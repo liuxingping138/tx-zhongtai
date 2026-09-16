@@ -1,6 +1,5 @@
 # 本地开发环境 Compose。生产部署需另行准备（本期不执行）。
-# 运行单元：frontend、gateway、iam-service、audit-service、postgres、redis。
-# iam-worker 在 P5 阶段随 Outbox 消费能力一起加入，本期不启动。
+# 运行单元：frontend、gateway、iam-service、iam-worker、audit-service、postgres、redis。
 #
 # 使用方式：在仓库根目录执行 `docker compose -f deploy/compose/docker-compose.yml --env-file .env up`
 # 或通过根目录 Makefile 的 `make dev-up` / `make dev-down`。
@@ -31,6 +30,8 @@ services:
       AUDIT_DB_NAME: ${AUDIT_DB_NAME:?AUDIT_DB_NAME 未设置}
       AUDIT_DB_USER: ${AUDIT_DB_USER:?AUDIT_DB_USER 未设置}
       AUDIT_DB_PASSWORD: ${AUDIT_DB_PASSWORD:?AUDIT_DB_PASSWORD 未设置}
+      AUDIT_CLEANUP_DB_USER: ${AUDIT_CLEANUP_DB_USER:-audit_cleanup}
+      AUDIT_CLEANUP_DB_PASSWORD: ${AUDIT_CLEANUP_DB_PASSWORD:?AUDIT_CLEANUP_DB_PASSWORD 未设置}
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
@@ -75,6 +76,14 @@ services:
       IAM_DATABASE_URL: postgresql+asyncpg://${IAM_DB_USER}:${IAM_DB_PASSWORD}@postgres:5432/${IAM_DB_NAME}
       IAM_REDIS_URL: redis://redis:${REDIS_PORT:-6379}/${REDIS_DB:-0}
       IAM_CORS_ALLOW_ORIGINS: ${IAM_CORS_ALLOW_ORIGINS:-[]}
+      IAM_JWT_KEYS_DIR: /secrets/jwt
+      IAM_COOKIE_SECURE: "false"
+      IAM_CSRF_ALLOWED_ORIGINS: '["http://localhost:8080","http://127.0.0.1:8080","http://localhost:5173"]'
+      IAM_INTERNAL_CALLER_SECRETS: ${IAM_INTERNAL_CALLER_SECRETS}
+      IAM_AUDIT_INGEST_URL: http://audit-service:8002
+      IAM_AUDIT_INGEST_SECRET: ${IAM_AUDIT_INGEST_SECRET:-dev-only-change-me-ingest}
+    volumes:
+      - ../../deploy/secrets/jwt:/secrets/jwt
     depends_on:
       postgres:
         condition: service_healthy
@@ -101,6 +110,10 @@ services:
       AUDIT_DATABASE_URL: postgresql+asyncpg://${AUDIT_DB_USER}:${AUDIT_DB_PASSWORD}@postgres:5432/${AUDIT_DB_NAME}
       AUDIT_CORS_ALLOW_ORIGINS: ${AUDIT_CORS_ALLOW_ORIGINS:-[]}
       AUDIT_RETENTION_DAYS: ${AUDIT_RETENTION_DAYS:-180}
+      AUDIT_INTERNAL_CALLER_SECRETS: ${AUDIT_INTERNAL_CALLER_SECRETS}
+      AUDIT_IAM_BASE_URL: http://iam-service:8001
+      AUDIT_IAM_SERVICE_SECRET: ${AUDIT_IAM_SERVICE_SECRET:-dev-only-change-me-internal}
+      AUDIT_CLEANUP_DB_USER: ${AUDIT_CLEANUP_DB_USER:-audit_cleanup}
     depends_on:
       postgres:
         condition: service_healthy
@@ -112,6 +125,32 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  iam-worker:
+    build:
+      context: ../..
+      dockerfile: services/iam-service/Dockerfile
+    command: [".venv/bin/python", "-m", "app.worker"]
+    restart: unless-stopped
+    environment:
+      IAM_ENVIRONMENT: ${ENVIRONMENT:-development}
+      IAM_SERVICE_NAME: iam-worker
+      IAM_LOG_LEVEL: ${IAM_LOG_LEVEL:-INFO}
+      IAM_DATABASE_URL: postgresql+asyncpg://${IAM_DB_USER}:${IAM_DB_PASSWORD}@postgres:5432/${IAM_DB_NAME}
+      IAM_REDIS_URL: redis://redis:${REDIS_PORT:-6379}/${REDIS_DB:-0}
+      IAM_JWT_KEYS_DIR: /secrets/jwt
+      IAM_INTERNAL_CALLER_SECRETS: ${IAM_INTERNAL_CALLER_SECRETS}
+      IAM_AUDIT_INGEST_URL: http://audit-service:8002
+      IAM_AUDIT_INGEST_SECRET: ${IAM_AUDIT_INGEST_SECRET:-dev-only-change-me-ingest}
+    volumes:
+      - ../../deploy/secrets/jwt:/secrets/jwt
+    depends_on:
+      postgres:
+        condition: service_healthy
+      audit-service:
+        condition: service_healthy
+    networks:
+      - data
 
   api-fallback:
     image: nginx:1.27-alpine3.20

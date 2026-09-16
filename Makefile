@@ -2,10 +2,16 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 COMPOSE := docker compose -f deploy/compose/docker-compose.yml --env-file .env
+P6_ENV := deploy/compose/.p6.env
+P6_COMPOSE := docker compose -p tx-zhongtai-p6 -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.p6.yml --env-file $(P6_ENV)
 PY_PACKAGES := packages/platform-common services/iam-service services/audit-service
+JWT_KEYS_DIR := deploy/secrets/jwt
+JWT_P6_DIR := deploy/secrets/jwt-p6
 
-.PHONY: help bootstrap dev-up dev-down migrate seed admin-create check \
-        test-unit test-integration test-e2e smoke
+.PHONY: help bootstrap jwt-keys jwt-keys-p6 dev-up dev-down migrate seed admin-create check \
+        test-unit test-integration test-e2e smoke provision-audit-cleanup \
+        outbox-replay audit-cleanup p6-env p6-up p6-down p6-migrate p6-seed p6-admin \
+        p6-backup p6-restore export-openapi scan-scope
 
 help:
 	@echo "可用命令："
@@ -13,13 +19,20 @@ help:
 	@echo "  make dev-up           启动本地开发环境（Compose）"
 	@echo "  make dev-down         停止本地开发环境（保留数据卷）"
 	@echo "  make migrate          对已运行的 iam-service/audit-service 执行数据库迁移"
-	@echo "  make seed             同步公共资源/动作/菜单清单（P2 阶段实现）"
-	@echo "  make admin-create     交互式创建初始管理员（P2 阶段实现）"
+	@echo "  make seed             幂等同步公共资源/动作/菜单与内置超级管理员角色"
+	@echo "  make admin-create     创建初始管理员（密码从 ADMIN_PASSWORD 读取，不进命令行参数）"
 	@echo "  make check            Python 静态检查 + 前端类型检查/构建/lint"
 	@echo "  make test-unit        运行三个 Python 包 + 前端的单元测试"
-	@echo "  make test-integration 真实依赖集成测试（P2+ 阶段补充用例）"
-	@echo "  make test-e2e         浏览器端关键流程测试（P4 阶段补充用例）"
+	@echo "  make test-integration 隔离栈 A01-A15 等真实依赖验收"
+	@echo "  make test-e2e         Playwright 关键流程（需先 integration）"
 	@echo "  make smoke            经网关执行公共功能冒烟验证"
+	@echo "  make provision-audit-cleanup  为已有数据卷补建审计清理账号"
+	@echo "  make outbox-replay    重放 dead/failed Outbox 事件"
+	@echo "  make audit-cleanup    使用独立清理账号删除到期审计事件"
+	@echo "  make p6-up / p6-down  启动/销毁隔离验收栈（down 删除隔离卷）"
+	@echo "  make export-openapi   从本地 FastAPI 应用导出 OpenAPI"
+	@echo "  make scan-scope       检查业务目录占位与仓库密钥扫描"
+	@echo "  make p6-backup / p6-restore  隔离库备份恢复"
 
 bootstrap:
 	@echo "== 检查关键工具版本 =="
@@ -43,9 +56,15 @@ bootstrap:
 	done
 	@echo "== 同步前端依赖（pnpm） =="
 	@(cd frontend && pnpm install)
+	@$(MAKE) jwt-keys
 	@echo "bootstrap 完成。"
 
-dev-up:
+jwt-keys:
+	@mkdir -p $(JWT_KEYS_DIR)
+	@cd services/iam-service && uv run python -c "from pathlib import Path; from app.core.jwt_keys import ensure_jwt_keys; ensure_jwt_keys(Path('../../$(JWT_KEYS_DIR)').resolve(), allow_generate=True)"
+	@echo "JWT 开发密钥已就绪（目录 $(JWT_KEYS_DIR)，不入库）。"
+
+dev-up: jwt-keys
 	$(COMPOSE) up -d --build
 
 dev-down:
@@ -56,14 +75,29 @@ migrate:
 	$(COMPOSE) exec -T iam-service uv run alembic upgrade head
 	@echo "== audit-service 迁移 =="
 	$(COMPOSE) exec -T audit-service uv run alembic upgrade head
+	@$(MAKE) provision-audit-cleanup
+	@echo "== 授予审计清理权限 =="
+	$(COMPOSE) exec -T audit-service uv run python -m app.cli.grant_cleanup
+
+provision-audit-cleanup:
+	@echo "== 补建审计清理账号（已有数据卷不会重跑 init） =="
+	$(COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-audit-cleanup.sh
+
+outbox-replay:
+	$(COMPOSE) exec -T iam-service uv run python -m app.cli.outbox_replay
+
+audit-cleanup:
+	@set -a && . ./.env && set +a && \
+	$(COMPOSE) exec -T \
+		-e AUDIT_CLEANUP_DATABASE_URL=postgresql+asyncpg://$$AUDIT_CLEANUP_DB_USER:$$AUDIT_CLEANUP_DB_PASSWORD@postgres:5432/$$AUDIT_DB_NAME \
+		audit-service uv run python -m app.cli.cleanup
 
 seed:
-	@echo "尚未实现：资源/动作/菜单清单同步在 P2 阶段随 IAM 数据模型一起交付。" >&2
-	@exit 1
+	$(COMPOSE) exec -T iam-service uv run python -m app.cli.seed
 
 admin-create:
-	@echo "尚未实现：初始管理员创建 CLI 在 P2 阶段随账号模型一起交付。" >&2
-	@exit 1
+	@if [ -z "$$ADMIN_PASSWORD" ]; then echo "请通过环境变量 ADMIN_PASSWORD 传入初始密码，不要写在命令行参数里。"; exit 2; fi
+	$(COMPOSE) exec -T -e ADMIN_USERNAME -e ADMIN_PASSWORD -e ADMIN_DISPLAY_NAME iam-service uv run python -m app.cli.admin_create
 
 check:
 	@echo "== Python 静态检查 =="
@@ -82,15 +116,69 @@ test-unit:
 		echo "-- $$pkg --"; \
 		(cd $$pkg && uv run pytest -q) || exit 1; \
 	done
-	@echo "前端单元测试（Vitest）尚未接入，P4 阶段随权限/组件逻辑一起补充。"
+	@(cd frontend && pnpm test)
 
-test-integration:
-	@echo "未验证：真实 PostgreSQL/Redis 集成测试用例在 P2 阶段随账号/会话能力一起补充。" >&2
-	@exit 1
+p6-env:
+	@if [ ! -f $(P6_ENV) ]; then cp deploy/compose/p6.env.example $(P6_ENV); echo "已生成 $(P6_ENV)"; fi
+
+jwt-keys-p6:
+	@mkdir -p $(JWT_P6_DIR)
+	@cd services/iam-service && uv run python -c "from pathlib import Path; from app.core.jwt_keys import ensure_jwt_keys; ensure_jwt_keys(Path('../../$(JWT_P6_DIR)').resolve(), allow_generate=True)"
+
+p6-up: p6-env jwt-keys-p6
+	$(P6_COMPOSE) up -d
+	@echo "等待隔离网关..."
+	@for i in $$(seq 1 60); do \
+		if curl -sf -o /dev/null http://localhost:$$(grep -E '^GATEWAY_HTTP_PORT=' $(P6_ENV) | cut -d= -f2)/api/v1/auth/csrf; then break; fi; \
+		sleep 2; \
+	done
+	@$(MAKE) p6-migrate
+	@$(MAKE) p6-seed
+	@$(MAKE) p6-admin
+
+p6-down:
+	$(P6_COMPOSE) down -v
+
+p6-migrate:
+	$(P6_COMPOSE) exec -T iam-service uv run alembic upgrade head
+	$(P6_COMPOSE) exec -T audit-service uv run alembic upgrade head
+	$(P6_COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-audit-cleanup.sh
+	$(P6_COMPOSE) exec -T audit-service uv run python -m app.cli.grant_cleanup
+
+p6-seed:
+	$(P6_COMPOSE) exec -T iam-service uv run python -m app.cli.seed
+
+p6-admin:
+	@set -a && . ./$(P6_ENV) && set +a && \
+	$(P6_COMPOSE) exec -T -e ADMIN_USERNAME -e ADMIN_PASSWORD -e ADMIN_DISPLAY_NAME iam-service uv run python -m app.cli.admin_create
+
+p6-backup:
+	@set -a && . ./$(P6_ENV) && set +a && \
+	BACKUP_COMPOSE="$(P6_COMPOSE)" BACKUP_ENV_FILE="$(P6_ENV)" bash scripts/backup.sh
+
+p6-restore:
+	@test -n "$(BACKUP)" || (echo "请设置 BACKUP=deploy/backups/<stamp>"; exit 2)
+	@set -a && . ./$(P6_ENV) && set +a && \
+	BACKUP_COMPOSE="$(P6_COMPOSE)" BACKUP_ENV_FILE="$(P6_ENV)" RESTORE_CONFIRM=$$IAM_DB_NAME bash scripts/restore.sh "$(BACKUP)"
+
+export-openapi:
+	@(cd services/iam-service && uv run python ../../scripts/export_openapi.py)
+
+scan-scope:
+	python3 scripts/scan_scope.py
+
+test-integration: p6-up
+	@set -a && . ./$(P6_ENV) && set +a && \
+	P6_GATEWAY=http://localhost:$$GATEWAY_HTTP_PORT \
+	P6_COMPOSE="$(P6_COMPOSE)" \
+	P6_RUNTIME_FILE=deploy/compose/.p6.runtime \
+	python3 tests/p6/accept.py
 
 test-e2e:
-	@echo "未验证：Playwright 端到端用例在 P4 阶段随管理端页面一起补充。" >&2
-	@exit 1
+	@test -f deploy/compose/.p6.runtime || (echo "请先运行 make test-integration"; exit 2)
+	@set -a && . ./deploy/compose/.p6.runtime && set +a && \
+	export P6_GATEWAY=http://localhost:$$(grep -E '^GATEWAY_HTTP_PORT=' $(P6_ENV) | cut -d= -f2) && \
+	(cd frontend && pnpm exec playwright test)
 
 smoke:
 	@echo "== 经网关冒烟验证（需要 make dev-up 已启动） =="
@@ -102,6 +190,8 @@ smoke:
 	curl -sS -o /dev/null -w "  status=%{http_code}\n" $$GW/; \
 	echo "- 未接入业务前缀 /api/v1/policy 应为 404（网关拦截，不回退到前端 HTML）"; \
 	curl -sS -o /dev/null -w "  status=%{http_code}\n" $$GW/api/v1/policy/anything; \
-	echo "- IAM 前缀 /api/v1/auth 应可达 iam-service（当前阶段返回统一 404 JSON）"; \
-	curl -sS -o /dev/null -w "  status=%{http_code}\n" -X POST $$GW/api/v1/auth/login; \
-	echo "冒烟验证完成（P1 阶段：仅验证网关路由骨架，不代表业务功能已实现）。"
+	echo "- GET /api/v1/auth/csrf 应为 200"; \
+	curl -sS -o /dev/null -w "  status=%{http_code}\n" $$GW/api/v1/auth/csrf; \
+	echo "- 错误密码登录应为 401"; \
+	curl -sS -o /dev/null -w "  status=%{http_code}\n" -X POST $$GW/api/v1/auth/login -H 'Content-Type: application/json' -d '{"username":"nobody","password":"wrong-pass"}'; \
+	echo "冒烟验证完成。"

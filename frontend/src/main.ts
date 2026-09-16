@@ -1,15 +1,35 @@
 import ElementPlus from 'element-plus'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import 'element-plus/dist/index.css'
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
+
+import { setForbiddenHandler, setUnauthorizedHandler } from '@/api/http'
+import { registerPermissionDirective } from '@/permissions/directive'
+import { useAuthStore } from '@/stores/auth'
 
 import App from './App.vue'
 import router from './router'
 
 const app = createApp(App)
+const pinia = createPinia()
 
-app.use(createPinia())
+app.use(pinia)
 app.use(router)
-app.use(ElementPlus)
+app.use(ElementPlus, { locale: zhCn })
+registerPermissionDirective(app)
+
+const auth = useAuthStore()
+setUnauthorizedHandler(() => {
+  auth.clearSession()
+  if (router.currentRoute.value.name !== 'login') {
+    void router.replace({ name: 'login' })
+  }
+})
+setForbiddenHandler(() => {
+  if (auth.isAuthenticated && !auth.mustChangePassword) {
+    void auth.loadProfile()
+  }
+})
 
 app.mount('#app')

@@ -1,15 +1,16 @@
 # tx-zhongtai 中台系统
 
-Vue 前端 + Python 微服务后端的中台管理系统。当前处于 **P1（工程骨架）** 阶段：
-公共服务骨架、网关、数据库迁移入口、容器部署已落地并通过验证；账号、认证、
-角色、权限等业务能力从 P2 阶段起逐步实现。业务模块（政策、客户、招投标、
-码表管理）仅保留目录占位，不在本期开发范围内。
+Vue 前端 + Python 微服务后端的中台管理系统。当前公共框架已做到 **P6（完整集成验收）**：
+账号/会话/RBAC、Outbox Worker、审计查询、隔离验收、备份恢复与 OpenAPI 已交付。
+业务模块（政策、客户、招投标、码表管理）仅保留目录占位，不在本期开发范围内。
 
 详见：
 - [`docs/中台系统公共基础框架设计.md`](docs/中台系统公共基础框架设计.md) —— 架构设计
 - [`docs/Cursor公共框架开发计划.md`](docs/Cursor公共框架开发计划.md) —— 分阶段开发计划
 - [`docs/开发进度.md`](docs/开发进度.md) —— 当前实际进度与验证记录
 - [`docs/实现决策.md`](docs/实现决策.md) —— 端口、数据库、技术选型等实施细节
+- [`docs/配置说明.md`](docs/配置说明.md) / [`docs/部署与维护.md`](docs/部署与维护.md)
+- [`docs/openapi/`](docs/openapi/) —— 从运行中服务导出的 OpenAPI
 
 ## 技术栈
 
@@ -25,8 +26,8 @@ Vue 前端 + Python 微服务后端的中台管理系统。当前处于 **P1（�
 tx-zhongtai/
 ├── frontend/                 # Vue 管理端
 ├── services/
-│   ├── iam-service/          # 身份权限服务（P2/P3 起实现账号、认证、权限）
-│   ├── audit-service/        # 审计日志服务（P5 起实现事件接收与查询）
+│   ├── iam-service/          # 身份权限服务；Compose 中 iam-worker 共用此镜像
+│   ├── audit-service/        # 审计写入、查询与到期清理
 │   ├── policy-service/       # 业务占位目录，仅 .gitkeep
 │   ├── customer-service/     # 业务占位目录，仅 .gitkeep
 │   ├── tender-service/       # 业务占位目录，仅 .gitkeep
@@ -58,19 +59,24 @@ make bootstrap
 # 2. 按需修改 .env（尤其是各数据库密码；本机已有 PostgreSQL/Redis 时
 #    可调整 POSTGRES_HOST_PORT / REDIS_HOST_PORT 避免端口冲突）
 
-# 3. 启动本地环境（Postgres、Redis、iam-service、audit-service、frontend、gateway）
+# 3. 启动本地环境（含 iam-worker）
 make dev-up
 
-# 4. 执行数据库迁移（当前阶段迁移链为空，仅验证迁移入口可用）
+# 4. 执行数据库迁移，并补建审计清理账号
 make migrate
 
 # 5. 冒烟验证网关路由
 make smoke
 
 # 6. 打开浏览器访问网关地址（默认 http://localhost:8080）
+
+# 7. 隔离验收（独立库/卷，不会清掉开发数据）
+make test-integration
+make test-e2e
+make p6-down
 ```
 
-停止环境（不删除数据卷）：`make dev-down`。
+停止开发环境（不删除数据卷）：`make dev-down`。
 
 ## 各服务本地开发（不经 Docker）
 
@@ -91,14 +97,10 @@ pnpm dev   # 默认代理 /api 到 http://localhost:8080（网关）
 
 参见 `make help`。关键命令：`bootstrap`、`dev-up`、`dev-down`、`migrate`、
 `check`（Python 静态检查 + 前端类型检查/构建/lint）、`test-unit`、`smoke`。
-`seed`、`admin-create`、`test-integration`、`test-e2e` 依赖 P2/P4 阶段的账号、
-权限、页面能力，当前阶段调用会明确提示"尚未实现"，不会假装成功。
+`seed`、`admin-create`、`test-integration`、`test-e2e` 已可在隔离栈上使用。
 
-## 已知限制（P1 阶段）
+## 已知限制
 
-- 账号、登录、角色、权限功能尚未实现，`/api/v1/auth`、`/api/v1/system` 当前
-  只有工程骨架（统一响应/异常/健康检查），实际业务路由在 P2/P3 阶段加入。
-- 审计事件接收、Outbox 消费、日志查询在 P2（写入基础）与 P5（消费/查询）阶段实现。
-- 前端登录页、系统管理页面、权限树等在 P4 阶段实现；当前只有布局骨架和占位首页。
-- 生产 HTTPS、备份恢复、监控接入等在 P6 阶段完成，当前仅提供配置模板
-  （见 `deploy/gateway/traefik.prod.yml.example`）。
+- 本期不执行生产部署；`deploy/gateway/traefik.prod.yml.example` 只是 HTTPS 模板。
+- 最后管理员并发保护已有行锁实现，验收覆盖了禁用唯一管理员返回 403，未做双客户端压测。
+- 业务表、业务 API、业务页面仍未开发，等待后续需求。

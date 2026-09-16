@@ -1,8 +1,4 @@
-"""audit-service 入口。
-
-当前阶段（P1）只提供工程骨架：统一响应/异常、请求 ID、结构化日志、
-健康检查。事件接收、去重入库、查询等业务能力在 P5 阶段实现。
-"""
+"""audit-service 入口：内部写入、授权查询、健康检查。"""
 
 from __future__ import annotations
 
@@ -16,6 +12,9 @@ from platform_common.logging_setup import get_logger, setup_logging
 from platform_common.request_context import RequestIdMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
+from app.api.events import router as events_router
+from app.api.internal import router as internal_router
+from app.api.security import get_authz_client
 from app.core.config import get_settings
 from app.core.database import check_database_ready
 
@@ -28,12 +27,14 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("audit_service_started", environment=settings.environment)
     yield
+    client = get_authz_client(settings)
+    await client.aclose()
 
 
 def create_app() -> FastAPI:
     app = FastAPI(
         title="audit-service",
-        version="0.1.0",
+        version="0.5.0",
         docs_url="/docs" if settings.environment != "production" else None,
         redoc_url=None,
         openapi_url="/openapi.json" if settings.environment != "production" else None,
@@ -51,7 +52,6 @@ def create_app() -> FastAPI:
         )
 
     register_exception_handlers(app)
-
     app.include_router(
         build_health_router(
             {
@@ -59,7 +59,8 @@ def create_app() -> FastAPI:
             }
         )
     )
-
+    app.include_router(internal_router)
+    app.include_router(events_router)
     return app
 
 

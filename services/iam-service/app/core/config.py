@@ -1,15 +1,12 @@
-"""iam-service 配置。
-
-所有环境变量使用 `IAM_` 前缀，避免与其他服务的同名变量混淆
-（例如两个服务各自的 `DATABASE_URL` 必须分别是 `IAM_DATABASE_URL`
-和 `AUDIT_DATABASE_URL`，指向各自独立的数据库和账号）。
-"""
+"""iam-service 配置。所有环境变量使用 `IAM_` 前缀。"""
 
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 
-from platform_common.config import BaseServiceSettings
+from platform_common.config import BaseServiceSettings, Environment
+from pydantic import Field, model_validator
 from pydantic_settings import SettingsConfigDict
 
 
@@ -23,12 +20,58 @@ class Settings(BaseServiceSettings):
     redis_url: str
 
     cors_allow_origins: list[str] = []
+    csrf_allowed_origins: list[str] = Field(
+        default_factory=lambda: ["http://localhost:8080", "http://localhost:5173"]
+    )
 
-    # JWT 相关配置在 P2 阶段接入具体实现时补充校验（密钥文件路径、算法、kid 等）。
     jwt_issuer: str = "tx-zhongtai-iam"
     jwt_audience: str = "tx-zhongtai"
+    jwt_algorithm: str = "RS256"
+    jwt_keys_dir: str = ".jwt-keys"
     access_token_ttl_seconds: int = 900
     refresh_token_ttl_seconds: int = 7 * 24 * 3600
+
+    refresh_cookie_name: str = "refresh_token"
+    csrf_cookie_name: str = "csrf_token"
+    csrf_header_name: str = "X-CSRF-Token"
+    cookie_path: str = "/api/v1/auth"
+    cookie_secure: bool = False
+    cookie_samesite: str = "strict"
+
+    login_max_failures: int = 5
+    login_lockout_seconds: int = 300
+
+    # 内部调用方：service_name -> 共享密钥。生产环境字段名含 secret，会被演示值检查拦截。
+    internal_caller_secrets: dict[str, str] = Field(default_factory=dict)
+
+    audit_ingest_url: str = "http://audit-service:8002"
+    audit_ingest_secret: str = ""
+    worker_batch_size: int = 20
+    worker_poll_interval_seconds: float = 2.0
+    worker_lease_seconds: int = 30
+    worker_max_attempts: int = 8
+    worker_backoff_base_seconds: int = 2
+    worker_backoff_cap_seconds: int = 300
+
+    @model_validator(mode="after")
+    def _reject_demo_internal_secrets_in_production(self) -> Settings:
+        if self.environment == Environment.PRODUCTION:
+            markers = ("dev-", "example", "changeme", "test-secret")
+            tokens = list(self.internal_caller_secrets.values())
+            if self.audit_ingest_secret:
+                tokens.append(self.audit_ingest_secret)
+            for token in tokens:
+                if any(marker in token.lower() for marker in markers):
+                    raise ValueError("生产环境内部调用密钥看起来是示例值，拒绝启动")
+        return self
+
+    @property
+    def jwt_keys_path(self) -> Path:
+        return Path(self.jwt_keys_dir)
+
+    @property
+    def allow_generate_jwt_keys(self) -> bool:
+        return self.environment in {Environment.DEVELOPMENT, Environment.TEST}
 
 
 @lru_cache

@@ -1,21 +1,125 @@
 <script setup lang="ts">
-// 管理端公共布局：顶栏 + 侧边菜单 + 内容区。
-// 侧边菜单当前为空占位，真实的可见菜单由 P4 阶段接入 `/auth/permissions` 后按权限生成，
-// 不在此处硬编码任何业务菜单项。
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+
+import { useAuthStore } from '@/stores/auth'
+import { pathForRouteName } from '@/router/menu'
+import type { MenuItem } from '@/api/types'
+import { errorMessage } from '@/api/errors'
+
+const auth = useAuthStore()
+const route = useRoute()
+const router = useRouter()
+
+const tree = computed(() => {
+  const items = auth.visibleMenus
+  const childrenOf = new Map<string | null, MenuItem[]>()
+  for (const item of items) {
+    const list = childrenOf.get(item.parent_id) ?? []
+    list.push(item)
+    childrenOf.set(item.parent_id, list)
+  }
+  for (const list of childrenOf.values()) {
+    list.sort((a, b) => a.sort_order - b.sort_order)
+  }
+  return childrenOf.get(null) ?? []
+})
+
+function childrenOf(id: string): MenuItem[] {
+  return auth.visibleMenus
+    .filter((item) => item.parent_id === id)
+    .sort((a, b) => a.sort_order - b.sort_order)
+}
+
+const active = computed(() => route.path)
+
+const crumbs = computed(() => {
+  const titles = route.matched.map((item) => item.meta.title).filter((title): title is string => Boolean(title))
+  return titles
+})
+
+async function onLogout() {
+  try {
+    await auth.signOut()
+  } catch (error) {
+    ElMessage.error(errorMessage(error, '退出失败'))
+  } finally {
+    await router.push({ name: 'login' })
+  }
+}
 </script>
 
 <template>
   <el-container class="admin-layout">
-    <el-header class="admin-layout__header">
-      <span class="admin-layout__title">中台管理端</span>
-    </el-header>
-    <el-container>
-      <el-aside
-        width="220px"
-        class="admin-layout__aside"
+    <el-aside
+      width="220px"
+      class="admin-layout__aside"
+    >
+      <div class="admin-layout__brand">
+        中台管理端
+      </div>
+      <el-menu
+        :default-active="active"
+        router
       >
-        <!-- P4 阶段：按 /auth/permissions 返回的可见菜单渲染 el-menu -->
-      </el-aside>
+        <el-menu-item index="/">
+          <span>首页</span>
+        </el-menu-item>
+        <template
+          v-for="item in tree"
+          :key="item.id"
+        >
+          <el-sub-menu
+            v-if="childrenOf(item.id).length"
+            :index="item.id"
+          >
+            <template #title>
+              {{ item.title }}
+            </template>
+            <el-menu-item
+              v-for="child in childrenOf(item.id)"
+              :key="child.id"
+              :index="pathForRouteName(child.route_name) || child.id"
+            >
+              {{ child.title }}
+            </el-menu-item>
+          </el-sub-menu>
+          <el-menu-item
+            v-else-if="pathForRouteName(item.route_name)"
+            :index="pathForRouteName(item.route_name) || item.id"
+          >
+            {{ item.title }}
+          </el-menu-item>
+        </template>
+      </el-menu>
+    </el-aside>
+    <el-container>
+      <el-header class="admin-layout__header">
+        <el-breadcrumb>
+          <el-breadcrumb-item
+            v-for="title in crumbs"
+            :key="title"
+          >
+            {{ title }}
+          </el-breadcrumb-item>
+        </el-breadcrumb>
+        <el-dropdown>
+          <span class="admin-layout__user">
+            {{ auth.user?.display_name || auth.user?.username }}
+          </span>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item @click="router.push({ name: 'profile' })">
+                个人设置
+              </el-dropdown-item>
+              <el-dropdown-item @click="onLogout">
+                退出登录
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </el-header>
       <el-main>
         <router-view />
       </el-main>
@@ -28,18 +132,26 @@
   height: 100vh;
 }
 
-.admin-layout__header {
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid var(--el-border-color);
+.admin-layout__aside {
+  border-right: 1px solid var(--el-border-color);
 }
 
-.admin-layout__title {
-  font-size: 16px;
+.admin-layout__brand {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
   font-weight: 600;
 }
 
-.admin-layout__aside {
-  border-right: 1px solid var(--el-border-color);
+.admin-layout__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--el-border-color);
+}
+
+.admin-layout__user {
+  cursor: pointer;
 }
 </style>

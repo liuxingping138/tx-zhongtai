@@ -32,6 +32,8 @@ _SENSITIVE_KEYS = {
     "private_key",
     "jwt",
     "csrf_token",
+    "temporary_password",
+    "internal_token",
 }
 
 _REDACTED = "***REDACTED***"

@@ -1,0 +1,34 @@
+# 覆盖主 Compose，形成隔离验收栈。不得与开发卷、网络同名。
+# 内部密钥在此写成 YAML 字面量，避免本机 .env 插值与 ${VAR:-{...}} 截断。
+name: tx-zhongtai-p6
+
+networks:
+  gateway:
+    name: tx-zhongtai-p6-gateway
+  data:
+    name: tx-zhongtai-p6-data
+    internal: true
+
+volumes:
+  postgres-data:
+    name: tx-zhongtai-p6-postgres-data
+  redis-data:
+    name: tx-zhongtai-p6-redis-data
+
+services:
+  iam-service:
+    environment:
+      IAM_ENVIRONMENT: test
+      IAM_CSRF_ALLOWED_ORIGINS: '["http://localhost:8090","http://127.0.0.1:8090"]'
+      IAM_INTERNAL_CALLER_SECRETS: '{"audit-service":"p6-only-change-me-internal"}'
+      IAM_AUDIT_INGEST_SECRET: p6-only-change-me-ingest
+  iam-worker:
+    environment:
+      IAM_ENVIRONMENT: test
+      IAM_INTERNAL_CALLER_SECRETS: '{"audit-service":"p6-only-change-me-internal"}'
+      IAM_AUDIT_INGEST_SECRET: p6-only-change-me-ingest
+  audit-service:
+    environment:
+      AUDIT_ENVIRONMENT: test
+      AUDIT_INTERNAL_CALLER_SECRETS: '{"iam-service":"p6-only-change-me-ingest"}'
+      AUDIT_IAM_SERVICE_SECRET: p6-only-change-me-internal

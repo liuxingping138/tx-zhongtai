@@ -1,4 +1,4 @@
-"""数据库引擎与会话工厂。P5 阶段在此基础上补充审计事件模型与仓储实现。"""
+"""数据库引擎与会话工厂。"""
 
 from __future__ import annotations
 
@@ -17,7 +17,13 @@ SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSe
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     async with SessionLocal() as session:
-        yield session
+        try:
+            yield session
+            if session.in_transaction():
+                await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
 
 
 async def check_database_ready() -> bool:

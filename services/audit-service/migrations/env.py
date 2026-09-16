@@ -12,6 +12,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from app.core.orm_base import Base  # noqa: E402
+from app.domain import models as _audit_models  # noqa: E402, F401
 
 config = context.config
 
