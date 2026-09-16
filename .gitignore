@@ -1,0 +1,35 @@
+# --- Python ---
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+uv-cache/
+
+# --- Node / 前端 ---
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.local
+
+# --- 环境与密钥（真实配置绝不提交） ---
+.env
+.env.*
+!.env.example
+deploy/secrets/
+*.pem
+*.key
+
+# --- 编辑器/系统 ---
+.DS_Store
+.vscode/
+.idea/
+
+# --- 日志与运行产物 ---
+*.log
+logs/
+
+# --- Docker 卷挂载数据（本地开发数据不入库） ---
+deploy/compose/.data/

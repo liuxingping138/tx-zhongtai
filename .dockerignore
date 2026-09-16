@@ -1,0 +1,22 @@
+# 所有服务的 Docker build context 都是仓库根目录，统一在这里排除不需要进镜像的内容，
+# 避免宿主机的 node_modules/.venv 等被 COPY 进容器覆盖容器内重新安装的依赖。
+.git/
+.gitignore
+
+**/.venv/
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/*.egg-info/
+
+**/node_modules/
+frontend/dist/
+frontend/.vite/
+
+.env
+.env.*
+!.env.example
+
+docs/

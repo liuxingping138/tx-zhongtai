@@ -1,0 +1,23 @@
+# Traefik 静态配置（本地开发用）。
+# 使用文件 Provider 而非 Docker Provider：路由集合固定、可读性高，
+# 也避免把 /var/run/docker.sock 挂进网关容器（在 Docker Desktop 上还有已知的 socket 权限问题）。
+# 生产环境请参考 traefik.prod.yml.example，额外启用 HTTPS 入口并关闭调试项。
+
+entryPoints:
+  web:
+    address: ":80"
+
+providers:
+  file:
+    filename: /etc/traefik/dynamic.yml
+
+api:
+  dashboard: false
+  insecure: false
+
+log:
+  level: INFO
+
+accessLog: {}
+
+# 不启用 ForwardAuth：首期业务授权全部在服务内执行，避免网关与服务内鉴权重复调用。

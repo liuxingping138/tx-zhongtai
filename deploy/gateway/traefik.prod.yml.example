@@ -1,0 +1,42 @@
+# 生产环境 Traefik 静态配置模板。复制为 traefik.prod.yml 并按真实域名/证书方式调整后使用；
+# 本项目不在本期执行任何生产部署，这里只提供配置模板供后续参考。
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    exposedByDefault: false
+    network: tx-zhongtai-gateway
+
+# 二选一：
+# 1) 使用 ACME（Let's Encrypt）自动签发证书：
+# certificatesResolvers:
+#   letsencrypt:
+#     acme:
+#       email: "ops@example.com"
+#       storage: "/letsencrypt/acme.json"
+#       httpChallenge:
+#         entryPoint: web
+#
+# 2) 使用已有证书文件，通过动态配置 `tls.certificates` 挂载 cert/key。
+
+api:
+  dashboard: false
+  insecure: false
+
+log:
+  level: WARN
+
+accessLog: {}
+
+# 生产只公开网关 443；数据库、Redis、各服务端口不映射公网。
+# 调试页面与公开 OpenAPI 在各服务 ENVIRONMENT=production 时自动关闭（见服务 app/main.py）。
