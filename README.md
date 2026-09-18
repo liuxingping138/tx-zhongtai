@@ -9,6 +9,7 @@ Vue 前端 + Python 微服务后端的中台管理系统。当前公共框架已
 - [`docs/Cursor公共框架开发计划.md`](docs/Cursor公共框架开发计划.md) —— 分阶段开发计划
 - [`docs/开发进度.md`](docs/开发进度.md) —— 当前实际进度与验证记录
 - [`docs/实现决策.md`](docs/实现决策.md) —— 端口、数据库、技术选型等实施细节
+- [`docs/开发约定.md`](docs/开发约定.md) —— 必须遵守的开发约定（含 ORM 中文 comment）
 - [`docs/配置说明.md`](docs/配置说明.md) / [`docs/部署与维护.md`](docs/部署与维护.md)
 - [`docs/openapi/`](docs/openapi/) —— 从运行中服务导出的 OpenAPI
 
@@ -98,6 +99,16 @@ pnpm dev   # 默认代理 /api 到 http://localhost:8080（网关）
 参见 `make help`。关键命令：`bootstrap`、`dev-up`、`dev-down`、`migrate`、
 `check`（Python 静态检查 + 前端类型检查/构建/lint）、`test-unit`、`smoke`。
 `seed`、`admin-create`、`test-integration`、`test-e2e` 已可在隔离栈上使用。
+
+## 开发约定（必须遵守）
+
+新建或修改数据库表时，ORM model **必须**写中文 `comment`：
+
+- 表：`__table_args__ = {"comment": "中文表名"}`（有约束时把该字典放在 `__table_args__` tuple 最后一项）
+- 列：每个 `mapped_column(..., comment="中文列名")`，与页面/Excel 表头对齐
+- Alembic 建表、加列时同步带上 comment，方便 Navicat 直接看到业务含义
+
+完整说明见 [`docs/开发约定.md`](docs/开发约定.md)。
 
 ## 已知限制
 

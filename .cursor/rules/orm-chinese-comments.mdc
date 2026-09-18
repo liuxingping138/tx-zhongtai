@@ -1,0 +1,27 @@
+---
+description: 新建或修改 ORM 表时必须写中文 comment，供 Navicat 显示
+globs: services/**/app/domain/models.py,services/**/migrations/versions/*.py
+alwaysApply: false
+---
+
+# ORM 中文 comment
+
+新建或改表时必须写中文 `comment`，不要只建英文字段。
+
+- 表：`__table_args__` 带 `comment="中文表名"`；有约束时把该字典放在 tuple 最后一项
+- 列：每个 `mapped_column(...)` 带 `comment="中文列名"`，与页面/Excel 表头对齐
+- 迁移：`create_table` / `add_column` 同步带 comment；`COMMENT ON` 用 SQL 字面量，不要绑参数
+- `alembic_version` 不用注释
+
+```python
+# ✅
+class AreaCode(Base):
+    __tablename__ = "codebook_area_codes"
+    __table_args__ = {"comment": "省市区编码表"}
+    name: Mapped[str] = mapped_column(String(64), comment="名称")
+
+# ❌ 缺表注释、缺列注释
+class AreaCode(Base):
+    __tablename__ = "codebook_area_codes"
+    name: Mapped[str] = mapped_column(String(64))
+```
