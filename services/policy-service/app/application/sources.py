@@ -207,7 +207,7 @@ async def import_sources(session: AsyncSession, actor: Actor, content: bytes) ->
         if internal_id in db_internal:
             reasons.append("内部唯一id已存在")
         if file_internal[internal_id] > 1:
-            reasons.append("文件内重复")
+            reasons.append("网站名称+省份+地市+标签重复")
         if site_code and site_code in db_site:
             reasons.append("网站编码已存在")
         if site_code and file_site[site_code] > 1:
@@ -267,6 +267,18 @@ async def import_sources(session: AsyncSession, actor: Actor, content: bytes) ->
         "total": len(parsed),
         "skipped_file": None,
     }
+
+
+async def purge_sources(session: AsyncSession, actor: Actor) -> dict[str, Any]:
+    deleted = await repo.delete_all(session)
+    await enqueue_event(
+        session,
+        event_type="policy.source.purged",
+        actor_id=actor.id,
+        actor_name=actor.name,
+        extra={"deleted": deleted},
+    )
+    return {"deleted": deleted}
 
 
 async def export_sources(session: AsyncSession, actor: Actor) -> bytes:

@@ -72,6 +72,15 @@ async def export_items(
     )
 
 
+@router.post("/clear")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def clear_items(
+    session: AsyncSession = Depends(get_db_session),
+    actor: Actor = Depends(require_policy_permission(RESOURCE, "purge")),
+):
+    return success_json(await service.purge_sources(session, actor))
+
+
 @router.post("/import")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def import_items(

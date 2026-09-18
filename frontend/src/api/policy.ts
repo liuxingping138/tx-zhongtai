@@ -112,6 +112,10 @@ export function updateSource(id: string, body: Partial<SourceItem> & { version: 
   return request(http.patch(`/policy/sources/${id}`, body))
 }
 
+export function clearSources(): Promise<{ deleted: number }> {
+  return request(http.post('/policy/sources/clear'))
+}
+
 export function importSources(
   file: File,
   onProgress?: (percent: number, stage: ImportStage) => void,

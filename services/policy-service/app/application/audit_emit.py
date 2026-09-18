@@ -20,6 +20,7 @@ _EVENT_META = {
     "policy.source.updated": ("policy.sources", "update", "source", "编辑信源"),
     "policy.source.imported": ("policy.sources", "import", "source", "导入信源"),
     "policy.source.exported": ("policy.sources", "export", "source", "导出信源"),
+    "policy.source.purged": ("policy.sources", "purge", "source", "清空信源表"),
     "policy.base_tag.created": ("policy.base_tags", "create", "base_tag", "新增政策基础标签"),
     "policy.base_tag.updated": ("policy.base_tags", "update", "base_tag", "编辑政策基础标签"),
     "policy.base_tag.imported": ("policy.base_tags", "import", "base_tag", "导入政策基础标签表"),
@@ -68,6 +69,8 @@ def _to_ingest(event: OutboxEvent) -> dict[str, Any]:
         summary.append(str(target))
     if payload.get("inserted") is not None:
         summary.append(f"新增{payload.get('inserted')}条")
+    if payload.get("deleted") is not None:
+        summary.append(f"清空{payload.get('deleted')}条")
     return {
         "event_id": str(event.event_id),
         "occurred_at": event.created_at.isoformat(),

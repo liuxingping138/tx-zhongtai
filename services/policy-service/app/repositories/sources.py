@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import Source
@@ -79,3 +79,8 @@ async def list_items(
 async def list_all(session: AsyncSession) -> list[Source]:
     result = await session.execute(select(Source).order_by(Source.site_code, Source.site_name))
     return list(result.scalars())
+
+
+async def delete_all(session: AsyncSession) -> int:
+    result = await session.execute(delete(Source))
+    return int(result.rowcount or 0)

@@ -13,7 +13,7 @@ export const MODULE_LABELS: Record<string, string> = {
   'policy.crawler_monitoring': '爬虫监测',
   codebook: '码表管理',
   'codebook.policy_types': '政策类型码表',
-  'codebook.scenarios': '场景码表',
+  'codebook.scenarios': '行业场景码表',
   'codebook.area_codes': '省市区编码表',
   customer: '客户',
   tender: '招投标',
@@ -40,6 +40,7 @@ export const ACTION_LABELS: Record<string, string> = {
   list: '查询列表',
   read: '查看',
   cleanup: '清理',
+  purge: '清空',
 }
 
 export function moduleLabel(code: string | null | undefined): string {

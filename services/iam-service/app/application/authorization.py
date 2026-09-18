@@ -13,9 +13,11 @@ from app.domain.enums import UserStatus
 from app.domain.models import User
 from app.repositories import outbox as outbox_repo
 from app.repositories import resources as resource_repo
+from app.repositories import users as user_repo
 
 logger = get_logger(__name__)
-_WRITE_ACTIONS = {"create", "update", "reset_password", "revoke_sessions", "grant"}
+_WRITE_ACTIONS = {"create", "update", "reset_password", "revoke_sessions", "grant", "purge"}
+_SUPERADMIN_ACTIONS = {"purge"}
 
 _DECISION_MESSAGE = {
     AuthzDecision.DENY_UNPUBLISHED: "未发布资源不可访问",
@@ -79,9 +81,14 @@ async def authorize_access_context(
         raise PermissionDeniedError("请先修改初始密码后再使用系统")
     decision, level = await resolve_authorization(session, user, resource_code, action_code)
     allowed = decision == AuthzDecision.ALLOW
+    reason = None if allowed else _DECISION_MESSAGE[decision]
+    if allowed and action_code in _SUPERADMIN_ACTIONS:
+        if not await user_repo.user_has_builtin_superadmin(session, user.id):
+            allowed = False
+            reason = "仅超级管理员可清空数据"
     return {
         "allowed": allowed,
-        "reason": None if allowed else _DECISION_MESSAGE[decision],
+        "reason": reason,
         "level": level,
         "resource": resource_code,
         "action": action_code,

@@ -33,6 +33,7 @@ class MePayload(BaseModel):
     display_name: str
     must_change_password: bool
     status: str
+    is_superadmin: bool
 
 
 class CsrfPayload(BaseModel):

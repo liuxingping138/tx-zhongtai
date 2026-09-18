@@ -19,6 +19,7 @@ from app.api.security import (
     require_restricted_or_authenticated,
 )
 from app.application.auth_service import AuthService
+from app.repositories import users as user_repo
 from app.core.config import Settings, get_settings
 from app.core.database import SessionLocal, get_db_session
 from app.core.http_utils import client_ip, client_user_agent, success_json
@@ -156,7 +157,10 @@ async def logout_all(
 
 @router.get("/me")
 @classified(SecurityClass.RESTRICTED_SESSION)
-async def me(principal: CurrentPrincipal = Depends(require_restricted_or_authenticated)) -> JSONResponse:
+async def me(
+    principal: CurrentPrincipal = Depends(require_restricted_or_authenticated),
+    session: AsyncSession = Depends(get_db_session),
+) -> JSONResponse:
     user = principal.user
     payload = MePayload(
         id=str(user.id),
@@ -164,6 +168,7 @@ async def me(principal: CurrentPrincipal = Depends(require_restricted_or_authent
         display_name=user.display_name,
         must_change_password=user.must_change_password,
         status=user.status,
+        is_superadmin=await user_repo.user_has_builtin_superadmin(session, user.id),
     )
     return success_json(payload.model_dump())
 

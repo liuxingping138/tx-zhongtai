@@ -71,7 +71,7 @@ const routes: RouteRecordRaw[] = [
         path: 'codebook/scenarios',
         name: 'codebook-scenarios',
         component: () => import('@/modules/codebook/scenarios/ScenarioList.vue'),
-        meta: { title: '场景码表', resource: 'codebook.scenarios' },
+        meta: { title: '行业场景码表', resource: 'codebook.scenarios' },
       },
       {
         path: 'codebook/area-codes',

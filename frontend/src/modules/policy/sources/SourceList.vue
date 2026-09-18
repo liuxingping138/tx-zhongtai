@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { importAfterAreaResolve } from '@/api/codebook'
 import {
+  clearSources,
   createSource,
   downloadPolicy,
   importSources,
@@ -23,7 +24,9 @@ import { formatTime } from '@/utils/time'
 const auth = useAuthStore()
 const router = useRouter()
 const canWrite = auth.canFull('policy.sources')
+const canPurge = computed(() => auth.canFull('policy.sources') && auth.isSuperadmin)
 const canAudit = auth.canRead('system.audit')
+const clearing = ref(false)
 
 const loading = ref(false)
 const items = ref<SourceItem[]>([])
@@ -212,6 +215,34 @@ async function onExport() {
   }
 }
 
+async function onClear() {
+  try {
+    await ElMessageBox.confirm(
+      '将删除信源管理中的全部数据，且无法恢复。确定清空？',
+      '清空信源表',
+      {
+        type: 'warning',
+        confirmButtonText: '确认清空',
+        cancelButtonText: '取消',
+        confirmButtonClass: 'el-button--danger',
+      },
+    )
+  } catch {
+    return
+  }
+  clearing.value = true
+  try {
+    const result = await clearSources()
+    ElMessage.success(`已清空 ${result.deleted} 条`)
+    query.page = 1
+    await Promise.all([load(), loadOptions()])
+  } catch (error) {
+    ElMessage.error(errorMessage(error, '清空失败'))
+  } finally {
+    clearing.value = false
+  }
+}
+
 function openLogs() {
   void router.push({ name: 'system-audit', query: { module_code: 'policy.sources' } })
 }
@@ -255,6 +286,15 @@ onMounted(() => {
         </el-upload>
         <el-button @click="onExport">
           下载 Excel
+        </el-button>
+        <el-button
+          v-if="canPurge"
+          type="danger"
+          plain
+          :loading="clearing"
+          @click="onClear"
+        >
+          清空表
         </el-button>
         <el-button
           v-if="canAudit"

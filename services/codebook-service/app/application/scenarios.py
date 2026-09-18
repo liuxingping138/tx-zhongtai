@@ -71,7 +71,7 @@ async def list_scenario_options(session: AsyncSession) -> dict[str, list[str]]:
 async def get_scenario(session: AsyncSession, item_id: uuid.UUID) -> dict[str, Any]:
     row = await repo.get_by_id(session, item_id)
     if row is None:
-        raise NotFoundError("场景码表记录不存在")
+        raise NotFoundError("行业场景码表记录不存在")
     return _to_out(row)
 
 
@@ -110,7 +110,7 @@ async def update_scenario(
 ) -> dict[str, Any]:
     row = await repo.get_by_id(session, item_id)
     if row is None:
-        raise NotFoundError("场景码表记录不存在")
+        raise NotFoundError("行业场景码表记录不存在")
     if data.get("version") != row.version:
         raise VersionConflictError()
     payload = {field: str(data.get(field, getattr(row, field) or "")) for field in SCENARIO_FIELDS}

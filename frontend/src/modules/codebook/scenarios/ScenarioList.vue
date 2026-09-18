@@ -133,7 +133,7 @@ async function load() {
     items.value = page.items
     total.value = page.total
   } catch (error) {
-    ElMessage.error(errorMessage(error, '加载场景码表失败'))
+    ElMessage.error(errorMessage(error, '加载行业场景码表失败'))
   } finally {
     loading.value = false
   }
@@ -343,7 +343,7 @@ onMounted(() => {
     </ListPage>
     <el-drawer
       v-model="visible"
-      :title="editing ? '编辑场景码表' : '新增场景码表'"
+      :title="editing ? '编辑行业场景码表' : '新增行业场景码表'"
       size="640px"
     >
       <el-form label-position="top">

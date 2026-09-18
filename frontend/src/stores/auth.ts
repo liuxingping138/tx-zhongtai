@@ -39,6 +39,7 @@ export const useAuthStore = defineStore('auth', {
       (state) =>
       (code: string): boolean =>
         canWrite(state.resources.find((item) => item.code === code)?.level),
+    isSuperadmin: (state): boolean => Boolean(state.user?.is_superadmin),
     visibleMenus(state): MenuItem[] {
       const byParent = new Map<string | null, MenuItem[]>()
       for (const menu of state.menus) {
