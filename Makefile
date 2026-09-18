@@ -4,12 +4,13 @@ SHELL := /bin/bash
 COMPOSE := docker compose -f deploy/compose/docker-compose.yml --env-file .env
 P6_ENV := deploy/compose/.p6.env
 P6_COMPOSE := docker compose -p tx-zhongtai-p6 -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.p6.yml --env-file $(P6_ENV)
-PY_PACKAGES := packages/platform-common services/iam-service services/audit-service services/codebook-service
+PY_PACKAGES := packages/platform-common services/iam-service services/audit-service services/codebook-service services/policy-service
 JWT_KEYS_DIR := deploy/secrets/jwt
 JWT_P6_DIR := deploy/secrets/jwt-p6
 
 .PHONY: help bootstrap jwt-keys jwt-keys-p6 dev-up dev-down migrate seed admin-create check \
         test-unit test-integration test-e2e smoke provision-audit-cleanup provision-codebook-db \
+        provision-policy-db \
         outbox-replay audit-cleanup p6-env p6-up p6-down p6-migrate p6-seed p6-admin \
         p6-backup p6-restore export-openapi scan-scope
 
@@ -81,6 +82,9 @@ migrate:
 	$(COMPOSE) exec -T audit-service uv run python -m app.cli.grant_cleanup
 	@echo "== codebook-service 迁移 =="
 	$(COMPOSE) exec -T codebook-service uv run alembic upgrade head
+	@$(MAKE) provision-policy-db
+	@echo "== policy-service 迁移 =="
+	$(COMPOSE) exec -T policy-service uv run alembic upgrade head
 
 provision-audit-cleanup:
 	@echo "== 补建审计清理账号（已有数据卷不会重跑 init） =="
@@ -89,6 +93,10 @@ provision-audit-cleanup:
 provision-codebook-db:
 	@echo "== 补建码表库和账号（已有数据卷不会重跑 init） =="
 	$(COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-codebook-db.sh
+
+provision-policy-db:
+	@echo "== 补建政策库和账号（已有数据卷不会重跑 init） =="
+	$(COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-policy-db.sh
 
 outbox-replay:
 	$(COMPOSE) exec -T iam-service uv run python -m app.cli.outbox_replay
@@ -112,6 +120,7 @@ check:
 	@(cd services/iam-service && uv run ruff check . && uv run mypy app) || exit 1
 	@(cd services/audit-service && uv run ruff check . && uv run mypy app) || exit 1
 	@(cd services/codebook-service && uv run ruff check . && uv run mypy app) || exit 1
+	@(cd services/policy-service && uv run ruff check . && uv run mypy app) || exit 1
 	@echo "== 前端类型检查 =="
 	@(cd frontend && pnpm run type-check)
 	@echo "== 前端构建 =="
@@ -154,6 +163,8 @@ p6-migrate:
 	$(P6_COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-codebook-db.sh
 	$(P6_COMPOSE) exec -T audit-service uv run python -m app.cli.grant_cleanup
 	$(P6_COMPOSE) exec -T codebook-service uv run alembic upgrade head
+	$(P6_COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-policy-db.sh
+	$(P6_COMPOSE) exec -T policy-service uv run alembic upgrade head
 
 p6-seed:
 	$(P6_COMPOSE) exec -T iam-service uv run python -m app.cli.seed
@@ -172,7 +183,10 @@ p6-restore:
 	BACKUP_COMPOSE="$(P6_COMPOSE)" BACKUP_ENV_FILE="$(P6_ENV)" RESTORE_CONFIRM=$$IAM_DB_NAME bash scripts/restore.sh "$(BACKUP)"
 
 export-openapi:
-	@(cd services/iam-service && uv run python ../../scripts/export_openapi.py)
+	@(cd services/iam-service && uv run python ../../scripts/export_openapi.py iam)
+	@(cd services/audit-service && uv run python ../../scripts/export_openapi.py audit)
+	@(cd services/codebook-service && uv run python ../../scripts/export_openapi.py codebook)
+	@(cd services/policy-service && uv run python ../../scripts/export_openapi.py policy)
 
 scan-scope:
 	python3 scripts/scan_scope.py
@@ -198,8 +212,8 @@ smoke:
 	echo "网关地址: $$GW"; \
 	echo "- 前端首页应为 200"; \
 	curl -sS -o /dev/null -w "  status=%{http_code}\n" $$GW/; \
-	echo "- 未接入业务前缀 /api/v1/policy 应为 404（网关拦截，不回退到前端 HTML）"; \
-	curl -sS -o /dev/null -w "  status=%{http_code}\n" $$GW/api/v1/policy/anything; \
+	echo "- 未接入业务前缀 /api/v1/customer 应为 404（网关拦截，不回退到前端 HTML）"; \
+	curl -sS -o /dev/null -w "  status=%{http_code}\n" $$GW/api/v1/customer/anything; \
 	echo "- GET /api/v1/auth/csrf 应为 200"; \
 	curl -sS -o /dev/null -w "  status=%{http_code}\n" $$GW/api/v1/auth/csrf; \
 	echo "- 错误密码登录应为 401"; \

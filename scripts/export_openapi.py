@@ -22,6 +22,10 @@ def _prepare_env() -> None:
     os.environ.setdefault("CODEBOOK_ENVIRONMENT", "test")
     os.environ.setdefault("CODEBOOK_IAM_SERVICE_SECRET", "export-only")
     os.environ.setdefault("CODEBOOK_AUDIT_INGEST_SECRET", "export-only")
+    os.environ.setdefault("POLICY_DATABASE_URL", "postgresql+asyncpg://policy_app:test@localhost:5432/policy_db")
+    os.environ.setdefault("POLICY_ENVIRONMENT", "test")
+    os.environ.setdefault("POLICY_IAM_SERVICE_SECRET", "export-only")
+    os.environ.setdefault("POLICY_AUDIT_INGEST_SECRET", "export-only")
 
 
 def _dump(app: object, dest: Path) -> None:
@@ -30,29 +34,29 @@ def _dump(app: object, dest: Path) -> None:
     print(f"wrote {dest} paths={len(payload.get('paths', {}))}")
 
 
+SERVICES = {
+    "iam": "services/iam-service",
+    "audit": "services/audit-service",
+    "codebook": "services/codebook-service",
+    "policy": "services/policy-service",
+}
+
+
 def main() -> int:
     _prepare_env()
     OUT.mkdir(parents=True, exist_ok=True)
-    sys.path.insert(0, str(ROOT / "services/iam-service"))
-    from app.main import app as iam_app
+    wanted = sys.argv[1:] or list(SERVICES)
+    for name in wanted:
+        rel = SERVICES[name]
+        sys.path.insert(0, str(ROOT / rel))
+        from app.main import app as service_app
 
-    _dump(iam_app, OUT / "iam.json")
-    sys.path.pop(0)
-    for key in list(sys.modules):
-        if key == "app" or key.startswith("app."):
-            del sys.modules[key]
-    sys.path.insert(0, str(ROOT / "services/audit-service"))
-    from app.main import app as audit_app
-
-    _dump(audit_app, OUT / "audit.json")
-    for key in list(sys.modules):
-        if key == "app" or key.startswith("app."):
-            del sys.modules[key]
-    sys.path.pop(0)
-    sys.path.insert(0, str(ROOT / "services/codebook-service"))
-    from app.main import app as codebook_app
-
-    _dump(codebook_app, OUT / "codebook.json")
+        _dump(service_app, OUT / f"{name}.json")
+        del sys.modules["app"]
+        for key in list(sys.modules):
+            if key.startswith("app."):
+                del sys.modules[key]
+        sys.path.pop(0)
     return 0
 
 

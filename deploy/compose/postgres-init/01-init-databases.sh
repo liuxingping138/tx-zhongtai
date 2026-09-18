@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Compose 启动 postgres 容器时执行一次：为 IAM、审计各建立独立数据库和账号。
+# Compose 启动 postgres 容器时执行一次：为 IAM、审计、码表、政策各建立独立数据库和账号。
 # 依赖的环境变量由 docker-compose.yml 传入本容器：
 # IAM_DB_NAME / IAM_DB_USER / IAM_DB_PASSWORD、AUDIT_DB_NAME / AUDIT_DB_USER / AUDIT_DB_PASSWORD、
 # AUDIT_CLEANUP_DB_USER / AUDIT_CLEANUP_DB_PASSWORD。
@@ -36,6 +36,7 @@ EOSQL
 create_db_and_user "${IAM_DB_NAME}" "${IAM_DB_USER}" "${IAM_DB_PASSWORD}"
 create_db_and_user "${AUDIT_DB_NAME}" "${AUDIT_DB_USER}" "${AUDIT_DB_PASSWORD}"
 create_db_and_user "${CODEBOOK_DB_NAME}" "${CODEBOOK_DB_USER}" "${CODEBOOK_DB_PASSWORD}"
+create_db_and_user "${POLICY_DB_NAME}" "${POLICY_DB_USER}" "${POLICY_DB_PASSWORD}"
 
 # 清理账号只建登录与 CONNECT，表级 DELETE 在迁移后由 grant_cleanup 授予。
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "postgres" <<-EOSQL

@@ -1,0 +1,1391 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "policy-service",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health/live": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Live",
+        "operationId": "live_health_live_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Live Health Live Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Ready",
+        "operationId": "ready_health_ready_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/sources": {
+      "get": {
+        "tags": [
+          "policy-sources"
+        ],
+        "summary": "List Items",
+        "operationId": "list_items_api_v1_policy_sources_get",
+        "parameters": [
+          {
+            "name": "site_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Site Name"
+            }
+          },
+          {
+            "name": "province_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Province Name"
+            }
+          },
+          {
+            "name": "city_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "City Name"
+            }
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tag"
+            }
+          },
+          {
+            "name": "site_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Site Code"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "policy-sources"
+        ],
+        "summary": "Create Item",
+        "operationId": "create_item_api_v1_policy_sources_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/sources/export": {
+      "get": {
+        "tags": [
+          "policy-sources"
+        ],
+        "summary": "Export Items",
+        "operationId": "export_items_api_v1_policy_sources_export_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/sources/import": {
+      "post": {
+        "tags": [
+          "policy-sources"
+        ],
+        "summary": "Import Items",
+        "operationId": "import_items_api_v1_policy_sources_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_items_api_v1_policy_sources_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/sources/{item_id}": {
+      "get": {
+        "tags": [
+          "policy-sources"
+        ],
+        "summary": "Get Item",
+        "operationId": "get_item_api_v1_policy_sources__item_id__get",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "policy-sources"
+        ],
+        "summary": "Update Item",
+        "operationId": "update_item_api_v1_policy_sources__item_id__patch",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/base-tags": {
+      "get": {
+        "tags": [
+          "policy-base-tags"
+        ],
+        "summary": "List Items",
+        "operationId": "list_items_api_v1_policy_base_tags_get",
+        "parameters": [
+          {
+            "name": "policy_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Policy Name"
+            }
+          },
+          {
+            "name": "province_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Province Name"
+            }
+          },
+          {
+            "name": "policy_types",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Policy Types"
+            }
+          },
+          {
+            "name": "is_penetrate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Penetrate"
+            }
+          },
+          {
+            "name": "need_interpret",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Need Interpret"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "policy-base-tags"
+        ],
+        "summary": "Create Item",
+        "operationId": "create_item_api_v1_policy_base_tags_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BaseTagWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/base-tags/export": {
+      "get": {
+        "tags": [
+          "policy-base-tags"
+        ],
+        "summary": "Export Items",
+        "operationId": "export_items_api_v1_policy_base_tags_export_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/base-tags/import": {
+      "post": {
+        "tags": [
+          "policy-base-tags"
+        ],
+        "summary": "Import Items",
+        "operationId": "import_items_api_v1_policy_base_tags_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_items_api_v1_policy_base_tags_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/base-tags/{item_id}": {
+      "get": {
+        "tags": [
+          "policy-base-tags"
+        ],
+        "summary": "Get Item",
+        "operationId": "get_item_api_v1_policy_base_tags__item_id__get",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "policy-base-tags"
+        ],
+        "summary": "Update Item",
+        "operationId": "update_item_api_v1_policy_base_tags__item_id__patch",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BaseTagWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/interpretations": {
+      "get": {
+        "tags": [
+          "policy-interpretations"
+        ],
+        "summary": "List Items",
+        "operationId": "list_items_api_v1_policy_interpretations_get",
+        "parameters": [
+          {
+            "name": "policy_title",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Policy Title"
+            }
+          },
+          {
+            "name": "industry_scenario_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Industry Scenario Code"
+            }
+          },
+          {
+            "name": "industry_l1",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Industry L1"
+            }
+          },
+          {
+            "name": "opportunity_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Opportunity Type"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "policy-interpretations"
+        ],
+        "summary": "Create Item",
+        "operationId": "create_item_api_v1_policy_interpretations_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InterpretationWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/interpretations/export": {
+      "get": {
+        "tags": [
+          "policy-interpretations"
+        ],
+        "summary": "Export Items",
+        "operationId": "export_items_api_v1_policy_interpretations_export_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/interpretations/import": {
+      "post": {
+        "tags": [
+          "policy-interpretations"
+        ],
+        "summary": "Import Items",
+        "operationId": "import_items_api_v1_policy_interpretations_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_items_api_v1_policy_interpretations_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/interpretations/{item_id}": {
+      "get": {
+        "tags": [
+          "policy-interpretations"
+        ],
+        "summary": "Get Item",
+        "operationId": "get_item_api_v1_policy_interpretations__item_id__get",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "policy-interpretations"
+        ],
+        "summary": "Update Item",
+        "operationId": "update_item_api_v1_policy_interpretations__item_id__patch",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InterpretationWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BaseTagWrite": {
+        "properties": {
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "policy_name": {
+            "type": "string",
+            "title": "Policy Name"
+          },
+          "issuing_dept": {
+            "type": "string",
+            "title": "Issuing Dept",
+            "default": ""
+          },
+          "issuer_industry": {
+            "type": "string",
+            "title": "Issuer Industry",
+            "default": ""
+          },
+          "policy_level": {
+            "type": "string",
+            "title": "Policy Level",
+            "default": ""
+          },
+          "province_code": {
+            "type": "string",
+            "title": "Province Code",
+            "default": ""
+          },
+          "province_name": {
+            "type": "string",
+            "title": "Province Name",
+            "default": ""
+          },
+          "city_code": {
+            "type": "string",
+            "title": "City Code",
+            "default": ""
+          },
+          "city_name": {
+            "type": "string",
+            "title": "City Name",
+            "default": ""
+          },
+          "issued_at": {
+            "type": "string",
+            "title": "Issued At",
+            "default": ""
+          },
+          "policy_types": {
+            "type": "string",
+            "title": "Policy Types",
+            "default": ""
+          },
+          "source_url": {
+            "type": "string",
+            "title": "Source Url",
+            "default": ""
+          },
+          "is_penetrate": {
+            "type": "string",
+            "title": "Is Penetrate",
+            "default": ""
+          },
+          "penetrate_words": {
+            "type": "string",
+            "title": "Penetrate Words",
+            "default": ""
+          },
+          "penetrate_score": {
+            "type": "string",
+            "title": "Penetrate Score",
+            "default": ""
+          },
+          "need_interpret": {
+            "type": "string",
+            "title": "Need Interpret",
+            "default": ""
+          },
+          "remark": {
+            "type": "string",
+            "title": "Remark",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "policy_name"
+        ],
+        "title": "BaseTagWrite"
+      },
+      "Body_import_items_api_v1_policy_base_tags_import_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_items_api_v1_policy_base_tags_import_post"
+      },
+      "Body_import_items_api_v1_policy_interpretations_import_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_items_api_v1_policy_interpretations_import_post"
+      },
+      "Body_import_items_api_v1_policy_sources_import_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_items_api_v1_policy_sources_import_post"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "InterpretationWrite": {
+        "properties": {
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "tenant_id": {
+            "type": "string",
+            "title": "Tenant Id",
+            "default": ""
+          },
+          "policy_uid": {
+            "type": "string",
+            "title": "Policy Uid",
+            "default": ""
+          },
+          "policy_title": {
+            "type": "string",
+            "title": "Policy Title"
+          },
+          "industry_scenario_code": {
+            "type": "string",
+            "title": "Industry Scenario Code",
+            "default": ""
+          },
+          "industry_code": {
+            "type": "string",
+            "title": "Industry Code",
+            "default": ""
+          },
+          "industry_l1": {
+            "type": "string",
+            "title": "Industry L1",
+            "default": ""
+          },
+          "industry_l2": {
+            "type": "string",
+            "title": "Industry L2",
+            "default": ""
+          },
+          "industry_l3": {
+            "type": "string",
+            "title": "Industry L3",
+            "default": ""
+          },
+          "scenario_code": {
+            "type": "string",
+            "title": "Scenario Code",
+            "default": ""
+          },
+          "scenario_l1_name": {
+            "type": "string",
+            "title": "Scenario L1 Name",
+            "default": ""
+          },
+          "scenario_l2_name": {
+            "type": "string",
+            "title": "Scenario L2 Name",
+            "default": ""
+          },
+          "scenario_l3_name": {
+            "type": "string",
+            "title": "Scenario L3 Name",
+            "default": ""
+          },
+          "target_customers": {
+            "type": "string",
+            "title": "Target Customers",
+            "default": ""
+          },
+          "opportunity_type": {
+            "type": "string",
+            "title": "Opportunity Type",
+            "default": ""
+          },
+          "policy_summary": {
+            "type": "string",
+            "title": "Policy Summary",
+            "default": ""
+          },
+          "has_subsidy": {
+            "type": "string",
+            "title": "Has Subsidy",
+            "default": ""
+          },
+          "subsidy_content": {
+            "type": "string",
+            "title": "Subsidy Content",
+            "default": ""
+          },
+          "market_opportunity": {
+            "type": "string",
+            "title": "Market Opportunity",
+            "default": ""
+          },
+          "info_level": {
+            "type": "string",
+            "title": "Info Level",
+            "default": ""
+          },
+          "is_new_scenario": {
+            "type": "string",
+            "title": "Is New Scenario",
+            "default": ""
+          },
+          "new_scenario_level": {
+            "type": "string",
+            "title": "New Scenario Level",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "policy_title"
+        ],
+        "title": "InterpretationWrite"
+      },
+      "SourceWrite": {
+        "properties": {
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "province_name": {
+            "type": "string",
+            "title": "Province Name",
+            "default": ""
+          },
+          "province_code": {
+            "type": "string",
+            "title": "Province Code",
+            "default": ""
+          },
+          "city_name": {
+            "type": "string",
+            "title": "City Name",
+            "default": ""
+          },
+          "city_code": {
+            "type": "string",
+            "title": "City Code",
+            "default": ""
+          },
+          "district_name": {
+            "type": "string",
+            "title": "District Name",
+            "default": ""
+          },
+          "district_code": {
+            "type": "string",
+            "title": "District Code",
+            "default": ""
+          },
+          "site_name": {
+            "type": "string",
+            "title": "Site Name"
+          },
+          "crawl_priority": {
+            "type": "string",
+            "title": "Crawl Priority",
+            "default": ""
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "default": ""
+          },
+          "tag": {
+            "type": "string",
+            "title": "Tag",
+            "default": ""
+          },
+          "data_type": {
+            "type": "string",
+            "title": "Data Type",
+            "default": ""
+          },
+          "department": {
+            "type": "string",
+            "title": "Department",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "site_name"
+        ],
+        "title": "SourceWrite"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

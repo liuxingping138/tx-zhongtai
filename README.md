@@ -2,7 +2,7 @@
 
 Vue 前端 + Python 微服务后端的中台管理系统。当前公共框架已做到 **P6（完整集成验收）**：
 账号/会话/RBAC、Outbox Worker、审计查询、隔离验收、备份恢复与 OpenAPI 已交付。
-码表管理（政策类型、行业场景）已按用户提供的 Excel 接入。政策、客户、招投标仍仅目录占位。
+码表管理（政策类型、行业场景）与政策三个子模块（信源、基础标签、解读）已按用户提供的 Excel 接入。客户、招投标仍仅目录占位。
 
 详见：
 - [`docs/中台系统公共基础框架设计.md`](docs/中台系统公共基础框架设计.md) —— 架构设计
@@ -28,10 +28,10 @@ tx-zhongtai/
 ├── services/
 │   ├── iam-service/          # 身份权限服务；Compose 中 iam-worker 共用此镜像
 │   ├── audit-service/        # 审计写入、查询与到期清理
-│   ├── policy-service/       # 业务占位目录，仅 .gitkeep
+│   ├── policy-service/       # 政策：信源、基础标签、解读
 │   ├── customer-service/     # 业务占位目录，仅 .gitkeep
 │   ├── tender-service/       # 业务占位目录，仅 .gitkeep
-│   └── codebook-service/     # 业务占位目录，仅 .gitkeep
+│   └── codebook-service/     # 码表：政策类型、行业场景
 ├── packages/platform-common/ # 公共协议、异常、日志、健康检查等基础代码包
 ├── deploy/
 │   ├── gateway/               # Traefik 静态/动态配置

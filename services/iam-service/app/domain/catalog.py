@@ -1,6 +1,6 @@
 """随代码发布的资源 / 动作 / 菜单清单。
 
-未交付业务资源 published=false。码表管理已按用户提供的 Excel 发布。
+未交付业务资源 published=false。码表与政策三个子模块已按用户提供的 Excel 发布。
 清单同步必须幂等。
 """
 
@@ -47,13 +47,13 @@ RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("system.roles", "角色管理", "iam-service", NodeType.RESOURCE, True, 12, "system"),
     ResourceSpec("system.permissions", "权限分配", "iam-service", NodeType.RESOURCE, True, 13, "system"),
     ResourceSpec("system.audit", "审计查询", "iam-service", NodeType.RESOURCE, True, 14, "system"),
-    ResourceSpec("policy", "政策", "policy-service", NodeType.DIRECTORY, False, 20),
-    ResourceSpec("policy.sources", "信源配置", "policy-service", NodeType.RESOURCE, False, 21, "policy"),
+    ResourceSpec("policy", "政策", "policy-service", NodeType.DIRECTORY, True, 20),
+    ResourceSpec("policy.sources", "信源管理", "policy-service", NodeType.RESOURCE, True, 21, "policy"),
     ResourceSpec(
         "policy.crawler_monitoring", "爬虫监测", "policy-service", NodeType.RESOURCE, False, 22, "policy"
     ),
-    ResourceSpec("policy.interpretations", "政策解读列表", "policy-service", NodeType.RESOURCE, False, 23, "policy"),
-    ResourceSpec("policy.base_tags", "政策基础标签表", "policy-service", NodeType.RESOURCE, False, 24, "policy"),
+    ResourceSpec("policy.interpretations", "政策解读列表", "policy-service", NodeType.RESOURCE, True, 23, "policy"),
+    ResourceSpec("policy.base_tags", "政策基础标签表", "policy-service", NodeType.RESOURCE, True, 24, "policy"),
     ResourceSpec("customer", "客户", "customer-service", NodeType.RESOURCE, False, 30),
     ResourceSpec("tender", "招投标", "tender-service", NodeType.RESOURCE, False, 40),
     ResourceSpec("codebook", "码表管理", "codebook-service", NodeType.DIRECTORY, True, 50),
@@ -90,6 +90,24 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ActionSpec("codebook.scenarios", "create", GrantLevel.FULL),
     ActionSpec("codebook.scenarios", "update", GrantLevel.FULL),
     ActionSpec("codebook.scenarios", "import", GrantLevel.FULL),
+    ActionSpec("policy.sources", "list", GrantLevel.READ),
+    ActionSpec("policy.sources", "read", GrantLevel.READ),
+    ActionSpec("policy.sources", "export", GrantLevel.READ),
+    ActionSpec("policy.sources", "create", GrantLevel.FULL),
+    ActionSpec("policy.sources", "update", GrantLevel.FULL),
+    ActionSpec("policy.sources", "import", GrantLevel.FULL),
+    ActionSpec("policy.base_tags", "list", GrantLevel.READ),
+    ActionSpec("policy.base_tags", "read", GrantLevel.READ),
+    ActionSpec("policy.base_tags", "export", GrantLevel.READ),
+    ActionSpec("policy.base_tags", "create", GrantLevel.FULL),
+    ActionSpec("policy.base_tags", "update", GrantLevel.FULL),
+    ActionSpec("policy.base_tags", "import", GrantLevel.FULL),
+    ActionSpec("policy.interpretations", "list", GrantLevel.READ),
+    ActionSpec("policy.interpretations", "read", GrantLevel.READ),
+    ActionSpec("policy.interpretations", "export", GrantLevel.READ),
+    ActionSpec("policy.interpretations", "create", GrantLevel.FULL),
+    ActionSpec("policy.interpretations", "update", GrantLevel.FULL),
+    ActionSpec("policy.interpretations", "import", GrantLevel.FULL),
 )
 
 MENU_SPECS: tuple[MenuSpec, ...] = (
@@ -98,8 +116,8 @@ MENU_SPECS: tuple[MenuSpec, ...] = (
     MenuSpec("menu.system.roles", "角色管理", 12, "system-roles", "system.roles", "menu.system"),
     MenuSpec("menu.system.permissions", "权限分配", 13, "system-permissions", "system.permissions", "menu.system"),
     MenuSpec("menu.system.audit", "操作日志", 14, "system-audit", "system.audit", "menu.system"),
-    MenuSpec("menu.policy", "政策", 20, enabled=False),
-    MenuSpec("menu.policy.sources", "信源配置", 21, "policy-sources", "policy.sources", "menu.policy", enabled=False),
+    MenuSpec("menu.policy", "政策", 20, enabled=True),
+    MenuSpec("menu.policy.sources", "信源管理", 21, "policy-sources", "policy.sources", "menu.policy", enabled=True),
     MenuSpec(
         "menu.policy.crawler",
         "爬虫监测",
@@ -116,7 +134,7 @@ MENU_SPECS: tuple[MenuSpec, ...] = (
         "policy-interpretations",
         "policy.interpretations",
         "menu.policy",
-        enabled=False,
+        enabled=True,
     ),
     MenuSpec(
         "menu.policy.base_tags",
@@ -125,7 +143,7 @@ MENU_SPECS: tuple[MenuSpec, ...] = (
         "policy-base-tags",
         "policy.base_tags",
         "menu.policy",
-        enabled=False,
+        enabled=True,
     ),
     MenuSpec("menu.customer", "客户", 30, "customer", "customer", enabled=False),
     MenuSpec("menu.tender", "招投标", 40, "tender", "tender", enabled=False),

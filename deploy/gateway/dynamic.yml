@@ -1,6 +1,6 @@
 # Traefik 动态路由配置（文件 Provider）。
 # 优先级设计：具体业务前缀（100）> 未接入业务的 /api/v1 兜底 404（50）> 前端 SPA 兜底（1）。
-# 这样 /api/v1/policy 等尚未接入的业务前缀会被 api-fallback 拦截返回 404，
+# 这样 /api/v1/customer 等尚未接入的业务前缀会被 api-fallback 拦截返回 404，
 # 不会被前端的 PathPrefix(`/`) 兜底路由捕获而误返回 200 的 HTML。
 #
 # `/health/*`、`/internal/*` 均未在此声明路由，网关不会公开这些内部路径。
@@ -27,6 +27,11 @@ http:
       entryPoints: ["web"]
       service: codebook-service
       priority: 100
+    policy:
+      rule: "PathPrefix(`/api/v1/policy`)"
+      entryPoints: ["web"]
+      service: policy-service
+      priority: 100
     api-fallback:
       rule: "PathPrefix(`/api/v1`)"
       entryPoints: ["web"]
@@ -51,6 +56,10 @@ http:
       loadBalancer:
         servers:
           - url: "http://codebook-service:8003"
+    policy-service:
+      loadBalancer:
+        servers:
+          - url: "http://policy-service:8004"
     api-fallback:
       loadBalancer:
         servers:

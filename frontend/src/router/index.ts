@@ -74,6 +74,24 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '场景码表', resource: 'codebook.scenarios' },
       },
       {
+        path: 'policy/sources',
+        name: 'policy-sources',
+        component: () => import('@/modules/policy/sources/SourceList.vue'),
+        meta: { title: '信源管理', resource: 'policy.sources' },
+      },
+      {
+        path: 'policy/base-tags',
+        name: 'policy-base-tags',
+        component: () => import('@/modules/policy/base-tags/BaseTagList.vue'),
+        meta: { title: '政策基础标签表', resource: 'policy.base_tags' },
+      },
+      {
+        path: 'policy/interpretations',
+        name: 'policy-interpretations',
+        component: () => import('@/modules/policy/interpretations/InterpretationList.vue'),
+        meta: { title: '政策解读列表', resource: 'policy.interpretations' },
+      },
+      {
         path: 'forbidden',
         name: 'forbidden',
         component: () => import('@/views/ForbiddenView.vue'),

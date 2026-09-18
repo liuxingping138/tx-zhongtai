@@ -1,0 +1,858 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "codebook-service",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health/live": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Live",
+        "operationId": "live_health_live_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Live Health Live Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Ready",
+        "operationId": "ready_health_ready_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/codebook/policy-types": {
+      "get": {
+        "tags": [
+          "codebook-policy-types"
+        ],
+        "summary": "List Items",
+        "operationId": "list_items_api_v1_codebook_policy_types_get",
+        "parameters": [
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "codebook-policy-types"
+        ],
+        "summary": "Create Item",
+        "operationId": "create_item_api_v1_codebook_policy_types_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyTypeWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/codebook/policy-types/export": {
+      "get": {
+        "tags": [
+          "codebook-policy-types"
+        ],
+        "summary": "Export Items",
+        "operationId": "export_items_api_v1_codebook_policy_types_export_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/codebook/policy-types/import": {
+      "post": {
+        "tags": [
+          "codebook-policy-types"
+        ],
+        "summary": "Import Items",
+        "operationId": "import_items_api_v1_codebook_policy_types_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_items_api_v1_codebook_policy_types_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/codebook/policy-types/{item_id}": {
+      "patch": {
+        "tags": [
+          "codebook-policy-types"
+        ],
+        "summary": "Update Item",
+        "operationId": "update_item_api_v1_codebook_policy_types__item_id__patch",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyTypeWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/codebook/scenarios": {
+      "get": {
+        "tags": [
+          "codebook-scenarios"
+        ],
+        "summary": "List Items",
+        "operationId": "list_items_api_v1_codebook_scenarios_get",
+        "parameters": [
+          {
+            "name": "industry_scenario_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Industry Scenario Code"
+            }
+          },
+          {
+            "name": "industry_l1",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Industry L1"
+            }
+          },
+          {
+            "name": "scenario_tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scenario Tag"
+            }
+          },
+          {
+            "name": "customer_group_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Customer Group Name"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "codebook-scenarios"
+        ],
+        "summary": "Create Item",
+        "operationId": "create_item_api_v1_codebook_scenarios_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScenarioWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/codebook/scenarios/export": {
+      "get": {
+        "tags": [
+          "codebook-scenarios"
+        ],
+        "summary": "Export Items",
+        "operationId": "export_items_api_v1_codebook_scenarios_export_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/codebook/scenarios/import": {
+      "post": {
+        "tags": [
+          "codebook-scenarios"
+        ],
+        "summary": "Import Items",
+        "operationId": "import_items_api_v1_codebook_scenarios_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_items_api_v1_codebook_scenarios_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/codebook/scenarios/{item_id}": {
+      "get": {
+        "tags": [
+          "codebook-scenarios"
+        ],
+        "summary": "Get Item",
+        "operationId": "get_item_api_v1_codebook_scenarios__item_id__get",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "codebook-scenarios"
+        ],
+        "summary": "Update Item",
+        "operationId": "update_item_api_v1_codebook_scenarios__item_id__patch",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScenarioWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Body_import_items_api_v1_codebook_policy_types_import_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_items_api_v1_codebook_policy_types_import_post"
+      },
+      "Body_import_items_api_v1_codebook_scenarios_import_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_items_api_v1_codebook_scenarios_import_post"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "PolicyTypeWrite": {
+        "properties": {
+          "seq_no": {
+            "type": "string",
+            "title": "Seq No",
+            "default": ""
+          },
+          "type_name": {
+            "type": "string",
+            "title": "Type Name"
+          },
+          "definition": {
+            "type": "string",
+            "title": "Definition",
+            "default": ""
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type_name"
+        ],
+        "title": "PolicyTypeWrite"
+      },
+      "ScenarioWrite": {
+        "properties": {
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "industry_scenario_code": {
+            "type": "string",
+            "title": "Industry Scenario Code",
+            "default": ""
+          },
+          "industry_code": {
+            "type": "string",
+            "title": "Industry Code",
+            "default": ""
+          },
+          "industry_l1": {
+            "type": "string",
+            "title": "Industry L1",
+            "default": ""
+          },
+          "industry_l2": {
+            "type": "string",
+            "title": "Industry L2",
+            "default": ""
+          },
+          "industry_l3": {
+            "type": "string",
+            "title": "Industry L3",
+            "default": ""
+          },
+          "scenario_tag": {
+            "type": "string",
+            "title": "Scenario Tag",
+            "default": ""
+          },
+          "scenario_level": {
+            "type": "string",
+            "title": "Scenario Level",
+            "default": ""
+          },
+          "scenario_type": {
+            "type": "string",
+            "title": "Scenario Type",
+            "default": ""
+          },
+          "desc_90": {
+            "type": "string",
+            "title": "Desc 90",
+            "default": ""
+          },
+          "desc_130": {
+            "type": "string",
+            "title": "Desc 130",
+            "default": ""
+          },
+          "desc_pest": {
+            "type": "string",
+            "title": "Desc Pest",
+            "default": ""
+          },
+          "scenario_source": {
+            "type": "string",
+            "title": "Scenario Source",
+            "default": ""
+          },
+          "scenario_hierarchy": {
+            "type": "string",
+            "title": "Scenario Hierarchy",
+            "default": ""
+          },
+          "scenario_code": {
+            "type": "string",
+            "title": "Scenario Code",
+            "default": ""
+          },
+          "scenario_l1_name": {
+            "type": "string",
+            "title": "Scenario L1 Name",
+            "default": ""
+          },
+          "scenario_l1_desc": {
+            "type": "string",
+            "title": "Scenario L1 Desc",
+            "default": ""
+          },
+          "scenario_l2_name": {
+            "type": "string",
+            "title": "Scenario L2 Name",
+            "default": ""
+          },
+          "scenario_l2_desc": {
+            "type": "string",
+            "title": "Scenario L2 Desc",
+            "default": ""
+          },
+          "scenario_l3_name": {
+            "type": "string",
+            "title": "Scenario L3 Name",
+            "default": ""
+          },
+          "scenario_l3_desc": {
+            "type": "string",
+            "title": "Scenario L3 Desc",
+            "default": ""
+          },
+          "customer_group_name": {
+            "type": "string",
+            "title": "Customer Group Name",
+            "default": ""
+          },
+          "customer_group_industry": {
+            "type": "string",
+            "title": "Customer Group Industry",
+            "default": ""
+          },
+          "org_keywords": {
+            "type": "string",
+            "title": "Org Keywords",
+            "default": ""
+          },
+          "scope_keywords": {
+            "type": "string",
+            "title": "Scope Keywords",
+            "default": ""
+          },
+          "customer_level": {
+            "type": "string",
+            "title": "Customer Level",
+            "default": ""
+          },
+          "customer_category": {
+            "type": "string",
+            "title": "Customer Category",
+            "default": ""
+          },
+          "product_l1_name": {
+            "type": "string",
+            "title": "Product L1 Name",
+            "default": ""
+          },
+          "product_l2_name": {
+            "type": "string",
+            "title": "Product L2 Name",
+            "default": ""
+          },
+          "branch_count": {
+            "type": "string",
+            "title": "Branch Count",
+            "default": ""
+          },
+          "product_l1_sort": {
+            "type": "string",
+            "title": "Product L1 Sort",
+            "default": ""
+          },
+          "product_l2_sort": {
+            "type": "string",
+            "title": "Product L2 Sort",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ScenarioWrite"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

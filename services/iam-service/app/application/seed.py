@@ -101,9 +101,11 @@ async def _upsert_menus(session: AsyncSession, resources: dict[str, Resource]) -
             await session.flush()
         else:
             row.parent_id = parent_id
+            row.title = spec.title
             row.route_name = spec.route_name
             row.resource_id = resource_id
             row.icon = spec.icon
+            row.sort_order = spec.sort_order
             row.enabled = spec.enabled
         by_code[spec.code] = row
 

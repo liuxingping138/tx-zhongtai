@@ -1,5 +1,5 @@
 # 本地开发环境 Compose。生产部署需另行准备（本期不执行）。
-# 运行单元：frontend、gateway、iam-service、iam-worker、audit-service、postgres、redis。
+# 运行单元：frontend、gateway、iam-service、iam-worker、audit-service、codebook-service、policy-service、postgres、redis。
 #
 # 使用方式：在仓库根目录执行 `docker compose -f deploy/compose/docker-compose.yml --env-file .env up`
 # 或通过根目录 Makefile 的 `make dev-up` / `make dev-down`。
@@ -35,6 +35,9 @@ services:
       CODEBOOK_DB_NAME: ${CODEBOOK_DB_NAME:?CODEBOOK_DB_NAME 未设置}
       CODEBOOK_DB_USER: ${CODEBOOK_DB_USER:?CODEBOOK_DB_USER 未设置}
       CODEBOOK_DB_PASSWORD: ${CODEBOOK_DB_PASSWORD:?CODEBOOK_DB_PASSWORD 未设置}
+      POLICY_DB_NAME: ${POLICY_DB_NAME:?POLICY_DB_NAME 未设置}
+      POLICY_DB_USER: ${POLICY_DB_USER:?POLICY_DB_USER 未设置}
+      POLICY_DB_PASSWORD: ${POLICY_DB_PASSWORD:?POLICY_DB_PASSWORD 未设置}
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
@@ -156,6 +159,33 @@ services:
       timeout: 5s
       retries: 5
 
+  policy-service:
+    build:
+      context: ../..
+      dockerfile: services/policy-service/Dockerfile
+    restart: unless-stopped
+    environment:
+      POLICY_ENVIRONMENT: ${ENVIRONMENT:-development}
+      POLICY_SERVICE_NAME: policy-service
+      POLICY_LOG_LEVEL: ${POLICY_LOG_LEVEL:-INFO}
+      POLICY_DATABASE_URL: postgresql+asyncpg://${POLICY_DB_USER}:${POLICY_DB_PASSWORD}@postgres:5432/${POLICY_DB_NAME}
+      POLICY_CORS_ALLOW_ORIGINS: ${POLICY_CORS_ALLOW_ORIGINS:-[]}
+      POLICY_IAM_BASE_URL: http://iam-service:8001
+      POLICY_IAM_SERVICE_SECRET: ${POLICY_IAM_SERVICE_SECRET:-dev-only-change-me-internal}
+      POLICY_AUDIT_INGEST_URL: http://audit-service:8002
+      POLICY_AUDIT_INGEST_SECRET: ${POLICY_AUDIT_INGEST_SECRET:-dev-only-change-me-ingest}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - data
+      - gateway
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8004/health/live')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   iam-worker:
     build:
       context: ../..
@@ -214,5 +244,6 @@ services:
       - iam-service
       - audit-service
       - codebook-service
+      - policy-service
       - frontend
       - api-fallback
