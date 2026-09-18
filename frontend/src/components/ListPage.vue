@@ -11,8 +11,9 @@ withDefaults(
     page: number
     pageSize: number
     loading?: boolean
+    hidePager?: boolean
   }>(),
-  { hint: '', loading: false },
+  { hint: '', loading: false, hidePager: false },
 )
 
 const emit = defineEmits<{
@@ -68,7 +69,10 @@ async function onSize(value: number) {
     </section>
     <section class="panel table-card">
       <slot />
-      <div class="pagination-row">
+      <div
+        v-if="!hidePager"
+        class="pagination-row"
+      >
         <el-pagination
           :current-page="page"
           :page-size="pageSize"

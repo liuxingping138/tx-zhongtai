@@ -46,7 +46,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'system/permissions',
         name: 'system-permissions',
-        component: () => import('@/modules/system/permissions/PermissionEntry.vue'),
+        component: () => import('@/modules/system/permissions/PermissionConfig.vue'),
         meta: { title: '权限分配', resource: 'system.permissions' },
       },
       {

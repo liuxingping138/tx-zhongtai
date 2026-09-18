@@ -189,6 +189,14 @@ async function onSaveRoles() {
   }
 }
 
+function toggleRole(roleId: string) {
+  if (selectedRoles.value.includes(roleId)) {
+    selectedRoles.value = selectedRoles.value.filter((id) => id !== roleId)
+    return
+  }
+  selectedRoles.value = [...selectedRoles.value, roleId]
+}
+
 function clearOnce() {
   oncePassword.value = ''
   onceUsername.value = ''
@@ -203,6 +211,7 @@ onMounted(() => {
   <div>
     <ListPage
       title="用户管理"
+      hint="管理登录账号。模块权限请在「权限分配」里配到角色上，再在这里把角色分给用户。"
       :total="total"
       :page="query.page"
       :page-size="query.page_size"
@@ -282,22 +291,41 @@ onMounted(() => {
           label="显示名"
         />
         <el-table-column
-          prop="status"
           label="状态"
           width="100"
-        />
+        >
+          <template #default="{ row }">
+            <el-tag
+              :type="row.status === 'active' ? 'success' : row.status === 'disabled' ? 'warning' : 'info'"
+              size="small"
+            >
+              {{ row.status === 'active' ? '启用' : row.status === 'disabled' ? '禁用' : '归档' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column
           label="须改密"
           width="90"
         >
           <template #default="{ row }">
-            {{ row.must_change_password ? '是' : '否' }}
+            <el-tag
+              v-if="row.must_change_password"
+              size="small"
+              type="warning"
+              effect="plain"
+            >
+              是
+            </el-tag>
+            <span
+              v-else
+              class="muted"
+            >否</span>
           </template>
         </el-table-column>
         <el-table-column
           v-if="auth.canFull('system.users') || auth.canFull('system.permissions')"
           label="操作"
-          width="360"
+          width="240"
         >
           <template #default="{ row }">
             <el-button
@@ -317,22 +345,6 @@ onMounted(() => {
               {{ row.status === 'active' ? '禁用' : '启用' }}
             </el-button>
             <el-button
-              v-if="auth.canFull('system.users')"
-              link
-              type="primary"
-              @click="onReset(row)"
-            >
-              重置密码
-            </el-button>
-            <el-button
-              v-if="auth.canFull('system.users')"
-              link
-              type="primary"
-              @click="onRevoke(row)"
-            >
-              强制下线
-            </el-button>
-            <el-button
               v-if="auth.canFull('system.permissions')"
               link
               type="primary"
@@ -340,6 +352,27 @@ onMounted(() => {
             >
               分配角色
             </el-button>
+            <el-dropdown
+              v-if="auth.canFull('system.users')"
+              trigger="click"
+            >
+              <el-button
+                link
+                type="primary"
+              >
+                更多
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item @click="onReset(row)">
+                    重置密码
+                  </el-dropdown-item>
+                  <el-dropdown-item @click="onRevoke(row)">
+                    强制下线
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </template>
         </el-table-column>
       </el-table>
@@ -412,23 +445,35 @@ onMounted(() => {
       </template>
     </el-dialog>
 
-    <el-dialog
+    <el-drawer
       v-model="roleVisible"
       title="分配角色"
-      width="420px"
+      size="440px"
     >
-      <el-select
-        v-model="selectedRoles"
-        multiple
-        style="width: 100%"
+      <p class="role-drawer__hint">
+        {{ roleUser?.display_name }}（{{ roleUser?.username }}）通过角色获得模块权限，不直接绑定资源。
+      </p>
+      <button
+        v-for="role in roleOptions"
+        :key="role.id"
+        type="button"
+        class="role-pick"
+        :class="{ 'is-on': selectedRoles.includes(role.id) }"
+        :disabled="role.status !== 'active' && !selectedRoles.includes(role.id)"
+        @click="toggleRole(role.id)"
       >
-        <el-option
-          v-for="role in roleOptions"
-          :key="role.id"
-          :label="role.name"
-          :value="role.id"
-        />
-      </el-select>
+        <el-checkbox :model-value="selectedRoles.includes(role.id)" />
+        <span class="role-pick__text">
+          <strong>{{ role.name }}</strong>
+          <em>{{ role.code }}</em>
+        </span>
+        <el-tag
+          :type="role.status === 'active' ? 'success' : 'info'"
+          size="small"
+        >
+          {{ role.status === 'active' ? '启用' : '停用' }}
+        </el-tag>
+      </button>
       <template #footer>
         <el-button @click="roleVisible = false">
           取消
@@ -440,7 +485,7 @@ onMounted(() => {
           保存
         </el-button>
       </template>
-    </el-dialog>
+    </el-drawer>
 
     <PasswordOnceDialog
       v-model="onceVisible"
@@ -450,3 +495,54 @@ onMounted(() => {
     />
   </div>
 </template>
+
+<style scoped>
+.muted {
+  color: var(--zt-ink-500);
+}
+
+.role-drawer__hint {
+  margin: 0 0 16px;
+  color: var(--zt-ink-500);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.role-pick {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 12px;
+  border: 1px solid var(--zt-border);
+  border-radius: 6px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.role-pick.is-on {
+  background: #edf5ff;
+  border-color: #c5dbf8;
+}
+
+.role-pick__text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.role-pick__text strong {
+  color: var(--zt-ink-900);
+  font-size: 14px;
+}
+
+.role-pick__text em {
+  color: var(--zt-ink-500);
+  font-size: 12px;
+  font-style: normal;
+}
+</style>

@@ -111,6 +111,7 @@ onMounted(() => {
   <div>
     <ListPage
       title="角色管理"
+      hint="角色是权限包：在这里维护角色，到「权限分配」给角色授权，再到用户管理里把角色分给人。"
       :total="total"
       :page="query.page"
       :page-size="query.page_size"
@@ -171,16 +172,35 @@ onMounted(() => {
           label="名称"
         />
         <el-table-column
-          prop="status"
           label="状态"
           width="100"
-        />
-        <el-table-column
-          label="内置"
-          width="80"
         >
           <template #default="{ row }">
-            {{ row.is_builtin ? '是' : '否' }}
+            <el-tag
+              :type="row.status === 'active' ? 'success' : 'info'"
+              size="small"
+            >
+              {{ row.status === 'active' ? '启用' : '停用' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="类型"
+          width="90"
+        >
+          <template #default="{ row }">
+            <el-tag
+              v-if="row.is_builtin"
+              size="small"
+              type="warning"
+              effect="plain"
+            >
+              内置
+            </el-tag>
+            <span
+              v-else
+              class="muted"
+            >自定义</span>
           </template>
         </el-table-column>
         <el-table-column
@@ -277,3 +297,9 @@ onMounted(() => {
     </el-dialog>
   </div>
 </template>
+
+<style scoped>
+.muted {
+  color: var(--zt-ink-500);
+}
+</style>
