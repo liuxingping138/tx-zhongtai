@@ -35,6 +35,7 @@ EOSQL
 
 create_db_and_user "${IAM_DB_NAME}" "${IAM_DB_USER}" "${IAM_DB_PASSWORD}"
 create_db_and_user "${AUDIT_DB_NAME}" "${AUDIT_DB_USER}" "${AUDIT_DB_PASSWORD}"
+create_db_and_user "${CODEBOOK_DB_NAME}" "${CODEBOOK_DB_USER}" "${CODEBOOK_DB_PASSWORD}"
 
 # 清理账号只建登录与 CONNECT，表级 DELETE 在迁移后由 grant_cleanup 授予。
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "postgres" <<-EOSQL

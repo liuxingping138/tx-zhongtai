@@ -26,7 +26,7 @@ function open(path: string) {
 <template>
   <div>
     <h2>欢迎，{{ auth.user?.display_name || auth.user?.username }}</h2>
-    <p>以下是你当前可以访问的公共模块。未发布的业务目录不会出现在这里。</p>
+    <p>以下是你当前可以访问的模块。未发布的业务目录不会出现在这里。</p>
     <el-empty
       v-if="!modules.length"
       description="当前没有可访问的模块"

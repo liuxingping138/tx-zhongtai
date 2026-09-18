@@ -15,6 +15,7 @@ class AuthzResult:
     allowed: bool
     user_id: str | None
     username: str | None
+    display_name: str | None
     level: str | None
     reason: str | None
 
@@ -77,11 +78,13 @@ class AuthzClient:
         user: dict[str, Any] = user_raw if isinstance(user_raw, dict) else {}
         user_id = user.get("id")
         username = user.get("username")
+        display_name = user.get("display_name")
         level = data.get("level")
         return AuthzResult(
             allowed=True,
             user_id=user_id if isinstance(user_id, str) else None,
             username=username if isinstance(username, str) else None,
+            display_name=display_name if isinstance(display_name, str) else None,
             level=level if isinstance(level, str) else None,
             reason=None,
         )

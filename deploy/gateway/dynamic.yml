@@ -22,6 +22,11 @@ http:
       entryPoints: ["web"]
       service: audit-service
       priority: 100
+    codebook:
+      rule: "PathPrefix(`/api/v1/codebook`)"
+      entryPoints: ["web"]
+      service: codebook-service
+      priority: 100
     api-fallback:
       rule: "PathPrefix(`/api/v1`)"
       entryPoints: ["web"]
@@ -42,6 +47,10 @@ http:
       loadBalancer:
         servers:
           - url: "http://audit-service:8002"
+    codebook-service:
+      loadBalancer:
+        servers:
+          - url: "http://codebook-service:8003"
     api-fallback:
       loadBalancer:
         servers:

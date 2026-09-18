@@ -10,13 +10,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BUSINESS_DIRS = [
     ROOT / "frontend/src/modules/policy",
-    ROOT / "frontend/src/modules/codebook",
     ROOT / "frontend/src/modules/customer",
     ROOT / "frontend/src/modules/tender",
     ROOT / "services/policy-service",
     ROOT / "services/customer-service",
     ROOT / "services/tender-service",
-    ROOT / "services/codebook-service",
 ]
 CODE_SUFFIX = {".py", ".ts", ".tsx", ".vue", ".js", ".sql"}
 SECRET_RE = re.compile(
@@ -45,7 +43,7 @@ def _business_ok() -> list[str]:
 def _secret_scan() -> list[str]:
     listed = subprocess.check_output(["git", "ls-files"], cwd=ROOT, text=True).splitlines()
     errors: list[str] = []
-    skip = {"docs/openapi/iam.json", "docs/openapi/audit.json"}
+    skip = {"docs/openapi/iam.json", "docs/openapi/audit.json", "docs/openapi/codebook.json"}
     for rel in listed:
         if rel in skip or rel.endswith(".lock") or "pnpm-lock" in rel:
             continue

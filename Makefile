@@ -4,12 +4,12 @@ SHELL := /bin/bash
 COMPOSE := docker compose -f deploy/compose/docker-compose.yml --env-file .env
 P6_ENV := deploy/compose/.p6.env
 P6_COMPOSE := docker compose -p tx-zhongtai-p6 -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.p6.yml --env-file $(P6_ENV)
-PY_PACKAGES := packages/platform-common services/iam-service services/audit-service
+PY_PACKAGES := packages/platform-common services/iam-service services/audit-service services/codebook-service
 JWT_KEYS_DIR := deploy/secrets/jwt
 JWT_P6_DIR := deploy/secrets/jwt-p6
 
 .PHONY: help bootstrap jwt-keys jwt-keys-p6 dev-up dev-down migrate seed admin-create check \
-        test-unit test-integration test-e2e smoke provision-audit-cleanup \
+        test-unit test-integration test-e2e smoke provision-audit-cleanup provision-codebook-db \
         outbox-replay audit-cleanup p6-env p6-up p6-down p6-migrate p6-seed p6-admin \
         p6-backup p6-restore export-openapi scan-scope
 
@@ -76,12 +76,19 @@ migrate:
 	@echo "== audit-service 迁移 =="
 	$(COMPOSE) exec -T audit-service uv run alembic upgrade head
 	@$(MAKE) provision-audit-cleanup
+	@$(MAKE) provision-codebook-db
 	@echo "== 授予审计清理权限 =="
 	$(COMPOSE) exec -T audit-service uv run python -m app.cli.grant_cleanup
+	@echo "== codebook-service 迁移 =="
+	$(COMPOSE) exec -T codebook-service uv run alembic upgrade head
 
 provision-audit-cleanup:
 	@echo "== 补建审计清理账号（已有数据卷不会重跑 init） =="
 	$(COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-audit-cleanup.sh
+
+provision-codebook-db:
+	@echo "== 补建码表库和账号（已有数据卷不会重跑 init） =="
+	$(COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-codebook-db.sh
 
 outbox-replay:
 	$(COMPOSE) exec -T iam-service uv run python -m app.cli.outbox_replay
@@ -104,6 +111,7 @@ check:
 	@(cd packages/platform-common && uv run ruff check . && uv run mypy platform_common) || exit 1
 	@(cd services/iam-service && uv run ruff check . && uv run mypy app) || exit 1
 	@(cd services/audit-service && uv run ruff check . && uv run mypy app) || exit 1
+	@(cd services/codebook-service && uv run ruff check . && uv run mypy app) || exit 1
 	@echo "== 前端类型检查 =="
 	@(cd frontend && pnpm run type-check)
 	@echo "== 前端构建 =="
@@ -143,7 +151,9 @@ p6-migrate:
 	$(P6_COMPOSE) exec -T iam-service uv run alembic upgrade head
 	$(P6_COMPOSE) exec -T audit-service uv run alembic upgrade head
 	$(P6_COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-audit-cleanup.sh
+	$(P6_COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-codebook-db.sh
 	$(P6_COMPOSE) exec -T audit-service uv run python -m app.cli.grant_cleanup
+	$(P6_COMPOSE) exec -T codebook-service uv run alembic upgrade head
 
 p6-seed:
 	$(P6_COMPOSE) exec -T iam-service uv run python -m app.cli.seed

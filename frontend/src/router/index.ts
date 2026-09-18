@@ -62,6 +62,18 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '操作日志', resource: 'system.audit' },
       },
       {
+        path: 'codebook/policy-types',
+        name: 'codebook-policy-types',
+        component: () => import('@/modules/codebook/policy-types/PolicyTypeList.vue'),
+        meta: { title: '政策类型码表', resource: 'codebook.policy_types' },
+      },
+      {
+        path: 'codebook/scenarios',
+        name: 'codebook-scenarios',
+        component: () => import('@/modules/codebook/scenarios/ScenarioList.vue'),
+        meta: { title: '场景码表', resource: 'codebook.scenarios' },
+      },
+      {
         path: 'forbidden',
         name: 'forbidden',
         component: () => import('@/views/ForbiddenView.vue'),

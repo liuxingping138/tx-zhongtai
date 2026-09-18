@@ -18,6 +18,10 @@ def _prepare_env() -> None:
     os.environ.setdefault("AUDIT_DATABASE_URL", "postgresql+asyncpg://audit_app:test@localhost:5432/audit_db")
     os.environ.setdefault("AUDIT_ENVIRONMENT", "test")
     os.environ.setdefault("AUDIT_IAM_SERVICE_SECRET", "export-only")
+    os.environ.setdefault("CODEBOOK_DATABASE_URL", "postgresql+asyncpg://codebook_app:test@localhost:5432/codebook_db")
+    os.environ.setdefault("CODEBOOK_ENVIRONMENT", "test")
+    os.environ.setdefault("CODEBOOK_IAM_SERVICE_SECRET", "export-only")
+    os.environ.setdefault("CODEBOOK_AUDIT_INGEST_SECRET", "export-only")
 
 
 def _dump(app: object, dest: Path) -> None:
@@ -41,6 +45,14 @@ def main() -> int:
     from app.main import app as audit_app
 
     _dump(audit_app, OUT / "audit.json")
+    for key in list(sys.modules):
+        if key == "app" or key.startswith("app."):
+            del sys.modules[key]
+    sys.path.pop(0)
+    sys.path.insert(0, str(ROOT / "services/codebook-service"))
+    from app.main import app as codebook_app
+
+    _dump(codebook_app, OUT / "codebook.json")
     return 0
 
 

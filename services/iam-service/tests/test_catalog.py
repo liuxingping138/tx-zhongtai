@@ -3,12 +3,14 @@ from __future__ import annotations
 from app.domain.catalog import ACTION_SPECS, RESOURCE_SPECS
 
 
-def test_business_resources_are_unpublished() -> None:
-    for spec in RESOURCE_SPECS:
-        if spec.service_code != "iam-service":
-            assert spec.published is False
+def test_unpublished_business_resources_have_no_actions() -> None:
+    unpublished = {spec.code for spec in RESOURCE_SPECS if spec.service_code != "iam-service" and not spec.published}
+    for spec in ACTION_SPECS:
+        assert spec.resource_code not in unpublished
 
 
-def test_no_fictional_business_actions() -> None:
-    resource_codes = {spec.resource_code for spec in ACTION_SPECS}
-    assert all(code.startswith("system.") for code in resource_codes)
+def test_codebook_resources_are_published() -> None:
+    by_code = {spec.code: spec for spec in RESOURCE_SPECS}
+    assert by_code["codebook.policy_types"].published is True
+    assert by_code["codebook.scenarios"].published is True
+    assert by_code["policy.sources"].published is False

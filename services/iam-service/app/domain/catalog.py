@@ -1,6 +1,6 @@
 """随代码发布的资源 / 动作 / 菜单清单。
 
-业务资源全部 published=false，且不登记虚构业务动作。
+未交付业务资源 published=false。码表管理已按用户提供的 Excel 发布。
 清单同步必须幂等。
 """
 
@@ -56,11 +56,11 @@ RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("policy.base_tags", "政策基础标签表", "policy-service", NodeType.RESOURCE, False, 24, "policy"),
     ResourceSpec("customer", "客户", "customer-service", NodeType.RESOURCE, False, 30),
     ResourceSpec("tender", "招投标", "tender-service", NodeType.RESOURCE, False, 40),
-    ResourceSpec("codebook", "码表管理", "codebook-service", NodeType.DIRECTORY, False, 50),
+    ResourceSpec("codebook", "码表管理", "codebook-service", NodeType.DIRECTORY, True, 50),
     ResourceSpec(
-        "codebook.policy_types", "政策类型码表", "codebook-service", NodeType.RESOURCE, False, 51, "codebook"
+        "codebook.policy_types", "政策类型码表", "codebook-service", NodeType.RESOURCE, True, 51, "codebook"
     ),
-    ResourceSpec("codebook.scenarios", "场景码表", "codebook-service", NodeType.RESOURCE, False, 52, "codebook"),
+    ResourceSpec("codebook.scenarios", "场景码表", "codebook-service", NodeType.RESOURCE, True, 52, "codebook"),
 )
 
 ACTION_SPECS: tuple[ActionSpec, ...] = (
@@ -78,6 +78,18 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ActionSpec("system.permissions", "grant", GrantLevel.FULL),
     ActionSpec("system.audit", "list", GrantLevel.READ),
     ActionSpec("system.audit", "read", GrantLevel.READ),
+    ActionSpec("codebook.policy_types", "list", GrantLevel.READ),
+    ActionSpec("codebook.policy_types", "read", GrantLevel.READ),
+    ActionSpec("codebook.policy_types", "export", GrantLevel.READ),
+    ActionSpec("codebook.policy_types", "create", GrantLevel.FULL),
+    ActionSpec("codebook.policy_types", "update", GrantLevel.FULL),
+    ActionSpec("codebook.policy_types", "import", GrantLevel.FULL),
+    ActionSpec("codebook.scenarios", "list", GrantLevel.READ),
+    ActionSpec("codebook.scenarios", "read", GrantLevel.READ),
+    ActionSpec("codebook.scenarios", "export", GrantLevel.READ),
+    ActionSpec("codebook.scenarios", "create", GrantLevel.FULL),
+    ActionSpec("codebook.scenarios", "update", GrantLevel.FULL),
+    ActionSpec("codebook.scenarios", "import", GrantLevel.FULL),
 )
 
 MENU_SPECS: tuple[MenuSpec, ...] = (
@@ -117,7 +129,7 @@ MENU_SPECS: tuple[MenuSpec, ...] = (
     ),
     MenuSpec("menu.customer", "客户", 30, "customer", "customer", enabled=False),
     MenuSpec("menu.tender", "招投标", 40, "tender", "tender", enabled=False),
-    MenuSpec("menu.codebook", "码表管理", 50, enabled=False),
+    MenuSpec("menu.codebook", "码表管理", 50, enabled=True),
     MenuSpec(
         "menu.codebook.policy_types",
         "政策类型码表",
@@ -125,7 +137,7 @@ MENU_SPECS: tuple[MenuSpec, ...] = (
         "codebook-policy-types",
         "codebook.policy_types",
         "menu.codebook",
-        enabled=False,
+        enabled=True,
     ),
     MenuSpec(
         "menu.codebook.scenarios",
@@ -134,7 +146,7 @@ MENU_SPECS: tuple[MenuSpec, ...] = (
         "codebook-scenarios",
         "codebook.scenarios",
         "menu.codebook",
-        enabled=False,
+        enabled=True,
     ),
 )
 

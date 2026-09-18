@@ -20,15 +20,20 @@ services:
     environment:
       IAM_ENVIRONMENT: test
       IAM_CSRF_ALLOWED_ORIGINS: '["http://localhost:8090","http://127.0.0.1:8090"]'
-      IAM_INTERNAL_CALLER_SECRETS: '{"audit-service":"p6-only-change-me-internal"}'
+      IAM_INTERNAL_CALLER_SECRETS: '{"audit-service":"p6-only-change-me-internal","codebook-service":"p6-only-change-me-internal"}'
       IAM_AUDIT_INGEST_SECRET: p6-only-change-me-ingest
   iam-worker:
     environment:
       IAM_ENVIRONMENT: test
-      IAM_INTERNAL_CALLER_SECRETS: '{"audit-service":"p6-only-change-me-internal"}'
+      IAM_INTERNAL_CALLER_SECRETS: '{"audit-service":"p6-only-change-me-internal","codebook-service":"p6-only-change-me-internal"}'
       IAM_AUDIT_INGEST_SECRET: p6-only-change-me-ingest
   audit-service:
     environment:
       AUDIT_ENVIRONMENT: test
-      AUDIT_INTERNAL_CALLER_SECRETS: '{"iam-service":"p6-only-change-me-ingest"}'
+      AUDIT_INTERNAL_CALLER_SECRETS: '{"iam-service":"p6-only-change-me-ingest","codebook-service":"p6-only-change-me-ingest"}'
       AUDIT_IAM_SERVICE_SECRET: p6-only-change-me-internal
+  codebook-service:
+    environment:
+      CODEBOOK_ENVIRONMENT: test
+      CODEBOOK_IAM_SERVICE_SECRET: p6-only-change-me-internal
+      CODEBOOK_AUDIT_INGEST_SECRET: p6-only-change-me-ingest

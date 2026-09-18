@@ -32,6 +32,9 @@ services:
       AUDIT_DB_PASSWORD: ${AUDIT_DB_PASSWORD:?AUDIT_DB_PASSWORD 未设置}
       AUDIT_CLEANUP_DB_USER: ${AUDIT_CLEANUP_DB_USER:-audit_cleanup}
       AUDIT_CLEANUP_DB_PASSWORD: ${AUDIT_CLEANUP_DB_PASSWORD:?AUDIT_CLEANUP_DB_PASSWORD 未设置}
+      CODEBOOK_DB_NAME: ${CODEBOOK_DB_NAME:?CODEBOOK_DB_NAME 未设置}
+      CODEBOOK_DB_USER: ${CODEBOOK_DB_USER:?CODEBOOK_DB_USER 未设置}
+      CODEBOOK_DB_PASSWORD: ${CODEBOOK_DB_PASSWORD:?CODEBOOK_DB_PASSWORD 未设置}
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
@@ -126,6 +129,33 @@ services:
       timeout: 5s
       retries: 5
 
+  codebook-service:
+    build:
+      context: ../..
+      dockerfile: services/codebook-service/Dockerfile
+    restart: unless-stopped
+    environment:
+      CODEBOOK_ENVIRONMENT: ${ENVIRONMENT:-development}
+      CODEBOOK_SERVICE_NAME: codebook-service
+      CODEBOOK_LOG_LEVEL: ${CODEBOOK_LOG_LEVEL:-INFO}
+      CODEBOOK_DATABASE_URL: postgresql+asyncpg://${CODEBOOK_DB_USER}:${CODEBOOK_DB_PASSWORD}@postgres:5432/${CODEBOOK_DB_NAME}
+      CODEBOOK_CORS_ALLOW_ORIGINS: ${CODEBOOK_CORS_ALLOW_ORIGINS:-[]}
+      CODEBOOK_IAM_BASE_URL: http://iam-service:8001
+      CODEBOOK_IAM_SERVICE_SECRET: ${CODEBOOK_IAM_SERVICE_SECRET:-dev-only-change-me-internal}
+      CODEBOOK_AUDIT_INGEST_URL: http://audit-service:8002
+      CODEBOOK_AUDIT_INGEST_SECRET: ${CODEBOOK_AUDIT_INGEST_SECRET:-dev-only-change-me-ingest}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - data
+      - gateway
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8003/health/live')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   iam-worker:
     build:
       context: ../..
@@ -183,5 +213,6 @@ services:
     depends_on:
       - iam-service
       - audit-service
+      - codebook-service
       - frontend
       - api-fallback

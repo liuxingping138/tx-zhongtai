@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 import { getAuditEvent, listAuditEvents } from '@/api/audit'
 import { errorMessage } from '@/api/errors'
 import type { AuditEventItem } from '@/api/types'
 
+const route = useRoute()
 const loading = ref(false)
 const events = ref<AuditEventItem[]>([])
 const total = ref(0)
@@ -77,6 +79,10 @@ async function openDetail(row: AuditEventItem) {
 }
 
 onMounted(() => {
+  const moduleCode = route.query.module_code
+  if (typeof moduleCode === 'string') {
+    query.module_code = moduleCode
+  }
   void load()
 })
 </script>
