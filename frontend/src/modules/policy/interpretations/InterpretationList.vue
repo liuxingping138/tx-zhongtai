@@ -12,6 +12,7 @@ import {
   type InterpretationItem,
 } from '@/api/policy'
 import { errorMessage, isApiError } from '@/api/errors'
+import ListPage from '@/components/ListPage.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -189,43 +190,21 @@ onMounted(() => {
 
 <template>
   <div>
-    <el-form
-      inline
-      @submit.prevent="onSearch"
+    <ListPage
+      title="政策解读表"
+      hint="对应《政策解读表》。空的政策唯一标识和关联主键由系统生成。完整流水在「系统管理 / 操作日志」。"
+      :total="total"
+      :page="query.page"
+      :page-size="query.page_size"
+      :loading="loading"
+      @update:page="query.page = $event"
+      @update:page-size="query.page_size = $event"
+      @change="load"
     >
-      <el-form-item label="政策原文名称">
-        <el-input
-          v-model="query.policy_title"
-          clearable
-        />
-      </el-form-item>
-      <el-form-item label="行业场景编码">
-        <el-input
-          v-model="query.industry_scenario_code"
-          clearable
-        />
-      </el-form-item>
-      <el-form-item label="一级行业">
-        <el-input
-          v-model="query.industry_l1"
-          clearable
-        />
-      </el-form-item>
-      <el-form-item label="机会类型">
-        <el-input
-          v-model="query.opportunity_type"
-          clearable
-        />
-      </el-form-item>
-      <el-form-item>
-        <el-button
-          native-type="submit"
-          type="primary"
-        >
-          查询
-        </el-button>
+      <template #actions>
         <el-button
           v-if="canWrite"
+          type="primary"
           @click="openCreate"
         >
           新增
@@ -247,74 +226,105 @@ onMounted(() => {
         >
           操作记录
         </el-button>
-      </el-form-item>
-    </el-form>
-    <p class="hint">
-      对应《政策解读表》。空的政策唯一标识和关联主键由系统生成。完整流水在「系统管理 / 操作日志」。
-    </p>
-    <el-table
-      v-loading="loading"
-      :data="items"
-    >
-      <el-table-column
-        prop="policy_title"
-        label="政策原文名称"
-        min-width="220"
-        show-overflow-tooltip
-      />
-      <el-table-column
-        prop="industry_scenario_code"
-        label="行业场景编码"
-        width="180"
-      />
-      <el-table-column
-        prop="industry_l1"
-        label="一级行业"
-        width="120"
-      />
-      <el-table-column
-        prop="opportunity_type"
-        label="机会类型"
-        width="100"
-      />
-      <el-table-column
-        prop="created_by_name"
-        label="入库人"
-        width="110"
-      />
-      <el-table-column
-        label="更新时间"
-        width="170"
+      </template>
+      <template #filters>
+        <el-form
+          class="filter-form"
+          inline
+          @submit.prevent="onSearch"
+        >
+          <el-form-item label="政策原文名称">
+            <el-input
+              v-model="query.policy_title"
+              clearable
+            />
+          </el-form-item>
+          <el-form-item label="行业场景编码">
+            <el-input
+              v-model="query.industry_scenario_code"
+              clearable
+            />
+          </el-form-item>
+          <el-form-item label="一级行业">
+            <el-input
+              v-model="query.industry_l1"
+              clearable
+            />
+          </el-form-item>
+          <el-form-item label="机会类型">
+            <el-input
+              v-model="query.opportunity_type"
+              clearable
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button
+              native-type="submit"
+              type="primary"
+            >
+              查询
+            </el-button>
+          </el-form-item>
+        </el-form>
+      </template>
+      <el-table
+        v-loading="loading"
+        class="data-table"
+        :data="items"
+        stripe
+        border
       >
-        <template #default="{ row }">
-          {{ formatTime(row.updated_at) }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        v-if="canWrite"
-        label="操作"
-        width="80"
-      >
-        <template #default="{ row }">
-          <el-button
-            link
-            type="primary"
-            @click="openEdit(row)"
-          >
-            编辑
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-    <div class="pager">
-      <el-pagination
-        v-model:current-page="query.page"
-        v-model:page-size="query.page_size"
-        :total="total"
-        layout="total, prev, pager, next"
-        @current-change="load"
-      />
-    </div>
+        <el-table-column
+          prop="policy_title"
+          label="政策原文名称"
+          min-width="220"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="industry_scenario_code"
+          label="行业场景编码"
+          width="180"
+        />
+        <el-table-column
+          prop="industry_l1"
+          label="一级行业"
+          width="120"
+        />
+        <el-table-column
+          prop="opportunity_type"
+          label="机会类型"
+          width="100"
+        />
+        <el-table-column
+          prop="created_by_name"
+          label="入库人"
+          width="110"
+        />
+        <el-table-column
+          label="更新时间"
+          width="170"
+        >
+          <template #default="{ row }">
+            {{ formatTime(row.updated_at) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          v-if="canWrite"
+          label="操作"
+          width="80"
+        >
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              @click="openEdit(row)"
+            >
+              编辑
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </ListPage>
     <el-drawer
       v-model="visible"
       :title="editing ? '编辑政策解读' : '新增政策解读'"
@@ -348,20 +358,3 @@ onMounted(() => {
     </el-drawer>
   </div>
 </template>
-
-<style scoped>
-.hint {
-  color: var(--el-text-color-secondary);
-  margin: 0 0 12px;
-}
-
-.pager {
-  margin-top: 16px;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.el-form-item :deep(.el-upload) {
-  margin: 0 8px;
-}
-</style>

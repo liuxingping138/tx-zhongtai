@@ -12,6 +12,7 @@ import {
   type PolicyTypeItem,
 } from '@/api/codebook'
 import { errorMessage, isApiError } from '@/api/errors'
+import ListPage from '@/components/ListPage.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -127,26 +128,21 @@ onMounted(() => {
 
 <template>
   <div>
-    <el-form
-      inline
-      @submit.prevent="onSearch"
+    <ListPage
+      title="政策类型码表"
+      hint="对应《政策基础信息表》中的「政策类型枚举值」。每条记录的入库/更新人和时间见下表；完整操作流水在「系统管理 / 操作日志」。"
+      :total="total"
+      :page="query.page"
+      :page-size="query.page_size"
+      :loading="loading"
+      @update:page="query.page = $event"
+      @update:page-size="query.page_size = $event"
+      @change="load"
     >
-      <el-form-item label="关键字">
-        <el-input
-          v-model="query.keyword"
-          clearable
-          placeholder="序号 / 政策类型 / 定义"
-        />
-      </el-form-item>
-      <el-form-item>
-        <el-button
-          native-type="submit"
-          type="primary"
-        >
-          查询
-        </el-button>
+      <template #actions>
         <el-button
           v-if="canWrite"
+          type="primary"
           @click="openCreate"
         >
           新增
@@ -168,82 +164,96 @@ onMounted(() => {
         >
           操作记录
         </el-button>
-      </el-form-item>
-    </el-form>
-    <p class="hint">
-      对应《政策基础信息表》中的「政策类型枚举值」。每条记录的入库/更新人和时间见下表；完整操作流水在「系统管理 / 操作日志」。
-    </p>
-    <el-table
-      v-loading="loading"
-      :data="items"
-    >
-      <el-table-column
-        prop="seq_no"
-        label="序号"
-        width="80"
-      />
-      <el-table-column
-        prop="type_name"
-        label="政策类型"
-        width="160"
-      />
-      <el-table-column
-        prop="definition"
-        label="定义"
-        min-width="280"
-        show-overflow-tooltip
-      />
-      <el-table-column
-        label="入库时间"
-        width="170"
+      </template>
+      <template #filters>
+        <el-form
+          class="filter-form"
+          inline
+          @submit.prevent="onSearch"
+        >
+          <el-form-item label="关键字">
+            <el-input
+              v-model="query.keyword"
+              clearable
+              placeholder="序号 / 政策类型 / 定义"
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button
+              native-type="submit"
+              type="primary"
+            >
+              查询
+            </el-button>
+          </el-form-item>
+        </el-form>
+      </template>
+      <el-table
+        v-loading="loading"
+        class="data-table"
+        :data="items"
+        stripe
+        border
       >
-        <template #default="{ row }">
-          {{ formatTime(row.created_at) }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="created_by_name"
-        label="入库人"
-        width="120"
-      />
-      <el-table-column
-        label="更新时间"
-        width="170"
-      >
-        <template #default="{ row }">
-          {{ formatTime(row.updated_at) }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="updated_by_name"
-        label="操作人"
-        width="120"
-      />
-      <el-table-column
-        v-if="canWrite"
-        label="操作"
-        width="80"
-      >
-        <template #default="{ row }">
-          <el-button
-            link
-            type="primary"
-            @click="openEdit(row)"
-          >
-            编辑
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-    <div class="pager">
-      <el-pagination
-        v-model:current-page="query.page"
-        v-model:page-size="query.page_size"
-        :total="total"
-        layout="total, prev, pager, next"
-        @current-change="load"
-      />
-    </div>
+        <el-table-column
+          prop="seq_no"
+          label="序号"
+          width="80"
+        />
+        <el-table-column
+          prop="type_name"
+          label="政策类型"
+          width="160"
+        />
+        <el-table-column
+          prop="definition"
+          label="定义"
+          min-width="280"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="入库时间"
+          width="170"
+        >
+          <template #default="{ row }">
+            {{ formatTime(row.created_at) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="created_by_name"
+          label="入库人"
+          width="120"
+        />
+        <el-table-column
+          label="更新时间"
+          width="170"
+        >
+          <template #default="{ row }">
+            {{ formatTime(row.updated_at) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="updated_by_name"
+          label="操作人"
+          width="120"
+        />
+        <el-table-column
+          v-if="canWrite"
+          label="操作"
+          width="80"
+        >
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              @click="openEdit(row)"
+            >
+              编辑
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </ListPage>
     <el-dialog
       v-model="visible"
       :title="editing ? '编辑政策类型' : '新增政策类型'"
@@ -285,20 +295,3 @@ onMounted(() => {
     </el-dialog>
   </div>
 </template>
-
-<style scoped>
-.hint {
-  color: var(--el-text-color-secondary);
-  margin: 0 0 12px;
-}
-
-.pager {
-  margin-top: 16px;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.el-form-item :deep(.el-upload) {
-  margin: 0 8px;
-}
-</style>

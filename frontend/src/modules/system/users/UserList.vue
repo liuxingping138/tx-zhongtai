@@ -14,6 +14,7 @@ import {
 import { errorMessage, isApiError } from '@/api/errors'
 import type { RoleItem, UserItem } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
+import ListPage from '@/components/ListPage.vue'
 import PasswordOnceDialog from '@/components/PasswordOnceDialog.vue'
 
 const auth = useAuthStore()
@@ -200,134 +201,149 @@ onMounted(() => {
 
 <template>
   <div>
-    <el-form
-      inline
-      @submit.prevent="onSearch"
+    <ListPage
+      title="用户管理"
+      :total="total"
+      :page="query.page"
+      :page-size="query.page_size"
+      :loading="loading"
+      @update:page="query.page = $event"
+      @update:page-size="query.page_size = $event"
+      @change="load"
     >
-      <el-form-item label="用户名">
-        <el-input
-          v-model="query.username"
-          clearable
-        />
-      </el-form-item>
-      <el-form-item label="状态">
-        <el-select
-          v-model="query.status"
-          clearable
-          placeholder="全部"
-          style="width: 140px"
-        >
-          <el-option
-            label="启用"
-            value="active"
-          />
-          <el-option
-            label="禁用"
-            value="disabled"
-          />
-          <el-option
-            label="归档"
-            value="archived"
-          />
-        </el-select>
-      </el-form-item>
-      <el-form-item>
+      <template
+        v-if="auth.canFull('system.users')"
+        #actions
+      >
         <el-button
-          native-type="submit"
           type="primary"
-        >
-          查询
-        </el-button>
-        <el-button
-          v-if="auth.canFull('system.users')"
           @click="createVisible = true"
         >
           新增用户
         </el-button>
-      </el-form-item>
-    </el-form>
-    <el-table
-      v-loading="loading"
-      :data="users"
-    >
-      <el-table-column
-        prop="username"
-        label="用户名"
-      />
-      <el-table-column
-        prop="display_name"
-        label="显示名"
-      />
-      <el-table-column
-        prop="status"
-        label="状态"
-        width="100"
-      />
-      <el-table-column
-        label="须改密"
-        width="90"
+      </template>
+      <template #filters>
+        <el-form
+          class="filter-form"
+          inline
+          @submit.prevent="onSearch"
+        >
+          <el-form-item label="用户名">
+            <el-input
+              v-model="query.username"
+              clearable
+              placeholder="用户名"
+            />
+          </el-form-item>
+          <el-form-item label="状态">
+            <el-select
+              v-model="query.status"
+              clearable
+              placeholder="全部"
+              style="width: 140px"
+            >
+              <el-option
+                label="启用"
+                value="active"
+              />
+              <el-option
+                label="禁用"
+                value="disabled"
+              />
+              <el-option
+                label="归档"
+                value="archived"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item>
+            <el-button
+              native-type="submit"
+              type="primary"
+            >
+              查询
+            </el-button>
+          </el-form-item>
+        </el-form>
+      </template>
+      <el-table
+        v-loading="loading"
+        class="data-table"
+        :data="users"
+        stripe
+        border
       >
-        <template #default="{ row }">
-          {{ row.must_change_password ? '是' : '否' }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        v-if="auth.canFull('system.users') || auth.canFull('system.permissions')"
-        label="操作"
-        width="360"
-      >
-        <template #default="{ row }">
-          <el-button
-            v-if="auth.canFull('system.users')"
-            link
-            type="primary"
-            @click="openEdit(row)"
-          >
-            编辑
-          </el-button>
-          <el-button
-            v-if="auth.canFull('system.users')"
-            link
-            type="primary"
-            @click="toggleStatus(row)"
-          >
-            {{ row.status === 'active' ? '禁用' : '启用' }}
-          </el-button>
-          <el-button
-            v-if="auth.canFull('system.users')"
-            link
-            type="primary"
-            @click="onReset(row)"
-          >
-            重置密码
-          </el-button>
-          <el-button
-            v-if="auth.canFull('system.users')"
-            link
-            type="primary"
-            @click="onRevoke(row)"
-          >
-            强制下线
-          </el-button>
-          <el-button
-            v-if="auth.canFull('system.permissions')"
-            link
-            type="primary"
-            @click="openRoles(row)"
-          >
-            分配角色
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-    <el-pagination
-      v-model:current-page="query.page"
-      v-model:page-size="query.page_size"
-      :total="total"
-      layout="total, prev, pager, next"
-      style="margin-top: 16px"
-      @current-change="load"
-    />
+        <el-table-column
+          prop="username"
+          label="用户名"
+        />
+        <el-table-column
+          prop="display_name"
+          label="显示名"
+        />
+        <el-table-column
+          prop="status"
+          label="状态"
+          width="100"
+        />
+        <el-table-column
+          label="须改密"
+          width="90"
+        >
+          <template #default="{ row }">
+            {{ row.must_change_password ? '是' : '否' }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          v-if="auth.canFull('system.users') || auth.canFull('system.permissions')"
+          label="操作"
+          width="360"
+        >
+          <template #default="{ row }">
+            <el-button
+              v-if="auth.canFull('system.users')"
+              link
+              type="primary"
+              @click="openEdit(row)"
+            >
+              编辑
+            </el-button>
+            <el-button
+              v-if="auth.canFull('system.users')"
+              link
+              type="primary"
+              @click="toggleStatus(row)"
+            >
+              {{ row.status === 'active' ? '禁用' : '启用' }}
+            </el-button>
+            <el-button
+              v-if="auth.canFull('system.users')"
+              link
+              type="primary"
+              @click="onReset(row)"
+            >
+              重置密码
+            </el-button>
+            <el-button
+              v-if="auth.canFull('system.users')"
+              link
+              type="primary"
+              @click="onRevoke(row)"
+            >
+              强制下线
+            </el-button>
+            <el-button
+              v-if="auth.canFull('system.permissions')"
+              link
+              type="primary"
+              @click="openRoles(row)"
+            >
+              分配角色
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </ListPage>
 
     <el-dialog
       v-model="createVisible"

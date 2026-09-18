@@ -130,28 +130,77 @@ async function onLogout() {
 <style scoped>
 .admin-layout {
   height: 100vh;
+  background: #edf2f8;
 }
 
 .admin-layout__aside {
-  border-right: 1px solid var(--el-border-color);
+  background: #fff;
+  border-right: 1px solid var(--zt-border);
+  box-shadow: 2px 0 12px rgba(30, 64, 115, 0.06);
 }
 
 .admin-layout__brand {
-  height: 56px;
   display: flex;
   align-items: center;
-  padding: 0 16px;
-  font-weight: 600;
+  gap: 10px;
+  height: 64px;
+  padding: 0 20px;
+  color: var(--zt-blue-900);
+  border-bottom: 1px solid var(--zt-border);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.admin-layout__brand::before {
+  width: 4px;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--zt-blue-600);
+  content: '';
+}
+
+.admin-layout :deep(.el-menu) {
+  border-right: none;
+  padding: 8px 0;
+}
+
+.admin-layout :deep(.el-menu-item),
+.admin-layout :deep(.el-sub-menu__title) {
+  height: 44px;
+  margin: 2px 8px;
+  border-radius: 6px;
+  color: var(--zt-ink-700);
+}
+
+.admin-layout :deep(.el-menu-item.is-active) {
+  background: #edf5ff;
+  color: var(--zt-blue-700);
+  font-weight: 700;
+}
+
+.admin-layout :deep(.el-menu-item:hover),
+.admin-layout :deep(.el-sub-menu__title:hover) {
+  background: #f7f9fc;
 }
 
 .admin-layout__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--el-border-color);
+  height: 64px;
+  background: #fff;
+  border-bottom: 1px solid var(--zt-border);
+  box-shadow: 0 2px 10px rgba(30, 64, 115, 0.04);
+}
+
+.admin-layout :deep(.el-main) {
+  padding: 20px 24px;
+  background: #edf2f8;
 }
 
 .admin-layout__user {
+  color: var(--zt-ink-700);
+  font-weight: 600;
   cursor: pointer;
 }
 </style>

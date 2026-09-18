@@ -12,6 +12,7 @@ import {
   type SourceItem,
 } from '@/api/policy'
 import { errorMessage, isApiError } from '@/api/errors'
+import ListPage from '@/components/ListPage.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -157,49 +158,21 @@ onMounted(() => {
 
 <template>
   <div>
-    <el-form
-      inline
-      @submit.prevent="onSearch"
+    <ListPage
+      title="信源管理"
+      hint="对应《北京-网站编码梳理》。入库时会纠正误填到地市的区县编码；新增不填网站编码和内部 id，由系统生成。完整流水在「系统管理 / 操作日志」。"
+      :total="total"
+      :page="query.page"
+      :page-size="query.page_size"
+      :loading="loading"
+      @update:page="query.page = $event"
+      @update:page-size="query.page_size = $event"
+      @change="load"
     >
-      <el-form-item label="网站名称">
-        <el-input
-          v-model="query.site_name"
-          clearable
-        />
-      </el-form-item>
-      <el-form-item label="省份">
-        <el-input
-          v-model="query.province_name"
-          clearable
-        />
-      </el-form-item>
-      <el-form-item label="地市">
-        <el-input
-          v-model="query.city_name"
-          clearable
-        />
-      </el-form-item>
-      <el-form-item label="标签">
-        <el-input
-          v-model="query.tag"
-          clearable
-        />
-      </el-form-item>
-      <el-form-item label="网站编码">
-        <el-input
-          v-model="query.site_code"
-          clearable
-        />
-      </el-form-item>
-      <el-form-item>
-        <el-button
-          native-type="submit"
-          type="primary"
-        >
-          查询
-        </el-button>
+      <template #actions>
         <el-button
           v-if="canWrite"
+          type="primary"
           @click="openCreate"
         >
           新增
@@ -221,90 +194,127 @@ onMounted(() => {
         >
           操作记录
         </el-button>
-      </el-form-item>
-    </el-form>
-    <p class="hint">
-      对应《北京-网站编码梳理》。入库时会纠正误填到地市的区县编码；新增不填网站编码和内部 id，由系统生成。完整流水在「系统管理 / 操作日志」。
-    </p>
-    <el-table
-      v-loading="loading"
-      :data="items"
-    >
-      <el-table-column
-        prop="site_code"
-        label="网站编码"
-        width="140"
-      />
-      <el-table-column
-        prop="site_name"
-        label="网站名称"
-        min-width="160"
-        show-overflow-tooltip
-      />
-      <el-table-column
-        prop="province_code"
-        label="省编码"
-        width="80"
-      />
-      <el-table-column
-        prop="city_code"
-        label="市编码"
-        width="90"
-      />
-      <el-table-column
-        prop="district_code"
-        label="区县编码"
-        width="100"
-      />
-      <el-table-column
-        prop="tag"
-        label="标签"
-        min-width="180"
-        show-overflow-tooltip
-      />
-      <el-table-column
-        prop="created_by_name"
-        label="入库人"
-        width="110"
-      />
-      <el-table-column
-        label="更新时间"
-        width="170"
+      </template>
+      <template #filters>
+        <el-form
+          class="filter-form"
+          inline
+          @submit.prevent="onSearch"
+        >
+          <el-form-item label="网站名称">
+            <el-input
+              v-model="query.site_name"
+              clearable
+            />
+          </el-form-item>
+          <el-form-item label="省份">
+            <el-input
+              v-model="query.province_name"
+              clearable
+            />
+          </el-form-item>
+          <el-form-item label="地市">
+            <el-input
+              v-model="query.city_name"
+              clearable
+            />
+          </el-form-item>
+          <el-form-item label="标签">
+            <el-input
+              v-model="query.tag"
+              clearable
+            />
+          </el-form-item>
+          <el-form-item label="网站编码">
+            <el-input
+              v-model="query.site_code"
+              clearable
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button
+              native-type="submit"
+              type="primary"
+            >
+              查询
+            </el-button>
+          </el-form-item>
+        </el-form>
+      </template>
+      <el-table
+        v-loading="loading"
+        class="data-table"
+        :data="items"
+        stripe
+        border
       >
-        <template #default="{ row }">
-          {{ formatTime(row.updated_at) }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="updated_by_name"
-        label="操作人"
-        width="110"
-      />
-      <el-table-column
-        v-if="canWrite"
-        label="操作"
-        width="80"
-      >
-        <template #default="{ row }">
-          <el-button
-            link
-            type="primary"
-            @click="openEdit(row)"
-          >
-            编辑
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-    <div class="pager">
-      <el-pagination
-        v-model:current-page="query.page"
-        v-model:page-size="query.page_size"
-        :total="total"
-        layout="total, prev, pager, next"
-        @current-change="load"
-      />
-    </div>
+        <el-table-column
+          prop="site_code"
+          label="网站编码"
+          width="140"
+        />
+        <el-table-column
+          prop="site_name"
+          label="网站名称"
+          min-width="160"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="province_code"
+          label="省编码"
+          width="80"
+        />
+        <el-table-column
+          prop="city_code"
+          label="市编码"
+          width="90"
+        />
+        <el-table-column
+          prop="district_code"
+          label="区县编码"
+          width="100"
+        />
+        <el-table-column
+          prop="tag"
+          label="标签"
+          min-width="180"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="created_by_name"
+          label="入库人"
+          width="110"
+        />
+        <el-table-column
+          label="更新时间"
+          width="170"
+        >
+          <template #default="{ row }">
+            {{ formatTime(row.updated_at) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="updated_by_name"
+          label="操作人"
+          width="110"
+        />
+        <el-table-column
+          v-if="canWrite"
+          label="操作"
+          width="80"
+        >
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              @click="openEdit(row)"
+            >
+              编辑
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </ListPage>
     <el-dialog
       v-model="visible"
       :title="editing ? '编辑信源' : '新增信源'"
@@ -375,17 +385,7 @@ onMounted(() => {
 
 <style scoped>
 .hint {
-  color: var(--el-text-color-secondary);
-  margin: 0 0 12px;
-}
-
-.pager {
-  margin-top: 16px;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.el-form-item :deep(.el-upload) {
-  margin: 0 8px;
+  color: var(--zt-ink-500);
+  margin: 0;
 }
 </style>

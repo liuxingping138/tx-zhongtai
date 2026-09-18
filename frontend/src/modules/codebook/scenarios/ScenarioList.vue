@@ -11,6 +11,7 @@ import {
   type ScenarioItem,
 } from '@/api/codebook'
 import { errorMessage, isApiError } from '@/api/errors'
+import ListPage from '@/components/ListPage.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -168,41 +169,18 @@ onMounted(() => {
 
 <template>
   <div>
-    <el-form
-      inline
-      @submit.prevent="onSearch"
+    <ListPage
+      title="行业场景码表"
+      hint="对应《行业场景字典表》。重复上传同一行会按内容去重。入库/更新人和时间见下表；完整流水在「系统管理 / 操作日志」。"
+      :total="total"
+      :page="query.page"
+      :page-size="query.page_size"
+      :loading="loading"
+      @update:page="query.page = $event"
+      @update:page-size="query.page_size = $event"
+      @change="load"
     >
-      <el-form-item label="行业场景编码">
-        <el-input
-          v-model="query.industry_scenario_code"
-          clearable
-        />
-      </el-form-item>
-      <el-form-item label="一级行业">
-        <el-input
-          v-model="query.industry_l1"
-          clearable
-        />
-      </el-form-item>
-      <el-form-item label="场景标签">
-        <el-input
-          v-model="query.scenario_tag"
-          clearable
-        />
-      </el-form-item>
-      <el-form-item label="客群名称">
-        <el-input
-          v-model="query.customer_group_name"
-          clearable
-        />
-      </el-form-item>
-      <el-form-item>
-        <el-button
-          native-type="submit"
-          type="primary"
-        >
-          查询
-        </el-button>
+      <template #actions>
         <el-upload
           v-if="canWrite"
           :show-file-list="false"
@@ -220,91 +198,122 @@ onMounted(() => {
         >
           操作记录
         </el-button>
-      </el-form-item>
-    </el-form>
-    <p class="hint">
-      对应《行业场景字典表》。重复上传同一行会按内容去重。入库/更新人和时间见下表；完整流水在「系统管理 / 操作日志」。
-    </p>
-    <el-table
-      v-loading="loading"
-      :data="items"
-    >
-      <el-table-column
-        prop="industry_scenario_code"
-        label="行业场景编码"
-        width="180"
-      />
-      <el-table-column
-        prop="industry_l1"
-        label="一级行业"
-        width="140"
-      />
-      <el-table-column
-        prop="scenario_tag"
-        label="场景标签"
-        min-width="160"
-      />
-      <el-table-column
-        prop="scenario_level"
-        label="level"
-        width="70"
-      />
-      <el-table-column
-        prop="customer_group_name"
-        label="客群名称"
-        width="160"
-      />
-      <el-table-column
-        label="入库时间"
-        width="170"
+      </template>
+      <template #filters>
+        <el-form
+          class="filter-form"
+          inline
+          @submit.prevent="onSearch"
+        >
+          <el-form-item label="行业场景编码">
+            <el-input
+              v-model="query.industry_scenario_code"
+              clearable
+            />
+          </el-form-item>
+          <el-form-item label="一级行业">
+            <el-input
+              v-model="query.industry_l1"
+              clearable
+            />
+          </el-form-item>
+          <el-form-item label="场景标签">
+            <el-input
+              v-model="query.scenario_tag"
+              clearable
+            />
+          </el-form-item>
+          <el-form-item label="客群名称">
+            <el-input
+              v-model="query.customer_group_name"
+              clearable
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button
+              native-type="submit"
+              type="primary"
+            >
+              查询
+            </el-button>
+          </el-form-item>
+        </el-form>
+      </template>
+      <el-table
+        v-loading="loading"
+        class="data-table"
+        :data="items"
+        stripe
+        border
       >
-        <template #default="{ row }">
-          {{ formatTime(row.created_at) }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="created_by_name"
-        label="入库人"
-        width="110"
-      />
-      <el-table-column
-        label="更新时间"
-        width="170"
-      >
-        <template #default="{ row }">
-          {{ formatTime(row.updated_at) }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="updated_by_name"
-        label="操作人"
-        width="110"
-      />
-      <el-table-column
-        v-if="canWrite"
-        label="操作"
-        width="80"
-      >
-        <template #default="{ row }">
-          <el-button
-            link
-            type="primary"
-            @click="openEdit(row)"
-          >
-            编辑
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-    <div class="pager">
-      <el-pagination
-        v-model:current-page="query.page"
-        v-model:page-size="query.page_size"
-        :total="total"
-        layout="total, prev, pager, next"
-        @current-change="load"
-      />
-    </div>
+        <el-table-column
+          prop="industry_scenario_code"
+          label="行业场景编码"
+          width="180"
+        />
+        <el-table-column
+          prop="industry_l1"
+          label="一级行业"
+          width="140"
+        />
+        <el-table-column
+          prop="scenario_tag"
+          label="场景标签"
+          min-width="160"
+        />
+        <el-table-column
+          prop="scenario_level"
+          label="level"
+          width="70"
+        />
+        <el-table-column
+          prop="customer_group_name"
+          label="客群名称"
+          width="160"
+        />
+        <el-table-column
+          label="入库时间"
+          width="170"
+        >
+          <template #default="{ row }">
+            {{ formatTime(row.created_at) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="created_by_name"
+          label="入库人"
+          width="110"
+        />
+        <el-table-column
+          label="更新时间"
+          width="170"
+        >
+          <template #default="{ row }">
+            {{ formatTime(row.updated_at) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="updated_by_name"
+          label="操作人"
+          width="110"
+        />
+        <el-table-column
+          v-if="canWrite"
+          label="操作"
+          width="80"
+        >
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              @click="openEdit(row)"
+            >
+              编辑
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </ListPage>
     <el-drawer
       v-model="visible"
       title="编辑场景码表"
@@ -338,20 +347,3 @@ onMounted(() => {
     </el-drawer>
   </div>
 </template>
-
-<style scoped>
-.hint {
-  color: var(--el-text-color-secondary);
-  margin: 0 0 12px;
-}
-
-.pager {
-  margin-top: 16px;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.el-form-item :deep(.el-upload) {
-  margin: 0 8px;
-}
-</style>

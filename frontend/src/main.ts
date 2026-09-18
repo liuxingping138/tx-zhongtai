@@ -4,6 +4,8 @@ import 'element-plus/dist/index.css'
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 
+import '@/styles/theme.css'
+
 import { setForbiddenHandler, setUnauthorizedHandler } from '@/api/http'
 import { registerPermissionDirective } from '@/permissions/directive'
 import { useAuthStore } from '@/stores/auth'

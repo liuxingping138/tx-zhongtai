@@ -83,20 +83,24 @@ async function onSubmit() {
 
 <style scoped>
 .login {
-  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--el-fill-color-light);
+  min-height: 100vh;
+  background: linear-gradient(135deg, #18375f 0%, #1f4d8f 46%, #2362c5 100%);
 }
 
 .login__card {
-  width: 360px;
+  width: 400px;
+  padding: 8px 8px 4px;
+  border: none;
+  box-shadow: 0 18px 40px rgba(16, 36, 68, 0.22);
 }
 
 .login__title {
-  margin: 0 0 16px;
-  font-size: 20px;
+  margin: 0 0 20px;
+  color: var(--zt-blue-900);
+  font-size: 22px;
   text-align: center;
 }
 </style>

@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 
 import { getAuditEvent, listAuditEvents } from '@/api/audit'
 import { errorMessage } from '@/api/errors'
+import ListPage from '@/components/ListPage.vue'
 import type { AuditEventItem } from '@/api/types'
 
 const route = useRoute()
@@ -89,133 +90,142 @@ onMounted(() => {
 
 <template>
   <div>
-    <el-form
-      inline
-      @submit.prevent="onSearch"
+    <ListPage
+      title="操作日志"
+      hint="记录各模块的新增、编辑、导入等操作，可按时间、人员、模块筛选。"
+      :total="total"
+      :page="query.page"
+      :page-size="query.page_size"
+      :loading="loading"
+      @update:page="query.page = $event"
+      @update:page-size="query.page_size = $event"
+      @change="load"
     >
-      <el-form-item label="时间">
-        <el-date-picker
-          v-model="query.range"
-          type="datetimerange"
-          start-placeholder="开始"
-          end-placeholder="结束"
-          value-format="YYYY-MM-DDTHH:mm:ss"
-          style="width: 360px"
-        />
-      </el-form-item>
-      <el-form-item label="人员">
-        <el-input
-          v-model="query.actor_name"
-          clearable
-          placeholder="显示名"
-        />
-      </el-form-item>
-      <el-form-item label="模块">
-        <el-input
-          v-model="query.module_code"
-          clearable
-        />
-      </el-form-item>
-      <el-form-item label="动作">
-        <el-input
-          v-model="query.action_code"
-          clearable
-        />
-      </el-form-item>
-      <el-form-item label="结果">
-        <el-select
-          v-model="query.outcome"
-          clearable
-          placeholder="全部"
-          style="width: 120px"
+      <template #filters>
+        <el-form
+          class="filter-form"
+          inline
+          @submit.prevent="onSearch"
         >
-          <el-option
-            label="成功"
-            value="success"
-          />
-          <el-option
-            label="失败"
-            value="failure"
-          />
-          <el-option
-            label="拒绝"
-            value="denied"
-          />
-        </el-select>
-      </el-form-item>
-      <el-form-item>
-        <el-button
-          native-type="submit"
-          type="primary"
+          <el-form-item label="时间">
+            <el-date-picker
+              v-model="query.range"
+              type="datetimerange"
+              start-placeholder="开始"
+              end-placeholder="结束"
+              value-format="YYYY-MM-DDTHH:mm:ss"
+              style="width: 360px"
+            />
+          </el-form-item>
+          <el-form-item label="人员">
+            <el-input
+              v-model="query.actor_name"
+              clearable
+              placeholder="显示名"
+            />
+          </el-form-item>
+          <el-form-item label="模块">
+            <el-input
+              v-model="query.module_code"
+              clearable
+            />
+          </el-form-item>
+          <el-form-item label="动作">
+            <el-input
+              v-model="query.action_code"
+              clearable
+            />
+          </el-form-item>
+          <el-form-item label="结果">
+            <el-select
+              v-model="query.outcome"
+              clearable
+              placeholder="全部"
+              style="width: 120px"
+            >
+              <el-option
+                label="成功"
+                value="success"
+              />
+              <el-option
+                label="失败"
+                value="failure"
+              />
+              <el-option
+                label="拒绝"
+                value="denied"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item>
+            <el-button
+              native-type="submit"
+              type="primary"
+            >
+              查询
+            </el-button>
+          </el-form-item>
+        </el-form>
+      </template>
+      <el-table
+        v-loading="loading"
+        class="data-table"
+        :data="events"
+        stripe
+        border
+      >
+        <el-table-column
+          label="时间"
+          width="190"
         >
-          查询
-        </el-button>
-      </el-form-item>
-    </el-form>
-    <el-table
-      v-loading="loading"
-      :data="events"
-    >
-      <el-table-column
-        label="时间"
-        width="190"
-      >
-        <template #default="{ row }">
-          {{ formatTime(row.occurred_at) }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="actor_name_snapshot"
-        label="人员"
-        width="140"
-      />
-      <el-table-column
-        prop="module_code"
-        label="模块"
-        width="140"
-      />
-      <el-table-column
-        prop="action_code"
-        label="动作"
-        width="140"
-      />
-      <el-table-column
-        label="结果"
-        width="90"
-      >
-        <template #default="{ row }">
-          {{ outcomeLabel[row.outcome] || row.outcome }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="summary"
-        label="摘要"
-        min-width="240"
-      />
-      <el-table-column
-        label="操作"
-        width="90"
-      >
-        <template #default="{ row }">
-          <el-button
-            link
-            type="primary"
-            @click="openDetail(row)"
-          >
-            详情
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-    <div class="audit-pager">
-      <el-pagination
-        v-model:current-page="query.page"
-        v-model:page-size="query.page_size"
-        :total="total"
-        layout="total, prev, pager, next"
-        @current-change="load"
-      />
-    </div>
+          <template #default="{ row }">
+            {{ formatTime(row.occurred_at) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="actor_name_snapshot"
+          label="人员"
+          width="140"
+        />
+        <el-table-column
+          prop="module_code"
+          label="模块"
+          width="140"
+        />
+        <el-table-column
+          prop="action_code"
+          label="动作"
+          width="140"
+        />
+        <el-table-column
+          label="结果"
+          width="90"
+        >
+          <template #default="{ row }">
+            {{ outcomeLabel[row.outcome] || row.outcome }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="summary"
+          label="摘要"
+          min-width="240"
+        />
+        <el-table-column
+          label="操作"
+          width="90"
+        >
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              @click="openDetail(row)"
+            >
+              详情
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </ListPage>
     <el-drawer
       v-model="detailVisible"
       title="审计详情"
@@ -264,12 +274,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.audit-pager {
-  margin-top: 16px;
-  display: flex;
-  justify-content: flex-end;
-}
-
 .audit-json {
   margin: 0;
   white-space: pre-wrap;

@@ -6,6 +6,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { createRole, listRoles, updateRole } from '@/api/system'
 import { errorMessage, isApiError } from '@/api/errors'
 import type { RoleItem } from '@/api/types'
+import ListPage from '@/components/ListPage.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -108,99 +109,113 @@ onMounted(() => {
 
 <template>
   <div>
-    <el-form inline>
-      <el-form-item label="状态">
-        <el-select
-          v-model="query.status"
-          clearable
-          placeholder="全部"
-          style="width: 140px"
-          @change="load"
-        >
-          <el-option
-            label="启用"
-            value="active"
-          />
-          <el-option
-            label="停用"
-            value="disabled"
-          />
-        </el-select>
-      </el-form-item>
-      <el-form-item>
+    <ListPage
+      title="角色管理"
+      :total="total"
+      :page="query.page"
+      :page-size="query.page_size"
+      :loading="loading"
+      @update:page="query.page = $event"
+      @update:page-size="query.page_size = $event"
+      @change="load"
+    >
+      <template
+        v-if="auth.canFull('system.roles')"
+        #actions
+      >
         <el-button
-          v-if="auth.canFull('system.roles')"
           type="primary"
           @click="createVisible = true"
         >
           新增角色
         </el-button>
-      </el-form-item>
-    </el-form>
-    <el-table
-      v-loading="loading"
-      :data="roles"
-    >
-      <el-table-column
-        prop="code"
-        label="编码"
-      />
-      <el-table-column
-        prop="name"
-        label="名称"
-      />
-      <el-table-column
-        prop="status"
-        label="状态"
-        width="100"
-      />
-      <el-table-column
-        label="内置"
-        width="80"
+      </template>
+      <template #filters>
+        <el-form
+          class="filter-form"
+          inline
+        >
+          <el-form-item label="状态">
+            <el-select
+              v-model="query.status"
+              clearable
+              placeholder="全部"
+              style="width: 140px"
+              @change="load"
+            >
+              <el-option
+                label="启用"
+                value="active"
+              />
+              <el-option
+                label="停用"
+                value="disabled"
+              />
+            </el-select>
+          </el-form-item>
+        </el-form>
+      </template>
+      <el-table
+        v-loading="loading"
+        class="data-table"
+        :data="roles"
+        stripe
+        border
       >
-        <template #default="{ row }">
-          {{ row.is_builtin ? '是' : '否' }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        label="操作"
-        width="260"
-      >
-        <template #default="{ row }">
-          <el-button
-            v-if="auth.canFull('system.roles')"
-            link
-            type="primary"
-            @click="openEdit(row)"
-          >
-            编辑
-          </el-button>
-          <el-button
-            v-if="auth.canFull('system.roles') && !row.is_builtin"
-            link
-            type="primary"
-            @click="toggleStatus(row)"
-          >
-            {{ row.status === 'active' ? '停用' : '启用' }}
-          </el-button>
-          <el-button
-            v-if="auth.canRead('system.permissions')"
-            link
-            type="primary"
-            @click="router.push({ name: 'system-role-grants', params: { roleId: row.id } })"
-          >
-            配置权限
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-    <el-pagination
-      v-model:current-page="query.page"
-      :total="total"
-      layout="total, prev, pager, next"
-      style="margin-top: 16px"
-      @current-change="load"
-    />
+        <el-table-column
+          prop="code"
+          label="编码"
+        />
+        <el-table-column
+          prop="name"
+          label="名称"
+        />
+        <el-table-column
+          prop="status"
+          label="状态"
+          width="100"
+        />
+        <el-table-column
+          label="内置"
+          width="80"
+        >
+          <template #default="{ row }">
+            {{ row.is_builtin ? '是' : '否' }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="操作"
+          width="260"
+        >
+          <template #default="{ row }">
+            <el-button
+              v-if="auth.canFull('system.roles')"
+              link
+              type="primary"
+              @click="openEdit(row)"
+            >
+              编辑
+            </el-button>
+            <el-button
+              v-if="auth.canFull('system.roles') && !row.is_builtin"
+              link
+              type="primary"
+              @click="toggleStatus(row)"
+            >
+              {{ row.status === 'active' ? '停用' : '启用' }}
+            </el-button>
+            <el-button
+              v-if="auth.canRead('system.permissions')"
+              link
+              type="primary"
+              @click="router.push({ name: 'system-role-grants', params: { roleId: row.id } })"
+            >
+              配置权限
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </ListPage>
 
     <el-dialog
       v-model="createVisible"
