@@ -7,13 +7,13 @@ from fastapi.responses import Response
 from platform_common.errors import ApiError, ErrorCode
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas import SourceWrite
+from app.api.schemas import SourceClearRequest, SourceWrite
 from app.api.security import classified, require_policy_permission
 from app.application import sources as service
 from app.application.actors import Actor
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
-from app.core.http_utils import success_json
+from app.core.http_utils import import_result_response, success_json
 from app.domain.enums import SecurityClass
 
 router = APIRouter(prefix="/api/v1/policy/sources", tags=["policy-sources"])
@@ -75,9 +75,12 @@ async def export_items(
 @router.post("/clear")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def clear_items(
+    body: SourceClearRequest,
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_policy_permission(RESOURCE, "purge")),
 ):
+    if body.confirm != "清空":
+        raise ApiError("请输入确认口令「清空」", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     return success_json(await service.purge_sources(session, actor))
 
 
@@ -92,7 +95,7 @@ async def import_items(
     content = await file.read()
     if len(content) > settings.import_max_bytes:
         raise ApiError("导入文件过大", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    return success_json(await service.import_sources(session, actor, content))
+    return import_result_response(await service.import_sources(session, actor, content), "sources-import.xlsx")
 
 
 @router.post("")

@@ -50,7 +50,7 @@ function onChange(value: string | null) {
     :class="{ 'filter-select--short': size === 'short' }"
     :model-value="modelValue"
     filterable
-    allow-create
+    :allow-create="!labels"
     default-first-option
     clearable
     :placeholder="placeholder"

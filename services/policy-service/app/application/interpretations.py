@@ -164,7 +164,7 @@ async def update_interpretation(
 
 
 async def import_interpretations(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, Any]:
-    parsed = parse_sheet(content, INTERPRETATION_COLUMNS, sheet_name="政策解读表")
+    parsed = parse_sheet(content, INTERPRETATION_COLUMNS)
     inserted = 0
     skipped_rows: list[dict[str, str]] = []
     now = utcnow()

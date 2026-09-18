@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import Any
 
@@ -217,7 +218,7 @@ async def resolve_area_codes(session: AsyncSession, actor: Actor, content: bytes
         )
         for row in await repo.list_all(session)
     ]
-    payload, matched, unmatched = build_resolve_workbook(content, catalog)
+    payload, matched, unmatched = await asyncio.to_thread(build_resolve_workbook, content, catalog)
     await enqueue_event(
         session,
         event_type="codebook.area_code.resolved",

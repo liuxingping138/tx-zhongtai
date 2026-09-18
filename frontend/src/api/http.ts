@@ -63,6 +63,9 @@ function notifyByStatus(error: ApiError): void {
 
 http.interceptors.response.use(
   (response) => {
+    if (response.config.responseType === 'blob') {
+      return response as never
+    }
     if (response.status === 204 || response.data == null || response.data === '') {
       return null as never
     }
@@ -70,6 +73,19 @@ http.interceptors.response.use(
     return body.data as never
   },
   async (error: AxiosError<ApiResponseBody<unknown>>) => {
+    if (error.response?.data instanceof Blob) {
+      const text = await error.response.data.text()
+      try {
+        error.response.data = JSON.parse(text) as ApiResponseBody<unknown>
+      } catch {
+        error.response.data = {
+          code: 'UNKNOWN_ERROR',
+          message: '请求失败',
+          data: null,
+          request_id: null,
+        }
+      }
+    }
     const config = error.config as RetryConfig | undefined
     const status = error.response?.status
     if (

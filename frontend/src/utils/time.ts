@@ -1,5 +1,15 @@
 const BEIJING = 'Asia/Shanghai'
 
+export function toBeijingIso(value: string | null | undefined): string {
+  if (!value) {
+    return ''
+  }
+  if (/[+-]\d{2}:\d{2}$/.test(value) || value.endsWith('Z')) {
+    return value
+  }
+  return `${value}+08:00`
+}
+
 export function formatTime(value: string | null | undefined): string {
   if (!value) {
     return '-'

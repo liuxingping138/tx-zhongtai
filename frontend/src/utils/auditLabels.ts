@@ -41,6 +41,7 @@ export const ACTION_LABELS: Record<string, string> = {
   read: '查看',
   cleanup: '清理',
   purge: '清空',
+  resolve: '补码',
 }
 
 export function moduleLabel(code: string | null | undefined): string {

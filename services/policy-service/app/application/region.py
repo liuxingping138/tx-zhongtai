@@ -33,7 +33,7 @@ def normalize_region(province_code: str, city_code: str, district_code: str) -> 
         elif len(city) >= 2:
             province = city[:2]
         else:
-            province = "00"
+            return "", "", ""
     province = (province + "00")[:2]
 
     if not city:

@@ -13,7 +13,7 @@ from app.application import base_tags as service
 from app.application.actors import Actor
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
-from app.core.http_utils import success_json
+from app.core.http_utils import import_result_response, success_json
 from app.domain.enums import SecurityClass
 
 router = APIRouter(prefix="/api/v1/policy/base-tags", tags=["policy-base-tags"])
@@ -81,7 +81,7 @@ async def import_items(
     content = await file.read()
     if len(content) > settings.import_max_bytes:
         raise ApiError("导入文件过大", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    return success_json(await service.import_base_tags(session, actor, content))
+    return import_result_response(await service.import_base_tags(session, actor, content), "base-tags-import.xlsx")
 
 
 @router.post("")

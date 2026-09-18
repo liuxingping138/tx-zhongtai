@@ -5,9 +5,10 @@ from io import BytesIO
 from openpyxl import Workbook, load_workbook
 from platform_common.errors import ApiError, ErrorCode
 
-from app.application.area_match import AreaSnap, match_area
+from app.application.area_match import AreaSnap, build_area_index, match_area_indexed
 
 _ROLE_HEADERS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("site_code", ("网站编码",)),
     ("province_code", ("省份编码", "省编码")),
     ("city_code", ("地市编码", "城市编码")),
     ("district_code", ("区县编码",)),
@@ -20,6 +21,8 @@ _CODE_TITLES = {
     "city_code": "地市编码",
     "district_code": "区县编码",
 }
+
+
 def _header_role(header: str) -> str | None:
     raw = (header or "").replace("\n", " ").strip()
     if not raw:
@@ -92,34 +95,47 @@ def build_resolve_workbook(content: bytes, catalog: list[AreaSnap]) -> tuple[byt
     if not any(role in {"province_name", "city_name", "district_name"} for role in roles):
         raise ApiError("未识别到省份/地市/区县列", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     headers, roles, index = _ensure_code_columns(headers, roles)
-    annotated: list[tuple[list[str], str]] = []
+    catalog_index = build_area_index(catalog)
+    if "校验说明" in headers:
+        reason_idx = headers.index("校验说明")
+    else:
+        reason_idx = len(headers)
+        headers = [*headers, "校验说明"]
+    annotated: list[list[str]] = []
     matched = 0
     unmatched = 0
     for raw in rows:
         row = _pad(raw, len(headers))
+        filled = _pad(row, len(headers))
+        site_code = filled[index["site_code"]] if "site_code" in index else ""
+        if site_code:
+            filled[reason_idx] = "通过"
+            matched += 1
+            annotated.append(filled)
+            continue
         province = row[index["province_name"]] if "province_name" in index else ""
         city = row[index["city_name"]] if "city_name" in index else ""
         county = row[index["district_name"]] if "district_name" in index else ""
         existing_p = row[index["province_code"]]
         existing_c = row[index["city_code"]]
         existing_d = row[index["district_code"]]
-        result = match_area(catalog, province, city, county)
-        filled = list(row)
+        result = match_area_indexed(catalog_index, province, city, county)
         filled[index["province_code"]] = result.province_code or existing_p
         filled[index["city_code"]] = result.city_code or existing_c
         filled[index["district_code"]] = result.district_code or existing_d
         if _has_any_code(filled[index["province_code"]], filled[index["city_code"]], filled[index["district_code"]]):
-            annotated.append((filled, ""))
+            filled[reason_idx] = "通过"
             matched += 1
         else:
-            annotated.append((filled, result.reason or "未关联到省市区编码"))
+            filled[reason_idx] = result.reason or "未关联到省市区编码"
             unmatched += 1
+        annotated.append(filled)
 
     book = Workbook()
     sheet = book.active
     sheet.title = "全部数据"
     sheet.append(headers)
-    for row, _reason in annotated:
+    for row in annotated:
         sheet.append(row)
     buffer = BytesIO()
     book.save(buffer)

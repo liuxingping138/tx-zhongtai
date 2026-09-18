@@ -113,7 +113,7 @@ export function updateSource(id: string, body: Partial<SourceItem> & { version: 
 }
 
 export function clearSources(): Promise<{ deleted: number }> {
-  return request(http.post('/policy/sources/clear'))
+  return request(http.post('/policy/sources/clear', { confirm: '清空' }))
 }
 
 export function importSources(

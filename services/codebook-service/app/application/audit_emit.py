@@ -28,7 +28,7 @@ _EVENT_META = {
     "codebook.area_code.updated": ("codebook.area_codes", "update", "area_code", "编辑省市区编码"),
     "codebook.area_code.imported": ("codebook.area_codes", "import", "area_code", "导入省市区编码表"),
     "codebook.area_code.exported": ("codebook.area_codes", "export", "area_code", "导出省市区编码表"),
-    "codebook.area_code.resolved": ("codebook.area_codes", "export", "area_code", "补全省市区编码"),
+    "codebook.area_code.resolved": ("codebook.area_codes", "resolve", "area_code", "补全省市区编码"),
 }
 
 

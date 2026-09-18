@@ -15,23 +15,32 @@ from app.domain.fields import (
 )
 
 
+def _field_of(columns: tuple[ColumnSpec, ...], header: str) -> str | None:
+    raw = (header or "").replace("\n", " ").strip()
+    if raw in {"校验说明", "跳过原因"}:
+        return "skip_reason"
+    return header_to_field(columns, header)
+
+
 def parse_sheet(
     content: bytes,
     columns: tuple[ColumnSpec, ...],
     *,
     sheet_name: str | None = None,
 ) -> list[dict[str, str]]:
+    del sheet_name  # 上传只读第一个 sheet，不看名称
     try:
         book = load_workbook(BytesIO(content), read_only=True, data_only=True)
     except Exception as exc:  # noqa: BLE001
         raise ApiError("无法读取 Excel 文件", code=ErrorCode.VALIDATION_ERROR, http_status=422) from exc
-    sheet = book[sheet_name] if sheet_name and sheet_name in book.sheetnames else book[book.sheetnames[0]]
+    sheet = book[book.sheetnames[0]]
     rows = sheet.iter_rows(values_only=True)
     mapping: list[str | None] = []
+    parse_columns = (*columns, SKIP_REASON_COLUMN)
     for header_row in rows:
         if header_row is None or all(cell is None or str(cell).strip() == "" for cell in header_row):
             continue
-        mapping = [header_to_field(columns, str(cell or "")) for cell in header_row]
+        mapping = [_field_of(columns, str(cell or "")) for cell in header_row]
         if any(mapping):
             break
         raise ApiError("Excel 表头与码表字段不匹配", code=ErrorCode.VALIDATION_ERROR, http_status=422)
@@ -41,7 +50,7 @@ def parse_sheet(
     for raw in rows:
         if raw is None or all(cell is None or str(cell).strip() == "" for cell in raw):
             continue
-        item = {spec.field: "" for spec in columns}
+        item = {spec.field: "" for spec in parse_columns}
         for idx, field in enumerate(mapping):
             if not field or idx >= len(raw):
                 continue
@@ -77,14 +86,14 @@ def build_workbook(
     return buffer.getvalue()
 
 
-SKIP_REASON_COLUMN = ColumnSpec("skip_reason", "跳过原因")
+SKIP_REASON_COLUMN = ColumnSpec("skip_reason", "校验说明")
 
 
 def encode_skipped_file(
     columns: tuple[ColumnSpec, ...],
     rows: list[dict[str, Any]],
     *,
-    sheet_name: str = "跳过明细",
+    sheet_name: str = "全部数据",
 ) -> str | None:
     if not rows:
         return None

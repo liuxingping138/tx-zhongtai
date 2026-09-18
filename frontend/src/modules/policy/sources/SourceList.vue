@@ -169,6 +169,10 @@ async function onSave() {
     ElMessage.warning('请填写网站名称')
     return
   }
+  if (!form.province_code.trim() && !form.city_code.trim() && !form.district_code.trim()) {
+    ElMessage.warning('请填写省市区编码')
+    return
+  }
   saving.value = true
   try {
     const payload = payloadFromForm()

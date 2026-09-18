@@ -42,6 +42,15 @@ async function onChangePassword() {
   }
 }
 
+function goBack() {
+  const state = window.history.state as { back?: unknown }
+  if (state?.back) {
+    router.back()
+    return
+  }
+  void router.push({ name: 'home' })
+}
+
 async function onLogoutAll() {
   await ElMessageBox.confirm('将退出你在全部设备上的登录，是否继续？', '退出全部设备', { type: 'warning' })
   try {
@@ -58,7 +67,12 @@ async function onLogoutAll() {
 
 <template>
   <el-card>
-    <h2>个人设置</h2>
+    <el-page-header
+      class="profile__header"
+      title="返回"
+      content="个人设置"
+      @back="goBack"
+    />
     <el-descriptions
       :column="2"
       border
@@ -123,3 +137,9 @@ async function onLogoutAll() {
     </el-form>
   </el-card>
 </template>
+
+<style scoped>
+.profile__header {
+  margin-bottom: 16px;
+}
+</style>

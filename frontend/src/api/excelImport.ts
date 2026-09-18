@@ -1,7 +1,9 @@
+import type { AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
 import { reactive } from 'vue'
 
-import { http, request } from './http'
+import { http } from './http'
+import type { ApiResponse } from './types'
 
 export interface ImportResult {
   inserted: number
@@ -21,31 +23,58 @@ export const importUi = reactive({
   stage: 'upload' as ImportStage,
 })
 
-export function postExcelImport<T>(
+function headerValue(headers: AxiosResponse['headers'], name: string): string {
+  const value = headers[name] ?? headers[name.toLowerCase()]
+  return value == null ? '' : String(value)
+}
+
+function filenameFromDisposition(value: string, fallback: string): string {
+  const utf = /filename\*=UTF-8''([^;]+)/i.exec(value)
+  if (utf?.[1]) {
+    return decodeURIComponent(utf[1])
+  }
+  const ascii = /filename="?([^"]+)"?/i.exec(value)
+  return ascii?.[1] || fallback
+}
+
+export async function postExcelImport(
   url: string,
   file: File,
   onProgress?: (percent: number, stage: ImportStage) => void,
   timeout = 600_000,
-): Promise<T> {
+): Promise<ImportResult> {
   const form = new FormData()
   form.append('file', file)
-  return request(
-    http.post(url, form, {
-      timeout,
-      onUploadProgress(event) {
-        if (!event.total) {
-          onProgress?.(0, 'upload')
-          return
-        }
-        const percent = Math.round((event.loaded / event.total) * 100)
-        if (event.loaded >= event.total) {
-          onProgress?.(100, 'parse')
-          return
-        }
-        onProgress?.(Math.min(percent, 99), 'upload')
-      },
-    }),
-  )
+  const response = (await http.post(url, form, {
+    timeout,
+    responseType: 'blob',
+    onUploadProgress(event) {
+      if (!event.total) {
+        onProgress?.(0, 'upload')
+        return
+      }
+      const percent = Math.round((event.loaded / event.total) * 100)
+      if (event.loaded >= event.total) {
+        onProgress?.(100, 'parse')
+        return
+      }
+      onProgress?.(Math.min(percent, 99), 'upload')
+    },
+  })) as AxiosResponse<Blob>
+  const contentType = headerValue(response.headers, 'content-type')
+  if (contentType.includes('spreadsheetml') || contentType.includes('octet-stream')) {
+    const filename = filenameFromDisposition(headerValue(response.headers, 'content-disposition'), '上传校验.xlsx')
+    downloadBlob(response.data, filename)
+    return {
+      inserted: Number(headerValue(response.headers, 'x-import-inserted') || 0),
+      updated: Number(headerValue(response.headers, 'x-import-updated') || 0),
+      skipped: Number(headerValue(response.headers, 'x-import-skipped') || 0),
+      total: Number(headerValue(response.headers, 'x-import-total') || 0),
+      rejected: headerValue(response.headers, 'x-import-rejected') === '1',
+    }
+  }
+  const body = JSON.parse(await response.data.text()) as ApiResponse<ImportResult>
+  return body.data as ImportResult
 }
 
 export function downloadBase64Xlsx(content: string, filename: string): void {
@@ -85,8 +114,10 @@ export function reportImportResult(result: ImportResult, skippedFilename: string
     )
     return
   }
-  if (result.skipped && result.skipped_file) {
-    downloadBase64Xlsx(result.skipped_file, skippedFilename)
+  if (result.skipped) {
+    if (result.skipped_file) {
+      downloadBase64Xlsx(result.skipped_file, skippedFilename)
+    }
     ElMessage.warning(
       `导入完成：新增 ${result.inserted}，跳过 ${result.skipped}。跳过明细已下载，可查看「校验说明」。`,
     )

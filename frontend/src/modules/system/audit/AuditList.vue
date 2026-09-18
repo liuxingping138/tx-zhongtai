@@ -9,7 +9,7 @@ import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import type { AuditEventItem } from '@/api/types'
 import { ACTION_LABELS, MODULE_LABELS, actionLabel, moduleLabel } from '@/utils/auditLabels'
-import { formatTime } from '@/utils/time'
+import { formatTime, toBeijingIso } from '@/utils/time'
 
 const route = useRoute()
 const loading = ref(false)
@@ -61,8 +61,8 @@ async function load() {
       module_code: query.module_code || undefined,
       action_code: query.action_code || undefined,
       outcome: query.outcome || undefined,
-      occurred_from: query.range[0] || undefined,
-      occurred_to: query.range[1] || undefined,
+      occurred_from: toBeijingIso(query.range[0]) || undefined,
+      occurred_to: toBeijingIso(query.range[1]) || undefined,
     })
     events.value = page.items
     total.value = page.total

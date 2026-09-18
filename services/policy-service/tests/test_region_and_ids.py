@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from io import BytesIO
+
+from openpyxl import Workbook
+
+from app.application.excel import parse_sheet
 from app.application.region import (
     make_internal_id,
     make_policy_uid,
@@ -20,9 +25,17 @@ def test_normalize_province_only() -> None:
     assert (province, city, district) == ("11", "1100", "110000")
 
 
+def test_normalize_empty_does_not_fabricate_00() -> None:
+    assert normalize_region("", "", "") == ("", "", "")
+
+
 def test_normalize_city_four_digits() -> None:
     province, city, district = normalize_region("44", "4406", "")
     assert (province, city, district) == ("44", "4406", "440600")
+
+
+def test_next_site_code_skips_file_reserved() -> None:
+    assert next_site_code("110101", ["11010100001"]) == "11010100002"
 
 
 def test_site_code_sequence() -> None:
@@ -44,6 +57,22 @@ def test_interpretation_keys() -> None:
     uid = make_policy_uid("某政策")
     assert uid == make_policy_uid("某政策")
     assert make_relation_key(uid, "010000", "TO_G") == f"{uid}010000TO_G"
+
+
+def test_parse_uses_first_sheet_only() -> None:
+    book = Workbook()
+    first = book.active
+    first.title = "全部数据"
+    first.append(["网站名称", "省份", "标签"])
+    first.append(["财政局", "北京市", "政务公开"])
+    other = book.create_sheet("网站-0430-编码")
+    other.append(["网站名称", "省份", "标签"])
+    other.append(["不该读到", "上海市", "新闻"])
+    raw = BytesIO()
+    book.save(raw)
+    items = parse_sheet(raw.getvalue(), SOURCE_COLUMNS, sheet_name="网站-0430-编码")
+    assert len(items) == 1
+    assert items[0]["site_name"] == "财政局"
 
 
 def test_excel_headers() -> None:

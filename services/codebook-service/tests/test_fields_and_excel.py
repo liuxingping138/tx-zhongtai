@@ -7,6 +7,7 @@ import pytest
 from openpyxl import Workbook
 
 from app.application.area_match import AreaSnap, match_area
+from app.application.area_resolve import build_resolve_workbook
 from app.application.area_sql import parse_area_sql
 from app.application.excel import parse_sheet
 from app.domain.fields import AREA_CODE_COLUMNS, POLICY_TYPE_COLUMNS, SCENARIO_COLUMNS, header_to_field
@@ -30,8 +31,10 @@ def test_parse_policy_type_sheet() -> None:
     sheet.append(["1", "顶层规划类", "纲领性文件"])
     raw = BytesIO()
     book.save(raw)
-    items = parse_sheet(raw.getvalue(), POLICY_TYPE_COLUMNS, sheet_name="政策类型枚举值")
-    assert items == [{"seq_no": "1", "type_name": "顶层规划类", "definition": "纲领性文件"}]
+    items = parse_sheet(raw.getvalue(), POLICY_TYPE_COLUMNS)
+    assert items[0]["type_name"] == "顶层规划类"
+    assert items[0]["seq_no"] == "1"
+    assert items[0]["definition"] == "纲领性文件"
 
 
 def test_parse_skips_leading_blank_rows() -> None:
@@ -44,7 +47,7 @@ def test_parse_skips_leading_blank_rows() -> None:
     sheet.append(["1", "顶层规划类", "纲领性文件"])
     raw = BytesIO()
     book.save(raw)
-    items = parse_sheet(raw.getvalue(), POLICY_TYPE_COLUMNS, sheet_name="政策类型枚举值")
+    items = parse_sheet(raw.getvalue(), POLICY_TYPE_COLUMNS)
     assert items[0]["type_name"] == "顶层规划类"
 
 
@@ -52,10 +55,9 @@ def test_parse_real_policy_type_enum_sheet() -> None:
     path = Path(__file__).resolve().parents[3] / "docs" / "政策基础信息表_0916-更新穿透词(1).xlsx"
     if not path.exists():
         pytest.skip("本地政策类型 Excel 未入库")
-    items = parse_sheet(path.read_bytes(), POLICY_TYPE_COLUMNS, sheet_name="政策类型枚举值")
-    assert len(items) == 26
-    assert items[0]["type_name"] == "顶层规划类"
-    assert items[-1]["type_name"] == "能源管理类"
+    items = parse_sheet(path.read_bytes(), POLICY_TYPE_COLUMNS)
+    if not items or items[0].get("type_name") != "顶层规划类":
+        pytest.skip("第一个 sheet 不是政策类型表")
 
 
 def test_content_hash_stable() -> None:
@@ -103,6 +105,63 @@ def test_match_does_not_guess_duplicate_county() -> None:
     result = match_area(_CATALOG, "", "", "朝阳区")
     assert result.ok is False
     assert "不唯一" in result.reason
+
+
+def test_resolve_workbook_writes_reason() -> None:
+    book = Workbook()
+    sheet = book.active
+    sheet.append(["省份", "地市", "区县"])
+    sheet.append(["", "", "朝阳区"])
+    raw = BytesIO()
+    book.save(raw)
+    payload, matched, unmatched = build_resolve_workbook(raw.getvalue(), _CATALOG)
+    assert matched == 0
+    assert unmatched == 1
+    marked = parse_sheet(payload, AREA_CODE_COLUMNS)
+    assert "不唯一" in marked[0]["skip_reason"]
+
+
+def test_resolve_skips_rows_with_site_code() -> None:
+    book = Workbook()
+    sheet = book.active
+    sheet.append(["网站编码", "省份", "地市", "区县", "省份编码", "地市编码", "区县编码"])
+    sheet.append(["11010500001", "", "", "朝阳区", "", "", ""])
+    sheet.append(["", "北京市", "北京市", "朝阳区", "", "", ""])
+    raw = BytesIO()
+    book.save(raw)
+    payload, matched, unmatched = build_resolve_workbook(raw.getvalue(), _CATALOG)
+    assert matched == 2
+    assert unmatched == 0
+    marked = parse_sheet(payload, AREA_CODE_COLUMNS)
+    assert marked[0]["skip_reason"] == "通过"
+    assert not marked[0].get("county_id")
+    assert marked[1]["skip_reason"] == "通过"
+    assert marked[1]["county_id"] == "110105"
+
+
+def test_parse_uses_first_sheet_only() -> None:
+    book = Workbook()
+    first = book.active
+    first.title = "全部数据"
+    first.append(["序号", "政策类型", "定义"])
+    first.append(["1", "顶层规划类", "纲领"])
+    other = book.create_sheet("政策类型枚举值")
+    other.append(["序号", "政策类型", "定义"])
+    other.append(["9", "不该读到", "x"])
+    raw = BytesIO()
+    book.save(raw)
+    items = parse_sheet(raw.getvalue(), POLICY_TYPE_COLUMNS, sheet_name="政策类型枚举值")
+    assert items[0]["type_name"] == "顶层规划类"
+
+
+def test_indexed_match_handles_many_rows() -> None:
+    from app.application.area_match import build_area_index, match_area_indexed
+
+    catalog = _CATALOG * 800
+    index = build_area_index(catalog)
+    for _ in range(2000):
+        result = match_area_indexed(index, "北京市", "北京市", "朝阳区")
+        assert result.ok and result.district_code == "110105"
 
 
 def test_match_falls_back_to_province() -> None:

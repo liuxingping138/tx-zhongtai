@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.application.actors import Actor
 from app.application.audit_emit import enqueue_event
 from app.application.excel import build_workbook, encode_skipped_file, parse_sheet
-from app.application.region import make_internal_id, next_site_code, normalize_region, site_code_prefix
+from app.application.region import digits_only, make_internal_id, next_site_code, normalize_region, site_code_prefix
 from app.core.clock import format_beijing, utcnow
 from app.domain.fields import SOURCE_COLUMNS
 from app.domain.models import SOURCE_FIELDS, Source
@@ -108,9 +108,12 @@ async def get_source(session: AsyncSession, item_id: uuid.UUID) -> dict[str, Any
 
 
 async def create_source(session: AsyncSession, actor: Actor, data: dict[str, str]) -> dict[str, Any]:
-    values = _normalized_values(data)
-    if not values["site_name"]:
+    raw = {field: (data.get(field) or "").strip() for field in SOURCE_FIELDS}
+    if not raw["site_name"]:
         raise ApiError("网站名称不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    if not _has_any_area_code(raw):
+        raise ApiError("省市区编码不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    values = _normalized_values(raw)
     internal_id = make_internal_id(values["site_name"], values["province_name"], values["city_name"], values["tag"])
     if await repo.get_by_internal_id(session, internal_id):
         raise ApiError("已存在相同的内部唯一 id", code=ErrorCode.VERSION_CONFLICT, http_status=409)
@@ -153,7 +156,12 @@ async def update_source(
         raise NotFoundError("信源不存在")
     if data.get("version") != row.version:
         raise VersionConflictError()
-    values = _normalized_values({field: str(data.get(field, getattr(row, field) or "")) for field in SOURCE_FIELDS})
+    raw = {field: str(data.get(field, getattr(row, field) or "")).strip() for field in SOURCE_FIELDS}
+    if not raw["site_name"]:
+        raise ApiError("网站名称不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    if not _has_any_area_code(raw):
+        raise ApiError("省市区编码不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    values = _normalized_values(raw)
     internal_id = make_internal_id(values["site_name"], values["province_name"], values["city_name"], values["tag"])
     existing = await repo.get_by_internal_id(session, internal_id)
     if existing and existing.id != row.id:
@@ -185,33 +193,41 @@ async def update_source(
 
 
 async def import_sources(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, Any]:
-    parsed = parse_sheet(content, SOURCE_COLUMNS, sheet_name="网站-0430-编码")
+    parsed = parse_sheet(content, SOURCE_COLUMNS)
     db_internal = await repo.list_internal_ids(session)
     db_site = await repo.list_site_codes(session)
-    staged: list[tuple[dict[str, str], str, str]] = []
+    staged: list[tuple[dict[str, str], str, str, str]] = []
     for item in parsed:
         values = {field: (item.get(field) or "").strip() for field in SOURCE_FIELDS}
         internal_id = make_internal_id(values["site_name"], values["province_name"], values["city_name"], values["tag"])
         site_code = (item.get("site_code") or "").strip()
-        staged.append((values, internal_id, site_code))
+        resolve_reason = (item.get("skip_reason") or "").strip()
+        staged.append((values, internal_id, site_code, resolve_reason))
     file_internal = Counter(item[1] for item in staged)
     file_site = Counter(item[2] for item in staged if item[2])
     marked: list[dict[str, str]] = []
     blocked = 0
-    for values, internal_id, site_code in staged:
+    for values, internal_id, site_code, resolve_reason in staged:
         reasons: list[str] = []
-        if not _has_any_area_code(values):
-            reasons.append("省市区编码为空")
+        if not site_code and not _has_any_area_code(values):
+            if resolve_reason and resolve_reason != "通过":
+                reasons.append(resolve_reason)
+            else:
+                reasons.append("省市区编码为空")
         if not values["site_name"]:
             reasons.append("网站名称为空")
         if internal_id in db_internal:
             reasons.append("内部唯一id已存在")
         if file_internal[internal_id] > 1:
             reasons.append("网站名称+省份+地市+标签重复")
-        if site_code and site_code in db_site:
-            reasons.append("网站编码已存在")
-        if site_code and file_site[site_code] > 1:
-            reasons.append("文件内网站编码重复")
+        if site_code:
+            digits = digits_only(site_code)
+            if not digits or digits != site_code or len(site_code) > 16:
+                reasons.append("网站编码不合法")
+            elif site_code in db_site:
+                reasons.append("网站编码已存在")
+            if file_site[site_code] > 1:
+                reasons.append("文件内网站编码重复")
         marked.append({**values, "site_code": site_code, "skip_reason": "；".join(reasons) if reasons else "通过"})
         if reasons:
             blocked += 1
@@ -227,7 +243,8 @@ async def import_sources(session: AsyncSession, actor: Actor, content: bytes) ->
     inserted = 0
     now = utcnow()
     seen_site = set(db_site)
-    for values, internal_id, site_code in staged:
+    seen_site.update(item[2] for item in staged if item[2])
+    for values, internal_id, site_code, _reason in staged:
         normalized = _normalized_values(values)
         if not site_code:
             prefix = site_code_prefix(

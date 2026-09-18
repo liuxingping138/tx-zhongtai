@@ -184,12 +184,21 @@ export async function resolveAreaCodes(
   const body = new FormData()
   body.append('file', file)
   onProgress?.(10, 'upload')
-  const response = await fetch('/api/v1/codebook/area-codes/resolve', {
-    method: 'POST',
-    headers,
-    body,
-    credentials: 'include',
-  })
+  let response: Response
+  try {
+    response = await fetch('/api/v1/codebook/area-codes/resolve', {
+      method: 'POST',
+      headers,
+      body,
+      credentials: 'include',
+      signal: AbortSignal.timeout(600_000),
+    })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      throw new Error('补全省市区编码超时，请拆成更小的文件再上传')
+    }
+    throw error
+  }
   onProgress?.(80, 'parse')
   if (!response.ok) {
     throw new Error('补全省市区编码失败')

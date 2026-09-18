@@ -141,26 +141,29 @@ def _has_any_area_code(item: dict[str, str]) -> bool:
 
 
 async def import_base_tags(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, Any]:
-    parsed = parse_sheet(content, BASE_TAG_COLUMNS, sheet_name="政策基础信息表数据导出")
+    parsed = parse_sheet(content, BASE_TAG_COLUMNS)
     db_hashes = await repo.list_hashes(session)
-    staged: list[tuple[dict[str, str], str]] = []
+    staged: list[tuple[dict[str, str], str, str]] = []
     for item in parsed:
         values = _values(item)
         digest = content_hash(values, BASE_TAG_FIELDS)
-        staged.append((values, digest))
+        staged.append((values, digest, (item.get("skip_reason") or "").strip()))
     file_hashes = Counter(item[1] for item in staged)
     marked: list[dict[str, str]] = []
     blocked = 0
-    for values, digest in staged:
+    for values, digest, resolve_reason in staged:
         reasons: list[str] = []
         if not _has_any_area_code(values):
-            reasons.append("省市区编码为空")
+            if resolve_reason and resolve_reason != "通过":
+                reasons.append(resolve_reason)
+            else:
+                reasons.append("省市区编码为空")
         if not values["policy_name"]:
             reasons.append("政策名称为空")
         if digest in db_hashes:
             reasons.append("内容已存在")
         if file_hashes[digest] > 1:
-            reasons.append("文件内重复")
+            reasons.append("文件内内容重复")
         marked.append({**values, "skip_reason": "；".join(reasons) if reasons else "通过"})
         if reasons:
             blocked += 1
@@ -175,7 +178,7 @@ async def import_base_tags(session: AsyncSession, actor: Actor, content: bytes) 
         }
     inserted = 0
     now = utcnow()
-    for values, digest in staged:
+    for values, digest, _reason in staged:
         session.add(
             BaseTag(
                 content_hash=digest,

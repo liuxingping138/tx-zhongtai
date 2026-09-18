@@ -6,6 +6,11 @@
 entryPoints:
   web:
     address: ":80"
+    transport:
+      respondingTimeouts:
+        readTimeout: "600s"
+        writeTimeout: "600s"
+        idleTimeout: "600s"
 
 providers:
   file:

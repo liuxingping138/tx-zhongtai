@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import AuditEventOut
 from app.application.redact import redact
+from app.core.clock import assume_beijing
 from app.domain.models import AuditEvent
 from app.repositories import events as event_repo
 
@@ -49,6 +50,8 @@ async def list_page(
     action_code: str | None,
     outcome: str | None,
 ) -> tuple[list[AuditEventOut], int]:
+    occurred_from = assume_beijing(occurred_from)
+    occurred_to = assume_beijing(occurred_to)
     total = await event_repo.count_events(
         session,
         occurred_from=occurred_from,

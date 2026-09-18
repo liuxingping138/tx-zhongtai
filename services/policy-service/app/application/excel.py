@@ -15,14 +15,11 @@ from app.domain.fields import (
 )
 
 
-def _pick_sheet(book: Any, sheet_name: str | None) -> Any:
-    if sheet_name:
-        if sheet_name in book.sheetnames:
-            return book[sheet_name]
-        stripped = {name.strip(): name for name in book.sheetnames}
-        if sheet_name.strip() in stripped:
-            return book[stripped[sheet_name.strip()]]
-    return book[book.sheetnames[0]]
+def _field_of(columns: tuple[ColumnSpec, ...], header: str) -> str | None:
+    raw = (header or "").replace("\n", " ").strip()
+    if raw in {"校验说明", "跳过原因"}:
+        return "skip_reason"
+    return header_to_field(columns, header)
 
 
 def parse_sheet(
@@ -31,17 +28,19 @@ def parse_sheet(
     *,
     sheet_name: str | None = None,
 ) -> list[dict[str, str]]:
+    del sheet_name  # 上传只读第一个 sheet，不看名称
     try:
         book = load_workbook(BytesIO(content), read_only=True, data_only=True)
     except Exception as exc:  # noqa: BLE001
         raise ApiError("无法读取 Excel 文件", code=ErrorCode.VALIDATION_ERROR, http_status=422) from exc
-    sheet = _pick_sheet(book, sheet_name)
+    sheet = book[book.sheetnames[0]]
     rows = sheet.iter_rows(values_only=True)
     mapping: list[str | None] = []
+    parse_columns = (*columns, SKIP_REASON_COLUMN)
     for header_row in rows:
         if header_row is None or all(cell is None or str(cell).strip() == "" for cell in header_row):
             continue
-        mapping = [header_to_field(columns, str(cell or "")) for cell in header_row]
+        mapping = [_field_of(columns, str(cell or "")) for cell in header_row]
         if any(mapping):
             break
         raise ApiError("Excel 表头与政策字段不匹配", code=ErrorCode.VALIDATION_ERROR, http_status=422)
@@ -51,7 +50,7 @@ def parse_sheet(
     for raw in rows:
         if raw is None or all(cell is None or str(cell).strip() == "" for cell in raw):
             continue
-        item = {spec.field: "" for spec in columns}
+        item = {spec.field: "" for spec in parse_columns}
         for idx, field in enumerate(mapping):
             if not field or idx >= len(raw):
                 continue

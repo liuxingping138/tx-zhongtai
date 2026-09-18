@@ -96,6 +96,7 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ActionSpec("codebook.area_codes", "list", GrantLevel.READ),
     ActionSpec("codebook.area_codes", "read", GrantLevel.READ),
     ActionSpec("codebook.area_codes", "export", GrantLevel.READ),
+    ActionSpec("codebook.area_codes", "resolve", GrantLevel.READ),
     ActionSpec("codebook.area_codes", "create", GrantLevel.FULL),
     ActionSpec("codebook.area_codes", "update", GrantLevel.FULL),
     ActionSpec("codebook.area_codes", "import", GrantLevel.FULL),
