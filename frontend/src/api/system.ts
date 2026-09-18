@@ -75,3 +75,15 @@ export function replaceRoleGrants(
 export function listResourceTree(): Promise<{ tree: ResourceNode[] }> {
   return request(http.get('/system/resources'))
 }
+
+// Role pickers must not silently omit roles beyond the first API page.
+export async function listAllRoles(): Promise<RoleItem[]> {
+  const items: RoleItem[] = []
+  let page = 1
+  while (true) {
+    const result = await listRoles({ page, page_size: 100 })
+    items.push(...result.items)
+    if (!result.items.length || items.length >= result.total) return items
+    page += 1
+  }
+}

@@ -7,19 +7,21 @@ withDefaults(
   defineProps<{
     title: string
     hint?: string
+    error?: string
     total: number
     page: number
     pageSize: number
     loading?: boolean
     hidePager?: boolean
   }>(),
-  { hint: '', loading: false, hidePager: false },
+  { hint: '', error: '', loading: false, hidePager: false },
 )
 
 const emit = defineEmits<{
   'update:page': [value: number]
   'update:pageSize': [value: number]
   change: []
+  retry: []
 }>()
 
 async function onPage(value: number) {
@@ -68,9 +70,28 @@ async function onSize(value: number) {
       <slot name="filters" />
     </section>
     <section class="panel table-card">
-      <slot />
       <div
-        v-if="!hidePager"
+        v-if="error"
+        class="list-error"
+        role="alert"
+      >
+        <span
+          class="list-error__icon"
+          aria-hidden="true"
+        >!</span>
+        <h2>暂时无法加载数据</h2>
+        <p>{{ error }}</p>
+        <el-button
+          type="primary"
+          :loading="loading"
+          @click="$emit('retry')"
+        >
+          重新加载
+        </el-button>
+      </div>
+      <slot v-else />
+      <div
+        v-if="!hidePager && !error"
         class="pagination-row"
       >
         <el-pagination
@@ -97,7 +118,7 @@ async function onSize(value: number) {
 
 .panel {
   border: 1px solid var(--zt-border);
-  border-radius: 6px;
+  border-radius: 10px;
   background: var(--zt-panel);
   box-shadow: var(--zt-shadow);
 }
@@ -128,7 +149,7 @@ async function onSize(value: number) {
 
 .list-page__title {
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
 }
 
@@ -160,4 +181,24 @@ async function onSize(value: number) {
   padding: 8px 16px 16px;
   overflow-x: auto;
 }
+@media (max-width: 760px) {
+  .list-page__heading {
+    flex-wrap: wrap;
+    padding: 16px;
+  }
+
+  .list-page__actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+
+  .filter-card {
+    padding: 16px;
+  }
+}
+.list-error { padding: 48px 20px; text-align: center; }
+.list-error__icon { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; color: #a97328; background: #fff5e6; font-size: 22px; }
+.list-error h2 { margin: 14px 0 8px; color: var(--zt-ink-900); font-size: 16px; }
+.list-error p { margin: 0 0 20px; color: var(--zt-ink-500); font-size: 13px; }
 </style>

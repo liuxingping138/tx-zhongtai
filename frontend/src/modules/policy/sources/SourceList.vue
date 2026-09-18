@@ -18,17 +18,22 @@ import { errorMessage, isApiError } from '@/api/errors'
 import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
+import ListEmpty from '@/components/ListEmpty.vue'
+import GroupedFields, { type EditorGroup } from '@/components/GroupedFields.vue'
+import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import { useAuthStore } from '@/stores/auth'
 import { formatTime } from '@/utils/time'
 
 const auth = useAuthStore()
 const router = useRouter()
-const canWrite = auth.canFull('policy.sources')
+const canWrite = computed(() => auth.canFull('policy.sources'))
 const canPurge = computed(() => auth.canFull('policy.sources') && auth.isSuperadmin)
-const canAudit = auth.canRead('system.audit')
+const canAudit = computed(() => auth.canRead('system.audit'))
 const clearing = ref(false)
 
 const loading = ref(false)
+const loadError = ref('')
+const resultFiltered = ref(false)
 const items = ref<SourceItem[]>([])
 const total = ref(0)
 const query = reactive({
@@ -119,8 +124,15 @@ async function loadOptions() {
   }
 }
 
+let loadSequence = 0
+
 async function load() {
+  const sequence = ++loadSequence
   loading.value = true
+  loadError.value = ''
+  const filtered = Object.entries(query).some(([key, value]) =>
+    !['page', 'page_size'].includes(key) && (Array.isArray(value) ? value.length > 0 : Boolean(value)),
+  )
   try {
     const page = await listSources({
       site_name: query.site_name || undefined,
@@ -131,13 +143,25 @@ async function load() {
       page: query.page,
       page_size: query.page_size,
     })
+    if (sequence !== loadSequence) return
     items.value = page.items
     total.value = page.total
+    resultFiltered.value = filtered
   } catch (error) {
-    ElMessage.error(errorMessage(error, '加载信源失败'))
+    if (sequence !== loadSequence) return
+    loadError.value = errorMessage(error, '加载信源失败')
   } finally {
-    loading.value = false
+    if (sequence === loadSequence) loading.value = false
   }
+}
+
+function onResetFilters() {
+  query.site_name = ''
+  query.province_name = ''
+  query.city_name = ''
+  query.tag = ''
+  query.crawl_priority = ''
+  onSearch()
 }
 
 function onSearch() {
@@ -165,6 +189,7 @@ function openEdit(row: SourceItem) {
 }
 
 async function onSave() {
+  if (saving.value) return
   if (!form.site_name.trim()) {
     ElMessage.warning('请填写网站名称')
     return
@@ -211,11 +236,17 @@ async function onImport(file: File) {
   return false
 }
 
+const exporting = ref(false)
+
 async function onExport() {
+  if (exporting.value) return
+  exporting.value = true
   try {
     await downloadPolicy('/policy/sources/export', '信源管理.xlsx')
   } catch {
     ElMessage.error('导出失败')
+  } finally {
+    exporting.value = false
   }
 }
 
@@ -255,17 +286,106 @@ onMounted(() => {
   void load()
   void loadOptions()
 })
+
+const editorGroups: EditorGroup[] = [
+  {
+    "title": "基础信息",
+    "hint": "填写信源网站与所属部门，便于识别和维护。",
+    "fields": [
+      {
+        "key": "site_name",
+        "label": "网站名称",
+        "required": true,
+        "maxLength": 255
+      },
+      {
+        "key": "department",
+        "label": "所属部门",
+        "maxLength": 255
+      },
+      {
+        "key": "url",
+        "label": "网站链接",
+        "long": true,
+        "placeholder": "https://",
+        "hint": "建议填写完整的网址，便于直接访问。"
+      }
+    ]
+  },
+  {
+    "title": "所属地区",
+    "hint": "省、市、区县编码至少填写一项；名称与编码请保持对应。",
+    "fields": [
+      {
+        "key": "province_name",
+        "label": "省份名称",
+        "maxLength": 64
+      },
+      {
+        "key": "province_code",
+        "label": "省份编码",
+        "placeholder": "如：11",
+        "maxLength": 8
+      },
+      {
+        "key": "city_name",
+        "label": "地市名称",
+        "maxLength": 64
+      },
+      {
+        "key": "city_code",
+        "label": "地市编码",
+        "placeholder": "如：1101",
+        "maxLength": 8
+      },
+      {
+        "key": "district_name",
+        "label": "区县名称",
+        "maxLength": 64
+      },
+      {
+        "key": "district_code",
+        "label": "区县编码",
+        "placeholder": "如：110101",
+        "maxLength": 8
+      }
+    ]
+  },
+  {
+    "title": "采集与标签",
+    "hint": "按业务约定填写采集优先级及分类。",
+    "fields": [
+      {
+        "key": "crawl_priority",
+        "label": "采集优先级",
+        "maxLength": 255
+      },
+      {
+        "key": "tag",
+        "label": "标签"
+      },
+      {
+        "key": "data_type",
+        "label": "数据类型",
+        "hint": "综合填 0，政策填 1，新闻填 2；0、1 全爬，2 爬聚集板块。"
+      }
+    ]
+  }
+]
+const editorGuard = useUnsavedForm(visible, () => form, saving)
 </script>
 
 <template>
   <div>
     <ListPage
       title="信源管理"
-      hint="上传时先补省市区编码再校验：有重复或省市区编码为空则整批不入库，并下载全量打标文件。全部通过后按该区县当前最大网站编码递增。完整流水在「系统管理 / 操作日志」。"
+      hint="维护政策采集网站、所属地区与采集规则。"
       :total="total"
       :page="query.page"
       :page-size="query.page_size"
       :loading="loading"
+      :error="loadError"
+      @retry="load"
       @update:page="query.page = $event"
       @update:page-size="query.page_size = $event"
       @change="load"
@@ -284,11 +404,19 @@ onMounted(() => {
           accept=".xlsx"
           :before-upload="onImport"
         >
-          <el-button :disabled="importUi.visible">
-            上传 Excel
-          </el-button>
+          <el-tooltip
+            content="上传后自动补齐地区编码；存在重复或地区编码缺失时整批退回，并下载校验报告。"
+            placement="bottom"
+          >
+            <el-button :disabled="importUi.visible">
+              上传 Excel
+            </el-button>
+          </el-tooltip>
         </el-upload>
-        <el-button @click="onExport">
+        <el-button
+          :loading="exporting"
+          @click="onExport"
+        >
           下载 Excel
         </el-button>
         <el-button
@@ -355,6 +483,9 @@ onMounted(() => {
             >
               查询
             </el-button>
+            <el-button @click="onResetFilters">
+              重置
+            </el-button>
           </el-form-item>
         </el-form>
       </template>
@@ -365,6 +496,13 @@ onMounted(() => {
         stripe
         border
       >
+        <template #empty>
+          <ListEmpty
+            :loading="loading"
+            :filtered="resultFiltered"
+            @reset="onResetFilters"
+          />
+        </template>
         <el-table-column
           v-for="col in tableColumns"
           :key="col.prop"
@@ -408,45 +546,36 @@ onMounted(() => {
         </el-table-column>
       </el-table>
     </ListPage>
-    <el-dialog
+    <el-drawer
       v-model="visible"
+      class="editor-overlay"
+      :before-close="editorGuard.beforeClose"
+      :close-on-click-modal="!saving"
+      :close-on-press-escape="!saving"
+      :show-close="!saving"
       :title="editing ? '编辑信源' : '新增信源'"
-      width="640px"
+      size="700px"
     >
-      <el-form label-position="top">
-        <el-form-item
-          label="网站名称"
-          required
-        >
-          <el-input v-model="form.site_name" />
-        </el-form-item>
-        <el-form-item label="省份">
-          <el-input v-model="form.province_name" />
-        </el-form-item>
-        <el-form-item label="地市">
-          <el-input v-model="form.city_name" />
-        </el-form-item>
-        <el-form-item label="区县">
-          <el-input v-model="form.district_name" />
-        </el-form-item>
-        <el-form-item label="网站梳理和抓取的优先级">
-          <el-input v-model="form.crawl_priority" />
-        </el-form-item>
-        <el-form-item label="链接">
-          <el-input v-model="form.url" />
-        </el-form-item>
-        <el-form-item label="标签">
-          <el-input v-model="form.tag" />
-        </el-form-item>
-        <el-form-item label="数据类型（综合-0、政策-1、新闻-2）注：0和1链接下全爬，2爬聚集板块">
-          <el-input v-model="form.data_type" />
-        </el-form-item>
-        <el-form-item label="所属部门">
-          <el-input v-model="form.department" />
-        </el-form-item>
+      <el-form
+        :disabled="saving"
+        label-position="top"
+        @submit.prevent="onSave"
+      >
+        <GroupedFields
+          :model-value="form"
+          :groups="editorGroups"
+        />
       </el-form>
       <template #footer>
-        <el-button @click="visible = false">
+        <span
+          v-if="editorGuard.dirty.value"
+          class="editor-dirty"
+          role="status"
+        >有未保存的修改</span>
+        <el-button
+          :disabled="saving"
+          @click="editorGuard.close"
+        >
           取消
         </el-button>
         <el-button
@@ -457,7 +586,7 @@ onMounted(() => {
           保存
         </el-button>
       </template>
-    </el-dialog>
+    </el-drawer>
   </div>
 </template>
 

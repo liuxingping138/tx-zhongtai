@@ -1,5 +1,4 @@
 import type { AxiosResponse } from 'axios'
-import { ElMessage } from 'element-plus'
 import { reactive } from 'vue'
 
 import { http } from './http'
@@ -10,11 +9,20 @@ export interface ImportResult {
   updated: number
   skipped: number
   total: number
+  report_blob?: Blob
+  report_filename?: string
   rejected?: boolean
   skipped_file?: string | null
 }
 
 export type ImportStage = 'upload' | 'parse'
+
+export const importResultUi = reactive({
+  visible: false,
+  result: null as ImportResult | null,
+  filename: '',
+  sourceName: '',
+})
 
 export const importUi = reactive({
   visible: false,
@@ -66,6 +74,8 @@ export async function postExcelImport(
     const filename = filenameFromDisposition(headerValue(response.headers, 'content-disposition'), '上传校验.xlsx')
     downloadBlob(response.data, filename)
     return {
+      report_blob: response.data,
+      report_filename: filename,
       inserted: Number(headerValue(response.headers, 'x-import-inserted') || 0),
       updated: Number(headerValue(response.headers, 'x-import-updated') || 0),
       skipped: Number(headerValue(response.headers, 'x-import-skipped') || 0),
@@ -105,35 +115,28 @@ export function downloadBlob(blob: Blob, filename: string): void {
 }
 
 export function reportImportResult(result: ImportResult, skippedFilename: string): void {
-  if (result.rejected) {
-    if (result.skipped_file) {
-      downloadBase64Xlsx(result.skipped_file, skippedFilename)
-    }
-    ElMessage.warning(
-      `未通过校验（重复或省市区编码为空），本次未入库。完整打标文件已下载，修正后再上传。`,
-    )
-    return
-  }
-  if (result.skipped) {
-    if (result.skipped_file) {
-      downloadBase64Xlsx(result.skipped_file, skippedFilename)
-    }
-    ElMessage.warning(
-      `导入完成：新增 ${result.inserted}，跳过 ${result.skipped}。跳过明细已下载，可查看「校验说明」。`,
-    )
-    return
-  }
-  if (result.updated) {
-    ElMessage.success(`导入完成：新增 ${result.inserted}，更新 ${result.updated}，跳过 ${result.skipped}`)
-    return
-  }
-  ElMessage.success(`导入完成：新增 ${result.inserted}，跳过 ${result.skipped}`)
+  if (result.skipped_file) downloadBase64Xlsx(result.skipped_file, skippedFilename)
+  importResultUi.result = result
+  importResultUi.filename = result.report_filename || skippedFilename
+  importResultUi.visible = true
+}
+
+export function downloadImportReport(): void {
+  const result = importResultUi.result
+  if (result?.report_blob) downloadBlob(result.report_blob, importResultUi.filename)
+  else if (result?.skipped_file) downloadBase64Xlsx(result.skipped_file, importResultUi.filename)
 }
 
 export async function runExcelImport<T>(
   file: File,
   importer: (onProgress: (percent: number, stage: ImportStage) => void) => Promise<T>,
 ): Promise<T> {
+  if (importUi.visible) throw new Error('已有文件正在导入，请等待完成后重试')
+  if (!/\.xlsx$/i.test(file.name)) throw new Error('请选择 .xlsx 格式的 Excel 文件')
+  if (!file.size) throw new Error('文件为空，请选择包含数据的 Excel 文件')
+  importResultUi.visible = false
+  importResultUi.result = null
+  importResultUi.sourceName = file.name
   importUi.visible = true
   importUi.fileName = file.name
   importUi.percent = 0

@@ -7,12 +7,15 @@ import { auditFilterOptions, getAuditEvent, listAuditEvents } from '@/api/audit'
 import { errorMessage } from '@/api/errors'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
+import ListEmpty from '@/components/ListEmpty.vue'
 import type { AuditEventItem } from '@/api/types'
 import { ACTION_LABELS, MODULE_LABELS, actionLabel, moduleLabel } from '@/utils/auditLabels'
 import { formatTime, toBeijingIso } from '@/utils/time'
 
 const route = useRoute()
 const loading = ref(false)
+const loadError = ref('')
+const resultFiltered = ref(false)
 const events = ref<AuditEventItem[]>([])
 const total = ref(0)
 const query = reactive({
@@ -20,7 +23,7 @@ const query = reactive({
   module_code: '',
   action_code: '',
   outcome: '',
-  range: [] as string[],
+  range: [] as string[] | null,
   page: 1,
   page_size: 20,
 })
@@ -51,8 +54,15 @@ async function loadOptions() {
   }
 }
 
+let loadSequence = 0
+
 async function load() {
+  const sequence = ++loadSequence
   loading.value = true
+  loadError.value = ''
+  const filtered = Object.entries(query).some(([key, value]) =>
+    !['page', 'page_size'].includes(key) && (Array.isArray(value) ? value.length > 0 : Boolean(value)),
+  )
   try {
     const page = await listAuditEvents({
       page: query.page,
@@ -61,16 +71,28 @@ async function load() {
       module_code: query.module_code || undefined,
       action_code: query.action_code || undefined,
       outcome: query.outcome || undefined,
-      occurred_from: toBeijingIso(query.range[0]) || undefined,
-      occurred_to: toBeijingIso(query.range[1]) || undefined,
+      occurred_from: toBeijingIso(query.range?.[0]) || undefined,
+      occurred_to: toBeijingIso(query.range?.[1]) || undefined,
     })
+    if (sequence !== loadSequence) return
     events.value = page.items
     total.value = page.total
+    resultFiltered.value = filtered
   } catch (error) {
-    ElMessage.error(errorMessage(error, '加载审计日志失败'))
+    if (sequence !== loadSequence) return
+    loadError.value = errorMessage(error, '加载审计日志失败')
   } finally {
-    loading.value = false
+    if (sequence === loadSequence) loading.value = false
   }
+}
+
+function onResetFilters() {
+  query.actor_name = ''
+  query.module_code = ''
+  query.action_code = ''
+  query.outcome = ''
+  query.range = []
+  onSearch()
 }
 
 function onSearch() {
@@ -78,16 +100,20 @@ function onSearch() {
   void load()
 }
 
+let detailSequence = 0
+
 async function openDetail(row: AuditEventItem) {
+  const sequence = ++detailSequence
   detailVisible.value = true
   detailLoading.value = true
   detail.value = row
   try {
-    detail.value = await getAuditEvent(row.id)
+    const result = await getAuditEvent(row.id)
+    if (sequence === detailSequence) detail.value = result
   } catch (error) {
-    ElMessage.error(errorMessage(error, '加载详情失败'))
+    if (sequence === detailSequence) ElMessage.error(errorMessage(error, '加载详情失败'))
   } finally {
-    detailLoading.value = false
+    if (sequence === detailSequence) detailLoading.value = false
   }
 }
 
@@ -105,11 +131,13 @@ onMounted(() => {
   <div>
     <ListPage
       title="操作日志"
-      hint="记录各模块的新增、编辑、导入等操作，可按时间、人员、模块筛选。"
+      hint="查看操作记录，按时间、人员和模块追溯变更。"
       :total="total"
       :page="query.page"
       :page-size="query.page_size"
       :loading="loading"
+      :error="loadError"
+      @retry="load"
       @update:page="query.page = $event"
       @update:page-size="query.page_size = $event"
       @change="load"
@@ -185,6 +213,9 @@ onMounted(() => {
             >
               查询
             </el-button>
+            <el-button @click="onResetFilters">
+              重置
+            </el-button>
           </el-form-item>
         </el-form>
       </template>
@@ -195,6 +226,13 @@ onMounted(() => {
         stripe
         border
       >
+        <template #empty>
+          <ListEmpty
+            :loading="loading"
+            :filtered="resultFiltered"
+            @reset="onResetFilters"
+          />
+        </template>
         <el-table-column
           label="时间"
           width="190"

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
-import { listResourceTree, listRoleGrants, listRoles, replaceRoleGrants } from '@/api/system'
+import { listResourceTree, listRoleGrants, listAllRoles, replaceRoleGrants } from '@/api/system'
 import { errorMessage, isApiError } from '@/api/errors'
 import type { ResourceNode, RoleItem } from '@/api/types'
 import { applyParentLevel, grantDiff, grantsFromTree, type GrantLevel } from '@/permissions/levels'
@@ -111,10 +111,10 @@ function syncUrl(roleId: string) {
 
 async function loadRolesAndTree() {
   const [rolePage, resourceData] = await Promise.all([
-    listRoles({ page: 1, page_size: 100 }),
+    listAllRoles(),
     tree.value.length ? Promise.resolve({ tree: tree.value }) : listResourceTree(),
   ])
-  roles.value = rolePage.items
+  roles.value = rolePage
   tree.value = resourceData.tree
 }
 
@@ -131,6 +131,7 @@ async function loadGrants(roleId: string) {
 }
 
 async function activateRole(roleId: string, force = false) {
+  if (saving.value || loading.value) return
   if (!roleId || (roleId === currentRoleId.value && !force)) {
     return
   }
@@ -141,11 +142,11 @@ async function activateRole(roleId: string, force = false) {
       return
     }
   }
-  currentRoleId.value = roleId
-  syncUrl(roleId)
   loading.value = true
   try {
     await loadGrants(roleId)
+    currentRoleId.value = roleId
+    syncUrl(roleId)
   } catch (error) {
     ElMessage.error(errorMessage(error, '加载授权失败'))
   } finally {
@@ -187,6 +188,7 @@ function onReset() {
 }
 
 async function onSave() {
+  if (saving.value || loading.value || !canWrite.value) return
   if (!role.value) {
     return
   }
@@ -197,8 +199,13 @@ async function onSave() {
   const summary = changes.value
     .map((item) => `${item.code}：${LEVEL_LABEL[item.from]} → ${LEVEL_LABEL[item.to]}`)
     .join('\n')
-  await ElMessageBox.confirm(summary, '确认保存以下授权变更？', { type: 'warning' })
   saving.value = true
+  try {
+    await ElMessageBox.confirm(summary, '确认保存以下授权变更？', { type: 'warning' })
+  } catch {
+    saving.value = false
+    return
+  }
   try {
     const result = await replaceRoleGrants(role.value.id, {
       version: role.value.version,
@@ -210,7 +217,7 @@ async function onSave() {
   } catch (error) {
     if (isApiError(error) && error.status === 409) {
       await ElMessageBox.alert('授权已被他人修改，请重新加载后再保存。', '版本冲突')
-      await activateRole(currentRoleId.value, true)
+      await loadGrants(currentRoleId.value)
     } else {
       ElMessage.error(errorMessage(error, '保存失败'))
     }
@@ -227,6 +234,17 @@ watch(
     }
   },
 )
+
+onBeforeRouteLeave(async () => {
+  if (saving.value) return false
+  if (!changes.value.length) return true
+  try {
+    await ElMessageBox.confirm('授权变更尚未保存，离开后将丢弃。', '离开权限分配', { type: 'warning' })
+    return true
+  } catch {
+    return false
+  }
+})
 
 onMounted(() => {
   void bootstrap()
@@ -246,7 +264,7 @@ onMounted(() => {
             权限分配
           </h1>
           <p class="iam-page__hint">
-            权限挂在角色上，用户只通过角色获得模块能力。左侧选角色，右侧改「无权限 / 只读 / 可管理」。
+            选择角色，设置模块访问权限；修改后保存生效。
           </p>
         </div>
       </div>
@@ -259,7 +277,7 @@ onMounted(() => {
           {{ changes.length }} 项待保存
         </el-tag>
         <el-button
-          :disabled="!changes.length"
+          :disabled="loading || saving || !changes.length"
           @click="onReset"
         >
           还原
@@ -268,7 +286,7 @@ onMounted(() => {
           v-if="canWrite"
           type="primary"
           :loading="saving"
-          :disabled="!changes.length"
+          :disabled="loading || saving || !changes.length"
           @click="onSave"
         >
           保存授权
@@ -290,6 +308,7 @@ onMounted(() => {
         <button
           v-for="item in filteredRoles"
           :key="item.id"
+          :disabled="loading || saving"
           type="button"
           class="iam-role"
           :class="{ 'is-active': item.id === currentRoleId }"
@@ -378,7 +397,7 @@ onMounted(() => {
                   class="perm-levels"
                   size="small"
                   :model-value="selected[data.code] || 'NONE'"
-                  :disabled="!canWrite"
+                  :disabled="!canWrite || loading || saving"
                   @change="(value: GrantLevel) => onLeafChange(data.code, value)"
                 >
                   <el-radio-button value="NONE">
@@ -396,7 +415,7 @@ onMounted(() => {
                   class="perm-levels"
                   size="small"
                   :model-value="parentLevel(data)"
-                  :disabled="!canWrite"
+                  :disabled="!canWrite || loading || saving"
                   @change="(value: GrantLevel) => onParentChange(data, value)"
                 >
                   <el-radio-button value="NONE">
@@ -427,7 +446,7 @@ onMounted(() => {
 
 .panel {
   border: 1px solid var(--zt-border);
-  border-radius: 6px;
+  border-radius: 10px;
   background: var(--zt-panel);
   box-shadow: var(--zt-shadow);
 }
@@ -514,7 +533,7 @@ onMounted(() => {
   margin-bottom: 6px;
   padding: 10px 12px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 10px;
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -631,6 +650,21 @@ onMounted(() => {
 @media (max-width: 1100px) {
   .iam-page__body {
     grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 760px) {
+  .iam-page__heading,
+  .iam-detail__meta,
+  .perm-row {
+    flex-wrap: wrap;
+  }
+
+  .iam-page__actions {
+    margin-left: 0;
+  }
+
+  .perm-row__code {
+    overflow-wrap: anywhere;
   }
 }
 </style>

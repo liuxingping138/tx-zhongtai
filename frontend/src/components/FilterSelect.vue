@@ -9,7 +9,7 @@ const props = withDefaults(
     placeholder?: string
     size?: 'short' | 'medium'
   }>(),
-  { placeholder: '输入或选择', size: 'medium' },
+  { placeholder: '输入或选择', size: 'medium', labels: undefined },
 )
 
 function optionLabel(value: string): string {
