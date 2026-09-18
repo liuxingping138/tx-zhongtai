@@ -93,6 +93,20 @@ async def list_events(
     return list(result.scalars().all())
 
 
+async def list_options(session: AsyncSession) -> dict[str, list[str]]:
+    async def values(column) -> list[str]:
+        result = await session.execute(
+            select(column).where(column.is_not(None)).where(column != "").distinct().order_by(column).limit(2000)
+        )
+        return [value for value in result.scalars() if value]
+
+    return {
+        "actor_name": await values(AuditEvent.actor_name_snapshot),
+        "module_code": await values(AuditEvent.module_code),
+        "action_code": await values(AuditEvent.action_code),
+    }
+
+
 async def get_event(session: AsyncSession, event_pk: uuid.UUID) -> AuditEvent | None:
     result = await session.execute(select(AuditEvent).where(AuditEvent.id == event_pk))
     row = result.scalar_one_or_none()

@@ -19,6 +19,7 @@ RUN uv sync --no-dev --no-install-project
 COPY services/codebook-service/app /srv/services/codebook-service/app
 COPY services/codebook-service/migrations /srv/services/codebook-service/migrations
 COPY services/codebook-service/alembic.ini /srv/services/codebook-service/alembic.ini
+COPY services/codebook-service/data /srv/services/codebook-service/data
 
 RUN uv sync --no-dev
 

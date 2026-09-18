@@ -5,6 +5,7 @@ export const ROUTE_BY_NAME: Record<string, string> = {
   'system-audit': '/system/audit',
   'codebook-policy-types': '/codebook/policy-types',
   'codebook-scenarios': '/codebook/scenarios',
+  'codebook-area-codes': '/codebook/area-codes',
   'policy-sources': '/policy/sources',
   'policy-base-tags': '/policy/base-tags',
   'policy-interpretations': '/policy/interpretations',

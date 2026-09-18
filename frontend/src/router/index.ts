@@ -74,6 +74,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '场景码表', resource: 'codebook.scenarios' },
       },
       {
+        path: 'codebook/area-codes',
+        name: 'codebook-area-codes',
+        component: () => import('@/modules/codebook/area-codes/AreaCodeList.vue'),
+        meta: { title: '省市区编码表', resource: 'codebook.area_codes' },
+      },
+      {
         path: 'policy/sources',
         name: 'policy-sources',
         component: () => import('@/modules/policy/sources/SourceList.vue'),

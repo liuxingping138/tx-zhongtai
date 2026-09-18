@@ -1,4 +1,4 @@
-"""codebook-service 入口：政策类型码表、行业场景码表。"""
+"""codebook-service 入口：政策类型码表、行业场景码表、省市区编码表。"""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from platform_common.logging_setup import get_logger, setup_logging
 from platform_common.request_context import RequestIdMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
+from app.api.area_codes import router as area_codes_router
 from app.api.policy_types import router as policy_types_router
 from app.api.scenarios import router as scenarios_router
 from app.api.security import get_authz_client
@@ -59,6 +60,7 @@ def create_app() -> FastAPI:
     app.include_router(build_health_router({"database": check_database_ready}))
     app.include_router(policy_types_router)
     app.include_router(scenarios_router)
+    app.include_router(area_codes_router)
     return app
 
 

@@ -135,25 +135,27 @@ onMounted(() => {
         <el-form
           class="filter-form"
           inline
+          label-position="top"
         >
-          <el-form-item label="状态">
-            <el-select
-              v-model="query.status"
-              clearable
-              placeholder="全部"
-              style="width: 140px"
-              @change="load"
-            >
-              <el-option
-                label="启用"
-                value="active"
-              />
-              <el-option
-                label="停用"
-                value="disabled"
-              />
-            </el-select>
-          </el-form-item>
+          <div class="filter-form__fields">
+            <el-form-item label="状态">
+              <el-select
+                v-model="query.status"
+                clearable
+                placeholder="全部"
+                @change="load"
+              >
+                <el-option
+                  label="启用"
+                  value="active"
+                />
+                <el-option
+                  label="停用"
+                  value="disabled"
+                />
+              </el-select>
+            </el-form-item>
+          </div>
         </el-form>
       </template>
       <el-table

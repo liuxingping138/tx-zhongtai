@@ -8,12 +8,16 @@ import {
   downloadCodebook,
   importPolicyTypes,
   listPolicyTypes,
+  policyTypeOptions,
   updatePolicyType,
   type PolicyTypeItem,
 } from '@/api/codebook'
 import { errorMessage, isApiError } from '@/api/errors'
+import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
+import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import { useAuthStore } from '@/stores/auth'
+import { formatTime } from '@/utils/time'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -24,13 +28,19 @@ const loading = ref(false)
 const items = ref<PolicyTypeItem[]>([])
 const total = ref(0)
 const query = reactive({ keyword: '', page: 1, page_size: 20 })
+const typeOptions = ref<string[]>([])
 const visible = ref(false)
 const saving = ref(false)
 const editing = ref<PolicyTypeItem | null>(null)
 const form = reactive({ seq_no: '', type_name: '', definition: '' })
 
-function formatTime(value: string): string {
-  return value.replace('T', ' ').replace(/\.\d+.*$/, '')
+async function loadOptions() {
+  try {
+    const data = await policyTypeOptions()
+    typeOptions.value = data.type_name ?? []
+  } catch {
+    /* 选项失败不影响列表 */
+  }
 }
 
 async function load() {
@@ -85,7 +95,7 @@ async function onSave() {
     }
     ElMessage.success('已保存')
     visible.value = false
-    await load()
+    await Promise.all([load(), loadOptions()])
   } catch (error) {
     if (isApiError(error) && error.status === 409) {
       await ElMessageBox.alert('数据已被他人修改或政策类型重复，请重新加载。', '无法保存')
@@ -100,9 +110,9 @@ async function onSave() {
 
 async function onImport(file: File) {
   try {
-    const result = await importPolicyTypes(file)
-    ElMessage.success(`导入完成：新增 ${result.inserted}，更新 ${result.updated}，跳过 ${result.skipped}`)
-    await load()
+    const result = await runExcelImport(file, (onProgress) => importPolicyTypes(file, onProgress))
+    reportImportResult(result, '政策类型-跳过明细.xlsx')
+    await Promise.all([load(), loadOptions()])
   } catch (error) {
     ElMessage.error(errorMessage(error, '导入失败'))
   }
@@ -123,6 +133,7 @@ function openLogs() {
 
 onMounted(() => {
   void load()
+  void loadOptions()
 })
 </script>
 
@@ -153,7 +164,9 @@ onMounted(() => {
           accept=".xlsx"
           :before-upload="onImport"
         >
-          <el-button>上传 Excel</el-button>
+          <el-button :disabled="importUi.visible">
+            上传 Excel
+          </el-button>
         </el-upload>
         <el-button @click="onExport">
           下载 Excel
@@ -169,16 +182,19 @@ onMounted(() => {
         <el-form
           class="filter-form"
           inline
+          label-position="top"
           @submit.prevent="onSearch"
         >
-          <el-form-item label="关键字">
-            <el-input
-              v-model="query.keyword"
-              clearable
-              placeholder="序号 / 政策类型 / 定义"
-            />
-          </el-form-item>
-          <el-form-item>
+          <div class="filter-form__fields">
+            <el-form-item label="关键字">
+              <FilterSelect
+                v-model="query.keyword"
+                :options="typeOptions"
+                placeholder="输入或选择政策类型"
+              />
+            </el-form-item>
+          </div>
+          <el-form-item class="filter-form__submit">
             <el-button
               native-type="submit"
               type="primary"

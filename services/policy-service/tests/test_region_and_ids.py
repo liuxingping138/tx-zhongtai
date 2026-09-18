@@ -28,6 +28,8 @@ def test_normalize_city_four_digits() -> None:
 def test_site_code_sequence() -> None:
     assert next_site_code("110000", []) == "11000000001"
     assert next_site_code("110101", ["11010100001", "11010100003"]) == "11010100004"
+    assert next_site_code("110101", ["11010100099", "11010500088"]) == "11010100100"
+    assert next_site_code("110101", ["11010199"]) == "11010100100"
     assert len(next_site_code("110000", ["11000000001"])) == 11
 
 

@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.orm_base import Base
-from app.domain.fields import POLICY_TYPE_COLUMNS, SCENARIO_COLUMNS
+from app.domain.fields import AREA_CODE_COLUMNS, POLICY_TYPE_COLUMNS, SCENARIO_COLUMNS
 
 
 def _uuid() -> uuid.UUID:
@@ -92,6 +92,34 @@ class Scenario(Base):
         self.content_hash = content_hash(self.business_values(), tuple(spec.field for spec in SCENARIO_COLUMNS))
 
 
+class AreaCode(Base):
+    __tablename__ = "codebook_area_codes"
+    __table_args__ = (UniqueConstraint("county_id", name="uq_codebook_area_codes_county_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    prov_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    prov_name: Mapped[str] = mapped_column(String(200), nullable=False, default="", index=True)
+    city_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    city_name: Mapped[str] = mapped_column(String(200), nullable=False, default="", index=True)
+    county_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    county_name: Mapped[str] = mapped_column(String(200), nullable=False, default="", index=True)
+    alias_prov_name: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    alias_city_name: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    alias_county_name: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    city_name_short: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    county_name_short: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_by_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_by_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_by_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    updated_by_name: Mapped[str] = mapped_column(String(128), nullable=False)
+
+    def business_values(self) -> dict[str, str]:
+        return {spec.field: str(getattr(self, spec.field) or "") for spec in AREA_CODE_COLUMNS}
+
+
 class OutboxEvent(Base):
     __tablename__ = "codebook_outbox"
 
@@ -108,3 +136,4 @@ class OutboxEvent(Base):
 
 POLICY_TYPE_FIELDS = tuple(spec.field for spec in POLICY_TYPE_COLUMNS)
 SCENARIO_FIELDS = tuple(spec.field for spec in SCENARIO_COLUMNS)
+AREA_CODE_FIELDS = tuple(spec.field for spec in AREA_CODE_COLUMNS)

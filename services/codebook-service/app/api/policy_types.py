@@ -32,6 +32,15 @@ async def list_items(
     return success_json(await service.list_policy_types(session, keyword=keyword, page=page, page_size=page_size))
 
 
+@router.get("/options")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def list_filter_options(
+    session: AsyncSession = Depends(get_db_session),
+    _: Actor = Depends(require_codebook_permission(RESOURCE, "list")),
+):
+    return success_json(await service.list_policy_type_options(session))
+
+
 @router.get("/export")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def export_items(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections import Counter
 from typing import Any
 
 from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionConflictError
@@ -8,20 +9,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.actors import Actor
 from app.application.audit_emit import enqueue_event
-from app.application.excel import build_workbook, parse_sheet
-from app.core.clock import utcnow
+from app.application.excel import build_workbook, encode_skipped_file, parse_sheet
+from app.core.clock import format_beijing, utcnow
 from app.domain.fields import BASE_TAG_COLUMNS
 from app.domain.models import BASE_TAG_FIELDS, BaseTag, content_hash
 from app.repositories import base_tags as repo
+from app.repositories import options as options_repo
 
 
 def _to_out(row: BaseTag) -> dict[str, Any]:
     data: dict[str, Any] = row.business_values()
     data["id"] = str(row.id)
     data["version"] = row.version
-    data["created_at"] = row.created_at.isoformat()
+    data["created_at"] = format_beijing(row.created_at)
     data["created_by_name"] = row.created_by_name
-    data["updated_at"] = row.updated_at.isoformat()
+    data["updated_at"] = format_beijing(row.updated_at)
     data["updated_by_name"] = row.updated_by_name
     return data
 
@@ -52,6 +54,10 @@ async def list_base_tags(
         page_size=page_size,
     )
     return {"items": [_to_out(item) for item in items], "total": total, "page": page, "page_size": page_size}
+
+
+async def list_base_tag_options(session: AsyncSession) -> dict[str, list[str]]:
+    return await options_repo.base_tag_options(session)
 
 
 async def get_base_tag(session: AsyncSession, item_id: uuid.UUID) -> dict[str, Any]:
@@ -130,22 +136,46 @@ async def update_base_tag(
     return _to_out(row)
 
 
-async def import_base_tags(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, int]:
+def _has_any_area_code(item: dict[str, str]) -> bool:
+    return bool((item.get("province_code") or "").strip() or (item.get("city_code") or "").strip())
+
+
+async def import_base_tags(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, Any]:
     parsed = parse_sheet(content, BASE_TAG_COLUMNS, sheet_name="政策基础信息表数据导出")
-    inserted = 0
-    skipped = 0
-    now = utcnow()
-    seen = await repo.list_hashes(session)
+    db_hashes = await repo.list_hashes(session)
+    staged: list[tuple[dict[str, str], str]] = []
     for item in parsed:
         values = _values(item)
-        if not values["policy_name"]:
-            skipped += 1
-            continue
         digest = content_hash(values, BASE_TAG_FIELDS)
-        if digest in seen:
-            skipped += 1
-            continue
-        seen.add(digest)
+        staged.append((values, digest))
+    file_hashes = Counter(item[1] for item in staged)
+    marked: list[dict[str, str]] = []
+    blocked = 0
+    for values, digest in staged:
+        reasons: list[str] = []
+        if not _has_any_area_code(values):
+            reasons.append("省市区编码为空")
+        if not values["policy_name"]:
+            reasons.append("政策名称为空")
+        if digest in db_hashes:
+            reasons.append("内容已存在")
+        if file_hashes[digest] > 1:
+            reasons.append("文件内重复")
+        marked.append({**values, "skip_reason": "；".join(reasons) if reasons else "通过"})
+        if reasons:
+            blocked += 1
+    if blocked:
+        return {
+            "inserted": 0,
+            "updated": 0,
+            "skipped": blocked,
+            "total": len(parsed),
+            "rejected": True,
+            "skipped_file": encode_skipped_file(BASE_TAG_COLUMNS, marked),
+        }
+    inserted = 0
+    now = utcnow()
+    for values, digest in staged:
         session.add(
             BaseTag(
                 content_hash=digest,
@@ -168,9 +198,15 @@ async def import_base_tags(session: AsyncSession, actor: Actor, content: bytes) 
         event_type="policy.base_tag.imported",
         actor_id=actor.id,
         actor_name=actor.name,
-        extra={"inserted": inserted, "skipped": skipped},
+        extra={"inserted": inserted, "skipped": 0},
     )
-    return {"inserted": inserted, "updated": 0, "skipped": skipped, "total": len(parsed)}
+    return {
+        "inserted": inserted,
+        "updated": 0,
+        "skipped": 0,
+        "total": len(parsed),
+        "skipped_file": None,
+    }
 
 
 async def export_base_tags(session: AsyncSession, actor: Actor) -> bytes:

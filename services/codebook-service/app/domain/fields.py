@@ -52,6 +52,20 @@ SCENARIO_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec("product_l2_sort", "二级产品排序（正序）"),
 )
 
+AREA_CODE_COLUMNS: tuple[ColumnSpec, ...] = (
+    ColumnSpec("prov_id", "省份编码"),
+    ColumnSpec("prov_name", "省份名称", searchable=True),
+    ColumnSpec("city_id", "城市编码"),
+    ColumnSpec("city_name", "城市名称", searchable=True),
+    ColumnSpec("county_id", "区县编码"),
+    ColumnSpec("county_name", "区县名称", searchable=True),
+    ColumnSpec("alias_prov_name", "省份别名"),
+    ColumnSpec("alias_city_name", "城市别名"),
+    ColumnSpec("alias_county_name", "区县别名"),
+    ColumnSpec("city_name_short", "城市简称"),
+    ColumnSpec("county_name_short", "区县简称"),
+)
+
 AUDIT_EXPORT_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec("created_at", "入库时间"),
     ColumnSpec("created_by_name", "入库人"),

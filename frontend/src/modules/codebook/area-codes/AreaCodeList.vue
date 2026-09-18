@@ -1,0 +1,337 @@
+<script setup lang="ts">
+import { onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+
+import {
+  areaCodeOptions,
+  createAreaCode,
+  downloadCodebook,
+  importAreaCodes,
+  listAreaCodes,
+  updateAreaCode,
+  type AreaCodeItem,
+} from '@/api/codebook'
+import { errorMessage, isApiError } from '@/api/errors'
+import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
+import FilterSelect from '@/components/FilterSelect.vue'
+import ListPage from '@/components/ListPage.vue'
+import { useAuthStore } from '@/stores/auth'
+import { formatTime } from '@/utils/time'
+
+const auth = useAuthStore()
+const router = useRouter()
+const canWrite = auth.canFull('codebook.area_codes')
+const canAudit = auth.canRead('system.audit')
+
+const fields: { key: keyof AreaCodeItem; label: string; required?: boolean }[] = [
+  { key: 'prov_id', label: '省份编码' },
+  { key: 'prov_name', label: '省份名称' },
+  { key: 'city_id', label: '城市编码' },
+  { key: 'city_name', label: '城市名称' },
+  { key: 'county_id', label: '区县编码', required: true },
+  { key: 'county_name', label: '区县名称' },
+  { key: 'alias_prov_name', label: '省份别名' },
+  { key: 'alias_city_name', label: '城市别名' },
+  { key: 'alias_county_name', label: '区县别名' },
+  { key: 'city_name_short', label: '城市简称' },
+  { key: 'county_name_short', label: '区县简称' },
+]
+
+const loading = ref(false)
+const items = ref<AreaCodeItem[]>([])
+const total = ref(0)
+const query = reactive({
+  prov_name: '',
+  city_name: '',
+  county_name: '',
+  page: 1,
+  page_size: 20,
+})
+const visible = ref(false)
+const saving = ref(false)
+const editing = ref<AreaCodeItem | null>(null)
+const form = reactive<Record<string, string>>({})
+const options = reactive({
+  prov_name: [] as string[],
+  city_name: [] as string[],
+  county_name: [] as string[],
+})
+
+const tableColumns = [
+  ...fields.map((field) => ({
+    prop: field.key,
+    label: field.label,
+    minWidth: 120,
+  })),
+  { prop: 'created_at', label: '入库时间', width: 170, time: true },
+  { prop: 'created_by_name', label: '入库人', width: 110 },
+  { prop: 'updated_at', label: '更新时间', width: 170, time: true },
+  { prop: 'updated_by_name', label: '操作人', width: 110 },
+]
+
+function cellValue(row: AreaCodeItem, prop: string): string {
+  return String(row[prop as keyof AreaCodeItem] ?? '')
+}
+
+async function loadOptions() {
+  try {
+    const data = await areaCodeOptions()
+    options.prov_name = data.prov_name ?? []
+    options.city_name = data.city_name ?? []
+    options.county_name = data.county_name ?? []
+  } catch {
+    /* 选项失败不影响列表 */
+  }
+}
+
+async function load() {
+  loading.value = true
+  try {
+    const page = await listAreaCodes({
+      prov_name: query.prov_name || undefined,
+      city_name: query.city_name || undefined,
+      county_name: query.county_name || undefined,
+      page: query.page,
+      page_size: query.page_size,
+    })
+    items.value = page.items
+    total.value = page.total
+  } catch (error) {
+    ElMessage.error(errorMessage(error, '加载省市区编码表失败'))
+  } finally {
+    loading.value = false
+  }
+}
+
+function onSearch() {
+  query.page = 1
+  void load()
+}
+
+function openCreate() {
+  editing.value = null
+  for (const field of fields) {
+    form[field.key] = ''
+  }
+  visible.value = true
+}
+
+function openEdit(row: AreaCodeItem) {
+  editing.value = row
+  for (const field of fields) {
+    form[field.key] = String(row[field.key] ?? '')
+  }
+  visible.value = true
+}
+
+async function onSave() {
+  if (!form.county_id?.trim()) {
+    ElMessage.warning('区县编码不能为空')
+    return
+  }
+  saving.value = true
+  try {
+    if (editing.value) {
+      await updateAreaCode(editing.value.id, { ...form, version: editing.value.version })
+    } else {
+      await createAreaCode({ ...form })
+    }
+    ElMessage.success('已保存')
+    visible.value = false
+    await Promise.all([load(), loadOptions()])
+  } catch (error) {
+    if (isApiError(error) && error.status === 409) {
+      await ElMessageBox.alert(
+        editing.value ? '数据已被他人修改，或区县编码已存在。' : '区县编码已存在。',
+        '无法保存',
+      )
+      await load()
+    } else {
+      ElMessage.error(errorMessage(error, '保存失败'))
+    }
+  } finally {
+    saving.value = false
+  }
+}
+
+async function onImport(file: File) {
+  try {
+    const result = await runExcelImport(file, (onProgress) => importAreaCodes(file, onProgress))
+    reportImportResult(result, '省市区编码-跳过明细.xlsx')
+    await Promise.all([load(), loadOptions()])
+  } catch (error) {
+    ElMessage.error(errorMessage(error, '导入失败'))
+  }
+  return false
+}
+
+async function onExport() {
+  try {
+    await downloadCodebook('/codebook/area-codes/export', '省市区编码表.xlsx')
+  } catch {
+    ElMessage.error('导出失败')
+  }
+}
+
+function openLogs() {
+  void router.push({ name: 'system-audit', query: { module_code: 'codebook.area_codes' } })
+}
+
+onMounted(() => {
+  void load()
+  void loadOptions()
+})
+</script>
+
+<template>
+  <div>
+    <ListPage
+      title="省市区编码表"
+      hint="对应全国省市区编码。按区县编码去重，重复上传会跳过已有记录；跳过明细会自动下载。"
+      :total="total"
+      :page="query.page"
+      :page-size="query.page_size"
+      :loading="loading"
+      @update:page="query.page = $event"
+      @update:page-size="query.page_size = $event"
+      @change="load"
+    >
+      <template #actions>
+        <el-button
+          v-if="canWrite"
+          type="primary"
+          @click="openCreate"
+        >
+          新增
+        </el-button>
+        <el-upload
+          v-if="canWrite"
+          :show-file-list="false"
+          accept=".xlsx"
+          :before-upload="onImport"
+        >
+          <el-button :disabled="importUi.visible">
+            上传 Excel
+          </el-button>
+        </el-upload>
+        <el-button @click="onExport">
+          下载 Excel
+        </el-button>
+        <el-button
+          v-if="canAudit"
+          @click="openLogs"
+        >
+          操作记录
+        </el-button>
+      </template>
+      <template #filters>
+        <el-form
+          class="filter-form"
+          inline
+          label-position="top"
+          @submit.prevent="onSearch"
+        >
+          <div class="filter-form__fields">
+            <el-form-item label="省份">
+              <FilterSelect
+                v-model="query.prov_name"
+                :options="options.prov_name"
+                size="short"
+              />
+            </el-form-item>
+            <el-form-item label="城市">
+              <FilterSelect
+                v-model="query.city_name"
+                :options="options.city_name"
+                size="short"
+              />
+            </el-form-item>
+            <el-form-item label="区县">
+              <FilterSelect
+                v-model="query.county_name"
+                :options="options.county_name"
+                size="short"
+              />
+            </el-form-item>
+          </div>
+          <el-form-item class="filter-form__submit">
+            <el-button
+              native-type="submit"
+              type="primary"
+            >
+              查询
+            </el-button>
+          </el-form-item>
+        </el-form>
+      </template>
+      <el-table
+        v-loading="loading"
+        class="data-table"
+        :data="items"
+        stripe
+        border
+      >
+        <el-table-column
+          v-for="col in tableColumns"
+          :key="col.prop"
+          :prop="col.prop"
+          :label="col.label"
+          :width="'width' in col ? col.width : undefined"
+          :min-width="'minWidth' in col ? col.minWidth : 120"
+          show-overflow-tooltip
+        >
+          <template
+            v-if="'time' in col && col.time"
+            #default="{ row }"
+          >
+            {{ formatTime(cellValue(row, col.prop)) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          v-if="canWrite"
+          label="操作"
+          width="80"
+          fixed="right"
+        >
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              @click="openEdit(row)"
+            >
+              编辑
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </ListPage>
+    <el-drawer
+      v-model="visible"
+      :title="editing ? '编辑省市区编码' : '新增省市区编码'"
+      size="560px"
+    >
+      <el-form label-position="top">
+        <el-form-item
+          v-for="field in fields"
+          :key="field.key"
+          :label="field.label"
+        >
+          <el-input v-model="form[field.key]" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="visible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="saving"
+          @click="onSave"
+        >
+          保存
+        </el-button>
+      </template>
+    </el-drawer>
+  </div>
+</template>

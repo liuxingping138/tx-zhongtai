@@ -1,3 +1,4 @@
+import { postExcelImport, type ImportResult, type ImportStage } from './excelImport'
 import { getAccessToken, getCsrfToken } from './session'
 import { http, request } from './http'
 import type { Page } from './types'
@@ -54,15 +55,16 @@ export interface ScenarioItem {
   product_l2_sort: string
 }
 
-export interface ImportResult {
-  inserted: number
-  updated: number
-  skipped: number
-  total: number
-}
+export type { ImportResult } from './excelImport'
+
+export type FilterOptions = Record<string, string[]>
 
 export function listPolicyTypes(params: { keyword?: string; page?: number; page_size?: number }): Promise<Page<PolicyTypeItem>> {
   return request(http.get('/codebook/policy-types', { params }))
+}
+
+export function policyTypeOptions(): Promise<FilterOptions> {
+  return request(http.get('/codebook/policy-types/options'))
 }
 
 export function createPolicyType(body: { seq_no?: string; type_name: string; definition?: string }): Promise<PolicyTypeItem> {
@@ -76,10 +78,15 @@ export function updatePolicyType(
   return request(http.patch(`/codebook/policy-types/${id}`, body))
 }
 
-export function importPolicyTypes(file: File): Promise<ImportResult> {
-  const form = new FormData()
-  form.append('file', file)
-  return request(http.post('/codebook/policy-types/import', form, { timeout: 180_000 }))
+export function importPolicyTypes(
+  file: File,
+  onProgress?: (percent: number, stage: ImportStage) => void,
+): Promise<ImportResult> {
+  return postExcelImport('/codebook/policy-types/import', file, onProgress, 180_000)
+}
+
+export function scenarioOptions(): Promise<FilterOptions> {
+  return request(http.get('/codebook/scenarios/options'))
 }
 
 export function listScenarios(params: {
@@ -105,10 +112,105 @@ export function updateScenario(id: string, body: Partial<ScenarioItem> & { versi
   return request(http.patch(`/codebook/scenarios/${id}`, body))
 }
 
-export function importScenarios(file: File): Promise<ImportResult> {
-  const form = new FormData()
-  form.append('file', file)
-  return request(http.post('/codebook/scenarios/import', form, { timeout: 180_000 }))
+export function importScenarios(
+  file: File,
+  onProgress?: (percent: number, stage: ImportStage) => void,
+): Promise<ImportResult> {
+  return postExcelImport('/codebook/scenarios/import', file, onProgress, 180_000)
+}
+
+export interface AreaCodeItem {
+  id: string
+  version: number
+  created_at: string
+  created_by_name: string
+  updated_at: string
+  updated_by_name: string
+  prov_id: string
+  prov_name: string
+  city_id: string
+  city_name: string
+  county_id: string
+  county_name: string
+  alias_prov_name: string
+  alias_city_name: string
+  alias_county_name: string
+  city_name_short: string
+  county_name_short: string
+}
+
+export function areaCodeOptions(): Promise<FilterOptions> {
+  return request(http.get('/codebook/area-codes/options'))
+}
+
+export function listAreaCodes(params: {
+  prov_name?: string
+  city_name?: string
+  county_name?: string
+  page?: number
+  page_size?: number
+}): Promise<Page<AreaCodeItem>> {
+  return request(http.get('/codebook/area-codes', { params }))
+}
+
+export function createAreaCode(body: Partial<AreaCodeItem>): Promise<AreaCodeItem> {
+  return request(http.post('/codebook/area-codes', body))
+}
+
+export function updateAreaCode(id: string, body: Partial<AreaCodeItem> & { version: number }): Promise<AreaCodeItem> {
+  return request(http.patch(`/codebook/area-codes/${id}`, body))
+}
+
+export function importAreaCodes(
+  file: File,
+  onProgress?: (percent: number, stage: ImportStage) => void,
+): Promise<ImportResult> {
+  return postExcelImport('/codebook/area-codes/import', file, onProgress, 180_000)
+}
+
+export async function resolveAreaCodes(
+  file: File,
+  onProgress?: (percent: number, stage: ImportStage) => void,
+): Promise<{ matched: number; unmatched: number; blob: Blob }> {
+  const headers: Record<string, string> = {}
+  const token = getAccessToken()
+  const csrf = getCsrfToken()
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+  if (csrf) {
+    headers['X-CSRF-Token'] = csrf
+  }
+  const body = new FormData()
+  body.append('file', file)
+  onProgress?.(10, 'upload')
+  const response = await fetch('/api/v1/codebook/area-codes/resolve', {
+    method: 'POST',
+    headers,
+    body,
+    credentials: 'include',
+  })
+  onProgress?.(80, 'parse')
+  if (!response.ok) {
+    throw new Error('补全省市区编码失败')
+  }
+  return {
+    matched: Number(response.headers.get('X-Matched-Count') || 0),
+    unmatched: Number(response.headers.get('X-Unmatched-Count') || 0),
+    blob: await response.blob(),
+  }
+}
+
+export async function importAfterAreaResolve(
+  file: File,
+  importer: (ready: File, onProgress?: (percent: number, stage: ImportStage) => void) => Promise<ImportResult>,
+  onProgress?: (percent: number, stage: ImportStage) => void,
+): Promise<ImportResult> {
+  const resolved = await resolveAreaCodes(file, onProgress)
+  const ready = new File([resolved.blob], file.name, {
+    type: file.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  })
+  return importer(ready, onProgress)
 }
 
 export async function downloadCodebook(path: string, filename: string): Promise<void> {

@@ -45,6 +45,15 @@ async def list_items(
     )
 
 
+@router.get("/options")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def list_filter_options(
+    session: AsyncSession = Depends(get_db_session),
+    _: Actor = Depends(require_codebook_permission(RESOURCE, "list")),
+):
+    return success_json(await service.list_scenario_options(session))
+
+
 @router.get("/export")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def export_items(

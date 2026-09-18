@@ -120,7 +120,7 @@ class AuthService:
             },
         )
 
-    async def refresh(self, raw_refresh: str) -> tuple[str, str, Session, User]:
+    async def refresh(self, raw_refresh: str) -> tuple[str, str | None, Session, User]:
         token_hash = hash_refresh_token(raw_refresh)
         refresh_row = await session_repo.get_refresh_token_for_update(self.session, token_hash)
         now = utcnow()
@@ -130,6 +130,18 @@ class AuthService:
         if session_row is None:
             raise UnauthenticatedError("刷新凭据无效")
         if refresh_row.consumed_at is not None:
+            grace = timedelta(seconds=self.settings.refresh_reuse_grace_seconds)
+            if (
+                refresh_row.replaced_by is not None
+                and refresh_row.consumed_at + grace >= now
+                and session_repo.session_is_usable(session_row, now=now)
+            ):
+                user = await user_repo.get_user_by_id(self.session, session_row.user_id)
+                if user is None or user.status != UserStatus.ACTIVE:
+                    raise UnauthenticatedError("账号不可用")
+                session_row.last_seen_at = now
+                access = issue_access_token(user_id=user.id, session_id=session_row.id, settings=self.settings)
+                return access, None, session_row, user
             await session_repo.revoke_family(self.session, session_row.family_id, now=now)
             await outbox_repo.enqueue(
                 self.session,

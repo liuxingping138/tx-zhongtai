@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import base64
 from io import BytesIO
 from typing import Any
 
 from openpyxl import Workbook, load_workbook
 from platform_common.errors import ApiError, ErrorCode
 
+from app.core.clock import format_beijing
 from app.domain.fields import (
     AUDIT_EXPORT_COLUMNS,
     ColumnSpec,
@@ -75,12 +77,26 @@ def build_workbook(
         values = []
         for spec in export_cols:
             value = row.get(spec.field)
-            isoformat = getattr(value, "isoformat", None)
-            if callable(isoformat):
-                values.append(str(isoformat()).replace("+00:00", "Z"))
+            if spec.field in {"created_at", "updated_at"}:
+                values.append(format_beijing(value))
             else:
                 values.append("" if value is None else str(value))
         sheet.append(values)
     buffer = BytesIO()
     book.save(buffer)
     return buffer.getvalue()
+
+
+SKIP_REASON_COLUMN = ColumnSpec("skip_reason", "校验说明")
+
+
+def encode_skipped_file(
+    columns: tuple[ColumnSpec, ...],
+    rows: list[dict[str, Any]],
+    *,
+    sheet_name: str = "全部数据",
+) -> str | None:
+    if not rows:
+        return None
+    payload = build_workbook((*columns, SKIP_REASON_COLUMN), rows, sheet_name=sheet_name, include_audit=False)
+    return base64.standard_b64encode(payload).decode("ascii")

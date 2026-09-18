@@ -54,6 +54,15 @@ async def list_audit_events(
     return success_json(page_data.model_dump())
 
 
+@router.get("/events/options")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def list_filter_options(
+    _auth: None = Depends(require_audit_permission("list")),
+    session: AsyncSession = Depends(get_db_session),
+) -> JSONResponse:
+    return success_json(await query_app.list_options(session))
+
+
 @router.get("/events/{event_id}")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def get_audit_event(

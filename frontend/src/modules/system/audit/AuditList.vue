@@ -3,10 +3,13 @@ import { onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
-import { getAuditEvent, listAuditEvents } from '@/api/audit'
+import { auditFilterOptions, getAuditEvent, listAuditEvents } from '@/api/audit'
 import { errorMessage } from '@/api/errors'
+import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import type { AuditEventItem } from '@/api/types'
+import { ACTION_LABELS, MODULE_LABELS, actionLabel, moduleLabel } from '@/utils/auditLabels'
+import { formatTime } from '@/utils/time'
 
 const route = useRoute()
 const loading = ref(false)
@@ -21,6 +24,11 @@ const query = reactive({
   page: 1,
   page_size: 20,
 })
+const options = reactive({
+  actor_name: [] as string[],
+  module_code: [] as string[],
+  action_code: [] as string[],
+})
 
 const detailVisible = ref(false)
 const detailLoading = ref(false)
@@ -32,11 +40,15 @@ const outcomeLabel: Record<string, string> = {
   denied: '拒绝',
 }
 
-function formatTime(value: string | null | undefined): string {
-  if (!value) {
-    return '-'
+async function loadOptions() {
+  try {
+    const data = await auditFilterOptions()
+    options.actor_name = data.actor_name ?? []
+    options.module_code = data.module_code ?? []
+    options.action_code = data.action_code ?? []
+  } catch {
+    /* 选项失败不影响列表 */
   }
-  return value.replace('T', ' ').replace(/\.\d+Z$/, 'Z')
 }
 
 async function load() {
@@ -85,6 +97,7 @@ onMounted(() => {
     query.module_code = moduleCode
   }
   void load()
+  void loadOptions()
 })
 </script>
 
@@ -105,59 +118,67 @@ onMounted(() => {
         <el-form
           class="filter-form"
           inline
+          label-position="top"
           @submit.prevent="onSearch"
         >
-          <el-form-item label="时间">
-            <el-date-picker
-              v-model="query.range"
-              type="datetimerange"
-              start-placeholder="开始"
-              end-placeholder="结束"
-              value-format="YYYY-MM-DDTHH:mm:ss"
-              style="width: 360px"
-            />
-          </el-form-item>
-          <el-form-item label="人员">
-            <el-input
-              v-model="query.actor_name"
-              clearable
-              placeholder="显示名"
-            />
-          </el-form-item>
-          <el-form-item label="模块">
-            <el-input
-              v-model="query.module_code"
-              clearable
-            />
-          </el-form-item>
-          <el-form-item label="动作">
-            <el-input
-              v-model="query.action_code"
-              clearable
-            />
-          </el-form-item>
-          <el-form-item label="结果">
-            <el-select
-              v-model="query.outcome"
-              clearable
-              placeholder="全部"
-              style="width: 120px"
+          <div class="filter-form__fields">
+            <el-form-item
+              class="filter-form__item--wide"
+              label="时间"
             >
-              <el-option
-                label="成功"
-                value="success"
+              <el-date-picker
+                v-model="query.range"
+                type="datetimerange"
+                start-placeholder="开始"
+                end-placeholder="结束"
+                value-format="YYYY-MM-DDTHH:mm:ss"
               />
-              <el-option
-                label="失败"
-                value="failure"
+            </el-form-item>
+            <el-form-item label="人员">
+              <FilterSelect
+                v-model="query.actor_name"
+                :options="options.actor_name"
+                placeholder="输入或选择人员"
               />
-              <el-option
-                label="拒绝"
-                value="denied"
+            </el-form-item>
+            <el-form-item label="模块">
+              <FilterSelect
+                v-model="query.module_code"
+                :options="options.module_code"
+                :labels="MODULE_LABELS"
+                placeholder="输入或选择模块"
               />
-            </el-select>
-          </el-form-item>
-          <el-form-item>
+            </el-form-item>
+            <el-form-item label="动作">
+              <FilterSelect
+                v-model="query.action_code"
+                :options="options.action_code"
+                :labels="ACTION_LABELS"
+                placeholder="输入或选择动作"
+              />
+            </el-form-item>
+            <el-form-item label="结果">
+              <el-select
+                v-model="query.outcome"
+                clearable
+                placeholder="全部"
+              >
+                <el-option
+                  label="成功"
+                  value="success"
+                />
+                <el-option
+                  label="失败"
+                  value="failure"
+                />
+                <el-option
+                  label="拒绝"
+                  value="denied"
+                />
+              </el-select>
+            </el-form-item>
+          </div>
+          <el-form-item class="filter-form__submit">
             <el-button
               native-type="submit"
               type="primary"
@@ -188,15 +209,21 @@ onMounted(() => {
           width="140"
         />
         <el-table-column
-          prop="module_code"
           label="模块"
-          width="140"
-        />
+          width="160"
+        >
+          <template #default="{ row }">
+            {{ moduleLabel(row.module_code) }}
+          </template>
+        </el-table-column>
         <el-table-column
-          prop="action_code"
           label="动作"
           width="140"
-        />
+        >
+          <template #default="{ row }">
+            {{ actionLabel(row.action_code) }}
+          </template>
+        </el-table-column>
         <el-table-column
           label="结果"
           width="90"
@@ -248,10 +275,10 @@ onMounted(() => {
           {{ detail.actor_name_snapshot || '-' }}
         </el-descriptions-item>
         <el-descriptions-item label="模块">
-          {{ detail.module_code || '-' }}
+          {{ moduleLabel(detail.module_code) }}
         </el-descriptions-item>
         <el-descriptions-item label="动作">
-          {{ detail.action_code || '-' }}
+          {{ actionLabel(detail.action_code) }}
         </el-descriptions-item>
         <el-descriptions-item label="结果">
           {{ outcomeLabel[detail.outcome] || detail.outcome }}

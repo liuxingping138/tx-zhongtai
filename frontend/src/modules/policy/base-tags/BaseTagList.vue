@@ -3,7 +3,9 @@ import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
+import { importAfterAreaResolve } from '@/api/codebook'
 import {
+  baseTagOptions,
   createBaseTag,
   downloadPolicy,
   importBaseTags,
@@ -12,8 +14,11 @@ import {
   type BaseTagItem,
 } from '@/api/policy'
 import { errorMessage, isApiError } from '@/api/errors'
+import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
+import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import { useAuthStore } from '@/stores/auth'
+import { formatTime } from '@/utils/time'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -54,9 +59,63 @@ const emptyForm = {
   remark: '',
 }
 const form = reactive({ ...emptyForm })
+const options = reactive({
+  policy_name: [] as string[],
+  province_name: [] as string[],
+  policy_types: [] as string[],
+  is_penetrate: [] as string[],
+  need_interpret: [] as string[],
+})
 
-function formatTime(value: string): string {
-  return value.replace('T', ' ').replace(/\.\d+.*$/, '')
+const tableColumns = [
+  { prop: 'policy_name', label: '政策名称', minWidth: 220 },
+  { prop: 'issuing_dept', label: '出台部门', minWidth: 160 },
+  { prop: 'issuer_industry', label: '发文机构行业', minWidth: 140 },
+  { prop: 'policy_level', label: '政策层级', width: 110 },
+  { prop: 'province_code', label: '省份编码', width: 100 },
+  { prop: 'province_name', label: '省份名称', width: 110 },
+  { prop: 'city_code', label: '地市编码', width: 100 },
+  { prop: 'city_name', label: '地市名称', width: 110 },
+  { prop: 'issued_at', label: '当前政策出台时间', width: 160 },
+  { prop: 'policy_types', label: '政策类型', minWidth: 160 },
+  { prop: 'source_url', label: '原始网站链接', minWidth: 240, link: true },
+  { prop: 'is_penetrate', label: '是否穿透', width: 100 },
+  { prop: 'penetrate_words', label: '穿透词', minWidth: 180 },
+  { prop: 'penetrate_score', label: '穿透词评分', width: 110 },
+  { prop: 'need_interpret', label: '是否解读', width: 100 },
+  { prop: 'remark', label: '备注', minWidth: 160 },
+  { prop: 'created_at', label: '入库时间', width: 170, time: true },
+  { prop: 'created_by_name', label: '入库人', width: 110 },
+  { prop: 'updated_at', label: '更新时间', width: 170, time: true },
+  { prop: 'updated_by_name', label: '操作人', width: 110 },
+] as const
+
+function cellValue(row: BaseTagItem, prop: string): string {
+  return String(row[prop as keyof BaseTagItem] ?? '')
+}
+
+function hrefOf(url: string): string {
+  const value = url.trim()
+  if (!value) {
+    return ''
+  }
+  if (/^https?:\/\//i.test(value)) {
+    return value
+  }
+  return `https://${value}`
+}
+
+async function loadOptions() {
+  try {
+    const data = await baseTagOptions()
+    options.policy_name = (data.policy_name as string[]) ?? []
+    options.province_name = (data.province_name as string[]) ?? []
+    options.policy_types = (data.policy_types as string[]) ?? []
+    options.is_penetrate = (data.is_penetrate as string[]) ?? []
+    options.need_interpret = (data.need_interpret as string[]) ?? []
+  } catch {
+    /* 选项失败不影响列表 */
+  }
 }
 
 async function load() {
@@ -117,7 +176,7 @@ async function onSave() {
     }
     ElMessage.success('已保存')
     visible.value = false
-    await load()
+    await Promise.all([load(), loadOptions()])
   } catch (error) {
     if (isApiError(error) && error.status === 409) {
       await ElMessageBox.alert('数据已被他人修改或内容重复，请重新加载。', '无法保存')
@@ -132,9 +191,13 @@ async function onSave() {
 
 async function onImport(file: File) {
   try {
-    const result = await importBaseTags(file)
-    ElMessage.success(`导入完成：新增 ${result.inserted}，跳过 ${result.skipped}`)
-    await load()
+    const result = await runExcelImport(file, (onProgress) =>
+      importAfterAreaResolve(file, importBaseTags, onProgress),
+    )
+    reportImportResult(result, '政策基础标签-上传校验.xlsx')
+    if (!result.rejected) {
+      await Promise.all([load(), loadOptions()])
+    }
   } catch (error) {
     ElMessage.error(errorMessage(error, '导入失败'))
   }
@@ -155,6 +218,7 @@ function openLogs() {
 
 onMounted(() => {
   void load()
+  void loadOptions()
 })
 </script>
 
@@ -162,7 +226,7 @@ onMounted(() => {
   <div>
     <ListPage
       title="政策基础标签表"
-      hint="对应《政策基础信息表》主表，不含政策类型枚举。完整流水在「系统管理 / 操作日志」。"
+      hint="对应《政策基础信息表》主表。上传时会先关联省市区编码，有一条关联不上则整批退回。完整流水在「系统管理 / 操作日志」。"
       :total="total"
       :page="query.page"
       :page-size="query.page_size"
@@ -185,7 +249,9 @@ onMounted(() => {
           accept=".xlsx"
           :before-upload="onImport"
         >
-          <el-button>上传 Excel</el-button>
+          <el-button :disabled="importUi.visible">
+            上传 Excel
+          </el-button>
         </el-upload>
         <el-button @click="onExport">
           下载 Excel
@@ -201,39 +267,45 @@ onMounted(() => {
         <el-form
           class="filter-form"
           inline
+          label-position="top"
           @submit.prevent="onSearch"
         >
-          <el-form-item label="政策名称">
-            <el-input
-              v-model="query.policy_name"
-              clearable
-            />
-          </el-form-item>
-          <el-form-item label="省份">
-            <el-input
-              v-model="query.province_name"
-              clearable
-            />
-          </el-form-item>
-          <el-form-item label="政策类型">
-            <el-input
-              v-model="query.policy_types"
-              clearable
-            />
-          </el-form-item>
-          <el-form-item label="是否穿透">
-            <el-input
-              v-model="query.is_penetrate"
-              clearable
-            />
-          </el-form-item>
-          <el-form-item label="是否解读">
-            <el-input
-              v-model="query.need_interpret"
-              clearable
-            />
-          </el-form-item>
-          <el-form-item>
+          <div class="filter-form__fields">
+            <el-form-item label="政策名称">
+              <FilterSelect
+                v-model="query.policy_name"
+                :options="options.policy_name"
+              />
+            </el-form-item>
+            <el-form-item label="省份">
+              <FilterSelect
+                v-model="query.province_name"
+                :options="options.province_name"
+                size="short"
+              />
+            </el-form-item>
+            <el-form-item label="政策类型">
+              <FilterSelect
+                v-model="query.policy_types"
+                :options="options.policy_types"
+              />
+            </el-form-item>
+            <el-form-item label="是否穿透">
+              <FilterSelect
+                v-model="query.is_penetrate"
+                :options="options.is_penetrate"
+                size="short"
+              />
+            </el-form-item>
+            <el-form-item label="是否解读">
+              <FilterSelect
+                v-model="query.need_interpret"
+                :options="options.need_interpret"
+                size="short"
+              />
+            </el-form-item>
+          </div>
+          <el-form-item class="filter-form__submit">
             <el-button
               native-type="submit"
               type="primary"
@@ -251,49 +323,35 @@ onMounted(() => {
         border
       >
         <el-table-column
-          prop="policy_name"
-          label="政策名称"
-          min-width="220"
+          v-for="col in tableColumns"
+          :key="col.prop"
+          :prop="col.prop"
+          :label="col.label"
+          :width="'width' in col ? col.width : undefined"
+          :min-width="'minWidth' in col ? col.minWidth : undefined"
           show-overflow-tooltip
-        />
-        <el-table-column
-          prop="province_name"
-          label="省份"
-          width="90"
-        />
-        <el-table-column
-          prop="policy_types"
-          label="政策类型"
-          min-width="160"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          prop="is_penetrate"
-          label="是否穿透"
-          width="90"
-        />
-        <el-table-column
-          prop="need_interpret"
-          label="是否解读"
-          width="100"
-        />
-        <el-table-column
-          prop="created_by_name"
-          label="入库人"
-          width="110"
-        />
-        <el-table-column
-          label="更新时间"
-          width="170"
         >
-          <template #default="{ row }">
-            {{ formatTime(row.updated_at) }}
+          <template
+            v-if="('time' in col && col.time) || ('link' in col && col.link)"
+            #default="{ row }"
+          >
+            <template v-if="'time' in col && col.time">
+              {{ formatTime(cellValue(row, col.prop)) }}
+            </template>
+            <a
+              v-else-if="cellValue(row, col.prop)"
+              class="source-link"
+              :href="hrefOf(cellValue(row, col.prop))"
+              target="_blank"
+              rel="noopener noreferrer"
+            >{{ cellValue(row, col.prop) }}</a>
           </template>
         </el-table-column>
         <el-table-column
           v-if="canWrite"
           label="操作"
           width="80"
+          fixed="right"
         >
           <template #default="{ row }">
             <el-button
@@ -323,7 +381,7 @@ onMounted(() => {
             province_name: '省份名称',
             city_code: '地市编码',
             city_name: '地市名称',
-            issued_at: '出台时间',
+            issued_at: '当前政策出台时间',
             policy_types: '政策类型',
             source_url: '原始网站链接',
             is_penetrate: '是否穿透',
@@ -357,3 +415,14 @@ onMounted(() => {
     </el-drawer>
   </div>
 </template>
+
+<style scoped>
+.source-link {
+  color: var(--zt-blue-600);
+  text-decoration: none;
+}
+
+.source-link:hover {
+  text-decoration: underline;
+}
+</style>

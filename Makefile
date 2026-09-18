@@ -10,6 +10,7 @@ JWT_P6_DIR := deploy/secrets/jwt-p6
 
 .PHONY: help bootstrap jwt-keys jwt-keys-p6 dev-up dev-down migrate seed admin-create check \
         test-unit test-integration test-e2e smoke provision-audit-cleanup provision-codebook-db \
+        seed-area-codes \
         provision-policy-db \
         outbox-replay audit-cleanup p6-env p6-up p6-down p6-migrate p6-seed p6-admin \
         p6-backup p6-restore export-openapi scan-scope
@@ -21,6 +22,7 @@ help:
 	@echo "  make dev-down         停止本地开发环境（保留数据卷）"
 	@echo "  make migrate          对已运行的 iam-service/audit-service 执行数据库迁移"
 	@echo "  make seed             幂等同步公共资源/动作/菜单与内置超级管理员角色"
+	@echo "  make seed-area-codes  从 SQL 种子导入省市区编码表（按区县编码去重）"
 	@echo "  make admin-create     创建初始管理员（密码从 ADMIN_PASSWORD 读取，不进命令行参数）"
 	@echo "  make check            Python 静态检查 + 前端类型检查/构建/lint"
 	@echo "  make test-unit        运行三个 Python 包 + 前端的单元测试"
@@ -109,6 +111,9 @@ audit-cleanup:
 
 seed:
 	$(COMPOSE) exec -T iam-service uv run python -m app.cli.seed
+
+seed-area-codes:
+	$(COMPOSE) exec -T codebook-service uv run python -m app.cli.seed_area_codes
 
 admin-create:
 	@if [ -z "$$ADMIN_PASSWORD" ]; then echo "请通过环境变量 ADMIN_PASSWORD 传入初始密码，不要写在命令行参数里。"; exit 2; fi

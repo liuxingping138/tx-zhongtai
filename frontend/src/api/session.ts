@@ -15,6 +15,7 @@ type ChannelMessage =
 let accessToken = ''
 let csrfToken = ''
 let tokenVersion = 0
+let refreshTimer: number | null = null
 let inFlight: Promise<TokenPayload> | null = null
 const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(CHANNEL_NAME) : null
 
@@ -38,6 +39,27 @@ export function setAccessToken(token: string): void {
   accessToken = token
   tokenVersion += 1
   listeners.forEach((listener) => listener(token))
+  if (!token) {
+    disarmAccessRefresh()
+  }
+}
+
+export function armAccessRefresh(expiresIn: number): void {
+  disarmAccessRefresh()
+  if (!expiresIn || expiresIn <= 0 || typeof window === 'undefined') {
+    return
+  }
+  const waitMs = Math.max(expiresIn * 1000 - 120_000, 60_000)
+  refreshTimer = window.setTimeout(() => {
+    void refreshSession().catch(() => undefined)
+  }, waitMs)
+}
+
+export function disarmAccessRefresh(): void {
+  if (refreshTimer !== null && typeof window !== 'undefined') {
+    window.clearTimeout(refreshTimer)
+  }
+  refreshTimer = null
 }
 
 export function onAccessTokenChange(listener: (token: string) => void): () => void {
@@ -95,6 +117,7 @@ async function postRefresh(): Promise<TokenPayload> {
   )
   const payload = response.data?.data as TokenPayload
   setAccessToken(payload.access_token)
+  armAccessRefresh(payload.expires_in)
   const cookieCsrf = readCsrfCookie()
   if (cookieCsrf) {
     csrfToken = cookieCsrf

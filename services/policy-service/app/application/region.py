@@ -66,14 +66,36 @@ def make_relation_key(policy_uid: str, industry_scenario_code: str, opportunity_
     return f"{policy_uid}{industry_scenario_code}{opportunity_type}"
 
 
+def site_code_prefix(province_code: str, city_code: str, district_code: str) -> str:
+    """网站编码前缀：有区县用 6 位区县，否则地市+00，再否则省份+0000。"""
+
+    district = digits_only(district_code)
+    city = digits_only(city_code)
+    province = digits_only(province_code)
+    if len(district) >= 6:
+        return district[:6]
+    if len(city) >= 4:
+        return f"{city[:4]}00"
+    if len(province) >= 2:
+        return f"{province[:2]}0000"
+    return ""
+
+
 def next_site_code(district_code: str, existing_codes: list[str]) -> str:
-    prefix = district_code
+    """同区县取当前网站编码最大序号再 +1。"""
+
+    prefix = digits_only(district_code)
+    if len(prefix) < 6:
+        prefix = (prefix + "000000")[:6]
+    else:
+        prefix = prefix[:6]
     max_seq = 0
     for code in existing_codes:
         digits = digits_only(code)
-        if len(digits) == 11 and digits.startswith(prefix):
-            try:
-                max_seq = max(max_seq, int(digits[6:]))
-            except ValueError:
-                continue
+        if not digits.startswith(prefix) or len(digits) <= len(prefix):
+            continue
+        try:
+            max_seq = max(max_seq, int(digits[len(prefix) :]))
+        except ValueError:
+            continue
     return f"{prefix}{max_seq + 1:05d}"

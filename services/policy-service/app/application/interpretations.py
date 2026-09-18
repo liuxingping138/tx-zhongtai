@@ -8,12 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.actors import Actor
 from app.application.audit_emit import enqueue_event
-from app.application.excel import build_workbook, parse_sheet
+from app.application.excel import build_workbook, encode_skipped_file, parse_sheet
 from app.application.region import make_policy_uid, make_relation_key
-from app.core.clock import utcnow
+from app.core.clock import format_beijing, utcnow
 from app.domain.fields import INTERPRETATION_COLUMNS
 from app.domain.models import INTERPRETATION_WRITE_FIELDS, Interpretation
 from app.repositories import interpretations as repo
+from app.repositories import options as options_repo
 
 
 def _to_out(row: Interpretation) -> dict[str, Any]:
@@ -43,9 +44,9 @@ def _to_out(row: Interpretation) -> dict[str, Any]:
         "is_new_scenario": row.is_new_scenario,
         "new_scenario_level": row.new_scenario_level,
         "version": row.version,
-        "created_at": row.created_at.isoformat(),
+        "created_at": format_beijing(row.created_at),
         "created_by_name": row.created_by_name,
-        "updated_at": row.updated_at.isoformat(),
+        "updated_at": format_beijing(row.updated_at),
         "updated_by_name": row.updated_by_name,
     }
 
@@ -80,6 +81,10 @@ async def list_interpretations(
         page_size=page_size,
     )
     return {"items": [_to_out(item) for item in items], "total": total, "page": page, "page_size": page_size}
+
+
+async def list_interpretation_options(session: AsyncSession) -> dict[str, list[str]]:
+    return await options_repo.interpretation_options(session)
 
 
 async def get_interpretation(session: AsyncSession, item_id: uuid.UUID) -> dict[str, Any]:
@@ -158,19 +163,19 @@ async def update_interpretation(
     return _to_out(row)
 
 
-async def import_interpretations(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, int]:
+async def import_interpretations(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, Any]:
     parsed = parse_sheet(content, INTERPRETATION_COLUMNS, sheet_name="政策解读表")
     inserted = 0
-    skipped = 0
+    skipped_rows: list[dict[str, str]] = []
     now = utcnow()
     seen = await repo.list_relation_keys(session)
     for item in parsed:
         values = _values(item)
         if not values["policy_title"]:
-            skipped += 1
+            skipped_rows.append({**values, "skip_reason": "政策原文名称为空"})
             continue
         if values["relation_key"] in seen:
-            skipped += 1
+            skipped_rows.append({**values, "skip_reason": "关联主键已存在"})
             continue
         seen.add(values["relation_key"])
         item_id = uuid.uuid4()
@@ -197,9 +202,15 @@ async def import_interpretations(session: AsyncSession, actor: Actor, content: b
         event_type="policy.interpretation.imported",
         actor_id=actor.id,
         actor_name=actor.name,
-        extra={"inserted": inserted, "skipped": skipped},
+        extra={"inserted": inserted, "skipped": len(skipped_rows)},
     )
-    return {"inserted": inserted, "updated": 0, "skipped": skipped, "total": len(parsed)}
+    return {
+        "inserted": inserted,
+        "updated": 0,
+        "skipped": len(skipped_rows),
+        "total": len(parsed),
+        "skipped_file": encode_skipped_file(INTERPRETATION_COLUMNS, skipped_rows),
+    }
 
 
 async def export_interpretations(session: AsyncSession, actor: Actor) -> bytes:

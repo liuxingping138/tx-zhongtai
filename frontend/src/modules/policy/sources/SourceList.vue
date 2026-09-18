@@ -1,19 +1,24 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
+import { importAfterAreaResolve } from '@/api/codebook'
 import {
   createSource,
   downloadPolicy,
   importSources,
   listSources,
+  sourceOptions,
   updateSource,
   type SourceItem,
 } from '@/api/policy'
 import { errorMessage, isApiError } from '@/api/errors'
+import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
+import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import { useAuthStore } from '@/stores/auth'
+import { formatTime } from '@/utils/time'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -28,9 +33,17 @@ const query = reactive({
   province_name: '',
   city_name: '',
   tag: '',
-  site_code: '',
+  crawl_priority: '',
   page: 1,
   page_size: 20,
+})
+const options = reactive({
+  site_name: [] as string[],
+  province_name: [] as string[],
+  city_name: [] as string[],
+  tag: [] as string[],
+  crawl_priority: [] as string[],
+  city_by_province: {} as Record<string, string[]>,
 })
 const visible = ref(false)
 const saving = ref(false)
@@ -51,8 +64,56 @@ const emptyForm = {
 }
 const form = reactive({ ...emptyForm })
 
-function formatTime(value: string): string {
-  return value.replace('T', ' ').replace(/\.\d+.*$/, '')
+const tableColumns = [
+  { prop: 'site_name', label: '网站名称', minWidth: 180 },
+  { prop: 'province_name', label: '省份', width: 100 },
+  { prop: 'city_name', label: '地市', width: 110 },
+  { prop: 'district_name', label: '区县', width: 120 },
+  { prop: 'crawl_priority', label: '网站梳理和抓取的优先级', minWidth: 200 },
+  { prop: 'url', label: '链接', minWidth: 240, link: true },
+  { prop: 'tag', label: '标签', minWidth: 180 },
+  { prop: 'data_type', label: '数据类型（综合-0、政策-1、新闻-2）注：0和1链接下全爬，2爬聚集板块', minWidth: 360 },
+  { prop: 'department', label: '所属部门', minWidth: 200 },
+  { prop: 'created_at', label: '入库时间', width: 170, time: true },
+  { prop: 'created_by_name', label: '入库人', width: 110 },
+  { prop: 'updated_at', label: '更新时间', width: 170, time: true },
+  { prop: 'updated_by_name', label: '操作人', width: 110 },
+] as const
+
+const cityOptions = computed(() => {
+  if (query.province_name && options.city_by_province[query.province_name]) {
+    return options.city_by_province[query.province_name]
+  }
+  return options.city_name
+})
+
+function cellValue(row: SourceItem, prop: string): string {
+  return String(row[prop as keyof SourceItem] ?? '')
+}
+
+function hrefOf(url: string): string {
+  const value = url.trim()
+  if (!value) {
+    return ''
+  }
+  if (/^https?:\/\//i.test(value)) {
+    return value
+  }
+  return `https://${value}`
+}
+
+async function loadOptions() {
+  try {
+    const data = await sourceOptions()
+    options.site_name = (data.site_name as string[]) ?? []
+    options.province_name = (data.province_name as string[]) ?? []
+    options.city_name = (data.city_name as string[]) ?? []
+    options.tag = (data.tag as string[]) ?? []
+    options.crawl_priority = (data.crawl_priority as string[]) ?? []
+    options.city_by_province = (data.city_by_province as Record<string, string[]>) ?? {}
+  } catch {
+    /* 选项失败不影响列表 */
+  }
 }
 
 async function load() {
@@ -63,7 +124,7 @@ async function load() {
       province_name: query.province_name || undefined,
       city_name: query.city_name || undefined,
       tag: query.tag || undefined,
-      site_code: query.site_code || undefined,
+      crawl_priority: query.crawl_priority || undefined,
       page: query.page,
       page_size: query.page_size,
     })
@@ -115,7 +176,7 @@ async function onSave() {
     }
     ElMessage.success('已保存')
     visible.value = false
-    await load()
+    await Promise.all([load(), loadOptions()])
   } catch (error) {
     if (isApiError(error) && error.status === 409) {
       await ElMessageBox.alert('数据已被他人修改或内部唯一 id 冲突，请重新加载。', '无法保存')
@@ -130,9 +191,13 @@ async function onSave() {
 
 async function onImport(file: File) {
   try {
-    const result = await importSources(file)
-    ElMessage.success(`导入完成：新增 ${result.inserted}，跳过 ${result.skipped}`)
-    await load()
+    const result = await runExcelImport(file, (onProgress) =>
+      importAfterAreaResolve(file, importSources, onProgress),
+    )
+    reportImportResult(result, '信源管理-上传校验.xlsx')
+    if (!result.rejected) {
+      await Promise.all([load(), loadOptions()])
+    }
   } catch (error) {
     ElMessage.error(errorMessage(error, '导入失败'))
   }
@@ -153,6 +218,7 @@ function openLogs() {
 
 onMounted(() => {
   void load()
+  void loadOptions()
 })
 </script>
 
@@ -160,7 +226,7 @@ onMounted(() => {
   <div>
     <ListPage
       title="信源管理"
-      hint="对应《北京-网站编码梳理》。入库时会纠正误填到地市的区县编码；新增不填网站编码和内部 id，由系统生成。完整流水在「系统管理 / 操作日志」。"
+      hint="上传时先补省市区编码再校验：有重复或省市区编码为空则整批不入库，并下载全量打标文件。全部通过后按该区县当前最大网站编码递增。完整流水在「系统管理 / 操作日志」。"
       :total="total"
       :page="query.page"
       :page-size="query.page_size"
@@ -183,7 +249,9 @@ onMounted(() => {
           accept=".xlsx"
           :before-upload="onImport"
         >
-          <el-button>上传 Excel</el-button>
+          <el-button :disabled="importUi.visible">
+            上传 Excel
+          </el-button>
         </el-upload>
         <el-button @click="onExport">
           下载 Excel
@@ -199,39 +267,44 @@ onMounted(() => {
         <el-form
           class="filter-form"
           inline
+          label-position="top"
           @submit.prevent="onSearch"
         >
-          <el-form-item label="网站名称">
-            <el-input
-              v-model="query.site_name"
-              clearable
-            />
-          </el-form-item>
-          <el-form-item label="省份">
-            <el-input
-              v-model="query.province_name"
-              clearable
-            />
-          </el-form-item>
-          <el-form-item label="地市">
-            <el-input
-              v-model="query.city_name"
-              clearable
-            />
-          </el-form-item>
-          <el-form-item label="标签">
-            <el-input
-              v-model="query.tag"
-              clearable
-            />
-          </el-form-item>
-          <el-form-item label="网站编码">
-            <el-input
-              v-model="query.site_code"
-              clearable
-            />
-          </el-form-item>
-          <el-form-item>
+          <div class="filter-form__fields">
+            <el-form-item label="网站名称">
+              <FilterSelect
+                v-model="query.site_name"
+                :options="options.site_name"
+              />
+            </el-form-item>
+            <el-form-item label="省份">
+              <FilterSelect
+                v-model="query.province_name"
+                :options="options.province_name"
+                size="short"
+              />
+            </el-form-item>
+            <el-form-item label="地市">
+              <FilterSelect
+                v-model="query.city_name"
+                :options="cityOptions"
+                size="short"
+              />
+            </el-form-item>
+            <el-form-item label="标签">
+              <FilterSelect
+                v-model="query.tag"
+                :options="options.tag"
+              />
+            </el-form-item>
+            <el-form-item label="网站优先级">
+              <FilterSelect
+                v-model="query.crawl_priority"
+                :options="options.crawl_priority"
+              />
+            </el-form-item>
+          </div>
+          <el-form-item class="filter-form__submit">
             <el-button
               native-type="submit"
               type="primary"
@@ -249,59 +322,35 @@ onMounted(() => {
         border
       >
         <el-table-column
-          prop="site_code"
-          label="网站编码"
-          width="140"
-        />
-        <el-table-column
-          prop="site_name"
-          label="网站名称"
-          min-width="160"
+          v-for="col in tableColumns"
+          :key="col.prop"
+          :prop="col.prop"
+          :label="col.label"
+          :width="'width' in col ? col.width : undefined"
+          :min-width="'minWidth' in col ? col.minWidth : undefined"
           show-overflow-tooltip
-        />
-        <el-table-column
-          prop="province_code"
-          label="省编码"
-          width="80"
-        />
-        <el-table-column
-          prop="city_code"
-          label="市编码"
-          width="90"
-        />
-        <el-table-column
-          prop="district_code"
-          label="区县编码"
-          width="100"
-        />
-        <el-table-column
-          prop="tag"
-          label="标签"
-          min-width="180"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          prop="created_by_name"
-          label="入库人"
-          width="110"
-        />
-        <el-table-column
-          label="更新时间"
-          width="170"
         >
-          <template #default="{ row }">
-            {{ formatTime(row.updated_at) }}
+          <template
+            v-if="('time' in col && col.time) || ('link' in col && col.link)"
+            #default="{ row }"
+          >
+            <template v-if="'time' in col && col.time">
+              {{ formatTime(cellValue(row, col.prop)) }}
+            </template>
+            <a
+              v-else-if="cellValue(row, col.prop)"
+              class="source-link"
+              :href="hrefOf(cellValue(row, col.prop))"
+              target="_blank"
+              rel="noopener noreferrer"
+            >{{ cellValue(row, col.prop) }}</a>
           </template>
         </el-table-column>
-        <el-table-column
-          prop="updated_by_name"
-          label="操作人"
-          width="110"
-        />
         <el-table-column
           v-if="canWrite"
           label="操作"
           width="80"
+          fixed="right"
         >
           <template #default="{ row }">
             <el-button
@@ -320,7 +369,7 @@ onMounted(() => {
       :title="editing ? '编辑信源' : '新增信源'"
       width="640px"
     >
-      <el-form label-width="100px">
+      <el-form label-position="top">
         <el-form-item
           label="网站名称"
           required
@@ -330,42 +379,27 @@ onMounted(() => {
         <el-form-item label="省份">
           <el-input v-model="form.province_name" />
         </el-form-item>
-        <el-form-item label="省份编码">
-          <el-input v-model="form.province_code" />
-        </el-form-item>
         <el-form-item label="地市">
           <el-input v-model="form.city_name" />
-        </el-form-item>
-        <el-form-item label="地市编码">
-          <el-input v-model="form.city_code" />
         </el-form-item>
         <el-form-item label="区县">
           <el-input v-model="form.district_name" />
         </el-form-item>
-        <el-form-item label="区县编码">
-          <el-input v-model="form.district_code" />
-        </el-form-item>
-        <el-form-item label="标签">
-          <el-input v-model="form.tag" />
+        <el-form-item label="网站梳理和抓取的优先级">
+          <el-input v-model="form.crawl_priority" />
         </el-form-item>
         <el-form-item label="链接">
           <el-input v-model="form.url" />
         </el-form-item>
-        <el-form-item label="优先级">
-          <el-input v-model="form.crawl_priority" />
+        <el-form-item label="标签">
+          <el-input v-model="form.tag" />
         </el-form-item>
-        <el-form-item label="数据类型">
+        <el-form-item label="数据类型（综合-0、政策-1、新闻-2）注：0和1链接下全爬，2爬聚集板块">
           <el-input v-model="form.data_type" />
         </el-form-item>
         <el-form-item label="所属部门">
           <el-input v-model="form.department" />
         </el-form-item>
-        <p
-          v-if="editing"
-          class="hint"
-        >
-          网站编码 {{ editing.site_code }}，内部 id 将按名称/省/市/标签重算。
-        </p>
       </el-form>
       <template #footer>
         <el-button @click="visible = false">
@@ -384,8 +418,12 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.hint {
-  color: var(--zt-ink-500);
-  margin: 0;
+.source-link {
+  color: var(--zt-blue-600);
+  text-decoration: none;
+}
+
+.source-link:hover {
+  text-decoration: underline;
 }
 </style>

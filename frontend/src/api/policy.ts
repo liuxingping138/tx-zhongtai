@@ -1,3 +1,4 @@
+import { postExcelImport, type ImportResult, type ImportStage } from './excelImport'
 import { getAccessToken, getCsrfToken } from './session'
 import { http, request } from './http'
 import type { Page } from './types'
@@ -82,12 +83,9 @@ export interface InterpretationItem {
   updated_by_name: string
 }
 
-export interface ImportResult {
-  inserted: number
-  updated: number
-  skipped: number
-  total: number
-}
+export type { ImportResult } from './excelImport'
+
+export type FilterOptions = Record<string, string[] | Record<string, string[]>>
 
 export function listSources(params: {
   site_name?: string
@@ -95,10 +93,15 @@ export function listSources(params: {
   city_name?: string
   tag?: string
   site_code?: string
+  crawl_priority?: string
   page?: number
   page_size?: number
 }): Promise<Page<SourceItem>> {
   return request(http.get('/policy/sources', { params }))
+}
+
+export function sourceOptions(): Promise<FilterOptions> {
+  return request(http.get('/policy/sources/options'))
 }
 
 export function createSource(body: Partial<SourceItem>): Promise<SourceItem> {
@@ -109,10 +112,15 @@ export function updateSource(id: string, body: Partial<SourceItem> & { version: 
   return request(http.patch(`/policy/sources/${id}`, body))
 }
 
-export function importSources(file: File): Promise<ImportResult> {
-  const form = new FormData()
-  form.append('file', file)
-  return request(http.post('/policy/sources/import', form, { timeout: 600_000 }))
+export function importSources(
+  file: File,
+  onProgress?: (percent: number, stage: ImportStage) => void,
+): Promise<ImportResult> {
+  return postExcelImport('/policy/sources/import', file, onProgress)
+}
+
+export function baseTagOptions(): Promise<FilterOptions> {
+  return request(http.get('/policy/base-tags/options'))
 }
 
 export function listBaseTags(params: {
@@ -135,10 +143,15 @@ export function updateBaseTag(id: string, body: Partial<BaseTagItem> & { version
   return request(http.patch(`/policy/base-tags/${id}`, body))
 }
 
-export function importBaseTags(file: File): Promise<ImportResult> {
-  const form = new FormData()
-  form.append('file', file)
-  return request(http.post('/policy/base-tags/import', form, { timeout: 600_000 }))
+export function importBaseTags(
+  file: File,
+  onProgress?: (percent: number, stage: ImportStage) => void,
+): Promise<ImportResult> {
+  return postExcelImport('/policy/base-tags/import', file, onProgress)
+}
+
+export function interpretationOptions(): Promise<FilterOptions> {
+  return request(http.get('/policy/interpretations/options'))
 }
 
 export function listInterpretations(params: {
@@ -163,10 +176,11 @@ export function updateInterpretation(
   return request(http.patch(`/policy/interpretations/${id}`, body))
 }
 
-export function importInterpretations(file: File): Promise<ImportResult> {
-  const form = new FormData()
-  form.append('file', file)
-  return request(http.post('/policy/interpretations/import', form, { timeout: 600_000 }))
+export function importInterpretations(
+  file: File,
+  onProgress?: (percent: number, stage: ImportStage) => void,
+): Promise<ImportResult> {
+  return postExcelImport('/policy/interpretations/import', file, onProgress)
 }
 
 export async function downloadPolicy(path: string, filename: string): Promise<void> {

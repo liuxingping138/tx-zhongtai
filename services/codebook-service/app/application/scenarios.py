@@ -8,10 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.actors import Actor
 from app.application.audit_emit import enqueue_event
-from app.application.excel import build_workbook, parse_sheet
-from app.core.clock import utcnow
+from app.application.excel import build_workbook, encode_skipped_file, parse_sheet
+from app.core.clock import format_beijing, utcnow
 from app.domain.fields import SCENARIO_COLUMNS
 from app.domain.models import SCENARIO_FIELDS, Scenario, content_hash
+from app.repositories import options as options_repo
 from app.repositories import scenarios as repo
 
 
@@ -19,9 +20,9 @@ def _to_out(row: Scenario) -> dict[str, Any]:
     data: dict[str, Any] = row.business_values()
     data["id"] = str(row.id)
     data["version"] = row.version
-    data["created_at"] = row.created_at.isoformat()
+    data["created_at"] = format_beijing(row.created_at)
     data["created_by_name"] = row.created_by_name
-    data["updated_at"] = row.updated_at.isoformat()
+    data["updated_at"] = format_beijing(row.updated_at)
     data["updated_by_name"] = row.updated_by_name
     return data
 
@@ -61,6 +62,10 @@ async def list_scenarios(
         page_size=page_size,
     )
     return {"items": [_to_out(item) for item in items], "total": total, "page": page, "page_size": page_size}
+
+
+async def list_scenario_options(session: AsyncSession) -> dict[str, list[str]]:
+    return await options_repo.scenario_options(session)
 
 
 async def get_scenario(session: AsyncSession, item_id: uuid.UUID) -> dict[str, Any]:
@@ -131,16 +136,16 @@ async def update_scenario(
     return _to_out(row)
 
 
-async def import_scenarios(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, int]:
+async def import_scenarios(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, Any]:
     parsed = parse_sheet(content, SCENARIO_COLUMNS)
     inserted = 0
-    skipped = 0
+    skipped_rows: list[dict[str, str]] = []
     now = utcnow()
     for item in parsed:
         values = {field: (item.get(field) or "").strip() for field in SCENARIO_FIELDS}
         digest = content_hash(values, SCENARIO_FIELDS)
         if await repo.get_by_hash(session, digest):
-            skipped += 1
+            skipped_rows.append({**values, "skip_reason": "内容已存在"})
             continue
         session.add(
             Scenario(
@@ -164,9 +169,15 @@ async def import_scenarios(session: AsyncSession, actor: Actor, content: bytes) 
         event_type="codebook.scenario.imported",
         actor_id=actor.id,
         actor_name=actor.name,
-        extra={"inserted": inserted, "skipped": skipped},
+        extra={"inserted": inserted, "skipped": len(skipped_rows)},
     )
-    return {"inserted": inserted, "updated": 0, "skipped": skipped, "total": len(parsed)}
+    return {
+        "inserted": inserted,
+        "updated": 0,
+        "skipped": len(skipped_rows),
+        "total": len(parsed),
+        "skipped_file": encode_skipped_file(SCENARIO_COLUMNS, skipped_rows),
+    }
 
 
 async def export_scenarios(session: AsyncSession, actor: Actor) -> bytes:

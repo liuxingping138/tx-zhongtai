@@ -8,10 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.actors import Actor
 from app.application.audit_emit import enqueue_event
-from app.application.excel import build_workbook, parse_sheet
-from app.core.clock import utcnow
+from app.application.excel import build_workbook, encode_skipped_file, parse_sheet
+from app.core.clock import format_beijing, utcnow
 from app.domain.fields import POLICY_TYPE_COLUMNS
 from app.domain.models import PolicyType
+from app.repositories import options as options_repo
 from app.repositories import policy_types as repo
 
 
@@ -22,9 +23,9 @@ def _to_out(row: PolicyType) -> dict[str, Any]:
         "type_name": row.type_name,
         "definition": row.definition,
         "version": row.version,
-        "created_at": row.created_at.isoformat(),
+        "created_at": format_beijing(row.created_at),
         "created_by_name": row.created_by_name,
-        "updated_at": row.updated_at.isoformat(),
+        "updated_at": format_beijing(row.updated_at),
         "updated_by_name": row.updated_by_name,
     }
 
@@ -45,6 +46,10 @@ def _apply_fields(row: PolicyType, data: dict[str, str]) -> dict[str, Any]:
 async def list_policy_types(session: AsyncSession, *, keyword: str | None, page: int, page_size: int) -> dict[str, Any]:
     items, total = await repo.list_items(session, keyword=keyword, page=page, page_size=page_size)
     return {"items": [_to_out(item) for item in items], "total": total, "page": page, "page_size": page_size}
+
+
+async def list_policy_type_options(session: AsyncSession) -> dict[str, list[str]]:
+    return await options_repo.policy_type_options(session)
 
 
 async def create_policy_type(session: AsyncSession, actor: Actor, data: dict[str, str]) -> dict[str, Any]:
@@ -110,16 +115,16 @@ async def update_policy_type(
     return _to_out(row)
 
 
-async def import_policy_types(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, int]:
+async def import_policy_types(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, Any]:
     parsed = parse_sheet(content, POLICY_TYPE_COLUMNS, sheet_name="政策类型枚举值")
     inserted = 0
     updated = 0
-    skipped = 0
+    skipped_rows: list[dict[str, str]] = []
     now = utcnow()
     for item in parsed:
         type_name = item.get("type_name", "").strip()
         if not type_name:
-            skipped += 1
+            skipped_rows.append({**item, "skip_reason": "政策类型为空"})
             continue
         row = await repo.get_by_name(session, type_name)
         if row is None:
@@ -141,7 +146,7 @@ async def import_policy_types(session: AsyncSession, actor: Actor, content: byte
             continue
         changed = _apply_fields(row, item)
         if not changed:
-            skipped += 1
+            skipped_rows.append({**item, "skip_reason": "内容无变化"})
             continue
         row.version += 1
         row.updated_at = now
@@ -154,9 +159,15 @@ async def import_policy_types(session: AsyncSession, actor: Actor, content: byte
         event_type="codebook.policy_type.imported",
         actor_id=actor.id,
         actor_name=actor.name,
-        extra={"inserted": inserted, "updated": updated, "skipped": skipped},
+        extra={"inserted": inserted, "updated": updated, "skipped": len(skipped_rows)},
     )
-    return {"inserted": inserted, "updated": updated, "skipped": skipped, "total": len(parsed)}
+    return {
+        "inserted": inserted,
+        "updated": updated,
+        "skipped": len(skipped_rows),
+        "total": len(parsed),
+        "skipped_file": encode_skipped_file(POLICY_TYPE_COLUMNS, skipped_rows),
+    }
 
 
 async def export_policy_types(session: AsyncSession, actor: Actor) -> bytes:

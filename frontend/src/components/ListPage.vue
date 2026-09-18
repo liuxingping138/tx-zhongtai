@@ -158,5 +158,6 @@ async function onSize(value: number) {
 
 .table-card {
   padding: 8px 16px 16px;
+  overflow-x: auto;
 }
 </style>

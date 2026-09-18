@@ -48,3 +48,20 @@ class ScenarioWrite(BaseModel):
     product_l1_sort: str = ""
     product_l2_sort: str = ""
 
+
+class AreaCodeWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: int | None = None
+    prov_id: str = ""
+    prov_name: str = ""
+    city_id: str = ""
+    city_name: str = ""
+    county_id: str = ""
+    county_name: str = ""
+    alias_prov_name: str = ""
+    alias_city_name: str = ""
+    alias_county_name: str = ""
+    city_name_short: str = ""
+    county_name_short: str = ""
+

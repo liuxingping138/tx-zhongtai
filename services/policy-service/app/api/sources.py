@@ -28,6 +28,7 @@ async def list_items(
     city_name: str | None = Query(default=None),
     tag: str | None = Query(default=None),
     site_code: str | None = Query(default=None),
+    crawl_priority: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session),
@@ -41,10 +42,20 @@ async def list_items(
             city_name=city_name,
             tag=tag,
             site_code=site_code,
+            crawl_priority=crawl_priority,
             page=page,
             page_size=page_size,
         )
     )
+
+
+@router.get("/options")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def list_filter_options(
+    session: AsyncSession = Depends(get_db_session),
+    _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
+):
+    return success_json(await service.list_source_options(session))
 
 
 @router.get("/export")

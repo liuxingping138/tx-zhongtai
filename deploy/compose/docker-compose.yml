@@ -43,6 +43,7 @@ services:
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
     networks:
       - data
+      - gateway
     # 本地开发方便直接用客户端连接；生产不得映射数据库端口到公网。
     # 宿主机端口可通过 .env 的 POSTGRES_HOST_PORT 调整，避免与本机已运行的 PostgreSQL 冲突。
     ports:
@@ -84,7 +85,8 @@ services:
       IAM_CORS_ALLOW_ORIGINS: ${IAM_CORS_ALLOW_ORIGINS:-[]}
       IAM_JWT_KEYS_DIR: /secrets/jwt
       IAM_COOKIE_SECURE: "false"
-      IAM_CSRF_ALLOWED_ORIGINS: '["http://localhost:8080","http://127.0.0.1:8080","http://localhost:5173"]'
+      IAM_ACCESS_TOKEN_TTL_SECONDS: "28800"
+      IAM_CSRF_ALLOWED_ORIGINS: '["http://localhost:8080","http://127.0.0.1:8080","http://localhost:5173","http://127.0.0.1:5173"]'
       IAM_INTERNAL_CALLER_SECRETS: ${IAM_INTERNAL_CALLER_SECRETS}
       IAM_AUDIT_INGEST_URL: http://audit-service:8002
       IAM_AUDIT_INGEST_SECRET: ${IAM_AUDIT_INGEST_SECRET:-dev-only-change-me-ingest}

@@ -21,15 +21,21 @@ class Settings(BaseServiceSettings):
 
     cors_allow_origins: list[str] = []
     csrf_allowed_origins: list[str] = Field(
-        default_factory=lambda: ["http://localhost:8080", "http://localhost:5173"]
+        default_factory=lambda: [
+            "http://localhost:8080",
+            "http://127.0.0.1:8080",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ]
     )
 
     jwt_issuer: str = "tx-zhongtai-iam"
     jwt_audience: str = "tx-zhongtai"
     jwt_algorithm: str = "RS256"
     jwt_keys_dir: str = ".jwt-keys"
-    access_token_ttl_seconds: int = 900
+    access_token_ttl_seconds: int = 8 * 3600
     refresh_token_ttl_seconds: int = 7 * 24 * 3600
+    refresh_reuse_grace_seconds: int = 30
 
     refresh_cookie_name: str = "refresh_token"
     csrf_cookie_name: str = "csrf_token"

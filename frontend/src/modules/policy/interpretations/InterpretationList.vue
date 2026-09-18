@@ -7,13 +7,17 @@ import {
   createInterpretation,
   downloadPolicy,
   importInterpretations,
+  interpretationOptions,
   listInterpretations,
   updateInterpretation,
   type InterpretationItem,
 } from '@/api/policy'
 import { errorMessage, isApiError } from '@/api/errors'
+import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
+import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import { useAuthStore } from '@/stores/auth'
+import { formatTime } from '@/utils/time'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -21,8 +25,6 @@ const canWrite = auth.canFull('policy.interpretations')
 const canAudit = auth.canRead('system.audit')
 
 const emptyForm = {
-  tenant_id: '',
-  policy_uid: '',
   policy_title: '',
   industry_scenario_code: '',
   industry_code: '',
@@ -45,8 +47,6 @@ const emptyForm = {
 }
 
 const fieldLabels: Record<keyof typeof emptyForm, string> = {
-  tenant_id: '租户ID',
-  policy_uid: '政策唯一标识',
   policy_title: '政策原文名称',
   industry_scenario_code: '行业场景编码',
   industry_code: '行业编码',
@@ -57,7 +57,7 @@ const fieldLabels: Record<keyof typeof emptyForm, string> = {
   scenario_l1_name: '一级场景名称',
   scenario_l2_name: '二级场景名称',
   scenario_l3_name: '三级场景名称',
-  target_customers: '目标客户',
+  target_customers: '目标客户当前政策影响客户群',
   opportunity_type: '机会类型',
   policy_summary: '政策要文',
   has_subsidy: '有无政府补贴',
@@ -85,9 +85,55 @@ const visible = ref(false)
 const saving = ref(false)
 const editing = ref<InterpretationItem | null>(null)
 const form = reactive({ ...emptyForm })
+const options = reactive({
+  policy_title: [] as string[],
+  industry_scenario_code: [] as string[],
+  industry_l1: [] as string[],
+  opportunity_type: [] as string[],
+})
 
-function formatTime(value: string): string {
-  return value.replace('T', ' ').replace(/\.\d+.*$/, '')
+const tableColumns = [
+  { prop: 'policy_uid', label: '政策唯一标识', minWidth: 200 },
+  { prop: 'policy_title', label: '政策原文名称', minWidth: 220 },
+  { prop: 'industry_scenario_code', label: '行业场景编码', minWidth: 180 },
+  { prop: 'industry_code', label: '行业编码', width: 120 },
+  { prop: 'industry_l1', label: '一级行业', width: 120 },
+  { prop: 'industry_l2', label: '二级行业', width: 120 },
+  { prop: 'industry_l3', label: '三级行业', width: 120 },
+  { prop: 'scenario_code', label: '场景编码', width: 140 },
+  { prop: 'scenario_l1_name', label: '一级场景名称', minWidth: 140 },
+  { prop: 'scenario_l2_name', label: '二级场景名称', minWidth: 140 },
+  { prop: 'scenario_l3_name', label: '三级场景名称', minWidth: 140 },
+  { prop: 'target_customers', label: '目标客户当前政策影响客户群', minWidth: 220 },
+  { prop: 'relation_key', label: '关联主键', minWidth: 200 },
+  { prop: 'opportunity_type', label: '机会类型', width: 110 },
+  { prop: 'policy_summary', label: '政策要文', minWidth: 220 },
+  { prop: 'has_subsidy', label: '有无政府补贴', width: 120 },
+  { prop: 'subsidy_content', label: '补贴内容', minWidth: 180 },
+  { prop: 'market_opportunity', label: '政策市场机会', minWidth: 180 },
+  { prop: 'info_level', label: '信息化等级', width: 110 },
+  { prop: 'is_new_scenario', label: '是否新增场景', width: 120 },
+  { prop: 'new_scenario_level', label: '新增场景级别', width: 120 },
+  { prop: 'created_at', label: '入库时间', width: 170, time: true },
+  { prop: 'created_by_name', label: '入库人', width: 110 },
+  { prop: 'updated_at', label: '更新时间', width: 170, time: true },
+  { prop: 'updated_by_name', label: '操作人', width: 110 },
+] as const
+
+function cellValue(row: InterpretationItem, prop: string): string {
+  return String(row[prop as keyof InterpretationItem] ?? '')
+}
+
+async function loadOptions() {
+  try {
+    const data = await interpretationOptions()
+    options.policy_title = (data.policy_title as string[]) ?? []
+    options.industry_scenario_code = (data.industry_scenario_code as string[]) ?? []
+    options.industry_l1 = (data.industry_l1 as string[]) ?? []
+    options.opportunity_type = (data.opportunity_type as string[]) ?? []
+  } catch {
+    /* 选项失败不影响列表 */
+  }
 }
 
 async function load() {
@@ -147,7 +193,7 @@ async function onSave() {
     }
     ElMessage.success('已保存')
     visible.value = false
-    await load()
+    await Promise.all([load(), loadOptions()])
   } catch (error) {
     if (isApiError(error) && error.status === 409) {
       await ElMessageBox.alert('数据已被他人修改或关联主键重复，请重新加载。', '无法保存')
@@ -162,9 +208,9 @@ async function onSave() {
 
 async function onImport(file: File) {
   try {
-    const result = await importInterpretations(file)
-    ElMessage.success(`导入完成：新增 ${result.inserted}，跳过 ${result.skipped}`)
-    await load()
+    const result = await runExcelImport(file, (onProgress) => importInterpretations(file, onProgress))
+    reportImportResult(result, '政策解读-跳过明细.xlsx')
+    await Promise.all([load(), loadOptions()])
   } catch (error) {
     ElMessage.error(errorMessage(error, '导入失败'))
   }
@@ -185,6 +231,7 @@ function openLogs() {
 
 onMounted(() => {
   void load()
+  void loadOptions()
 })
 </script>
 
@@ -215,7 +262,9 @@ onMounted(() => {
           accept=".xlsx"
           :before-upload="onImport"
         >
-          <el-button>上传 Excel</el-button>
+          <el-button :disabled="importUi.visible">
+            上传 Excel
+          </el-button>
         </el-upload>
         <el-button @click="onExport">
           下载 Excel
@@ -231,33 +280,38 @@ onMounted(() => {
         <el-form
           class="filter-form"
           inline
+          label-position="top"
           @submit.prevent="onSearch"
         >
-          <el-form-item label="政策原文名称">
-            <el-input
-              v-model="query.policy_title"
-              clearable
-            />
-          </el-form-item>
-          <el-form-item label="行业场景编码">
-            <el-input
-              v-model="query.industry_scenario_code"
-              clearable
-            />
-          </el-form-item>
-          <el-form-item label="一级行业">
-            <el-input
-              v-model="query.industry_l1"
-              clearable
-            />
-          </el-form-item>
-          <el-form-item label="机会类型">
-            <el-input
-              v-model="query.opportunity_type"
-              clearable
-            />
-          </el-form-item>
-          <el-form-item>
+          <div class="filter-form__fields">
+            <el-form-item label="政策原文名称">
+              <FilterSelect
+                v-model="query.policy_title"
+                :options="options.policy_title"
+              />
+            </el-form-item>
+            <el-form-item label="行业场景编码">
+              <FilterSelect
+                v-model="query.industry_scenario_code"
+                :options="options.industry_scenario_code"
+              />
+            </el-form-item>
+            <el-form-item label="一级行业">
+              <FilterSelect
+                v-model="query.industry_l1"
+                :options="options.industry_l1"
+                size="short"
+              />
+            </el-form-item>
+            <el-form-item label="机会类型">
+              <FilterSelect
+                v-model="query.opportunity_type"
+                :options="options.opportunity_type"
+                size="short"
+              />
+            </el-form-item>
+          </div>
+          <el-form-item class="filter-form__submit">
             <el-button
               native-type="submit"
               type="primary"
@@ -275,43 +329,26 @@ onMounted(() => {
         border
       >
         <el-table-column
-          prop="policy_title"
-          label="政策原文名称"
-          min-width="220"
+          v-for="col in tableColumns"
+          :key="col.prop"
+          :prop="col.prop"
+          :label="col.label"
+          :width="'width' in col ? col.width : undefined"
+          :min-width="'minWidth' in col ? col.minWidth : undefined"
           show-overflow-tooltip
-        />
-        <el-table-column
-          prop="industry_scenario_code"
-          label="行业场景编码"
-          width="180"
-        />
-        <el-table-column
-          prop="industry_l1"
-          label="一级行业"
-          width="120"
-        />
-        <el-table-column
-          prop="opportunity_type"
-          label="机会类型"
-          width="100"
-        />
-        <el-table-column
-          prop="created_by_name"
-          label="入库人"
-          width="110"
-        />
-        <el-table-column
-          label="更新时间"
-          width="170"
         >
-          <template #default="{ row }">
-            {{ formatTime(row.updated_at) }}
+          <template
+            v-if="'time' in col && col.time"
+            #default="{ row }"
+          >
+            {{ formatTime(cellValue(row, col.prop)) }}
           </template>
         </el-table-column>
         <el-table-column
           v-if="canWrite"
           label="操作"
           width="80"
+          fixed="right"
         >
           <template #default="{ row }">
             <el-button

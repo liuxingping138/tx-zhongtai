@@ -14,6 +14,7 @@ import {
 import { errorMessage, isApiError } from '@/api/errors'
 import type { RoleItem, UserItem } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
+import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import PasswordOnceDialog from '@/components/PasswordOnceDialog.vue'
 
@@ -27,6 +28,7 @@ const query = reactive({
   page: 1,
   page_size: 20,
 })
+const usernameOptions = ref<string[]>([])
 
 const createVisible = ref(false)
 const createForm = reactive({ username: '', display_name: '', password: '' })
@@ -202,8 +204,18 @@ function clearOnce() {
   onceUsername.value = ''
 }
 
+async function loadUsernameOptions() {
+  try {
+    const page = await listUsers({ page: 1, page_size: 100 })
+    usernameOptions.value = page.items.map((item) => item.username)
+  } catch {
+    /* 选项失败不影响列表 */
+  }
+}
+
 onMounted(() => {
   void load()
+  void loadUsernameOptions()
 })
 </script>
 
@@ -235,37 +247,39 @@ onMounted(() => {
         <el-form
           class="filter-form"
           inline
+          label-position="top"
           @submit.prevent="onSearch"
         >
-          <el-form-item label="用户名">
-            <el-input
-              v-model="query.username"
-              clearable
-              placeholder="用户名"
-            />
-          </el-form-item>
-          <el-form-item label="状态">
-            <el-select
-              v-model="query.status"
-              clearable
-              placeholder="全部"
-              style="width: 140px"
-            >
-              <el-option
-                label="启用"
-                value="active"
+          <div class="filter-form__fields">
+            <el-form-item label="用户名">
+              <FilterSelect
+                v-model="query.username"
+                :options="usernameOptions"
+                placeholder="输入或选择用户名"
               />
-              <el-option
-                label="禁用"
-                value="disabled"
-              />
-              <el-option
-                label="归档"
-                value="archived"
-              />
-            </el-select>
-          </el-form-item>
-          <el-form-item>
+            </el-form-item>
+            <el-form-item label="状态">
+              <el-select
+                v-model="query.status"
+                clearable
+                placeholder="全部"
+              >
+                <el-option
+                  label="启用"
+                  value="active"
+                />
+                <el-option
+                  label="禁用"
+                  value="disabled"
+                />
+                <el-option
+                  label="归档"
+                  value="archived"
+                />
+              </el-select>
+            </el-form-item>
+          </div>
+          <el-form-item class="filter-form__submit">
             <el-button
               native-type="submit"
               type="primary"

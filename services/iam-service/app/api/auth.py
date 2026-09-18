@@ -110,6 +110,13 @@ async def refresh(
         raise UnauthenticatedError("缺少刷新凭据")
     service = AuthService(session, settings)
     access, new_refresh, _session_row, user = await service.refresh(raw)
+    if new_refresh is None:
+        payload = TokenPayload(
+            access_token=access,
+            expires_in=settings.access_token_ttl_seconds,
+            must_change_password=user.must_change_password,
+        )
+        return success_json(payload.model_dump())
     return _token_response(access, new_refresh, must_change_password=user.must_change_password, settings=settings)
 
 

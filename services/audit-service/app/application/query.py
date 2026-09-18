@@ -74,6 +74,10 @@ async def list_page(
     return [to_out(row) for row in rows], total
 
 
+async def list_options(session: AsyncSession) -> dict[str, list[str]]:
+    return await event_repo.list_options(session)
+
+
 async def get_one(session: AsyncSession, event_pk: uuid.UUID) -> AuditEventOut | None:
     row = await event_repo.get_event(session, event_pk)
     return to_out(row) if row is not None else None

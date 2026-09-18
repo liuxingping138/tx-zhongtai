@@ -3,7 +3,9 @@ import { defineStore } from 'pinia'
 import { changePassword, fetchMe, fetchPermissions, login, logout, logoutAll } from '@/api/auth'
 import { errorMessage } from '@/api/errors'
 import {
+  armAccessRefresh,
   broadcastLogout,
+  disarmAccessRefresh,
   ensureCsrfToken,
   getAccessToken,
   refreshSession,
@@ -94,6 +96,7 @@ export const useAuthStore = defineStore('auth', {
     async signIn(username: string, password: string): Promise<void> {
       const token = await login(username, password)
       setAccessToken(token.access_token)
+      armAccessRefresh(token.expires_in)
       this.signedIn = true
       await ensureCsrfToken()
       this.mustChangePassword = token.must_change_password
@@ -102,6 +105,7 @@ export const useAuthStore = defineStore('auth', {
     async updatePassword(oldPassword: string, newPassword: string): Promise<void> {
       const token = await changePassword(oldPassword, newPassword)
       setAccessToken(token.access_token)
+      armAccessRefresh(token.expires_in)
       this.signedIn = true
       this.mustChangePassword = false
       await this.loadProfile()
@@ -131,6 +135,7 @@ export const useAuthStore = defineStore('auth', {
       this.mustChangePassword = false
     },
     clearSession(): void {
+      disarmAccessRefresh()
       setAccessToken('')
       setCsrfToken('')
       this.signedIn = false

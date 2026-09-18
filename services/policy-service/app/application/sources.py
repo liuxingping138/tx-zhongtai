@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections import Counter
 from typing import Any
 
 from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionConflictError
@@ -8,11 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.actors import Actor
 from app.application.audit_emit import enqueue_event
-from app.application.excel import build_workbook, parse_sheet
-from app.application.region import make_internal_id, next_site_code, normalize_region
-from app.core.clock import utcnow
+from app.application.excel import build_workbook, encode_skipped_file, parse_sheet
+from app.application.region import make_internal_id, next_site_code, normalize_region, site_code_prefix
+from app.core.clock import format_beijing, utcnow
 from app.domain.fields import SOURCE_COLUMNS
 from app.domain.models import SOURCE_FIELDS, Source
+from app.repositories import options as options_repo
 from app.repositories import sources as repo
 
 
@@ -34,9 +36,9 @@ def _to_out(row: Source) -> dict[str, Any]:
         "data_type": row.data_type,
         "department": row.department,
         "version": row.version,
-        "created_at": row.created_at.isoformat(),
+        "created_at": format_beijing(row.created_at),
         "created_by_name": row.created_by_name,
-        "updated_at": row.updated_at.isoformat(),
+        "updated_at": format_beijing(row.updated_at),
         "updated_by_name": row.updated_by_name,
     }
 
@@ -52,9 +54,20 @@ def _normalized_values(data: dict[str, str]) -> dict[str, str]:
     return values
 
 
-async def _allocate_site_code(session: AsyncSession, district_code: str) -> str:
-    existing = await repo.list_site_codes_for_district(session, district_code)
-    return next_site_code(district_code, existing)
+def _has_any_area_code(item: dict[str, str]) -> bool:
+    return bool(
+        (item.get("province_code") or "").strip()
+        or (item.get("city_code") or "").strip()
+        or (item.get("district_code") or "").strip()
+    )
+
+
+async def _allocate_site_code(
+    session: AsyncSession, province_code: str, city_code: str, district_code: str
+) -> str:
+    prefix = site_code_prefix(province_code, city_code, district_code)
+    existing = await repo.list_site_codes_for_district(session, prefix)
+    return next_site_code(prefix, existing)
 
 
 async def list_sources(
@@ -65,6 +78,7 @@ async def list_sources(
     city_name: str | None,
     tag: str | None,
     site_code: str | None,
+    crawl_priority: str | None,
     page: int,
     page_size: int,
 ) -> dict[str, Any]:
@@ -75,10 +89,15 @@ async def list_sources(
         city_name=city_name,
         tag=tag,
         site_code=site_code,
+        crawl_priority=crawl_priority,
         page=page,
         page_size=page_size,
     )
     return {"items": [_to_out(item) for item in items], "total": total, "page": page, "page_size": page_size}
+
+
+async def list_source_options(session: AsyncSession) -> dict[str, Any]:
+    return await options_repo.source_options(session)
 
 
 async def get_source(session: AsyncSession, item_id: uuid.UUID) -> dict[str, Any]:
@@ -95,7 +114,9 @@ async def create_source(session: AsyncSession, actor: Actor, data: dict[str, str
     internal_id = make_internal_id(values["site_name"], values["province_name"], values["city_name"], values["tag"])
     if await repo.get_by_internal_id(session, internal_id):
         raise ApiError("已存在相同的内部唯一 id", code=ErrorCode.VERSION_CONFLICT, http_status=409)
-    site_code = await _allocate_site_code(session, values["district_code"])
+    site_code = await _allocate_site_code(
+        session, values["province_code"], values["city_code"], values["district_code"]
+    )
     if await repo.get_by_site_code(session, site_code):
         raise ApiError("网站编码冲突，请重试", code=ErrorCode.VERSION_CONFLICT, http_status=409)
     now = utcnow()
@@ -163,29 +184,56 @@ async def update_source(
     return _to_out(row)
 
 
-async def import_sources(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, int]:
+async def import_sources(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, Any]:
     parsed = parse_sheet(content, SOURCE_COLUMNS, sheet_name="网站-0430-编码")
-    inserted = 0
-    skipped = 0
-    now = utcnow()
-    seen_internal = await repo.list_internal_ids(session)
-    seen_site = await repo.list_site_codes(session)
+    db_internal = await repo.list_internal_ids(session)
+    db_site = await repo.list_site_codes(session)
+    staged: list[tuple[dict[str, str], str, str]] = []
     for item in parsed:
-        values = _normalized_values(item)
-        if not values["site_name"]:
-            skipped += 1
-            continue
+        values = {field: (item.get(field) or "").strip() for field in SOURCE_FIELDS}
         internal_id = make_internal_id(values["site_name"], values["province_name"], values["city_name"], values["tag"])
         site_code = (item.get("site_code") or "").strip()
-        if internal_id in seen_internal:
-            skipped += 1
-            continue
-        if site_code and site_code in seen_site:
-            skipped += 1
-            continue
+        staged.append((values, internal_id, site_code))
+    file_internal = Counter(item[1] for item in staged)
+    file_site = Counter(item[2] for item in staged if item[2])
+    marked: list[dict[str, str]] = []
+    blocked = 0
+    for values, internal_id, site_code in staged:
+        reasons: list[str] = []
+        if not _has_any_area_code(values):
+            reasons.append("省市区编码为空")
+        if not values["site_name"]:
+            reasons.append("网站名称为空")
+        if internal_id in db_internal:
+            reasons.append("内部唯一id已存在")
+        if file_internal[internal_id] > 1:
+            reasons.append("文件内重复")
+        if site_code and site_code in db_site:
+            reasons.append("网站编码已存在")
+        if site_code and file_site[site_code] > 1:
+            reasons.append("文件内网站编码重复")
+        marked.append({**values, "site_code": site_code, "skip_reason": "；".join(reasons) if reasons else "通过"})
+        if reasons:
+            blocked += 1
+    if blocked:
+        return {
+            "inserted": 0,
+            "updated": 0,
+            "skipped": blocked,
+            "total": len(parsed),
+            "rejected": True,
+            "skipped_file": encode_skipped_file(SOURCE_COLUMNS, marked),
+        }
+    inserted = 0
+    now = utcnow()
+    seen_site = set(db_site)
+    for values, internal_id, site_code in staged:
+        normalized = _normalized_values(values)
         if not site_code:
-            site_code = await _allocate_site_code(session, values["district_code"])
-        seen_internal.add(internal_id)
+            prefix = site_code_prefix(
+                normalized["province_code"], normalized["city_code"], normalized["district_code"]
+            )
+            site_code = next_site_code(prefix, list(seen_site))
         seen_site.add(site_code)
         session.add(
             Source(
@@ -198,7 +246,7 @@ async def import_sources(session: AsyncSession, actor: Actor, content: bytes) ->
                 updated_at=now,
                 updated_by_id=actor.id,
                 updated_by_name=actor.name,
-                **values,
+                **normalized,
             )
         )
         inserted += 1
@@ -210,9 +258,15 @@ async def import_sources(session: AsyncSession, actor: Actor, content: bytes) ->
         event_type="policy.source.imported",
         actor_id=actor.id,
         actor_name=actor.name,
-        extra={"inserted": inserted, "skipped": skipped},
+        extra={"inserted": inserted, "skipped": 0},
     )
-    return {"inserted": inserted, "updated": 0, "skipped": skipped, "total": len(parsed)}
+    return {
+        "inserted": inserted,
+        "updated": 0,
+        "skipped": 0,
+        "total": len(parsed),
+        "skipped_file": None,
+    }
 
 
 async def export_sources(session: AsyncSession, actor: Actor) -> bytes:

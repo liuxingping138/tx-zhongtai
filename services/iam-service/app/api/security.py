@@ -49,6 +49,10 @@ def check_origin(request: Request, settings: Settings) -> None:
             raise PermissionDeniedError("缺少 Origin")
         return
     allowed = set(settings.csrf_allowed_origins) | set(settings.cors_allow_origins)
+    host = request.headers.get("host")
+    if host:
+        allowed.add(f"http://{host}")
+        allowed.add(f"https://{host}")
     if origin not in allowed:
         raise PermissionDeniedError("请求来源不被允许")
 

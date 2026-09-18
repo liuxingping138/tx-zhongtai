@@ -4,15 +4,20 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import {
+  createScenario,
   downloadCodebook,
   importScenarios,
   listScenarios,
+  scenarioOptions,
   updateScenario,
   type ScenarioItem,
 } from '@/api/codebook'
 import { errorMessage, isApiError } from '@/api/errors'
+import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
+import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import { useAuthStore } from '@/stores/auth'
+import { formatTime } from '@/utils/time'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -79,9 +84,39 @@ const visible = ref(false)
 const saving = ref(false)
 const editing = ref<ScenarioItem | null>(null)
 const form = reactive<Record<string, string>>({})
+const options = reactive({
+  industry_scenario_code: [] as string[],
+  industry_l1: [] as string[],
+  scenario_tag: [] as string[],
+  customer_group_name: [] as string[],
+})
 
-function formatTime(value: string): string {
-  return value.replace('T', ' ').replace(/\.\d+.*$/, '')
+const tableColumns = [
+  ...fields.map((field) => ({
+    prop: field.key,
+    label: field.label,
+    minWidth: longFields.has(field.key) ? 220 : 140,
+  })),
+  { prop: 'created_at', label: '入库时间', width: 170, time: true },
+  { prop: 'created_by_name', label: '入库人', width: 110 },
+  { prop: 'updated_at', label: '更新时间', width: 170, time: true },
+  { prop: 'updated_by_name', label: '操作人', width: 110 },
+]
+
+function cellValue(row: ScenarioItem, prop: string): string {
+  return String(row[prop as keyof ScenarioItem] ?? '')
+}
+
+async function loadOptions() {
+  try {
+    const data = await scenarioOptions()
+    options.industry_scenario_code = data.industry_scenario_code ?? []
+    options.industry_l1 = data.industry_l1 ?? []
+    options.scenario_tag = data.scenario_tag ?? []
+    options.customer_group_name = data.customer_group_name ?? []
+  } catch {
+    /* 选项失败不影响列表 */
+  }
 }
 
 async function load() {
@@ -109,6 +144,14 @@ function onSearch() {
   void load()
 }
 
+function openCreate() {
+  editing.value = null
+  for (const field of fields) {
+    form[field.key] = ''
+  }
+  visible.value = true
+}
+
 function openEdit(row: ScenarioItem) {
   editing.value = row
   for (const field of fields) {
@@ -118,18 +161,22 @@ function openEdit(row: ScenarioItem) {
 }
 
 async function onSave() {
-  if (!editing.value) {
-    return
-  }
   saving.value = true
   try {
-    await updateScenario(editing.value.id, { ...form, version: editing.value.version })
+    if (editing.value) {
+      await updateScenario(editing.value.id, { ...form, version: editing.value.version })
+    } else {
+      await createScenario({ ...form })
+    }
     ElMessage.success('已保存')
     visible.value = false
-    await load()
+    await Promise.all([load(), loadOptions()])
   } catch (error) {
     if (isApiError(error) && error.status === 409) {
-      await ElMessageBox.alert('数据已被他人修改，请重新加载后再编辑。', '版本冲突')
+      await ElMessageBox.alert(
+        editing.value ? '数据已被他人修改，请重新加载后再编辑。' : '已存在完全相同的场景记录。',
+        '无法保存',
+      )
       await load()
     } else {
       ElMessage.error(errorMessage(error, '保存失败'))
@@ -141,9 +188,9 @@ async function onSave() {
 
 async function onImport(file: File) {
   try {
-    const result = await importScenarios(file)
-    ElMessage.success(`导入完成：新增 ${result.inserted}，跳过重复 ${result.skipped}`)
-    await load()
+    const result = await runExcelImport(file, (onProgress) => importScenarios(file, onProgress))
+    reportImportResult(result, '行业场景-跳过明细.xlsx')
+    await Promise.all([load(), loadOptions()])
   } catch (error) {
     ElMessage.error(errorMessage(error, '导入失败'))
   }
@@ -164,6 +211,7 @@ function openLogs() {
 
 onMounted(() => {
   void load()
+  void loadOptions()
 })
 </script>
 
@@ -181,13 +229,22 @@ onMounted(() => {
       @change="load"
     >
       <template #actions>
+        <el-button
+          v-if="canWrite"
+          type="primary"
+          @click="openCreate"
+        >
+          新增
+        </el-button>
         <el-upload
           v-if="canWrite"
           :show-file-list="false"
           accept=".xlsx"
           :before-upload="onImport"
         >
-          <el-button>上传 Excel</el-button>
+          <el-button :disabled="importUi.visible">
+            上传 Excel
+          </el-button>
         </el-upload>
         <el-button @click="onExport">
           下载 Excel
@@ -203,33 +260,37 @@ onMounted(() => {
         <el-form
           class="filter-form"
           inline
+          label-position="top"
           @submit.prevent="onSearch"
         >
-          <el-form-item label="行业场景编码">
-            <el-input
-              v-model="query.industry_scenario_code"
-              clearable
-            />
-          </el-form-item>
-          <el-form-item label="一级行业">
-            <el-input
-              v-model="query.industry_l1"
-              clearable
-            />
-          </el-form-item>
-          <el-form-item label="场景标签">
-            <el-input
-              v-model="query.scenario_tag"
-              clearable
-            />
-          </el-form-item>
-          <el-form-item label="客群名称">
-            <el-input
-              v-model="query.customer_group_name"
-              clearable
-            />
-          </el-form-item>
-          <el-form-item>
+          <div class="filter-form__fields">
+            <el-form-item label="行业场景编码">
+              <FilterSelect
+                v-model="query.industry_scenario_code"
+                :options="options.industry_scenario_code"
+              />
+            </el-form-item>
+            <el-form-item label="一级行业">
+              <FilterSelect
+                v-model="query.industry_l1"
+                :options="options.industry_l1"
+                size="short"
+              />
+            </el-form-item>
+            <el-form-item label="场景标签">
+              <FilterSelect
+                v-model="query.scenario_tag"
+                :options="options.scenario_tag"
+              />
+            </el-form-item>
+            <el-form-item label="客群名称">
+              <FilterSelect
+                v-model="query.customer_group_name"
+                :options="options.customer_group_name"
+              />
+            </el-form-item>
+          </div>
+          <el-form-item class="filter-form__submit">
             <el-button
               native-type="submit"
               type="primary"
@@ -247,60 +308,26 @@ onMounted(() => {
         border
       >
         <el-table-column
-          prop="industry_scenario_code"
-          label="行业场景编码"
-          width="180"
-        />
-        <el-table-column
-          prop="industry_l1"
-          label="一级行业"
-          width="140"
-        />
-        <el-table-column
-          prop="scenario_tag"
-          label="场景标签"
-          min-width="160"
-        />
-        <el-table-column
-          prop="scenario_level"
-          label="level"
-          width="70"
-        />
-        <el-table-column
-          prop="customer_group_name"
-          label="客群名称"
-          width="160"
-        />
-        <el-table-column
-          label="入库时间"
-          width="170"
+          v-for="col in tableColumns"
+          :key="col.prop"
+          :prop="col.prop"
+          :label="col.label"
+          :width="'width' in col ? col.width : undefined"
+          :min-width="'minWidth' in col ? col.minWidth : 140"
+          show-overflow-tooltip
         >
-          <template #default="{ row }">
-            {{ formatTime(row.created_at) }}
+          <template
+            v-if="'time' in col && col.time"
+            #default="{ row }"
+          >
+            {{ formatTime(cellValue(row, col.prop)) }}
           </template>
         </el-table-column>
-        <el-table-column
-          prop="created_by_name"
-          label="入库人"
-          width="110"
-        />
-        <el-table-column
-          label="更新时间"
-          width="170"
-        >
-          <template #default="{ row }">
-            {{ formatTime(row.updated_at) }}
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="updated_by_name"
-          label="操作人"
-          width="110"
-        />
         <el-table-column
           v-if="canWrite"
           label="操作"
           width="80"
+          fixed="right"
         >
           <template #default="{ row }">
             <el-button
@@ -316,7 +343,7 @@ onMounted(() => {
     </ListPage>
     <el-drawer
       v-model="visible"
-      title="编辑场景码表"
+      :title="editing ? '编辑场景码表' : '新增场景码表'"
       size="640px"
     >
       <el-form label-position="top">

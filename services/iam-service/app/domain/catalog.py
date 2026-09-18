@@ -61,6 +61,9 @@ RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
         "codebook.policy_types", "政策类型码表", "codebook-service", NodeType.RESOURCE, True, 51, "codebook"
     ),
     ResourceSpec("codebook.scenarios", "场景码表", "codebook-service", NodeType.RESOURCE, True, 52, "codebook"),
+    ResourceSpec(
+        "codebook.area_codes", "省市区编码表", "codebook-service", NodeType.RESOURCE, True, 53, "codebook"
+    ),
 )
 
 ACTION_SPECS: tuple[ActionSpec, ...] = (
@@ -90,6 +93,12 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ActionSpec("codebook.scenarios", "create", GrantLevel.FULL),
     ActionSpec("codebook.scenarios", "update", GrantLevel.FULL),
     ActionSpec("codebook.scenarios", "import", GrantLevel.FULL),
+    ActionSpec("codebook.area_codes", "list", GrantLevel.READ),
+    ActionSpec("codebook.area_codes", "read", GrantLevel.READ),
+    ActionSpec("codebook.area_codes", "export", GrantLevel.READ),
+    ActionSpec("codebook.area_codes", "create", GrantLevel.FULL),
+    ActionSpec("codebook.area_codes", "update", GrantLevel.FULL),
+    ActionSpec("codebook.area_codes", "import", GrantLevel.FULL),
     ActionSpec("policy.sources", "list", GrantLevel.READ),
     ActionSpec("policy.sources", "read", GrantLevel.READ),
     ActionSpec("policy.sources", "export", GrantLevel.READ),
@@ -163,6 +172,15 @@ MENU_SPECS: tuple[MenuSpec, ...] = (
         52,
         "codebook-scenarios",
         "codebook.scenarios",
+        "menu.codebook",
+        enabled=True,
+    ),
+    MenuSpec(
+        "menu.codebook.area_codes",
+        "省市区编码表",
+        53,
+        "codebook-area-codes",
+        "codebook.area_codes",
         "menu.codebook",
         enabled=True,
     ),
