@@ -64,7 +64,7 @@ async function onSubmit() {
           class="brand-mark"
           aria-hidden="true"
         ><i /><i /><i /></span>
-        <span>中台管理端</span>
+        <span>业务数据运营平台</span>
       </div>
       <div class="story-content">
         <p class="eyebrow">
@@ -86,7 +86,7 @@ async function onSubmit() {
           <div class="art-line art-line--two" />
           <div class="art-core">
             <span class="core-mark"><i /><i /><i /></span>
-            <span>中台工作空间</span>
+            <span>业务数据运营平台</span>
             <small>连接 · 整理 · 协作</small>
           </div>
           <div class="art-card art-card--policy">
@@ -255,7 +255,7 @@ async function onSubmit() {
         </div>
       </div>
       <footer class="login-panel__footer">
-        中台管理端<span>统一入口 · 高效协同</span>
+        业务数据运营平台<span>统一入口 · 高效协同</span>
       </footer>
     </section>
   </main>

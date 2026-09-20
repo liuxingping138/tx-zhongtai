@@ -1,0 +1,11 @@
+---
+description: 日常只用开发栈，P6 测完必须停掉
+alwaysApply: true
+---
+
+# 开发栈 vs P6
+
+- 日常启动：`make dev-up`。不要顺带 `p6-up`。
+- P6 只用于隔离验收（`make test-integration` / `make test-e2e`）。
+- 验收结束后立刻 `make p6-down`，不要让 `tx-zhongtai-p6-*` 一直跑。
+- Navicat / 业务数据连开发栈 `127.0.0.1:5433`，不要连本机 Homebrew `5432`，也不要连 P6。

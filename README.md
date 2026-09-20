@@ -1,15 +1,18 @@
-# tx-zhongtai 中台系统
+# 业务数据运营平台
 
-Vue 前端 + Python 微服务后端的中台管理系统。当前公共框架已做到 **P6（完整集成验收）**：
+面向政策、客户、招投标和标准码表的业务数据运营平台，采用 Vue 前端和 Python 微服务后端。当前公共框架已做到 **P6（完整集成验收）**：
 账号/会话/RBAC、Outbox Worker、审计查询、隔离验收、备份恢复与 OpenAPI 已交付。
 码表管理（政策类型、行业场景）与政策三个子模块（信源、基础标签、解读）已按用户提供的 Excel 接入。客户、招投标仍仅目录占位。
 
+产品展示名称统一为“业务数据运营平台”；仓库、包名及部署标识继续使用 `tx-zhongtai`，与现有开发环境保持兼容。
+
 详见：
-- [`docs/中台系统公共基础框架设计.md`](docs/中台系统公共基础框架设计.md) —— 架构设计
+- [`docs/业务数据运营平台公共基础框架设计.md`](docs/业务数据运营平台公共基础框架设计.md) —— 架构设计
 - [`docs/Cursor公共框架开发计划.md`](docs/Cursor公共框架开发计划.md) —— 分阶段开发计划
 - [`docs/开发进度.md`](docs/开发进度.md) —— 当前实际进度与验证记录
 - [`docs/实现决策.md`](docs/实现决策.md) —— 端口、数据库、技术选型等实施细节
-- [`docs/开发约定.md`](docs/开发约定.md) —— 必须遵守的开发约定（含 ORM 中文 comment）
+- [`docs/业务表主键与导入导出分析.md`](docs/业务表主键与导入导出分析.md) —— 六张业务表的现状、限制与待业务确认事项；暂维持现有规则
+- [`docs/开发约定.md`](docs/开发约定.md) —— 必须遵守的开发约定（ORM 中文 comment、开发栈/P6）
 - [`docs/配置说明.md`](docs/配置说明.md) / [`docs/部署与维护.md`](docs/部署与维护.md)
 - [`docs/openapi/`](docs/openapi/) —— 从运行中服务导出的 OpenAPI
 
@@ -71,13 +74,14 @@ make smoke
 
 # 6. 打开浏览器访问网关地址（默认 http://localhost:8080）
 
-# 7. 隔离验收（独立库/卷，不会清掉开发数据）
+# 7. 隔离验收（独立库/卷，不会清掉开发数据；测完必须停掉）
 make test-integration
 make test-e2e
 make p6-down
 ```
 
-停止开发环境（不删除数据卷）：`make dev-down`。
+停止开发环境（不删除数据卷）：`make dev-down`。  
+P6 只用于隔离验收，日常不要开着；详见 [`docs/开发约定.md`](docs/开发约定.md)。
 
 ## 各服务本地开发（不经 Docker）
 
@@ -107,6 +111,8 @@ pnpm dev   # 默认代理 /api 到 http://localhost:8080（网关）
 - 表：`__table_args__ = {"comment": "中文表名"}`（有约束时把该字典放在 `__table_args__` tuple 最后一项）
 - 列：每个 `mapped_column(..., comment="中文列名")`，与页面/Excel 表头对齐
 - Alembic 建表、加列时同步带上 comment，方便 Navicat 直接看到业务含义
+
+日常只用 `make dev-up`。P6 是隔离验收栈，测完必须 `make p6-down`，不要常开。
 
 完整说明见 [`docs/开发约定.md`](docs/开发约定.md)。
 

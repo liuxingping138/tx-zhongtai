@@ -1,7 +1,7 @@
 [project]
 name = "platform-common"
 version = "0.1.0"
-description = "中台公共基础包：统一响应、异常、请求ID、日志脱敏、鉴权客户端、Outbox 基础组件、健康检查"
+description = "业务数据运营平台公共基础包：统一响应、异常、请求ID、日志脱敏、鉴权客户端、Outbox 基础组件、健康检查"
 requires-python = ">=3.12,<3.13"
 readme = "README.md"
 license = { text = "Proprietary" }
