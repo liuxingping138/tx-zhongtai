@@ -50,6 +50,7 @@ let loadSequence = 0
 
 async function load() {
   void listQuery.commit()
+  listQuery.captureApplied()
   const sequence = ++loadSequence
   loading.value = true
   loadError.value = ''
@@ -192,6 +193,7 @@ onMounted(() => {
       <template #filters>
         <FilterBar
           :query="query"
+          :applied="listQuery.applied"
           @search="onSearch"
           @reset="onResetFilters"
         >
@@ -218,7 +220,6 @@ onMounted(() => {
         v-loading="loading"
         class="data-table"
         :data="roles"
-        scrollbar-always-on
         stripe
       >
         <template #empty>

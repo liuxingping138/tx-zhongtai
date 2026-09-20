@@ -86,96 +86,6 @@ body {
   font-size: 13px;
 }
 
-.filter-card .filter-form.el-form--inline {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 12px;
-  width: 100%;
-  max-width: 100%;
-}
-
-.filter-form__fields {
-  display: flex;
-  flex-wrap: wrap;
-  flex: 1 1 auto;
-  align-items: flex-end;
-  gap: 12px;
-  min-width: 0;
-}
-
-.filter-form .el-form-item {
-  margin-right: 0;
-  margin-bottom: 0;
-}
-
-.filter-form.el-form--label-top .filter-form__fields .el-form-item {
-  display: flex;
-  flex: 1 1 160px;
-  flex-direction: column;
-  align-items: stretch;
-  width: auto;
-  min-width: 0;
-}
-
-.filter-form__fields:has(> .el-form-item:only-child) .el-form-item {
-  flex: 0 1 220px;
-}
-
-.filter-form.el-form--label-top .filter-form__fields .el-form-item.filter-form__item--wide {
-  flex: 1.8 1 360px;
-}
-
-.filter-form__fields .el-form-item__label {
-  color: var(--zt-ink-900);
-  font-weight: 500;
-  justify-content: flex-start;
-  height: auto;
-  line-height: 1.2;
-  margin: 0;
-  padding: 0 0 6px;
-}
-
-.filter-form__fields .el-form-item__content {
-  margin-left: 0 !important;
-  width: 100%;
-}
-
-.filter-form__submit.el-form-item {
-  flex: 0 0 auto;
-  width: auto;
-}
-
-.filter-form__submit .el-form-item__label {
-  display: none;
-}
-
-.filter-form .el-input,
-.filter-form .el-select,
-.filter-form .el-date-editor {
-  width: 100%;
-}
-
-.filter-form .el-date-editor.el-date-editor--datetimerange {
-  width: 100%;
-}
-
-.filter-form .el-input__wrapper,
-.filter-form .el-select__wrapper,
-.filter-form .el-date-editor {
-  min-height: 36px;
-  box-shadow: none;
-  border: 1px solid #e4e9f0;
-  background: #f7f9fc;
-}
-
-.filter-form .el-input__wrapper.is-focus,
-.filter-form .el-select__wrapper.is-focused {
-  border-color: #9ec9ff;
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(45, 118, 229, 0.1);
-}
-
 .pagination-row {
   display: flex;
   justify-content: flex-end;
@@ -204,31 +114,7 @@ body {
   max-width: 100vw;
 }
 
-@media (max-width: 1200px) {
-  .filter-card .filter-form.el-form--inline,
-  .filter-form__fields {
-    flex-wrap: wrap;
-  }
-
-  .filter-form.el-form--label-top .filter-form__fields .el-form-item {
-    flex: 1 1 180px;
-    width: auto;
-  }
-
-  .filter-form__fields .el-form-item.filter-form__item--wide {
-    flex: 1 1 360px;
-  }
-}
-
 @media (max-width: 600px) {
-  .filter-form__fields {
-    flex-basis: 100%;
-  }
-
-  .filter-form__fields .el-form-item.filter-form__item--wide {
-    flex-basis: 100%;
-  }
-
   .pagination-row .el-pagination {
     gap: 8px;
   }
@@ -269,10 +155,10 @@ body {
   --zt-nav: #203955;
   --zt-nav-active: #33567e;
   --zt-nav-text: #c1d0e2;
-  --zt-scroll-thumb: #acb9ca;
-  --zt-scroll-track: transparent;
-  --zt-scroll-hover: #8294ac;
-  --zt-scroll-active: #607894;
+  --zt-scroll-thumb: #7f91a8;
+  --zt-scroll-track: #e6edf4;
+  --zt-scroll-hover: #667b94;
+  --zt-scroll-active: #4d6480;
   --el-font-family: var(--zt-font);
   --el-font-size-base: 14px;
   --el-border-radius-base: var(--zt-radius);
@@ -282,13 +168,24 @@ body {
   --el-border-color: var(--zt-border);
 }
 body { font-family: var(--zt-font); font-size: 14px; line-height: 1.6; }
-* { scrollbar-width: thin; scrollbar-color: var(--zt-scroll-thumb) var(--zt-scroll-track); }
-*::-webkit-scrollbar { width: 8px; height: 8px; }
+* { scrollbar-width: auto; scrollbar-color: var(--zt-scroll-thumb) var(--zt-scroll-track); }
+*::-webkit-scrollbar { width: 12px; height: 12px; }
 *::-webkit-scrollbar-track { background: var(--zt-scroll-track); }
 *::-webkit-scrollbar-thumb { background: var(--zt-scroll-thumb); border-radius: 6px; }
 *::-webkit-scrollbar-thumb:hover { background: var(--zt-scroll-hover); }
 *::-webkit-scrollbar-thumb:active { background: var(--zt-scroll-active); }
 @media (forced-colors: active) { * { scrollbar-color: auto; } }
+.el-scrollbar__wrap,
+.el-scrollbar__wrap--hidden-default {
+  scrollbar-width: auto;
+}
+.el-scrollbar__wrap::-webkit-scrollbar,
+.el-scrollbar__wrap--hidden-default::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+.el-table .el-scrollbar__bar { display: none; }
 button:not(:disabled), a, .el-select, .el-checkbox, .el-radio { cursor: pointer; }
 button:focus-visible, a:focus-visible { outline: 2px solid var(--zt-blue-600); outline-offset: 3px; }
 button:disabled { cursor: not-allowed; }

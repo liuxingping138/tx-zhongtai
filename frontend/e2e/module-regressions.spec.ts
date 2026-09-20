@@ -9,7 +9,7 @@ async function mockSession(page: Page) {
     const path = new URL(route.request().url()).pathname
     if (path.endsWith('/auth/csrf')) return respond(route, { csrf_token: 'test' })
     if (path.endsWith('/auth/refresh')) return respond(route, { access_token: 'test', expires_in: 3600, must_change_password: false })
-    if (path.endsWith('/auth/me')) return respond(route, { id: 'admin', username: 'admin', display_name: '测试管理员', status: 'active' })
+    if (path.endsWith('/auth/me')) return respond(route, { id: 'admin', username: 'admin', display_name: '测试管理员', status: 'active', roles: ['超级管理员'] })
     if (path.endsWith('/auth/permissions')) return respond(route, { resources: resources.map(code => ({ code, level: 'FULL' })), menus: [] })
     if (path.endsWith('/options')) return respond(route, {})
     return respond(route, { items: [], total: 0, page: 1, page_size: 20 })
@@ -59,7 +59,7 @@ test('roles: changing status resets pagination', async ({ page }) => {
   await page.route('**/api/v1/system/roles?**', route => respond(route, { items: [role('1')], total: 45 }))
   await page.goto('/system/roles')
   await page.locator('.el-pager li').filter({ hasText: /^2$/ }).click()
-  await page.locator('.filter-form .el-select').click()
+  await page.locator('.filter-bar .el-select').click()
   const request = page.waitForRequest(r => r.url().includes('status=disabled'))
   await page.getByRole('option', { name: '停用', exact: true }).click()
   expect(new URL((await request).url()).searchParams.get('page')).toBe('1')

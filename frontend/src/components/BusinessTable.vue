@@ -7,7 +7,7 @@ import ListEmpty from './ListEmpty.vue'
 import { formatTime } from '@/utils/time'
 const props = defineProps<{
   items: T[]; columns: readonly DataColumn[]; selected: string[]; titleKey: string; summaryKeys?: string[];
-  canWrite: boolean; loading: boolean; filtered: boolean;
+  canWrite: boolean; loading: boolean; filtered: boolean; detailTitle?: string;
 }>()
 const emit = defineEmits<{ edit: [row: T]; reset: [] }>()
 const detail: ShallowRef<T | null> = shallowRef(null)
@@ -23,12 +23,14 @@ const availableWidth = ref(0)
 const actionWidth = computed(() => props.canWrite ? 116 : 72)
 const laidOut = computed(() => layoutDataColumns(displayed.value, availableWidth.value - 2, actionWidth.value))
 const totalWidth = computed(() => laidOut.value.reduce((sum, col) => sum + col.width, actionWidth.value) + 2)
-const overflows = computed(() => availableWidth.value > 0 && totalWidth.value > availableWidth.value)
 let resizeObserver: ResizeObserver | undefined
 onMounted(() => {
   if (!root.value) return
   availableWidth.value = root.value.clientWidth
-  resizeObserver = new ResizeObserver(([entry]) => { if (entry) availableWidth.value = entry.contentRect.width })
+  resizeObserver = new ResizeObserver(([entry]) => {
+    if (!entry) return
+    availableWidth.value = entry.contentRect.width
+  })
   resizeObserver.observe(root.value)
 })
 onBeforeUnmount(() => resizeObserver?.disconnect())
@@ -50,10 +52,8 @@ function editDetail() { if (detail.value) { emit('edit', detail.value); detailOp
     <el-table
       v-if="!narrow"
       v-loading="loading"
-      height="max(300px, calc(100dvh - 410px))"
       :data="items"
       :fit="false"
-      scrollbar-always-on
       style="width: 100%"
       row-key="id"
       class="data-table business-table__desktop"
@@ -111,8 +111,8 @@ function editDetail() { if (detail.value) { emit('edit', detail.value); detailOp
       />
       <el-table-column
         label="操作"
-        :width="canWrite ? 116 : 72"
-        fixed="right"
+        :width="actionWidth"
+        class-name="table-action"
       >
         <template #default="{ row }">
           <el-button
@@ -184,15 +184,9 @@ function editDetail() { if (detail.value) { emit('edit', detail.value); detailOp
         </div>
       </article>
     </div>
-    <p
-      v-if="!narrow && overflows"
-      class="table-scroll-hint"
-    >
-      左右滚动查看其余字段
-    </p>
     <el-drawer
       v-model="detailOpen"
-      title="记录详情"
+      :title="detailTitle || '记录详情'"
       size="min(720px, 100vw)"
       class="record-detail"
       destroy-on-close
@@ -234,14 +228,15 @@ function editDetail() { if (detail.value) { emit('edit', detail.value); detailOp
 </template>
 <style scoped>
 .business-table { min-width: 0; }
-.business-table__desktop { border: 1px solid var(--zt-border); border-radius: var(--zt-radius); }
+.business-table__desktop { border: 0; }
 .column-heading { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 20px; }
 .business-table__desktop :deep(th.el-table__cell) { height: 40px; padding: 5px 0; }
 .business-table__desktop :deep(td.el-table__cell) { height: 44px; padding: 6px 0; }
 .business-table__desktop :deep(.el-button.is-link) { min-height: 24px; height: 24px; }
 .business-table__desktop :deep(.cell) { padding: 0 12px; line-height: 22px; }
 .cell-text--wrap { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.table-scroll-hint { margin: 7px 0 0; font-size: 12px; color: var(--zt-ink-500); }
+.business-table__desktop :deep(.table-action) { position: sticky; right: 0; z-index: 2; background: #fff; box-shadow: -8px 0 10px -8px rgba(32, 50, 76, 0.18); }
+.business-table__desktop :deep(th.table-action) { background: #f0f4f9; }
 
 .record-title { padding: 0; border: 0; font: inherit; font-weight: 500; line-height: 22px; background: none; color: var(--zt-ink-900); text-align: left; cursor: pointer; display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .record-title:hover { color: var(--zt-blue-600); text-decoration: underline; }

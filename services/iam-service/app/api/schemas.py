@@ -34,6 +34,7 @@ class MePayload(BaseModel):
     must_change_password: bool
     status: str
     is_superadmin: bool
+    roles: list[str] = []
 
 
 class CsrfPayload(BaseModel):

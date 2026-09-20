@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.clock import utcnow
 from app.domain.catalog import SUPERADMIN_ROLE_CODE
+from app.domain.enums import RoleStatus
 from app.domain.models import Role, User, UserRole
 
 
@@ -88,6 +89,16 @@ async def lock_superadmin_users(session: AsyncSession) -> list[User]:
 
 async def list_user_role_ids(session: AsyncSession, user_id: uuid.UUID) -> list[uuid.UUID]:
     result = await session.execute(select(UserRole.role_id).where(UserRole.user_id == user_id))
+    return list(result.scalars().all())
+
+
+async def list_user_role_names(session: AsyncSession, user_id: uuid.UUID) -> list[str]:
+    result = await session.execute(
+        select(Role.name)
+        .join(UserRole, UserRole.role_id == Role.id)
+        .where(UserRole.user_id == user_id, Role.status == RoleStatus.ACTIVE)
+        .order_by(Role.is_builtin.desc(), Role.name)
+    )
     return list(result.scalars().all())
 
 

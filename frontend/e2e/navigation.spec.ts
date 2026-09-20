@@ -11,7 +11,7 @@ test.beforeEach(async ({ page }) => {
     const path = new URL(route.request().url()).pathname
     const data = path.endsWith('/auth/csrf') ? { csrf_token: 'test' }
       : path.endsWith('/auth/refresh') ? { access_token: 'test', expires_in: 3600, must_change_password: false }
-        : path.endsWith('/auth/me') ? { id: 'admin', username: 'admin', display_name: '测试管理员', status: 'active' }
+        : path.endsWith('/auth/me') ? { id: 'admin', username: 'admin', display_name: '测试管理员', status: 'active', roles: ['超级管理员'] }
           : path.endsWith('/auth/permissions') ? { menus, resources: ['policy.sources', 'codebook.policy_types'].map(code => ({ code, level: 'FULL' })) }
             : path.endsWith('/options') ? {} : { items: [], total: 0, page: 1, page_size: 20 }
     return route.fulfill({ json: { code: 'OK', data } })
@@ -25,6 +25,8 @@ test('desktop collapse persists across reload and offers grouped and direct navi
   await expect(sidebar).toHaveCSS('width', '220px')
   await page.getByRole('button', { name: '收起侧栏', exact: true }).click()
   await expect(sidebar).toHaveCSS('width', '64px')
+  await expect(sidebar.getByRole('button', { name: '测试管理员，打开账号菜单' })).toBeVisible()
+  await expect(sidebar.getByText('超级管理员', { exact: true })).toHaveCount(0)
   await page.reload()
   await expect(sidebar).toHaveCSS('width', '64px')
   await sidebar.getByRole('menuitem', { name: '政策', exact: true }).hover()
@@ -37,6 +39,8 @@ test('desktop collapse persists across reload and offers grouped and direct navi
   await toggle.focus()
   await page.keyboard.press('Enter')
   await expect(sidebar).toHaveCSS('width', '220px')
+  await expect(sidebar.getByRole('button', { name: '测试管理员，打开账号菜单' })).toBeVisible()
+  await expect(sidebar.getByText('超级管理员', { exact: true })).toBeVisible()
 })
 
 test('mobile drawer navigates, closes with Escape and restores focus', async ({ page }) => {
@@ -44,10 +48,13 @@ test('mobile drawer navigates, closes with Escape and restores focus', async ({ 
   await page.goto('/')
   await expect(page.locator('#desktop-navigation')).toHaveCount(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await expect(page.getByRole('banner').getByRole('button', { name: '测试管理员，打开账号菜单' })).toBeVisible()
   const toggle = page.getByRole('button', { name: '打开导航菜单', exact: true })
   await toggle.click()
   const drawer = page.getByRole('dialog', { name: '导航菜单', exact: true })
   await expect(drawer).toBeVisible()
+  await expect(drawer.getByRole('button', { name: '测试管理员，打开账号菜单' })).toBeVisible()
+  await expect(drawer.getByText('超级管理员', { exact: true })).toBeVisible()
   await drawer.getByRole('menuitem', { name: '政策', exact: true }).click()
   await drawer.getByRole('menuitem', { name: '信源管理', exact: true }).click()
   await expect(page).toHaveURL(/\/policy\/sources$/)

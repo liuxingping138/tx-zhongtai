@@ -120,6 +120,7 @@ let loadSequence = 0
 
 async function load() {
   void listQuery.commit()
+  listQuery.captureApplied()
   const sequence = ++loadSequence
   loading.value = true
   loadError.value = ''
@@ -426,6 +427,7 @@ const selectedColumns = ref([...defaultColumns.value])
       <template #filters>
         <FilterBar
           :query="query"
+          :applied="listQuery.applied"
           @search="onSearch"
           @reset="onResetFilters"
         >
@@ -480,6 +482,7 @@ const selectedColumns = ref([...defaultColumns.value])
         :selected="selectedColumns"
         :summary-keys="legacyDefaults"
         title-key="policy_name"
+        detail-title="政策基础标签详情"
         :can-write="canWrite"
         :loading="loading"
         :filtered="resultFiltered"

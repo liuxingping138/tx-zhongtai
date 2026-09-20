@@ -27,6 +27,7 @@ export interface MePayload {
   must_change_password: boolean
   status: string
   is_superadmin: boolean
+  roles?: string[]
 }
 
 export interface ResourceLevel {

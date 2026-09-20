@@ -81,6 +81,7 @@ let loadSequence = 0
 
 async function load() {
   void listQuery.commit()
+  listQuery.captureApplied()
   const sequence = ++loadSequence
   loading.value = true
   loadError.value = ''
@@ -166,10 +167,12 @@ async function onEdit() {
   }
   editingSaving.value = true
   try {
-    await updateUser(editing.value.id, { display_name: editForm.display_name, version: editing.value.version })
+    const userId = editing.value.id
+    await updateUser(userId, { display_name: editForm.display_name, version: editing.value.version })
     ElMessage.success('已保存')
     editVisible.value = false
     await load()
+    if (userId === auth.user?.id) await auth.loadProfile()
   } catch (error) {
     if (isApiError(error) && error.status === 409) {
       editError.value = '数据已被他人修改，请保留需要的内容，关闭后重新打开最新记录再编辑。'
@@ -246,10 +249,12 @@ async function onSaveRoles() {
   }
   roleSaving.value = true
   try {
-    await replaceUserRoles(roleUser.value.id, { role_ids: selectedRoles.value, version: roleUser.value.version })
+    const userId = roleUser.value.id
+    await replaceUserRoles(userId, { role_ids: selectedRoles.value, version: roleUser.value.version })
     ElMessage.success('角色已更新')
     roleVisible.value = false
     await load()
+    if (userId === auth.user?.id) await auth.loadProfile()
   } catch (error) {
     ElMessage.error(errorMessage(error, '分配角色失败'))
   } finally {
@@ -314,6 +319,7 @@ onMounted(() => {
       <template #filters>
         <FilterBar
           :query="query"
+          :applied="listQuery.applied"
           @search="onSearch"
           @reset="onResetFilters"
         >
@@ -350,7 +356,6 @@ onMounted(() => {
         v-loading="loading"
         class="data-table"
         :data="users"
-        scrollbar-always-on
         stripe
       >
         <template #empty>

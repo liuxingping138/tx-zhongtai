@@ -8,11 +8,24 @@ test.beforeEach(async ({ page }) => {
     const path = new URL(route.request().url()).pathname
     if (path.endsWith('/auth/csrf')) return respond(route, { csrf_token: 'test' })
     if (path.endsWith('/auth/refresh')) return respond(route, { access_token: 'test', expires_in: 3600, must_change_password: false })
-    if (path.endsWith('/auth/me')) return respond(route, { id: 'admin', username: 'admin', display_name: '测试管理员', status: 'active' })
+    if (path.endsWith('/auth/me')) return respond(route, { id: 'admin', username: 'admin', display_name: '测试管理员', status: 'active', roles: ['超级管理员'] })
     if (path.endsWith('/auth/permissions')) return respond(route, { resources: resources.map(code => ({ code, level: 'FULL' })), menus: [{ id: 'sources', parent_id: null, title: '信源管理', route_name: 'policy-sources', resource_code: 'policy.sources', sort_order: 1 }] })
     if (path.endsWith('/options')) return respond(route, {})
     return respond(route, { items: [], total: 0, page: 1, page_size: 20 })
   })
+})
+
+test('column picker defaults to all fields and can restore the full set', async ({ page }) => {
+  await page.goto('/codebook/scenarios')
+  const picker = page.getByRole('button', { name: /列设置/ })
+  await expect(picker).toContainText('35/35')
+  await picker.click()
+  await expect(page.getByRole('button', { name: '显示全部列', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '恢复默认列', exact: true })).toBeVisible()
+  await page.getByRole('checkbox', { name: '场景标签', exact: true }).uncheck()
+  await expect(picker).toContainText('34/35')
+  await page.getByRole('button', { name: '恢复默认列', exact: true }).click()
+  await expect(picker).toContainText('35/35')
 })
 
 for (const [path, count] of [
@@ -66,6 +79,21 @@ test('source creation sends visible region codes and closes without a discard pr
   await expect(page.getByRole('dialog')).toHaveCount(0)
   expect(payload?.district_code).toBe('110101')
   expect(payload?.site_name).toBe('测试信源')
+})
+
+test('desktop keeps every filter visible and distinguishes draft from applied query', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.goto('/policy/sources')
+  await expect(page.getByRole('combobox', { name: '网站名称', exact: true })).toBeVisible()
+  await expect(page.getByRole('combobox', { name: '标签', exact: true })).toBeVisible()
+  await expect(page.getByRole('combobox', { name: '网站优先级', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '更多筛选' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '重置', exact: true })).toBeDisabled()
+  await page.getByRole('combobox', { name: '网站名称', exact: true }).fill('北京日报')
+  await page.getByRole('option', { name: '北京日报', exact: true }).click()
+  await expect(page.getByText('条件已改，点击查询后生效', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '查询', exact: true }).click()
+  await expect(page.getByText('已筛选 1 项', { exact: true })).toBeVisible()
 })
 
 test('failed loading exposes retry and filtered empty results can clear filters', async ({ page }) => {

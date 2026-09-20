@@ -1,17 +1,15 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { ArrowDown, Fold, Expand, Menu } from '@element-plus/icons-vue'
-import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { Fold, Expand, Menu } from '@element-plus/icons-vue'
+import { useRoute } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
 import AdminNavigation from './AdminNavigation.vue'
+import UserAccountMenu from './UserAccountMenu.vue'
 import { pathForRouteName } from '@/router/menu'
-import { errorMessage } from '@/api/errors'
 
 const auth = useAuthStore()
 const route = useRoute()
-const router = useRouter()
 
 const storageKey = 'tx-zhongtai-sidebar-collapsed'
 const mobileQuery = window.matchMedia('(max-width: 767px)')
@@ -56,26 +54,30 @@ onBeforeUnmount(() => {
   compactQuery.removeEventListener('change', syncViewport)
 })
 watch(() => route.fullPath, () => { mobileOpen.value = false })
+watch(mobileOpen, async (open) => {
+  if (!open) return
+  await nextTick()
+  document.querySelector<HTMLButtonElement>('.admin-navigation__close')?.focus()
+})
+
+function firstChildPath(parentId: string) {
+  return auth.visibleMenus
+    .filter(item => item.parent_id === parentId)
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map(item => pathForRouteName(item.route_name))
+    .find((path): path is string => Boolean(path))
+}
 
 const crumbs = computed(() => {
   const current = auth.visibleMenus.find(item => pathForRouteName(item.route_name) === route.path)
   const parent = current?.parent_id ? auth.visibleMenus.find(item => item.id === current.parent_id) : undefined
   return [
     ...(route.path !== '/' ? [{ title: '工作台', path: '/' }] : []),
-    ...(parent ? [{ title: parent.title, path: undefined }] : []),
+    ...(parent ? [{ title: parent.title, path: pathForRouteName(parent.route_name) || firstChildPath(parent.id) }] : []),
     { title: route.meta.title || '工作台', path: undefined },
   ]
 })
 
-async function onLogout() {
-  try {
-    await auth.signOut()
-  } catch (error) {
-    ElMessage.error(errorMessage(error, '退出失败'))
-  } finally {
-    await router.push({ name: 'login' })
-  }
-}
 </script>
 
 <template>
@@ -96,6 +98,7 @@ async function onLogout() {
       direction="ltr"
       size="min(280px, 86vw)"
       :with-header="false"
+      :lock-scroll="true"
       class="admin-navigation-drawer"
     >
       <AdminNavigation
@@ -128,29 +131,11 @@ async function onLogout() {
             </el-breadcrumb-item>
           </el-breadcrumb>
         </div>
-        <el-dropdown trigger="click">
-          <el-button
-            text
-            class="admin-layout__user"
-          >
-            <span
-              class="admin-layout__avatar"
-              aria-hidden="true"
-            >{{ (auth.user?.display_name || auth.user?.username || '用').slice(0, 1) }}</span>
-            <span class="admin-layout__username">{{ auth.user?.display_name || auth.user?.username }}</span>
-            <el-icon><ArrowDown /></el-icon>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item @click="router.push({ name: 'profile' })">
-                个人设置
-              </el-dropdown-item>
-              <el-dropdown-item @click="onLogout">
-                退出登录
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+        <UserAccountMenu
+          v-if="isMobile"
+          compact
+          tone="header"
+        />
       </el-header>
       <el-main>
         <router-view />
@@ -167,21 +152,14 @@ async function onLogout() {
 .admin-layout__toggle { display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 8px; color: var(--zt-ink-700); background: transparent; cursor: pointer; font-size: 20px; }
 .admin-layout__toggle:hover { color: var(--zt-blue-600); background: #eef3fa; }
 .admin-layout__toggle:focus-visible { outline: 2px solid var(--zt-blue-600); outline-offset: 2px; }
-.admin-layout__username { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.admin-layout__content { min-width: 0; }
+.admin-layout__content { min-width: 0; min-height: 0; }
 .admin-layout__header { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; height: 60px; padding: 0 28px; background: #fff; border-bottom: 1px solid var(--zt-border); }
-.admin-layout :deep(.el-main) { padding: 24px 28px; background: var(--zt-soft); }
-.admin-layout__user { display: inline-flex; align-items: center; gap: 10px; padding: 5px 0 5px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--zt-ink-700); font: inherit; font-size: 13px; cursor: pointer; }
-.admin-layout__user:hover { background: var(--zt-soft); }
-.admin-layout__user:focus-visible { outline: 2px solid var(--zt-blue-600); outline-offset: 4px; }
-.admin-layout__avatar { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: #eaf0f8; color: #3a608e; font-size: 12px; }
+.admin-layout :deep(.el-main) { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; padding: 24px 28px; background: var(--zt-soft); }
 @media (max-width: 1000px) { .admin-layout :deep(.el-main) { padding: 20px; } }
 @media (max-width: 767px) {
   .admin-layout__header { height: 60px; gap: 12px; padding: 0 12px; }
   .admin-layout__header-start { gap: 8px; }
-  .admin-layout__username { max-width: 72px; }
   .admin-layout__header-start :deep(.el-breadcrumb__item:not(:last-child)) { display: none; }
-  .admin-layout__user { flex-shrink: 0; gap: 6px; }
   .admin-layout :deep(.el-main) { padding: 16px 12px; }
 }
 @media (prefers-reduced-motion: reduce) { .admin-layout__aside { transition: none; } }

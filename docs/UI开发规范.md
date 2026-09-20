@@ -5,7 +5,7 @@
 ## 1. 不得改变的规则
 
 1. 一列对应一个字段。单元格只显示该字段，不在名称下加部门、行业、编码等其他字段。同一字段可换行、截断，详情提供完整值。
-2. 页面顺序为：标题/一句说明 → 常用筛选/更多筛选 → 总数与操作栏 → 结果 → 分页。操作栏顺序为新增、上传 Excel、下载 Excel、操作记录、列设置；根据实际权限显示。已有特殊业务动作保留原有权限和确认。
+2. 页面顺序为：标题/一句说明 → 筛选 → 总数与操作栏 → 结果 → 分页。桌面一次展示全部筛选项；手机字段多于 1 个才收起为「更多筛选」。操作栏顺序为新增、上传 Excel、下载 Excel、操作记录、列设置；根据实际权限显示。已有特殊业务动作保留原有权限和确认。
 3. 上传和下载均保留清晰文字入口，不另建占据页面顶部的大块导入区域。不改 Excel 主键、去重、覆盖、导出范围。
 4. 列设置使用“列设置 已选/全部”文字按钮，支持逐列勾选、显示全部列（全选）、恢复默认列；至少一个数据列，固定操作列不参与计数。
 5. 当前页全部字段必须能在列设置和详情里找到。隐藏字段不从数据对象、编辑表单或导出中删除。列全选不等于记录全选。
@@ -17,9 +17,11 @@
 
 | 能力 | 复用位置 | 页面负责 |
 |---|---|---|
-| 页面结构、总数、分页、加载失败 | `frontend/src/components/ListPage.vue` | title/hint、total/page/pageSize/loading/error，retry/change处理 |
-| 查询与高级筛选 | `frontend/src/components/FilterBar.vue`、`FilterSelect.vue` | query、常用字段、advanced插槽、search/reset |
+| 页面结构、总数、分页、加载失败 | `frontend/src/components/ListPage.vue` | title/hint、total/page/pageSize/loading/error，retry/change处理；结果区必须用 ScrollPort |
+| 结果区滚动 | `frontend/src/components/ScrollPort.vue` | 常显横/纵滑槽；两指分轴；默认每页 20 条时未露出的行必须能上下滚到 |
+| 查询 | `frontend/src/components/FilterBar.vue`、`FilterSelect.vue` | query 与 applied；桌面展开全部字段，advanced 只作字段分组不再桌面折叠 |
 | 业务表格/详情/手机摘要 | `frontend/src/components/BusinessTable.vue` | items、完整columns、selected、titleKey、可选summaryKeys、canWrite/loading/filtered，edit/reset |
+| 账号菜单 | `frontend/src/layouts/UserAccountMenu.vue` | 侧栏底部 / 手机顶栏头像；显示名 + `/me.roles` |
 | 显示列与浏览器记忆 | `frontend/src/components/ColumnPicker.vue` | 与表格共享 selected；完整columns与defaults |
 | 字段列类型 | `frontend/src/components/dataColumns.ts` | prop与API字段对应；label简明、fullLabel保留原名；可选width/minWidth/grow/wrap/time/link |
 | 列顺序与宽度计算 | `frontend/src/components/dataColumnLayout.ts` | layoutDataColumns固定短字段、让长字段吸收余量；不按首列特殊处理 |
@@ -28,7 +30,7 @@
 | 未保存保护 | `frontend/src/composables/useUnsavedForm.ts` | visible、表单快照、saving；接close/beforeClose |
 | URL查询恢复 | `frontend/src/composables/useListQuery.ts` | query、load、私有字段列表 |
 | 上传状态与结果 | `frontend/src/components/ExcelImportProgress.vue`、`ExcelImportResult.vue` | 原模块导入接口及结果，不复制业务去重逻辑 |
-| 导航/基础色/字体/间距 | `frontend/src/layouts/`、`frontend/src/styles/theme.css` | 路由、发布配置、资源权限；不复制导航或另建色板 |
+| 导航/基础色/字体/间距 | `frontend/src/layouts/`、`frontend/src/styles/theme.css` | 路由、发布配置、资源权限；账号放侧栏底部，不复制导航或另建色板；不改登录页 |
 
 系统用户、角色、审计等专门二维表目前复用 ListPage，但不强行迁移为业务记录表；原有专门操作和权限语义必须保留。
 
@@ -100,7 +102,7 @@ ColumnPicker 按用户ID和route.path保存字段键，使用v2存储键；旧v1
 | 长标题/名称 | `minWidth: 240–340, grow: 1或2` | 仅此类字段吸收空余宽度；需逐页核对 |
 | 定义/描述 | `minWidth: 300–360, grow: 1` | 单行省略，悬停和详情可读完整内容 |
 
-有 `width` 时该列固定；弹性列配置 `minWidth/grow`，未声明grow的列不分配余量。表格外框必须铺满内容区，与操作栏和分页右边缘对齐；不能用maxWidth限制表格总宽度。全列超过容器时局部横向滚动、操作固定右侧。用户仅选择少量短字段时保留其紧凑宽度，允许表内空白。六个业务表表头通常40px、数据行44px；系统专用表保留已有操作密度。长内容单行省略，不挤高整行。系统用户/角色表同样铺满内容区，首列固定200px；审计表时间190px，摘要吸收余量，详情固定右侧。
+有 `width` 时该列固定；弹性列配置 `minWidth/grow`，未声明grow的列不分配余量。表格外框必须铺满内容区，与操作栏和分页右边缘对齐；不能用maxWidth限制表格总宽度。全列超过容器时在 ScrollPort 内横向滚动，操作列 CSS sticky 贴右侧。用户仅选择少量短字段时保留其紧凑宽度，允许表内空白。六个业务表表头通常40px、数据行44px；系统专用表保留已有操作密度。长内容单行省略，不挤高整行。系统用户/角色/审计同样走 ListPage + ScrollPort。不要写滚动提示文案，也不要用 Element Plus 悬浮条替代常显滑槽。
 
 ## 5. 本地开发和更新页面
 
@@ -119,7 +121,10 @@ docker compose -f deploy/compose/docker-compose.yml --env-file .env up -d --buil
 
 ## 6. 验收与文档同步
 
-- 检查一列一字段、全字段可选、全部显示/默认恢复、刷新保留偏好；操作列不丢失。
+- 检查一列一字段、默认即全字段、列设置数量正确、全部显示/默认恢复、刷新保留偏好；横滑到末列时操作列不遮挡数据。
+- 检查筛选：桌面一次看到全部条件；改条件未点查询出现「条件已改…」；查询后为「已筛选 N 项」；重置在无条件时禁用。
+- 检查结果区底边/右侧常显滑槽；默认 20 条时若首屏不足 20 行，必须能上下滚完全页；触控板上下不串成左右。
+- 检查侧栏底部账号：显示名 + 角色；折叠/手机顶栏仅头像。不改登录页。
 - 每个列表检查默认全字段和自定义列：首列宽度合理，恢复全列不跳位；横向滚动至末尾仍能操作。至少检查1280px和2560px宽屏，避免窄视口看似正常而宽屏表格只占半幅；另查390px手机。
 - 检查查询、分页、返回恢复；首次空数据、无匹配、加载、请求错误/重试；编辑校验、保存成功、失败保留、取消/离开保护。
 - 检查上传和下载都可用、反馈明确；模拟写入用例优先隔离/模拟接口，不拿真实数据随意测试。

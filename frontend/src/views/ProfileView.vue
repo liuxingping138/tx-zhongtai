@@ -84,6 +84,9 @@ async function onLogoutAll() {
       <el-descriptions-item label="显示名">
         {{ auth.user?.display_name }}
       </el-descriptions-item>
+      <el-descriptions-item label="角色">
+        {{ auth.user?.roles?.length ? auth.user.roles.join('、') : '未分配角色' }}
+      </el-descriptions-item>
       <el-descriptions-item label="状态">
         {{ auth.user?.status }}
       </el-descriptions-item>

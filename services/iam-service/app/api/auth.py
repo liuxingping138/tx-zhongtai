@@ -169,6 +169,7 @@ async def me(
         must_change_password=user.must_change_password,
         status=user.status,
         is_superadmin=await user_repo.user_has_builtin_superadmin(session, user.id),
+        roles=await user_repo.list_user_role_names(session, user.id),
     )
     return success_json(payload.model_dump())
 

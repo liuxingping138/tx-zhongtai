@@ -5,6 +5,7 @@ import { useRoute } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
 import { pathForRouteName } from '@/router/menu'
+import UserAccountMenu from './UserAccountMenu.vue'
 
 withDefaults(defineProps<{ collapsed?: boolean; mobile?: boolean }>(), { collapsed: false, mobile: false })
 defineEmits<{ select: []; close: [] }>()
@@ -109,11 +110,8 @@ function iconFor(title: string) {
         </template>
       </el-menu>
     </div>
-    <div
-      v-if="!collapsed"
-      class="admin-navigation__footer"
-    >
-      信息有序 · 协作高效
+    <div class="admin-navigation__footer">
+      <UserAccountMenu :compact="collapsed && !mobile" />
     </div>
   </nav>
 </template>
@@ -134,12 +132,13 @@ function iconFor(title: string) {
 .admin-navigation :deep(.el-menu-item:hover), .admin-navigation :deep(.el-sub-menu__title:hover) { color: #fff; }
 .admin-navigation :deep(.el-menu-item.is-active:hover) { background: var(--zt-nav-active); }
 .admin-navigation :deep(.el-menu-item:focus-visible), .admin-navigation :deep(.el-sub-menu__title:focus-visible) { outline: 2px solid #93b9f1; outline-offset: -2px; }
-.admin-navigation__footer { flex-shrink: 0; padding: 24px; color: #93abc9; font-size: 11px; letter-spacing: 1px; white-space: nowrap; }
+.admin-navigation__footer { flex-shrink: 0; padding: 10px 12px 16px; border-top: 1px solid #ffffff14; }
+.is-collapsed .admin-navigation__footer { padding: 10px 8px 16px; }
 .is-collapsed .admin-navigation__brand { justify-content: center; padding: 0; }
 .is-collapsed :deep(.el-menu-item), .is-collapsed :deep(.el-sub-menu__title) { margin: 3px 8px; padding: 0 12px !important; }
 .is-collapsed :deep(.el-menu-item .el-menu-tooltip__trigger) { padding: 0 12px !important; }
 .is-collapsed :deep(.has-active-child > .el-sub-menu__title) { background: var(--zt-nav-active); color: #fff; box-shadow: inset 3px 0 #93b9f1; }
-.admin-navigation__close { display: grid; place-items: center; flex: 0 0 32px; width: 32px; height: 36px; margin-left: auto; padding: 0; border: 0; border-radius: 6px; color: #d3e2f5; background: transparent; cursor: pointer; font-size: 20px; }
+.admin-navigation__close { display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; margin-left: auto; padding: 0; border: 0; border-radius: 6px; color: #d3e2f5; background: transparent; cursor: pointer; font-size: 20px; }
 .admin-navigation__close:hover { background: #ffffff14; }
 .admin-navigation__close:focus-visible { outline: 2px solid #93b9f1; }
 @media (max-width: 1000px) { .admin-navigation__brand { gap: 8px; padding: 0 18px; font-size: 14px; } }
