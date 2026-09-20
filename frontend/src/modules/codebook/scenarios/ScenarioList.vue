@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Plus, Upload, Download, Clock } from '@element-plus/icons-vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -16,11 +17,13 @@ import { errorMessage, isApiError } from '@/api/errors'
 import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
-import ListEmpty from '@/components/ListEmpty.vue'
+import FilterBar from '@/components/FilterBar.vue'
+import { useListQuery } from '@/composables/useListQuery'
+import BusinessTable from '@/components/BusinessTable.vue'
+import ColumnPicker from '@/components/ColumnPicker.vue'
 import GroupedFields, { type EditorGroup } from '@/components/GroupedFields.vue'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import { useAuthStore } from '@/stores/auth'
-import { formatTime } from '@/utils/time'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -87,6 +90,7 @@ const query = reactive({
 })
 const visible = ref(false)
 const saving = ref(false)
+const saveError = ref('')
 const editing = ref<ScenarioItem | null>(null)
 const form = reactive<Record<string, string>>({})
 const options = reactive({
@@ -96,21 +100,42 @@ const options = reactive({
   customer_group_name: [] as string[],
 })
 
+const columnLabels: Record<string, string> = {
+  industry_l1: '一级行业',
+  industry_l2: '二级行业',
+  industry_l3: '三级行业',
+  scenario_l1_name: '一级场景',
+  scenario_l2_name: '二级场景',
+  scenario_l3_name: '三级场景',
+  scenario_l1_desc: '一级场景描述',
+  scenario_l2_desc: '二级场景描述',
+  scenario_l3_desc: '三级场景描述',
+  org_keywords: '机构名称关键词',
+  product_l1_name: '一级产品',
+  product_l2_name: '二级产品',
+  branch_count: '分支机构数',
+  product_l1_sort: '一级产品排序',
+  product_l2_sort: '二级产品排序',
+}
+
 const tableColumns = [
   ...fields.map((field) => ({
     prop: field.key,
-    label: field.label,
-    minWidth: longFields.has(field.key) ? 220 : 140,
+    label: columnLabels[field.key] || field.label,
+    fullLabel: field.label,
+    ...(longFields.has(field.key) ? { width: 300, wrap: true }
+      : field.key === 'industry_scenario_code' ? { width: 220 }
+      : field.key === 'scenario_tag' ? { minWidth: 220, grow: 1 }
+      : field.key === 'customer_group_name' ? { minWidth: 230, grow: 2 }
+      : field.key === 'product_l1_name' ? { minWidth: 180, grow: 1 }
+      : { width: 160 }),
   })),
-  { prop: 'created_at', label: '入库时间', width: 170, time: true },
+  { prop: 'created_at', label: '入库时间', width: 190, time: true },
   { prop: 'created_by_name', label: '入库人', width: 110 },
-  { prop: 'updated_at', label: '更新时间', width: 170, time: true },
+  { prop: 'updated_at', label: '更新时间', width: 190, time: true },
   { prop: 'updated_by_name', label: '操作人', width: 110 },
 ]
 
-function cellValue(row: ScenarioItem, prop: string): string {
-  return String(row[prop as keyof ScenarioItem] ?? '')
-}
 
 async function loadOptions() {
   try {
@@ -124,9 +149,12 @@ async function loadOptions() {
   }
 }
 
+const listQuery = useListQuery(query, load)
+
 let loadSequence = 0
 
 async function load() {
+  void listQuery.commit()
   const sequence = ++loadSequence
   loading.value = true
   loadError.value = ''
@@ -168,6 +196,7 @@ function onSearch() {
 }
 
 function openCreate() {
+  saveError.value = ''
   editing.value = null
   for (const field of fields) {
     form[field.key] = ''
@@ -176,6 +205,7 @@ function openCreate() {
 }
 
 function openEdit(row: ScenarioItem) {
+  saveError.value = ''
   editing.value = row
   for (const field of fields) {
     form[field.key] = String(row[field.key] ?? '')
@@ -185,6 +215,8 @@ function openEdit(row: ScenarioItem) {
 
 async function onSave() {
   if (saving.value) return
+  saveError.value = ''
+  if (!await editorFields.value?.validate()) return
   saving.value = true
   try {
     if (editing.value) {
@@ -203,7 +235,7 @@ async function onSave() {
       )
       await load()
     } else {
-      ElMessage.error(errorMessage(error, '保存失败'))
+      saveError.value = errorMessage(error, '保存失败，请检查后重试')
     }
   } finally {
     saving.value = false
@@ -228,8 +260,9 @@ async function onExport() {
   exporting.value = true
   try {
     await downloadCodebook('/codebook/scenarios/export', '行业场景字典表.xlsx')
+    ElMessage.success('下载已开始，请查看浏览器下载列表')
   } catch {
-    ElMessage.error('导出失败')
+    ElMessage.error('下载失败，请重试')
   } finally {
     exporting.value = false
   }
@@ -478,7 +511,17 @@ const editorGroups: EditorGroup[] = [
     ]
   }
 ]
+const editorFields = ref<InstanceType<typeof GroupedFields>>()
 const editorGuard = useUnsavedForm(visible, () => form, saving)
+
+const legacyDefaults = ['scenario_tag', 'industry_l1', 'customer_group_name', 'product_l1_name']
+
+const detailColumns = computed(() => {
+  const known = new Set(tableColumns.map(col => String(col.prop)))
+  return [...tableColumns, ...editorGroups.flatMap(group => group.fields).filter(field => !known.has(field.key)).map(field => ({ prop: field.key, label: field.label }))]
+})
+const defaultColumns = computed(() => detailColumns.value.map(col => col.prop))
+const selectedColumns = ref([...defaultColumns.value])
 </script>
 
 <template>
@@ -500,6 +543,7 @@ const editorGuard = useUnsavedForm(visible, () => form, saving)
         <el-button
           v-if="canWrite"
           type="primary"
+          :icon="Plus"
           @click="openCreate"
         >
           新增
@@ -514,12 +558,16 @@ const editorGuard = useUnsavedForm(visible, () => form, saving)
             content="按整行内容去重，重复记录会跳过；导入完成后可查看结果和校验报告。"
             placement="bottom"
           >
-            <el-button :disabled="importUi.visible">
+            <el-button
+              :icon="Upload"
+              :disabled="importUi.visible"
+            >
               上传 Excel
             </el-button>
           </el-tooltip>
         </el-upload>
         <el-button
+          :icon="Download"
           :loading="exporting"
           @click="onExport"
         >
@@ -527,109 +575,72 @@ const editorGuard = useUnsavedForm(visible, () => form, saving)
         </el-button>
         <el-button
           v-if="canAudit"
+          :icon="Clock"
           @click="openLogs"
         >
           操作记录
         </el-button>
       </template>
       <template #filters>
-        <el-form
-          class="filter-form"
-          inline
-          label-position="top"
-          @submit.prevent="onSearch"
+        <FilterBar
+          :query="query"
+          @search="onSearch"
+          @reset="onResetFilters"
         >
-          <div class="filter-form__fields">
-            <el-form-item label="行业场景编码">
-              <FilterSelect
-                v-model="query.industry_scenario_code"
-                :options="options.industry_scenario_code"
-              />
-            </el-form-item>
-            <el-form-item label="一级行业">
-              <FilterSelect
-                v-model="query.industry_l1"
-                :options="options.industry_l1"
-                size="short"
-              />
-            </el-form-item>
-            <el-form-item label="场景标签">
-              <FilterSelect
-                v-model="query.scenario_tag"
-                :options="options.scenario_tag"
-              />
-            </el-form-item>
+          <el-form-item label="行业场景编码">
+            <FilterSelect
+              v-model="query.industry_scenario_code"
+              :options="options.industry_scenario_code"
+            />
+          </el-form-item>
+          <el-form-item label="一级行业">
+            <FilterSelect
+              v-model="query.industry_l1"
+              :options="options.industry_l1"
+              size="short"
+            />
+          </el-form-item>
+          <el-form-item label="场景标签">
+            <FilterSelect
+              v-model="query.scenario_tag"
+              :options="options.scenario_tag"
+            />
+          </el-form-item>
+          <template #advanced>
             <el-form-item label="客群名称">
               <FilterSelect
                 v-model="query.customer_group_name"
                 :options="options.customer_group_name"
               />
             </el-form-item>
-          </div>
-          <el-form-item class="filter-form__submit">
-            <el-button
-              native-type="submit"
-              type="primary"
-            >
-              查询
-            </el-button>
-            <el-button @click="onResetFilters">
-              重置
-            </el-button>
-          </el-form-item>
-        </el-form>
+          </template>
+        </FilterBar>
       </template>
-      <el-table
-        v-loading="loading"
-        class="data-table"
-        :data="items"
-        stripe
-        border
-      >
-        <template #empty>
-          <ListEmpty
-            :loading="loading"
-            :filtered="resultFiltered"
-            @reset="onResetFilters"
-          />
-        </template>
-        <el-table-column
-          v-for="col in tableColumns"
-          :key="col.prop"
-          :prop="col.prop"
-          :label="col.label"
-          :width="'width' in col ? col.width : undefined"
-          :min-width="'minWidth' in col ? col.minWidth : 140"
-          show-overflow-tooltip
-        >
-          <template
-            v-if="'time' in col && col.time"
-            #default="{ row }"
-          >
-            {{ formatTime(cellValue(row, col.prop)) }}
-          </template>
-        </el-table-column>
-        <el-table-column
-          v-if="canWrite"
-          label="操作"
-          width="80"
-          fixed="right"
-        >
-          <template #default="{ row }">
-            <el-button
-              link
-              type="primary"
-              @click="openEdit(row)"
-            >
-              编辑
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <template #tools>
+        <ColumnPicker
+          v-model="selectedColumns"
+          :columns="detailColumns"
+          :defaults="defaultColumns"
+          :legacy-defaults="legacyDefaults"
+        />
+      </template>
+      <BusinessTable
+        :items="items"
+        :columns="detailColumns"
+        :selected="selectedColumns"
+        :summary-keys="legacyDefaults"
+        title-key="scenario_tag"
+        :can-write="canWrite"
+        :loading="loading"
+        :filtered="resultFiltered"
+        @reset="onResetFilters"
+        @edit="openEdit"
+      />
     </ListPage>
     <el-drawer
       v-model="visible"
       class="editor-overlay"
+      destroy-on-close
       :before-close="editorGuard.beforeClose"
       :close-on-click-modal="!saving"
       :close-on-press-escape="!saving"
@@ -638,13 +649,16 @@ const editorGuard = useUnsavedForm(visible, () => form, saving)
       size="700px"
     >
       <el-form
+        novalidate
         :disabled="saving"
         label-position="top"
         @submit.prevent="onSave"
       >
         <GroupedFields
+          ref="editorFields"
           :model-value="form"
           :groups="editorGroups"
+          :submit-error="saveError"
         />
       </el-form>
       <template #footer>

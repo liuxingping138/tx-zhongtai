@@ -7,12 +7,14 @@
 产品展示名称统一为“业务数据运营平台”；仓库、包名及部署标识继续使用 `tx-zhongtai`，与现有开发环境保持兼容。
 
 详见：
+
+- [UI 视觉规范](DESIGN.md) / [交互契约](UX-CONTRACT.md) / [UI 开发与复用指南](docs/UI开发规范.md) —— 新增、修改前端页面必读
 - [`docs/业务数据运营平台公共基础框架设计.md`](docs/业务数据运营平台公共基础框架设计.md) —— 架构设计
 - [`docs/Cursor公共框架开发计划.md`](docs/Cursor公共框架开发计划.md) —— 分阶段开发计划
 - [`docs/开发进度.md`](docs/开发进度.md) —— 当前实际进度与验证记录
 - [`docs/实现决策.md`](docs/实现决策.md) —— 端口、数据库、技术选型等实施细节
 - [`docs/业务表主键与导入导出分析.md`](docs/业务表主键与导入导出分析.md) —— 六张业务表的现状、限制与待业务确认事项；暂维持现有规则
-- [`docs/开发约定.md`](docs/开发约定.md) —— 必须遵守的开发约定（ORM 中文 comment、开发栈/P6）
+- [`docs/开发约定.md`](docs/开发约定.md) —— 必须遵守的开发约定（ORM 中文 comment、开发栈/P6、UI 复用规范）
 - [`docs/配置说明.md`](docs/配置说明.md) / [`docs/部署与维护.md`](docs/部署与维护.md)
 - [`docs/openapi/`](docs/openapi/) —— 从运行中服务导出的 OpenAPI
 

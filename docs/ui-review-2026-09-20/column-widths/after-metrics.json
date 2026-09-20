@@ -1,0 +1,1009 @@
+[
+  {
+    "name": "after-areas-province-only",
+    "documentWidth": 1280,
+    "heads": [
+      {
+        "label": "省份名称",
+        "width": 160
+      },
+      {
+        "label": "操作",
+        "width": 116
+      }
+    ],
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "name": "after-areas-default",
+    "documentWidth": 1280,
+    "heads": [
+      {
+        "label": "区县名称",
+        "width": 160
+      },
+      {
+        "label": "省份名称",
+        "width": 160
+      },
+      {
+        "label": "城市名称",
+        "width": 160
+      },
+      {
+        "label": "区县编码",
+        "width": 112
+      },
+      {
+        "label": "操作",
+        "width": 116
+      }
+    ],
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "name": "after-areas-all",
+    "documentWidth": 1280,
+    "heads": [
+      {
+        "label": "区县名称",
+        "width": 160
+      },
+      {
+        "label": "省份名称",
+        "width": 160
+      },
+      {
+        "label": "城市名称",
+        "width": 160
+      },
+      {
+        "label": "区县编码",
+        "width": 112
+      },
+      {
+        "label": "省份编码",
+        "width": 112
+      },
+      {
+        "label": "城市编码",
+        "width": 112
+      },
+      {
+        "label": "省份别名",
+        "width": 160
+      },
+      {
+        "label": "城市别名",
+        "width": 160
+      },
+      {
+        "label": "区县别名",
+        "width": 160
+      },
+      {
+        "label": "城市简称",
+        "width": 160
+      },
+      {
+        "label": "区县简称",
+        "width": 160
+      },
+      {
+        "label": "入库时间",
+        "width": 190
+      },
+      {
+        "label": "入库人",
+        "width": 110
+      },
+      {
+        "label": "更新时间",
+        "width": 190
+      },
+      {
+        "label": "操作人",
+        "width": 110
+      },
+      {
+        "label": "操作",
+        "width": 116
+      }
+    ],
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "name": "after-scenarios-default",
+    "documentWidth": 1280,
+    "heads": [
+      {
+        "label": "场景标签",
+        "width": 242
+      },
+      {
+        "label": "一级行业",
+        "width": 160
+      },
+      {
+        "label": "客群名称",
+        "width": 272
+      },
+      {
+        "label": "一级产品",
+        "width": 201
+      },
+      {
+        "label": "操作",
+        "width": 116
+      }
+    ],
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "name": "after-scenarios-all",
+    "documentWidth": 1280,
+    "heads": [
+      {
+        "label": "场景标签",
+        "width": 220
+      },
+      {
+        "label": "一级行业",
+        "width": 160
+      },
+      {
+        "label": "客群名称",
+        "width": 230
+      },
+      {
+        "label": "一级产品",
+        "width": 180
+      },
+      {
+        "label": "行业场景编码",
+        "width": 220
+      },
+      {
+        "label": "行业编码",
+        "width": 160
+      },
+      {
+        "label": "二级行业",
+        "width": 160
+      },
+      {
+        "label": "三级行业",
+        "width": 160
+      },
+      {
+        "label": "场景level",
+        "width": 160
+      },
+      {
+        "label": "场景类型",
+        "width": 160
+      },
+      {
+        "label": "场景描述(90字)",
+        "width": 300
+      },
+      {
+        "label": "场景描述(130字)",
+        "width": 300
+      },
+      {
+        "label": "场景描述(PEST总结)",
+        "width": 300
+      },
+      {
+        "label": "场景来源",
+        "width": 160
+      },
+      {
+        "label": "场景层级",
+        "width": 160
+      },
+      {
+        "label": "场景编码",
+        "width": 160
+      },
+      {
+        "label": "一级场景",
+        "width": 160
+      },
+      {
+        "label": "一级场景描述",
+        "width": 300
+      },
+      {
+        "label": "二级场景",
+        "width": 160
+      },
+      {
+        "label": "二级场景描述",
+        "width": 300
+      },
+      {
+        "label": "三级场景",
+        "width": 160
+      },
+      {
+        "label": "三级场景描述",
+        "width": 300
+      },
+      {
+        "label": "客群行业",
+        "width": 160
+      },
+      {
+        "label": "机构名称关键词",
+        "width": 300
+      },
+      {
+        "label": "经营范围包含",
+        "width": 300
+      },
+      {
+        "label": "客户等级",
+        "width": 160
+      },
+      {
+        "label": "客户类别",
+        "width": 160
+      },
+      {
+        "label": "二级产品",
+        "width": 160
+      },
+      {
+        "label": "分支机构数",
+        "width": 160
+      },
+      {
+        "label": "一级产品排序",
+        "width": 160
+      },
+      {
+        "label": "二级产品排序",
+        "width": 160
+      },
+      {
+        "label": "入库时间",
+        "width": 190
+      },
+      {
+        "label": "入库人",
+        "width": 110
+      },
+      {
+        "label": "更新时间",
+        "width": 190
+      },
+      {
+        "label": "操作人",
+        "width": 110
+      },
+      {
+        "label": "操作",
+        "width": 116
+      }
+    ],
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "name": "after-sources-default",
+    "documentWidth": 1280,
+    "heads": [
+      {
+        "label": "网站名称",
+        "width": 310
+      },
+      {
+        "label": "省份",
+        "width": 100
+      },
+      {
+        "label": "地市",
+        "width": 110
+      },
+      {
+        "label": "标签",
+        "width": 235
+      },
+      {
+        "label": "抓取优先级",
+        "width": 120
+      },
+      {
+        "label": "操作",
+        "width": 116
+      }
+    ],
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "name": "after-sources-all",
+    "documentWidth": 1280,
+    "heads": [
+      {
+        "label": "网站名称",
+        "width": 240
+      },
+      {
+        "label": "省份",
+        "width": 100
+      },
+      {
+        "label": "地市",
+        "width": 110
+      },
+      {
+        "label": "标签",
+        "width": 200
+      },
+      {
+        "label": "抓取优先级",
+        "width": 120
+      },
+      {
+        "label": "区县",
+        "width": 120
+      },
+      {
+        "label": "链接",
+        "width": 240
+      },
+      {
+        "label": "数据类型",
+        "width": 120
+      },
+      {
+        "label": "所属部门",
+        "width": 220
+      },
+      {
+        "label": "入库时间",
+        "width": 190
+      },
+      {
+        "label": "入库人",
+        "width": 110
+      },
+      {
+        "label": "更新时间",
+        "width": 190
+      },
+      {
+        "label": "操作人",
+        "width": 110
+      },
+      {
+        "label": "省份编码",
+        "width": 140
+      },
+      {
+        "label": "地市编码",
+        "width": 140
+      },
+      {
+        "label": "区县编码",
+        "width": 140
+      },
+      {
+        "label": "操作",
+        "width": 116
+      }
+    ],
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "name": "after-base-default",
+    "documentWidth": 1280,
+    "heads": [
+      {
+        "label": "政策名称",
+        "width": 324
+      },
+      {
+        "label": "省份名称",
+        "width": 110
+      },
+      {
+        "label": "政策类型",
+        "width": 201
+      },
+      {
+        "label": "出台日期",
+        "width": 140
+      },
+      {
+        "label": "是否解读",
+        "width": 100
+      },
+      {
+        "label": "操作",
+        "width": 116
+      }
+    ],
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "name": "after-base-all",
+    "documentWidth": 1280,
+    "heads": [
+      {
+        "label": "政策名称",
+        "width": 320
+      },
+      {
+        "label": "省份名称",
+        "width": 110
+      },
+      {
+        "label": "政策类型",
+        "width": 200
+      },
+      {
+        "label": "出台日期",
+        "width": 140
+      },
+      {
+        "label": "是否解读",
+        "width": 100
+      },
+      {
+        "label": "出台部门",
+        "width": 220
+      },
+      {
+        "label": "发文机构行业",
+        "width": 140
+      },
+      {
+        "label": "政策层级",
+        "width": 110
+      },
+      {
+        "label": "省份编码",
+        "width": 100
+      },
+      {
+        "label": "地市编码",
+        "width": 100
+      },
+      {
+        "label": "地市名称",
+        "width": 110
+      },
+      {
+        "label": "原始网站链接",
+        "width": 240
+      },
+      {
+        "label": "是否穿透",
+        "width": 100
+      },
+      {
+        "label": "穿透词",
+        "width": 180
+      },
+      {
+        "label": "穿透词评分",
+        "width": 110
+      },
+      {
+        "label": "备注",
+        "width": 160
+      },
+      {
+        "label": "入库时间",
+        "width": 190
+      },
+      {
+        "label": "入库人",
+        "width": 110
+      },
+      {
+        "label": "更新时间",
+        "width": 190
+      },
+      {
+        "label": "操作人",
+        "width": 110
+      },
+      {
+        "label": "操作",
+        "width": 116
+      }
+    ],
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "name": "after-interpretations-default",
+    "documentWidth": 1280,
+    "heads": [
+      {
+        "label": "政策原文名称",
+        "width": 370
+      },
+      {
+        "label": "机会类型",
+        "width": 110
+      },
+      {
+        "label": "目标客户",
+        "width": 275
+      },
+      {
+        "label": "有无政府补贴",
+        "width": 120
+      },
+      {
+        "label": "操作",
+        "width": 116
+      }
+    ],
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "name": "after-interpretations-all",
+    "documentWidth": 1280,
+    "heads": [
+      {
+        "label": "政策原文名称",
+        "width": 340
+      },
+      {
+        "label": "机会类型",
+        "width": 110
+      },
+      {
+        "label": "目标客户",
+        "width": 260
+      },
+      {
+        "label": "有无政府补贴",
+        "width": 120
+      },
+      {
+        "label": "政策唯一标识",
+        "width": 300
+      },
+      {
+        "label": "行业场景编码",
+        "width": 220
+      },
+      {
+        "label": "行业编码",
+        "width": 120
+      },
+      {
+        "label": "一级行业",
+        "width": 120
+      },
+      {
+        "label": "二级行业",
+        "width": 120
+      },
+      {
+        "label": "三级行业",
+        "width": 120
+      },
+      {
+        "label": "场景编码",
+        "width": 140
+      },
+      {
+        "label": "一级场景名称",
+        "width": 140
+      },
+      {
+        "label": "二级场景名称",
+        "width": 140
+      },
+      {
+        "label": "三级场景名称",
+        "width": 140
+      },
+      {
+        "label": "关联主键",
+        "width": 200
+      },
+      {
+        "label": "政策要文",
+        "width": 320
+      },
+      {
+        "label": "补贴内容",
+        "width": 180
+      },
+      {
+        "label": "政策市场机会",
+        "width": 180
+      },
+      {
+        "label": "信息化等级",
+        "width": 110
+      },
+      {
+        "label": "是否新增场景",
+        "width": 120
+      },
+      {
+        "label": "新增场景级别",
+        "width": 120
+      },
+      {
+        "label": "入库时间",
+        "width": 190
+      },
+      {
+        "label": "入库人",
+        "width": 110
+      },
+      {
+        "label": "更新时间",
+        "width": 190
+      },
+      {
+        "label": "操作人",
+        "width": 110
+      },
+      {
+        "label": "租户标识",
+        "width": 140
+      },
+      {
+        "label": "操作",
+        "width": 116
+      }
+    ],
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "name": "after-interpretations-1440",
+    "documentWidth": 1440,
+    "heads": [
+      {
+        "label": "政策原文名称",
+        "width": 477
+      },
+      {
+        "label": "机会类型",
+        "width": 110
+      },
+      {
+        "label": "目标客户",
+        "width": 328
+      },
+      {
+        "label": "有无政府补贴",
+        "width": 120
+      },
+      {
+        "label": "操作",
+        "width": 116
+      }
+    ],
+    "viewport": [
+      1440,
+      900
+    ]
+  },
+  {
+    "name": "after-interpretations-1024",
+    "documentWidth": 1024,
+    "heads": [
+      {
+        "label": "政策原文名称",
+        "width": 340
+      },
+      {
+        "label": "机会类型",
+        "width": 110
+      },
+      {
+        "label": "目标客户",
+        "width": 260
+      },
+      {
+        "label": "有无政府补贴",
+        "width": 120
+      },
+      {
+        "label": "操作",
+        "width": 116
+      }
+    ],
+    "viewport": [
+      1024,
+      768
+    ]
+  },
+  {
+    "name": "after-interpretations-mobile-default",
+    "documentWidth": 390,
+    "heads": [],
+    "viewport": [
+      390,
+      844
+    ]
+  },
+  {
+    "name": "after-interpretations-mobile-all",
+    "documentWidth": 390,
+    "heads": [],
+    "viewport": [
+      390,
+      844
+    ]
+  },
+  {
+    "name": "after-interpretations-mobile-detail",
+    "documentWidth": 390,
+    "heads": [],
+    "viewport": [
+      390,
+      844
+    ]
+  },
+  {
+    "name": "after-system-users",
+    "documentWidth": 1280,
+    "heads": [
+      {
+        "label": "用户名",
+        "width": 200
+      },
+      {
+        "label": "显示名",
+        "width": 288
+      },
+      {
+        "label": "状态",
+        "width": 100
+      },
+      {
+        "label": "须改密",
+        "width": 90
+      },
+      {
+        "label": "操作",
+        "width": 240
+      }
+    ],
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "name": "after-system-roles",
+    "documentWidth": 1280,
+    "heads": [
+      {
+        "label": "编码",
+        "width": 200
+      },
+      {
+        "label": "名称",
+        "width": 268
+      },
+      {
+        "label": "状态",
+        "width": 100
+      },
+      {
+        "label": "类型",
+        "width": 90
+      },
+      {
+        "label": "操作",
+        "width": 260
+      }
+    ],
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "name": "after-system-roles",
+    "documentWidth": 1280,
+    "heads": [
+      {
+        "label": "编码",
+        "width": 200
+      },
+      {
+        "label": "名称",
+        "width": 268
+      },
+      {
+        "label": "状态",
+        "width": 100
+      },
+      {
+        "label": "类型",
+        "width": 90
+      },
+      {
+        "label": "操作",
+        "width": 260
+      }
+    ],
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "name": "after-system-audit",
+    "documentWidth": 1280,
+    "heads": [
+      {
+        "label": "时间",
+        "width": 190
+      },
+      {
+        "label": "人员",
+        "width": 120
+      },
+      {
+        "label": "模块",
+        "width": 140
+      },
+      {
+        "label": "动作",
+        "width": 100
+      },
+      {
+        "label": "结果",
+        "width": 80
+      },
+      {
+        "label": "摘要",
+        "width": 271
+      },
+      {
+        "label": "操作",
+        "width": 90
+      }
+    ],
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "name": "after-system-users",
+    "documentWidth": 1280,
+    "heads": [
+      {
+        "label": "用户名",
+        "width": 200
+      },
+      {
+        "label": "显示名",
+        "width": 288
+      },
+      {
+        "label": "状态",
+        "width": 100
+      },
+      {
+        "label": "须改密",
+        "width": 90
+      },
+      {
+        "label": "操作",
+        "width": 240
+      }
+    ],
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "name": "after-types-default",
+    "documentWidth": 1280,
+    "heads": [
+      {
+        "label": "政策类型",
+        "width": 160
+      },
+      {
+        "label": "定义",
+        "width": 525
+      },
+      {
+        "label": "更新时间",
+        "width": 190
+      },
+      {
+        "label": "操作",
+        "width": 116
+      }
+    ],
+    "viewport": [
+      1280,
+      720
+    ]
+  },
+  {
+    "name": "after-types-all",
+    "documentWidth": 1280,
+    "heads": [
+      {
+        "label": "政策类型",
+        "width": 160
+      },
+      {
+        "label": "定义",
+        "width": 360
+      },
+      {
+        "label": "更新时间",
+        "width": 190
+      },
+      {
+        "label": "序号",
+        "width": 80
+      },
+      {
+        "label": "入库时间",
+        "width": 190
+      },
+      {
+        "label": "入库人",
+        "width": 120
+      },
+      {
+        "label": "操作人",
+        "width": 120
+      },
+      {
+        "label": "操作",
+        "width": 116
+      }
+    ],
+    "viewport": [
+      1280,
+      720
+    ]
+  }
+]

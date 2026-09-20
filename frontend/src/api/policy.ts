@@ -206,6 +206,10 @@ export async function downloadPolicy(path: string, filename: string): Promise<vo
   const link = document.createElement('a')
   link.href = url
   link.download = filename
+  link.hidden = true
+  document.body.appendChild(link)
   link.click()
-  URL.revokeObjectURL(url)
+  link.remove()
+  // Give browsers time to consume the blob URL before releasing it.
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

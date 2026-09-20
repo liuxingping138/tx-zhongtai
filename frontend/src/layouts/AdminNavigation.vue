@@ -13,7 +13,7 @@ const auth = useAuthStore()
 const route = useRoute()
 const tree = computed(() => auth.visibleMenus
   .filter(item => item.parent_id === null)
-  .sort((a, b) => a.sort_order - b.sort_order))
+  .sort((a, b) => Number(a.title.includes('系统')) - Number(b.title.includes('系统')) || a.sort_order - b.sort_order))
 
 function childrenOf(id: string) {
   return auth.visibleMenus.filter(item => item.parent_id === id).sort((a, b) => a.sort_order - b.sort_order)
@@ -119,26 +119,26 @@ function iconFor(title: string) {
 </template>
 
 <style scoped>
-.admin-navigation { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; background: linear-gradient(175deg, #172f50, #1c3a60); }
-.admin-navigation__brand { display: flex; flex-shrink: 0; align-items: center; gap: 10px; height: 92px; padding: 0 20px; color: #f4f8ff; font-size: 16px; font-weight: 650; white-space: nowrap; }
+.admin-navigation { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; background: var(--zt-nav); }
+.admin-navigation__brand { display: flex; flex-shrink: 0; align-items: center; gap: 10px; height: 88px; padding: 0 20px; color: #f4f8ff; font-size: 16px; font-weight: 650; white-space: nowrap; }
 .admin-navigation__brand small { display: block; margin-top: 6px; color: #93abc9; font-size: 10px; font-weight: 400; letter-spacing: 2px; }
 .admin-brand-mark { display: flex; flex-shrink: 0; align-items: center; gap: 3px; }
 .admin-brand-mark i { width: 5px; height: 22px; border-radius: 2px; background: #c8defa; transform: skewY(-24deg); }
 .admin-brand-mark i:nth-child(2) { height: 30px; background: #fff; }
 .admin-brand-mark i:nth-child(3) { background: #80aaf0; }
 .admin-navigation__scroll { flex: 1; min-height: 0; overflow: auto; }
-.admin-navigation :deep(.el-menu) { --el-menu-bg-color: transparent; --el-menu-text-color: #b9cbe1; --el-menu-active-color: #fff; --el-menu-hover-bg-color: #ffffff0c; width: 100%; border-right: none; padding: 6px 0; }
-.admin-navigation :deep(.el-menu-item), .admin-navigation :deep(.el-sub-menu__title) { height: 44px; margin: 3px 12px; border-radius: 7px; font-size: 13px; }
+.admin-navigation :deep(.el-menu) { --el-menu-bg-color: transparent; --el-menu-text-color: var(--zt-nav-text); --el-menu-active-color: #fff; --el-menu-hover-bg-color: #ffffff0c; width: 100%; border-right: none; padding: 6px 0; }
+.admin-navigation :deep(.el-menu-item), .admin-navigation :deep(.el-sub-menu__title) { height: 44px; margin: 3px 12px; border-radius: 7px; font-size: 14px; }
 .admin-navigation :deep(.el-sub-menu .el-menu-item) { min-width: 0; padding-left: 47px !important; }
-.admin-navigation :deep(.el-menu-item.is-active) { background: #33567e; font-weight: 600; box-shadow: inset 3px 0 #93b9f1; }
+.admin-navigation :deep(.el-menu-item.is-active) { background: var(--zt-nav-active); font-weight: 600; box-shadow: inset 3px 0 #93b9f1; }
 .admin-navigation :deep(.el-menu-item:hover), .admin-navigation :deep(.el-sub-menu__title:hover) { color: #fff; }
-.admin-navigation :deep(.el-menu-item.is-active:hover) { background: #33567e; }
+.admin-navigation :deep(.el-menu-item.is-active:hover) { background: var(--zt-nav-active); }
 .admin-navigation :deep(.el-menu-item:focus-visible), .admin-navigation :deep(.el-sub-menu__title:focus-visible) { outline: 2px solid #93b9f1; outline-offset: -2px; }
 .admin-navigation__footer { flex-shrink: 0; padding: 24px; color: #93abc9; font-size: 11px; letter-spacing: 1px; white-space: nowrap; }
 .is-collapsed .admin-navigation__brand { justify-content: center; padding: 0; }
 .is-collapsed :deep(.el-menu-item), .is-collapsed :deep(.el-sub-menu__title) { margin: 3px 8px; padding: 0 12px !important; }
 .is-collapsed :deep(.el-menu-item .el-menu-tooltip__trigger) { padding: 0 12px !important; }
-.is-collapsed :deep(.has-active-child > .el-sub-menu__title) { background: #33567e; color: #fff; box-shadow: inset 3px 0 #93b9f1; }
+.is-collapsed :deep(.has-active-child > .el-sub-menu__title) { background: var(--zt-nav-active); color: #fff; box-shadow: inset 3px 0 #93b9f1; }
 .admin-navigation__close { display: grid; place-items: center; flex: 0 0 32px; width: 32px; height: 36px; margin-left: auto; padding: 0; border: 0; border-radius: 6px; color: #d3e2f5; background: transparent; cursor: pointer; font-size: 20px; }
 .admin-navigation__close:hover { background: #ffffff14; }
 .admin-navigation__close:focus-visible { outline: 2px solid #93b9f1; }
@@ -148,8 +148,8 @@ function iconFor(title: string) {
 </style>
 
 <style>
-.admin-navigation-popper { --el-menu-bg-color: #1c3a60; --el-menu-text-color: #b9cbe1; --el-menu-active-color: #fff; --el-menu-hover-bg-color: #33567e; border-color: #33567e !important; }
+.admin-navigation-popper { --el-menu-bg-color: #1c3a60; --el-menu-text-color: var(--zt-nav-text); --el-menu-active-color: #fff; --el-menu-hover-bg-color: #33567e; border-color: #33567e !important; }
 .admin-navigation-popper .el-menu-item { border-radius: 6px; margin: 3px 6px; }
-.admin-navigation-popper .el-menu-item.is-active { background: #33567e; }
+.admin-navigation-popper .el-menu-item.is-active { background: var(--zt-nav-active); }
 .admin-navigation-popper .el-menu-item:focus-visible { outline: 2px solid #93b9f1; outline-offset: -2px; }
 </style>

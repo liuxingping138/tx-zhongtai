@@ -256,9 +256,8 @@ onMounted(() => {
     v-loading="loading"
     class="iam-page"
   >
-    <section class="panel iam-page__heading">
+    <section class="iam-page__heading">
       <div class="iam-page__title-block">
-        <span class="iam-page__bar" />
         <div>
           <h1 class="iam-page__title">
             权限分配
@@ -303,6 +302,7 @@ onMounted(() => {
             clearable
             size="small"
             placeholder="搜索名称 / 编码"
+            aria-label="搜索角色名称或编码"
           />
         </div>
         <button
@@ -446,9 +446,9 @@ onMounted(() => {
 
 .panel {
   border: 1px solid var(--zt-border);
-  border-radius: 10px;
+  border-radius: var(--zt-radius);
   background: var(--zt-panel);
-  box-shadow: var(--zt-shadow);
+
 }
 
 .iam-page__heading,
@@ -465,6 +465,8 @@ onMounted(() => {
   padding: 16px 24px;
 }
 
+.iam-page__heading { padding: 0 0 16px; border-bottom: 1px solid var(--zt-border); }
+.iam-page__heading h1 { font-size: var(--zt-title-size); }
 .iam-page__title-block {
   display: flex;
   align-items: flex-start;
@@ -533,7 +535,7 @@ onMounted(() => {
   margin-bottom: 6px;
   padding: 10px 12px;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: var(--zt-radius);
   background: transparent;
   text-align: left;
   cursor: pointer;

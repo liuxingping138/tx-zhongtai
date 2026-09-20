@@ -3,6 +3,8 @@ import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
+import type { FormInstance } from 'element-plus'
+import { useFieldValidation } from '@/composables/useFieldValidation'
 import { useAuthStore } from '@/stores/auth'
 import { errorMessage } from '@/api/errors'
 
@@ -15,19 +17,18 @@ const form = reactive({
   confirm: '',
 })
 
+const formRef = ref<FormInstance>()
+const saveError = ref('')
+const { errors, validate } = useFieldValidation(form, formRef)
+
 async function onChangePassword() {
-  if (!form.oldPassword || !form.newPassword) {
-    ElMessage.warning('请填写原密码和新密码')
-    return
-  }
-  if (form.newPassword.length < 8) {
-    ElMessage.warning('新密码至少 8 位')
-    return
-  }
-  if (form.newPassword !== form.confirm) {
-    ElMessage.warning('两次输入的新密码不一致')
-    return
-  }
+  if (loading.value) return
+  saveError.value = ''
+  if (!await validate({
+    oldPassword: form.oldPassword ? '' : '请填写原密码',
+    newPassword: form.newPassword.length >= 8 ? '' : '新密码至少 8 位',
+    confirm: form.confirm && form.confirm === form.newPassword ? '' : '两次输入的新密码不一致',
+  })) return
   loading.value = true
   try {
     await auth.updatePassword(form.oldPassword, form.newPassword)
@@ -36,7 +37,7 @@ async function onChangePassword() {
     form.confirm = ''
     ElMessage.success('密码已修改')
   } catch (error) {
-    ElMessage.error(errorMessage(error, '修改密码失败'))
+    saveError.value = errorMessage(error, '修改密码失败')
   } finally {
     loading.value = false
   }
@@ -74,7 +75,7 @@ async function onLogoutAll() {
       @back="goBack"
     />
     <el-descriptions
-      :column="2"
+      :column="1"
       border
     >
       <el-descriptions-item label="用户名">
@@ -88,45 +89,94 @@ async function onLogoutAll() {
       </el-descriptions-item>
     </el-descriptions>
     <h3>修改密码</h3>
+    <el-alert
+      v-if="saveError"
+      :title="saveError"
+      type="error"
+      show-icon
+      :closable="false"
+    />
     <el-form
-      label-width="100px"
+      ref="formRef"
+      novalidate
+      label-position="top"
       style="max-width: 420px"
+      @submit.prevent="onChangePassword"
     >
       <el-form-item
         label="原密码"
+        :error="errors.oldPassword"
+        for="password-oldPassword"
         required
       >
         <el-input
+          id="password-oldPassword"
           v-model="form.oldPassword"
+          autocomplete="current-password"
+          :aria-invalid="Boolean(errors.oldPassword)"
+          :aria-describedby="errors.oldPassword ? 'password-oldPassword-error' : undefined"
           type="password"
           show-password
         />
+        <template #error="{ error }">
+          <span
+            id="password-oldPassword-error"
+            class="field-error"
+            role="alert"
+          >{{ error }}</span>
+        </template>
       </el-form-item>
       <el-form-item
         label="新密码"
+        :error="errors.newPassword"
+        for="password-newPassword"
         required
       >
         <el-input
+          id="password-newPassword"
           v-model="form.newPassword"
+          autocomplete="new-password"
+          :aria-invalid="Boolean(errors.newPassword)"
+          :aria-describedby="errors.newPassword ? 'password-newPassword-error' : undefined"
           type="password"
           show-password
         />
+        <template #error="{ error }">
+          <span
+            id="password-newPassword-error"
+            class="field-error"
+            role="alert"
+          >{{ error }}</span>
+        </template>
       </el-form-item>
       <el-form-item
         label="确认新密码"
+        :error="errors.confirm"
+        for="password-confirm"
         required
       >
         <el-input
+          id="password-confirm"
           v-model="form.confirm"
+          autocomplete="new-password"
+          :aria-invalid="Boolean(errors.confirm)"
+          :aria-describedby="errors.confirm ? 'password-confirm-error' : undefined"
           type="password"
           show-password
         />
+        <template #error="{ error }">
+          <span
+            id="password-confirm-error"
+            class="field-error"
+            role="alert"
+          >{{ error }}</span>
+        </template>
       </el-form-item>
       <el-form-item>
         <el-button
           type="primary"
           :loading="loading"
-          @click="onChangePassword"
+          native-type="submit"
         >
           保存密码
         </el-button>

@@ -6,6 +6,7 @@ import { ElMessage } from 'element-plus'
 
 import { useAuthStore } from '@/stores/auth'
 import AdminNavigation from './AdminNavigation.vue'
+import { pathForRouteName } from '@/router/menu'
 import { errorMessage } from '@/api/errors'
 
 const auth = useAuthStore()
@@ -57,8 +58,13 @@ onBeforeUnmount(() => {
 watch(() => route.fullPath, () => { mobileOpen.value = false })
 
 const crumbs = computed(() => {
-  const titles = route.matched.map((item) => item.meta.title).filter((title): title is string => Boolean(title))
-  return titles
+  const current = auth.visibleMenus.find(item => pathForRouteName(item.route_name) === route.path)
+  const parent = current?.parent_id ? auth.visibleMenus.find(item => item.id === current.parent_id) : undefined
+  return [
+    ...(route.path !== '/' ? [{ title: '工作台', path: '/' }] : []),
+    ...(parent ? [{ title: parent.title, path: undefined }] : []),
+    { title: route.meta.title || '工作台', path: undefined },
+  ]
 })
 
 async function onLogout() {
@@ -114,16 +120,17 @@ async function onLogout() {
           </button>
           <el-breadcrumb>
             <el-breadcrumb-item
-              v-for="title in crumbs"
-              :key="title"
+              v-for="crumb in crumbs"
+              :key="crumb.title"
+              :to="crumb.path"
             >
-              {{ title }}
+              {{ crumb.title }}
             </el-breadcrumb-item>
           </el-breadcrumb>
         </div>
         <el-dropdown trigger="click">
-          <button
-            type="button"
+          <el-button
+            text
             class="admin-layout__user"
           >
             <span
@@ -132,7 +139,7 @@ async function onLogout() {
             >{{ (auth.user?.display_name || auth.user?.username || '用').slice(0, 1) }}</span>
             <span class="admin-layout__username">{{ auth.user?.display_name || auth.user?.username }}</span>
             <el-icon><ArrowDown /></el-icon>
-          </button>
+          </el-button>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item @click="router.push({ name: 'profile' })">
@@ -154,7 +161,7 @@ async function onLogout() {
 
 <style scoped>
 .admin-layout { height: 100vh; height: 100dvh; background: var(--zt-soft); }
-.admin-layout__aside { flex-shrink: 0; overflow: hidden; background: #172f50; transition: width .2s ease; }
+.admin-layout__aside { flex-shrink: 0; overflow: hidden; background: var(--zt-nav); transition: width .2s ease; }
 .admin-layout__header-start { display: flex; align-items: center; gap: 16px; min-width: 0; }
 .admin-layout__header-start :deep(.el-breadcrumb) { min-width: 0; line-height: 1.5; }
 .admin-layout__toggle { display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 8px; color: var(--zt-ink-700); background: transparent; cursor: pointer; font-size: 20px; }
@@ -162,9 +169,10 @@ async function onLogout() {
 .admin-layout__toggle:focus-visible { outline: 2px solid var(--zt-blue-600); outline-offset: 2px; }
 .admin-layout__username { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .admin-layout__content { min-width: 0; }
-.admin-layout__header { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; height: 68px; padding: 0 28px; background: #fff; border-bottom: 1px solid var(--zt-border); }
-.admin-layout :deep(.el-main) { padding: 26px 28px; background: var(--zt-soft); }
+.admin-layout__header { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; height: 60px; padding: 0 28px; background: #fff; border-bottom: 1px solid var(--zt-border); }
+.admin-layout :deep(.el-main) { padding: 24px 28px; background: var(--zt-soft); }
 .admin-layout__user { display: inline-flex; align-items: center; gap: 10px; padding: 5px 0 5px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--zt-ink-700); font: inherit; font-size: 13px; cursor: pointer; }
+.admin-layout__user:hover { background: var(--zt-soft); }
 .admin-layout__user:focus-visible { outline: 2px solid var(--zt-blue-600); outline-offset: 4px; }
 .admin-layout__avatar { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: #eaf0f8; color: #3a608e; font-size: 12px; }
 @media (max-width: 1000px) { .admin-layout :deep(.el-main) { padding: 20px; } }
@@ -172,6 +180,7 @@ async function onLogout() {
   .admin-layout__header { height: 60px; gap: 12px; padding: 0 12px; }
   .admin-layout__header-start { gap: 8px; }
   .admin-layout__username { max-width: 72px; }
+  .admin-layout__header-start :deep(.el-breadcrumb__item:not(:last-child)) { display: none; }
   .admin-layout__user { flex-shrink: 0; gap: 6px; }
   .admin-layout :deep(.el-main) { padding: 16px 12px; }
 }

@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 
 import { createRole, listRoles, updateRole } from '@/api/system'
 import { errorMessage, isApiError } from '@/api/errors'
 import type { RoleItem } from '@/api/types'
 import ListPage from '@/components/ListPage.vue'
+import FilterBar from '@/components/FilterBar.vue'
+import { useListQuery } from '@/composables/useListQuery'
 import ListEmpty from '@/components/ListEmpty.vue'
+import { useFieldValidation } from '@/composables/useFieldValidation'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import { useAuthStore } from '@/stores/auth'
 
@@ -27,6 +30,11 @@ const editingSaving = ref(false)
 const editing = ref<RoleItem | null>(null)
 const editForm = reactive({ name: '' })
 
+const createFormRef = ref<FormInstance>()
+const editFormRef = ref<FormInstance>()
+const createValidation = useFieldValidation(createForm, createFormRef)
+const editValidation = useFieldValidation(editForm, editFormRef)
+
 const createGuard = useUnsavedForm(createVisible, () => createForm, creating)
 const editGuard = useUnsavedForm(editVisible, () => editForm, editingSaving)
 
@@ -36,9 +44,12 @@ function openCreate() {
   createVisible.value = true
 }
 
+const listQuery = useListQuery(query, load)
+
 let loadSequence = 0
 
 async function load() {
+  void listQuery.commit()
   const sequence = ++loadSequence
   loading.value = true
   loadError.value = ''
@@ -73,12 +84,15 @@ function onSearch() {
   void load()
 }
 
+const createError = ref('')
+const editError = ref('')
+watch(createVisible, (open) => { if (open) { createError.value = ''; void createValidation.validate({}) } })
+watch(editVisible, (open) => { if (open) { editError.value = ''; void editValidation.validate({}) } })
+
 async function onCreate() {
   if (creating.value) return
-  if (!createForm.code || !createForm.name) {
-    ElMessage.warning('请填写编码和名称')
-    return
-  }
+  createError.value = ''
+  if (!await createValidation.validate({code: createForm.code.trim() ? '' : '请填写角色编码', name: createForm.name.trim() ? '' : '请填写角色名称'})) return
   creating.value = true
   try {
     await createRole({ code: createForm.code, name: createForm.name })
@@ -88,7 +102,7 @@ async function onCreate() {
     createForm.name = ''
     await load()
   } catch (error) {
-    ElMessage.error(errorMessage(error, '创建失败'))
+    createError.value = errorMessage(error, '创建失败，请检查后重试')
   } finally {
     creating.value = false
   }
@@ -102,10 +116,8 @@ function openEdit(role: RoleItem) {
 
 async function onEdit() {
   if (editingSaving.value) return
-  if (!editForm.name.trim()) {
-    ElMessage.warning('请填写角色名称')
-    return
-  }
+  editError.value = ''
+  if (!await editValidation.validate({ name: editForm.name.trim() ? '' : '请填写角色名称' })) return
   if (!editing.value) {
     return
   }
@@ -117,10 +129,10 @@ async function onEdit() {
     await load()
   } catch (error) {
     if (isApiError(error) && error.status === 409) {
-      await ElMessageBox.alert('数据已被他人修改，请重新加载。', '版本冲突')
+      editError.value = '数据已被他人修改，请保留需要的内容，关闭后重新打开最新记录再编辑。'
       await load()
     } else {
-      ElMessage.error(errorMessage(error, '保存失败'))
+      editError.value = errorMessage(error, '保存失败，请检查后重试')
     }
   } finally {
     editingSaving.value = false
@@ -178,43 +190,36 @@ onMounted(() => {
         </el-button>
       </template>
       <template #filters>
-        <el-form
-          class="filter-form"
-          inline
-          label-position="top"
+        <FilterBar
+          :query="query"
+          @search="onSearch"
+          @reset="onResetFilters"
         >
-          <div class="filter-form__fields">
-            <el-form-item label="状态">
-              <el-select
-                v-model="query.status"
-                clearable
-                placeholder="全部"
-                @change="onSearch"
-              >
-                <el-option
-                  label="启用"
-                  value="active"
-                />
-                <el-option
-                  label="停用"
-                  value="disabled"
-                />
-              </el-select>
-            </el-form-item>
-          </div>
-          <el-form-item class="filter-form__submit">
-            <el-button @click="onResetFilters">
-              重置
-            </el-button>
+          <el-form-item label="状态">
+            <el-select
+              v-model="query.status"
+              clearable
+              placeholder="全部"
+              @change="onSearch"
+            >
+              <el-option
+                label="启用"
+                value="active"
+              />
+              <el-option
+                label="停用"
+                value="disabled"
+              />
+            </el-select>
           </el-form-item>
-        </el-form>
+        </FilterBar>
       </template>
       <el-table
         v-loading="loading"
         class="data-table"
         :data="roles"
+        scrollbar-always-on
         stripe
-        border
       >
         <template #empty>
           <ListEmpty
@@ -226,10 +231,14 @@ onMounted(() => {
         <el-table-column
           prop="code"
           label="编码"
+          width="200"
+          show-overflow-tooltip
         />
         <el-table-column
           prop="name"
           label="名称"
+          min-width="200"
+          show-overflow-tooltip
         />
         <el-table-column
           label="状态"
@@ -311,20 +320,60 @@ onMounted(() => {
         角色编码创建后不可修改，名称可随时调整。
       </p>
       <el-form
+        ref="createFormRef"
+        novalidate
         :disabled="creating"
         label-position="top"
       >
+        <el-alert
+          v-if="createError"
+          :title="createError"
+          type="error"
+          show-icon
+          :closable="false"
+          class="form-submit-error"
+        />
         <el-form-item
+          :error="createValidation.errors.code"
           label="编码"
           required
         >
-          <el-input v-model="createForm.code" />
+          <el-input
+            v-model="createForm.code"
+            :aria-invalid="Boolean(createValidation.errors.code)"
+            aria-describedby="createForm-code-error"
+          />
+          <template #error>
+            <p
+              v-if="createValidation.errors.code"
+              id="createForm-code-error"
+              class="field-error"
+              role="alert"
+            >
+              {{ createValidation.errors.code }}
+            </p>
+          </template>
         </el-form-item>
         <el-form-item
+          :error="createValidation.errors.name"
           label="名称"
           required
         >
-          <el-input v-model="createForm.name" />
+          <el-input
+            v-model="createForm.name"
+            :aria-invalid="Boolean(createValidation.errors.name)"
+            aria-describedby="createForm-name-error"
+          />
+          <template #error>
+            <p
+              v-if="createValidation.errors.name"
+              id="createForm-name-error"
+              class="field-error"
+              role="alert"
+            >
+              {{ createValidation.errors.name }}
+            </p>
+          </template>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -360,14 +409,39 @@ onMounted(() => {
       width="420px"
     >
       <el-form
+        ref="editFormRef"
+        novalidate
         :disabled="editingSaving"
         label-position="top"
       >
+        <el-alert
+          v-if="editError"
+          :title="editError"
+          type="error"
+          show-icon
+          :closable="false"
+          class="form-submit-error"
+        />
         <el-form-item
+          :error="editValidation.errors.name"
           label="名称"
           required
         >
-          <el-input v-model="editForm.name" />
+          <el-input
+            v-model="editForm.name"
+            :aria-invalid="Boolean(editValidation.errors.name)"
+            aria-describedby="editForm-name-error"
+          />
+          <template #error>
+            <p
+              v-if="editValidation.errors.name"
+              id="editForm-name-error"
+              class="field-error"
+              role="alert"
+            >
+              {{ editValidation.errors.name }}
+            </p>
+          </template>
         </el-form-item>
       </el-form>
       <template #footer>

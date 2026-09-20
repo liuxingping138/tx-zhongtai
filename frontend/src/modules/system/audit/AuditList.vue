@@ -1,18 +1,17 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
 
 import { auditFilterOptions, getAuditEvent, listAuditEvents } from '@/api/audit'
 import { errorMessage } from '@/api/errors'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
+import FilterBar from '@/components/FilterBar.vue'
+import { useListQuery } from '@/composables/useListQuery'
 import ListEmpty from '@/components/ListEmpty.vue'
 import type { AuditEventItem } from '@/api/types'
 import { ACTION_LABELS, MODULE_LABELS, actionLabel, moduleLabel } from '@/utils/auditLabels'
 import { formatTime, toBeijingIso } from '@/utils/time'
 
-const route = useRoute()
 const loading = ref(false)
 const loadError = ref('')
 const resultFiltered = ref(false)
@@ -35,6 +34,7 @@ const options = reactive({
 
 const detailVisible = ref(false)
 const detailLoading = ref(false)
+const detailError = ref('')
 const detail = ref<AuditEventItem | null>(null)
 
 const outcomeLabel: Record<string, string> = {
@@ -54,9 +54,12 @@ async function loadOptions() {
   }
 }
 
+const listQuery = useListQuery(query, load, ['actor_name'])
+
 let loadSequence = 0
 
 async function load() {
+  void listQuery.commit()
   const sequence = ++loadSequence
   loading.value = true
   loadError.value = ''
@@ -106,22 +109,19 @@ async function openDetail(row: AuditEventItem) {
   const sequence = ++detailSequence
   detailVisible.value = true
   detailLoading.value = true
+  detailError.value = ''
   detail.value = row
   try {
     const result = await getAuditEvent(row.id)
     if (sequence === detailSequence) detail.value = result
   } catch (error) {
-    if (sequence === detailSequence) ElMessage.error(errorMessage(error, '加载详情失败'))
+    if (sequence === detailSequence) detailError.value = errorMessage(error, '加载详情失败')
   } finally {
     if (sequence === detailSequence) detailLoading.value = false
   }
 }
 
 onMounted(() => {
-  const moduleCode = route.query.module_code
-  if (typeof moduleCode === 'string') {
-    query.module_code = moduleCode
-  }
   void load()
   void loadOptions()
 })
@@ -143,40 +143,39 @@ onMounted(() => {
       @change="load"
     >
       <template #filters>
-        <el-form
-          class="filter-form"
-          inline
-          label-position="top"
-          @submit.prevent="onSearch"
+        <FilterBar
+          :query="query"
+          @search="onSearch"
+          @reset="onResetFilters"
         >
-          <div class="filter-form__fields">
-            <el-form-item
-              class="filter-form__item--wide"
-              label="时间"
-            >
-              <el-date-picker
-                v-model="query.range"
-                type="datetimerange"
-                start-placeholder="开始"
-                end-placeholder="结束"
-                value-format="YYYY-MM-DDTHH:mm:ss"
-              />
-            </el-form-item>
-            <el-form-item label="人员">
-              <FilterSelect
-                v-model="query.actor_name"
-                :options="options.actor_name"
-                placeholder="输入或选择人员"
-              />
-            </el-form-item>
-            <el-form-item label="模块">
-              <FilterSelect
-                v-model="query.module_code"
-                :options="options.module_code"
-                :labels="MODULE_LABELS"
-                placeholder="输入或选择模块"
-              />
-            </el-form-item>
+          <el-form-item
+            class="filter-form__item--wide"
+            label="时间"
+          >
+            <el-date-picker
+              v-model="query.range"
+              type="datetimerange"
+              start-placeholder="开始"
+              end-placeholder="结束"
+              value-format="YYYY-MM-DDTHH:mm:ss"
+            />
+          </el-form-item>
+          <el-form-item label="人员">
+            <FilterSelect
+              v-model="query.actor_name"
+              :options="options.actor_name"
+              placeholder="输入或选择人员"
+            />
+          </el-form-item>
+          <el-form-item label="模块">
+            <FilterSelect
+              v-model="query.module_code"
+              :options="options.module_code"
+              :labels="MODULE_LABELS"
+              placeholder="输入或选择模块"
+            />
+          </el-form-item>
+          <template #advanced>
             <el-form-item label="动作">
               <FilterSelect
                 v-model="query.action_code"
@@ -205,26 +204,16 @@ onMounted(() => {
                 />
               </el-select>
             </el-form-item>
-          </div>
-          <el-form-item class="filter-form__submit">
-            <el-button
-              native-type="submit"
-              type="primary"
-            >
-              查询
-            </el-button>
-            <el-button @click="onResetFilters">
-              重置
-            </el-button>
-          </el-form-item>
-        </el-form>
+          </template>
+        </FilterBar>
       </template>
       <el-table
         v-loading="loading"
         class="data-table"
         :data="events"
+        height="max(360px, calc(100dvh - 400px))"
+        scrollbar-always-on
         stripe
-        border
       >
         <template #empty>
           <ListEmpty
@@ -244,11 +233,11 @@ onMounted(() => {
         <el-table-column
           prop="actor_name_snapshot"
           label="人员"
-          width="140"
+          width="120"
         />
         <el-table-column
           label="模块"
-          width="160"
+          width="140"
         >
           <template #default="{ row }">
             {{ moduleLabel(row.module_code) }}
@@ -256,7 +245,7 @@ onMounted(() => {
         </el-table-column>
         <el-table-column
           label="动作"
-          width="140"
+          width="100"
         >
           <template #default="{ row }">
             {{ actionLabel(row.action_code) }}
@@ -264,7 +253,7 @@ onMounted(() => {
         </el-table-column>
         <el-table-column
           label="结果"
-          width="90"
+          width="80"
         >
           <template #default="{ row }">
             {{ outcomeLabel[row.outcome] || row.outcome }}
@@ -278,6 +267,7 @@ onMounted(() => {
         <el-table-column
           label="操作"
           width="90"
+          fixed="right"
         >
           <template #default="{ row }">
             <el-button
@@ -296,6 +286,20 @@ onMounted(() => {
       title="审计详情"
       size="480px"
     >
+      <el-alert
+        v-if="detailError"
+        type="error"
+        :closable="false"
+        show-icon
+        :title="detailError"
+      >
+        <el-button
+          v-if="detail"
+          @click="openDetail(detail)"
+        >
+          重试
+        </el-button>
+      </el-alert>
       <el-skeleton
         v-if="detailLoading"
         :rows="8"
@@ -304,7 +308,6 @@ onMounted(() => {
       <el-descriptions
         v-else-if="detail"
         :column="1"
-        border
       >
         <el-descriptions-item label="时间">
           {{ formatTime(detail.occurred_at) }}

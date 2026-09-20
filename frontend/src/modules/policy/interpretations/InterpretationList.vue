@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { Plus, Upload, Download, Clock } from '@element-plus/icons-vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 
 import {
   createInterpretation,
@@ -16,11 +17,13 @@ import { errorMessage, isApiError } from '@/api/errors'
 import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
-import ListEmpty from '@/components/ListEmpty.vue'
+import FilterBar from '@/components/FilterBar.vue'
+import { useListQuery } from '@/composables/useListQuery'
+import BusinessTable from '@/components/BusinessTable.vue'
+import ColumnPicker from '@/components/ColumnPicker.vue'
 import GroupedFields, { type EditorGroup } from '@/components/GroupedFields.vue'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import { useAuthStore } from '@/stores/auth'
-import { formatTime } from '@/utils/time'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -65,6 +68,7 @@ const query = reactive({
 })
 const visible = ref(false)
 const saving = ref(false)
+const saveError = ref('')
 const editing = ref<InterpretationItem | null>(null)
 const form = reactive({ ...emptyForm })
 const options = reactive({
@@ -75,9 +79,9 @@ const options = reactive({
 })
 
 const tableColumns = [
-  { prop: 'policy_uid', label: '政策唯一标识', minWidth: 200 },
-  { prop: 'policy_title', label: '政策原文名称', minWidth: 220 },
-  { prop: 'industry_scenario_code', label: '行业场景编码', minWidth: 180 },
+  { prop: 'policy_uid', label: '政策唯一标识', width: 300 },
+  { prop: 'policy_title', label: '政策原文名称', minWidth: 340, grow: 2 },
+  { prop: 'industry_scenario_code', label: '行业场景编码', width: 220 },
   { prop: 'industry_code', label: '行业编码', width: 120 },
   { prop: 'industry_l1', label: '一级行业', width: 120 },
   { prop: 'industry_l2', label: '二级行业', width: 120 },
@@ -86,25 +90,22 @@ const tableColumns = [
   { prop: 'scenario_l1_name', label: '一级场景名称', minWidth: 140 },
   { prop: 'scenario_l2_name', label: '二级场景名称', minWidth: 140 },
   { prop: 'scenario_l3_name', label: '三级场景名称', minWidth: 140 },
-  { prop: 'target_customers', label: '目标客户当前政策影响客户群', minWidth: 220 },
+  { prop: 'target_customers', label: '目标客户', fullLabel: '目标客户当前政策影响客户群', minWidth: 260, grow: 1, wrap: true },
   { prop: 'relation_key', label: '关联主键', minWidth: 200 },
   { prop: 'opportunity_type', label: '机会类型', width: 110 },
-  { prop: 'policy_summary', label: '政策要文', minWidth: 220 },
+  { prop: 'policy_summary', label: '政策要文', width: 320, wrap: true },
   { prop: 'has_subsidy', label: '有无政府补贴', width: 120 },
   { prop: 'subsidy_content', label: '补贴内容', minWidth: 180 },
   { prop: 'market_opportunity', label: '政策市场机会', minWidth: 180 },
   { prop: 'info_level', label: '信息化等级', width: 110 },
   { prop: 'is_new_scenario', label: '是否新增场景', width: 120 },
   { prop: 'new_scenario_level', label: '新增场景级别', width: 120 },
-  { prop: 'created_at', label: '入库时间', width: 170, time: true },
+  { prop: 'created_at', label: '入库时间', width: 190, time: true },
   { prop: 'created_by_name', label: '入库人', width: 110 },
-  { prop: 'updated_at', label: '更新时间', width: 170, time: true },
+  { prop: 'updated_at', label: '更新时间', width: 190, time: true },
   { prop: 'updated_by_name', label: '操作人', width: 110 },
 ] as const
 
-function cellValue(row: InterpretationItem, prop: string): string {
-  return String(row[prop as keyof InterpretationItem] ?? '')
-}
 
 async function loadOptions() {
   try {
@@ -118,9 +119,12 @@ async function loadOptions() {
   }
 }
 
+const listQuery = useListQuery(query, load)
+
 let loadSequence = 0
 
 async function load() {
+  void listQuery.commit()
   const sequence = ++loadSequence
   loading.value = true
   loadError.value = ''
@@ -162,12 +166,14 @@ function onSearch() {
 }
 
 function openCreate() {
+  saveError.value = ''
   editing.value = null
   Object.assign(form, emptyForm)
   visible.value = true
 }
 
 function openEdit(row: InterpretationItem) {
+  saveError.value = ''
   editing.value = row
   Object.assign(form, emptyForm)
   for (const key of Object.keys(emptyForm) as (keyof typeof emptyForm)[]) {
@@ -178,6 +184,8 @@ function openEdit(row: InterpretationItem) {
 
 async function onSave() {
   if (saving.value) return
+  saveError.value = ''
+  if (!await editorFields.value?.validate()) return
   if (!form.policy_title.trim()) {
     ElMessage.warning('请填写政策原文名称')
     return
@@ -197,10 +205,10 @@ async function onSave() {
     await Promise.all([load(), loadOptions()])
   } catch (error) {
     if (isApiError(error) && error.status === 409) {
-      await ElMessageBox.alert('数据已被他人修改或关联主键重复，请重新加载。', '无法保存')
+      saveError.value = '数据已被他人修改或内容重复。请保留需要的内容，关闭后重新打开最新记录再修改。'
       await load()
     } else {
-      ElMessage.error(errorMessage(error, '保存失败'))
+      saveError.value = errorMessage(error, '保存失败，请检查后重试')
     }
   } finally {
     saving.value = false
@@ -225,8 +233,9 @@ async function onExport() {
   exporting.value = true
   try {
     await downloadPolicy('/policy/interpretations/export', '政策解读表.xlsx')
+    ElMessage.success('下载已开始，请查看浏览器下载列表')
   } catch {
-    ElMessage.error('导出失败')
+    ElMessage.error('下载失败，请重试')
   } finally {
     exporting.value = false
   }
@@ -395,7 +404,17 @@ const editorGroups: EditorGroup[] = [
     ]
   }
 ]
+const editorFields = ref<InstanceType<typeof GroupedFields>>()
 const editorGuard = useUnsavedForm(visible, () => form, saving)
+
+const legacyDefaults = ['policy_title', 'opportunity_type', 'target_customers', 'has_subsidy']
+
+const detailColumns = computed(() => {
+  const known = new Set(tableColumns.map(col => String(col.prop)))
+  return [...tableColumns, ...editorGroups.flatMap(group => group.fields).filter(field => !known.has(field.key)).map(field => ({ prop: field.key, label: field.label }))]
+})
+const defaultColumns = computed(() => detailColumns.value.map(col => col.prop))
+const selectedColumns = ref([...defaultColumns.value])
 </script>
 
 <template>
@@ -417,6 +436,7 @@ const editorGuard = useUnsavedForm(visible, () => form, saving)
         <el-button
           v-if="canWrite"
           type="primary"
+          :icon="Plus"
           @click="openCreate"
         >
           新增
@@ -431,12 +451,16 @@ const editorGuard = useUnsavedForm(visible, () => form, saving)
             content="政策标识与关联主键可自动生成；重复或校验不通过的记录会跳过并提供报告。"
             placement="bottom"
           >
-            <el-button :disabled="importUi.visible">
+            <el-button
+              :icon="Upload"
+              :disabled="importUi.visible"
+            >
               上传 Excel
             </el-button>
           </el-tooltip>
         </el-upload>
         <el-button
+          :icon="Download"
           :loading="exporting"
           @click="onExport"
         >
@@ -444,38 +468,38 @@ const editorGuard = useUnsavedForm(visible, () => form, saving)
         </el-button>
         <el-button
           v-if="canAudit"
+          :icon="Clock"
           @click="openLogs"
         >
           操作记录
         </el-button>
       </template>
       <template #filters>
-        <el-form
-          class="filter-form"
-          inline
-          label-position="top"
-          @submit.prevent="onSearch"
+        <FilterBar
+          :query="query"
+          @search="onSearch"
+          @reset="onResetFilters"
         >
-          <div class="filter-form__fields">
-            <el-form-item label="政策原文名称">
-              <FilterSelect
-                v-model="query.policy_title"
-                :options="options.policy_title"
-              />
-            </el-form-item>
-            <el-form-item label="行业场景编码">
-              <FilterSelect
-                v-model="query.industry_scenario_code"
-                :options="options.industry_scenario_code"
-              />
-            </el-form-item>
-            <el-form-item label="一级行业">
-              <FilterSelect
-                v-model="query.industry_l1"
-                :options="options.industry_l1"
-                size="short"
-              />
-            </el-form-item>
+          <el-form-item label="政策原文名称">
+            <FilterSelect
+              v-model="query.policy_title"
+              :options="options.policy_title"
+            />
+          </el-form-item>
+          <el-form-item label="行业场景编码">
+            <FilterSelect
+              v-model="query.industry_scenario_code"
+              :options="options.industry_scenario_code"
+            />
+          </el-form-item>
+          <el-form-item label="一级行业">
+            <FilterSelect
+              v-model="query.industry_l1"
+              :options="options.industry_l1"
+              size="short"
+            />
+          </el-form-item>
+          <template #advanced>
             <el-form-item label="机会类型">
               <FilterSelect
                 v-model="query.opportunity_type"
@@ -483,71 +507,34 @@ const editorGuard = useUnsavedForm(visible, () => form, saving)
                 size="short"
               />
             </el-form-item>
-          </div>
-          <el-form-item class="filter-form__submit">
-            <el-button
-              native-type="submit"
-              type="primary"
-            >
-              查询
-            </el-button>
-            <el-button @click="onResetFilters">
-              重置
-            </el-button>
-          </el-form-item>
-        </el-form>
+          </template>
+        </FilterBar>
       </template>
-      <el-table
-        v-loading="loading"
-        class="data-table"
-        :data="items"
-        stripe
-        border
-      >
-        <template #empty>
-          <ListEmpty
-            :loading="loading"
-            :filtered="resultFiltered"
-            @reset="onResetFilters"
-          />
-        </template>
-        <el-table-column
-          v-for="col in tableColumns"
-          :key="col.prop"
-          :prop="col.prop"
-          :label="col.label"
-          :width="'width' in col ? col.width : undefined"
-          :min-width="'minWidth' in col ? col.minWidth : undefined"
-          show-overflow-tooltip
-        >
-          <template
-            v-if="'time' in col && col.time"
-            #default="{ row }"
-          >
-            {{ formatTime(cellValue(row, col.prop)) }}
-          </template>
-        </el-table-column>
-        <el-table-column
-          v-if="canWrite"
-          label="操作"
-          width="80"
-          fixed="right"
-        >
-          <template #default="{ row }">
-            <el-button
-              link
-              type="primary"
-              @click="openEdit(row)"
-            >
-              编辑
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <template #tools>
+        <ColumnPicker
+          v-model="selectedColumns"
+          :columns="detailColumns"
+          :defaults="defaultColumns"
+          :legacy-defaults="legacyDefaults"
+        />
+      </template>
+      <BusinessTable
+        :items="items"
+        :columns="detailColumns"
+        :selected="selectedColumns"
+        :summary-keys="legacyDefaults"
+        title-key="policy_title"
+        :can-write="canWrite"
+        :loading="loading"
+        :filtered="resultFiltered"
+        @reset="onResetFilters"
+        @edit="openEdit"
+      />
     </ListPage>
     <el-drawer
       v-model="visible"
       class="editor-overlay"
+      destroy-on-close
       :before-close="editorGuard.beforeClose"
       :close-on-click-modal="!saving"
       :close-on-press-escape="!saving"
@@ -556,13 +543,16 @@ const editorGuard = useUnsavedForm(visible, () => form, saving)
       size="700px"
     >
       <el-form
+        novalidate
         :disabled="saving"
         label-position="top"
         @submit.prevent="onSave"
       >
         <GroupedFields
+          ref="editorFields"
           :model-value="form"
           :groups="editorGroups"
+          :submit-error="saveError"
         />
       </el-form>
       <template #footer>

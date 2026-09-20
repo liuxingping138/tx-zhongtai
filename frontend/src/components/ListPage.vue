@@ -1,86 +1,71 @@
 <script setup lang="ts">
-import { nextTick } from 'vue'
-
-const PAGE_SIZES = [10, 20, 50, 100]
-
-withDefaults(
-  defineProps<{
-    title: string
-    hint?: string
-    error?: string
-    total: number
-    page: number
-    pageSize: number
-    loading?: boolean
-    hidePager?: boolean
-  }>(),
-  { hint: '', error: '', loading: false, hidePager: false },
-)
-
+import { nextTick, ref } from 'vue'
+import { Warning } from '@element-plus/icons-vue'
+withDefaults(defineProps<{
+  title: string; hint?: string; error?: string; total: number; page: number;
+  pageSize: number; loading?: boolean; hidePager?: boolean;
+}>(), { hint: '', error: '', loading: false, hidePager: false })
 const emit = defineEmits<{
-  'update:page': [value: number]
-  'update:pageSize': [value: number]
-  change: []
-  retry: []
+  'update:page': [value: number]; 'update:pageSize': [value: number]; change: []; retry: [];
 }>()
-
+const surface = ref<HTMLElement>()
 async function onPage(value: number) {
   emit('update:page', value)
   await nextTick()
   emit('change')
+  surface.value?.scrollIntoView({ block: 'start' })
 }
-
 async function onSize(value: number) {
   emit('update:pageSize', value)
   emit('update:page', 1)
   await nextTick()
   emit('change')
 }
-
 </script>
-
 <template>
   <div class="list-page">
-    <section class="panel list-page__heading">
-      <div class="list-page__title-block">
-        <span class="list-page__bar" />
-        <div>
-          <h1 class="list-page__title">
-            {{ title }}
-          </h1>
-          <p
-            v-if="hint"
-            class="list-page__hint"
-          >
-            {{ hint }}
-          </p>
-        </div>
-      </div>
-      <div
-        v-if="$slots.actions"
-        class="list-page__actions"
-      >
-        <slot name="actions" />
-      </div>
-    </section>
+    <header class="list-page__heading">
+      <h1>{{ title }}</h1>
+      <p v-if="hint">
+        {{ hint }}
+      </p>
+    </header>
     <section
       v-if="$slots.filters"
-      class="panel filter-card"
+      class="filter-card"
+      aria-label="筛选条件"
     >
       <slot name="filters" />
     </section>
-    <section class="panel table-card">
+    <section
+      ref="surface"
+      class="table-card"
+      :aria-label="title + '列表'"
+      :aria-busy="loading"
+    >
+      <div class="list-page__toolbar">
+        <span
+          class="list-page__total"
+          role="status"
+          aria-live="polite"
+        >
+          <template v-if="error">数据加载失败</template>
+          <template v-else-if="loading">正在加载…</template>
+          <template v-else>共 <strong>{{ total.toLocaleString('zh-CN') }}</strong> 条记录</template>
+        </span>
+        <div class="list-page__actions">
+          <slot name="actions" /><slot name="tools" />
+        </div>
+      </div>
       <div
         v-if="error"
         class="list-error"
         role="alert"
       >
-        <span
-          class="list-error__icon"
-          aria-hidden="true"
-        >!</span>
-        <h2>暂时无法加载数据</h2>
-        <p>{{ error }}</p>
+        <el-icon :size="28">
+          <Warning />
+        </el-icon>
+        <h2>暂时无法加载数据</h2><p>{{ error }}</p>
         <el-button
           type="primary"
           :loading="loading"
@@ -89,18 +74,25 @@ async function onSize(value: number) {
           重新加载
         </el-button>
       </div>
-      <slot v-else />
+      <div
+        v-else
+        class="list-page__results"
+      >
+        <slot />
+      </div>
       <div
         v-if="!hidePager && !error"
         class="pagination-row"
       >
+        <span class="pagination-range">第 {{ total ? (page - 1) * pageSize + 1 : 0 }}–{{ Math.min(page * pageSize, total) }} 条</span>
         <el-pagination
           :current-page="page"
           :page-size="pageSize"
           :total="total"
-          :page-sizes="PAGE_SIZES"
+          :page-sizes="[10, 20, 50, 100]"
+          :pager-count="5"
           :disabled="loading"
-          layout="total, sizes, prev, pager, next, jumper"
+          layout="sizes, prev, pager, next"
           @update:current-page="onPage"
           @update:page-size="onSize"
         />
@@ -108,97 +100,30 @@ async function onSize(value: number) {
     </section>
   </div>
 </template>
-
 <style scoped>
-.list-page {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+.list-page { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.list-page__heading { padding: 0 0 14px; }
+.list-page__heading h1 { margin: 0; font-size: var(--zt-title-size); line-height: 1.4; font-weight: 650; color: var(--zt-ink-900); }
+.list-page__heading p { margin: 4px 0 0; font-size: 13px; line-height: 1.6; color: var(--zt-ink-500); }
+.filter-card { padding: 0 0 14px; border-bottom: 1px solid var(--zt-border); }
+.table-card { min-width: 0; scroll-margin-top: 12px; }
+.list-page__toolbar { min-height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; }
+.list-page__total { flex-shrink: 0; color: var(--zt-ink-700); font-size: 14px; font-variant-numeric: tabular-nums; }
+.list-page__total strong { color: var(--zt-ink-900); font-weight: 650; }
+.list-page__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; }
+.list-page__actions :deep(.el-button + .el-button) { margin-left: 0; }
+.list-page__actions :deep(.el-upload) { display: inline-flex; }
+.list-page__results { min-height: 280px; background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: var(--zt-radius); overflow-x: auto; }
+.list-page__results:has(.business-table) { border: 0; border-radius: 0; background: transparent; overflow: visible; }
+.list-error { min-height: max(360px, calc(100dvh - 400px)); display: flex; align-items: center; justify-content: center; flex-direction: column; background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: var(--zt-radius); color: var(--zt-ink-700); text-align: center; padding: 24px; }
+.list-error h2 { font-size: 17px; margin: 16px 0 0; }
+.list-error p { max-width: 560px; overflow-wrap: anywhere; font-size: 14px; line-height: 1.7; }
+@media (max-width: 767px) {
+ .list-page__heading { padding-bottom: 16px; }
+ .list-page__heading p { margin-top: 5px; }
+ .filter-card { padding-bottom: 14px; }
+ .list-page__toolbar { align-items: flex-start; flex-direction: column; padding: 14px 0; }
+ .list-page__actions { justify-content: flex-start; gap: 8px; width: 100%; }
+ .list-page__actions :deep(.el-button) { padding: 0 10px; }
 }
-
-.panel {
-  border: 1px solid var(--zt-border);
-  border-radius: 10px;
-  background: var(--zt-panel);
-  box-shadow: var(--zt-shadow);
-}
-
-.list-page__heading {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  min-height: 72px;
-  padding: 16px 24px;
-}
-
-.list-page__title-block {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  min-width: 0;
-}
-
-.list-page__bar {
-  width: 4px;
-  height: 22px;
-  margin-top: 3px;
-  border-radius: 4px;
-  background: var(--zt-blue-600);
-  flex: 0 0 auto;
-}
-
-.list-page__title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.list-page__hint {
-  margin: 6px 0 0;
-  color: var(--zt-ink-500);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.list-page__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-left: auto;
-}
-
-.list-page__actions :deep(.el-upload) {
-  display: inline-flex;
-}
-
-.filter-card {
-  padding: 16px 24px;
-}
-
-.table-card {
-  padding: 8px 16px 16px;
-  overflow-x: auto;
-}
-@media (max-width: 760px) {
-  .list-page__heading {
-    flex-wrap: wrap;
-    padding: 16px;
-  }
-
-  .list-page__actions {
-    width: 100%;
-    margin-left: 0;
-    justify-content: flex-start;
-  }
-
-  .filter-card {
-    padding: 16px;
-  }
-}
-.list-error { padding: 48px 20px; text-align: center; }
-.list-error__icon { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; color: #a97328; background: #fff5e6; font-size: 22px; }
-.list-error h2 { margin: 14px 0 8px; color: var(--zt-ink-900); font-size: 16px; }
-.list-error p { margin: 0 0 20px; color: var(--zt-ink-500); font-size: 13px; }
 </style>

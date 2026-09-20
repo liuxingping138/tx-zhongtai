@@ -1,113 +1,62 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ArrowRight, Collection, Document, Setting } from '@element-plus/icons-vue'
-import { useRouter } from 'vue-router'
-
 import { useAuthStore } from '@/stores/auth'
 import { pathForRouteName } from '@/router/menu'
-
 const auth = useAuthStore()
-const router = useRouter()
-
-const modules = computed(() =>
-  auth.visibleMenus
-    .filter((item) => item.route_name && pathForRouteName(item.route_name))
-    .map((item) => ({
-      title: item.title,
-      path: pathForRouteName(item.route_name) as string,
-      level: item.resource_code ? auth.resourceLevel(item.resource_code) : null,
-    })),
-)
-
-function open(path: string) {
-  void router.push(path)
-}
+const groups = computed(() => {
+  const entries = auth.visibleMenus.filter(item => item.route_name && pathForRouteName(item.route_name))
+  const grouped = new Map<string, { title: string; items: { title: string; path: string; write: boolean }[] }>()
+  for (const item of entries) {
+    const path = pathForRouteName(item.route_name) as string
+    const parent = auth.visibleMenus.find(parent => parent.id === item.parent_id)
+    const key = path.split('/')[1] || 'other'
+    if (!grouped.has(key)) grouped.set(key, { title: parent?.title || (key === 'system' ? '系统管理' : key === 'codebook' ? '码表管理' : key === 'policy' ? '政策' : '业务模块'), items: [] })
+    grouped.get(key)?.items.push({ title: item.title, path, write: Boolean(item.resource_code && auth.canFull(item.resource_code)) })
+  }
+  return [...grouped.entries()].sort(([a], [b]) => Number(a === 'system') - Number(b === 'system'))
+})
 </script>
-
 <template>
   <div class="home">
-    <section class="home__heading">
-      <span class="home__bar" />
-      <div>
-        <h2>欢迎，{{ auth.user?.display_name || auth.user?.username }}</h2>
-        <p>从常用模块开始今天的工作。</p>
-      </div>
-    </section>
+    <header class="home__heading">
+      <h1>工作台</h1><p>{{ auth.user?.display_name || auth.user?.username }}，从业务模块开始今天的工作。</p>
+    </header>
     <el-empty
-      v-if="!modules.length"
+      v-if="!groups.length"
       description="当前没有可访问的模块"
     />
-    <el-row
-      v-else
-      :gutter="16"
+    <section
+      v-for="[key, group] in groups"
+      :key="key"
+      class="workspace-group"
     >
-      <el-col
-        v-for="item in modules"
-        :key="item.path"
-        :xs="24"
-        :sm="12"
-        :lg="8"
-      >
-        <button
-          type="button"
-          class="home-card"
-          @click="open(item.path)"
+      <h2><el-icon><component :is="key === 'policy' ? Document : key === 'codebook' ? Collection : Setting" /></el-icon>{{ group.title }}<span>{{ group.items.length }} 个模块</span></h2>
+      <div class="workspace-links">
+        <router-link
+          v-for="item in group.items"
+          :key="item.path"
+          :to="item.path"
+          class="workspace-link"
         >
-          <span class="home-card__icon"><el-icon><component :is="item.path.startsWith('/policy') ? Document : item.path.startsWith('/codebook') ? Collection : Setting" /></el-icon></span>
-          <span class="home-card__text"><strong>{{ item.title }}</strong><small>{{ item.level === 'FULL' ? '可管理' : '只读访问' }}</small></span>
-          <el-icon class="home-card__arrow">
-            <ArrowRight />
-          </el-icon>
-        </button>
-      </el-col>
-    </el-row>
+          <span><strong>{{ item.title }}</strong><small>{{ item.path === '/system/audit' ? '查看操作记录' : item.write ? '查看与维护数据' : '只读访问' }}</small></span>
+          <el-icon><ArrowRight /></el-icon>
+        </router-link>
+      </div>
+    </section>
   </div>
 </template>
-
 <style scoped>
-.home {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.home__heading {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  min-height: 72px;
-  padding: 16px 24px;
-  background: #fff;
-  border: 1px solid var(--zt-border);
-  border-radius: 10px;
-  box-shadow: var(--zt-shadow);
-}
-
-.home__bar {
-  width: 4px;
-  height: 22px;
-  margin-top: 4px;
-  border-radius: 4px;
-  background: var(--zt-blue-600);
-}
-
-.home__heading h2 {
-  margin: 0;
-  font-size: 18px;
-}
-
-.home__heading p {
-  margin: 6px 0 0;
-  color: var(--zt-ink-500);
-  font-size: 13px;
-}
-
-.home-card { display: flex; align-items: center; gap: 16px; width: 100%; margin-bottom: 16px; padding: 24px; border: 1px solid var(--zt-border); border-radius: 10px; background: #fff; text-align: left; font: inherit; cursor: pointer; transition: border-color .18s, box-shadow .18s; }
-.home-card:hover { border-color: #b6cae4; box-shadow: 0 5px 18px #223c5810; }
-.home-card:focus-visible { outline: 2px solid var(--zt-blue-600); outline-offset: 3px; }
-.home-card__icon { display: grid; place-items: center; flex: 0 0 42px; height: 42px; background: #eef3fa; color: #446b9e; border-radius: 12px; font-size: 20px; }
-.home-card__text { display: flex; flex-direction: column; gap: 9px; }
-.home-card__text strong { color: var(--zt-ink-900); font-size: 15px; font-weight: 600; }
-.home-card__text small { color: var(--zt-ink-500); font-size: 12px; }
-.home-card__arrow { margin-left: auto; color: #9aaec5; }
+.home { display: flex; flex-direction: column; gap: 28px; }
+.home__heading h1 { margin: 0; font-size: var(--zt-title-size); font-weight: 650; }
+.home__heading p { margin: 6px 0 0; color: var(--zt-ink-500); font-size: 14px; }
+.workspace-group h2 { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; margin: 0 0 12px; }
+.workspace-group h2 span { font-size: 12px; color: var(--zt-ink-500); font-weight: 400; margin-left: 4px; }
+.workspace-links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: var(--zt-radius); overflow: hidden; }
+.workspace-link { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px; text-decoration: none; color: var(--zt-ink-900); border-bottom: 1px solid var(--zt-border); }
+.workspace-link:hover { background: var(--el-color-primary-light-9); color: var(--zt-blue-600); }
+.workspace-link strong { display: block; font-size: 15px; font-weight: 600; }
+.workspace-link small { display: block; margin-top: 5px; font-size: 12px; color: var(--zt-ink-500); }
+@media (max-width: 1100px) { .workspace-links { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .workspace-links { grid-template-columns: minmax(0, 1fr); } .home { gap: 22px; } }
 </style>

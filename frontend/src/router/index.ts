@@ -23,7 +23,7 @@ const routes: RouteRecordRaw[] = [
         path: '',
         name: 'home',
         component: () => import('@/views/HomeView.vue'),
-        meta: { title: '首页' },
+        meta: { title: '工作台' },
       },
       {
         path: 'profile',
@@ -169,6 +169,8 @@ router.beforeEach(async (to) => {
 
   return true
 })
+
+router.afterEach((to) => { document.title = `${to.meta.title || '页面'} · 业务数据运营平台` })
 
 declare module 'vue-router' {
   interface RouteMeta {
