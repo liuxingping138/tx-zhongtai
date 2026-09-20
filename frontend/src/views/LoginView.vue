@@ -5,6 +5,7 @@ import { ArrowRight, Hide, Lock, User, View } from '@element-plus/icons-vue'
 
 import { useAuthStore } from '@/stores/auth'
 import { errorMessage } from '@/api/errors'
+import customerHub from '@/assets/login/customer-hub.webp'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -68,46 +69,28 @@ async function onSubmit() {
       </div>
       <div class="story-content">
         <p class="eyebrow">
-          统一工作空间
+          一体化业务数据平台
         </p>
         <h1 id="platform-title">
-          让信息有序，<br>让协作高效。
+          以客群为核心，<br>让业务数据相连。
         </h1>
         <p class="story-description">
-          连接政策信息、标准码表与系统管理，<br class="desktop-break">在一个工作空间里，专注每一步工作。
+          汇聚客户、招投标、政策与场景，<br class="desktop-break">以码表统一数据标准，提供独立的爬虫监测。
         </p>
-        <div
+        <figure
           class="workspace-art"
-          aria-hidden="true"
         >
-          <div class="orbit orbit--outer" />
-          <div class="orbit orbit--inner" />
-          <div class="art-line art-line--one" />
-          <div class="art-line art-line--two" />
-          <div class="art-core">
-            <span class="core-mark"><i /><i /><i /></span>
-            <span>业务数据运营平台</span>
-            <small>连接 · 整理 · 协作</small>
-          </div>
-          <div class="art-card art-card--policy">
-            <span class="art-icon">01</span>
-            <div><strong>政策管理</strong><small>信源汇聚 · 政策解读</small></div>
-            <span class="art-dot" />
-          </div>
-          <div class="art-card art-card--codebook">
-            <span class="art-icon">02</span>
-            <div><strong>标准码表</strong><small>统一标准 · 有序归集</small></div>
-            <span class="art-dot" />
-          </div>
-          <div class="art-card art-card--system">
-            <span class="art-icon">03</span>
-            <div><strong>系统管理</strong><small>角色权限 · 操作记录</small></div>
-            <span class="art-dot" />
-          </div>
-        </div>
+          <img
+            :src="customerHub"
+            width="1774"
+            height="887"
+            fetchpriority="high"
+            alt="客群关联客户管理、招投标、政策、场景与码表管理；爬虫监测作为独立模块运行。"
+          >
+        </figure>
       </div>
       <div class="story-footer">
-        <span />信息有序流转，工作从容开展
+        <span />数据相连，围绕客群开展业务
       </div>
     </section>
 
@@ -271,6 +254,7 @@ async function onSubmit() {
 }
 .login-story {
   position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -278,44 +262,25 @@ async function onSubmit() {
   color: #fff;
   background: radial-gradient(ellipse at 92% 8%, #305a9c 0%, transparent 55%), linear-gradient(155deg, #152f56, #1a4274 70%, #244f7e);
 }
-.login-story::before {
-  position: absolute;
-  inset: 0;
-  content: '';
-  pointer-events: none;
-  background-image: linear-gradient(#ffffff04 1px, transparent 1px), linear-gradient(90deg, #ffffff04 1px, transparent 1px);
-  background-size: 52px 52px;
-}
 .login-brand { display: flex; align-items: center; gap: 12px; font-size: 18px; font-weight: 650; letter-spacing: 1px; }
-.brand-mark, .core-mark { display: flex; align-items: center; gap: 4px; }
+.brand-mark { display: flex; align-items: center; gap: 4px; }
 .brand-mark i { width: 6px; height: 25px; border-radius: 2px; background: #d6e8ff; transform: skewY(-24deg); }
 .brand-mark i:nth-child(2) { height: 34px; background: #fff; }
 .brand-mark i:nth-child(3) { background: #84b4fa; }
-.story-content { position: relative; width: 100%; max-width: 550px; margin: auto; padding: 60px 0 32px; }
+.story-content { position: relative; width: 100%; max-width: 650px; margin: auto; padding: 42px 0 26px; }
 .eyebrow { margin: 0 0 20px; color: #b4c9e6; font-size: 12px; letter-spacing: 4px; }
-h1 { margin: 0; font-size: clamp(36px, 3.25vw, 54px); font-weight: 600; line-height: 1.42; letter-spacing: 2px; }
+h1 { margin: 0; font-size: clamp(36px, 3.25vw, 54px); font-weight: 600; line-height: 1.3; letter-spacing: 2px; }
 .story-description { margin: 22px 0 0; color: #bccde3; font-size: 14px; line-height: 1.95; }
-.workspace-art { position: relative; height: 280px; margin-top: 36px; }
-.orbit { position: absolute; border: 1px solid #abcfff1b; border-radius: 50%; transform: rotate(-25deg); }
-.orbit--outer { inset: 14px 0 10px; }
-.orbit--inner { inset: 47px 52px 36px; }
-.art-core { position: absolute; top: 76px; left: 35%; display: flex; flex-direction: column; align-items: center; gap: 10px; font-size: 13px; }
-.core-mark { justify-content: center; width: 66px; height: 66px; border: 1px solid #b9d4ff55; border-radius: 18px; background: linear-gradient(140deg, #95bfff35, #588cf717); box-shadow: 0 10px 36px #091e3933; }
-.core-mark i { width: 7px; height: 22px; background: #d3e5ff; border-radius: 2px; transform: skewY(-25deg); }
-.core-mark i:nth-child(2) { height: 31px; background: #fff; }
-.core-mark i:nth-child(3) { background: #82b4ff; }
-.art-core small { color: #a5bddc; font-size: 10px; letter-spacing: 2px; }
-.art-card { position: absolute; display: flex; align-items: center; gap: 10px; padding: 15px 16px; border: 1px solid #b3ccf32e; border-radius: 10px; background: linear-gradient(110deg, #345982ef, #2c5078ed); box-shadow: 0 12px 24px #0c24401f; }
-.art-card strong { display: block; font-size: 12px; font-weight: 500; letter-spacing: 1px; }
-.art-card small { display: block; margin-top: 5px; font-size: 10px; color: #b9cce4; }
-.art-icon { display: grid; place-items: center; width: 30px; height: 34px; border-radius: 6px; background: #8eb5ed14; color: #c8dcf7; font-size: 11px; font-variant-numeric: tabular-nums; }
-.art-card--policy { top: 0; left: 0; }
-.art-card--codebook { top: 84px; right: -4px; }
-.art-card--system { bottom: 0; left: 22px; }
-.art-dot { width: 4px; height: 4px; margin-left: 8px; background: #9ddccb; border-radius: 50%; }
-.art-line { position: absolute; height: 1px; background: #b5d3ff40; transform-origin: left; }
-.art-line--one { top: 69px; left: 110px; width: 110px; transform: rotate(30deg); }
-.art-line--two { bottom: 56px; left: 172px; width: 90px; transform: rotate(-40deg); }
+.workspace-art { width: calc(100% + 100px); aspect-ratio: 2.4; margin: -8px -50px 0; }
+.workspace-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  mix-blend-mode: lighten;
+  mask-image: linear-gradient(transparent, #000 4%, #000 96%, transparent), linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  mask-composite: intersect;
+}
 .story-footer { display: flex; align-items: center; gap: 10px; color: #9fb6d3; font-size: 11px; letter-spacing: 1px; }
 .story-footer > span { width: 24px; height: 1px; background: #789dc7; }
 .login-panel { display: flex; flex-direction: column; padding: 46px clamp(36px, 5.6vw, 108px) 30px; }
@@ -351,20 +316,16 @@ h2 { margin: 0; color: #20324c; font-size: clamp(25px, 2.2vw, 32px); line-height
 .caps-lock { color: #946923; }
 .login-spinner { width: 16px; height: 16px; border: 2px solid #ffffff55; border-top-color: #fff; border-radius: 50%; animation: login-spin .8s linear infinite; }
 @keyframes login-spin { to { transform: rotate(360deg); } }
-@media (min-width: 1500px) { .workspace-art { margin-top: 54px; } }
+@media (min-width: 1500px) { .workspace-art { margin-top: 24px; } }
 @media (max-width: 1100px) {
   .login { grid-template-columns: minmax(0, 1fr) minmax(410px, 1fr); }
   .login-story { padding: 32px; }
-  .art-card { gap: 7px; padding: 12px; }
-  .art-card--codebook { top: 122px; }
-  .art-card--system { left: 0; }
-  .art-core { left: 48%; top: 35px; }
+  h1 { font-size: clamp(30px, 3.25vw, 36px); }
+  .story-description { font-size: 13px; }
   .login-panel { padding: 38px 36px 28px; }
 }
 @media (min-width: 801px) and (max-height: 800px) {
-  .story-content { padding-top: 36px; padding-bottom: 22px; }
-  .workspace-art { height: 240px; margin-top: 24px; }
-  .art-core { top: 54px; }
+  .story-content { padding-top: 28px; padding-bottom: 18px; }
   .login-form-wrap { padding: 40px 0; }
 }
 @media (max-width: 800px) {
