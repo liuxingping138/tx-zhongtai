@@ -14,6 +14,12 @@ async def get_by_id(session: AsyncSession, item_id: uuid.UUID) -> BaseTag | None
     return await session.get(BaseTag, item_id)
 
 
+async def get_for_update(session: AsyncSession, item_id: uuid.UUID) -> BaseTag | None:
+    """更新路径专用：锁住目标行，见 sources.get_for_update 的说明。"""
+
+    return await session.get(BaseTag, item_id, with_for_update=True)
+
+
 async def get_by_hash(session: AsyncSession, digest: str) -> BaseTag | None:
     result = await session.execute(select(BaseTag).where(BaseTag.content_hash == digest))
     return result.scalar_one_or_none()

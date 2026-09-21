@@ -153,7 +153,9 @@ jwt-keys-p6:
 	@cd services/iam-service && uv run python -c "from pathlib import Path; from app.core.jwt_keys import ensure_jwt_keys; ensure_jwt_keys(Path('../../$(JWT_P6_DIR)').resolve(), allow_generate=True)"
 
 p6-up: p6-env jwt-keys-p6
-	$(P6_COMPOSE) up -d
+	# 必须带 --build：Compose 的镜像按项目名隔离（tx-zhongtai-p6-*），
+	# 不重建会拿到上一次验收留下的旧镜像，等于用过期代码做验收。
+	$(P6_COMPOSE) up -d --build
 	@echo "等待隔离网关..."
 	@for i in $$(seq 1 60); do \
 		if curl -sf -o /dev/null http://localhost:$$(grep -E '^GATEWAY_HTTP_PORT=' $(P6_ENV) | cut -d= -f2)/api/v1/auth/csrf; then break; fi; \

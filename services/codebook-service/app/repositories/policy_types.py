@@ -13,6 +13,16 @@ async def get_by_id(session: AsyncSession, item_id: uuid.UUID) -> PolicyType | N
     return await session.get(PolicyType, item_id)
 
 
+async def get_for_update(session: AsyncSession, item_id: uuid.UUID) -> PolicyType | None:
+    """更新路径专用：锁住目标行。
+
+    version 比对是「先读后写」，发出的 UPDATE 不带版本条件。不加行锁时两个并发
+    请求会读到同一个 version、双双通过校验，后提交的静默覆盖前一个，两边都收到 200。
+    """
+
+    return await session.get(PolicyType, item_id, with_for_update=True)
+
+
 async def get_by_name(session: AsyncSession, type_name: str) -> PolicyType | None:
     result = await session.execute(select(PolicyType).where(PolicyType.type_name == type_name))
     return result.scalar_one_or_none()

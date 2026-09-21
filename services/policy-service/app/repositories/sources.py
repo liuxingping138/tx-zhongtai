@@ -15,6 +15,16 @@ async def get_by_id(session: AsyncSession, item_id: uuid.UUID) -> Source | None:
     return await session.get(Source, item_id)
 
 
+async def get_for_update(session: AsyncSession, item_id: uuid.UUID) -> Source | None:
+    """更新路径专用：锁住目标行。
+
+    version 比对是「先读后写」，发出的 UPDATE 不带版本条件。不加行锁时两个并发
+    请求会读到同一个 version、双双通过校验，后提交的静默覆盖前一个，两边都收到 200。
+    """
+
+    return await session.get(Source, item_id, with_for_update=True)
+
+
 async def get_by_internal_id(session: AsyncSession, internal_id: str) -> Source | None:
     result = await session.execute(select(Source).where(Source.internal_id == internal_id))
     return result.scalar_one_or_none()

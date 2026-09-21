@@ -114,7 +114,7 @@ async def create_base_tag(session: AsyncSession, actor: Actor, data: dict[str, s
 async def update_base_tag(
     session: AsyncSession, actor: Actor, item_id: uuid.UUID, data: dict[str, Any]
 ) -> dict[str, Any]:
-    row = await repo.get_by_id(session, item_id)
+    row = await repo.get_for_update(session, item_id)
     if row is None:
         raise NotFoundError("政策基础标签不存在")
     if data.get("version") != row.version:

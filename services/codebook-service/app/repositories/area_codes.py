@@ -14,6 +14,12 @@ async def get_by_id(session: AsyncSession, item_id: uuid.UUID) -> AreaCode | Non
     return await session.get(AreaCode, item_id)
 
 
+async def get_for_update(session: AsyncSession, item_id: uuid.UUID) -> AreaCode | None:
+    """更新路径专用：锁住目标行，见 policy_types.get_for_update 的说明。"""
+
+    return await session.get(AreaCode, item_id, with_for_update=True)
+
+
 async def get_by_county_id(session: AsyncSession, county_id: str) -> AreaCode | None:
     result = await session.execute(select(AreaCode).where(AreaCode.county_id == county_id))
     return result.scalar_one_or_none()

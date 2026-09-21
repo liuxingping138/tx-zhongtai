@@ -14,6 +14,12 @@ async def get_by_id(session: AsyncSession, item_id: uuid.UUID) -> Interpretation
     return await session.get(Interpretation, item_id)
 
 
+async def get_for_update(session: AsyncSession, item_id: uuid.UUID) -> Interpretation | None:
+    """更新路径专用：锁住目标行，见 sources.get_for_update 的说明。"""
+
+    return await session.get(Interpretation, item_id, with_for_update=True)
+
+
 async def get_by_relation_key(session: AsyncSession, relation_key: str) -> Interpretation | None:
     result = await session.execute(select(Interpretation).where(Interpretation.relation_key == relation_key))
     return result.scalar_one_or_none()
