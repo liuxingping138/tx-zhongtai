@@ -8,13 +8,13 @@ import { importAfterAreaResolve } from '@/api/codebook'
 import {
   clearSources,
   createSource,
-  downloadPolicy,
   importSources,
   listSources,
   sourceOptions,
   updateSource,
   type SourceItem,
 } from '@/api/policy'
+import { downloadFile } from '@/api/download'
 import { errorMessage, isApiError } from '@/api/errors'
 import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
 import FilterSelect from '@/components/FilterSelect.vue'
@@ -241,10 +241,10 @@ async function onExport() {
   if (exporting.value) return
   exporting.value = true
   try {
-    await downloadPolicy('/policy/sources/export', '信源管理.xlsx')
+    await downloadFile('/policy/sources/export', '信源管理.xlsx')
     ElMessage.success('下载已开始，请查看浏览器下载列表')
-  } catch {
-    ElMessage.error('下载失败，请重试')
+  } catch (error) {
+    ElMessage.error(errorMessage(error, '下载失败，请重试'))
   } finally {
     exporting.value = false
   }

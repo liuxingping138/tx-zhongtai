@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.actors import Actor
 from app.application.audit_emit import enqueue_event
-from app.application.excel import build_workbook, encode_skipped_file, parse_sheet
+from app.application.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async
 from app.core.clock import format_beijing, utcnow
 from app.domain.fields import BASE_TAG_COLUMNS
 from app.domain.models import BASE_TAG_FIELDS, BaseTag, content_hash
@@ -141,7 +141,7 @@ def _has_any_area_code(item: dict[str, str]) -> bool:
 
 
 async def import_base_tags(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, Any]:
-    parsed = parse_sheet(content, BASE_TAG_COLUMNS)
+    parsed = await parse_sheet_async(content, BASE_TAG_COLUMNS)
     db_hashes = await repo.list_hashes(session)
     staged: list[tuple[dict[str, str], str, str]] = []
     for item in parsed:
@@ -174,7 +174,7 @@ async def import_base_tags(session: AsyncSession, actor: Actor, content: bytes) 
             "skipped": blocked,
             "total": len(parsed),
             "rejected": True,
-            "skipped_file": encode_skipped_file(BASE_TAG_COLUMNS, marked),
+            "skipped_file": await encode_skipped_file_async(BASE_TAG_COLUMNS, marked),
         }
     inserted = 0
     now = utcnow()
@@ -221,4 +221,4 @@ async def export_base_tags(session: AsyncSession, actor: Actor) -> bytes:
         actor_name=actor.name,
         extra={"count": len(rows)},
     )
-    return build_workbook(BASE_TAG_COLUMNS, rows, sheet_name="政策基础信息表")
+    return await build_workbook_async(BASE_TAG_COLUMNS, rows, sheet_name="政策基础信息表")

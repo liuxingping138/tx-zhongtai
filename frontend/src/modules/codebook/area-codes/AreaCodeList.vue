@@ -7,12 +7,12 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   areaCodeOptions,
   createAreaCode,
-  downloadCodebook,
   importAreaCodes,
   listAreaCodes,
   updateAreaCode,
   type AreaCodeItem,
 } from '@/api/codebook'
+import { downloadFile } from '@/api/download'
 import { errorMessage, isApiError } from '@/api/errors'
 import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
 import FilterSelect from '@/components/FilterSelect.vue'
@@ -204,10 +204,10 @@ async function onExport() {
   if (exporting.value) return
   exporting.value = true
   try {
-    await downloadCodebook('/codebook/area-codes/export', '省市区编码表.xlsx')
+    await downloadFile('/codebook/area-codes/export', '省市区编码表.xlsx')
     ElMessage.success('下载已开始，请查看浏览器下载列表')
-  } catch {
-    ElMessage.error('下载失败，请重试')
+  } catch (error) {
+    ElMessage.error(errorMessage(error, '下载失败，请重试'))
   } finally {
     exporting.value = false
   }

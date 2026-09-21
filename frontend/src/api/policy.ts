@@ -1,5 +1,4 @@
 import { postExcelImport, type ImportResult, type ImportStage } from './excelImport'
-import { getAccessToken, getCsrfToken } from './session'
 import { http, request } from './http'
 import type { Page } from './types'
 
@@ -187,29 +186,3 @@ export function importInterpretations(
   return postExcelImport('/policy/interpretations/import', file, onProgress)
 }
 
-export async function downloadPolicy(path: string, filename: string): Promise<void> {
-  const headers: Record<string, string> = {}
-  const token = getAccessToken()
-  const csrf = getCsrfToken()
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
-  if (csrf) {
-    headers['X-CSRF-Token'] = csrf
-  }
-  const response = await fetch(`/api/v1${path}`, { headers, credentials: 'include' })
-  if (!response.ok) {
-    throw new Error('导出失败')
-  }
-  const blob = await response.blob()
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.hidden = true
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  // Give browsers time to consume the blob URL before releasing it.
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-}

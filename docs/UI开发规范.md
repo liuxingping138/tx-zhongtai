@@ -28,6 +28,7 @@
 | 分组业务表单 | `frontend/src/components/GroupedFields.vue` | 完整字段groups、表单model、submitError，保存前validate |
 | 系统字段验证 | `frontend/src/composables/useFieldValidation.ts` | 字段错误、提交验证，不覆盖业务规则 |
 | 未保存保护 | `frontend/src/composables/useUnsavedForm.ts` | visible、表单快照、saving；接close/beforeClose |
+| Excel 下载 | `frontend/src/api/download.ts` | `downloadFile(路径, 中文文件名)`；不要用裸 fetch，否则绕开 401 自动续期和统一中文错误提示，失败提示统一走 `errorMessage(error, '下载失败，请重试')` |
 | URL查询恢复 | `frontend/src/composables/useListQuery.ts` | query、load、私有字段列表 |
 | 上传状态与结果 | `frontend/src/components/ExcelImportProgress.vue`、`ExcelImportResult.vue` | 原模块导入接口及结果，不复制业务去重逻辑 |
 | 导航/基础色/字体/间距 | `frontend/src/layouts/`、`frontend/src/styles/theme.css` | 路由、发布配置、资源权限；账号放侧栏底部，不复制导航或另建色板 |

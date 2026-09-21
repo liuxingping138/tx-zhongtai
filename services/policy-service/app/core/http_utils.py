@@ -3,9 +3,13 @@ from __future__ import annotations
 import base64
 from typing import Any
 
+from fastapi import UploadFile
 from fastapi.responses import JSONResponse, Response
+from platform_common.errors import ApiError, ErrorCode
 from platform_common.request_context import get_request_id
 from platform_common.responses import ApiResponse
+
+_UPLOAD_CHUNK_BYTES = 1024 * 1024
 
 
 def success_json(data: Any = None, *, status_code: int = 200, message: str = "success") -> JSONResponse:
@@ -35,3 +39,23 @@ def import_result_response(result: dict[str, Any], filename: str) -> Response:
             ),
         },
     )
+
+
+async def read_upload_within_limit(file: UploadFile, max_bytes: int) -> bytes:
+    """分块读取上传文件，一超出上限立即中止。
+
+    先 ``await file.read()`` 再判断长度，会把整个文件读进内存后才拒绝，
+    上限就失去了保护作用；这里边读边累计，超限直接抛 422。
+    """
+
+    chunks: list[bytes] = []
+    size = 0
+    while True:
+        chunk = await file.read(_UPLOAD_CHUNK_BYTES)
+        if not chunk:
+            break
+        size += len(chunk)
+        if size > max_bytes:
+            raise ApiError("导入文件过大", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+        chunks.append(chunk)
+    return b"".join(chunks)

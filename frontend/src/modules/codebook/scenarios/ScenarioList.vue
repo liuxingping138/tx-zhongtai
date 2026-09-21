@@ -6,13 +6,13 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 import {
   createScenario,
-  downloadCodebook,
   importScenarios,
   listScenarios,
   scenarioOptions,
   updateScenario,
   type ScenarioItem,
 } from '@/api/codebook'
+import { downloadFile } from '@/api/download'
 import { errorMessage, isApiError } from '@/api/errors'
 import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
 import FilterSelect from '@/components/FilterSelect.vue'
@@ -260,10 +260,10 @@ async function onExport() {
   if (exporting.value) return
   exporting.value = true
   try {
-    await downloadCodebook('/codebook/scenarios/export', '行业场景字典表.xlsx')
+    await downloadFile('/codebook/scenarios/export', '行业场景字典表.xlsx')
     ElMessage.success('下载已开始，请查看浏览器下载列表')
-  } catch {
-    ElMessage.error('下载失败，请重试')
+  } catch (error) {
+    ElMessage.error(errorMessage(error, '下载失败，请重试'))
   } finally {
     exporting.value = false
   }

@@ -1,8 +1,11 @@
 import type { AxiosResponse } from 'axios'
 import { reactive } from 'vue'
 
+import { downloadBlob } from './download'
 import { http } from './http'
 import type { ApiResponse } from './types'
+
+export { downloadBlob }
 
 export interface ImportResult {
   inserted: number
@@ -98,15 +101,6 @@ export function downloadBase64Xlsx(content: string, filename: string): void {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     }),
   )
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  URL.revokeObjectURL(url)
-}
-
-export function downloadBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
   link.download = filename

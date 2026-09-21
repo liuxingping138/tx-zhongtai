@@ -4,7 +4,6 @@ import uuid
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import Response
-from platform_common.errors import ApiError, ErrorCode
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import PolicyTypeWrite
@@ -13,7 +12,7 @@ from app.application import policy_types as service
 from app.application.actors import Actor
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
-from app.core.http_utils import import_result_response, success_json
+from app.core.http_utils import import_result_response, read_upload_within_limit, success_json
 from app.domain.enums import SecurityClass
 
 router = APIRouter(prefix="/api/v1/codebook/policy-types", tags=["codebook-policy-types"])
@@ -63,9 +62,7 @@ async def import_items(
     actor: Actor = Depends(require_codebook_permission(RESOURCE, "import")),
     settings: Settings = Depends(get_settings),
 ):
-    content = await file.read()
-    if len(content) > settings.import_max_bytes:
-        raise ApiError("导入文件过大", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    content = await read_upload_within_limit(file, settings.import_max_bytes)
     return import_result_response(
         await service.import_policy_types(session, actor, content), "policy-types-import.xlsx"
     )

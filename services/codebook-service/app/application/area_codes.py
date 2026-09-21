@@ -11,7 +11,7 @@ from app.application.actors import Actor
 from app.application.audit_emit import enqueue_event
 from app.application.area_match import AreaSnap
 from app.application.area_resolve import build_resolve_workbook
-from app.application.excel import build_workbook, encode_skipped_file, parse_sheet
+from app.application.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async
 from app.core.clock import format_beijing, utcnow
 from app.domain.fields import AREA_CODE_COLUMNS
 from app.domain.models import AREA_CODE_FIELDS, AreaCode
@@ -146,7 +146,7 @@ async def update_area_code(
 
 
 async def import_area_codes(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, Any]:
-    parsed = parse_sheet(content, AREA_CODE_COLUMNS)
+    parsed = await parse_sheet_async(content, AREA_CODE_COLUMNS)
     return await upsert_area_code_rows(session, actor, parsed, event_type="codebook.area_code.imported")
 
 
@@ -197,7 +197,7 @@ async def upsert_area_code_rows(
         "updated": 0,
         "skipped": len(skipped_rows),
         "total": len(parsed),
-        "skipped_file": encode_skipped_file(AREA_CODE_COLUMNS, skipped_rows),
+        "skipped_file": await encode_skipped_file_async(AREA_CODE_COLUMNS, skipped_rows),
     }
 
 
@@ -238,4 +238,4 @@ async def export_area_codes(session: AsyncSession, actor: Actor) -> bytes:
         actor_name=actor.name,
         extra={"count": len(rows)},
     )
-    return build_workbook(AREA_CODE_COLUMNS, rows, sheet_name="省市区编码表")
+    return await build_workbook_async(AREA_CODE_COLUMNS, rows, sheet_name="省市区编码表")

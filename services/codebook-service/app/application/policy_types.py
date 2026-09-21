@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.actors import Actor
 from app.application.audit_emit import enqueue_event
-from app.application.excel import build_workbook, encode_skipped_file, parse_sheet
+from app.application.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async
 from app.core.clock import format_beijing, utcnow
 from app.domain.fields import POLICY_TYPE_COLUMNS
 from app.domain.models import PolicyType
@@ -116,7 +116,7 @@ async def update_policy_type(
 
 
 async def import_policy_types(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, Any]:
-    parsed = parse_sheet(content, POLICY_TYPE_COLUMNS)
+    parsed = await parse_sheet_async(content, POLICY_TYPE_COLUMNS)
     inserted = 0
     updated = 0
     skipped_rows: list[dict[str, str]] = []
@@ -166,7 +166,7 @@ async def import_policy_types(session: AsyncSession, actor: Actor, content: byte
         "updated": updated,
         "skipped": len(skipped_rows),
         "total": len(parsed),
-        "skipped_file": encode_skipped_file(POLICY_TYPE_COLUMNS, skipped_rows),
+        "skipped_file": await encode_skipped_file_async(POLICY_TYPE_COLUMNS, skipped_rows),
     }
 
 
@@ -181,4 +181,4 @@ async def export_policy_types(session: AsyncSession, actor: Actor) -> bytes:
         actor_name=actor.name,
         extra={"count": len(rows)},
     )
-    return build_workbook(POLICY_TYPE_COLUMNS, rows, sheet_name="政策类型枚举值")
+    return await build_workbook_async(POLICY_TYPE_COLUMNS, rows, sheet_name="政策类型枚举值")

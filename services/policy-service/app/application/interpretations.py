@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.actors import Actor
 from app.application.audit_emit import enqueue_event
-from app.application.excel import build_workbook, encode_skipped_file, parse_sheet
+from app.application.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async
 from app.application.region import make_policy_uid, make_relation_key
 from app.core.clock import format_beijing, utcnow
 from app.domain.fields import INTERPRETATION_COLUMNS
@@ -164,7 +164,7 @@ async def update_interpretation(
 
 
 async def import_interpretations(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, Any]:
-    parsed = parse_sheet(content, INTERPRETATION_COLUMNS)
+    parsed = await parse_sheet_async(content, INTERPRETATION_COLUMNS)
     inserted = 0
     skipped_rows: list[dict[str, str]] = []
     now = utcnow()
@@ -209,7 +209,7 @@ async def import_interpretations(session: AsyncSession, actor: Actor, content: b
         "updated": 0,
         "skipped": len(skipped_rows),
         "total": len(parsed),
-        "skipped_file": encode_skipped_file(INTERPRETATION_COLUMNS, skipped_rows),
+        "skipped_file": await encode_skipped_file_async(INTERPRETATION_COLUMNS, skipped_rows),
     }
 
 
@@ -222,4 +222,4 @@ async def export_interpretations(session: AsyncSession, actor: Actor) -> bytes:
         actor_name=actor.name,
         extra={"count": len(rows)},
     )
-    return build_workbook(INTERPRETATION_COLUMNS, rows, sheet_name="政策解读表")
+    return await build_workbook_async(INTERPRETATION_COLUMNS, rows, sheet_name="政策解读表")

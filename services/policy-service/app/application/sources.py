@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.actors import Actor
 from app.application.audit_emit import enqueue_event
-from app.application.excel import build_workbook, encode_skipped_file, parse_sheet
+from app.application.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async
 from app.application.region import digits_only, make_internal_id, next_site_code, normalize_region, site_code_prefix
 from app.core.clock import format_beijing, utcnow
 from app.domain.fields import SOURCE_COLUMNS
@@ -193,7 +193,7 @@ async def update_source(
 
 
 async def import_sources(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, Any]:
-    parsed = parse_sheet(content, SOURCE_COLUMNS)
+    parsed = await parse_sheet_async(content, SOURCE_COLUMNS)
     db_internal = await repo.list_internal_ids(session)
     db_site = await repo.list_site_codes(session)
     staged: list[tuple[dict[str, str], str, str, str]] = []
@@ -238,7 +238,7 @@ async def import_sources(session: AsyncSession, actor: Actor, content: bytes) ->
             "skipped": blocked,
             "total": len(parsed),
             "rejected": True,
-            "skipped_file": encode_skipped_file(SOURCE_COLUMNS, marked),
+            "skipped_file": await encode_skipped_file_async(SOURCE_COLUMNS, marked),
         }
     inserted = 0
     now = utcnow()
@@ -307,4 +307,4 @@ async def export_sources(session: AsyncSession, actor: Actor) -> bytes:
         actor_name=actor.name,
         extra={"count": len(rows)},
     )
-    return build_workbook(SOURCE_COLUMNS, rows, sheet_name="网站编码")
+    return await build_workbook_async(SOURCE_COLUMNS, rows, sheet_name="网站编码")
