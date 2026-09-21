@@ -56,10 +56,24 @@ async def list_filter_options(
 @router.get("/export")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def export_items(
+    policy_title: str | None = Query(default=None),
+    industry_scenario_code: str | None = Query(default=None),
+    industry_l1: str | None = Query(default=None),
+    opportunity_type: str | None = Query(default=None),
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_policy_permission(RESOURCE, "export")),
 ):
-    payload = await service.export_interpretations(session, actor)
+    # 导出复用列表的筛选条件，保证「所见即所导」。
+    payload = await service.export_interpretations(
+        session,
+        actor,
+        {
+            "policy_title": policy_title,
+            "industry_scenario_code": industry_scenario_code,
+            "industry_l1": industry_l1,
+            "opportunity_type": opportunity_type,
+        },
+    )
     return Response(
         content=payload,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

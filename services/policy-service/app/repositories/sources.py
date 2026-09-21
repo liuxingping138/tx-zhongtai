@@ -3,9 +3,11 @@ from __future__ import annotations
 import uuid
 from typing import Any, cast
 
-from sqlalchemy import CursorResult, delete, func, or_, select
+from sqlalchemy import ColumnElement, CursorResult, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
+from app.domain.filters import Filters
 from app.domain.models import Source
 
 
@@ -43,49 +45,64 @@ async def list_site_codes_for_district(session: AsyncSession, district_code: str
     return list(result.scalars())
 
 
+# 列表与导出共用同一份筛选定义，避免两边条件逐渐走偏。
+FILTER_COLUMNS: dict[str, InstrumentedAttribute[str]] = {
+    "site_name": Source.site_name,
+    "province_name": Source.province_name,
+    "city_name": Source.city_name,
+    "tag": Source.tag,
+    "site_code": Source.site_code,
+    "crawl_priority": Source.crawl_priority,
+}
+
+
+def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
+    conds: list[ColumnElement[bool]] = []
+    for key, value in filters.items():
+        column = FILTER_COLUMNS[key]  # 未知字段直接报错，避免筛选被静默忽略
+        if value:
+            conds.append(column.ilike(f"%{value}%"))
+    return conds
+
+
 async def list_items(
     session: AsyncSession,
     *,
-    site_name: str | None,
-    province_name: str | None,
-    city_name: str | None,
-    tag: str | None,
-    site_code: str | None,
-    crawl_priority: str | None,
+    filters: Filters,
     page: int,
     page_size: int,
 ) -> tuple[list[Source], int]:
-    stmt = select(Source)
-    count_stmt = select(func.count()).select_from(Source)
-    filters = [
-        (Source.site_name, site_name),
-        (Source.province_name, province_name),
-        (Source.city_name, city_name),
-        (Source.tag, tag),
-        (Source.site_code, site_code),
-        (Source.crawl_priority, crawl_priority),
-    ]
-    for column, value in filters:
-        if value:
-            cond = column.ilike(f"%{value}%")
-            stmt = stmt.where(cond)
-            count_stmt = count_stmt.where(cond)
-    total = int(await session.scalar(count_stmt) or 0)
+    conds = _conditions(filters)
+    total = int(await session.scalar(select(func.count()).select_from(Source).where(*conds)) or 0)
     result = await session.execute(
-        stmt.order_by(Source.site_code, Source.site_name).offset((page - 1) * page_size).limit(page_size)
+        select(Source)
+        .where(*conds)
+        .order_by(Source.site_code, Source.site_name)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
     )
     return list(result.scalars()), total
 
 
-async def count_all(session: AsyncSession) -> int:
-    """导出前先数行数，避免把超限的整表读进内存。"""
+async def count_filtered(session: AsyncSession, filters: Filters) -> int:
+    """导出前按同样的筛选条件数行数，避免把超限的结果集读进内存。"""
 
-    return int(await session.scalar(select(func.count()).select_from(Source)) or 0)
+    return int(await session.scalar(select(func.count()).select_from(Source).where(*_conditions(filters))) or 0)
+
+
+async def list_filtered(session: AsyncSession, filters: Filters) -> list[Source]:
+    """导出用：与列表一致的筛选和排序，不分页。"""
+
+    result = await session.execute(
+        select(Source).where(*_conditions(filters)).order_by(Source.site_code, Source.site_name)
+    )
+    return list(result.scalars())
 
 
 async def list_all(session: AsyncSession) -> list[Source]:
-    result = await session.execute(select(Source).order_by(Source.site_code, Source.site_name))
-    return list(result.scalars())
+    """全表读取（不筛选）。导出请用 list_filtered，两者排序一致。"""
+
+    return await list_filtered(session, {})
 
 
 async def delete_all(session: AsyncSession) -> int:

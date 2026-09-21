@@ -61,10 +61,28 @@ async def list_filter_options(
 @router.get("/export")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def export_items(
+    site_name: str | None = Query(default=None),
+    province_name: str | None = Query(default=None),
+    city_name: str | None = Query(default=None),
+    tag: str | None = Query(default=None),
+    site_code: str | None = Query(default=None),
+    crawl_priority: str | None = Query(default=None),
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_policy_permission(RESOURCE, "export")),
 ):
-    payload = await service.export_sources(session, actor)
+    # 导出复用列表的筛选条件，保证「所见即所导」。
+    payload = await service.export_sources(
+        session,
+        actor,
+        {
+            "site_name": site_name,
+            "province_name": province_name,
+            "city_name": city_name,
+            "tag": tag,
+            "site_code": site_code,
+            "crawl_priority": crawl_priority,
+        },
+    )
     return Response(
         content=payload,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

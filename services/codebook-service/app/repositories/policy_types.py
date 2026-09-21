@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import Integer, cast, func, or_, select
+from sqlalchemy import ColumnElement, Integer, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.filters import Filters
 from app.domain.models import PolicyType
 
 
@@ -17,37 +18,60 @@ async def get_by_name(session: AsyncSession, type_name: str) -> PolicyType | Non
     return result.scalar_one_or_none()
 
 
+# 列表与导出共用同一份筛选定义，避免两边条件逐渐走偏。
+# 政策类型只有一个关键词，跨三列做 or 匹配。
+KEYWORD_COLUMNS = (PolicyType.type_name, PolicyType.definition, PolicyType.seq_no)
+_ORDER_BY = (cast(func.nullif(PolicyType.seq_no, ""), Integer), PolicyType.type_name)
+
+
+def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
+    keyword = filters.get("keyword")
+    unknown = set(filters) - {"keyword"}
+    if unknown:  # 未知字段直接报错，避免筛选被静默忽略
+        raise KeyError(f"未知筛选字段: {sorted(unknown)}")
+    if not keyword:
+        return []
+    like = f"%{keyword}%"
+    return [or_(*(column.ilike(like) for column in KEYWORD_COLUMNS))]
+
+
 async def list_items(
     session: AsyncSession,
     *,
-    keyword: str | None,
+    filters: Filters,
     page: int,
     page_size: int,
 ) -> tuple[list[PolicyType], int]:
-    stmt = select(PolicyType)
-    count_stmt = select(func.count()).select_from(PolicyType)
-    if keyword:
-        like = f"%{keyword}%"
-        cond = or_(PolicyType.type_name.ilike(like), PolicyType.definition.ilike(like), PolicyType.seq_no.ilike(like))
-        stmt = stmt.where(cond)
-        count_stmt = count_stmt.where(cond)
-    total = int(await session.scalar(count_stmt) or 0)
+    conds = _conditions(filters)
+    total = int(await session.scalar(select(func.count()).select_from(PolicyType).where(*conds)) or 0)
     result = await session.execute(
-        stmt.order_by(cast(func.nullif(PolicyType.seq_no, ""), Integer), PolicyType.type_name)
+        select(PolicyType)
+        .where(*conds)
+        .order_by(*_ORDER_BY)
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
     return list(result.scalars()), total
 
 
-async def count_all(session: AsyncSession) -> int:
-    """导出前先数行数，避免把超限的整表读进内存。"""
+async def count_filtered(session: AsyncSession, filters: Filters) -> int:
+    """导出前按同样的筛选条件数行数，避免把超限的结果集读进内存。"""
 
-    return int(await session.scalar(select(func.count()).select_from(PolicyType)) or 0)
+    return int(await session.scalar(select(func.count()).select_from(PolicyType).where(*_conditions(filters))) or 0)
+
+
+async def list_filtered(session: AsyncSession, filters: Filters) -> list[PolicyType]:
+    """导出用：与列表一致的筛选和排序，不分页。"""
+
+    result = await session.execute(
+        select(PolicyType).where(*_conditions(filters)).order_by(*_ORDER_BY)
+    )
+    return list(result.scalars())
 
 
 async def list_all(session: AsyncSession) -> list[PolicyType]:
-    result = await session.execute(
-        select(PolicyType).order_by(cast(func.nullif(PolicyType.seq_no, ""), Integer), PolicyType.type_name)
-    )
-    return list(result.scalars())
+    """全表读取（不筛选）。导出请用 list_filtered，两者排序一致。"""
+
+    return await list_filtered(session, {})
+
+

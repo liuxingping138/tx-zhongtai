@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
+from app.domain.filters import Filters
 from app.domain.models import Scenario
 
 
@@ -17,44 +19,61 @@ async def get_by_hash(session: AsyncSession, digest: str) -> Scenario | None:
     return result.scalar_one_or_none()
 
 
+# 列表与导出共用同一份筛选定义，避免两边条件逐渐走偏。
+FILTER_COLUMNS: dict[str, InstrumentedAttribute[str]] = {
+    "industry_scenario_code": Scenario.industry_scenario_code,
+    "industry_l1": Scenario.industry_l1,
+    "scenario_tag": Scenario.scenario_tag,
+    "customer_group_name": Scenario.customer_group_name,
+}
+
+
+def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
+    conds: list[ColumnElement[bool]] = []
+    for key, value in filters.items():
+        column = FILTER_COLUMNS[key]  # 未知字段直接报错，避免筛选被静默忽略
+        if value:
+            conds.append(column.ilike(f"%{value}%"))
+    return conds
+
+
 async def list_items(
     session: AsyncSession,
     *,
-    industry_scenario_code: str | None,
-    industry_l1: str | None,
-    scenario_tag: str | None,
-    customer_group_name: str | None,
+    filters: Filters,
     page: int,
     page_size: int,
 ) -> tuple[list[Scenario], int]:
-    stmt = select(Scenario)
-    count_stmt = select(func.count()).select_from(Scenario)
-    filters = [
-        (Scenario.industry_scenario_code, industry_scenario_code),
-        (Scenario.industry_l1, industry_l1),
-        (Scenario.scenario_tag, scenario_tag),
-        (Scenario.customer_group_name, customer_group_name),
-    ]
-    for column, value in filters:
-        if value:
-            cond = column.ilike(f"%{value}%")
-            stmt = stmt.where(cond)
-            count_stmt = count_stmt.where(cond)
-    total = int(await session.scalar(count_stmt) or 0)
+    conds = _conditions(filters)
+    total = int(await session.scalar(select(func.count()).select_from(Scenario).where(*conds)) or 0)
     result = await session.execute(
-        stmt.order_by(Scenario.industry_scenario_code, Scenario.scenario_tag)
+        select(Scenario)
+        .where(*conds)
+        .order_by(Scenario.industry_scenario_code, Scenario.scenario_tag)
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
     return list(result.scalars()), total
 
 
-async def count_all(session: AsyncSession) -> int:
-    """导出前先数行数，避免把超限的整表读进内存。"""
+async def count_filtered(session: AsyncSession, filters: Filters) -> int:
+    """导出前按同样的筛选条件数行数，避免把超限的结果集读进内存。"""
 
-    return int(await session.scalar(select(func.count()).select_from(Scenario)) or 0)
+    return int(await session.scalar(select(func.count()).select_from(Scenario).where(*_conditions(filters))) or 0)
+
+
+async def list_filtered(session: AsyncSession, filters: Filters) -> list[Scenario]:
+    """导出用：与列表一致的筛选和排序，不分页。"""
+
+    result = await session.execute(
+        select(Scenario).where(*_conditions(filters)).order_by(Scenario.industry_scenario_code, Scenario.scenario_tag)
+    )
+    return list(result.scalars())
 
 
 async def list_all(session: AsyncSession) -> list[Scenario]:
-    result = await session.execute(select(Scenario).order_by(Scenario.industry_scenario_code, Scenario.scenario_tag))
-    return list(result.scalars())
+    """全表读取（不筛选）。导出请用 list_filtered，两者排序一致。"""
+
+    return await list_filtered(session, {})
+
+

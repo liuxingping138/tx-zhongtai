@@ -19,7 +19,7 @@ import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import FilterBar from '@/components/FilterBar.vue'
-import { useListQuery } from '@/composables/useListQuery'
+import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
 import GroupedFields, { type EditorGroup } from '@/components/GroupedFields.vue'
@@ -234,7 +234,7 @@ async function onExport() {
   if (exporting.value) return
   exporting.value = true
   try {
-    await downloadFile('/policy/base-tags/export', '政策基础标签表.xlsx')
+    await downloadFile('/policy/base-tags/export', '政策基础标签表.xlsx', filtersForExport(listQuery.applied))
     ElMessage.success('下载已开始，请查看浏览器下载列表')
   } catch (error) {
     ElMessage.error(errorMessage(error, '下载失败，请重试'))
@@ -409,13 +409,18 @@ const selectedColumns = ref([...defaultColumns.value])
             </el-button>
           </el-tooltip>
         </el-upload>
-        <el-button
-          :icon="Download"
-          :loading="exporting"
-          @click="onExport"
+        <el-tooltip
+          content="按当前已生效的筛选条件导出；未筛选时导出全表。"
+          placement="bottom"
         >
-          下载 Excel
-        </el-button>
+          <el-button
+            :icon="Download"
+            :loading="exporting"
+            @click="onExport"
+          >
+            下载 Excel
+          </el-button>
+        </el-tooltip>
         <el-button
           v-if="canAudit"
           :icon="Clock"

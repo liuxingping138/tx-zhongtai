@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
+from app.domain.filters import Filters
 from app.domain.models import BaseTag
 
 
@@ -22,44 +24,62 @@ async def list_hashes(session: AsyncSession) -> set[str]:
     return set(result.scalars())
 
 
+# 列表与导出共用同一份筛选定义，避免两边条件逐渐走偏。
+FILTER_COLUMNS: dict[str, InstrumentedAttribute[str]] = {
+    "policy_name": BaseTag.policy_name,
+    "province_name": BaseTag.province_name,
+    "policy_types": BaseTag.policy_types,
+    "is_penetrate": BaseTag.is_penetrate,
+    "need_interpret": BaseTag.need_interpret,
+}
+
+
+def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
+    conds: list[ColumnElement[bool]] = []
+    for key, value in filters.items():
+        column = FILTER_COLUMNS[key]  # 未知字段直接报错，避免筛选被静默忽略
+        if value:
+            conds.append(column.ilike(f"%{value}%"))
+    return conds
+
+
 async def list_items(
     session: AsyncSession,
     *,
-    policy_name: str | None,
-    province_name: str | None,
-    policy_types: str | None,
-    is_penetrate: str | None,
-    need_interpret: str | None,
+    filters: Filters,
     page: int,
     page_size: int,
 ) -> tuple[list[BaseTag], int]:
-    stmt = select(BaseTag)
-    count_stmt = select(func.count()).select_from(BaseTag)
-    filters = [
-        (BaseTag.policy_name, policy_name),
-        (BaseTag.province_name, province_name),
-        (BaseTag.policy_types, policy_types),
-        (BaseTag.is_penetrate, is_penetrate),
-        (BaseTag.need_interpret, need_interpret),
-    ]
-    for column, value in filters:
-        if value:
-            cond = column.ilike(f"%{value}%")
-            stmt = stmt.where(cond)
-            count_stmt = count_stmt.where(cond)
-    total = int(await session.scalar(count_stmt) or 0)
+    conds = _conditions(filters)
+    total = int(await session.scalar(select(func.count()).select_from(BaseTag).where(*conds)) or 0)
     result = await session.execute(
-        stmt.order_by(BaseTag.province_code, BaseTag.policy_name).offset((page - 1) * page_size).limit(page_size)
+        select(BaseTag)
+        .where(*conds)
+        .order_by(BaseTag.province_code, BaseTag.policy_name)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
     )
     return list(result.scalars()), total
 
 
-async def count_all(session: AsyncSession) -> int:
-    """导出前先数行数，避免把超限的整表读进内存。"""
+async def count_filtered(session: AsyncSession, filters: Filters) -> int:
+    """导出前按同样的筛选条件数行数，避免把超限的结果集读进内存。"""
 
-    return int(await session.scalar(select(func.count()).select_from(BaseTag)) or 0)
+    return int(await session.scalar(select(func.count()).select_from(BaseTag).where(*_conditions(filters))) or 0)
+
+
+async def list_filtered(session: AsyncSession, filters: Filters) -> list[BaseTag]:
+    """导出用：与列表一致的筛选和排序，不分页。"""
+
+    result = await session.execute(
+        select(BaseTag).where(*_conditions(filters)).order_by(BaseTag.province_code, BaseTag.policy_name)
+    )
+    return list(result.scalars())
 
 
 async def list_all(session: AsyncSession) -> list[BaseTag]:
-    result = await session.execute(select(BaseTag).order_by(BaseTag.province_code, BaseTag.policy_name))
-    return list(result.scalars())
+    """全表读取（不筛选）。导出请用 list_filtered，两者排序一致。"""
+
+    return await list_filtered(session, {})
+
+

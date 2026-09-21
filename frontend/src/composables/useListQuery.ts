@@ -65,3 +65,21 @@ export function useListQuery<T extends Record<string, Value>>(query: T, reload: 
   })
   return { commit, applied, captureApplied }
 }
+
+const PAGING_KEYS = ['page', 'page_size']
+
+/**
+ * 取「已生效」的筛选条件用于导出。
+ *
+ * 用 applied 而不是 query：query 是用户正在输入、还没点查询的值，
+ * 用它导出会导出屏幕上没看到的结果。去掉分页参数，导出本来就不分页。
+ */
+export function filtersForExport(applied: Record<string, unknown>): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(applied)) {
+    if (PAGING_KEYS.includes(key)) continue
+    if (typeof value === 'string' && value !== '') out[key] = value
+    else if (typeof value === 'number') out[key] = String(value)
+  }
+  return out
+}

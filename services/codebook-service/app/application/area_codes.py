@@ -15,6 +15,7 @@ from app.application.excel import build_workbook_async, encode_skipped_file_asyn
 from app.core.clock import format_beijing, utcnow
 from app.core.config import get_settings
 from app.domain.fields import AREA_CODE_COLUMNS
+from app.domain.filters import Filters
 from app.domain.models import AREA_CODE_FIELDS, AreaCode
 from app.repositories import area_codes as repo
 from app.repositories import options as options_repo
@@ -66,9 +67,11 @@ async def list_area_codes(
 ) -> dict[str, Any]:
     items, total = await repo.list_items(
         session,
-        prov_name=prov_name,
-        city_name=city_name,
-        county_name=county_name,
+        filters={
+            "prov_name": prov_name,
+            "city_name": city_name,
+            "county_name": county_name,
+        },
         page=page,
         page_size=page_size,
     )
@@ -217,7 +220,7 @@ async def resolve_area_codes(session: AsyncSession, actor: Actor, content: bytes
             city_name_short=row.city_name_short,
             county_name_short=row.county_name_short,
         )
-        for row in await repo.list_all(session)
+        for row in await repo.list_all(session)  # 地区匹配需要完整码表，不受导出筛选影响
     ]
     payload, matched, unmatched = await asyncio.to_thread(build_resolve_workbook, content, catalog)
     await enqueue_event(
@@ -230,26 +233,27 @@ async def resolve_area_codes(session: AsyncSession, actor: Actor, content: bytes
     return payload, matched, unmatched
 
 
-async def _assert_exportable(session: AsyncSession) -> None:
-    """导出前校验行数上限。
+async def _assert_exportable(session: AsyncSession, filters: Filters) -> None:
+    """导出前按当前筛选条件校验行数上限。
 
-    导出是整表读进内存再生成 Excel，没有上限时大表会把服务撑爆。
-    上限由 ``export_max_rows`` 配置，默认 10 万行。
+    导出是把结果集整个读进内存再生成 Excel，没有上限时大表会把服务撑爆。
+    上限由 ``export_max_rows`` 配置，默认 10 万行；超限时提示先缩小筛选范围。
     """
 
     limit = get_settings().export_max_rows
-    total = await repo.count_all(session)
+    total = await repo.count_filtered(session, filters)
     if total > limit:
+        scope = "筛选结果" if any(filters.values()) else "本表"
         raise ApiError(
-            f"本表共 {total} 条，超过单次导出上限 {limit} 条，请联系管理员调整上限后再试。",
+            f"{scope}共 {total} 条，超过单次导出上限 {limit} 条，请先缩小筛选范围后再导出。",
             code=ErrorCode.VALIDATION_ERROR,
             http_status=422,
         )
 
 
-async def export_area_codes(session: AsyncSession, actor: Actor) -> bytes:
-    await _assert_exportable(session)
-    rows = [_to_out(item) for item in await repo.list_all(session)]
+async def export_area_codes(session: AsyncSession, actor: Actor, filters: Filters) -> bytes:
+    await _assert_exportable(session, filters)
+    rows = [_to_out(item) for item in await repo.list_filtered(session, filters)]
     await enqueue_event(
         session,
         event_type="codebook.area_code.exported",

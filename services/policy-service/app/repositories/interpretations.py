@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
+from app.domain.filters import Filters
 from app.domain.models import Interpretation
 
 
@@ -22,46 +24,63 @@ async def list_relation_keys(session: AsyncSession) -> set[str]:
     return set(result.scalars())
 
 
+# 列表与导出共用同一份筛选定义，避免两边条件逐渐走偏。
+FILTER_COLUMNS: dict[str, InstrumentedAttribute[str]] = {
+    "policy_title": Interpretation.policy_title,
+    "industry_scenario_code": Interpretation.industry_scenario_code,
+    "industry_l1": Interpretation.industry_l1,
+    "opportunity_type": Interpretation.opportunity_type,
+}
+
+
+def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
+    conds: list[ColumnElement[bool]] = []
+    for key, value in filters.items():
+        column = FILTER_COLUMNS[key]  # 未知字段直接报错，避免筛选被静默忽略
+        if value:
+            conds.append(column.ilike(f"%{value}%"))
+    return conds
+
+
 async def list_items(
     session: AsyncSession,
     *,
-    policy_title: str | None,
-    industry_scenario_code: str | None,
-    industry_l1: str | None,
-    opportunity_type: str | None,
+    filters: Filters,
     page: int,
     page_size: int,
 ) -> tuple[list[Interpretation], int]:
-    stmt = select(Interpretation)
-    count_stmt = select(func.count()).select_from(Interpretation)
-    filters = [
-        (Interpretation.policy_title, policy_title),
-        (Interpretation.industry_scenario_code, industry_scenario_code),
-        (Interpretation.industry_l1, industry_l1),
-        (Interpretation.opportunity_type, opportunity_type),
-    ]
-    for column, value in filters:
-        if value:
-            cond = column.ilike(f"%{value}%")
-            stmt = stmt.where(cond)
-            count_stmt = count_stmt.where(cond)
-    total = int(await session.scalar(count_stmt) or 0)
+    conds = _conditions(filters)
+    total = int(await session.scalar(select(func.count()).select_from(Interpretation).where(*conds)) or 0)
     result = await session.execute(
-        stmt.order_by(Interpretation.policy_title, Interpretation.industry_scenario_code)
+        select(Interpretation)
+        .where(*conds)
+        .order_by(Interpretation.policy_title, Interpretation.industry_scenario_code)
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
     return list(result.scalars()), total
 
 
-async def count_all(session: AsyncSession) -> int:
-    """导出前先数行数，避免把超限的整表读进内存。"""
+async def count_filtered(session: AsyncSession, filters: Filters) -> int:
+    """导出前按同样的筛选条件数行数，避免把超限的结果集读进内存。"""
 
-    return int(await session.scalar(select(func.count()).select_from(Interpretation)) or 0)
+    return int(await session.scalar(select(func.count()).select_from(Interpretation).where(*_conditions(filters))) or 0)
+
+
+async def list_filtered(session: AsyncSession, filters: Filters) -> list[Interpretation]:
+    """导出用：与列表一致的筛选和排序，不分页。"""
+
+    result = await session.execute(
+        select(Interpretation)
+        .where(*_conditions(filters))
+        .order_by(Interpretation.policy_title, Interpretation.industry_scenario_code)
+    )
+    return list(result.scalars())
 
 
 async def list_all(session: AsyncSession) -> list[Interpretation]:
-    result = await session.execute(
-        select(Interpretation).order_by(Interpretation.policy_title, Interpretation.industry_scenario_code)
-    )
-    return list(result.scalars())
+    """全表读取（不筛选）。导出请用 list_filtered，两者排序一致。"""
+
+    return await list_filtered(session, {})
+
+

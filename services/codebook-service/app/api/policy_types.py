@@ -43,10 +43,18 @@ async def list_filter_options(
 @router.get("/export")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def export_items(
+    keyword: str | None = Query(default=None),
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_codebook_permission(RESOURCE, "export")),
 ):
-    payload = await service.export_policy_types(session, actor)
+    # 导出复用列表的筛选条件，保证「所见即所导」。
+    payload = await service.export_policy_types(
+        session,
+        actor,
+        {
+            "keyword": keyword,
+        },
+    )
     return Response(
         content=payload,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
