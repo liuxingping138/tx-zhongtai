@@ -53,10 +53,10 @@ class Role(Base):
 
 class UserRole(Base):
     __tablename__ = "iam_user_roles"
-    __table_args__ = (
-        UniqueConstraint("user_id", "role_id", name="uq_iam_user_roles_user_role"),
-        {"comment": "用户角色关系"},
-    )
+    # 唯一性由 (user_id, role_id) 复合主键保证，库里就是这一个约束
+    # （名字沿用 uq_iam_user_roles_user_role）。不要再额外声明同列的
+    # UniqueConstraint，那会让 alembic check 反复提议补一个不存在的约束。
+    __table_args__ = {"comment": "用户角色关系"}
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("iam_users.id", ondelete="RESTRICT"), primary_key=True, comment="用户ID"
@@ -103,10 +103,8 @@ class ResourceAction(Base):
 
 class RoleGrant(Base):
     __tablename__ = "iam_role_grants"
-    __table_args__ = (
-        UniqueConstraint("role_id", "resource_id", name="uq_iam_role_grants_role_resource"),
-        {"comment": "角色授权"},
-    )
+    # 同 UserRole：唯一性由 (role_id, resource_id) 复合主键保证。
+    __table_args__ = {"comment": "角色授权"}
 
     role_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("iam_roles.id", ondelete="RESTRICT"), primary_key=True, comment="角色ID"

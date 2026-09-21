@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, Integer, String, Text
+from sqlalchemy import DateTime, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -15,7 +15,15 @@ from app.core.orm_base import Base
 
 class AuditEvent(Base):
     __tablename__ = "audit_events"
-    __table_args__ = {"comment": "操作日志"}
+    # 这四个索引由迁移 c2b8d4e7a201 建出，必须在 model 里同步声明，
+    # 否则 alembic check 会认为库里多了索引、提议把它们删掉。
+    __table_args__ = (
+        Index("ix_audit_events_occurred_at", "occurred_at"),
+        Index("ix_audit_events_actor_id", "actor_id"),
+        Index("ix_audit_events_module_action", "module_code", "action_code"),
+        Index("ix_audit_events_outcome", "outcome"),
+        {"comment": "操作日志"},
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, comment="主键")
     event_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), unique=True, nullable=False, comment="业务事件ID")

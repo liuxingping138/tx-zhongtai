@@ -8,7 +8,7 @@ PY_PACKAGES := packages/platform-common services/iam-service services/audit-serv
 JWT_KEYS_DIR := deploy/secrets/jwt
 JWT_P6_DIR := deploy/secrets/jwt-p6
 
-.PHONY: help bootstrap jwt-keys jwt-keys-p6 dev-up dev-down migrate seed admin-create check \
+.PHONY: help bootstrap jwt-keys jwt-keys-p6 dev-up dev-down migrate migrate-check seed admin-create check \
         test-unit test-integration test-e2e smoke provision-audit-cleanup provision-codebook-db \
         seed-area-codes \
         provision-policy-db \
@@ -25,6 +25,7 @@ help:
 	@echo "  make seed-area-codes  从 SQL 种子导入省市区编码表（按区县编码去重）"
 	@echo "  make admin-create     创建初始管理员（密码从 ADMIN_PASSWORD 读取，不进命令行参数）"
 	@echo "  make check            Python 静态检查 + 前端类型检查/构建/lint"
+	@echo "  make migrate-check    检查各服务 model 与数据库是否漂移（需开发栈已启动）"
 	@echo "  make test-unit        运行三个 Python 包 + 前端的单元测试"
 	@echo "  make test-integration 隔离栈 A01-A15 等真实依赖验收"
 	@echo "  make test-e2e         Playwright 关键流程（需先 integration）"
@@ -88,6 +89,14 @@ migrate:
 	@$(MAKE) provision-policy-db
 	@echo "== policy-service 迁移 =="
 	$(COMPOSE) exec -T policy-service uv run alembic upgrade head
+
+migrate-check:
+	@# alembic check 需要连真实库，进不了 make check，单独跑。
+	@# model 改了但没写迁移、或迁移漏建索引/约束，都会在这里暴露。
+	@set -e; for s in iam-service audit-service codebook-service policy-service; do \
+		printf '%-20s ' "$$s"; \
+		$(COMPOSE) exec -T $$s uv run alembic check 2>&1 | tail -1; \
+	done
 
 provision-audit-cleanup:
 	@echo "== 补建审计清理账号（已有数据卷不会重跑 init） =="
