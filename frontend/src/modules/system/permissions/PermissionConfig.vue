@@ -19,6 +19,8 @@ const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
+const loadError = ref('')
+const failedRoleId = ref('')
 const saving = ref(false)
 const roleKeyword = ref('')
 const roles = ref<RoleItem[]>([])
@@ -147,8 +149,18 @@ async function activateRole(roleId: string, force = false) {
     await loadGrants(roleId)
     currentRoleId.value = roleId
     syncUrl(roleId)
+    loadError.value = ''
+    failedRoleId.value = ''
   } catch (error) {
-    ElMessage.error(errorMessage(error, '加载授权失败'))
+    const message = errorMessage(error, '加载授权失败')
+    failedRoleId.value = roleId
+    // 已经有一个角色的授权显示着，就别拿错误页把它顶掉——那份内容还是好的。
+    // 只有什么都没加载出来时才铺内联错误，否则页面空着又只剩一个会消失的 toast。
+    if (role.value) {
+      ElMessage.error(message)
+    } else {
+      loadError.value = message
+    }
   } finally {
     loading.value = false
   }
@@ -161,6 +173,8 @@ async function bootstrap() {
     const preferred = routeRoleId()
     const next =
       roles.value.find((item) => item.id === preferred)?.id ?? roles.value.find((item) => item.status === 'active')?.id ?? roles.value[0]?.id ?? ''
+    loadError.value = ''
+    failedRoleId.value = ''
     if (!next) {
       role.value = null
       return
@@ -169,10 +183,20 @@ async function bootstrap() {
     syncUrl(next)
     await loadGrants(next)
   } catch (error) {
-    ElMessage.error(errorMessage(error, '加载授权失败'))
+    loadError.value = errorMessage(error, '加载授权失败')
   } finally {
     loading.value = false
   }
+}
+
+async function onRetry() {
+  // 角色列表拿到了、只是某个角色的授权没拿到，就只重试那个角色，别把整页重置。
+  const roleId = failedRoleId.value || currentRoleId.value
+  if (roles.value.length && roleId) {
+    await activateRole(roleId, true)
+    return
+  }
+  await bootstrap()
 }
 
 function onLeafChange(code: string, level: GrantLevel) {
@@ -293,7 +317,27 @@ onMounted(() => {
       </div>
     </section>
 
-    <div class="iam-page__body">
+    <!-- 角色列表都没拿到，左侧没有可点的东西，整页给错误和重试。 -->
+    <div
+      v-if="loadError && !roles.length"
+      class="perm-error panel"
+      role="alert"
+    >
+      <h2>暂时无法加载授权</h2>
+      <p>{{ loadError }}</p>
+      <el-button
+        type="primary"
+        :loading="loading"
+        @click="onRetry"
+      >
+        重新加载
+      </el-button>
+    </div>
+
+    <div
+      v-else
+      class="iam-page__body"
+    >
       <aside class="panel iam-roles">
         <div class="iam-roles__head">
           <strong>角色</strong>
@@ -356,8 +400,24 @@ onMounted(() => {
         </div>
 
         <div class="panel perm-tree-card">
+          <!-- 角色列表在、只是这个角色的授权没拿到：左侧仍可切换，错误只占右侧。 -->
+          <div
+            v-if="loadError"
+            class="perm-error"
+            role="alert"
+          >
+            <h2>暂时无法加载授权</h2>
+            <p>{{ loadError }}</p>
+            <el-button
+              type="primary"
+              :loading="loading"
+              @click="onRetry"
+            >
+              重新加载
+            </el-button>
+          </div>
           <el-empty
-            v-if="!role"
+            v-else-if="!role"
             description="先在左侧选择一个角色"
           />
           <el-tree
@@ -598,6 +658,32 @@ onMounted(() => {
 
 .perm-tree-card {
   padding: 8px 8px 16px;
+}
+
+/* 与列表页 ListPage 的 .list-error 视觉保持一致。 */
+.perm-error {
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+  color: var(--zt-ink-700);
+}
+
+.perm-error h2 {
+  font-size: 17px;
+  margin: 0;
+}
+
+.perm-error p {
+  max-width: 560px;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.7;
 }
 
 .perm-tree {

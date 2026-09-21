@@ -90,6 +90,27 @@ test('permissions: role load failure keeps selection; saving locks inputs and ro
 })
 
 
+test('permissions: initial load failure shows a persistent error with a working retry', async ({ page }) => {
+  // 原来初次加载失败只弹一个会消失的 toast，页面空着且没有重试入口，只能刷整页。
+  await page.route('**/api/v1/system/resources', route => respond(route, { tree: [] }))
+  let attempts = 0
+  await page.route('**/api/v1/system/roles?**', route => {
+    attempts += 1
+    if (attempts === 1) return route.fulfill({ status: 503, json: { message: '授权服务暂时不可用' } })
+    return respond(route, { items: [role('1')], total: 1 })
+  })
+  await page.route('**/api/v1/system/roles/*/grants', route => respond(route, { role: role('1'), grants: [] }))
+
+  await page.goto('/system/permissions')
+  const error = page.getByRole('alert').filter({ hasText: '暂时无法加载授权' })
+  await expect(error).toBeVisible()
+  await expect(error).toContainText('授权服务暂时不可用')
+
+  await error.getByRole('button', { name: '重新加载', exact: true }).click()
+  await expect(page.getByRole('button', { name: /角色1/ })).toBeVisible()
+  await expect(page.getByText('暂时无法加载授权')).toHaveCount(0)
+})
+
 test('permissions: includes roles after the first 100', async ({ page }) => {
   await page.route('**/api/v1/system/roles?**', route => {
     const second = new URL(route.request().url()).searchParams.get('page') === '2'
