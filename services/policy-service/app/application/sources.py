@@ -4,17 +4,17 @@ import uuid
 from collections import Counter
 from typing import Any
 
+from platform_common.actors import Actor
+from platform_common.clock import format_beijing, utcnow
 from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionConflictError
+from platform_common.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async
+from platform_common.filters import Filters
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.actors import Actor
 from app.application.audit_emit import enqueue_event
-from app.application.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async
 from app.application.region import digits_only, make_internal_id, next_site_code, normalize_region, site_code_prefix
-from app.core.clock import format_beijing, utcnow
 from app.core.config import get_settings
 from app.domain.fields import SOURCE_COLUMNS
-from app.domain.filters import Filters
 from app.domain.models import SOURCE_FIELDS, Source
 from app.repositories import options as options_repo
 from app.repositories import sources as repo
@@ -197,7 +197,7 @@ async def update_source(
 
 
 async def import_sources(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, Any]:
-    parsed = await parse_sheet_async(content, SOURCE_COLUMNS)
+    parsed = await parse_sheet_async(content, SOURCE_COLUMNS, subject="政策")
     db_internal = await repo.list_internal_ids(session)
     db_site = await repo.list_site_codes(session)
     staged: list[tuple[dict[str, str], str, str, str]] = []

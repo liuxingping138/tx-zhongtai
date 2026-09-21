@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import uuid
 
+from platform_common.filters import Filters
 from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
-from app.domain.filters import Filters
 from app.domain.models import BaseTag
 
 

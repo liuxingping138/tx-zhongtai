@@ -6,7 +6,8 @@ import asyncio
 import logging
 from pathlib import Path
 
-from app.application.actors import Actor
+from platform_common.actors import Actor
+
 from app.application.area_codes import upsert_area_code_rows
 from app.application.area_sql import parse_area_sql
 from app.core.database import SessionLocal

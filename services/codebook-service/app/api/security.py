@@ -1,25 +1,20 @@
+"""本服务的鉴权依赖。逻辑在 platform_common.service_authz，这里只绑定本服务配置。"""
+
 from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
 
-from fastapi import Depends, Request
+from fastapi import Depends
 from platform_common.authz import AuthzClient
-from platform_common.errors import UnauthenticatedError
+from platform_common.enums import SecurityClass
+from platform_common.service_authz import build_permission_dependency, classified
 
-from app.application.actors import Actor
 from app.core.config import Settings, get_settings
-from app.domain.enums import SecurityClass
+
+__all__ = ["SecurityClass", "classified", "get_authz_client", "require_codebook_permission"]
 
 _authz_client: AuthzClient | None = None
-
-
-def classified(security_class: SecurityClass) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        func.__security_class__ = security_class  # type: ignore[attr-defined]
-        return func
-
-    return decorator
 
 
 def get_authz_client(settings: Settings = Depends(get_settings)) -> AuthzClient:
@@ -34,23 +29,7 @@ def get_authz_client(settings: Settings = Depends(get_settings)) -> AuthzClient:
     return _authz_client
 
 
-def _bearer_token(request: Request) -> str:
-    header = request.headers.get("authorization") or ""
-    if not header.lower().startswith("bearer "):
-        raise UnauthenticatedError()
-    return header[7:].strip()
-
-
-def require_codebook_permission(resource: str, action: str) -> Callable[..., Any]:
-    async def dependency(
-        request: Request,
-        client: AuthzClient = Depends(get_authz_client),
-    ) -> Actor:
-        result = await client.authorize(access_token=_bearer_token(request), resource=resource, action=action)
-        actor_id = result.user_id or ""
-        actor_name = result.display_name or result.username or actor_id
-        if not actor_id:
-            raise UnauthenticatedError()
-        return Actor(id=actor_id, name=actor_name)
-
-    return dependency
+require_codebook_permission: Callable[[str, str], Callable[..., Any]] = build_permission_dependency(
+    service_name="codebook-service",
+    get_client=get_authz_client,
+)

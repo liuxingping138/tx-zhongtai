@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from app.core.clock import format_beijing
+from platform_common.clock import format_beijing
 
 
 def test_format_beijing_from_utc():

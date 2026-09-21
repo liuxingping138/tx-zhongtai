@@ -5,12 +5,13 @@ from pathlib import Path
 
 import pytest
 from openpyxl import Workbook
+from platform_common.columns import header_to_field
+from platform_common.excel import parse_sheet
 
 from app.application.area_match import AreaSnap, match_area
 from app.application.area_resolve import build_resolve_workbook
 from app.application.area_sql import parse_area_sql
-from app.application.excel import parse_sheet
-from app.domain.fields import AREA_CODE_COLUMNS, POLICY_TYPE_COLUMNS, SCENARIO_COLUMNS, header_to_field
+from app.domain.fields import AREA_CODE_COLUMNS, POLICY_TYPE_COLUMNS, SCENARIO_COLUMNS
 from app.domain.models import SCENARIO_FIELDS, content_hash
 
 
@@ -31,7 +32,7 @@ def test_parse_policy_type_sheet() -> None:
     sheet.append(["1", "顶层规划类", "纲领性文件"])
     raw = BytesIO()
     book.save(raw)
-    items = parse_sheet(raw.getvalue(), POLICY_TYPE_COLUMNS)
+    items = parse_sheet(raw.getvalue(), POLICY_TYPE_COLUMNS, subject="码表")
     assert items[0]["type_name"] == "顶层规划类"
     assert items[0]["seq_no"] == "1"
     assert items[0]["definition"] == "纲领性文件"
@@ -47,7 +48,7 @@ def test_parse_skips_leading_blank_rows() -> None:
     sheet.append(["1", "顶层规划类", "纲领性文件"])
     raw = BytesIO()
     book.save(raw)
-    items = parse_sheet(raw.getvalue(), POLICY_TYPE_COLUMNS)
+    items = parse_sheet(raw.getvalue(), POLICY_TYPE_COLUMNS, subject="码表")
     assert items[0]["type_name"] == "顶层规划类"
 
 
@@ -55,7 +56,7 @@ def test_parse_real_policy_type_enum_sheet() -> None:
     path = Path(__file__).resolve().parents[3] / "docs" / "政策基础信息表_0916-更新穿透词(1).xlsx"
     if not path.exists():
         pytest.skip("本地政策类型 Excel 未入库")
-    items = parse_sheet(path.read_bytes(), POLICY_TYPE_COLUMNS)
+    items = parse_sheet(path.read_bytes(), POLICY_TYPE_COLUMNS, subject="码表")
     if not items or items[0].get("type_name") != "顶层规划类":
         pytest.skip("第一个 sheet 不是政策类型表")
 
@@ -117,7 +118,7 @@ def test_resolve_workbook_writes_reason() -> None:
     payload, matched, unmatched = build_resolve_workbook(raw.getvalue(), _CATALOG)
     assert matched == 0
     assert unmatched == 1
-    marked = parse_sheet(payload, AREA_CODE_COLUMNS)
+    marked = parse_sheet(payload, AREA_CODE_COLUMNS, subject="码表")
     assert "不唯一" in marked[0]["skip_reason"]
 
 
@@ -132,7 +133,7 @@ def test_resolve_skips_rows_with_site_code() -> None:
     payload, matched, unmatched = build_resolve_workbook(raw.getvalue(), _CATALOG)
     assert matched == 2
     assert unmatched == 0
-    marked = parse_sheet(payload, AREA_CODE_COLUMNS)
+    marked = parse_sheet(payload, AREA_CODE_COLUMNS, subject="码表")
     assert marked[0]["skip_reason"] == "通过"
     assert not marked[0].get("county_id")
     assert marked[1]["skip_reason"] == "通过"

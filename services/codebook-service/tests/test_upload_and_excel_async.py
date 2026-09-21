@@ -8,9 +8,9 @@ import io
 import pytest
 from fastapi import UploadFile
 from platform_common.errors import ApiError
+from platform_common.excel import build_workbook, build_workbook_async, parse_sheet_async
+from platform_common.http_utils import read_upload_within_limit
 
-from app.application.excel import build_workbook, build_workbook_async, parse_sheet_async
-from app.core.http_utils import read_upload_within_limit
 from app.domain.fields import POLICY_TYPE_COLUMNS
 
 
@@ -35,7 +35,7 @@ def test_excel_async_wrappers_match_sync_results() -> None:
     async def run() -> None:
         payload = await build_workbook_async(POLICY_TYPE_COLUMNS, rows, sheet_name="政策类型枚举值")
         assert payload == build_workbook(POLICY_TYPE_COLUMNS, rows, sheet_name="政策类型枚举值")
-        assert len(await parse_sheet_async(payload, POLICY_TYPE_COLUMNS)) == 1
+        assert len(await parse_sheet_async(payload, POLICY_TYPE_COLUMNS, subject="码表")) == 1
 
     asyncio.run(run())
 

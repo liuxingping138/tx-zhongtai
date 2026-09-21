@@ -3,8 +3,9 @@ from __future__ import annotations
 from io import BytesIO
 
 from openpyxl import Workbook
+from platform_common.columns import header_to_field
+from platform_common.excel import parse_sheet
 
-from app.application.excel import parse_sheet
 from app.application.region import (
     make_internal_id,
     make_policy_uid,
@@ -12,7 +13,7 @@ from app.application.region import (
     next_site_code,
     normalize_region,
 )
-from app.domain.fields import BASE_TAG_COLUMNS, INTERPRETATION_COLUMNS, SOURCE_COLUMNS, header_to_field
+from app.domain.fields import BASE_TAG_COLUMNS, INTERPRETATION_COLUMNS, SOURCE_COLUMNS
 
 
 def test_normalize_district_misplaced_in_city() -> None:

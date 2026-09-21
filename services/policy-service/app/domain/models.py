@@ -6,11 +6,11 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+from platform_common.orm_base import Base
 from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.core.orm_base import Base
 from app.domain.fields import BASE_TAG_COLUMNS
 
 

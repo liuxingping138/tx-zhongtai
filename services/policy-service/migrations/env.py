@@ -7,11 +7,11 @@ import os
 from logging.config import fileConfig
 
 from alembic import context
+from platform_common.orm_base import Base
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
-from app.core.orm_base import Base
 from app.domain import models as _policy_models  # noqa: F401
 
 config = context.config

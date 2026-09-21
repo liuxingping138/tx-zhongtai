@@ -1,3 +1,5 @@
+"""统一时钟与北京时间格式化。业务时间一律存 UTC，展示时转北京时间。"""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta, timezone

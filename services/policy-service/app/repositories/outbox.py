@@ -1,66 +1,14 @@
+"""本服务的 Outbox 仓储。逻辑在 platform_common，这里只绑定本服务的 ORM model。"""
+
 from __future__ import annotations
 
-import uuid
-from datetime import timedelta
-from typing import Any
+from platform_common.outbox import OutboxRepository
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.core.clock import utcnow
-from app.domain.enums import OutboxStatus
 from app.domain.models import OutboxEvent
 
+_repository = OutboxRepository(OutboxEvent)
 
-async def enqueue(
-    session: AsyncSession,
-    *,
-    event_type: str,
-    payload: dict[str, Any],
-) -> OutboxEvent:
-    event = OutboxEvent(
-        event_id=uuid.uuid4(),
-        event_type=event_type,
-        schema_version=1,
-        payload=payload,
-        status=OutboxStatus.PENDING,
-        attempts=0,
-        created_at=utcnow(),
-    )
-    session.add(event)
-    return event
-
-
-async def claim_pending(session: AsyncSession, *, limit: int = 20) -> list[OutboxEvent]:
-    now = utcnow()
-    result = await session.execute(
-        select(OutboxEvent)
-        .where(
-            OutboxEvent.status.in_((OutboxStatus.PENDING, OutboxStatus.FAILED)),
-            (OutboxEvent.next_retry_at.is_(None)) | (OutboxEvent.next_retry_at <= now),
-        )
-        .order_by(OutboxEvent.created_at)
-        .limit(limit)
-        .with_for_update(skip_locked=True)
-    )
-    events = list(result.scalars())
-    for event in events:
-        event.status = OutboxStatus.DELIVERING
-        event.attempts += 1
-    return events
-
-
-async def mark_delivered(session: AsyncSession, event: OutboxEvent) -> None:
-    event.status = OutboxStatus.DELIVERED
-    event.error_message = None
-    event.next_retry_at = None
-
-
-async def mark_retry(session: AsyncSession, event: OutboxEvent, *, error: str, max_attempts: int) -> None:
-    event.error_message = error[:500]
-    if event.attempts >= max_attempts:
-        event.status = OutboxStatus.DEAD
-        event.next_retry_at = None
-        return
-    event.status = OutboxStatus.FAILED
-    event.next_retry_at = utcnow() + timedelta(seconds=min(2 ** event.attempts, 60))
+enqueue = _repository.enqueue
+claim_pending = _repository.claim_pending
+mark_delivered = _repository.mark_delivered
+mark_retry = _repository.mark_retry

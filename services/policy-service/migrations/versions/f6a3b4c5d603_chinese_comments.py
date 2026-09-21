@@ -12,7 +12,7 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-from app.core.orm_base import Base
+from platform_common.orm_base import Base
 from app.domain import models as _models  # noqa: F401
 
 revision: str = "f6a3b4c5d603"

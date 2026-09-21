@@ -4,16 +4,16 @@ import uuid
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import Response
+from platform_common.actors import Actor
+from platform_common.enums import SecurityClass
+from platform_common.http_utils import import_result_response, read_upload_within_limit, success_json
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import AreaCodeWrite
 from app.api.security import classified, require_codebook_permission
 from app.application import area_codes as service
-from app.application.actors import Actor
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
-from app.core.http_utils import import_result_response, read_upload_within_limit, success_json
-from app.domain.enums import SecurityClass
 
 router = APIRouter(prefix="/api/v1/codebook/area-codes", tags=["codebook-area-codes"])
 RESOURCE = "codebook.area_codes"

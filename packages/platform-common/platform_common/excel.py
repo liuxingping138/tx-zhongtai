@@ -1,3 +1,9 @@
+"""业务表 Excel 解析与生成。
+
+openpyxl 是纯 CPU 同步库，服务里一律用 *_async 包装放到线程池执行，
+否则会把整个服务的事件循环占住。同步版本保留给单元测试直接调用。
+"""
+
 from __future__ import annotations
 
 import base64
@@ -7,14 +13,10 @@ from typing import Any
 
 from anyio import to_thread
 from openpyxl import Workbook, load_workbook
-from platform_common.errors import ApiError, ErrorCode
 
-from app.core.clock import format_beijing
-from app.domain.fields import (
-    AUDIT_EXPORT_COLUMNS,
-    ColumnSpec,
-    header_to_field,
-)
+from platform_common.clock import format_beijing
+from platform_common.columns import AUDIT_EXPORT_COLUMNS, ColumnSpec, header_to_field
+from platform_common.errors import ApiError, ErrorCode
 
 
 def _field_of(columns: tuple[ColumnSpec, ...], header: str) -> str | None:
@@ -29,6 +31,7 @@ def parse_sheet(
     columns: tuple[ColumnSpec, ...],
     *,
     sheet_name: str | None = None,
+    subject: str = "业务",
 ) -> list[dict[str, str]]:
     del sheet_name  # 上传只读第一个 sheet，不看名称
     try:
@@ -45,7 +48,7 @@ def parse_sheet(
         mapping = [_field_of(columns, str(cell or "")) for cell in header_row]
         if any(mapping):
             break
-        raise ApiError("Excel 表头与政策字段不匹配", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+        raise ApiError(f"Excel 表头与{subject}字段不匹配", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     else:
         raise ApiError("Excel 为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     items: list[dict[str, str]] = []
@@ -113,10 +116,11 @@ async def parse_sheet_async(
     columns: tuple[ColumnSpec, ...],
     *,
     sheet_name: str | None = None,
+    subject: str = "业务",
 ) -> list[dict[str, str]]:
     """在线程池中解析 Excel，避免阻塞事件循环。"""
 
-    return await to_thread.run_sync(partial(parse_sheet, content, columns, sheet_name=sheet_name))
+    return await to_thread.run_sync(partial(parse_sheet, content, columns, sheet_name=sheet_name, subject=subject))
 
 
 async def build_workbook_async(

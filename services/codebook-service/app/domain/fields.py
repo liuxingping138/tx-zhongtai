@@ -2,15 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-
-@dataclass(frozen=True)
-class ColumnSpec:
-    field: str
-    header: str
-    searchable: bool = False
-
+from platform_common.columns import ColumnSpec
 
 POLICY_TYPE_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec("seq_no", "序号"),
@@ -66,25 +58,4 @@ AREA_CODE_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec("county_name_short", "区县简称"),
 )
 
-AUDIT_EXPORT_COLUMNS: tuple[ColumnSpec, ...] = (
-    ColumnSpec("created_at", "入库时间"),
-    ColumnSpec("created_by_name", "入库人"),
-    ColumnSpec("updated_at", "更新时间"),
-    ColumnSpec("updated_by_name", "操作人"),
-)
 
-
-def normalize_header(value: str) -> str:
-    text = (value or "").replace("\n", " ").strip()
-    if not text:
-        return ""
-    return text.split()[0]
-
-
-def header_to_field(columns: tuple[ColumnSpec, ...], header: str) -> str | None:
-    raw = (header or "").replace("\n", " ").strip()
-    short = normalize_header(raw)
-    for spec in columns:
-        if raw == spec.header or short == spec.header or raw.startswith(spec.header):
-            return spec.field
-    return None

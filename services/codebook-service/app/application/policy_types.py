@@ -3,16 +3,16 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from platform_common.actors import Actor
+from platform_common.clock import format_beijing, utcnow
 from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionConflictError
+from platform_common.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async
+from platform_common.filters import Filters
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.actors import Actor
 from app.application.audit_emit import enqueue_event
-from app.application.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async
-from app.core.clock import format_beijing, utcnow
 from app.core.config import get_settings
 from app.domain.fields import POLICY_TYPE_COLUMNS
-from app.domain.filters import Filters
 from app.domain.models import PolicyType
 from app.repositories import options as options_repo
 from app.repositories import policy_types as repo
@@ -118,7 +118,7 @@ async def update_policy_type(
 
 
 async def import_policy_types(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, Any]:
-    parsed = await parse_sheet_async(content, POLICY_TYPE_COLUMNS)
+    parsed = await parse_sheet_async(content, POLICY_TYPE_COLUMNS, subject="码表")
     inserted = 0
     updated = 0
     skipped_rows: list[dict[str, str]] = []

@@ -2,15 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-
-@dataclass(frozen=True)
-class ColumnSpec:
-    field: str
-    header: str
-    searchable: bool = False
-
+from platform_common.columns import ColumnSpec
 
 SOURCE_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec("internal_id", "内部唯一id"),
@@ -74,31 +66,4 @@ INTERPRETATION_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec("new_scenario_level", "新增场景级别"),
 )
 
-AUDIT_EXPORT_COLUMNS: tuple[ColumnSpec, ...] = (
-    ColumnSpec("created_at", "入库时间"),
-    ColumnSpec("created_by_name", "入库人"),
-    ColumnSpec("updated_at", "更新时间"),
-    ColumnSpec("updated_by_name", "操作人"),
-)
 
-
-def normalize_header(value: str) -> str:
-    text = (value or "").replace("\n", " ").strip()
-    if not text:
-        return ""
-    return text.split()[0]
-
-
-def header_to_field(columns: tuple[ColumnSpec, ...], header: str) -> str | None:
-    raw = (header or "").replace("\n", " ").strip()
-    short = normalize_header(raw)
-    if not raw:
-        return None
-    exact = [spec for spec in columns if raw == spec.header or short == spec.header]
-    if exact:
-        return exact[0].field
-    prefixed = [spec for spec in columns if raw.startswith(spec.header) or (short and short.startswith(spec.header))]
-    if prefixed:
-        prefixed.sort(key=lambda spec: len(spec.header), reverse=True)
-        return prefixed[0].field
-    return None

@@ -8,14 +8,14 @@ import io
 import pytest
 from fastapi import UploadFile
 from platform_common.errors import ApiError
-
-from app.application.excel import (
+from platform_common.excel import (
     build_workbook,
     build_workbook_async,
     encode_skipped_file_async,
     parse_sheet_async,
 )
-from app.core.http_utils import read_upload_within_limit
+from platform_common.http_utils import read_upload_within_limit
+
 from app.domain.fields import SOURCE_COLUMNS
 
 
@@ -64,7 +64,7 @@ def test_excel_async_wrappers_match_sync_results() -> None:
         payload = await build_workbook_async(SOURCE_COLUMNS, rows, sheet_name="网站编码")
         assert payload == build_workbook(SOURCE_COLUMNS, rows, sheet_name="网站编码")
 
-        parsed = await parse_sheet_async(payload, SOURCE_COLUMNS)
+        parsed = await parse_sheet_async(payload, SOURCE_COLUMNS, subject="政策")
         assert len(parsed) == 1
         assert parsed[0]["site_name"] == "值"
 
