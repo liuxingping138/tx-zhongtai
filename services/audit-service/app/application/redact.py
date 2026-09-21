@@ -1,33 +1,11 @@
-"""审计入库与查询共用的脱敏。"""
+"""审计入库与查询共用的脱敏。
+
+键名清单已下沉到 platform_common.redaction，这里只做转发，
+保持既有导入路径不变。新增敏感字段改公共模块。
+"""
 
 from __future__ import annotations
 
-from typing import Any
+from platform_common.redaction import REDACTED, SENSITIVE_KEYS, redact
 
-_SENSITIVE = {
-    "password",
-    "old_password",
-    "new_password",
-    "temporary_password",
-    "password_hash",
-    "token",
-    "access_token",
-    "refresh_token",
-    "authorization",
-    "cookie",
-    "set-cookie",
-    "secret",
-    "private_key",
-    "csrf_token",
-}
-_REDACTED = "***REDACTED***"
-
-
-def redact(value: Any, key: str | None = None) -> Any:
-    if key and key.lower() in _SENSITIVE:
-        return _REDACTED
-    if isinstance(value, dict):
-        return {str(item_key): redact(item_value, str(item_key)) for item_key, item_value in value.items()}
-    if isinstance(value, list):
-        return [redact(item) for item in value]
-    return value
+__all__ = ["REDACTED", "SENSITIVE_KEYS", "redact"]

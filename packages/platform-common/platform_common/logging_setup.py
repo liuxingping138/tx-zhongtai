@@ -1,8 +1,8 @@
 """结构化日志初始化，统一 JSON 格式并对敏感字段脱敏。
 
-禁止记录的内容（架构文档第 10.3 节）：明文密码、完整 Token、Cookie、
-Authorization 头、密钥、完整请求体。本模块对常见敏感字段名做防御性脱敏，
-业务代码仍需自行避免把敏感值放进日志消息本身。
+敏感键名清单在 platform_common.redaction，全平台共用一份。
+本模块只负责把它接进 structlog 的处理链；业务代码仍需自行避免把敏感值
+拼进日志消息本身，按键名脱敏拦不住那种写法。
 """
 
 from __future__ import annotations
@@ -13,42 +13,12 @@ from typing import Any
 
 import structlog
 
+from platform_common.redaction import redact
 from platform_common.request_context import get_request_id
-
-_SENSITIVE_KEYS = {
-    "password",
-    "old_password",
-    "new_password",
-    "password_hash",
-    "token",
-    "access_token",
-    "refresh_token",
-    "id_token",
-    "authorization",
-    "cookie",
-    "set-cookie",
-    "secret",
-    "client_secret",
-    "private_key",
-    "jwt",
-    "csrf_token",
-    "temporary_password",
-    "internal_token",
-}
-
-_REDACTED = "***REDACTED***"
-
-
-def _redact_value(key: str, value: Any) -> Any:
-    if key.lower() in _SENSITIVE_KEYS:
-        return _REDACTED
-    if isinstance(value, dict):
-        return {k: _redact_value(k, v) for k, v in value.items()}
-    return value
 
 
 def _redaction_processor(logger: Any, method_name: str, event_dict: dict[str, Any]) -> dict[str, Any]:
-    return {k: _redact_value(k, v) for k, v in event_dict.items()}
+    return {key: redact(value, key) for key, value in event_dict.items()}
 
 
 def _inject_request_id(logger: Any, method_name: str, event_dict: dict[str, Any]) -> dict[str, Any]:

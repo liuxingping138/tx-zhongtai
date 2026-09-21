@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any
 
+from platform_common.redaction import redact
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,11 +23,13 @@ async def enqueue(
     event_id: uuid.UUID | None = None,
     schema_version: int = 1,
 ) -> OutboxEvent:
+    # 入队即脱敏。iam 的 payload 常带账号相关字段，而 Outbox 落在 iam_db 里、
+    # 投递成功前一直存着，光靠投递时脱敏挡不住业务库留痕。
     event = OutboxEvent(
         event_id=event_id or uuid.uuid4(),
         event_type=event_type,
         schema_version=schema_version,
-        payload=payload,
+        payload=redact(payload),
         status=OutboxStatus.PENDING,
         attempts=0,
         created_at=utcnow(),

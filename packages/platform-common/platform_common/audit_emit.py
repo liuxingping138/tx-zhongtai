@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from platform_common.logging_setup import get_logger
 from platform_common.outbox import OutboxRepository
+from platform_common.redaction import redact
 from platform_common.request_context import get_request_id
 
 # 事件类型 -> (模块编码, 动作编码, 目标类型, 中文标签)
@@ -79,7 +80,9 @@ class AuditEmitter:
         }
         if extra:
             payload.update(extra)
-        await self._repo.enqueue(session, event_type=event_type, payload=payload)
+        # 入队即脱敏：Outbox 落在业务库里，投递成功前一直存着。
+        # 这里收口后，敏感值不会因为某个调用方手滑而在业务库留痕。
+        await self._repo.enqueue(session, event_type=event_type, payload=redact(payload))
 
     def to_ingest(self, event: Any) -> dict[str, Any]:
         payload = event.payload if isinstance(event.payload, dict) else {}
