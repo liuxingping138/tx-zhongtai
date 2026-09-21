@@ -1,0 +1,197 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## 项目定位
+
+一体化业务数据平台，最终包含：客户、招投标、政策、场景、爬虫监测、码表管理、系统管理。
+主要业务数据围绕「客群」串联；爬虫监测是独立模块，与客群无直接关联。
+
+当前进度：公共框架已到 P6（账号/会话/RBAC、Outbox、审计、隔离验收、备份恢复、OpenAPI），
+政策三张表（信源、基础标签、解读）与码表三张表（政策类型、行业场景、省市区编码）已接入。
+**客户、招投标、爬虫监测仅有占位目录**，未开发——不要为它们提前暴露无功能入口或做过度抽象。
+
+## 常用命令
+
+```bash
+make bootstrap        # 检查环境、装依赖、生成 .env（不覆盖已有）
+make dev-up           # 启动开发栈（含 iam-worker）
+make dev-down         # 停止（保留数据卷）
+make migrate          # 执行各服务迁移
+make check            # 质量门：Python ruff+mypy，前端 type-check+build+lint
+make test-unit        # 后端 pytest + 前端 vitest
+make smoke            # 经网关冒烟
+make export-openapi   # 从运行中服务导出 OpenAPI
+```
+
+运维类：`make iam-session-cleanup`（清理失效会话/令牌）、`make audit-cleanup`（清理到期审计）、
+`make outbox-replay`（重放 dead/failed 事件）、`make admin-create`、`make seed-area-codes`。
+
+### 跑单个测试
+
+```bash
+# 后端：在对应服务目录下
+cd services/policy-service && uv run pytest tests/test_export_limit.py -q
+cd services/policy-service && uv run pytest -q -k "export_rejects"
+
+# 前端单测
+cd frontend && pnpm vitest run src/composables/useFilterOptions.test.ts
+
+# e2e（Playwright）。默认指向 P6 的 8090，指到开发栈要显式覆盖：
+cd frontend && P6_GATEWAY=http://localhost:8080 pnpm exec playwright test filter-options
+cd frontend && P6_GATEWAY=http://localhost:8080 pnpm exec playwright test --grep "date range"
+```
+
+### 前端改动必须重建容器
+
+**8080 是 Docker 构建产物，不是热更新**。改了前端源码只刷新 8080 不会生效：
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml --env-file .env up -d --build --no-deps frontend
+```
+
+重建后核对 8080 返回的资源哈希与 `frontend/dist/assets/` 一致。5173 才是 `pnpm dev` 热更新。
+
+### 开发栈 vs P6 隔离栈
+
+日常只用开发栈。P6 是一次性隔离验收环境（独立项目名/库/卷），
+`make test-integration` / `make test-e2e` 用它，**测完必须 `make p6-down`**，不要常开。
+Navicat 连开发栈 `127.0.0.1:5433`，不要连本机 Homebrew 的 5432，也不要连 P6。
+
+## 架构
+
+### 服务边界
+
+```
+frontend/              Vue 管理端（pnpm）
+services/
+  iam-service/         账号、会话、RBAC、菜单；Compose 里 iam-worker 共用此镜像
+  audit-service/       审计写入、查询、到期清理
+  policy-service/      政策：信源、基础标签、解读
+  codebook-service/    码表：政策类型、行业场景、省市区编码
+  customer-service/    占位，仅 .gitkeep
+  tender-service/      占位，仅 .gitkeep
+packages/platform-common/   跨服务公共包（见下）
+deploy/gateway/        Traefik 静态+动态配置
+deploy/compose/        docker-compose.yml、Postgres 初始化脚本
+```
+
+每个服务一套独立数据库（`iam_db` / `audit_db` / `policy_db` / `codebook_db`），
+服务间不直连对方的库。
+
+### 关键：公共能力一律放 platform-common
+
+policy 和 codebook 的基础设施代码高度重复，已统一下沉。**新增业务服务时不要复制这些文件**：
+
+| 能力 | 公共模块 | 服务内保留 |
+| --- | --- | --- |
+| 时钟、北京时间格式化 | `clock.py` | 无 |
+| ORM Base | `orm_base.py` | 无 |
+| 安全分级、Outbox 状态枚举 | `enums.py` | 无 |
+| 操作者身份 | `actors.py` | 无 |
+| 列表/导出筛选类型 | `filters.py` | 无 |
+| 上传限流、统一响应 | `http_utils.py` | 无 |
+| Excel 解析与生成 | `excel.py` | 各表列清单 `domain/fields.py` |
+| 表头匹配、ColumnSpec | `columns.py` | 同上 |
+| Outbox 仓储 | `outbox.py` 的 `OutboxRepository` | 绑定本服务 ORM model |
+| 鉴权依赖 | `service_authz.py` | 绑定服务名与 Settings |
+| 审计入队与投递 | `audit_emit.py` 的 `AuditEmitter` | 本服务的 `_EVENT_META` |
+| 筛选项预览与搜索 | `options.py` | 字段映射表 |
+
+### 分层
+
+`api/`（路由、Query 参数、权限依赖）→ `application/`（业务编排、审计入队）→
+`repositories/`（SQLAlchemy 查询）→ `domain/`（models、fields 列清单）。
+`core/` 放配置、数据库、clock 等。
+
+### 鉴权链路
+
+业务服务不自己校验 JWT。每个受保护路由挂 `Depends(require_*_permission(RESOURCE, action))`，
+它经 `platform_common.authz.AuthzClient` 调 iam-service 的 `/internal/v1/authorize`。
+**依赖失败一律返回 503，绝不当作放行**。网关不启用 ForwardAuth，授权全在服务内执行。
+
+路由必须带 `@classified(SecurityClass.*)`，`tests/test_route_security_class.py` 会强制检查
+（注意：该用例只校验声明存在，不校验是否真的挂了权限依赖）。
+
+### 审计走 Outbox
+
+业务写操作调 `enqueue_event(...)` 写本服务的 `*_outbox` 表（与业务同事务），
+再由 worker 投递到 audit-service。失败按指数退避重试，超上限置 dead，可用 `make outbox-replay` 重放。
+
+### 网关
+
+Traefik 文件 Provider（非 Docker Provider）。路由优先级：
+具体业务前缀（100）> 未接入业务的 `/api/v1` 兜底 404（50）> 前端 SPA 兜底（1）。
+`/health/*`、`/internal/*` 未声明路由，不对外暴露。全部路由挂了 `compress` 中间件，
+xlsx/zip/图片在 `excludedContentTypes` 里排除。
+
+## 硬性开发约定
+
+### ORM 中文 comment（Cursor 规则，强制）
+
+新建或修改表/列**必须**写中文 `comment`，PostgreSQL 会落到 `COMMENT ON`，Navicat 直接可见。
+
+- 表：`__table_args__` 带 `comment="中文表名"`；有约束时把该字典放 tuple 最后一项
+- 列：每个 `mapped_column(...)` 带 `comment="中文列名"`，与页面/Excel 表头对齐
+- Alembic `create_table` / `add_column` 同步带 comment；`COMMENT ON ... IS` 用 SQL 字面量，不能绑参数
+- `alembic_version` 不用注释
+
+### Excel 必须放线程池，上传必须边读边限流
+
+openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接在协程里调用会占住整个事件循环
+（实测 5 万行导出阻塞 4.2s，期间该服务所有请求挂起）。
+
+- 业务层一律用 `parse_sheet_async` / `build_workbook_async` / `encode_skipped_file_async`，
+  同步版本只留给单测
+- 上传用 `read_upload_within_limit(file, settings.import_max_bytes)`。
+  先 `await file.read()` 再判断长度，体积上限形同虚设
+- 导出前用 `count_filtered` 校验 `export_max_rows`（默认 10 万），超限不执行查询
+
+### 列表与导出共用一份筛选定义
+
+仓储里的 `FILTER_COLUMNS` + `_conditions` 同时供 `list_items` / `count_filtered` / `list_filtered` 使用，
+从结构上杜绝列表和导出条件走偏。未知字段直接 `KeyError`（API 层转 422），
+不允许静默忽略——否则导出会悄悄变成导全表。
+`tests/test_export_filter_parity.py` 会强制三者一致。
+
+### 前端复用规范
+
+改页面前读 `DESIGN.md`、`UX-CONTRACT.md`、`docs/UI开发规范.md`。优先复用：
+
+`ListPage` / `FilterBar` / `FilterSelect` / `ScrollPort` / `BusinessTable` / `ColumnPicker` /
+`GroupedFields` / `UserAccountMenu`，基础视觉用 `theme.css`。
+
+- 筛选项：`v-bind="filters.bind('字段')"`（`useFilterOptions`），不要自己再维护一份 options
+- Excel 下载：`downloadFile(路径, 中文文件名, filtersForExport(listQuery.applied))`，
+  **不要用裸 fetch**——会绕开 401 自动续期和统一中文错误提示
+- 导出传 `applied` 而非 `query`：`query` 是用户还没点查询的输入
+- 修改共享组件或约定，同步更新 DESIGN.md / UX-CONTRACT.md / UI开发规范.md
+
+### 已确认的产品规则（不要自行推翻）
+
+- 列表默认展示全部字段，列设置支持逐列勾选/显示全部/恢复默认，浏览器记忆选择
+- 一列只展示对应字段，不在列里拼接部门、编码等辅助信息
+- 上传和下载入口都必须保留在列表工具栏
+- 列宽按字段内容制定，不给首列统一大宽度
+- 桌面筛选一次展开全部条件，点查询才生效
+- 账号入口在侧栏底部（显示名 + 角色），不做右上角芯片，不改登录页
+
+## 排查提示
+
+- `pg_stat_user_tables.n_live_tup` 是过期统计会显示 0 行，判断数据量用 `count(*)`
+- mypy 有缓存假报错，改完文件结构先 `rm -rf .mypy_cache`
+- 登录失败按账号+IP 限流 5 次 / 300 秒。探测后清理：
+  `docker exec tx-zhongtai-redis-1 redis-cli del 'iam:login:user:<账号>' 'iam:login:ip:<IP>'`
+- Element Plus 的原生 checkbox 是 `opacity:0; 0x0` 隐藏元素，e2e 里 `check()` 会一直等可见，
+  改点可见标签；hover 才出现的清除图标用 `dispatchEvent('click')`，
+  `click({force:true})` 会静默失效（测试变绿但实际没点到）
+- e2e 里 `getByLabel('字段名')` 会同时命中列设置弹层的同名复选框，需限定 `.el-drawer` 作用域
+
+## 已知限制
+
+- 本期不执行生产部署；`deploy/gateway/traefik.prod.yml.example` 只是 HTTPS 模板
+- `client_ip` 无条件信任 `X-Forwarded-For` 首段，成立前提是服务只能经网关访问
+  （Traefik 会清洗客户端自带的该头）。服务端口 8001–8004 不得直接对外暴露，
+  也不要在 Traefik 前再加一层不做同样清洗的代理
+- 导出不分页，整个结果集读进内存再生成 Excel，靠 `export_max_rows` 兜底
+- 筛选项服务端搜索最坏情况线性扫索引（20002 行约 5ms），到 20 万行量级再考虑 pg_trgm
