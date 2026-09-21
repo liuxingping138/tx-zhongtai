@@ -17,6 +17,7 @@ const compactQuery = window.matchMedia('(max-width: 1000px)')
 const isMobile = ref(mobileQuery.matches)
 const isCompact = ref(compactQuery.matches)
 const mobileOpen = ref(false)
+const toggleButton = ref<HTMLButtonElement>()
 
 function savedCollapsed(): boolean {
   try {
@@ -60,6 +61,16 @@ watch(mobileOpen, async (open) => {
   document.querySelector<HTMLButtonElement>('.admin-navigation__close')?.focus()
 })
 
+/**
+ * 抽屉关闭后把焦点送回触发它的按钮。
+ *
+ * 不做的话焦点会落回 document.body，键盘和读屏用户关掉导航后就丢了位置，
+ * 只能从页面开头重新 Tab。浮层关闭必须归还焦点。
+ */
+function restoreToggleFocus() {
+  toggleButton.value?.focus()
+}
+
 function firstChildPath(parentId: string) {
   return auth.visibleMenus
     .filter(item => item.parent_id === parentId)
@@ -100,6 +111,7 @@ const crumbs = computed(() => {
       :with-header="false"
       :lock-scroll="true"
       class="admin-navigation-drawer"
+      @closed="restoreToggleFocus"
     >
       <AdminNavigation
         mobile
@@ -108,9 +120,13 @@ const crumbs = computed(() => {
       />
     </el-drawer>
     <el-container class="admin-layout__content">
-      <el-header class="admin-layout__header">
+      <el-header
+        class="admin-layout__header"
+        role="banner"
+      >
         <div class="admin-layout__header-start">
           <button
+            ref="toggleButton"
             type="button"
             class="admin-layout__toggle"
             :aria-label="toggleLabel"

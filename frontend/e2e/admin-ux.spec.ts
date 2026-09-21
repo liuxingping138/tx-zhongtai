@@ -22,7 +22,9 @@ test('column picker defaults to all fields and can restore the full set', async 
   await picker.click()
   await expect(page.getByRole('button', { name: '显示全部列', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: '恢复默认列', exact: true })).toBeVisible()
-  await page.getByRole('checkbox', { name: '场景标签', exact: true }).uncheck()
+  // Element Plus 的原生 checkbox 被隐藏（opacity:0、0x0），可见的是样式化替身，
+  // 直接对原生元素 uncheck() 会一直等它可见。点可见的标签。
+  await page.locator('.el-checkbox').filter({ hasText: /^场景标签$/ }).click()
   await expect(picker).toContainText('34/35')
   await page.getByRole('button', { name: '恢复默认列', exact: true }).click()
   await expect(picker).toContainText('35/35')
@@ -74,7 +76,7 @@ test('source creation sends visible region codes and closes without a discard pr
   await page.goto('/policy/sources')
   await page.getByRole('button', { name: '新增', exact: true }).click()
   await page.getByRole('dialog').getByLabel('网站名称', { exact: true }).fill('测试信源')
-  await page.getByLabel('区县编码', { exact: true }).fill('110101')
+  await page.locator('.el-drawer').getByLabel('区县编码', { exact: true }).fill('110101')
   await page.getByRole('button', { name: '保存', exact: true }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
   expect(payload?.district_code).toBe('110101')
@@ -135,7 +137,7 @@ test('editing interpretation preserves generated policy UID and tenant identifie
   })
   await page.goto('/policy/interpretations')
   await page.getByRole('button', { name: '编辑', exact: true }).click()
-  await expect(page.getByLabel('租户标识', { exact: true })).toHaveValue('tenant-a')
+  await expect(page.locator('.el-drawer').getByLabel('租户标识', { exact: true })).toHaveValue('tenant-a')
   await page.getByRole('dialog').getByLabel('政策原文名称', { exact: true }).fill('修改后的政策')
   await page.getByRole('button', { name: '保存', exact: true }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)

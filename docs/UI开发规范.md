@@ -22,6 +22,7 @@
 | 查询 | `frontend/src/components/FilterBar.vue`、`FilterSelect.vue` | query 与 applied；桌面展开全部字段，advanced 只作字段分组不再桌面折叠 |
 | 业务表格/详情/手机摘要 | `frontend/src/components/BusinessTable.vue` | items、完整columns、selected、titleKey、可选summaryKeys、canWrite/loading/filtered，edit/reset |
 | 账号菜单 | `frontend/src/layouts/UserAccountMenu.vue` | 侧栏底部 / 手机顶栏头像；显示名 + `/me.roles` |
+| 浮层焦点 | `frontend/src/layouts/AdminLayout.vue` | 打开时把焦点送进浮层、关闭后送回触发按钮；落回 body 会让键盘用户从头 Tab |
 | 显示列与浏览器记忆 | `frontend/src/components/ColumnPicker.vue` | 与表格共享 selected；完整columns与defaults |
 | 字段列类型 | `frontend/src/components/dataColumns.ts` | prop与API字段对应；label简明、fullLabel保留原名；可选width/minWidth/grow/wrap/time/link |
 | 列顺序与宽度计算 | `frontend/src/components/dataColumnLayout.ts` | layoutDataColumns固定短字段、让长字段吸收余量；不按首列特殊处理 |

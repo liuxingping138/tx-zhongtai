@@ -47,7 +47,9 @@ test('audit: clearing the date range still submits the query', async ({ page }) 
   await inputs.nth(1).press('Enter')
   await page.getByRole('heading', { name: '操作日志' }).click()
   await page.locator('.el-date-editor').hover()
-  await page.locator('.el-range__close-icon').click()
+  // 清除图标只在 hover 时出现且带过渡动画，click() 等不到 stable；
+  // force 点击又会因为指针移开而丢掉 hover，真正生效的是直接派发 click 事件。
+  await page.locator('.el-range__close-icon').dispatchEvent('click')
   const request = page.waitForRequest(r => r.url().includes('/audit/events?'))
   await page.getByRole('button', { name: '查询', exact: true }).click()
   const url = new URL((await request).url())
