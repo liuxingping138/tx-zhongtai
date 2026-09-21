@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 
-import { auditFilterOptions, getAuditEvent, listAuditEvents } from '@/api/audit'
+import { getAuditEvent, listAuditEvents } from '@/api/audit'
 import { errorMessage } from '@/api/errors'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import FilterBar from '@/components/FilterBar.vue'
+import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useListQuery } from '@/composables/useListQuery'
 import ListEmpty from '@/components/ListEmpty.vue'
 import type { AuditEventItem } from '@/api/types'
@@ -26,11 +27,7 @@ const query = reactive({
   page: 1,
   page_size: 20,
 })
-const options = reactive({
-  actor_name: [] as string[],
-  module_code: [] as string[],
-  action_code: [] as string[],
-})
+const filters = useFilterOptions('/audit/events')
 
 const detailVisible = ref(false)
 const detailLoading = ref(false)
@@ -43,16 +40,6 @@ const outcomeLabel: Record<string, string> = {
   denied: '拒绝',
 }
 
-async function loadOptions() {
-  try {
-    const data = await auditFilterOptions()
-    options.actor_name = data.actor_name ?? []
-    options.module_code = data.module_code ?? []
-    options.action_code = data.action_code ?? []
-  } catch {
-    /* 选项失败不影响列表 */
-  }
-}
 
 const listQuery = useListQuery(query, load, ['actor_name'])
 
@@ -124,7 +111,7 @@ async function openDetail(row: AuditEventItem) {
 
 onMounted(() => {
   void load()
-  void loadOptions()
+  void filters.load()
 })
 </script>
 
@@ -165,14 +152,14 @@ onMounted(() => {
           <el-form-item label="人员">
             <FilterSelect
               v-model="query.actor_name"
-              :options="options.actor_name"
+              v-bind="filters.bind('actor_name')"
               placeholder="输入或选择人员"
             />
           </el-form-item>
           <el-form-item label="模块">
             <FilterSelect
               v-model="query.module_code"
-              :options="options.module_code"
+              v-bind="filters.bind('module_code')"
               :labels="MODULE_LABELS"
               placeholder="输入或选择模块"
             />
@@ -181,7 +168,7 @@ onMounted(() => {
             <el-form-item label="动作">
               <FilterSelect
                 v-model="query.action_code"
-                :options="options.action_code"
+                v-bind="filters.bind('action_code')"
                 :labels="ACTION_LABELS"
                 placeholder="输入或选择动作"
               />

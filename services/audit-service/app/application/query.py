@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -77,8 +78,14 @@ async def list_page(
     return [to_out(row) for row in rows], total
 
 
-async def list_options(session: AsyncSession) -> dict[str, list[str]]:
+async def list_options(session: AsyncSession) -> dict[str, Any]:
     return await event_repo.list_options(session)
+
+
+async def search_options(session: AsyncSession, *, field: str, keyword: str | None) -> list[str]:
+    """按关键词搜索筛选项候选值，供前端下拉的服务端搜索使用。"""
+
+    return await event_repo.search_option_values(session, field=field, keyword=keyword)
 
 
 async def get_one(session: AsyncSession, event_pk: uuid.UUID) -> AuditEventOut | None:

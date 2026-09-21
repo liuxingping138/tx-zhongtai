@@ -15,14 +15,6 @@ export function listAuditEvents(params: {
   return request(http.get('/audit/events', { params }))
 }
 
-export function auditFilterOptions(): Promise<{
-  actor_name: string[]
-  module_code: string[]
-  action_code: string[]
-}> {
-  return request(http.get('/audit/events/options'))
-}
-
 export function getAuditEvent(eventId: string): Promise<AuditEventItem> {
   return request(http.get(`/audit/events/${eventId}`))
 }

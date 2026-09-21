@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
+from platform_common.options import OptionColumns, preview_options, search_options
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -93,18 +95,20 @@ async def list_events(
     return list(result.scalars().all())
 
 
-async def list_options(session: AsyncSession) -> dict[str, list[str]]:
-    async def values(column) -> list[str]:
-        result = await session.execute(
-            select(column).where(column.is_not(None)).where(column != "").distinct().order_by(column).limit(2000)
-        )
-        return [value for value in result.scalars() if value]
+# 筛选项字段。键名与列表接口的 query 参数一致，便于前端直接按字段名绑定。
+OPTION_COLUMNS: OptionColumns = {
+    "actor_name": AuditEvent.actor_name_snapshot,
+    "module_code": AuditEvent.module_code,
+    "action_code": AuditEvent.action_code,
+}
 
-    return {
-        "actor_name": await values(AuditEvent.actor_name_snapshot),
-        "module_code": await values(AuditEvent.module_code),
-        "action_code": await values(AuditEvent.action_code),
-    }
+
+async def list_options(session: AsyncSession) -> dict[str, Any]:
+    return {"options": await preview_options(session, OPTION_COLUMNS)}
+
+
+async def search_option_values(session: AsyncSession, *, field: str, keyword: str | None) -> list[str]:
+    return await search_options(session, OPTION_COLUMNS, field=field, keyword=keyword)
 
 
 async def get_event(session: AsyncSession, event_pk: uuid.UUID) -> AuditEvent | None:
