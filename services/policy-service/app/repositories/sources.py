@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any, cast
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import CursorResult, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import Source
@@ -82,5 +83,6 @@ async def list_all(session: AsyncSession) -> list[Source]:
 
 
 async def delete_all(session: AsyncSession) -> int:
-    result = await session.execute(delete(Source))
+    # execute() 的静态类型是 Result，DELETE 实际拿到的是带 rowcount 的 CursorResult。
+    result = cast(CursorResult[Any], await session.execute(delete(Source)))
     return int(result.rowcount or 0)

@@ -151,7 +151,9 @@ class Session(Base):
     )
     family_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True, comment="会话族ID")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="创建时间")
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True, comment="过期时间")
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True, comment="过期时间"
+    )
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, comment="撤销时间")
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="最近活跃时间")
     client_info: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True, comment="客户端信息")

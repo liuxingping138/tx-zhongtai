@@ -54,7 +54,9 @@ class Scenario(Base):
         String(64), nullable=False, default="", index=True, comment="行业场景编码"
     )
     industry_code: Mapped[str] = mapped_column(String(32), nullable=False, default="", comment="行业编码")
-    industry_l1: Mapped[str] = mapped_column(String(128), nullable=False, default="", index=True, comment="项目一级行业")
+    industry_l1: Mapped[str] = mapped_column(
+        String(128), nullable=False, default="", index=True, comment="项目一级行业"
+    )
     industry_l2: Mapped[str] = mapped_column(String(128), nullable=False, default="", comment="项目二级行业")
     industry_l3: Mapped[str] = mapped_column(String(128), nullable=False, default="", comment="项目三级行业")
     scenario_tag: Mapped[str] = mapped_column(String(255), nullable=False, default="", index=True, comment="场景标签")

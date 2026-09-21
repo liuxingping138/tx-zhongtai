@@ -66,7 +66,9 @@ def read_raw_sheet(content: bytes) -> tuple[list[str], list[list[str]]]:
     return headers, items
 
 
-def _ensure_code_columns(headers: list[str], roles: list[str | None]) -> tuple[list[str], list[str | None], dict[str, int]]:
+def _ensure_code_columns(
+    headers: list[str], roles: list[str | None]
+) -> tuple[list[str], list[str | None], dict[str, int]]:
     index = {role: idx for idx, role in enumerate(roles) if role}
     next_headers = list(headers)
     next_roles = list(roles)

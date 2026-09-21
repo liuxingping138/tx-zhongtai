@@ -19,7 +19,6 @@ from app.api.security import (
     require_restricted_or_authenticated,
 )
 from app.application.auth_service import AuthService
-from app.repositories import users as user_repo
 from app.core.config import Settings, get_settings
 from app.core.database import SessionLocal, get_db_session
 from app.core.http_utils import client_ip, client_user_agent, success_json
@@ -27,6 +26,7 @@ from app.core.rate_limit import LoginRateLimiter
 from app.core.redis_client import redis_client
 from app.domain.enums import SecurityClass
 from app.domain.tokens import generate_csrf_token
+from app.repositories import users as user_repo
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 

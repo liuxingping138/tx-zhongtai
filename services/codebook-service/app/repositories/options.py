@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from typing import Any
-
-from sqlalchemy import ColumnElement, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
 from app.domain.models import AreaCode, PolicyType, Scenario
 
 
-async def _values(session: AsyncSession, column: ColumnElement[Any], limit: int = 8000) -> list[str]:
+async def _values(session: AsyncSession, column: InstrumentedAttribute[str], limit: int = 8000) -> list[str]:
     result = await session.execute(
         select(column).where(column.is_not(None)).where(column != "").distinct().order_by(column).limit(limit)
     )

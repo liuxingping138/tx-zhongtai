@@ -42,7 +42,9 @@ class Source(Base):
     district_name: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="区县")
     district_code: Mapped[str] = mapped_column(String(8), nullable=False, default="", index=True, comment="区县编码")
     site_name: Mapped[str] = mapped_column(String(255), nullable=False, default="", index=True, comment="网站名称")
-    crawl_priority: Mapped[str] = mapped_column(String(255), nullable=False, default="", comment="网站梳理和抓取的优先级")
+    crawl_priority: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="", comment="网站梳理和抓取的优先级"
+    )
     url: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="链接")
     tag: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="标签")
     data_type: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="数据类型")
@@ -116,7 +118,9 @@ class Interpretation(Base):
     scenario_l1_name: Mapped[str] = mapped_column(String(255), nullable=False, default="", comment="一级场景名称")
     scenario_l2_name: Mapped[str] = mapped_column(String(255), nullable=False, default="", comment="二级场景名称")
     scenario_l3_name: Mapped[str] = mapped_column(String(255), nullable=False, default="", comment="三级场景名称")
-    target_customers: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="目标客户当前政策影响客户群")
+    target_customers: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", comment="目标客户当前政策影响客户群"
+    )
     relation_key: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="关联主键")
     opportunity_type: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="机会类型")
     policy_summary: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="政策要文")

@@ -45,6 +45,8 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.per-file-ignores]
 "app/api/*.py" = ["B008"]
+# 建表/插入语句必须保持单行，parse_area_sql 是按行解析的，换行会改掉用例本身。
+"tests/test_fields_and_excel.py" = ["E501"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.core.clock import assume_beijing
 
@@ -10,6 +10,6 @@ def test_assume_beijing_naive():
 
 
 def test_assume_beijing_keeps_aware():
-    utc = datetime(2026, 9, 18, 7, 0, 0, tzinfo=timezone.utc)
+    utc = datetime(2026, 9, 18, 7, 0, 0, tzinfo=UTC)
     value = assume_beijing(utc)
     assert value == utc
