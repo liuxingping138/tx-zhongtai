@@ -54,6 +54,12 @@ async def list_items(
     return list(result.scalars()), total
 
 
+async def count_all(session: AsyncSession) -> int:
+    """导出前先数行数，避免把超限的整表读进内存。"""
+
+    return int(await session.scalar(select(func.count()).select_from(BaseTag)) or 0)
+
+
 async def list_all(session: AsyncSession) -> list[BaseTag]:
     result = await session.execute(select(BaseTag).order_by(BaseTag.province_code, BaseTag.policy_name))
     return list(result.scalars())

@@ -26,6 +26,8 @@ class Settings(BaseServiceSettings):
     worker_poll_interval_seconds: float = 2.0
     worker_max_attempts: int = 8
     import_max_bytes: int = 20 * 1024 * 1024
+    # 导出会把整表读进内存再生成 Excel，必须有上限，否则大表导出能把服务撑爆。
+    export_max_rows: int = 100_000
 
     @model_validator(mode="after")
     def _reject_demo_secrets_in_production(self) -> Settings:

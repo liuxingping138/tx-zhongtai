@@ -10,6 +10,7 @@ from app.application.actors import Actor
 from app.application.audit_emit import enqueue_event
 from app.application.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async
 from app.core.clock import format_beijing, utcnow
+from app.core.config import get_settings
 from app.domain.fields import POLICY_TYPE_COLUMNS
 from app.domain.models import PolicyType
 from app.repositories import options as options_repo
@@ -170,7 +171,25 @@ async def import_policy_types(session: AsyncSession, actor: Actor, content: byte
     }
 
 
+async def _assert_exportable(session: AsyncSession) -> None:
+    """导出前校验行数上限。
+
+    导出是整表读进内存再生成 Excel，没有上限时大表会把服务撑爆。
+    上限由 ``export_max_rows`` 配置，默认 10 万行。
+    """
+
+    limit = get_settings().export_max_rows
+    total = await repo.count_all(session)
+    if total > limit:
+        raise ApiError(
+            f"本表共 {total} 条，超过单次导出上限 {limit} 条，请联系管理员调整上限后再试。",
+            code=ErrorCode.VALIDATION_ERROR,
+            http_status=422,
+        )
+
+
 async def export_policy_types(session: AsyncSession, actor: Actor) -> bytes:
+    await _assert_exportable(session)
     rows = []
     for item in await repo.list_all(session):
         rows.append(_to_out(item) | {"seq_no": item.seq_no, "type_name": item.type_name, "definition": item.definition})
