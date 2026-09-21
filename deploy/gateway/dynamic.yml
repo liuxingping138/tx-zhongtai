@@ -11,37 +11,57 @@ http:
       rule: "PathPrefix(`/api/v1/auth`)"
       entryPoints: ["web"]
       service: iam-service
+      middlewares: ["compress"]
       priority: 100
     iam-system:
       rule: "PathPrefix(`/api/v1/system`)"
       entryPoints: ["web"]
       service: iam-service
+      middlewares: ["compress"]
       priority: 100
     audit:
       rule: "PathPrefix(`/api/v1/audit`)"
       entryPoints: ["web"]
       service: audit-service
+      middlewares: ["compress"]
       priority: 100
     codebook:
       rule: "PathPrefix(`/api/v1/codebook`)"
       entryPoints: ["web"]
       service: codebook-service
+      middlewares: ["compress"]
       priority: 100
     policy:
       rule: "PathPrefix(`/api/v1/policy`)"
       entryPoints: ["web"]
       service: policy-service
+      middlewares: ["compress"]
       priority: 100
     api-fallback:
       rule: "PathPrefix(`/api/v1`)"
       entryPoints: ["web"]
       service: api-fallback
+      middlewares: ["compress"]
       priority: 50
     frontend:
       rule: "PathPrefix(`/`)"
       entryPoints: ["web"]
       service: frontend
+      middlewares: ["compress"]
       priority: 1
+
+  middlewares:
+    # JSON 和前端资源都是高压缩比文本：筛选项接口未压缩时约 940KB，
+    # 前端主包约 1.1MB。Traefik 默认只压缩超过 1KB 的响应，小响应不受影响。
+    compress:
+      compress:
+        # xlsx 本身就是 zip，再压几乎没有收益，只是白白消耗两端 CPU。
+        excludedContentTypes:
+          - "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          - "application/zip"
+          - "image/webp"
+          - "image/png"
+          - "image/jpeg"
 
   services:
     iam-service:
