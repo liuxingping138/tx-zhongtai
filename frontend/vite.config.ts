@@ -27,4 +27,21 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // 页面已按路由懒加载，主包剩下的几乎全是第三方库。把它们按变更频率分开：
+        // 业务代码改动不再让用户重下 Element Plus，三个 chunk 也能并行下载。
+        // 首屏总字节没变少，换的是缓存命中和并行度。
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return
+          if (id.includes('element-plus') || id.includes('@element-plus')) return 'element-plus'
+          if (id.includes('/vue/') || id.includes('vue-router') || id.includes('pinia') || id.includes('@vue/')) {
+            return 'vue'
+          }
+          return 'vendor'
+        },
+      },
+    },
+  },
 })
