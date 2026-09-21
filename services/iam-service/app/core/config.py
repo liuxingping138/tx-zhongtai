@@ -46,6 +46,8 @@ class Settings(BaseServiceSettings):
 
     login_max_failures: int = 5
     login_lockout_seconds: int = 300
+    # 会话与刷新令牌失效后的额外保留天数，供回溯近期登录情况；到期由清理任务删除。
+    session_retention_days: int = 30
 
     # 内部调用方：service_name -> 共享密钥。生产环境字段名含 secret，会被演示值检查拦截。
     internal_caller_secrets: dict[str, str] = Field(default_factory=dict)

@@ -12,7 +12,7 @@ JWT_P6_DIR := deploy/secrets/jwt-p6
         test-unit test-integration test-e2e smoke provision-audit-cleanup provision-codebook-db \
         seed-area-codes \
         provision-policy-db \
-        outbox-replay audit-cleanup p6-env p6-up p6-down p6-migrate p6-seed p6-admin \
+        outbox-replay audit-cleanup iam-session-cleanup p6-env p6-up p6-down p6-migrate p6-seed p6-admin \
         p6-backup p6-restore export-openapi scan-scope
 
 help:
@@ -32,6 +32,7 @@ help:
 	@echo "  make provision-audit-cleanup  为已有数据卷补建审计清理账号"
 	@echo "  make outbox-replay    重放 dead/failed Outbox 事件"
 	@echo "  make audit-cleanup    使用独立清理账号删除到期审计事件"
+	@echo "  make iam-session-cleanup  清理已过期/已撤销的会话与刷新令牌"
 	@echo "  make p6-up / p6-down  启动/销毁隔离验收栈（down 删除隔离卷）"
 	@echo "  make export-openapi   从本地 FastAPI 应用导出 OpenAPI"
 	@echo "  make scan-scope       检查业务目录占位与仓库密钥扫描"
@@ -102,6 +103,10 @@ provision-policy-db:
 
 outbox-replay:
 	$(COMPOSE) exec -T iam-service uv run python -m app.cli.outbox_replay
+
+iam-session-cleanup:
+	@echo "== 清理已失效的会话与刷新令牌 =="
+	$(COMPOSE) exec -T iam-service uv run python -m app.cli.session_cleanup
 
 audit-cleanup:
 	@set -a && . ./.env && set +a && \
