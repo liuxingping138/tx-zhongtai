@@ -12,7 +12,7 @@ guard_db_name() {
     *_p6_db|*_itest|*_test)
       return 0
       ;;
-    iam_db|audit_db)
+    iam_db|audit_db|policy_db|codebook_db)
       echo "拒绝操作开发库 $name。隔离验收请使用 *_p6_db。" >&2
       exit 2
       ;;

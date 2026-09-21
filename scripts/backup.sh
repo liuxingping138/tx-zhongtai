@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 备份 IAM 与审计库。默认只允许隔离库名（*_p6_db / *_itest / *_test）。
+# 备份四个服务库。默认只允许隔离库名（*_p6_db / *_itest / *_test）。
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=lib_guard.sh
@@ -15,8 +15,12 @@ set -a
 source "$ENV_FILE"
 set +a
 
-guard_db_name "$IAM_DB_NAME" iam
-guard_db_name "$AUDIT_DB_NAME" audit
+# 每个服务一套独立库，四个都要备。只备 iam+audit 会丢掉全部业务数据。
+SERVICES="iam audit policy codebook"
+for svc in $SERVICES; do
+  eval "db=\${$(echo "$svc" | tr '[:lower:]' '[:upper:]')_DB_NAME:-}"
+  guard_db_name "$db" "$svc"
+done
 
 COMPOSE="${BACKUP_COMPOSE:?请设置 BACKUP_COMPOSE，例如 docker compose -p tx-zhongtai-p6 ...}"
 STAMP="${BACKUP_STAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
@@ -24,9 +28,11 @@ OUT_DIR="${BACKUP_DIR:-$ROOT/deploy/backups/$STAMP}"
 mkdir -p "$OUT_DIR"
 
 echo "备份到 $OUT_DIR"
-$COMPOSE exec -T postgres pg_dump -U "$POSTGRES_SUPERUSER" -d "$IAM_DB_NAME" --no-owner --format=custom > "$OUT_DIR/iam.dump"
-$COMPOSE exec -T postgres pg_dump -U "$POSTGRES_SUPERUSER" -d "$AUDIT_DB_NAME" --no-owner --format=custom > "$OUT_DIR/audit.dump"
-printf '%s\n' "$IAM_DB_NAME" > "$OUT_DIR/iam.dbname"
-printf '%s\n' "$AUDIT_DB_NAME" > "$OUT_DIR/audit.dbname"
+for svc in $SERVICES; do
+  eval "db=\${$(echo "$svc" | tr '[:lower:]' '[:upper:]')_DB_NAME}"
+  $COMPOSE exec -T postgres pg_dump -U "$POSTGRES_SUPERUSER" -d "$db" --no-owner --format=custom > "$OUT_DIR/$svc.dump"
+  printf '%s\n' "$db" > "$OUT_DIR/$svc.dbname"
+  echo "  $svc <- $db"
+done
 echo "备份完成 $STAMP"
 echo "$OUT_DIR"
