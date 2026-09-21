@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 
 from platform_common.filters import Filters
-from sqlalchemy import ColumnElement, Integer, cast, func, or_, select
+from sqlalchemy import ColumnElement, Integer, case, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import PolicyType
@@ -31,7 +31,20 @@ async def get_by_name(session: AsyncSession, type_name: str) -> PolicyType | Non
 # 列表与导出共用同一份筛选定义，避免两边条件逐渐走偏。
 # 政策类型只有一个关键词，跨三列做 or 匹配。
 KEYWORD_COLUMNS = (PolicyType.type_name, PolicyType.definition, PolicyType.seq_no)
-_ORDER_BY = (cast(func.nullif(PolicyType.seq_no, ""), Integer), PolicyType.type_name)
+
+# 序号按数值排，但 seq_no 是用户可写的自由文本（API 的 seq_no 字段、Excel 的「序号」列
+# 都不限格式）。曾经直接 CAST(... AS INTEGER)，只要有一行填了「A1」，
+# 整个列表和导出就永久 500，且页面打不开、用户无法自行改回来。
+# 改成只对纯数字取值，非数字排在后面按文本排，排序结果对全数字数据与原来一致。
+_NUMERIC_SEQ_NO = case(
+    (PolicyType.seq_no.op("~")("^[0-9]+$"), cast(PolicyType.seq_no, Integer)),
+    else_=None,
+)
+_ORDER_BY = (
+    _NUMERIC_SEQ_NO.nulls_last(),
+    PolicyType.seq_no,
+    PolicyType.type_name,
+)
 
 
 def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
