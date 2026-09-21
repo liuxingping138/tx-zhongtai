@@ -98,6 +98,50 @@ test('desktop keeps every filter visible and distinguishes draft from applied qu
   await expect(page.getByText('已筛选 1 项', { exact: true })).toBeVisible()
 })
 
+// 适配范围是电脑端 1024px 起（见 docs/UI开发规范.md 第 0 节）。
+// 1024 是下限，最容易出问题：列多、容器窄，既不能让整页横向溢出，
+// 也不能因为窄就退化成移动端摘要卡片，上传下载入口还必须留着。
+test('1024px 下限：无整页横溢出、工具栏入口齐全、筛选全展开、横滑到末列仍能操作', async ({ page }) => {
+  await page.route('**/api/v1/policy/sources?**', route => respond(route, {
+    items: [{ id: 'row-1', site_name: '北京日报', province_name: '北京市', department: '宣传部' }],
+    total: 1,
+    page: 1,
+    page_size: 20,
+  }))
+  await page.setViewportSize({ width: 1024, height: 768 })
+  await page.goto('/policy/sources')
+
+  // 整页不许横向溢出；表格自身超宽是允许的，它在 ScrollPort 里滚。
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+  expect(overflow).toBeLessThanOrEqual(0)
+
+  // 上传和下载入口必须保留，且真的落在视口内。
+  for (const name of [/上传/, /下载/, /列设置/]) {
+    const button = page.getByRole('button', { name }).first()
+    await expect(button).toBeVisible()
+    const box = await button.boundingBox()
+    expect(box!.x + box!.width).toBeLessThanOrEqual(1024)
+  }
+
+  // 桌面一次展开全部筛选，1024 也不许退化成手机的「更多筛选」。
+  await expect(page.getByRole('button', { name: '更多筛选' })).toHaveCount(0)
+  // 也不许退化成移动端摘要卡片。
+  await expect(page.locator('.mobile-record')).toHaveCount(0)
+
+  // 横滑到最右，操作列仍要在视口内可点。
+  const scrolled = await page.evaluate(() => {
+    const port = [...document.querySelectorAll('div')].find(d => d.scrollWidth > d.clientWidth + 1 && d.clientWidth > 300)
+    if (!port) return false
+    port.scrollLeft = port.scrollWidth
+    return true
+  })
+  expect(scrolled).toBe(true)
+  const opHeader = page.getByRole('columnheader', { name: '操作' }).first()
+  await expect(opHeader).toBeVisible()
+  const opBox = await opHeader.boundingBox()
+  expect(opBox!.x + opBox!.width).toBeLessThanOrEqual(1024)
+})
+
 test('failed loading exposes retry and filtered empty results can clear filters', async ({ page }) => {
   let fail = true
   await page.route('**/api/v1/codebook/policy-types?**', route => fail
