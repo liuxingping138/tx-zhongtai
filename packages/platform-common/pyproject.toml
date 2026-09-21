@@ -44,6 +44,8 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.ruff.lint.per-file-ignores]
 # FastAPI 依赖注入本来就写在参数默认值里，与各服务 app/api/*.py 的豁免一致。
 "platform_common/service_authz.py" = ["B008"]
+# 路由体检的自测要照真实路由的写法造样例，否则验不出漏挂依赖。
+"tests/test_route_audit.py" = ["B008"]
 
 [tool.mypy]
 python_version = "3.12"

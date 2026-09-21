@@ -8,9 +8,12 @@ from fastapi import Depends, Request
 from platform_common.authz import AuthzClient
 from platform_common.errors import UnauthenticatedError
 from platform_common.request_context import get_request_id
+from platform_common.route_audit import mark_permission_dependency
 
 from app.core.config import Settings, get_settings
 from app.domain.enums import SecurityClass
+
+AUDIT_RESOURCE = "system.audit"
 
 _authz_client: AuthzClient | None = None
 
@@ -59,6 +62,6 @@ def require_audit_permission(action: str) -> Callable[..., Any]:
         client: AuthzClient = Depends(get_authz_client),
     ) -> None:
         _ = get_request_id()
-        await client.authorize(access_token=_bearer_token(request), resource="system.audit", action=action)
+        await client.authorize(access_token=_bearer_token(request), resource=AUDIT_RESOURCE, action=action)
 
-    return dependency
+    return mark_permission_dependency(dependency, resource=AUDIT_RESOURCE, action=action)

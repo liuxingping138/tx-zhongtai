@@ -17,6 +17,7 @@ from platform_common.actors import Actor
 from platform_common.authz import AuthzClient
 from platform_common.enums import SecurityClass
 from platform_common.errors import UnauthenticatedError
+from platform_common.route_audit import mark_permission_dependency
 
 
 def classified(security_class: SecurityClass) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
@@ -59,6 +60,6 @@ def build_permission_dependency(
                 raise UnauthenticatedError()
             return Actor(id=actor_id, name=actor_name)
 
-        return dependency
+        return mark_permission_dependency(dependency, resource=resource, action=action)
 
     return require_permission

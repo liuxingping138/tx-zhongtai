@@ -9,6 +9,7 @@ from typing import Any
 
 from fastapi import Depends, Request
 from platform_common.errors import PermissionDeniedError, UnauthenticatedError
+from platform_common.route_audit import mark_permission_dependency
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
@@ -119,4 +120,4 @@ def require_permission(resource: str, action: str) -> Callable[..., Any]:
         await assert_allowed(session, principal.user, resource, action)
         return principal
 
-    return dependency
+    return mark_permission_dependency(dependency, resource=resource, action=action)
