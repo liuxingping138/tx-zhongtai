@@ -84,8 +84,6 @@ export interface InterpretationItem {
 
 export type { ImportResult } from './excelImport'
 
-export type FilterOptions = Record<string, string[] | Record<string, string[]>>
-
 export function listSources(params: {
   site_name?: string
   province_name?: string
@@ -97,10 +95,6 @@ export function listSources(params: {
   page_size?: number
 }): Promise<Page<SourceItem>> {
   return request(http.get('/policy/sources', { params }))
-}
-
-export function sourceOptions(): Promise<FilterOptions> {
-  return request(http.get('/policy/sources/options'))
 }
 
 export function createSource(body: Partial<SourceItem>): Promise<SourceItem> {
@@ -120,10 +114,6 @@ export function importSources(
   onProgress?: (percent: number, stage: ImportStage) => void,
 ): Promise<ImportResult> {
   return postExcelImport('/policy/sources/import', file, onProgress)
-}
-
-export function baseTagOptions(): Promise<FilterOptions> {
-  return request(http.get('/policy/base-tags/options'))
 }
 
 export function listBaseTags(params: {
@@ -151,10 +141,6 @@ export function importBaseTags(
   onProgress?: (percent: number, stage: ImportStage) => void,
 ): Promise<ImportResult> {
   return postExcelImport('/policy/base-tags/import', file, onProgress)
-}
-
-export function interpretationOptions(): Promise<FilterOptions> {
-  return request(http.get('/policy/interpretations/options'))
 }
 
 export function listInterpretations(params: {

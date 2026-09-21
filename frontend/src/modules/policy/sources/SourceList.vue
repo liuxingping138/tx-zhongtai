@@ -10,7 +10,6 @@ import {
   createSource,
   importSources,
   listSources,
-  sourceOptions,
   updateSource,
   type SourceItem,
 } from '@/api/policy'
@@ -20,6 +19,7 @@ import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import FilterBar from '@/components/FilterBar.vue'
+import { useFilterOptions } from '@/composables/useFilterOptions'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
@@ -48,14 +48,7 @@ const query = reactive({
   page: 1,
   page_size: 20,
 })
-const options = reactive({
-  site_name: [] as string[],
-  province_name: [] as string[],
-  city_name: [] as string[],
-  tag: [] as string[],
-  crawl_priority: [] as string[],
-  city_by_province: {} as Record<string, string[]>,
-})
+const filters = useFilterOptions('/policy/sources')
 const visible = ref(false)
 const saving = ref(false)
 const saveError = ref('')
@@ -92,28 +85,10 @@ const tableColumns = [
   { prop: 'updated_by_name', label: '操作人', width: 110 },
 ] as const
 
-const cityOptions = computed(() => {
-  if (query.province_name && options.city_by_province[query.province_name]) {
-    return options.city_by_province[query.province_name]
-  }
-  return options.city_name
-})
+const cityBinding = computed(() => filters.bindCity('city_name', query.province_name))
 
 
 
-async function loadOptions() {
-  try {
-    const data = await sourceOptions()
-    options.site_name = (data.site_name as string[]) ?? []
-    options.province_name = (data.province_name as string[]) ?? []
-    options.city_name = (data.city_name as string[]) ?? []
-    options.tag = (data.tag as string[]) ?? []
-    options.crawl_priority = (data.crawl_priority as string[]) ?? []
-    options.city_by_province = (data.city_by_province as Record<string, string[]>) ?? {}
-  } catch {
-    /* 选项失败不影响列表 */
-  }
-}
 
 const listQuery = useListQuery(query, load)
 
@@ -207,7 +182,7 @@ async function onSave() {
     }
     ElMessage.success('已保存')
     visible.value = false
-    await Promise.all([load(), loadOptions()])
+    await Promise.all([load(), filters.load()])
   } catch (error) {
     if (isApiError(error) && error.status === 409) {
       saveError.value = '数据已被他人修改或内容重复。请保留需要的内容，关闭后重新打开最新记录再修改。'
@@ -227,7 +202,7 @@ async function onImport(file: File) {
     )
     reportImportResult(result, '信源管理-上传校验.xlsx')
     if (!result.rejected) {
-      await Promise.all([load(), loadOptions()])
+      await Promise.all([load(), filters.load()])
     }
   } catch (error) {
     ElMessage.error(errorMessage(error, '导入失败'))
@@ -270,7 +245,7 @@ async function onClear() {
     const result = await clearSources()
     ElMessage.success(`已清空 ${result.deleted} 条`)
     query.page = 1
-    await Promise.all([load(), loadOptions()])
+    await Promise.all([load(), filters.load()])
   } catch (error) {
     ElMessage.error(errorMessage(error, '清空失败'))
   } finally {
@@ -284,7 +259,7 @@ function openLogs() {
 
 onMounted(() => {
   void load()
-  void loadOptions()
+  void filters.load()
 })
 
 const editorGroups: EditorGroup[] = [
@@ -466,20 +441,20 @@ const selectedColumns = ref([...defaultColumns.value])
           <el-form-item label="网站名称">
             <FilterSelect
               v-model="query.site_name"
-              :options="options.site_name"
+              v-bind="filters.bind('site_name')"
             />
           </el-form-item>
           <el-form-item label="省份">
             <FilterSelect
               v-model="query.province_name"
-              :options="options.province_name"
+              v-bind="filters.bind('province_name')"
               size="short"
             />
           </el-form-item>
           <el-form-item label="地市">
             <FilterSelect
               v-model="query.city_name"
-              :options="cityOptions"
+              v-bind="cityBinding"
               size="short"
             />
           </el-form-item>
@@ -487,13 +462,13 @@ const selectedColumns = ref([...defaultColumns.value])
             <el-form-item label="标签">
               <FilterSelect
                 v-model="query.tag"
-                :options="options.tag"
+                v-bind="filters.bind('tag')"
               />
             </el-form-item>
             <el-form-item label="网站优先级">
               <FilterSelect
                 v-model="query.crawl_priority"
-                :options="options.crawl_priority"
+                v-bind="filters.bind('crawl_priority')"
               />
             </el-form-item>
           </template>

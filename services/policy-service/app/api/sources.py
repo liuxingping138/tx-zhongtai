@@ -58,6 +58,23 @@ async def list_filter_options(
     return success_json(await service.list_source_options(session))
 
 
+@router.get("/options/search")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def search_filter_options(
+    field: str = Query(..., min_length=1, max_length=64),
+    q: str | None = Query(default=None, max_length=200),
+    session: AsyncSession = Depends(get_db_session),
+    _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
+):
+    """筛选项的服务端搜索。候选值过多的字段由前端按关键词调用。"""
+
+    try:
+        values = await service.search_source_options(session, field=field, keyword=q)
+    except KeyError as exc:
+        raise ApiError("未知的筛选字段", code=ErrorCode.VALIDATION_ERROR, http_status=422) from exc
+    return success_json({"items": values})
+
+
 @router.get("/export")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def export_items(

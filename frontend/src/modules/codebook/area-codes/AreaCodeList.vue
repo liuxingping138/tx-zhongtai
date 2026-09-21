@@ -5,7 +5,6 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import {
-  areaCodeOptions,
   createAreaCode,
   importAreaCodes,
   listAreaCodes,
@@ -18,6 +17,7 @@ import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import FilterBar from '@/components/FilterBar.vue'
+import { useFilterOptions } from '@/composables/useFilterOptions'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
@@ -61,11 +61,7 @@ const saving = ref(false)
 const saveError = ref('')
 const editing = ref<AreaCodeItem | null>(null)
 const form = reactive<Record<string, string>>({})
-const options = reactive({
-  prov_name: [] as string[],
-  city_name: [] as string[],
-  county_name: [] as string[],
-})
+const filters = useFilterOptions('/codebook/area-codes')
 
 const tableColumns = [
   ...fields.map((field) => ({
@@ -80,16 +76,6 @@ const tableColumns = [
 ]
 
 
-async function loadOptions() {
-  try {
-    const data = await areaCodeOptions()
-    options.prov_name = data.prov_name ?? []
-    options.city_name = data.city_name ?? []
-    options.county_name = data.county_name ?? []
-  } catch {
-    /* 选项失败不影响列表 */
-  }
-}
 
 const listQuery = useListQuery(query, load)
 
@@ -171,7 +157,7 @@ async function onSave() {
     }
     ElMessage.success('已保存')
     visible.value = false
-    await Promise.all([load(), loadOptions()])
+    await Promise.all([load(), filters.load()])
   } catch (error) {
     if (isApiError(error) && error.status === 409) {
       await ElMessageBox.alert(
@@ -191,7 +177,7 @@ async function onImport(file: File) {
   try {
     const result = await runExcelImport(file, (onProgress) => importAreaCodes(file, onProgress))
     reportImportResult(result, '省市区编码-跳过明细.xlsx')
-    await Promise.all([load(), loadOptions()])
+    await Promise.all([load(), filters.load()])
   } catch (error) {
     ElMessage.error(errorMessage(error, '导入失败'))
   }
@@ -219,7 +205,7 @@ function openLogs() {
 
 onMounted(() => {
   void load()
-  void loadOptions()
+  void filters.load()
 })
 
 const editorGroups: EditorGroup[] = [
@@ -398,21 +384,21 @@ const selectedColumns = ref([...defaultColumns.value])
           <el-form-item label="省份">
             <FilterSelect
               v-model="query.prov_name"
-              :options="options.prov_name"
+              v-bind="filters.bind('prov_name')"
               size="short"
             />
           </el-form-item>
           <el-form-item label="城市">
             <FilterSelect
               v-model="query.city_name"
-              :options="options.city_name"
+              v-bind="filters.bind('city_name')"
               size="short"
             />
           </el-form-item>
           <el-form-item label="区县">
             <FilterSelect
               v-model="query.county_name"
-              :options="options.county_name"
+              v-bind="filters.bind('county_name')"
               size="short"
             />
           </el-form-item>

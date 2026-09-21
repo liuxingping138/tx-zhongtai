@@ -1,22 +1,41 @@
+"""本服务各表的筛选项字段。预览与搜索逻辑在 platform_common.options。"""
+
 from __future__ import annotations
 
 from typing import Any
 
+from platform_common.options import OptionColumns, preview_options, search_options
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import InstrumentedAttribute
 
 from app.domain.models import BaseTag, Interpretation, Source
 
+SOURCE_OPTION_COLUMNS: OptionColumns = {
+    "site_name": Source.site_name,
+    "province_name": Source.province_name,
+    "city_name": Source.city_name,
+    "tag": Source.tag,
+    "crawl_priority": Source.crawl_priority,
+}
 
-async def _values(session: AsyncSession, column: InstrumentedAttribute[str], limit: int = 8000) -> list[str]:
-    result = await session.execute(
-        select(column).where(column.is_not(None)).where(column != "").distinct().order_by(column).limit(limit)
-    )
-    return [value for value in result.scalars() if value]
+BASE_TAG_OPTION_COLUMNS: OptionColumns = {
+    "policy_name": BaseTag.policy_name,
+    "province_name": BaseTag.province_name,
+    "policy_types": BaseTag.policy_types,
+    "is_penetrate": BaseTag.is_penetrate,
+    "need_interpret": BaseTag.need_interpret,
+}
+
+INTERPRETATION_OPTION_COLUMNS: OptionColumns = {
+    "policy_title": Interpretation.policy_title,
+    "industry_scenario_code": Interpretation.industry_scenario_code,
+    "industry_l1": Interpretation.industry_l1,
+    "opportunity_type": Interpretation.opportunity_type,
+}
 
 
 async def source_options(session: AsyncSession) -> dict[str, Any]:
+    # 省份数量有限，省市联动表整份下发；地市字段本身仍可能被截断。
     pairs = await session.execute(
         select(Source.province_name, Source.city_name)
         .where(Source.province_name != "")
@@ -30,29 +49,18 @@ async def source_options(session: AsyncSession) -> dict[str, Any]:
     for cities in city_by_province.values():
         cities.sort()
     return {
-        "site_name": await _values(session, Source.site_name),
-        "province_name": await _values(session, Source.province_name),
-        "city_name": await _values(session, Source.city_name),
-        "tag": await _values(session, Source.tag),
-        "crawl_priority": await _values(session, Source.crawl_priority),
+        "options": await preview_options(session, SOURCE_OPTION_COLUMNS),
         "city_by_province": city_by_province,
     }
 
 
-async def base_tag_options(session: AsyncSession) -> dict[str, list[str]]:
-    return {
-        "policy_name": await _values(session, BaseTag.policy_name),
-        "province_name": await _values(session, BaseTag.province_name),
-        "policy_types": await _values(session, BaseTag.policy_types),
-        "is_penetrate": await _values(session, BaseTag.is_penetrate),
-        "need_interpret": await _values(session, BaseTag.need_interpret),
-    }
+async def base_tag_options(session: AsyncSession) -> dict[str, Any]:
+    return {"options": await preview_options(session, BASE_TAG_OPTION_COLUMNS)}
 
 
-async def interpretation_options(session: AsyncSession) -> dict[str, list[str]]:
-    return {
-        "policy_title": await _values(session, Interpretation.policy_title),
-        "industry_scenario_code": await _values(session, Interpretation.industry_scenario_code),
-        "industry_l1": await _values(session, Interpretation.industry_l1),
-        "opportunity_type": await _values(session, Interpretation.opportunity_type),
-    }
+async def interpretation_options(session: AsyncSession) -> dict[str, Any]:
+    return {"options": await preview_options(session, INTERPRETATION_OPTION_COLUMNS)}
+
+
+async def search(session: AsyncSession, columns: OptionColumns, *, field: str, keyword: str | None) -> list[str]:
+    return await search_options(session, columns, field=field, keyword=keyword)

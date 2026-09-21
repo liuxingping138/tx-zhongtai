@@ -29,6 +29,7 @@
 | 系统字段验证 | `frontend/src/composables/useFieldValidation.ts` | 字段错误、提交验证，不覆盖业务规则 |
 | 未保存保护 | `frontend/src/composables/useUnsavedForm.ts` | visible、表单快照、saving；接close/beforeClose |
 | Excel 下载 | `frontend/src/api/download.ts` | `downloadFile(路径, 中文文件名, filtersForExport(listQuery.applied))`；导出按已生效筛选走，传 applied 不传 query；不要用裸 fetch，否则绕开 401 自动续期和统一中文错误提示 |
+| 筛选项候选值 | `frontend/src/composables/useFilterOptions.ts` | `v-bind="filters.bind('字段')"`；候选少的字段整份预发、本地过滤，候选多的自动转服务端搜索。不要再自己 reactive 一份 options |
 | URL查询恢复 | `frontend/src/composables/useListQuery.ts` | query、load、私有字段列表 |
 | 上传状态与结果 | `frontend/src/components/ExcelImportProgress.vue`、`ExcelImportResult.vue` | 原模块导入接口及结果，不复制业务去重逻辑 |
 | 导航/基础色/字体/间距 | `frontend/src/layouts/`、`frontend/src/styles/theme.css` | 路由、发布配置、资源权限；账号放侧栏底部，不复制导航或另建色板 |

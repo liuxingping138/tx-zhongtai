@@ -68,8 +68,16 @@ async def list_scenarios(
     return {"items": [_to_out(item) for item in items], "total": total, "page": page, "page_size": page_size}
 
 
-async def list_scenario_options(session: AsyncSession) -> dict[str, list[str]]:
+async def list_scenario_options(session: AsyncSession) -> dict[str, Any]:
     return await options_repo.scenario_options(session)
+
+
+async def search_scenario_options(session: AsyncSession, *, field: str, keyword: str | None) -> list[str]:
+    """按关键词搜索筛选项候选值，供前端下拉的服务端搜索使用。"""
+
+    return await options_repo.search(
+        session, options_repo.SCENARIO_OPTION_COLUMNS, field=field, keyword=keyword
+    )
 
 
 async def get_scenario(session: AsyncSession, item_id: uuid.UUID) -> dict[str, Any]:

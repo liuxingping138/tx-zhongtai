@@ -1,38 +1,44 @@
+"""本服务各表的筛选项字段。预览与搜索逻辑在 platform_common.options。"""
+
 from __future__ import annotations
 
-from sqlalchemy import select
+from typing import Any
+
+from platform_common.options import OptionColumns, preview_options, search_options
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import InstrumentedAttribute
 
 from app.domain.models import AreaCode, PolicyType, Scenario
 
+SCENARIO_OPTION_COLUMNS: OptionColumns = {
+    "industry_scenario_code": Scenario.industry_scenario_code,
+    "industry_l1": Scenario.industry_l1,
+    "scenario_tag": Scenario.scenario_tag,
+    "customer_group_name": Scenario.customer_group_name,
+}
 
-async def _values(session: AsyncSession, column: InstrumentedAttribute[str], limit: int = 8000) -> list[str]:
-    result = await session.execute(
-        select(column).where(column.is_not(None)).where(column != "").distinct().order_by(column).limit(limit)
-    )
-    return [value for value in result.scalars() if value]
+POLICY_TYPE_OPTION_COLUMNS: OptionColumns = {
+    "type_name": PolicyType.type_name,
+    "seq_no": PolicyType.seq_no,
+}
 
-
-async def scenario_options(session: AsyncSession) -> dict[str, list[str]]:
-    return {
-        "industry_scenario_code": await _values(session, Scenario.industry_scenario_code),
-        "industry_l1": await _values(session, Scenario.industry_l1),
-        "scenario_tag": await _values(session, Scenario.scenario_tag),
-        "customer_group_name": await _values(session, Scenario.customer_group_name),
-    }
-
-
-async def policy_type_options(session: AsyncSession) -> dict[str, list[str]]:
-    return {
-        "type_name": await _values(session, PolicyType.type_name),
-        "seq_no": await _values(session, PolicyType.seq_no),
-    }
+AREA_CODE_OPTION_COLUMNS: OptionColumns = {
+    "prov_name": AreaCode.prov_name,
+    "city_name": AreaCode.city_name,
+    "county_name": AreaCode.county_name,
+}
 
 
-async def area_code_options(session: AsyncSession) -> dict[str, list[str]]:
-    return {
-        "prov_name": await _values(session, AreaCode.prov_name),
-        "city_name": await _values(session, AreaCode.city_name),
-        "county_name": await _values(session, AreaCode.county_name),
-    }
+async def scenario_options(session: AsyncSession) -> dict[str, Any]:
+    return {"options": await preview_options(session, SCENARIO_OPTION_COLUMNS)}
+
+
+async def policy_type_options(session: AsyncSession) -> dict[str, Any]:
+    return {"options": await preview_options(session, POLICY_TYPE_OPTION_COLUMNS)}
+
+
+async def area_code_options(session: AsyncSession) -> dict[str, Any]:
+    return {"options": await preview_options(session, AREA_CODE_OPTION_COLUMNS)}
+
+
+async def search(session: AsyncSession, columns: OptionColumns, *, field: str, keyword: str | None) -> list[str]:
+    return await search_options(session, columns, field=field, keyword=keyword)

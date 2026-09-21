@@ -7,7 +7,6 @@ import { ElMessage } from 'element-plus'
 import {
   createInterpretation,
   importInterpretations,
-  interpretationOptions,
   listInterpretations,
   updateInterpretation,
   type InterpretationItem,
@@ -18,6 +17,7 @@ import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import FilterBar from '@/components/FilterBar.vue'
+import { useFilterOptions } from '@/composables/useFilterOptions'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
@@ -71,12 +71,7 @@ const saving = ref(false)
 const saveError = ref('')
 const editing = ref<InterpretationItem | null>(null)
 const form = reactive({ ...emptyForm })
-const options = reactive({
-  policy_title: [] as string[],
-  industry_scenario_code: [] as string[],
-  industry_l1: [] as string[],
-  opportunity_type: [] as string[],
-})
+const filters = useFilterOptions('/policy/interpretations')
 
 const tableColumns = [
   { prop: 'policy_uid', label: '政策唯一标识', width: 300 },
@@ -107,17 +102,6 @@ const tableColumns = [
 ] as const
 
 
-async function loadOptions() {
-  try {
-    const data = await interpretationOptions()
-    options.policy_title = (data.policy_title as string[]) ?? []
-    options.industry_scenario_code = (data.industry_scenario_code as string[]) ?? []
-    options.industry_l1 = (data.industry_l1 as string[]) ?? []
-    options.opportunity_type = (data.opportunity_type as string[]) ?? []
-  } catch {
-    /* 选项失败不影响列表 */
-  }
-}
 
 const listQuery = useListQuery(query, load)
 
@@ -203,7 +187,7 @@ async function onSave() {
     }
     ElMessage.success('已保存')
     visible.value = false
-    await Promise.all([load(), loadOptions()])
+    await Promise.all([load(), filters.load()])
   } catch (error) {
     if (isApiError(error) && error.status === 409) {
       saveError.value = '数据已被他人修改或内容重复。请保留需要的内容，关闭后重新打开最新记录再修改。'
@@ -220,7 +204,7 @@ async function onImport(file: File) {
   try {
     const result = await runExcelImport(file, (onProgress) => importInterpretations(file, onProgress))
     reportImportResult(result, '政策解读-跳过明细.xlsx')
-    await Promise.all([load(), loadOptions()])
+    await Promise.all([load(), filters.load()])
   } catch (error) {
     ElMessage.error(errorMessage(error, '导入失败'))
   }
@@ -248,7 +232,7 @@ function openLogs() {
 
 onMounted(() => {
   void load()
-  void loadOptions()
+  void filters.load()
 })
 
 const editorGroups: EditorGroup[] = [
@@ -490,19 +474,19 @@ const selectedColumns = ref([...defaultColumns.value])
           <el-form-item label="政策原文名称">
             <FilterSelect
               v-model="query.policy_title"
-              :options="options.policy_title"
+              v-bind="filters.bind('policy_title')"
             />
           </el-form-item>
           <el-form-item label="行业场景编码">
             <FilterSelect
               v-model="query.industry_scenario_code"
-              :options="options.industry_scenario_code"
+              v-bind="filters.bind('industry_scenario_code')"
             />
           </el-form-item>
           <el-form-item label="一级行业">
             <FilterSelect
               v-model="query.industry_l1"
-              :options="options.industry_l1"
+              v-bind="filters.bind('industry_l1')"
               size="short"
             />
           </el-form-item>
@@ -510,7 +494,7 @@ const selectedColumns = ref([...defaultColumns.value])
             <el-form-item label="机会类型">
               <FilterSelect
                 v-model="query.opportunity_type"
-                :options="options.opportunity_type"
+                v-bind="filters.bind('opportunity_type')"
                 size="short"
               />
             </el-form-item>

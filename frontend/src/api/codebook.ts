@@ -57,14 +57,8 @@ export interface ScenarioItem {
 
 export type { ImportResult } from './excelImport'
 
-export type FilterOptions = Record<string, string[]>
-
 export function listPolicyTypes(params: { keyword?: string; page?: number; page_size?: number }): Promise<Page<PolicyTypeItem>> {
   return request(http.get('/codebook/policy-types', { params }))
-}
-
-export function policyTypeOptions(): Promise<FilterOptions> {
-  return request(http.get('/codebook/policy-types/options'))
 }
 
 export function createPolicyType(body: { seq_no?: string; type_name: string; definition?: string }): Promise<PolicyTypeItem> {
@@ -83,10 +77,6 @@ export function importPolicyTypes(
   onProgress?: (percent: number, stage: ImportStage) => void,
 ): Promise<ImportResult> {
   return postExcelImport('/codebook/policy-types/import', file, onProgress, 180_000)
-}
-
-export function scenarioOptions(): Promise<FilterOptions> {
-  return request(http.get('/codebook/scenarios/options'))
 }
 
 export function listScenarios(params: {
@@ -137,10 +127,6 @@ export interface AreaCodeItem {
   alias_county_name: string
   city_name_short: string
   county_name_short: string
-}
-
-export function areaCodeOptions(): Promise<FilterOptions> {
-  return request(http.get('/codebook/area-codes/options'))
 }
 
 export function listAreaCodes(params: {

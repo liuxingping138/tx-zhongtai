@@ -8,7 +8,6 @@ import {
   createScenario,
   importScenarios,
   listScenarios,
-  scenarioOptions,
   updateScenario,
   type ScenarioItem,
 } from '@/api/codebook'
@@ -18,6 +17,7 @@ import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import FilterBar from '@/components/FilterBar.vue'
+import { useFilterOptions } from '@/composables/useFilterOptions'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
@@ -93,12 +93,7 @@ const saving = ref(false)
 const saveError = ref('')
 const editing = ref<ScenarioItem | null>(null)
 const form = reactive<Record<string, string>>({})
-const options = reactive({
-  industry_scenario_code: [] as string[],
-  industry_l1: [] as string[],
-  scenario_tag: [] as string[],
-  customer_group_name: [] as string[],
-})
+const filters = useFilterOptions('/codebook/scenarios')
 
 const columnLabels: Record<string, string> = {
   industry_l1: '一级行业',
@@ -137,17 +132,6 @@ const tableColumns = [
 ]
 
 
-async function loadOptions() {
-  try {
-    const data = await scenarioOptions()
-    options.industry_scenario_code = data.industry_scenario_code ?? []
-    options.industry_l1 = data.industry_l1 ?? []
-    options.scenario_tag = data.scenario_tag ?? []
-    options.customer_group_name = data.customer_group_name ?? []
-  } catch {
-    /* 选项失败不影响列表 */
-  }
-}
 
 const listQuery = useListQuery(query, load)
 
@@ -227,7 +211,7 @@ async function onSave() {
     }
     ElMessage.success('已保存')
     visible.value = false
-    await Promise.all([load(), loadOptions()])
+    await Promise.all([load(), filters.load()])
   } catch (error) {
     if (isApiError(error) && error.status === 409) {
       await ElMessageBox.alert(
@@ -247,7 +231,7 @@ async function onImport(file: File) {
   try {
     const result = await runExcelImport(file, (onProgress) => importScenarios(file, onProgress))
     reportImportResult(result, '行业场景-跳过明细.xlsx')
-    await Promise.all([load(), loadOptions()])
+    await Promise.all([load(), filters.load()])
   } catch (error) {
     ElMessage.error(errorMessage(error, '导入失败'))
   }
@@ -275,7 +259,7 @@ function openLogs() {
 
 onMounted(() => {
   void load()
-  void loadOptions()
+  void filters.load()
 })
 
 const editorGroups: EditorGroup[] = [
@@ -597,27 +581,27 @@ const selectedColumns = ref([...defaultColumns.value])
           <el-form-item label="行业场景编码">
             <FilterSelect
               v-model="query.industry_scenario_code"
-              :options="options.industry_scenario_code"
+              v-bind="filters.bind('industry_scenario_code')"
             />
           </el-form-item>
           <el-form-item label="一级行业">
             <FilterSelect
               v-model="query.industry_l1"
-              :options="options.industry_l1"
+              v-bind="filters.bind('industry_l1')"
               size="short"
             />
           </el-form-item>
           <el-form-item label="场景标签">
             <FilterSelect
               v-model="query.scenario_tag"
-              :options="options.scenario_tag"
+              v-bind="filters.bind('scenario_tag')"
             />
           </el-form-item>
           <template #advanced>
             <el-form-item label="客群名称">
               <FilterSelect
                 v-model="query.customer_group_name"
-                :options="options.customer_group_name"
+                v-bind="filters.bind('customer_group_name')"
               />
             </el-form-item>
           </template>

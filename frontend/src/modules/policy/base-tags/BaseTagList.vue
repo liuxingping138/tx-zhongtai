@@ -6,7 +6,6 @@ import { ElMessage } from 'element-plus'
 
 import { importAfterAreaResolve } from '@/api/codebook'
 import {
-  baseTagOptions,
   createBaseTag,
   importBaseTags,
   listBaseTags,
@@ -19,6 +18,7 @@ import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import FilterBar from '@/components/FilterBar.vue'
+import { useFilterOptions } from '@/composables/useFilterOptions'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
@@ -68,13 +68,7 @@ const emptyForm = {
   remark: '',
 }
 const form = reactive({ ...emptyForm })
-const options = reactive({
-  policy_name: [] as string[],
-  province_name: [] as string[],
-  policy_types: [] as string[],
-  is_penetrate: [] as string[],
-  need_interpret: [] as string[],
-})
+const filters = useFilterOptions('/policy/base-tags')
 
 const tableColumns = [
   { prop: 'policy_name', label: '政策名称', minWidth: 320, grow: 2 },
@@ -101,18 +95,6 @@ const tableColumns = [
 
 
 
-async function loadOptions() {
-  try {
-    const data = await baseTagOptions()
-    options.policy_name = (data.policy_name as string[]) ?? []
-    options.province_name = (data.province_name as string[]) ?? []
-    options.policy_types = (data.policy_types as string[]) ?? []
-    options.is_penetrate = (data.is_penetrate as string[]) ?? []
-    options.need_interpret = (data.need_interpret as string[]) ?? []
-  } catch {
-    /* 选项失败不影响列表 */
-  }
-}
 
 const listQuery = useListQuery(query, load)
 
@@ -200,7 +182,7 @@ async function onSave() {
     }
     ElMessage.success('已保存')
     visible.value = false
-    await Promise.all([load(), loadOptions()])
+    await Promise.all([load(), filters.load()])
   } catch (error) {
     if (isApiError(error) && error.status === 409) {
       saveError.value = '数据已被他人修改或内容重复。请保留需要的内容，关闭后重新打开最新记录再修改。'
@@ -220,7 +202,7 @@ async function onImport(file: File) {
     )
     reportImportResult(result, '政策基础标签-上传校验.xlsx')
     if (!result.rejected) {
-      await Promise.all([load(), loadOptions()])
+      await Promise.all([load(), filters.load()])
     }
   } catch (error) {
     ElMessage.error(errorMessage(error, '导入失败'))
@@ -249,7 +231,7 @@ function openLogs() {
 
 onMounted(() => {
   void load()
-  void loadOptions()
+  void filters.load()
 })
 
 const editorGroups: EditorGroup[] = [
@@ -439,34 +421,34 @@ const selectedColumns = ref([...defaultColumns.value])
           <el-form-item label="政策名称">
             <FilterSelect
               v-model="query.policy_name"
-              :options="options.policy_name"
+              v-bind="filters.bind('policy_name')"
             />
           </el-form-item>
           <el-form-item label="省份">
             <FilterSelect
               v-model="query.province_name"
-              :options="options.province_name"
+              v-bind="filters.bind('province_name')"
               size="short"
             />
           </el-form-item>
           <el-form-item label="政策类型">
             <FilterSelect
               v-model="query.policy_types"
-              :options="options.policy_types"
+              v-bind="filters.bind('policy_types')"
             />
           </el-form-item>
           <template #advanced>
             <el-form-item label="是否穿透">
               <FilterSelect
                 v-model="query.is_penetrate"
-                :options="options.is_penetrate"
+                v-bind="filters.bind('is_penetrate')"
                 size="short"
               />
             </el-form-item>
             <el-form-item label="是否解读">
               <FilterSelect
                 v-model="query.need_interpret"
-                :options="options.need_interpret"
+                v-bind="filters.bind('need_interpret')"
                 size="short"
               />
             </el-form-item>

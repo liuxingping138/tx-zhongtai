@@ -104,6 +104,14 @@ async def list_source_options(session: AsyncSession) -> dict[str, Any]:
     return await options_repo.source_options(session)
 
 
+async def search_source_options(session: AsyncSession, *, field: str, keyword: str | None) -> list[str]:
+    """按关键词搜索筛选项候选值，供前端下拉的服务端搜索使用。"""
+
+    return await options_repo.search(
+        session, options_repo.SOURCE_OPTION_COLUMNS, field=field, keyword=keyword
+    )
+
+
 async def get_source(session: AsyncSession, item_id: uuid.UUID) -> dict[str, Any]:
     row = await repo.get_by_id(session, item_id)
     if row is None:

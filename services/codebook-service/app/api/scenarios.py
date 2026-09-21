@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import Response
 from platform_common.actors import Actor
 from platform_common.enums import SecurityClass
+from platform_common.errors import ApiError, ErrorCode
 from platform_common.http_utils import import_result_response, read_upload_within_limit, success_json
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -51,6 +52,23 @@ async def list_filter_options(
     _: Actor = Depends(require_codebook_permission(RESOURCE, "list")),
 ):
     return success_json(await service.list_scenario_options(session))
+
+
+@router.get("/options/search")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def search_filter_options(
+    field: str = Query(..., min_length=1, max_length=64),
+    q: str | None = Query(default=None, max_length=200),
+    session: AsyncSession = Depends(get_db_session),
+    _: Actor = Depends(require_codebook_permission(RESOURCE, "list")),
+):
+    """筛选项的服务端搜索。候选值过多的字段由前端按关键词调用。"""
+
+    try:
+        values = await service.search_scenario_options(session, field=field, keyword=q)
+    except KeyError as exc:
+        raise ApiError("未知的筛选字段", code=ErrorCode.VALIDATION_ERROR, http_status=422) from exc
+    return success_json({"items": values})
 
 
 @router.get("/export")

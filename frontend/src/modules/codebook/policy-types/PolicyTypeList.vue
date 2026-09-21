@@ -8,7 +8,6 @@ import {
   createPolicyType,
   importPolicyTypes,
   listPolicyTypes,
-  policyTypeOptions,
   updatePolicyType,
   type PolicyTypeItem,
 } from '@/api/codebook'
@@ -18,6 +17,7 @@ import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import FilterBar from '@/components/FilterBar.vue'
+import { useFilterOptions } from '@/composables/useFilterOptions'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
@@ -36,21 +36,13 @@ const resultFiltered = ref(false)
 const items = ref<PolicyTypeItem[]>([])
 const total = ref(0)
 const query = reactive({ keyword: '', page: 1, page_size: 20 })
-const typeOptions = ref<string[]>([])
+const filters = useFilterOptions('/codebook/policy-types')
 const visible = ref(false)
 const saving = ref(false)
 const saveError = ref('')
 const editing = ref<PolicyTypeItem | null>(null)
 const form = reactive({ seq_no: '', type_name: '', definition: '' })
 
-async function loadOptions() {
-  try {
-    const data = await policyTypeOptions()
-    typeOptions.value = data.type_name ?? []
-  } catch {
-    /* 选项失败不影响列表 */
-  }
-}
 
 const listQuery = useListQuery(query, load)
 
@@ -128,7 +120,7 @@ async function onSave() {
     }
     ElMessage.success('已保存')
     visible.value = false
-    await Promise.all([load(), loadOptions()])
+    await Promise.all([load(), filters.load()])
   } catch (error) {
     if (isApiError(error) && error.status === 409) {
       saveError.value = '数据已被他人修改或内容重复。请保留需要的内容，关闭后重新打开最新记录再修改。'
@@ -145,7 +137,7 @@ async function onImport(file: File) {
   try {
     const result = await runExcelImport(file, (onProgress) => importPolicyTypes(file, onProgress))
     reportImportResult(result, '政策类型-跳过明细.xlsx')
-    await Promise.all([load(), loadOptions()])
+    await Promise.all([load(), filters.load()])
   } catch (error) {
     ElMessage.error(errorMessage(error, '导入失败'))
   }
@@ -173,7 +165,7 @@ function openLogs() {
 
 onMounted(() => {
   void load()
-  void loadOptions()
+  void filters.load()
 })
 
 const editorGroups: EditorGroup[] = [
@@ -290,7 +282,7 @@ const selectedColumns = ref([...defaultColumns])
           <el-form-item label="关键字">
             <FilterSelect
               v-model="query.keyword"
-              :options="typeOptions"
+              v-bind="filters.bind('type_name')"
               placeholder="输入或选择政策类型"
             />
           </el-form-item>

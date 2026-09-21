@@ -50,8 +50,16 @@ async def list_policy_types(session: AsyncSession, *, keyword: str | None, page:
     return {"items": [_to_out(item) for item in items], "total": total, "page": page, "page_size": page_size}
 
 
-async def list_policy_type_options(session: AsyncSession) -> dict[str, list[str]]:
+async def list_policy_type_options(session: AsyncSession) -> dict[str, Any]:
     return await options_repo.policy_type_options(session)
+
+
+async def search_policy_type_options(session: AsyncSession, *, field: str, keyword: str | None) -> list[str]:
+    """按关键词搜索筛选项候选值，供前端下拉的服务端搜索使用。"""
+
+    return await options_repo.search(
+        session, options_repo.POLICY_TYPE_OPTION_COLUMNS, field=field, keyword=keyword
+    )
 
 
 async def create_policy_type(session: AsyncSession, actor: Actor, data: dict[str, str]) -> dict[str, Any]:
