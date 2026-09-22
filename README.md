@@ -14,9 +14,11 @@
 - [`docs/开发进度.md`](docs/开发进度.md) —— 当前实际进度与验证记录
 - [`docs/实现决策.md`](docs/实现决策.md) —— 端口、数据库、技术选型等实施细节
 - [`docs/业务表主键与导入导出分析.md`](docs/业务表主键与导入导出分析.md) —— 六张业务表的现状、限制与待业务确认事项；暂维持现有规则
-- [`docs/开发约定.md`](docs/开发约定.md) —— 必须遵守的开发约定（ORM 中文 comment、开发栈/P6、UI 复用规范）
+- [`CLAUDE.md`](CLAUDE.md) 的「硬性开发约定」—— 必须遵守的开发约定（ORM 中文 comment、开发栈/P6、UI 复用规范）
 - [`docs/配置说明.md`](docs/配置说明.md) / [`docs/部署与维护.md`](docs/部署与维护.md)
 - [`docs/openapi/`](docs/openapi/) —— 从运行中服务导出的 OpenAPI
+- [`docs/excel/`](docs/excel/) —— 用户提供的业务原始 Excel（信源、政策、场景等导入源文件）
+- [`docs/archive/`](docs/archive/) —— 历史 UI 验收记录与截图证据，仅供追溯，不代表现行规范
 
 ## 技术栈
 
@@ -83,7 +85,7 @@ make p6-down
 ```
 
 停止开发环境（不删除数据卷）：`make dev-down`。  
-P6 只用于隔离验收，日常不要开着；详见 [`docs/开发约定.md`](docs/开发约定.md)。
+P6 只用于隔离验收，日常不要开着；详见 [`CLAUDE.md`](CLAUDE.md)。
 
 ## 各服务本地开发（不经 Docker）
 
@@ -119,7 +121,7 @@ pnpm dev   # 默认代理 /api 到 http://localhost:8080（网关）
 
 日常只用 `make dev-up`。P6 是隔离验收栈，测完必须 `make p6-down`，不要常开。
 
-完整说明见 [`docs/开发约定.md`](docs/开发约定.md)。
+完整说明见 [`CLAUDE.md`](CLAUDE.md) 的「硬性开发约定」。
 
 ## 已知限制
 

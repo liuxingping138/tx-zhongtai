@@ -136,6 +136,18 @@ xlsx/zip/图片在 `excludedContentTypes` 里排除。
 - Alembic `create_table` / `add_column` 同步带 comment；`COMMENT ON ... IS` 用 SQL 字面量，不能绑参数
 - `alembic_version` 不用注释
 
+```python
+class Source(Base):
+    __tablename__ = "policy_sources"
+    __table_args__ = (
+        UniqueConstraint("site_code", name="uq_policy_sources_site_code"),
+        {"comment": "信源管理"},
+    )
+
+    site_name: Mapped[str] = mapped_column(String(255), nullable=False, comment="网站名称")
+    site_code: Mapped[str] = mapped_column(String(16), nullable=False, comment="网站编码")
+```
+
 ### Excel 必须放线程池，上传必须边读边限流
 
 openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接在协程里调用会占住整个事件循环
@@ -186,6 +198,7 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
   改点可见标签；hover 才出现的清除图标用 `dispatchEvent('click')`，
   `click({force:true})` 会静默失效（测试变绿但实际没点到）
 - e2e 里 `getByLabel('字段名')` 会同时命中列设置弹层的同名复选框，需限定 `.el-drawer` 作用域
+- Excel 表头匹配一律走 `header_to_field`：它按**最长前缀**匹配，按列顺序取第一个会把「省份编码」错配成「省份」
 
 ## 已知限制
 

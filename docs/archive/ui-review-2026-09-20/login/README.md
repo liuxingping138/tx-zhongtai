@@ -10,8 +10,8 @@
 - `after-compact.jpg`：1024 × 768小屏桌面。
 - `after-mobile.jpg`：390 × 844手机视口（浏览器输出图像375 × 812）。
 - `invalid-credentials-mobile.jpg`：虚构账号的登录失败状态。
-- `premium-audit.json`：全项目静态审查原始结果；既有Dropdown触发按钮的误报已手动验证，详见[本次QA](../../../design-qa.md)。
+- `premium-audit.json`：全项目静态审查原始结果；既有Dropdown触发按钮的误报已手动验证，详见[本次QA](../../design-qa.md)。
 
 运行时资源是 `frontend/src/assets/login/customer-hub.webp`，由选稿生成独立图示后转为WebP。节点及文字属于插图，未来变更节点关系时同时更新图片、alt及平台简介。不要把图中的节点改成不受权限控制的路由。
 
-复用依据：[设计规范](../../../DESIGN.md)、[交互契约](../../../UX-CONTRACT.md)、[UI开发指南](../../UI开发规范.md)。
+复用依据：[设计规范](../../../../DESIGN.md)、[交互契约](../../../../UX-CONTRACT.md)、[UI开发指南](../../../UI开发规范.md)。

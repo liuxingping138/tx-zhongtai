@@ -4,11 +4,11 @@
 
 ## 本次比较证据
 
-- Source visual truth：`docs/ui-review-2026-09-20/login/selected-direction.png`，1672 × 941；比较时等比例归一为1280 × 720（原图比例存在不足1px的舍入差）。
-- 实际页面：`http://127.0.0.1:8080/login`；最终部署截图 `docs/ui-review-2026-09-20/login/after-8080.jpg`，1280 × 720。桌面 CSS 视口1280 × 720，DPR 1，无整页溢出。
-- 调整前：`docs/ui-review-2026-09-20/login/before.jpg`；开发版最终：`docs/ui-review-2026-09-20/login/after-desktop.jpg`。均为1280 × 720，未登录、空表单、无提示的同一状态。
-- 小屏桌面：`docs/ui-review-2026-09-20/login/after-compact.jpg`，CSS/图像均1024 × 768，无整页溢出、六个节点完整可见。
-- 手机：`docs/ui-review-2026-09-20/login/after-mobile.jpg`。CSS视口390 × 844，截图工具输出375 × 812的缩放图；页面宽375px（为既有常显滚动条预留15px），文档高约897px，自然纵向滚动。没有手机选稿，不进行手机像素复刻比较。
+- Source visual truth：`docs/archive/ui-review-2026-09-20/login/selected-direction.png`，1672 × 941；比较时等比例归一为1280 × 720（原图比例存在不足1px的舍入差）。
+- 实际页面：`http://127.0.0.1:8080/login`；最终部署截图 `docs/archive/ui-review-2026-09-20/login/after-8080.jpg`，1280 × 720。桌面 CSS 视口1280 × 720，DPR 1，无整页溢出。
+- 调整前：`docs/archive/ui-review-2026-09-20/login/before.jpg`；开发版最终：`docs/archive/ui-review-2026-09-20/login/after-desktop.jpg`。均为1280 × 720，未登录、空表单、无提示的同一状态。
+- 小屏桌面：`docs/archive/ui-review-2026-09-20/login/after-compact.jpg`，CSS/图像均1024 × 768，无整页溢出、六个节点完整可见。
+- 手机：`docs/archive/ui-review-2026-09-20/login/after-mobile.jpg`。CSS视口390 × 844，截图工具输出375 × 812的缩放图；页面宽375px（为既有常显滚动条预留15px），文档高约897px，自然纵向滚动。没有手机选稿，不进行手机像素复刻比较。
 - 完整选稿和开发版截图已在同一个比较输入中展示并检查两次。全幅原尺寸下标题、图示标签、表单和页脚均可读，无需另外裁切比较区域。线上构建另核对图像已加载、`mix-blend-mode: lighten` 已生效及静态资源指纹。
 
 ## 本次问题与迭代
@@ -29,7 +29,7 @@
 
 - `pnpm run type-check`、`pnpm run lint`、`pnpm run test`（5文件/19测试）、`pnpm run build`通过；最后的背景融合样式修改后再次通过Lint和Docker内的类型检查/生产构建。
 - 官方 `npx -p @google/design.md designmd lint DESIGN.md` 通过，0错误、5个既有token引用警告。
-- Premium全项目strict audit原始结果保存在 `docs/ui-review-2026-09-20/login/premium-audit.json`：退出码1，唯一项为既有 `UserAccountMenu.vue:50` 的 `affordance.actionless-button`。该按钮由父级Element Plus Dropdown的click trigger驱动；已在8080实际打开菜单并看到“个人设置/退出登录”，确认是静态分析误报。没有为了消除误报加入空click处理器，也不声称原始strict命令通过。
+- Premium全项目strict audit原始结果保存在 `docs/archive/ui-review-2026-09-20/login/premium-audit.json`：退出码1，唯一项为既有 `UserAccountMenu.vue:50` 的 `affordance.actionless-button`。该按钮由父级Element Plus Dropdown的click trigger驱动；已在8080实际打开菜单并看到“个人设置/退出登录”，确认是静态分析误报。没有为了消除误报加入空click处理器，也不声称原始strict命令通过。
 - 浏览器检查：空提交显示两个字段错误并聚焦用户名；密码显示/隐藏支持点击和空格键；虚构账号登录显示“用户名或密码错误”、保留输入并恢复可操作；无真实账号凭据被更改。测试后重新加载恢复空表单。
 - 8080小屏桌面控制台检查无error/warn。本次不修改认证逻辑，未重跑真实凭据登录成功、首次改密及限速/断网矩阵；没有为左侧静态介绍添加镜像实现的测试。
 - 已重建本地Docker frontend，最终图片地址 `/assets/customer-hub-BDewtZ-g.webp`，桌面渲染和页面尺寸已核对。localhost原有登录会话保留，使用同一8080服务的127.0.0.1入口展示未登录预览。
@@ -42,9 +42,9 @@ final result: passed
 
 # 历史验收：业务工作台 — 2026-09-20
 
-Source visual truth: `docs/ui-review-2026-09-20/concept-revised-toolbar.png`.
+Source visual truth: `docs/archive/ui-review-2026-09-20/concept-revised-toolbar.png`.
 Implementation: `http://127.0.0.1:5173/policy/base-tags`.
-Final screenshot: `docs/ui-review-2026-09-20/after-policy-final.jpg`.
+Final screenshot: `docs/archive/ui-review-2026-09-20/after-policy-final.jpg`.
 
 ## Comparison evidence
 
@@ -89,19 +89,19 @@ final result: passed
 
 ## 用户反馈后的列设置迭代
 
-最新列宽与长表头验收见[逐页复查](docs/ui-review-2026-09-20/column-widths/REVIEW.md)。六个业务列表均检查默认/全部，另检查三个系统列表；移除主字段320px特例、固定短字段、稳定字段顺序、精简长表头。该版在宽屏上的视觉效果被用户否定，已由默认全字段方案替代；当前记录见[全宽修订](docs/ui-review-2026-09-20/full-width/REVIEW.md)。
+最新列宽与长表头验收见[逐页复查](ui-review-2026-09-20/column-widths/REVIEW.md)。六个业务列表均检查默认/全部，另检查三个系统列表；移除主字段320px特例、固定短字段、稳定字段顺序、精简长表头。该版在宽屏上的视觉效果被用户否定，已由默认全字段方案替代；当前记录见[全宽修订](ui-review-2026-09-20/full-width/REVIEW.md)。
 
-[P2] 原先仅齿轮图标的列设置入口不易发现，缺少一键恢复全字段展示。用户反馈后改为“列设置 已选/全部”文字按钮，增加“显示全部列”和“恢复默认列”，并保存本浏览器偏好。证据：`docs/ui-review-2026-09-20/after-column-settings.jpg`；已核对行业场景35/35个数据列、36个表头（包括操作）。本次变化是用户明确要求的样板修订，优先于原图的图标按钮。
+[P2] 原先仅齿轮图标的列设置入口不易发现，缺少一键恢复全字段展示。用户反馈后改为“列设置 已选/全部”文字按钮，增加“显示全部列”和“恢复默认列”，并保存本浏览器偏好。证据：`docs/archive/ui-review-2026-09-20/after-column-settings.jpg`；已核对行业场景35/35个数据列、36个表头（包括操作）。本次变化是用户明确要求的样板修订，优先于原图的图标按钮。
 
-用户进一步明确所有列表必须一列一个字段，已删除共享表格的辅助字段混排能力。最终第一列证据：`docs/ui-review-2026-09-20/after-policy-single-field.jpg`。此要求覆盖早期样板中的标题/部门双行设计。
+用户进一步明确所有列表必须一列一个字段，已删除共享表格的辅助字段混排能力。最终第一列证据：`docs/archive/ui-review-2026-09-20/after-policy-single-field.jpg`。此要求覆盖早期样板中的标题/部门双行设计。
 
 ## 最终入口与文档同步
 
-2026-09-20 已重建Docker frontend并从用户实际使用的 `http://localhost:8080/codebook/scenarios` 验证最新运行状态。证据：`docs/ui-review-2026-09-20/deployed-8080-final.jpg`。文字列设置4/35、显示全部列、恢复默认列已可见；首格为单独的“IDC”，不含编码副文本。上文早期图是比较历史，后续实现必须遵循 DESIGN.md / UX-CONTRACT.md / docs/UI开发规范.md 的最终规则。
+2026-09-20 已重建Docker frontend并从用户实际使用的 `http://localhost:8080/codebook/scenarios` 验证最新运行状态。证据：`docs/archive/ui-review-2026-09-20/deployed-8080-final.jpg`。文字列设置4/35、显示全部列、恢复默认列已可见；首格为单独的“IDC”，不含编码副文本。上文早期图是比较历史，后续实现必须遵循 DESIGN.md / UX-CONTRACT.md / docs/UI开发规范.md 的最终规则。
 
 
 ## 默认全字段修订（现行）
 
-用户明确确认默认全部字段、个人通过列设置隐藏。旧核心列默认及表格总宽上限已撤回。六个业务列表和三个系统列表已复查，重点补充2560px宽屏与1280px桌面；44px业务行、单行长文本、完整详情与390px手机摘要均有实测。[当前截图和验证记录](docs/ui-review-2026-09-20/full-width/REVIEW.md)。
+用户明确确认默认全部字段、个人通过列设置隐藏。旧核心列默认及表格总宽上限已撤回。六个业务列表和三个系统列表已复查，重点补充2560px宽屏与1280px桌面；44px业务行、单行长文本、完整详情与390px手机摘要均有实测。[当前截图和验证记录](ui-review-2026-09-20/full-width/REVIEW.md)。
 
 同日续订：账号在侧栏底部（显示名 + `/me.roles`），登录页不改；桌面筛选一次展开、点查询生效；结果区 `ScrollPort` 常显横/纵滑槽，默认 20 条必须能上下滚完全页。现行条文以 DESIGN.md / UX-CONTRACT.md / docs/UI开发规范.md 为准。

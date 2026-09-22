@@ -10,7 +10,7 @@
 
 权威来源：`docs/openapi/{policy,codebook,iam,audit}.json`、`docs/业务表主键与导入导出分析.md`、`frontend/src/stores/auth.ts`、`frontend/src/router/index.ts` 及各模块 API 调用。2026-09-20 核对。不复制或改变业务主键、身份、权限、删除和导入覆盖规则。
 
-现行规范入口：[DESIGN.md](DESIGN.md)、[UI开发规范](docs/UI开发规范.md)。视觉规范见 `DESIGN.md`，runtime canonical 为 `frontend/src/styles/theme.css`。样板与验证见 `docs/ui-review-2026-09-20/`，设计验收见 `design-qa.md`。
+现行规范入口：[DESIGN.md](DESIGN.md)、[UI开发规范](docs/UI开发规范.md)。视觉规范见 `DESIGN.md`，runtime canonical 为 `frontend/src/styles/theme.css`。样板与验证见 `docs/archive/ui-review-2026-09-20/`，设计验收见 `docs/archive/design-qa.md`（均为历史归档，非现行标准）。
 
 ## Canonical UI Map
 
@@ -75,4 +75,4 @@ Element Plus 弹层负责层级、Escape、焦点约束和焦点返回；不使�
 
 已迁移：工作台、全局导航、六个业务列表与分组编辑、用户/角色/日志列表、权限页标题、个人设置与首次改密验证。基线提交 d71902b，可回滚。
 
-检查：frontend 下 `pnpm run type-check`、`pnpm run lint`、`pnpm run test`、`pnpm run build`；Premium strict audit；DESIGN.md lint；内置浏览器桌面/手机验证。Playwright CLI 按 Product Design 技能要求等用户单独同意后运行。完整结果和测试边界见 `docs/ui-review-2026-09-20/IMPLEMENTATION.md`，不将未执行检查描述为通过。
+检查：frontend 下 `pnpm run type-check`、`pnpm run lint`、`pnpm run test`、`pnpm run build`；Premium strict audit；DESIGN.md lint；内置浏览器桌面/手机验证。Playwright CLI 按 Product Design 技能要求等用户单独同意后运行。完整结果和测试边界见 `docs/archive/ui-review-2026-09-20/IMPLEMENTATION.md`，不将未执行检查描述为通过。
