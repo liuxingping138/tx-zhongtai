@@ -29,6 +29,24 @@ class Settings(BaseServiceSettings):
     # 导出会把整表读进内存再生成 Excel，必须有上限，否则大表导出能把服务撑爆。
     export_max_rows: int = 100_000
 
+    # 爬虫监测：只读连爬虫库做按天聚合，结果落本服务库。服务进程不连它，只有同步 CLI 用。
+    crawler_mysql_host: str = ""
+    crawler_mysql_port: int = 3306
+    crawler_mysql_user: str = ""
+    crawler_mysql_password: str = ""
+    crawler_mysql_db: str = "crawler2021"
+    crawler_data_table: str = "csys_policy_info_source_all"
+    crawler_rules_table: str = "policy_rules_alls_spider"
+    # 日常同步回算最近几天。爬虫是「采集后入库」，实测入库普遍比 collect_date 晚 1 天，
+    # 近 60 天里最大滞后 4 天。窗口必须大于最大滞后，否则迟到的行进库时窗口已经滑过它的
+    # collect_date，那天的统计会永久少算。7 天是在实测滞后上留了余量。
+    crawler_sync_days: int = 7
+    # 首次回填窗口。窗口外没出过数的任务一律按「长期断爬」处理，不再回查大表。
+    crawler_backfill_days: int = 365
+    # 健康分档阈值（停更天数）：<=normal 正常，<=watch 观察，其余断爬。
+    crawler_health_normal_days: int = 7
+    crawler_health_watch_days: int = 30
+
     @model_validator(mode="after")
     def _reject_demo_secrets_in_production(self) -> Settings:
         if self.environment == Environment.PRODUCTION:

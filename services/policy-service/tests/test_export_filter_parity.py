@@ -16,7 +16,7 @@ import pytest  # noqa: E402
 from fastapi.routing import APIRoute  # noqa: E402
 
 from app.main import app  # noqa: E402
-from app.repositories import base_tags, interpretations, sources  # noqa: E402
+from app.repositories import base_tags, crawler, interpretations, sources  # noqa: E402
 
 PAGING = {"page", "page_size"}
 
@@ -24,7 +24,13 @@ TABLES = [
     ("/api/v1/policy/sources", sources),
     ("/api/v1/policy/base-tags", base_tags),
     ("/api/v1/policy/interpretations", interpretations),
+    ("/api/v1/policy/crawler-monitoring/tasks", crawler),
 ]
+
+# 爬虫监测除了模糊匹配的列，还有状态精确匹配和停更天数下限，它们不在 FILTER_COLUMNS 里。
+EXTRA_FILTERS = {
+    "/api/v1/policy/crawler-monitoring/tasks": {"health_status", "stale_days_min", "abnormal_only"},
+}
 
 
 def _query_params(path: str) -> set[str]:
@@ -43,7 +49,7 @@ def test_export_accepts_the_same_filters_as_list(prefix: str, repo) -> None:
 
 @pytest.mark.parametrize(("prefix", "repo"), TABLES)
 def test_filters_match_repository_columns(prefix: str, repo) -> None:
-    assert _query_params(prefix) - PAGING == set(repo.FILTER_COLUMNS)
+    assert _query_params(prefix) - PAGING - EXTRA_FILTERS.get(prefix, set()) == set(repo.FILTER_COLUMNS)
 
 
 @pytest.mark.parametrize(("prefix", "repo"), TABLES)

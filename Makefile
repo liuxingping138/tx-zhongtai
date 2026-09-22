@@ -10,7 +10,7 @@ JWT_P6_DIR := deploy/secrets/jwt-p6
 
 .PHONY: help bootstrap jwt-keys jwt-keys-p6 dev-up dev-down migrate migrate-check seed admin-create check \
         test-unit test-integration test-e2e smoke provision-audit-cleanup provision-codebook-db \
-        seed-area-codes \
+        seed-area-codes crawler-sync crawler-backfill \
         provision-policy-db \
         outbox-replay audit-cleanup iam-session-cleanup p6-env p6-up p6-down p6-migrate p6-seed p6-admin \
         p6-backup p6-restore export-openapi scan-scope
@@ -23,6 +23,8 @@ help:
 	@echo "  make migrate          对已运行的 iam-service/audit-service 执行数据库迁移"
 	@echo "  make seed             幂等同步公共资源/动作/菜单与内置超级管理员角色"
 	@echo "  make seed-area-codes  从 SQL 种子导入省市区编码表（按区县编码去重）"
+	@echo "  make crawler-sync     同步爬虫采集量（日常增量，回算最近几天）"
+	@echo "  make crawler-backfill 回填爬虫采集量，用 DAYS=365 指定窗口"
 	@echo "  make admin-create     创建初始管理员（密码从 ADMIN_PASSWORD 读取，不进命令行参数）"
 	@echo "  make check            Python 静态检查 + 前端类型检查/构建/lint"
 	@echo "  make migrate-check    检查各服务 model 与数据库是否漂移（需开发栈已启动）"
@@ -128,6 +130,14 @@ seed:
 
 seed-area-codes:
 	$(COMPOSE) exec -T codebook-service uv run python -m app.cli.seed_area_codes
+
+# 爬虫监测：从爬虫库按天聚合到 policy_db。日常只回算最近几天，够覆盖当天补录。
+crawler-sync:
+	$(COMPOSE) exec -T policy-service uv run python -m app.cli.sync_crawler
+
+# 回填历史窗口。整表聚合在爬虫库上跑不动，这里是按天分片查，365 天约 12 分钟。
+crawler-backfill:
+	$(COMPOSE) exec -T policy-service uv run python -m app.cli.sync_crawler --days $(or $(DAYS),365)
 
 admin-create:
 	@if [ -z "$$ADMIN_PASSWORD" ]; then echo "请通过环境变量 ADMIN_PASSWORD 传入初始密码，不要写在命令行参数里。"; exit 2; fi

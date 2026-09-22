@@ -50,7 +50,7 @@ RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("policy", "政策", "policy-service", NodeType.DIRECTORY, True, 20),
     ResourceSpec("policy.sources", "信源管理", "policy-service", NodeType.RESOURCE, True, 21, "policy"),
     ResourceSpec(
-        "policy.crawler_monitoring", "爬虫监测", "policy-service", NodeType.RESOURCE, False, 22, "policy"
+        "policy.crawler_monitoring", "爬虫监测", "policy-service", NodeType.RESOURCE, True, 22, "policy"
     ),
     ResourceSpec("policy.interpretations", "政策解读列表", "policy-service", NodeType.RESOURCE, True, 23, "policy"),
     ResourceSpec("policy.base_tags", "政策基础标签表", "policy-service", NodeType.RESOURCE, True, 24, "policy"),
@@ -107,6 +107,9 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ActionSpec("policy.sources", "update", GrantLevel.FULL),
     ActionSpec("policy.sources", "import", GrantLevel.FULL),
     ActionSpec("policy.sources", "purge", GrantLevel.FULL),
+    ActionSpec("policy.crawler_monitoring", "list", GrantLevel.READ),
+    ActionSpec("policy.crawler_monitoring", "read", GrantLevel.READ),
+    ActionSpec("policy.crawler_monitoring", "export", GrantLevel.READ),
     ActionSpec("policy.base_tags", "list", GrantLevel.READ),
     ActionSpec("policy.base_tags", "read", GrantLevel.READ),
     ActionSpec("policy.base_tags", "export", GrantLevel.READ),
@@ -136,7 +139,7 @@ MENU_SPECS: tuple[MenuSpec, ...] = (
         "policy-crawler-monitoring",
         "policy.crawler_monitoring",
         "menu.policy",
-        enabled=False,
+        enabled=True,
     ),
     MenuSpec(
         "menu.policy.interpretations",

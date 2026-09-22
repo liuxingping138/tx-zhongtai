@@ -16,7 +16,8 @@
 
 | 能力 | 规范所有者 | 允许变体 |
 |---|---|---|
-| 列表/分页/反馈 | ListPage | 系统列表二维表；六个业务列表 BusinessTable |
+| 列表/分页/反馈 | ListPage | 系统列表二维表；业务列表 BusinessTable；监测类页面用 `summary` 插槽加概览区 |
+| 概览卡片与图表 | ListPage `summary` 插槽 | 只读统计；图表用内联 SVG，不引图表库 |
 | 下拉与筛选 | FilterSelect / FilterBar + Element Plus | 可搜索、显式提交；桌面展开全部条件；手机才收起多余项 |
 | 日期 | Element Plus date-picker，现有中文 locale | 业务原始日期字符串保留文本编辑，不擅自转换数据 |
 | 表单 | GroupedFields / useFieldValidation | 分组业务字段、系统表单、密码表单 |
@@ -25,6 +26,7 @@
 | 结果区滚动 | ScrollPort | 常显横/纵滑槽；触控板分轴；禁止只靠系统悬浮条 |
 | 账号入口 | UserAccountMenu | 侧栏底部主行显示名、辅行角色；折叠/手机顶栏仅头像 |
 | 表格列选择 | ColumnPicker | 只影响当前页面显示，不改变数据/导出字段 |
+| 记录详情扩展 | BusinessTable `detail-extra` | 在完整字段之后追加模块内容，不替换既有详情 |
 | 登录入口 | LoginView + auth store | 左侧平台介绍；右侧原有账号认证，不从关系图直接进入模块 |
 
 ## 字段与列设置

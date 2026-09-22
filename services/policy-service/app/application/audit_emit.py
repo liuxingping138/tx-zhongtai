@@ -23,6 +23,12 @@ _EVENT_META = {
     "policy.interpretation.updated": ("policy.interpretations", "update", "interpretation", "编辑政策解读"),
     "policy.interpretation.imported": ("policy.interpretations", "import", "interpretation", "导入政策解读表"),
     "policy.interpretation.exported": ("policy.interpretations", "export", "interpretation", "导出政策解读表"),
+    "policy.crawler_monitoring.exported": (
+        "policy.crawler_monitoring",
+        "export",
+        "crawler_task",
+        "导出爬虫监测",
+    ),
 }
 
 _emitter = AuditEmitter(

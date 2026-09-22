@@ -14,6 +14,7 @@ from platform_common.request_context import RequestIdMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
 from app.api.base_tags import router as base_tags_router
+from app.api.crawler_monitoring import router as crawler_monitoring_router
 from app.api.interpretations import router as interpretations_router
 from app.api.security import get_authz_client
 from app.api.sources import router as sources_router
@@ -60,6 +61,7 @@ def create_app() -> FastAPI:
     app.include_router(build_health_router({"database": check_database_ready}))
     app.include_router(sources_router)
     app.include_router(base_tags_router)
+    app.include_router(crawler_monitoring_router)
     app.include_router(interpretations_router)
     return app
 

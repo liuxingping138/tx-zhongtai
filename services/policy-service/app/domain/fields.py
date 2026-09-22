@@ -40,6 +40,30 @@ BASE_TAG_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec("remark", "备注"),
 )
 
+HEALTH_STATUS_LABELS: dict[str, str] = {
+    "normal": "正常",
+    "watch": "观察",
+    "broken": "断爬",
+    "never": "从未出数",
+}
+
+CRAWLER_TASK_COLUMNS: tuple[ColumnSpec, ...] = (
+    ColumnSpec("province_name", "省份", searchable=True),
+    ColumnSpec("city_name", "地市", searchable=True),
+    ColumnSpec("site_name", "网站名称", searchable=True),
+    ColumnSpec("site_code", "网站编码", searchable=True),
+    ColumnSpec("tag", "标签", searchable=True),
+    ColumnSpec("health_status_label", "健康状态"),
+    ColumnSpec("last_collect_date", "最后采集日期"),
+    ColumnSpec("stale_days", "停更天数"),
+    ColumnSpec("count_7d", "近7天采集条数"),
+    ColumnSpec("count_30d", "近30天采集条数"),
+    ColumnSpec("count_90d", "近90天采集条数"),
+    ColumnSpec("count_total", "统计窗口内累计条数"),
+    ColumnSpec("in_rules_label", "爬虫规则是否仍配置"),
+    ColumnSpec("source_url", "栏目源链接"),
+)
+
 INTERPRETATION_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec("record_id", "自增或雪花算法"),
     ColumnSpec("tenant_id", "租户ID"),

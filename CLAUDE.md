@@ -8,8 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 主要业务数据围绕「客群」串联；爬虫监测是独立模块，与客群无直接关联。
 
 当前进度：公共框架已到 P6（账号/会话/RBAC、Outbox、审计、隔离验收、备份恢复、OpenAPI），
-政策三张表（信源、基础标签、解读）与码表三张表（政策类型、行业场景、省市区编码）已接入。
-**客户、招投标、爬虫监测仅有占位目录**，未开发——不要为它们提前暴露无功能入口或做过度抽象。
+政策三张表（信源、基础标签、解读）与码表三张表（政策类型、行业场景、省市区编码）已接入，
+爬虫监测已接入（只读统计页，数据来自外部爬虫库的按天聚合）。
+**客户、招投标仅有占位目录**，未开发——不要为它们提前暴露无功能入口或做过度抽象。
 
 ## 常用命令
 
@@ -22,6 +23,7 @@ make check            # 质量门：Python ruff+mypy，前端 type-check+build+l
 make test-unit        # 后端 pytest + 前端 vitest
 make smoke            # 经网关冒烟
 make export-openapi   # 从运行中服务导出 OpenAPI
+make crawler-sync     # 同步爬虫采集量（日常增量，回算最近几天）
 ```
 
 运维类：`make iam-session-cleanup`（清理失效会话/令牌）、`make audit-cleanup`（清理到期审计）、
@@ -67,7 +69,7 @@ frontend/              Vue 管理端（pnpm）
 services/
   iam-service/         账号、会话、RBAC、菜单；Compose 里 iam-worker 共用此镜像
   audit-service/       审计写入、查询、到期清理
-  policy-service/      政策：信源、基础标签、解读
+  policy-service/      政策：信源、基础标签、解读、爬虫监测
   codebook-service/    码表：政策类型、行业场景、省市区编码
   customer-service/    占位，仅 .gitkeep
   tender-service/      占位，仅 .gitkeep
@@ -112,6 +114,22 @@ policy 和 codebook 的基础设施代码高度重复，已统一下沉。**新�
 
 路由必须带 `@classified(SecurityClass.*)`，`tests/test_route_security_class.py` 会强制检查
 （注意：该用例只校验声明存在，不校验是否真的挂了权限依赖）。
+
+### 爬虫监测是只读统计，数据靠同步进来
+
+数据源是外部爬虫库（MySQL `crawler2021`，400 万行，前面挂 ShardingSphere 代理），
+**页面永远不查它**。`app/cli/sync_crawler.py` 按天聚合后写本服务的三张表：
+`policy_crawler_tasks`（任务基线，来自爬虫规则表的 JSON）、
+`policy_crawler_daily_stats`（任务×日采集量）、`policy_crawler_task_health`（健康快照，每次同步整体重算）。
+
+- 监测的最小单位是「网站编码 + 标签」的任务，不是网站。同一个站不同标签停更程度差别很大，
+  只看站级会把半死的站显示成正常
+- 核心指标是「停更天数」不是「今天有没有出数」：每天只有约 11% 的任务出数据，
+  政策网站本来就不是天天更新
+- 首次回填必须覆盖到爬虫库最早的采集日期（`--since 2023-10-18`）。
+  窗口开小了，窗口外停更的任务会被算成「从未出数」，把「停更 400 天」说成「从来没爬通」
+- 聚合按 `collect_date`（采集日）分桶，但爬虫是采集后才入库：实测入库普遍晚 1 天、最大滞后 4 天。
+  所以日常同步回算 7 天而不是 1 天，窗口小于最大滞后会让迟到的行永久漏算
 
 ### 审计走 Outbox
 
@@ -214,6 +232,8 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
   `click({force:true})` 会静默失效（测试变绿但实际没点到）
 - e2e 里 `getByLabel('字段名')` 会同时命中列设置弹层的同名复选框，需限定 `.el-drawer` 作用域
 - Excel 表头匹配一律走 `header_to_field`：它按**最长前缀**匹配，按列顺序取第一个会把「省份编码」错配成「省份」
+- 爬虫库在 ShardingSphere 代理后面，整表 `GROUP BY` 跑十分钟都出不来（实测被迫 kill），
+  但带 `collect_date` 的单天聚合只要 1.4 秒。要全量统计就按天循环，别写一条大 SQL
 
 ## 已知限制
 

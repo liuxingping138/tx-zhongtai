@@ -211,6 +211,11 @@ function editDetail() { if (detail.value) { emit('edit', detail.value); detailOp
             </dd>
           </template>
         </dl>
+        <!-- 模块可在详情里补自己的内容（如趋势图），不必另造一个平行抽屉。 -->
+        <slot
+          name="detail-extra"
+          :row="detail"
+        />
       </template>
       <template #footer>
         <el-button @click="detailOpen = false">
