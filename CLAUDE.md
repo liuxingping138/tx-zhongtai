@@ -188,6 +188,21 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
 - 桌面筛选一次展开全部条件，点查询才生效
 - 账号入口在侧栏底部（显示名 + 角色），不做右上角芯片，不改登录页
 
+### Git 提交信息
+
+格式固定为 `type(scope): 中文描述`（英文前缀 + 冒号 + 空格 + 中文正文），前缀不能省。
+早期仓库有一批纯英文句子式提交（如 `Add policy sources...`），那是更早的写法，不要模仿。
+
+- `type` 用 `feat` / `fix` / `perf` / `refactor` / `test` / `docs` / `chore`；
+  `scope` 是服务名或关注点（`iam`、`export`、`migrations`、`concurrency`、`authz`、`a11y`、`e2e`、`excel`、`gateway`…），
+  跨模块或没有明确单一归属时可以省略 `(scope)`，直接 `type: 中文描述`
+- 中文正文聚焦改动会导致的问题/价值，不要写成文件改动清单，也不要写"更新 xx”“修改 xx”这类空洞描述
+  - `fix(migrations): 清掉 model 与数据库的三处漂移，补 make migrate-check`
+  - `fix(concurrency): 更新路径补行锁，修掉并发编辑静默丢失；p6-up 补 --build`
+  - `feat(export): 单次导出加 10 万行上限，超限明确退回`
+  - `refactor: 把 policy/codebook 的重复基础设施下沉到 platform-common`
+- 只在用户明确要求时才创建提交；默认新建提交，不 `--amend` 已推送的历史
+
 ## 排查提示
 
 - `pg_stat_user_tables.n_live_tup` 是过期统计会显示 0 行，判断数据量用 `count(*)`
