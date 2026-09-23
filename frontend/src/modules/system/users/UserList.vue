@@ -1,19 +1,21 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 
 import {
   createUser,
   listAllRoles,
-  getUser,
   listUsers,
-  replaceUserRoles,
   resetUserPassword,
   revokeUserSessions,
   updateUser,
 } from '@/api/system'
 import { errorMessage, isApiError } from '@/api/errors'
 import type { RoleItem, UserItem } from '@/api/types'
+import { formatTime } from '@/utils/time'
+import RolePicker from './RolePicker.vue'
+import UserDetailDrawer from './UserDetailDrawer.vue'
 import { useAuthStore } from '@/stores/auth'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
@@ -25,6 +27,11 @@ import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import PasswordOnceDialog from '@/components/PasswordOnceDialog.vue'
 
 const auth = useAuthStore()
+const router = useRouter()
+/** 分配角色即授权，与后端同一门槛：需要「权限分配」可管理（只有超级管理员）。 */
+const canGrant = computed(() => auth.canFull('system.permissions'))
+const canReadRoles = computed(() => auth.canRead('system.roles'))
+const canAudit = computed(() => auth.canRead('system.audit'))
 const loading = ref(false)
 const loadError = ref('')
 const resultFiltered = ref(false)
@@ -32,6 +39,7 @@ const users = ref<UserItem[]>([])
 const total = ref(0)
 const query = reactive({
   username: [] as string[],
+  role_id: [] as string[],
   status: [] as string[],
   page: 1,
   page_size: 20,
@@ -40,19 +48,17 @@ const usernameOptions = ref<string[]>([])
 
 const createVisible = ref(false)
 const createForm = reactive({ username: '', display_name: '', password: '' })
+const createRoles = ref<string[]>([])
 const creating = ref(false)
+const allRoles = ref<RoleItem[]>([])
 
 const editVisible = ref(false)
 const editingSaving = ref(false)
 const editing = ref<UserItem | null>(null)
 const editForm = reactive({ display_name: '' })
 
-const roleVisible = ref(false)
-const roleLoading = ref(false)
-const roleSaving = ref(false)
-const roleUser = ref<UserItem | null>(null)
-const roleOptions = ref<RoleItem[]>([])
-const selectedRoles = ref<string[]>([])
+const detailVisible = ref(false)
+const detailUserId = ref<string | null>(null)
 
 const onceVisible = ref(false)
 const oncePassword = ref('')
@@ -63,17 +69,26 @@ const editFormRef = ref<FormInstance>()
 const createValidation = useFieldValidation(createForm, createFormRef)
 const editValidation = useFieldValidation(editForm, editFormRef)
 
-const createGuard = useUnsavedForm(createVisible, () => createForm, creating)
+const createGuard = useUnsavedForm(createVisible, () => ({ ...createForm, roles: createRoles.value }), creating)
 const editGuard = useUnsavedForm(editVisible, () => editForm, editingSaving)
 
 function openCreate() {
   createForm.username = ''
   createForm.display_name = ''
   createForm.password = ''
+  createRoles.value = []
   createVisible.value = true
+  if (canGrant.value) void loadRoles()
 }
 
-const roleGuard = useUnsavedForm(roleVisible, () => [...selectedRoles.value].sort(), roleSaving)
+async function loadRoles() {
+  if (!canReadRoles.value) return
+  try {
+    allRoles.value = await listAllRoles()
+  } catch {
+    /* 角色列表失败不影响用户列表；筛选退化为不可选，分配角色处会显示空列表。 */
+  }
+}
 
 const listQuery = useListQuery(query, load, ['username'])
 
@@ -93,6 +108,7 @@ async function load() {
       page: query.page,
       page_size: query.page_size,
       username: query.username || undefined,
+      role_id: query.role_id || undefined,
       status: query.status || undefined,
     })
     if (sequence !== loadSequence) return
@@ -109,6 +125,7 @@ async function load() {
 
 function onResetFilters() {
   query.username = []
+  query.role_id = []
   query.status = []
   onSearch()
 }
@@ -133,12 +150,14 @@ async function onCreate() {
       username: createForm.username,
       display_name: createForm.display_name,
       password: createForm.password || undefined,
+      role_ids: canGrant.value && createRoles.value.length ? createRoles.value : undefined,
     })
     createVisible.value = false
     createForm.username = ''
     createForm.display_name = ''
     createForm.password = ''
-    ElMessage.success('用户已创建')
+    ElMessage.success(createRoles.value.length || !canGrant.value ? '用户已创建' : '用户已创建，还没有分配角色')
+    createRoles.value = []
     if (result.temporary_password) {
       oncePassword.value = result.temporary_password
       onceUsername.value = result.user.username
@@ -227,47 +246,24 @@ async function onRevoke(user: UserItem) {
   }
 }
 
-async function openRoles(user: UserItem) {
-  if (roleLoading.value || roleSaving.value) return
-  roleLoading.value = true
-  try {
-    const [roles, detail] = await Promise.all([listAllRoles(), getUser(user.id)])
-    roleOptions.value = roles
-    roleUser.value = detail
-    selectedRoles.value = [...(detail.role_ids ?? [])]
-    roleVisible.value = true
-  } catch (error) {
-    ElMessage.error(errorMessage(error, '加载用户角色失败'))
-  } finally {
-    roleLoading.value = false
-  }
+function roleNames(user: UserItem): string {
+  return (user.roles ?? []).map(role => role.name).join('、')
 }
 
-async function onSaveRoles() {
-  if (!roleUser.value || roleSaving.value) {
-    return
-  }
-  roleSaving.value = true
-  try {
-    const userId = roleUser.value.id
-    await replaceUserRoles(userId, { role_ids: selectedRoles.value, version: roleUser.value.version })
-    ElMessage.success('角色已更新')
-    roleVisible.value = false
-    await load()
-    if (userId === auth.user?.id) await auth.loadProfile()
-  } catch (error) {
-    ElMessage.error(errorMessage(error, '分配角色失败'))
-  } finally {
-    roleSaving.value = false
-  }
+function openDetail(user: UserItem) {
+  detailUserId.value = user.id
+  detailVisible.value = true
 }
 
-function toggleRole(roleId: string) {
-  if (selectedRoles.value.includes(roleId)) {
-    selectedRoles.value = selectedRoles.value.filter((id) => id !== roleId)
-    return
-  }
-  selectedRoles.value = [...selectedRoles.value, roleId]
+function onDetailChanged(user: UserItem) {
+  const index = users.value.findIndex(item => item.id === user.id)
+  if (index >= 0) users.value[index] = { ...users.value[index], ...user }
+  void loadRoles()
+  if (user.id === auth.user?.id) void auth.loadProfile()
+}
+
+function openAudit(user: UserItem) {
+  void router.push({ name: 'system-audit', state: { auditActor: user.display_name } })
 }
 
 function clearOnce() {
@@ -287,6 +283,7 @@ async function loadUsernameOptions() {
 onMounted(() => {
   void load()
   void loadUsernameOptions()
+  void loadRoles()
 })
 </script>
 
@@ -294,7 +291,7 @@ onMounted(() => {
   <div>
     <ListPage
       title="用户管理"
-      hint="管理登录账号、账号状态及角色分配。"
+      hint="开通账号并分配角色。账号能用哪些模块由角色决定，点「查看」可看到每个人的实际权限。"
       :total="total"
       :page="query.page"
       :page-size="query.page_size"
@@ -329,6 +326,27 @@ onMounted(() => {
               :options="usernameOptions"
               placeholder="输入或选择用户名"
             />
+          </el-form-item>
+          <el-form-item
+            v-if="canReadRoles"
+            label="角色"
+          >
+            <el-select
+              v-model="query.role_id"
+              multiple
+              collapse-tags
+              collapse-tags-tooltip
+              clearable
+              filterable
+              placeholder="全部"
+            >
+              <el-option
+                v-for="role in allRoles"
+                :key="role.id"
+                :label="role.name"
+                :value="role.id"
+              />
+            </el-select>
           </el-form-item>
           <el-form-item label="状态">
             <el-select
@@ -369,17 +387,65 @@ onMounted(() => {
           />
         </template>
         <el-table-column
-          prop="username"
           label="用户名"
-          width="200"
+          width="180"
           show-overflow-tooltip
-        />
+        >
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              class="user-link"
+              @click="openDetail(row)"
+            >
+              {{ row.username }}
+            </el-button>
+          </template>
+        </el-table-column>
         <el-table-column
           prop="display_name"
           label="显示名"
-          min-width="200"
+          min-width="140"
           show-overflow-tooltip
         />
+        <el-table-column
+          label="角色"
+          min-width="240"
+        >
+          <template #default="{ row }">
+            <div
+              v-if="(row.roles ?? []).length"
+              class="role-cell"
+            >
+              <el-tag
+                v-for="role in (row.roles ?? []).slice(0, 2)"
+                :key="role.id"
+                size="small"
+                :type="role.status === 'active' ? 'primary' : 'info'"
+                effect="plain"
+              >
+                {{ role.name }}{{ role.status === 'active' ? '' : '（停用）' }}
+              </el-tag>
+              <el-tooltip
+                v-if="(row.roles ?? []).length > 2"
+                :content="roleNames(row)"
+                placement="top"
+              >
+                <el-tag
+                  size="small"
+                  type="info"
+                  effect="plain"
+                >
+                  +{{ (row.roles ?? []).length - 2 }}
+                </el-tag>
+              </el-tooltip>
+            </div>
+            <span
+              v-else
+              class="role-cell__none"
+            >未分配角色</span>
+          </template>
+        </el-table-column>
         <el-table-column
           label="状态"
           width="100"
@@ -413,11 +479,26 @@ onMounted(() => {
           </template>
         </el-table-column>
         <el-table-column
-          v-if="auth.canFull('system.users') || auth.canFull('system.permissions')"
-          label="操作"
-          width="240"
+          label="创建时间"
+          width="190"
         >
           <template #default="{ row }">
+            <span class="muted">{{ formatTime(row.created_at) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="操作"
+          width="220"
+          fixed="right"
+        >
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              @click="openDetail(row)"
+            >
+              查看
+            </el-button>
             <el-button
               v-if="auth.canFull('system.users')"
               link
@@ -434,17 +515,9 @@ onMounted(() => {
             >
               {{ row.status === 'active' ? '禁用' : '启用' }}
             </el-button>
-            <el-button
-              v-if="auth.canFull('system.permissions')"
-              link
-              type="primary"
-              :disabled="roleLoading || roleSaving"
-              @click="openRoles(row)"
-            >
-              分配角色
-            </el-button>
             <el-dropdown
-              v-if="auth.canFull('system.users')"
+              v-if="auth.canFull('system.users') || canAudit"
+              class="ops-more"
               trigger="click"
             >
               <el-button
@@ -455,11 +528,24 @@ onMounted(() => {
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item @click="onReset(row)">
+                  <el-dropdown-item
+                    v-if="auth.canFull('system.users')"
+                    @click="onReset(row)"
+                  >
                     重置密码
                   </el-dropdown-item>
-                  <el-dropdown-item @click="onRevoke(row)">
+                  <el-dropdown-item
+                    v-if="auth.canFull('system.users')"
+                    @click="onRevoke(row)"
+                  >
                     强制下线
+                  </el-dropdown-item>
+                  <el-dropdown-item
+                    v-if="canAudit"
+                    :divided="auth.canFull('system.users')"
+                    @click="openAudit(row)"
+                  >
+                    操作记录
                   </el-dropdown-item>
                 </el-dropdown-menu>
               </template>
@@ -477,10 +563,10 @@ onMounted(() => {
       :close-on-press-escape="!creating"
       :show-close="!creating"
       title="新增用户"
-      width="420px"
+      width="560px"
     >
       <p class="editor-help">
-        用户名创建后不可修改；初始密码留空时由系统生成。
+        用户名创建后不可修改；初始密码留空时由系统生成，首次登录须修改密码。
       </p>
       <el-form
         ref="createFormRef"
@@ -545,6 +631,31 @@ onMounted(() => {
             show-password
             placeholder="留空则系统生成"
           />
+        </el-form-item>
+        <el-form-item
+          label="角色"
+          class="create-roles"
+        >
+          <template v-if="canGrant">
+            <RolePicker
+              v-model="createRoles"
+              :roles="allRoles"
+              :disabled="creating"
+            />
+            <p
+              v-if="!createRoles.length"
+              class="create-roles__warn"
+              role="status"
+            >
+              未选择角色：创建后该用户登录看不到任何业务模块，之后可在「查看」里补上。
+            </p>
+          </template>
+          <p
+            v-else
+            class="create-roles__note"
+          >
+            分配角色只有超级管理员可以操作。创建后请联系超级管理员分配，否则该用户登录后看不到任何业务模块。
+          </p>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -637,62 +748,14 @@ onMounted(() => {
       </template>
     </el-dialog>
 
-    <el-drawer
-      v-model="roleVisible"
-      class="editor-overlay"
-      :before-close="roleGuard.beforeClose"
-      :close-on-click-modal="!roleSaving"
-      :close-on-press-escape="!roleSaving"
-      :show-close="!roleSaving"
-      title="分配角色"
-      size="440px"
-    >
-      <p class="role-drawer__hint">
-        {{ roleUser?.display_name }}（{{ roleUser?.username }}）通过角色获得模块权限，不直接绑定资源。
-      </p>
-      <button
-        v-for="role in roleOptions"
-        :key="role.id"
-        type="button"
-        class="role-pick"
-        :aria-pressed="selectedRoles.includes(role.id)"
-        :class="{ 'is-on': selectedRoles.includes(role.id) }"
-        :disabled="roleSaving || (role.status !== 'active' && !selectedRoles.includes(role.id))"
-        @click="toggleRole(role.id)"
-      >
-        <span aria-hidden="true">{{ selectedRoles.includes(role.id) ? '☑' : '☐' }}</span>
-        <span class="role-pick__text">
-          <strong>{{ role.name }}</strong>
-          <em>{{ role.code }}</em>
-        </span>
-        <el-tag
-          :type="role.status === 'active' ? 'success' : 'info'"
-          size="small"
-        >
-          {{ role.status === 'active' ? '启用' : '停用' }}
-        </el-tag>
-      </button>
-      <template #footer>
-        <span
-          v-if="roleGuard.dirty.value"
-          class="editor-dirty"
-          role="status"
-        >有未保存的修改</span>
-        <el-button
-          :disabled="roleSaving"
-          @click="roleGuard.close"
-        >
-          取消
-        </el-button>
-        <el-button
-          type="primary"
-          :loading="roleSaving"
-          @click="onSaveRoles"
-        >
-          保存
-        </el-button>
-      </template>
-    </el-drawer>
+    <UserDetailDrawer
+      v-model="detailVisible"
+      :user-id="detailUserId"
+      :roles="allRoles"
+      :can-grant="canGrant"
+      :can-audit="canAudit"
+      @changed="onDetailChanged"
+    />
 
     <PasswordOnceDialog
       v-model="onceVisible"
@@ -708,48 +771,40 @@ onMounted(() => {
   color: var(--zt-ink-500);
 }
 
-.role-drawer__hint {
-  margin: 0 0 16px;
-  color: var(--zt-ink-500);
-  font-size: 13px;
+.user-link { font-weight: 500; }
+
+.ops-more {
+  margin-left: 12px;
+  vertical-align: middle;
+}
+
+.role-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.role-cell__none {
+  color: #b26a00;
+  font-size: 12px;
+}
+
+.create-roles :deep(.el-form-item__content) {
+  display: block;
+}
+
+.create-roles__warn,
+.create-roles__note {
+  margin: 8px 0 0;
+  font-size: 12px;
   line-height: 1.5;
 }
 
-.role-pick {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  margin-bottom: 8px;
-  padding: 12px;
-  border: 1px solid var(--zt-border);
-  border-radius: 6px;
-  background: #fff;
-  text-align: left;
-  cursor: pointer;
+.create-roles__warn {
+  color: #b26a00;
 }
 
-.role-pick.is-on {
-  background: #edf5ff;
-  border-color: #c5dbf8;
-}
-
-.role-pick__text {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  flex: 1;
-}
-
-.role-pick__text strong {
-  color: var(--zt-ink-900);
-  font-size: 14px;
-}
-
-.role-pick__text em {
+.create-roles__note {
   color: var(--zt-ink-500);
-  font-size: 12px;
-  font-style: normal;
 }
 </style>

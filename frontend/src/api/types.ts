@@ -70,12 +70,26 @@ export interface UserItem {
   created_at: string
   updated_at: string
   role_ids?: string[]
+  /** 列表与详情都带上角色，页面不必再逐个请求。 */
+  roles?: RoleBrief[]
+}
+
+export interface RoleBrief {
+  id: string
+  name: string
+  status: 'active' | 'disabled'
+  is_builtin: boolean
 }
 
 export interface RoleItem {
   id: string
   code: string
   name: string
+  description?: string
+  /** 角色分给了几个人（含已禁用账号）。 */
+  member_count?: number
+  /** 已发布模块上各档的数量：仅查看 / 查看和导出 / 可管理。 */
+  grant_counts?: { read: number; export: number; full: number }
   status: 'active' | 'disabled'
   is_builtin: boolean
   version: number
@@ -86,7 +100,7 @@ export interface RoleItem {
 export interface GrantItem {
   resource_code: string
   resource_name?: string
-  level: 'NONE' | 'READ' | 'FULL'
+  level: 'NONE' | 'READ' | 'EXPORT' | 'FULL'
 }
 
 export interface AuditEventItem {
@@ -123,4 +137,19 @@ export interface ResourceNode {
   parent_id: string | null
   actions: { action_code: string; required_level: string }[]
   children: ResourceNode[]
+}
+
+export interface RoleMember {
+  id: string
+  username: string
+  display_name: string
+  status: 'active' | 'disabled' | 'archived'
+}
+
+export interface EffectivePermission {
+  resource_code: string
+  resource_name: string
+  group_name: string
+  level: 'NONE' | 'READ' | 'EXPORT' | 'FULL'
+  sources: { role_id: string; role_name: string; level: 'READ' | 'EXPORT' | 'FULL'; active: boolean }[]
 }

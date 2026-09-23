@@ -43,5 +43,5 @@ export function useUnsavedForm(visible: Ref<boolean>, value: () => unknown, savi
   onMounted(() => window.addEventListener('beforeunload', beforeUnload))
   onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
   onBeforeRouteLeave(canLeave)
-  return { dirty, close, beforeClose }
+  return { dirty, close, beforeClose, canLeave }
 }

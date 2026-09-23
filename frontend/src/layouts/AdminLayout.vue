@@ -80,11 +80,14 @@ function firstChildPath(parentId: string) {
 }
 
 const crumbs = computed(() => {
-  const current = auth.visibleMenus.find(item => pathForRouteName(item.route_name) === route.path)
+  // 详情页不在菜单里，用 meta.menuPath 挂到它所属的列表页下：工作台 / 系统管理 / 角色与权限 / 角色详情。
+  const menuPath = typeof route.meta.menuPath === 'string' ? route.meta.menuPath : route.path
+  const current = auth.visibleMenus.find(item => pathForRouteName(item.route_name) === menuPath)
   const parent = current?.parent_id ? auth.visibleMenus.find(item => item.id === current.parent_id) : undefined
   return [
     ...(route.path !== '/' ? [{ title: '工作台', path: '/' }] : []),
     ...(parent ? [{ title: parent.title, path: pathForRouteName(parent.route_name) || firstChildPath(parent.id) }] : []),
+    ...(current && menuPath !== route.path ? [{ title: current.title, path: menuPath }] : []),
     { title: route.meta.title || '工作台', path: undefined },
   ]
 })

@@ -1,9 +1,11 @@
-export type GrantLevel = 'NONE' | 'READ' | 'FULL'
+/** 逐档包含：查看 < 查看+导出 < 管理。导出单列一档：能看不等于能把整表数据带走。 */
+export type GrantLevel = 'NONE' | 'READ' | 'EXPORT' | 'FULL'
 
 const RANK: Record<GrantLevel, number> = {
   NONE: 0,
   READ: 1,
-  FULL: 2,
+  EXPORT: 2,
+  FULL: 3,
 }
 
 export function levelSatisfies(effective: string | null | undefined, required: GrantLevel): boolean {
@@ -13,6 +15,10 @@ export function levelSatisfies(effective: string | null | undefined, required: G
 
 export function canRead(level: string | null | undefined): boolean {
   return levelSatisfies(level, 'READ')
+}
+
+export function canExport(level: string | null | undefined): boolean {
+  return levelSatisfies(level, 'EXPORT')
 }
 
 export function canWrite(level: string | null | undefined): boolean {

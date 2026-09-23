@@ -148,6 +148,17 @@ policy 和 codebook 的基础设施代码高度重复，已统一下沉。**新�
 - 同步持有 advisory lock（键见 `repositories/crawler_v2.py`），概览据 `pg_locks` 把停在 running 的批次识别为中断
 - ShardingSphere 不支持 `REGEXP` 和多列 `COUNT(DISTINCT)`，写源库 SQL 时用 `LIKE`、单列聚合
 
+### 系统管理：给人分配角色即授权
+
+菜单三项：用户管理、角色与权限（原角色管理 + 权限分配合并）、操作日志。给人分配角色的所有入口
+（建人带角色、用户详情调角色、角色侧增删成员、复制角色）都要求 `system.permissions:grant`，
+而该资源只能授予超级管理员角色——这是防止「用户管理员给自己加超级管理员」的关键约束，改入口时不要放宽。
+权限页的模块分组、可选档位和中文说明都由 `frontend/src/permissions/catalog.ts` 从资源树推导。
+
+授权四档逐档包含：`READ`（查看）< `EXPORT`（查看+导出）< `FULL`（含新增、编辑、导入）。新增模块时导出动作
+必须标 `GrantLevel.EXPORT`，`test_every_export_action_requires_export_tier` 会拦；前端导出按钮用 `auth.canExport`。
+越权探针 `tests/authz_probe.py` 会自建 `越权探测-*` 角色与 `probe.*` 账号，在开发栈跑完记得清掉。
+
 ### 审计走 Outbox
 
 业务写操作调 `enqueue_event(...)` 写本服务的 `*_outbox` 表（与业务同事务），

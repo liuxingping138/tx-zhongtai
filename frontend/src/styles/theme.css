@@ -209,7 +209,8 @@ button:disabled { cursor: not-allowed; }
 .editor-overlay .editor-section legend { padding: 0; margin-bottom: 12px; font-size: 15px; }
 .editor-overlay .editor-section__hint { margin-bottom: 16px; }
 .el-message { max-width: calc(100vw - 24px); }
-.el-message-box { max-width: calc(100vw - 32px); }
+/* Element Plus 2.9 的确认框是 width:100% + max-width 限宽；只写 100vw 会把限宽覆盖掉，变成整屏宽。 */
+.el-message-box { max-width: min(var(--el-messagebox-width, 420px), calc(100vw - 32px)); }
 @media (max-width: 767px) {
  :root { --zt-title-size: 21px; }
  .el-button:not(.is-link), .el-input__wrapper, .el-select__wrapper { min-height: 44px; }

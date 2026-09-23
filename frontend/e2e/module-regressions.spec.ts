@@ -57,68 +57,228 @@ test('audit: clearing the date range still submits the query', async ({ page }) 
   expect(url.searchParams.has('occurred_to')).toBe(false)
 })
 
-test('roles: changing status resets pagination', async ({ page }) => {
-  await page.route('**/api/v1/system/roles?**', route => respond(route, { items: [role('1')], total: 45 }))
-  await page.goto('/system/roles')
-  await page.locator('.el-pager li').filter({ hasText: /^2$/ }).click()
-  await page.locator('.filter-bar .el-select').click()
-  const request = page.waitForRequest(r => r.url().includes('status=disabled'))
-  await page.getByRole('option', { name: '停用', exact: true }).click()
-  expect(new URL((await request).url()).searchParams.get('page')).toBe('1')
-})
+const sourcesTree = [{
+  id: 'g', code: 'policy', name: '政策', node_type: 'directory', published: true, children: [
+    { id: 'r', code: 'policy.sources', name: '信源管理', node_type: 'resource', published: true, children: [],
+      actions: [{ action_code: 'list', required_level: 'READ' }, { action_code: 'export', required_level: 'EXPORT' }, { action_code: 'create', required_level: 'FULL' }] },
+    { id: 'c', code: 'policy.crawler_monitoring_v2', name: '爬虫监测 v2', node_type: 'resource', published: true, children: [],
+      actions: [{ action_code: 'list', required_level: 'READ' }, { action_code: 'export', required_level: 'EXPORT' }] },
+  ],
+}, { id: 'u', code: 'customer', name: '客户', node_type: 'directory', published: false, children: [] }]
 
-test('permissions: role load failure keeps selection; saving locks inputs and role switching', async ({ page }) => {
-  await page.route('**/api/v1/system/roles?**', route => respond(route, { items: [role('1'), role('2')], total: 2 }))
-  await page.route('**/api/v1/system/resources', route => respond(route, { tree: [{ id: 'r', code: 'policy.sources', name: '信源', node_type: 'resource', published: true }] }))
-  let saving: Route | undefined
-  await page.route('**/api/v1/system/roles/*/grants', route => {
-    if (route.request().method() === 'PUT') { saving = route; return }
-    if (route.request().url().includes('/2/')) return route.fulfill({ status: 500, json: { message: '加载失败' } })
-    return respond(route, { role: role('1'), grants: [] })
+/** 角色详情页需要的三个接口：角色本身、资源树、授权。 */
+async function mockRoleDetail(page: Page, grants: (id: string, route: Route) => Promise<void> | void) {
+  await page.route('**/api/v1/system/roles/*', route => {
+    const id = new URL(route.request().url()).pathname.split('/').pop() ?? '1'
+    return respond(route, { ...role(id), member_count: 0, grant_counts: { read: 0, export: 0, full: 0 } })
   })
+  await page.route('**/api/v1/system/resources', route => respond(route, { tree: sourcesTree }))
+  await page.route('**/api/v1/system/roles/*/grants', route => {
+    const id = new URL(route.request().url()).pathname.split('/').slice(-2)[0]
+    return grants(id, route)
+  })
+}
+
+test('roles: old permission links open the role detail page', async ({ page }) => {
+  await mockRoleDetail(page, (id, route) => respond(route, { role: role(id), grants: [] }))
+  await page.goto('/system/roles/2/grants')
+  await expect(page).toHaveURL(/\/system\/roles\/2$/)
+  await expect(page.getByRole('heading', { name: '角色2' })).toBeVisible()
+  await page.goto('/system/permissions?roleId=1')
+  await expect(page).toHaveURL(/\/system\/roles\/1$/)
+  await expect(page.getByRole('heading', { name: '角色1' })).toBeVisible()
   await page.goto('/system/permissions')
-  await page.getByRole('button', { name: /角色2/ }).click()
-  await expect(page.locator('.iam-role.is-active')).toContainText('角色1')
-  await page.locator('.el-radio-button').filter({ hasText: '只读' }).click()
-  await page.getByRole('button', { name: '保存授权', exact: true }).click()
-  await page.locator('.el-message-box').getByRole('button', { name: /确定|确认/ }).click()
-  await expect.poll(() => saving !== undefined).toBe(true)
-  await expect(page.getByRole('button', { name: /角色2/ })).toBeDisabled()
-  await expect(page.getByRole('radio', { name: '可管理', exact: true })).toBeDisabled()
-  await respond(saving!, { role: { ...role('1'), version: 2 }, grants: [{ resource_code: 'policy.sources', level: 'READ' }] })
-  await expect(page.getByText('1 项待保存')).toHaveCount(0)
+  await expect(page).toHaveURL(/\/system\/roles$/)
 })
 
-
-test('permissions: initial load failure shows a persistent error with a working retry', async ({ page }) => {
-  // 原来初次加载失败只弹一个会消失的 toast，页面空着且没有重试入口，只能刷整页。
-  await page.route('**/api/v1/system/resources', route => respond(route, { tree: [] }))
-  let attempts = 0
+test('roles: list is a normal filterable table and opens the detail page', async ({ page }) => {
   await page.route('**/api/v1/system/roles?**', route => {
+    const names = new URL(route.request().url()).searchParams.getAll('name')
+    const items = [{ ...role('1'), name: '政策数据管理员', description: '负责政策表', member_count: 3, grant_counts: { read: 1, export: 1, full: 2 } },
+      { ...role('2'), name: '码表管理员', member_count: 0, grant_counts: { read: 0, export: 0, full: 0 } }]
+    const filtered = names.length ? items.filter(item => names.some(name => item.name.includes(name))) : items
+    return respond(route, { items: filtered, total: filtered.length })
+  })
+  await mockRoleDetail(page, (id, route) => respond(route, { role: role(id), grants: [] }))
+  await page.route('**/api/v1/auth/permissions', route => respond(route, {
+    resources: resources.map(code => ({ code, level: 'FULL' })),
+    menus: [
+      { id: 'm-sys', parent_id: null, title: '系统管理', route_name: null, resource_code: null, icon: 'setting', sort_order: 10 },
+      { id: 'm-roles', parent_id: 'm-sys', title: '角色与权限', route_name: 'system-roles', resource_code: 'system.roles', icon: null, sort_order: 12 },
+    ],
+  }))
+  await page.goto('/system/roles')
+  const policyRow = page.getByRole('row').filter({ hasText: '政策数据管理员' })
+  await expect(policyRow).toContainText('4 个模块，其中 2 个可管理')
+  await expect(policyRow).toContainText('3 人')
+  await expect(page.getByRole('row').filter({ hasText: '码表管理员' })).toContainText('还没有设置权限')
+
+  const field = page.locator('.filter-bar .el-form-item').filter({ hasText: '角色名称' })
+  await field.locator('.el-select__wrapper').click()
+  await field.locator('input').first().fill('码表')
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Escape')
+  const filtered = page.waitForRequest(r => r.url().includes('/system/roles?') && r.url().includes('name='))
+  await page.getByRole('button', { name: '查询', exact: true }).click()
+  expect(new URL((await filtered).url()).searchParams.getAll('name')).toEqual(['码表'])
+  await expect(page.getByRole('row').filter({ hasText: '政策数据管理员' })).toHaveCount(0)
+
+  await page.getByRole('row').filter({ hasText: '码表管理员' }).getByRole('button', { name: '权限设置' }).click()
+  await expect(page).toHaveURL(/\/system\/roles\/2$/)
+  // 面包屑挂在角色列表下，侧栏也高亮「角色与权限」。
+  await expect(page.locator('.el-breadcrumb')).toContainText('系统管理')
+  await expect(page.locator('.el-breadcrumb')).toContainText('角色与权限')
+  await expect(page.locator('.el-breadcrumb')).toContainText('角色详情')
+  await expect(page.locator('.el-menu-item.is-active')).toContainText('角色与权限')
+})
+
+test('roles: permission table ticks cumulatively; saving locks the table and confirms in plain Chinese', async ({ page }) => {
+  let saving: Route | undefined
+  let payload: { grants: { resource_code: string; level: string }[] } | undefined
+  await mockRoleDetail(page, (id, route) => {
+    if (route.request().method() === 'PUT') { saving = route; payload = route.request().postDataJSON(); return }
+    return respond(route, { role: role(id), grants: [] })
+  })
+  await page.goto('/system/roles/1')
+  const sources = page.locator('.perm-table__row').filter({ hasText: '信源管理' })
+  // 勾「管理」自动带上查看和导出。
+  await sources.getByRole('checkbox', { name: '信源管理管理' }).check({ force: true }).catch(async () => {
+    await sources.locator('.el-checkbox').nth(2).click()
+  })
+  await expect(sources.locator('.el-checkbox.is-checked')).toHaveCount(3)
+  await expect(page.getByText('有 1 项修改还没保存')).toBeVisible()
+  // 取消「查看」一并取消后面两列。
+  await sources.locator('.el-checkbox').nth(0).click()
+  await expect(sources.locator('.el-checkbox.is-checked')).toHaveCount(0)
+  await expect(page.getByText('有 1 项修改还没保存')).toHaveCount(0)
+  await sources.locator('.el-checkbox').nth(1).click()
+  await expect(sources.locator('.el-checkbox.is-checked')).toHaveCount(2)
+
+  await page.getByRole('button', { name: '保存权限', exact: true }).click()
+  const confirm = page.locator('.el-message-box')
+  await expect(confirm).toContainText('政策 / 信源管理：无权限 → 查看和导出')
+  await confirm.getByRole('button', { name: '保存', exact: true }).click()
+  await expect.poll(() => saving !== undefined).toBe(true)
+  expect(payload?.grants.find(item => item.resource_code === 'policy.sources')?.level).toBe('EXPORT')
+  await expect(sources.locator('.el-checkbox.is-disabled')).toHaveCount(3)
+  await respond(saving!, { role: { ...role('1'), version: 2 }, grants: [{ resource_code: 'policy.sources', level: 'EXPORT' }] })
+  await expect(page.getByText('有 1 项修改还没保存')).toHaveCount(0)
+})
+
+test('roles: modules only show the columns they actually have; unreleased modules are hidden', async ({ page }) => {
+  await mockRoleDetail(page, (id, route) => respond(route, { role: role(id), grants: [] }))
+  await page.goto('/system/roles/1')
+  const crawler = page.locator('.perm-table__row').filter({ hasText: '爬虫监测 v2' })
+  await expect(crawler.locator('.el-checkbox')).toHaveCount(2)
+  await expect(crawler.locator('.perm-table__na')).toHaveCount(1)
+  await expect(crawler).toContainText('只读模块，没有新增或修改操作')
+  await expect(page.locator('.perm-table__row').filter({ hasText: '信源管理' })).toContainText('管理包含：新增')
+  await expect(page.getByText('客户', { exact: true })).toHaveCount(0)
+})
+
+test('roles: detail load failure shows a persistent error with a working retry', async ({ page }) => {
+  // 原来初次加载失败只弹一个会消失的 toast，页面空着且没有重试入口，只能刷整页。
+  let attempts = 0
+  await mockRoleDetail(page, (id, route) => {
     attempts += 1
     if (attempts === 1) return route.fulfill({ status: 503, json: { message: '授权服务暂时不可用' } })
-    return respond(route, { items: [role('1')], total: 1 })
+    return respond(route, { role: role(id), grants: [] })
   })
-  await page.route('**/api/v1/system/roles/*/grants', route => respond(route, { role: role('1'), grants: [] }))
-
-  await page.goto('/system/permissions')
-  const error = page.getByRole('alert').filter({ hasText: '暂时无法加载授权' })
+  await page.goto('/system/roles/1')
+  const error = page.getByRole('alert').filter({ hasText: '暂时无法加载这个角色' })
   await expect(error).toBeVisible()
   await expect(error).toContainText('授权服务暂时不可用')
-
   await error.getByRole('button', { name: '重新加载', exact: true }).click()
-  await expect(page.getByRole('button', { name: /角色1/ })).toBeVisible()
-  await expect(page.getByText('暂时无法加载授权')).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: '角色1' })).toBeVisible()
 })
 
-test('permissions: includes roles after the first 100', async ({ page }) => {
-  await page.route('**/api/v1/system/roles?**', route => {
-    const second = new URL(route.request().url()).searchParams.get('page') === '2'
-    return respond(route, { items: second ? [role('101')] : Array.from({ length: 100 }, (_, i) => role(String(i + 1))), total: 101 })
+test('roles: members can be added and removed from the role side', async ({ page }) => {
+  const members: { id: string; username: string; display_name: string; status: string }[] = []
+  await mockRoleDetail(page, (id, route) => respond(route, { role: role(id), grants: [] }))
+  await page.route('**/api/v1/system/users?**', route => respond(route, {
+    items: [{ id: 'u1', username: 'zhangsan', display_name: '张三', status: 'active', version: 1 }], total: 1,
+  }))
+  let added: unknown
+  await page.route('**/api/v1/system/roles/1/members**', async route => {
+    const method = route.request().method()
+    if (method === 'POST') {
+      added = route.request().postDataJSON()
+      members.push({ id: 'u1', username: 'zhangsan', display_name: '张三', status: 'active' })
+      return respond(route, { added: 1, items: members })
+    }
+    if (method === 'DELETE') { members.length = 0; return respond(route, { items: members }) }
+    return respond(route, { items: members })
   })
-  await page.route('**/api/v1/system/resources', route => respond(route, { tree: [] }))
-  await page.route('**/api/v1/system/roles/*/grants', route => respond(route, { role: role('1'), grants: [] }))
-  await page.goto('/system/permissions')
-  await page.getByPlaceholder('搜索名称 / 编码').fill('role_101')
-  await expect(page.getByRole('button', { name: /角色101/ })).toBeVisible()
+  await page.goto('/system/roles/1?tab=members')
+  await expect(page.getByText('还没有成员')).toBeVisible()
+  await page.getByRole('button', { name: '添加成员' }).click()
+  const dialog = page.getByRole('dialog', { name: '添加成员' })
+  await dialog.locator('.el-select__wrapper').click()
+  await page.getByRole('option', { name: /张三/ }).click()
+  // 选中后下拉自动收起，不会盖住底部按钮。
+  await expect(page.getByRole('option', { name: /张三/ })).toBeHidden()
+  await dialog.getByRole('button', { name: /添加 1 人/ }).click()
+  expect(added).toEqual({ user_ids: ['u1'] })
+  await expect(page.locator('.members__table')).toContainText('zhangsan')
+  await expect(page.getByRole('tab', { name: /成员/ })).toContainText('1')
+  await page.getByRole('button', { name: '移出' }).click()
+  await page.locator('.el-message-box').getByRole('button', { name: '移出' }).click()
+  await expect(page.getByText('还没有成员')).toBeVisible()
+})
+
+test('users: create a user with roles in one step, and list shows roles', async ({ page }) => {
+  const roles = [{ ...role('1'), name: '政策数据管理员', description: '负责政策表维护', grant_counts: { read: 1, full: 2 } }]
+  let created: { role_ids?: string[] } | undefined
+  await page.route('**/api/v1/system/roles?**', route => respond(route, { items: roles, total: 1 }))
+  await page.route('**/api/v1/system/users**', route => {
+    if (route.request().method() === 'POST') {
+      created = route.request().postDataJSON()
+      return respond(route, { user: { id: 'u9', username: 'lisi', display_name: '李四', status: 'active', version: 1, roles: [] } })
+    }
+    return respond(route, {
+      items: [
+        { id: 'u1', username: 'zhangsan', display_name: '张三', status: 'active', version: 1, created_at: '2026-09-23T08:00:00+00:00', roles: [{ id: '1', name: '政策数据管理员', status: 'active', is_builtin: false }] },
+        { id: 'u2', username: 'wangwu', display_name: '王五', status: 'active', version: 1, created_at: '2026-09-23T08:00:00+00:00', roles: [] },
+      ],
+      total: 2,
+    })
+  })
+  await page.goto('/system/users')
+  await expect(page.getByRole('row').filter({ hasText: 'zhangsan' })).toContainText('政策数据管理员')
+  await expect(page.getByRole('row').filter({ hasText: 'wangwu' })).toContainText('未分配角色')
+
+  await page.getByRole('button', { name: '新增用户' }).click()
+  const dialog = page.getByRole('dialog', { name: '新增用户' })
+  await dialog.getByLabel('用户名', { exact: true }).fill('lisi')
+  await dialog.getByLabel('显示名', { exact: true }).fill('李四')
+  await expect(dialog.getByText('未选择角色')).toBeVisible()
+  await dialog.getByRole('checkbox', { name: /政策数据管理员/ }).click()
+  await expect(dialog.getByRole('checkbox', { name: /政策数据管理员/ })).toHaveAttribute('aria-checked', 'true')
+  await expect(dialog.getByText('负责政策表维护')).toBeVisible()
+  await expect(dialog.getByText('未选择角色')).toHaveCount(0)
+  await dialog.getByRole('button', { name: '创建', exact: true }).click()
+  await expect.poll(() => created?.role_ids).toEqual(['1'])
+})
+
+test('users: detail drawer shows effective permissions and their source roles', async ({ page }) => {
+  await page.route('**/api/v1/system/roles?**', route => respond(route, { items: [role('1')], total: 1 }))
+  await page.route('**/api/v1/system/users?**', route => respond(route, {
+    items: [{ id: 'u1', username: 'zhangsan', display_name: '张三', status: 'active', version: 1, created_at: '2026-09-23T08:00:00+00:00', roles: [{ id: '1', name: '角色1', status: 'active', is_builtin: false }] }],
+    total: 1,
+  }))
+  await page.route('**/api/v1/system/users/u1', route => respond(route, {
+    id: 'u1', username: 'zhangsan', display_name: '张三', status: 'active', version: 1, created_at: '2026-09-23T08:00:00+00:00',
+    role_ids: ['1'], roles: [{ id: '1', name: '角色1', status: 'active', is_builtin: false }],
+  }))
+  await page.route('**/api/v1/system/users/u1/permissions', route => respond(route, {
+    account_active: true,
+    items: [{ resource_code: 'policy.sources', resource_name: '信源管理', group_name: '政策', level: 'FULL', sources: [{ role_id: '1', role_name: '角色1', level: 'FULL', active: true }] }],
+  }))
+  await page.goto('/system/users')
+  await page.getByRole('button', { name: 'zhangsan', exact: true }).click()
+  const drawer = page.locator('.el-drawer')
+  await expect(drawer.getByText('实际权限')).toBeVisible()
+  await expect(drawer.locator('.perm-line')).toContainText('信源管理')
+  await expect(drawer.locator('.perm-line')).toContainText('可管理')
+  await expect(drawer.locator('.perm-line')).toContainText('来自 角色1（可管理）')
 })

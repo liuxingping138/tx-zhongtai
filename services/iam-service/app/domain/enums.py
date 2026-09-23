@@ -22,7 +22,11 @@ class NodeType(StrEnum):
 
 
 class GrantLevel(StrEnum):
+    """授权档位，逐档包含：查看 < 查看+导出 < 管理（含新增、编辑、导入等写操作）。"""
+
     READ = "READ"
+    # 导出单列一档：能看不等于能把整表数据带走。
+    EXPORT = "EXPORT"
     FULL = "FULL"
 
 

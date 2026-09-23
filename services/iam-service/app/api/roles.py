@@ -9,9 +9,16 @@ from fastapi.responses import JSONResponse
 from platform_common.responses import paginate
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas import RoleCreateRequest, RoleGrantsReplaceRequest, RoleUpdateRequest
+from app.api.schemas import (
+    RoleCopyRequest,
+    RoleCreateRequest,
+    RoleGrantsReplaceRequest,
+    RoleMembersAddRequest,
+    RoleUpdateRequest,
+)
 from app.api.security import CurrentPrincipal, classified, require_permission
-from app.application import role_admin
+from app.application import role_admin, user_admin
+from app.application.authorization import assert_allowed
 from app.core.database import get_db_session
 from app.core.http_utils import success_json
 from app.domain.enums import SecurityClass
@@ -27,8 +34,9 @@ async def list_roles(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     status: list[str] | None = Query(default=None),
+    name: list[str] | None = Query(default=None),
 ) -> JSONResponse:
-    items, total = await role_admin.list_roles_page(session, status=status, page=page, page_size=page_size)
+    items, total = await role_admin.list_roles_page(session, status=status, name=name, page=page, page_size=page_size)
     return success_json(paginate(items, total, page=page, page_size=page_size).model_dump())
 
 
@@ -50,7 +58,9 @@ async def create_role(
     session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
     return success_json(
-        await role_admin.create_role(session, principal.user, code=body.code, name=body.name),
+        await role_admin.create_role(
+            session, principal.user, code=body.code, name=body.name, description=body.description
+        ),
         status_code=201,
     )
 
@@ -65,7 +75,13 @@ async def update_role(
 ) -> JSONResponse:
     return success_json(
         await role_admin.update_role(
-            session, principal.user, role_id, name=body.name, status=body.status, version=body.version
+            session,
+            principal.user,
+            role_id,
+            name=body.name,
+            status=body.status,
+            version=body.version,
+            description=body.description,
         )
     )
 
@@ -103,3 +119,55 @@ async def list_resources(
     session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
     return success_json({"tree": await role_admin.resource_tree(session)})
+
+
+@router.post("/roles/{role_id}/copy")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def copy_role(
+    role_id: uuid.UUID,
+    body: RoleCopyRequest,
+    principal: CurrentPrincipal = Depends(require_permission("system.roles", "create")),
+    session: AsyncSession = Depends(get_db_session),
+) -> JSONResponse:
+    # 复制会连带授权，等同于一次授权操作，还要有「权限分配」可管理。
+    await assert_allowed(session, principal.user, "system.permissions", "grant")
+    return success_json(
+        await role_admin.copy_role(session, principal.user, role_id, name=body.name, description=body.description),
+        status_code=201,
+    )
+
+
+@router.get("/roles/{role_id}/members")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def list_role_members(
+    role_id: uuid.UUID,
+    _principal: CurrentPrincipal = Depends(require_permission("system.roles", "read")),
+    session: AsyncSession = Depends(get_db_session),
+) -> JSONResponse:
+    return success_json({"items": await role_admin.list_members(session, role_id)})
+
+
+@router.post("/roles/{role_id}/members")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def add_role_members(
+    role_id: uuid.UUID,
+    body: RoleMembersAddRequest,
+    principal: CurrentPrincipal = Depends(require_permission("system.permissions", "grant")),
+    session: AsyncSession = Depends(get_db_session),
+) -> JSONResponse:
+    await role_admin.get_role(session, role_id)  # 角色不存在时明确 404，而不是「存在未知角色」
+    added = await user_admin.add_role_members(session, principal.user, role_id, body.user_ids)
+    return success_json({"added": added, "items": await role_admin.list_members(session, role_id)})
+
+
+@router.delete("/roles/{role_id}/members/{user_id}")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def remove_role_member(
+    role_id: uuid.UUID,
+    user_id: uuid.UUID,
+    principal: CurrentPrincipal = Depends(require_permission("system.permissions", "grant")),
+    session: AsyncSession = Depends(get_db_session),
+) -> JSONResponse:
+    await role_admin.get_role(session, role_id)
+    await user_admin.remove_role_member(session, principal.user, role_id, user_id)
+    return success_json({"items": await role_admin.list_members(session, role_id)})

@@ -10,8 +10,8 @@ from sqlalchemy.orm import selectinload
 
 from app.core.clock import utcnow
 from app.domain.catalog import SUPERADMIN_ROLE_CODE
-from app.domain.enums import RoleStatus
-from app.domain.models import Role, User, UserRole
+from app.domain.enums import NodeType, RoleStatus
+from app.domain.models import Resource, Role, RoleGrant, User, UserRole
 
 
 async def get_user_by_username(session: AsyncSession, username: str) -> User | None:
@@ -29,7 +29,14 @@ async def get_user_for_update(session: AsyncSession, user_id: uuid.UUID) -> User
     return result.scalar_one_or_none()
 
 
-def _apply_user_filters(stmt: Any, *, username: FilterValue, status: FilterValue) -> Any:
+def _apply_user_filters(
+    stmt: Any, *, username: FilterValue, status: FilterValue, role_id: FilterValue = None
+) -> Any:
+    role_ids = [_uuid_or_none(item) for item in filter_values(role_id)]
+    if role_ids:
+        # 选了多个角色是「或」：拥有其中任一角色即命中。非法 id 当作匹配不到，不报错。
+        valid = [item for item in role_ids if item is not None]
+        stmt = stmt.where(User.id.in_(select(UserRole.user_id).where(UserRole.role_id.in_(valid))))
     names = filter_values(username)
     if names:
         stmt = stmt.where(or_(*(User.username.like(f"%{name.lower()}%") for name in names)))
@@ -39,8 +46,12 @@ def _apply_user_filters(stmt: Any, *, username: FilterValue, status: FilterValue
     return stmt
 
 
-async def count_users(session: AsyncSession, *, username: FilterValue, status: FilterValue) -> int:
-    stmt = _apply_user_filters(select(func.count()).select_from(User), username=username, status=status)
+async def count_users(
+    session: AsyncSession, *, username: FilterValue, status: FilterValue, role_id: FilterValue = None
+) -> int:
+    stmt = _apply_user_filters(
+        select(func.count()).select_from(User), username=username, status=status, role_id=role_id
+    )
     return int((await session.execute(stmt)).scalar_one())
 
 
@@ -52,8 +63,9 @@ async def list_users(
     offset: int,
     limit: int,
     sort: str,
+    role_id: FilterValue = None,
 ) -> list[User]:
-    stmt = _apply_user_filters(select(User), username=username, status=status)
+    stmt = _apply_user_filters(select(User), username=username, status=status, role_id=role_id)
     if sort == "username":
         stmt = stmt.order_by(User.username.asc())
     else:
@@ -131,3 +143,45 @@ async def list_superadmin_users(session: AsyncSession) -> list[User]:
     )
     result = await session.execute(stmt)
     return list(result.unique().scalars().all())
+
+
+def _uuid_or_none(value: str) -> uuid.UUID | None:
+    try:
+        return uuid.UUID(value)
+    except ValueError:
+        return None
+
+
+async def roles_for_users(session: AsyncSession, user_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[Role]]:
+    """一次查出一页用户各自的角色，列表不必逐个请求详情。"""
+
+    if not user_ids:
+        return {}
+    result = await session.execute(
+        select(UserRole.user_id, Role)
+        .join(Role, Role.id == UserRole.role_id)
+        .where(UserRole.user_id.in_(user_ids))
+        .order_by(Role.is_builtin.desc(), Role.name)
+    )
+    out: dict[uuid.UUID, list[Role]] = {}
+    for user_id, role in result.all():
+        out.setdefault(user_id, []).append(role)
+    return out
+
+
+async def list_user_grant_sources(session: AsyncSession, user_id: uuid.UUID) -> list[tuple[str, str, Role]]:
+    """用户每个角色在已发布模块上的授权，含停用角色（页面标明它不生效）。"""
+
+    result = await session.execute(
+        select(Resource.code, RoleGrant.level, Role)
+        .join(RoleGrant, RoleGrant.resource_id == Resource.id)
+        .join(Role, Role.id == RoleGrant.role_id)
+        .join(UserRole, UserRole.role_id == Role.id)
+        .where(
+            UserRole.user_id == user_id,
+            Resource.published.is_(True),
+            Resource.node_type == NodeType.RESOURCE,
+        )
+        .order_by(Resource.sort_order, Role.name)
+    )
+    return [(code, str(level), role) for code, level, role in result.all()]

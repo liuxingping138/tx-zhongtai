@@ -18,12 +18,16 @@ import FilterBar from '@/components/FilterBar.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import { useFilterOptions } from '@/composables/useFilterOptions'
+import { useAuthStore } from '@/stores/auth'
 import { filtersForExport, toggleValue, useListQuery } from '@/composables/useListQuery'
 import HealthBar from './HealthBar.vue'
 import { crawlerFilters, STATUS_BY_LABEL, statusValues } from './filters'
 import TaskTrend from './TaskTrend.vue'
 import TrendChart from './TrendChart.vue'
 
+const auth = useAuthStore()
+/** 导出单独一档：只读角色能看不能导，按钮保留但禁用并说明原因。 */
+const canExport = computed(() => auth.canExport('policy.crawler_monitoring'))
 const loading = ref(false)
 const loadError = ref('')
 const resultFiltered = ref(false)
@@ -186,6 +190,7 @@ async function reloadData() {
 }
 
 onMounted(() => { void reloadData() })
+const NO_EXPORT_HINT = '你的角色没有导出权限，如需下载 Excel 请联系管理员开通「导出」。'
 </script>
 
 <template>
@@ -203,32 +208,36 @@ onMounted(() => { void reloadData() })
     >
       <template #actions>
         <el-tooltip
-          content="按当前已生效的筛选条件导出；未筛选时导出全部任务。"
+          :content="canExport ? '按当前已生效的筛选条件导出；未筛选时导出全部任务。' : NO_EXPORT_HINT"
           placement="bottom"
         >
-          <el-button
-            :icon="Download"
-            :loading="exporting"
-            :disabled="loading || !!loadError || total === 0"
-            @click="onExport"
-          >
-            下载 Excel
-          </el-button>
+          <span>
+            <el-button
+              :icon="Download"
+              :loading="exporting"
+              :disabled="!canExport || loading || !!loadError || total === 0"
+              @click="onExport"
+            >
+              下载 Excel
+            </el-button>
+          </span>
         </el-tooltip>
         <el-tooltip
-          content="在当前已生效筛选结果中，导出断爬和从未出数的任务。"
+          :content="canExport ? '在当前已生效筛选结果中，导出断爬和从未出数的任务。' : NO_EXPORT_HINT"
           placement="bottom"
         >
-          <el-button
-            type="danger"
-            plain
-            :icon="Warning"
-            :loading="exportingAbnormal"
-            :disabled="loading || !!loadError || total === 0"
-            @click="onExportAbnormal"
-          >
-            下载异常清单
-          </el-button>
+          <span>
+            <el-button
+              type="danger"
+              plain
+              :icon="Warning"
+              :loading="exportingAbnormal"
+              :disabled="!canExport || loading || !!loadError || total === 0"
+              @click="onExportAbnormal"
+            >
+              下载异常清单
+            </el-button>
+          </span>
         </el-tooltip>
       </template>
 

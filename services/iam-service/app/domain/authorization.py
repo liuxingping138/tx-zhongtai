@@ -8,7 +8,16 @@ from enum import StrEnum
 
 from app.domain.enums import GrantLevel, UserStatus
 
-LEVEL_RANK = {None: 0, "NONE": 0, GrantLevel.READ: 1, "READ": 1, GrantLevel.FULL: 2, "FULL": 2}
+LEVEL_RANK = {
+    None: 0,
+    "NONE": 0,
+    GrantLevel.READ: 1,
+    "READ": 1,
+    GrantLevel.EXPORT: 2,
+    "EXPORT": 2,
+    GrantLevel.FULL: 3,
+    "FULL": 3,
+}
 SYSTEM_PERMISSIONS_CODE = "system.permissions"
 
 

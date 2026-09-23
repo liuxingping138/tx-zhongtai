@@ -1,11 +1,21 @@
 import { http, request } from './http'
-import type { FilterParam, GrantItem, Page, ResourceNode, RoleItem, UserItem } from './types'
+import type {
+  EffectivePermission,
+  FilterParam,
+  GrantItem,
+  Page,
+  ResourceNode,
+  RoleItem,
+  RoleMember,
+  UserItem,
+} from './types'
 
 export function listUsers(params: {
   page?: number
   page_size?: number
   username?: FilterParam
   status?: FilterParam
+  role_id?: FilterParam
   sort?: string
 }): Promise<Page<UserItem>> {
   return request(http.get('/system/users', { params }))
@@ -19,6 +29,7 @@ export function createUser(payload: {
   username: string
   display_name: string
   password?: string
+  role_ids?: string[]
 }): Promise<{ user: UserItem; temporary_password?: string }> {
   return request(http.post('/system/users', payload))
 }
@@ -42,7 +53,12 @@ export function replaceUserRoles(userId: string, payload: { role_ids: string[]; 
   return request(http.put(`/system/users/${userId}/roles`, payload))
 }
 
-export function listRoles(params: { page?: number; page_size?: number; status?: FilterParam }): Promise<Page<RoleItem>> {
+export function listRoles(params: {
+  page?: number
+  page_size?: number
+  status?: FilterParam
+  name?: FilterParam
+}): Promise<Page<RoleItem>> {
   return request(http.get('/system/roles', { params }))
 }
 
@@ -50,13 +66,13 @@ export function getRole(roleId: string): Promise<RoleItem> {
   return request(http.get(`/system/roles/${roleId}`))
 }
 
-export function createRole(payload: { code: string; name: string }): Promise<RoleItem> {
+export function createRole(payload: { code?: string; name: string; description?: string }): Promise<RoleItem> {
   return request(http.post('/system/roles', payload))
 }
 
 export function updateRole(
   roleId: string,
-  payload: { name?: string; status?: 'active' | 'disabled'; version: number },
+  payload: { name?: string; description?: string; status?: 'active' | 'disabled'; version: number },
 ): Promise<RoleItem> {
   return request(http.patch(`/system/roles/${roleId}`, payload))
 }
@@ -67,7 +83,7 @@ export function listRoleGrants(roleId: string): Promise<{ role: RoleItem; grants
 
 export function replaceRoleGrants(
   roleId: string,
-  payload: { version: number; grants: { resource_code: string; level: 'NONE' | 'READ' | 'FULL' }[] },
+  payload: { version: number; grants: { resource_code: string; level: 'NONE' | 'READ' | 'EXPORT' | 'FULL' }[] },
 ): Promise<{ role: RoleItem; grants: GrantItem[] }> {
   return request(http.put(`/system/roles/${roleId}/grants`, payload))
 }
@@ -86,4 +102,26 @@ export async function listAllRoles(): Promise<RoleItem[]> {
     if (!result.items.length || items.length >= result.total) return items
     page += 1
   }
+}
+
+/** 以现有角色为模板新建：复制模块授权，不复制成员。 */
+export function copyRole(roleId: string, payload: { name: string; description?: string }): Promise<RoleItem> {
+  return request(http.post(`/system/roles/${roleId}/copy`, payload))
+}
+
+export function listRoleMembers(roleId: string): Promise<{ items: RoleMember[] }> {
+  return request(http.get(`/system/roles/${roleId}/members`))
+}
+
+export function addRoleMembers(roleId: string, userIds: string[]): Promise<{ added: number; items: RoleMember[] }> {
+  return request(http.post(`/system/roles/${roleId}/members`, { user_ids: userIds }))
+}
+
+export function removeRoleMember(roleId: string, userId: string): Promise<{ items: RoleMember[] }> {
+  return request(http.delete(`/system/roles/${roleId}/members/${userId}`))
+}
+
+/** 多个角色叠加后，这个人在每个模块上最终能做什么。 */
+export function getUserPermissions(userId: string): Promise<{ account_active: boolean; items: EffectivePermission[] }> {
+  return request(http.get(`/system/users/${userId}/permissions`))
 }

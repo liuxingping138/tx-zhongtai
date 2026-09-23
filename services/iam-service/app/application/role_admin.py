@@ -27,6 +27,7 @@ def role_public(role: Role) -> dict[str, object]:
         "id": str(role.id),
         "code": role.code,
         "name": role.name,
+        "description": role.description or "",
         "status": role.status,
         "is_builtin": role.is_builtin,
         "version": role.version,
@@ -41,25 +42,73 @@ async def list_roles_page(
     status: FilterValue,
     page: int,
     page_size: int,
+    name: FilterValue = None,
 ) -> tuple[list[dict[str, object]], int]:
     page = max(page, 1)
     page_size = min(max(page_size, 1), 100)
-    total = await role_repo.count_roles(session, status=status)
-    rows = await role_repo.list_roles(session, status=status, offset=(page - 1) * page_size, limit=page_size)
-    return [role_public(row) for row in rows], total
+    total = await role_repo.count_roles(session, status=status, name=name)
+    rows = await role_repo.list_roles(
+        session, status=status, name=name, offset=(page - 1) * page_size, limit=page_size
+    )
+    return await _with_stats(session, rows), total
+
+
+async def _with_stats(session: AsyncSession, roles: list[Role]) -> list[dict[str, object]]:
+    """附上成员数与授权摘要，角色列表据此回答「这个角色能干什么、有几个人在用」。"""
+
+    ids = [role.id for role in roles]
+    members = await role_repo.member_counts(session, ids)
+    grants = await role_repo.grant_level_counts(session, ids)
+    out: list[dict[str, object]] = []
+    for role in roles:
+        payload = role_public(role)
+        counts = grants.get(role.id, {})
+        payload["member_count"] = members.get(role.id, 0)
+        payload["grant_counts"] = {
+            "read": counts.get("READ", 0),
+            "export": counts.get("EXPORT", 0),
+            "full": counts.get("FULL", 0),
+        }
+        out.append(payload)
+    return out
 
 
 async def get_role(session: AsyncSession, role_id: uuid.UUID) -> dict[str, object]:
     role = await role_repo.get_role_by_id(session, role_id)
     if role is None:
         raise NotFoundError("角色不存在")
-    return role_public(role)
+    return (await _with_stats(session, [role]))[0]
 
 
-async def create_role(session: AsyncSession, actor: User, *, code: str, name: str) -> dict[str, object]:
-    normalized = code.strip().lower()
+async def list_members(session: AsyncSession, role_id: uuid.UUID) -> list[dict[str, object]]:
+    role = await role_repo.get_role_by_id(session, role_id)
+    if role is None:
+        raise NotFoundError("角色不存在")
+    return [
+        {"id": str(user.id), "username": user.username, "display_name": user.display_name, "status": user.status}
+        for user in await role_repo.list_role_members(session, role.id)
+    ]
+
+
+def _clean_description(description: str | None) -> str:
+    text = (description or "").strip()
+    if len(text) > 500:
+        raise ApiError("角色说明不能超过 500 字")
+    return text
+
+
+async def create_role(
+    session: AsyncSession,
+    actor: User,
+    *,
+    code: str | None,
+    name: str,
+    description: str | None = None,
+) -> dict[str, object]:
+    # 编码只作系统内部标识，管理员不必想英文名：不填就自动生成，填了仍按原规则校验。
+    normalized = (code or "").strip().lower() or f"role-{uuid.uuid4().hex[:8]}"
     if not ROLE_CODE_RE.match(normalized):
-        raise ApiError("角色编码格式无效")
+        raise ApiError("角色编码只能用小写字母开头，包含小写字母、数字、点、下划线或短横线")
     display = name.strip()
     if not display:
         raise ApiError("角色名称不能为空")
@@ -68,6 +117,7 @@ async def create_role(session: AsyncSession, actor: User, *, code: str, name: st
         id=uuid.uuid4(),
         code=normalized,
         name=display,
+        description=_clean_description(description),
         status=RoleStatus.ACTIVE,
         is_builtin=False,
         version=1,
@@ -95,6 +145,7 @@ async def update_role(
     name: str | None,
     status: str | None,
     version: int,
+    description: str | None = None,
 ) -> dict[str, object]:
     role = await role_repo.get_role_for_update(session, role_id)
     if role is None:
@@ -113,6 +164,8 @@ async def update_role(
         if not display:
             raise ApiError("角色名称不能为空")
         role.name = display
+    if description is not None:
+        role.description = _clean_description(description)
     role.updated_at = utcnow()
     role.version += 1
     await outbox_repo.enqueue(
@@ -155,7 +208,7 @@ async def replace_grants(
     for resource_code, level in grants:
         if level == "NONE":
             continue
-        if level not in {GrantLevel.READ, GrantLevel.FULL, "READ", "FULL"}:
+        if level not in {GrantLevel.READ, GrantLevel.EXPORT, GrantLevel.FULL}:
             raise ApiError("授权等级无效")
         resource = await resource_repo.get_resource_by_code(session, resource_code)
         if resource is None:
@@ -225,3 +278,28 @@ async def resource_tree(session: AsyncSession) -> list[dict[str, object]]:
         else:
             roots.append(node)
     return roots
+
+
+async def copy_role(
+    session: AsyncSession, actor: User, source_id: uuid.UUID, *, name: str, description: str | None = None
+) -> dict[str, object]:
+    """以现有角色为模板新建：复制全部模块授权，不复制成员。
+
+    「权限分配」只能属于超级管理员，复制出的新角色不带它。
+    """
+
+    source = await role_repo.get_role_by_id(session, source_id)
+    if source is None:
+        raise NotFoundError("角色不存在")
+    created = await create_role(session, actor, code=None, name=name, description=description)
+    grants = [
+        (resource.code, grant.level)
+        for grant, resource in await role_repo.list_role_grants(session, source.id)
+        if resource.published and resource.node_type == NodeType.RESOURCE and resource.code != SYSTEM_PERMISSIONS_CODE
+    ]
+    if not grants:
+        return await get_role(session, uuid.UUID(str(created["id"])))
+    await replace_grants(
+        session, actor, uuid.UUID(str(created["id"])), version=int(str(created["version"])), grants=grants
+    )
+    return await get_role(session, uuid.UUID(str(created["id"])))

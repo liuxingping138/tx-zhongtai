@@ -45,6 +45,8 @@ class UserCreateRequest(StrictModel):
     username: str = Field(min_length=3, max_length=64)
     display_name: str = Field(min_length=1, max_length=128)
     password: str | None = Field(default=None, min_length=8, max_length=128)
+    # 建账号时一并分配的角色；非空时要求操作人有「权限分配」可管理。
+    role_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 class UserUpdateRequest(StrictModel):
@@ -59,19 +61,31 @@ class UserRolesReplaceRequest(StrictModel):
 
 
 class RoleCreateRequest(StrictModel):
-    code: str = Field(min_length=2, max_length=64)
+    # 不填由系统生成，管理员只需要起中文名。
+    code: str | None = Field(default=None, max_length=64)
     name: str = Field(min_length=1, max_length=128)
+    description: str | None = Field(default=None, max_length=500)
+
+
+class RoleCopyRequest(StrictModel):
+    name: str = Field(min_length=1, max_length=128)
+    description: str | None = Field(default=None, max_length=500)
+
+
+class RoleMembersAddRequest(StrictModel):
+    user_ids: list[uuid.UUID] = Field(min_length=1, max_length=200)
 
 
 class RoleUpdateRequest(StrictModel):
     name: str | None = Field(default=None, min_length=1, max_length=128)
+    description: str | None = Field(default=None, max_length=500)
     status: Literal["active", "disabled"] | None = None
     version: int = Field(ge=1)
 
 
 class GrantItem(StrictModel):
     resource_code: str = Field(min_length=1, max_length=128)
-    level: Literal["NONE", "READ", "FULL"]
+    level: Literal["NONE", "READ", "EXPORT", "FULL"]
 
 
 class RoleGrantsReplaceRequest(StrictModel):

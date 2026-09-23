@@ -39,19 +39,27 @@ export const routes: RouteRecordRaw[] = [
         path: 'system/roles',
         name: 'system-roles',
         component: () => import('@/modules/system/roles/RoleList.vue'),
-        meta: { title: '角色管理', resource: 'system.roles' },
+        meta: { title: '角色与权限', resource: 'system.roles' },
       },
       {
+        path: 'system/roles/:roleId',
+        name: 'system-role-detail',
+        component: () => import('@/modules/system/roles/RoleDetail.vue'),
+        // menuPath：详情页不在菜单里，面包屑和侧栏高亮挂到角色列表下。
+        meta: { title: '角色详情', resource: 'system.roles', menuPath: '/system/roles' },
+      },
+      {
+        // 权限配置已并入「角色与权限」，旧书签和链接自动带着角色跳过去。
         path: 'system/permissions',
         name: 'system-permissions',
-        component: () => import('@/modules/system/permissions/PermissionConfig.vue'),
-        meta: { title: '权限分配', resource: 'system.permissions' },
+        redirect: to => typeof to.query.roleId === 'string' && to.query.roleId
+          ? { name: 'system-role-detail', params: { roleId: to.query.roleId }, query: {} }
+          : { name: 'system-roles', query: {} },
       },
       {
         path: 'system/roles/:roleId/grants',
         name: 'system-role-grants',
-        component: () => import('@/modules/system/permissions/PermissionConfig.vue'),
-        meta: { title: '角色授权', resource: 'system.permissions' },
+        redirect: to => ({ name: 'system-role-detail', params: { roleId: String(to.params.roleId) } }),
       },
       {
         path: 'system/audit',

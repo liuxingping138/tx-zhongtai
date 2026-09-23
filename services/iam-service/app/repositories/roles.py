@@ -4,11 +4,12 @@ import uuid
 from typing import Any
 
 from platform_common.filters import FilterValue, filter_values
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.clock import utcnow
-from app.domain.models import Resource, Role, RoleGrant
+from app.domain.enums import NodeType
+from app.domain.models import Resource, Role, RoleGrant, User, UserRole
 
 
 async def get_role_by_id(session: AsyncSession, role_id: uuid.UUID) -> Role | None:
@@ -26,15 +27,18 @@ async def get_role_for_update(session: AsyncSession, role_id: uuid.UUID) -> Role
     return result.scalar_one_or_none()
 
 
-def _apply_role_filters(stmt: Any, *, status: FilterValue) -> Any:
+def _apply_role_filters(stmt: Any, *, status: FilterValue, name: FilterValue = None) -> Any:
+    names = filter_values(name)
+    if names:
+        stmt = stmt.where(or_(*(Role.name.ilike(f"%{item}%") for item in names)))
     statuses = filter_values(status)
     if statuses:
         stmt = stmt.where(Role.status.in_(statuses))
     return stmt
 
 
-async def count_roles(session: AsyncSession, *, status: FilterValue) -> int:
-    stmt = _apply_role_filters(select(func.count()).select_from(Role), status=status)
+async def count_roles(session: AsyncSession, *, status: FilterValue, name: FilterValue = None) -> int:
+    stmt = _apply_role_filters(select(func.count()).select_from(Role), status=status, name=name)
     return int((await session.execute(stmt)).scalar_one())
 
 
@@ -44,8 +48,15 @@ async def list_roles(
     status: FilterValue,
     offset: int,
     limit: int,
+    name: FilterValue = None,
 ) -> list[Role]:
-    stmt = _apply_role_filters(select(Role), status=status).order_by(Role.created_at.desc()).offset(offset).limit(limit)
+    # 内置角色固定在最前，其余按创建时间倒序，新建的角色一眼能找到。
+    stmt = (
+        _apply_role_filters(select(Role), status=status, name=name)
+        .order_by(Role.is_builtin.desc(), Role.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
     result = await session.execute(stmt)
     return list(result.scalars().all())
 
@@ -90,3 +101,41 @@ async def replace_role_grants(
                 updated_at=now,
             )
         )
+
+
+async def member_counts(session: AsyncSession, role_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+    """每个角色分给了几个人（含已禁用账号，角色列表据此提示影响范围）。"""
+
+    if not role_ids:
+        return {}
+    result = await session.execute(
+        select(UserRole.role_id, func.count()).where(UserRole.role_id.in_(role_ids)).group_by(UserRole.role_id)
+    )
+    return {role_id: int(count) for role_id, count in result.all()}
+
+
+async def grant_level_counts(session: AsyncSession, role_ids: list[uuid.UUID]) -> dict[uuid.UUID, dict[str, int]]:
+    """每个角色在已发布模块上的只读 / 可管理数量。未发布资源不计入，免得摘要与页面对不上。"""
+
+    if not role_ids:
+        return {}
+    result = await session.execute(
+        select(RoleGrant.role_id, RoleGrant.level, func.count())
+        .join(Resource, Resource.id == RoleGrant.resource_id)
+        .where(RoleGrant.role_id.in_(role_ids), Resource.published.is_(True), Resource.node_type == NodeType.RESOURCE)
+        .group_by(RoleGrant.role_id, RoleGrant.level)
+    )
+    out: dict[uuid.UUID, dict[str, int]] = {}
+    for role_id, level, count in result.all():
+        out.setdefault(role_id, {})[str(level)] = int(count)
+    return out
+
+
+async def list_role_members(session: AsyncSession, role_id: uuid.UUID) -> list[User]:
+    result = await session.execute(
+        select(User)
+        .join(UserRole, UserRole.user_id == User.id)
+        .where(UserRole.role_id == role_id)
+        .order_by(User.status, User.username)
+    )
+    return list(result.scalars().all())

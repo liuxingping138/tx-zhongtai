@@ -19,10 +19,14 @@ import FilterBar from '@/components/FilterBar.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import { useFilterOptions } from '@/composables/useFilterOptions'
+import { useAuthStore } from '@/stores/auth'
 import { filtersForExport, toggleValue, useListQuery } from '@/composables/useListQuery'
 import { compactCount, siteFilters, STATUS_BY_LABEL, statusValues } from './filters'
 
 const LIST_ERROR = '暂时无法获取网站列表，请稍后重新加载。'
+const auth = useAuthStore()
+/** 导出单独一档：只读角色能看不能导，按钮保留但禁用并说明原因。 */
+const canExport = computed(() => auth.canExport('policy.crawler_monitoring_v2'))
 const OVERVIEW_ERROR = '暂时无法获取采集概况，请稍后重试。'
 
 const loading = ref(false)
@@ -167,6 +171,7 @@ async function reloadData() {
 }
 
 onMounted(() => { void reloadData() })
+const NO_EXPORT_HINT = '你的角色没有导出权限，如需下载 Excel 请联系管理员开通「导出」。'
 </script>
 
 <template>
@@ -184,17 +189,19 @@ onMounted(() => { void reloadData() })
     >
       <template #actions>
         <el-tooltip
-          content="按当前已生效的筛选条件导出网站明细。"
+          :content="canExport ? '按当前已生效的筛选条件导出网站明细。' : NO_EXPORT_HINT"
           placement="bottom"
         >
-          <el-button
-            :icon="Download"
-            :loading="exporting"
-            :disabled="loading || !!loadError || total === 0"
-            @click="onExport"
-          >
-            下载 Excel
-          </el-button>
+          <span>
+            <el-button
+              :icon="Download"
+              :loading="exporting"
+              :disabled="!canExport || loading || !!loadError || total === 0"
+              @click="onExport"
+            >
+              下载 Excel
+            </el-button>
+          </span>
         </el-tooltip>
       </template>
 

@@ -13,7 +13,7 @@ import {
   setCsrfToken,
 } from '@/api/session'
 import type { MePayload, MenuItem, ResourceLevel } from '@/api/types'
-import { canRead, canWrite } from '@/permissions/levels'
+import { canExport, canRead, canWrite } from '@/permissions/levels'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -35,6 +35,10 @@ export const useAuthStore = defineStore('auth', {
       (state) =>
       (code: string): boolean =>
         canRead(state.resources.find((item) => item.code === code)?.level),
+    canExport:
+      (state) =>
+      (code: string): boolean =>
+        canExport(state.resources.find((item) => item.code === code)?.level),
     canFull:
       (state) =>
       (code: string): boolean =>

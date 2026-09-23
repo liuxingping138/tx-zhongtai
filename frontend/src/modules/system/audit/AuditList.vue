@@ -41,6 +41,9 @@ const outcomeLabel: Record<string, string> = {
 }
 
 
+// 从用户管理「操作记录」跳过来时带着人员：人员名不写 URL（非共享条件），经 history.state 传入。
+const presetActor = typeof window.history.state?.auditActor === 'string' ? window.history.state.auditActor : ''
+if (presetActor) query.actor_name = [presetActor]
 const listQuery = useListQuery(query, load, ['actor_name'])
 
 let loadSequence = 0

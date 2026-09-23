@@ -28,6 +28,8 @@ import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
+/** 导出单独一档：只读角色能看不能导，按钮保留但禁用并说明原因。 */
+const canExport = computed(() => auth.canExport('policy.sources'))
 const router = useRouter()
 const canWrite = computed(() => auth.canFull('policy.sources'))
 const canPurge = computed(() => auth.canFull('policy.sources') && auth.isSuperadmin)
@@ -358,6 +360,7 @@ const detailColumns = computed(() => {
 })
 const defaultColumns = computed(() => detailColumns.value.map(col => col.prop))
 const selectedColumns = ref([...defaultColumns.value])
+const NO_EXPORT_HINT = '你的角色没有导出权限，如需下载 Excel 请联系管理员开通「导出」。'
 </script>
 
 <template>
@@ -403,16 +406,19 @@ const selectedColumns = ref([...defaultColumns.value])
           </el-tooltip>
         </el-upload>
         <el-tooltip
-          content="按当前已生效的筛选条件导出；未筛选时导出全表。"
+          :content="canExport ? '按当前已生效的筛选条件导出；未筛选时导出全表。' : NO_EXPORT_HINT"
           placement="bottom"
         >
-          <el-button
-            :icon="Download"
-            :loading="exporting"
-            @click="onExport"
-          >
-            下载 Excel
-          </el-button>
+          <span>
+            <el-button
+              :icon="Download"
+              :loading="exporting"
+              :disabled="!canExport"
+              @click="onExport"
+            >
+              下载 Excel
+            </el-button>
+          </span>
         </el-tooltip>
         <el-button
           v-if="canPurge"

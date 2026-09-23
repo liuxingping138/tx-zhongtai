@@ -12,6 +12,8 @@ defineEmits<{ select: []; close: [] }>()
 
 const auth = useAuthStore()
 const route = useRoute()
+/** 详情页不在菜单里（如角色详情），按 meta.menuPath 高亮它所属的列表菜单。 */
+const activePath = computed(() => (typeof route.meta.menuPath === 'string' ? route.meta.menuPath : route.path))
 const tree = computed(() => auth.visibleMenus
   .filter(item => item.parent_id === null)
   .sort((a, b) => Number(a.title.includes('系统')) - Number(b.title.includes('系统')) || a.sort_order - b.sort_order))
@@ -59,7 +61,7 @@ function iconFor(title: string) {
     </div>
     <div class="admin-navigation__scroll">
       <el-menu
-        :default-active="route.path"
+        :default-active="activePath"
         :collapse="collapsed"
         :collapse-transition="false"
         popper-class="admin-navigation-popper"
@@ -83,7 +85,7 @@ function iconFor(title: string) {
             v-if="childrenOf(item.id).length"
             :index="item.id"
             :aria-label="item.title"
-            :class="{ 'has-active-child': childrenOf(item.id).some(child => pathForRouteName(child.route_name) === route.path) }"
+            :class="{ 'has-active-child': childrenOf(item.id).some(child => pathForRouteName(child.route_name) === activePath) }"
           >
             <template #title>
               <el-icon><component :is="iconFor(item.title)" /></el-icon>

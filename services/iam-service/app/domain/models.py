@@ -44,6 +44,10 @@ class Role(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid, comment="主键")
     code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, comment="角色编码")
     name: Mapped[str] = mapped_column(String(128), nullable=False, comment="角色名称")
+    # 写给管理员看的职责说明，例如「负责政策三张表的日常维护」，分配角色时据此判断选哪个。
+    description: Mapped[str] = mapped_column(
+        String(500), nullable=False, default="", server_default="", comment="角色说明"
+    )
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active", comment="状态")
     is_builtin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, comment="是否内置")
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, comment="版本号")

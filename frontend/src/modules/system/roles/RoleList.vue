@@ -1,83 +1,75 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowDown } from '@element-plus/icons-vue'
 
-import { createRole, listRoles, updateRole } from '@/api/system'
-import { errorMessage, isApiError } from '@/api/errors'
+import { listAllRoles, listRoles, updateRole } from '@/api/system'
+import { errorMessage } from '@/api/errors'
 import type { RoleItem } from '@/api/types'
-import ListPage from '@/components/ListPage.vue'
 import FilterBar from '@/components/FilterBar.vue'
-import { useListQuery } from '@/composables/useListQuery'
+import FilterSelect from '@/components/FilterSelect.vue'
 import ListEmpty from '@/components/ListEmpty.vue'
-import { useFieldValidation } from '@/composables/useFieldValidation'
-import { useUnsavedForm } from '@/composables/useUnsavedForm'
+import ListPage from '@/components/ListPage.vue'
+import { useListQuery } from '@/composables/useListQuery'
 import { useAuthStore } from '@/stores/auth'
+import RoleFormDialog, { type RoleFormMode } from './RoleFormDialog.vue'
 
+/**
+ * 角色列表。参考若依等后台的通行做法：列表只负责找到角色，每行给出「权限设置」「成员」两个主操作，
+ * 具体配置在角色详情页完成，不在一个页面里同时列表又编辑。
+ */
 const auth = useAuthStore()
 const router = useRouter()
+const canManageRoles = computed(() => auth.canFull('system.roles'))
+const canGrant = computed(() => auth.canFull('system.permissions'))
+
 const loading = ref(false)
 const loadError = ref('')
 const resultFiltered = ref(false)
 const roles = ref<RoleItem[]>([])
 const total = ref(0)
-const query = reactive({ page: 1, page_size: 20, status: [] as string[] })
-const createVisible = ref(false)
-const creating = ref(false)
-const createForm = reactive({ code: '', name: '' })
-const editVisible = ref(false)
-const editingSaving = ref(false)
-const editing = ref<RoleItem | null>(null)
-const editForm = reactive({ name: '' })
-
-const createFormRef = ref<FormInstance>()
-const editFormRef = ref<FormInstance>()
-const createValidation = useFieldValidation(createForm, createFormRef)
-const editValidation = useFieldValidation(editForm, editFormRef)
-
-const createGuard = useUnsavedForm(createVisible, () => createForm, creating)
-const editGuard = useUnsavedForm(editVisible, () => editForm, editingSaving)
-
-function openCreate() {
-  createForm.code = ''
-  createForm.name = ''
-  createVisible.value = true
-}
-
+const nameOptions = ref<string[]>([])
+const query = reactive({ name: [] as string[], status: [] as string[], page: 1, page_size: 20 })
 const listQuery = useListQuery(query, load)
 
-let loadSequence = 0
+const formVisible = ref(false)
+const formMode = ref<RoleFormMode>('create')
+const formRole = ref<RoleItem | null>(null)
 
+let sequence = 0
 async function load() {
   void listQuery.commit()
   listQuery.captureApplied()
-  const sequence = ++loadSequence
+  const current = ++sequence
   loading.value = true
   loadError.value = ''
-  const filtered = Object.entries(query).some(([key, value]) =>
-    !['page', 'page_size'].includes(key) && (Array.isArray(value) ? value.length > 0 : Boolean(value)),
-  )
+  const filtered = query.name.length > 0 || query.status.length > 0
   try {
     const page = await listRoles({
       page: query.page,
       page_size: query.page_size,
-      status: query.status || undefined,
+      name: query.name.length ? query.name : undefined,
+      status: query.status.length ? query.status : undefined,
     })
-    if (sequence !== loadSequence) return
+    if (current !== sequence) return
     roles.value = page.items
     total.value = page.total
     resultFiltered.value = filtered
   } catch (error) {
-    if (sequence !== loadSequence) return
-    loadError.value = errorMessage(error, '加载角色失败')
+    if (current !== sequence) return
+    loadError.value = errorMessage(error, '暂时无法加载角色，请稍后重试。')
   } finally {
-    if (sequence === loadSequence) loading.value = false
+    if (current === sequence) loading.value = false
   }
 }
 
-function onResetFilters() {
-  query.status = []
-  onSearch()
+async function loadNameOptions() {
+  try {
+    nameOptions.value = (await listAllRoles()).map(role => role.name)
+  } catch {
+    /* 候选取不到不影响列表，筛选框退化为自由输入。 */
+  }
 }
 
 function onSearch() {
@@ -85,111 +77,108 @@ function onSearch() {
   void load()
 }
 
-const createError = ref('')
-const editError = ref('')
-watch(createVisible, (open) => { if (open) { createError.value = ''; void createValidation.validate({}) } })
-watch(editVisible, (open) => { if (open) { editError.value = ''; void editValidation.validate({}) } })
+function onResetFilters() {
+  query.name = []
+  query.status = []
+  onSearch()
+}
 
-async function onCreate() {
-  if (creating.value) return
-  createError.value = ''
-  if (!await createValidation.validate({code: createForm.code.trim() ? '' : '请填写角色编码', name: createForm.name.trim() ? '' : '请填写角色名称'})) return
-  creating.value = true
-  try {
-    await createRole({ code: createForm.code, name: createForm.name })
-    ElMessage.success('角色已创建')
-    createVisible.value = false
-    createForm.code = ''
-    createForm.name = ''
+function openDetail(role: RoleItem, tab: 'grants' | 'members' = 'grants') {
+  void router.push({ name: 'system-role-detail', params: { roleId: role.id }, query: tab === 'members' ? { tab } : {} })
+}
+
+function openForm(mode: RoleFormMode, role: RoleItem | null = null) {
+  formMode.value = mode
+  formRole.value = role
+  formVisible.value = true
+}
+
+async function onFormSaved(saved: RoleItem, mode: RoleFormMode) {
+  if (mode === 'edit') {
+    ElMessage.success('角色信息已保存')
     await load()
-  } catch (error) {
-    createError.value = errorMessage(error, '创建失败，请检查后重试')
-  } finally {
-    creating.value = false
-  }
-}
-
-function openEdit(role: RoleItem) {
-  editing.value = role
-  editForm.name = role.name
-  editVisible.value = true
-}
-
-async function onEdit() {
-  if (editingSaving.value) return
-  editError.value = ''
-  if (!await editValidation.validate({ name: editForm.name.trim() ? '' : '请填写角色名称' })) return
-  if (!editing.value) {
     return
   }
-  editingSaving.value = true
-  try {
-    await updateRole(editing.value.id, { name: editForm.name, version: editing.value.version })
-    ElMessage.success('已保存')
-    editVisible.value = false
-    await load()
-  } catch (error) {
-    if (isApiError(error) && error.status === 409) {
-      editError.value = '数据已被他人修改，请保留需要的内容，关闭后重新打开最新记录再编辑。'
-      await load()
-    } else {
-      editError.value = errorMessage(error, '保存失败，请检查后重试')
-    }
-  } finally {
-    editingSaving.value = false
-  }
+  // 新建或复制后直接进入权限设置，顺着「设置权限 → 分配成员」往下走。
+  void loadNameOptions()
+  void router.push({ name: 'system-role-detail', params: { roleId: saved.id }, query: { created: mode } })
 }
 
-async function toggleStatus(role: RoleItem) {
-  if (role.is_builtin) {
-    ElMessage.warning('不能停用内置角色')
-    return
-  }
+async function onToggleStatus(role: RoleItem) {
   const next = role.status === 'active' ? 'disabled' : 'active'
-  const confirmed = await ElMessageBox.confirm(`确认${next === 'disabled' ? '停用' : '启用'}角色 ${role.name} ？`, '请确认', {
-    type: 'warning',
-  }).then(() => true, () => false)
+  const members = role.member_count ?? 0
+  const confirmed = await ElMessageBox.confirm(
+    next === 'disabled'
+      ? `停用后，${members} 位成员会立即失去这个角色带来的权限（其他角色不受影响），可随时重新启用。`
+      : '启用后，成员会重新获得这个角色的权限。',
+    `${next === 'disabled' ? '停用' : '启用'}「${role.name}」`,
+    { type: 'warning', confirmButtonText: next === 'disabled' ? '停用' : '启用', cancelButtonText: '取消' },
+  ).then(() => true, () => false)
   if (!confirmed) return
   try {
     await updateRole(role.id, { status: next, version: role.version })
-    ElMessage.success('状态已更新')
+    ElMessage.success(next === 'disabled' ? '角色已停用' : '角色已启用')
     await load()
   } catch (error) {
-    ElMessage.error(errorMessage(error, '更新失败'))
+    ElMessage.error(errorMessage(error, '操作失败'))
   }
+}
+
+function onMore(command: string, role: RoleItem) {
+  if (command === 'edit') openForm('edit', role)
+  else if (command === 'copy') openForm('copy', role)
+  else if (command === 'toggle') void onToggleStatus(role)
+}
+
+function moduleSummary(role: RoleItem): string {
+  const counts = role.grant_counts
+  const opened = (counts?.read ?? 0) + (counts?.export ?? 0) + (counts?.full ?? 0)
+  if (!opened) return ''
+  return counts?.full ? `${opened} 个模块，其中 ${counts.full} 个可管理` : `${opened} 个模块`
 }
 
 onMounted(() => {
   void load()
+  void loadNameOptions()
 })
 </script>
 
 <template>
   <div>
     <ListPage
-      title="角色管理"
-      hint="维护团队角色，在权限分配中设置可访问的模块。"
-      :total="total"
-      :page="query.page"
-      :page-size="query.page_size"
+      v-model:page="query.page"
+      v-model:page-size="query.page_size"
+      title="角色与权限"
+      hint="角色决定一个人能进入哪些模块、能做什么。一个人可以有多个角色，权限取最高的那一档。"
       :loading="loading"
       :error="loadError"
+      :total="total"
       @retry="load"
-      @update:page="query.page = $event"
-      @update:page-size="query.page_size = $event"
       @change="load"
     >
+      <template #summary>
+        <ol
+          class="role-steps"
+          aria-label="操作步骤"
+        >
+          <li><strong>1</strong><span>新增角色，写清它负责什么</span></li>
+          <li><strong>2</strong><span>点「权限设置」，勾选它能用的模块</span></li>
+          <li><strong>3</strong><span>点「成员」，把角色分给同事</span></li>
+        </ol>
+      </template>
+
       <template
-        v-if="auth.canFull('system.roles')"
+        v-if="canManageRoles"
         #actions
       >
         <el-button
           type="primary"
-          @click="openCreate"
+          @click="openForm('create')"
         >
           新增角色
         </el-button>
       </template>
+
       <template #filters>
         <FilterBar
           :query="query"
@@ -197,6 +186,13 @@ onMounted(() => {
           @search="onSearch"
           @reset="onResetFilters"
         >
+          <el-form-item label="角色名称">
+            <FilterSelect
+              v-model="query.name"
+              :options="nameOptions"
+              placeholder="输入或选择角色名称"
+            />
+          </el-form-item>
           <el-form-item label="状态">
             <el-select
               v-model="query.status"
@@ -205,7 +201,6 @@ onMounted(() => {
               collapse-tags-tooltip
               clearable
               placeholder="全部"
-              @change="onSearch"
             >
               <el-option
                 label="启用"
@@ -219,6 +214,7 @@ onMounted(() => {
           </el-form-item>
         </FilterBar>
       </template>
+
       <el-table
         v-loading="loading"
         class="data-table"
@@ -233,247 +229,164 @@ onMounted(() => {
           />
         </template>
         <el-table-column
-          prop="code"
-          label="编码"
-          width="200"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          prop="name"
-          label="名称"
+          label="角色名称"
           min-width="200"
+        >
+          <template #default="{ row }">
+            <span class="role-name">
+              <el-button
+                link
+                type="primary"
+                class="role-name__link"
+                @click="openDetail(row)"
+              >
+                {{ row.name }}
+              </el-button>
+              <el-tag
+                v-if="row.is_builtin"
+                size="small"
+                type="warning"
+                effect="plain"
+              >
+                内置
+              </el-tag>
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="职责说明"
+          min-width="260"
           show-overflow-tooltip
-        />
+        >
+          <template #default="{ row }">
+            <span :class="{ muted: !row.description }">{{ row.description || '未填写' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="权限"
+          min-width="190"
+        >
+          <template #default="{ row }">
+            <span v-if="moduleSummary(row)">{{ moduleSummary(row) }}</span>
+            <span
+              v-else
+              class="warn"
+            >还没有设置权限</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="成员"
+          width="90"
+          align="right"
+        >
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              class="tabular"
+              :aria-label="`${row.name}的成员：${row.member_count ?? 0} 人`"
+              @click="openDetail(row, 'members')"
+            >
+              {{ row.member_count ?? 0 }} 人
+            </el-button>
+          </template>
+        </el-table-column>
         <el-table-column
           label="状态"
-          width="100"
+          width="90"
         >
           <template #default="{ row }">
             <el-tag
-              :type="row.status === 'active' ? 'success' : 'info'"
               size="small"
+              :type="row.status === 'active' ? 'success' : 'info'"
             >
               {{ row.status === 'active' ? '启用' : '停用' }}
             </el-tag>
           </template>
         </el-table-column>
         <el-table-column
-          label="类型"
-          width="90"
-        >
-          <template #default="{ row }">
-            <el-tag
-              v-if="row.is_builtin"
-              size="small"
-              type="warning"
-              effect="plain"
-            >
-              内置
-            </el-tag>
-            <span
-              v-else
-              class="muted"
-            >自定义</span>
-          </template>
-        </el-table-column>
-        <el-table-column
           label="操作"
-          width="260"
+          width="230"
+          fixed="right"
         >
           <template #default="{ row }">
             <el-button
-              v-if="auth.canFull('system.roles')"
               link
               type="primary"
-              @click="openEdit(row)"
+              @click="openDetail(row)"
             >
-              编辑
+              权限设置
             </el-button>
             <el-button
-              v-if="auth.canFull('system.roles') && !row.is_builtin"
               link
               type="primary"
-              @click="toggleStatus(row)"
+              @click="openDetail(row, 'members')"
             >
-              {{ row.status === 'active' ? '停用' : '启用' }}
+              成员
             </el-button>
-            <el-button
-              v-if="auth.canRead('system.permissions')"
-              link
-              type="primary"
-              @click="router.push({ name: 'system-role-grants', params: { roleId: row.id } })"
+            <el-dropdown
+              v-if="canManageRoles"
+              class="ops-more"
+              trigger="click"
+              @command="(command: string) => onMore(command, row)"
             >
-              配置权限
-            </el-button>
+              <el-button
+                link
+                type="primary"
+              >
+                更多<el-icon class="el-icon--right">
+                  <ArrowDown />
+                </el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="edit">
+                    编辑名称和说明
+                  </el-dropdown-item>
+                  <el-dropdown-item
+                    command="copy"
+                    :disabled="!canGrant"
+                  >
+                    复制为新角色
+                  </el-dropdown-item>
+                  <el-dropdown-item
+                    v-if="!row.is_builtin"
+                    command="toggle"
+                    divided
+                  >
+                    {{ row.status === 'active' ? '停用' : '启用' }}
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </template>
         </el-table-column>
       </el-table>
     </ListPage>
 
-    <el-dialog
-      v-model="createVisible"
-      class="editor-overlay"
-      :before-close="createGuard.beforeClose"
-      :close-on-click-modal="!creating"
-      :close-on-press-escape="!creating"
-      :show-close="!creating"
-      title="新增角色"
-      width="420px"
-    >
-      <p class="editor-help">
-        角色编码创建后不可修改，名称可随时调整。
-      </p>
-      <el-form
-        ref="createFormRef"
-        novalidate
-        :disabled="creating"
-        label-position="top"
-      >
-        <el-alert
-          v-if="createError"
-          :title="createError"
-          type="error"
-          show-icon
-          :closable="false"
-          class="form-submit-error"
-        />
-        <el-form-item
-          :error="createValidation.errors.code"
-          label="编码"
-          required
-        >
-          <el-input
-            v-model="createForm.code"
-            :aria-invalid="Boolean(createValidation.errors.code)"
-            aria-describedby="createForm-code-error"
-          />
-          <template #error>
-            <p
-              v-if="createValidation.errors.code"
-              id="createForm-code-error"
-              class="field-error"
-              role="alert"
-            >
-              {{ createValidation.errors.code }}
-            </p>
-          </template>
-        </el-form-item>
-        <el-form-item
-          :error="createValidation.errors.name"
-          label="名称"
-          required
-        >
-          <el-input
-            v-model="createForm.name"
-            :aria-invalid="Boolean(createValidation.errors.name)"
-            aria-describedby="createForm-name-error"
-          />
-          <template #error>
-            <p
-              v-if="createValidation.errors.name"
-              id="createForm-name-error"
-              class="field-error"
-              role="alert"
-            >
-              {{ createValidation.errors.name }}
-            </p>
-          </template>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <span
-          v-if="createGuard.dirty.value"
-          class="editor-dirty"
-          role="status"
-        >有未保存的修改</span>
-        <el-button
-          :disabled="creating"
-          @click="createGuard.close"
-        >
-          取消
-        </el-button>
-        <el-button
-          type="primary"
-          :loading="creating"
-          @click="onCreate"
-        >
-          创建
-        </el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog
-      v-model="editVisible"
-      class="editor-overlay"
-      :before-close="editGuard.beforeClose"
-      :close-on-click-modal="!editingSaving"
-      :close-on-press-escape="!editingSaving"
-      :show-close="!editingSaving"
-      title="编辑角色"
-      width="420px"
-    >
-      <el-form
-        ref="editFormRef"
-        novalidate
-        :disabled="editingSaving"
-        label-position="top"
-      >
-        <el-alert
-          v-if="editError"
-          :title="editError"
-          type="error"
-          show-icon
-          :closable="false"
-          class="form-submit-error"
-        />
-        <el-form-item
-          :error="editValidation.errors.name"
-          label="名称"
-          required
-        >
-          <el-input
-            v-model="editForm.name"
-            :aria-invalid="Boolean(editValidation.errors.name)"
-            aria-describedby="editForm-name-error"
-          />
-          <template #error>
-            <p
-              v-if="editValidation.errors.name"
-              id="editForm-name-error"
-              class="field-error"
-              role="alert"
-            >
-              {{ editValidation.errors.name }}
-            </p>
-          </template>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <span
-          v-if="editGuard.dirty.value"
-          class="editor-dirty"
-          role="status"
-        >有未保存的修改</span>
-        <el-button
-          :disabled="editingSaving"
-          @click="editGuard.close"
-        >
-          取消
-        </el-button>
-        <el-button
-          type="primary"
-          :loading="editingSaving"
-          @click="onEdit"
-        >
-          保存
-        </el-button>
-      </template>
-    </el-dialog>
+    <RoleFormDialog
+      v-model="formVisible"
+      :mode="formMode"
+      :role="formRole"
+      @saved="onFormSaved"
+    />
   </div>
 </template>
 
 <style scoped>
-.muted {
-  color: var(--zt-ink-500);
+.role-steps {
+  display: flex; flex-wrap: wrap; gap: 8px 32px; margin: 0 0 12px; padding: 12px 16px; list-style: none;
+  border: 1px solid #d6e6fb; border-radius: var(--zt-radius); background: #f5f9ff;
 }
+.role-steps li { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--zt-ink-700); }
+.role-steps strong {
+  display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--zt-blue-600); color: #fff; font-size: 12px; font-weight: 600;
+}
+.role-name { display: inline-flex; align-items: center; gap: 6px; }
+.role-name__link { font-weight: 500; }
+.muted { color: var(--zt-ink-500); }
+.warn { color: #b26a00; font-size: 13px; }
+.tabular { font-variant-numeric: tabular-nums; }
+.ops-more { margin-left: 12px; vertical-align: middle; }
 </style>

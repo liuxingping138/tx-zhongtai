@@ -211,7 +211,9 @@ def build_endpoints() -> list[Endpoint]:
     return endpoints
 
 
-READ_ACTIONS = {"list", "read", "export", "resolve"}
+READ_ACTIONS = {"list", "read", "resolve"}
+# 导出单列一档（2026-09-23）：READ 只能看，EXPORT 起才能导出。
+EXPORT_ACTIONS = {"export"}
 WRITE_ACTIONS = {"create", "update", "import"}
 
 
@@ -240,7 +242,9 @@ class ProbeAccount:
             # purge 额外要求内置 superadmin 角色，探测账号都不是。
             return "denied"
         if endpoint.action in READ_ACTIONS:
-            return "allowed" if level in {"READ", "FULL"} else "denied"
+            return "allowed" if level in {"READ", "EXPORT", "FULL"} else "denied"
+        if endpoint.action in EXPORT_ACTIONS:
+            return "allowed" if level in {"EXPORT", "FULL"} else "denied"
         return "allowed" if level == "FULL" else "denied"
 
 
