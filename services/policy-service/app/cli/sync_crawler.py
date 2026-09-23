@@ -21,19 +21,17 @@ import argparse
 import asyncio
 import json
 import logging
-import time
-from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
-from functools import wraps
 from typing import Any, cast
 
-import pymysql
 from platform_common.clock import BEIJING
 from sqlalchemy import CursorResult, delete, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.crawler_source import mysql_connect as _mysql_connect
+from app.core.crawler_source import retry_mysql_read as _retry_mysql_read
 from app.core.database import SessionLocal, engine
 from app.domain.crawler_identity import site_key
 from app.domain.models import CrawlerDailyStat, CrawlerSyncRun, CrawlerTask
@@ -47,46 +45,12 @@ settings = get_settings()
 _WATERMARK_OVERLAP_HOURS = 2
 
 
-def _retry_mysql_read[**P, R](operation: Callable[P, R]) -> Callable[P, R]:
-    """只重试瞬时连接错误；每次重新连接，认证和 SQL 错误立即失败。"""
-
-    @wraps(operation)
-    def read(*args: P.args, **kwargs: P.kwargs) -> R:
-        for attempt in range(1, 4):
-            try:
-                return operation(*args, **kwargs)
-            except pymysql.err.OperationalError as exc:
-                if not exc.args or exc.args[0] not in {2002, 2003, 2006, 2013, 2055} or attempt == 3:
-                    raise
-                logger.warning("source_read_retry operation=%s attempt=%s", operation.__name__, attempt)
-                time.sleep(2 ** (attempt - 1))
-        raise AssertionError("unreachable")
-
-    return read
-
-
 def _text_value(value: Any, limit: int) -> str:
     """规则 JSON 里同一个键可能是字符串也可能是数字（如 author），统一成字符串。"""
 
     if value is None:
         return ""
     return str(value).strip()[:limit]
-
-
-def _mysql_connect() -> pymysql.connections.Connection:
-    if not settings.crawler_mysql_host:
-        raise RuntimeError("未配置 POLICY_CRAWLER_MYSQL_HOST，无法同步爬虫数据")
-    return pymysql.connect(
-        host=settings.crawler_mysql_host,
-        port=settings.crawler_mysql_port,
-        user=settings.crawler_mysql_user,
-        password=settings.crawler_mysql_password,
-        database=settings.crawler_mysql_db,
-        charset="utf8mb4",
-        cursorclass=pymysql.cursors.DictCursor,
-        connect_timeout=30,
-        read_timeout=600,
-    )
 
 
 @_retry_mysql_read

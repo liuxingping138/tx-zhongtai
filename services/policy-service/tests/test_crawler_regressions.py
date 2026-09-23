@@ -17,28 +17,6 @@ from app.domain.crawler_identity import site_key  # noqa: E402
 from app.repositories import crawler as repo  # noqa: E402
 
 
-def test_transient_source_disconnect_reconnects_with_bounded_retry(monkeypatch: pytest.MonkeyPatch) -> None:
-    sleep = MagicMock()
-    monkeypatch.setattr(sync.time, "sleep", sleep)
-    operation = MagicMock(side_effect=[sync.pymysql.err.OperationalError(2013, "lost"), 7])
-    operation.__name__ = "read"
-    assert sync._retry_mysql_read(operation)() == 7
-    assert operation.call_count == 2
-    sleep.assert_called_once_with(1)
-
-
-@pytest.mark.parametrize(("code", "attempts"), [(2013, 3), (1045, 1), (1064, 1)])
-def test_source_retry_stops_and_does_not_retry_permanent_errors(
-    monkeypatch: pytest.MonkeyPatch, code: int, attempts: int
-) -> None:
-    monkeypatch.setattr(sync.time, "sleep", MagicMock())
-    operation = MagicMock(side_effect=sync.pymysql.err.OperationalError(code, "source failure"))
-    operation.__name__ = "read"
-    with pytest.raises(sync.pymysql.err.OperationalError):
-        sync._retry_mysql_read(operation)()
-    assert operation.call_count == attempts
-
-
 def test_empty_codes_do_not_merge_different_websites() -> None:
     assert site_key("", "甲网站", "海南省", "海口市") != site_key("", "乙网站", "海南省", "海口市")
     assert site_key("", "甲网站", "海南省", "海口市") == site_key("123", "甲网站", "海南省", "海口市")

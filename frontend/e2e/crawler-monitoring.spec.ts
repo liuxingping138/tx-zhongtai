@@ -29,7 +29,7 @@ test('爬虫监测：概览、筛选、翻页和任务详情', async ({ page }) 
   await page.getByRole('button', { name: '登录' }).click()
 
   await expect(page.getByRole('heading', { name: '爬虫监测' })).toBeVisible({ timeout: 20_000 })
-  await expect(page.getByRole('menuitem', { name: '爬虫监测' })).toBeVisible()
+  await expect(page.getByRole('menuitem', { name: '爬虫监测', exact: true })).toBeVisible()
   await expect(page.getByText('昨日采集', { exact: true })).toBeVisible()
   await expect(page.getByText('异常任务', { exact: true })).toBeVisible()
   await expect(page.getByText('健康占比', { exact: true })).toBeVisible()

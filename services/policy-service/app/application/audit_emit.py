@@ -29,6 +29,12 @@ _EVENT_META = {
         "crawler_task",
         "导出爬虫监测",
     ),
+    "policy.crawler_monitoring_v2.exported": (
+        "policy.crawler_monitoring_v2",
+        "export",
+        "crawler_site",
+        "导出爬虫监测 v2",
+    ),
 }
 
 _emitter = AuditEmitter(

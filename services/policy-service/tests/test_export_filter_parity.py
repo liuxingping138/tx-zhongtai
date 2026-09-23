@@ -16,7 +16,7 @@ import pytest  # noqa: E402
 from fastapi.routing import APIRoute  # noqa: E402
 
 from app.main import app  # noqa: E402
-from app.repositories import base_tags, crawler, interpretations, sources  # noqa: E402
+from app.repositories import base_tags, crawler, crawler_v2, interpretations, sources  # noqa: E402
 
 PAGING = {"page", "page_size"}
 
@@ -25,11 +25,13 @@ TABLES = [
     ("/api/v1/policy/base-tags", base_tags),
     ("/api/v1/policy/interpretations", interpretations),
     ("/api/v1/policy/crawler-monitoring/tasks", crawler),
+    ("/api/v1/policy/crawler-monitoring-v2/sites", crawler_v2),
 ]
 
 # 爬虫监测除了模糊匹配的列，还有状态精确匹配和停更天数下限，它们不在 FILTER_COLUMNS 里。
 EXTRA_FILTERS = {
     "/api/v1/policy/crawler-monitoring/tasks": {"health_status", "stale_days_min", "abnormal_only"},
+    "/api/v1/policy/crawler-monitoring-v2/sites": {"status"},
 }
 
 

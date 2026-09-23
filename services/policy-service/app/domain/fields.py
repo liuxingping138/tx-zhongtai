@@ -64,6 +64,23 @@ CRAWLER_TASK_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec("source_url", "栏目源链接"),
 )
 
+CRAWLER_SITE_STATUS_LABELS: dict[str, str] = {
+    "normal": "正常",
+    "watch": "关注",
+    "stale": "停更",
+}
+
+CRAWLER_SITE_COLUMNS: tuple[ColumnSpec, ...] = (
+    ColumnSpec("site_name", "网站名称", searchable=True),
+    ColumnSpec("province_name", "省份", searchable=True),
+    ColumnSpec("city_name", "地市", searchable=True),
+    ColumnSpec("total_rows", "数据总量"),
+    ColumnSpec("last_created_at", "最新入库时间"),
+    ColumnSpec("last_published_date", "最近发布时间"),
+    ColumnSpec("stale_days", "停更天数"),
+    ColumnSpec("status_label", "状态"),
+)
+
 INTERPRETATION_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec("record_id", "自增或雪花算法"),
     ColumnSpec("tenant_id", "租户ID"),
@@ -89,5 +106,3 @@ INTERPRETATION_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec("is_new_scenario", "是否新增场景"),
     ColumnSpec("new_scenario_level", "新增场景级别"),
 )
-
-

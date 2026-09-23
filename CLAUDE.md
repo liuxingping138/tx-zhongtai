@@ -9,7 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 当前进度：公共框架已到 P6（账号/会话/RBAC、Outbox、审计、隔离验收、备份恢复、OpenAPI），
 政策三张表（信源、基础标签、解读）与码表三张表（政策类型、行业场景、省市区编码）已接入，
-爬虫监测已接入（只读统计页，数据来自外部爬虫库的按天聚合）。
+爬虫监测已接入（只读统计页，数据来自外部爬虫库的按天聚合）；另有精简版「爬虫监测 v2」与 v1 并存，
+只读采集总表、按网站统计，核对无误后计划下线 v1。
 **客户、招投标仅有占位目录**，未开发——不要为它们提前暴露无功能入口或做过度抽象。
 
 ## 常用命令
@@ -24,6 +25,7 @@ make test-unit        # 后端 pytest + 前端 vitest
 make smoke            # 经网关冒烟
 make export-openapi   # 从运行中服务导出 OpenAPI
 make crawler-sync     # 按成功入库水位增量重算受影响日期
+make crawler-v2-sync  # v2 日常增量；首次先 make crawler-v2-backfill 建立水位
 ```
 
 运维类：`make iam-session-cleanup`（清理失效会话/令牌）、`make audit-cleanup`（清理到期审计）、
@@ -134,6 +136,17 @@ policy 和 codebook 的基础设施代码高度重复，已统一下沉。**新�
 - 从旧编码口径升级到名称口径时，需要一次历史重算；普通 UI 发布和服务重启不需要。
   迁移前备份，使用新镜像迁移与回填；中断后用同一范围加 `--skip-existing` 续跑。
   详细步骤和真实增量验证见 `docs/配置说明.md` 与 `docs/reviews/crawler-monitoring-2026-09-23-release/README.md`
+
+### 爬虫监测 v2：只用采集总表，按网站统计
+
+`app/cli/sync_crawler_v2.py` 只读 `csys_policy_info_source_all`，不读规则表。网站身份是
+「网站名称 + 省份 + 地市」的**原始值**（用户确认不做别名归一），停更天数按最新入库日期算。
+本地三张表：`policy_crawler_site_daily`（网站×采集日，按天整体替换）、`policy_crawler_sites`
+（页面唯一读取的快照）、`policy_crawler_v2_sync_runs`（水位与状态）。表、水位、锁、菜单权限都与 v1 独立。
+
+- 没有成功回填过时日常同步直接报错，不用短窗口算出偏小的总量
+- 同步持有 advisory lock（键见 `repositories/crawler_v2.py`），概览据 `pg_locks` 把停在 running 的批次识别为中断
+- ShardingSphere 不支持 `REGEXP` 和多列 `COUNT(DISTINCT)`，写源库 SQL 时用 `LIKE`、单列聚合
 
 ### 审计走 Outbox
 
