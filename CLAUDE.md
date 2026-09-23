@@ -196,6 +196,9 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
 `GroupedFields` / `UserAccountMenu`，基础视觉用 `theme.css`。
 
 - 筛选项：`v-bind="filters.bind('字段')"`（`useFilterOptions`），不要自己再维护一份 options
+- 筛选一律多选：前端 query 字段默认 `[]`，`http` 按重复参数（`a=1&a=2`）提交；后端参数写
+  `list[str] | None = Query(default=None)`，仓储用 `platform_common.filters` 的 `ilike_any`（模糊，同字段「或」）
+  或 `in_any`（枚举精确）。只写 `str | None` 会让多选只剩最后一个值生效
 - Excel 下载：`downloadFile(路径, 中文文件名, filtersForExport(listQuery.applied))`，
   **不要用裸 fetch**——会绕开 401 自动续期和统一中文错误提示
 - 导出传 `applied` 而非 `query`：`query` 是用户还没点查询的输入

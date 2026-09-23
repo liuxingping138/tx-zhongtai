@@ -31,7 +31,7 @@ export function downloadBlob(blob: Blob, filename: string): void {
 export async function downloadFile(
   path: string,
   filename: string,
-  params?: Record<string, string | number | undefined>,
+  params?: Record<string, string | string[] | number | undefined>,
   timeout = 600_000,
 ): Promise<void> {
   const response = (await http.get(path, {
@@ -44,12 +44,13 @@ export async function downloadFile(
 
 /** 去掉空筛选项，避免把 `?site_name=` 这样的空条件发给后端。 */
 function cleanParams(
-  params?: Record<string, string | number | undefined>,
-): Record<string, string | number> | undefined {
+  params?: Record<string, string | string[] | number | undefined>,
+): Record<string, string | string[] | number> | undefined {
   if (!params) return undefined
-  const out: Record<string, string | number> = {}
+  const out: Record<string, string | string[] | number> = {}
   for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== '') out[key] = value
+    if (value === undefined || value === '' || (Array.isArray(value) && value.length === 0)) continue
+    out[key] = value
   }
   return out
 }

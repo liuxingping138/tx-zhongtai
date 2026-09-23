@@ -8,7 +8,7 @@ from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
 from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionConflictError
 from platform_common.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async
-from platform_common.filters import Filters
+from platform_common.filters import Filters, FilterValue
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.audit_emit import enqueue_event
@@ -37,11 +37,11 @@ def _values(data: dict[str, str]) -> dict[str, str]:
 async def list_base_tags(
     session: AsyncSession,
     *,
-    policy_name: str | None,
-    province_name: str | None,
-    policy_types: str | None,
-    is_penetrate: str | None,
-    need_interpret: str | None,
+    policy_name: FilterValue,
+    province_name: FilterValue,
+    policy_types: FilterValue,
+    is_penetrate: FilterValue,
+    need_interpret: FilterValue,
     page: int,
     page_size: int,
 ) -> dict[str, Any]:

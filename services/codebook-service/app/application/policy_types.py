@@ -7,7 +7,7 @@ from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
 from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionConflictError
 from platform_common.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async
-from platform_common.filters import Filters
+from platform_common.filters import Filters, FilterValue
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.audit_emit import enqueue_event
@@ -45,7 +45,9 @@ def _apply_fields(row: PolicyType, data: dict[str, str]) -> dict[str, Any]:
     return changes
 
 
-async def list_policy_types(session: AsyncSession, *, keyword: str | None, page: int, page_size: int) -> dict[str, Any]:
+async def list_policy_types(
+    session: AsyncSession, *, keyword: FilterValue, page: int, page_size: int
+) -> dict[str, Any]:
     items, total = await repo.list_items(session, filters={"keyword": keyword}, page=page, page_size=page_size)
     return {"items": [_to_out(item) for item in items], "total": total, "page": page, "page_size": page_size}
 

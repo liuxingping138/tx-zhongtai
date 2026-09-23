@@ -59,10 +59,10 @@ const resultFiltered = ref(false)
 const items = ref<InterpretationItem[]>([])
 const total = ref(0)
 const query = reactive({
-  policy_title: '',
-  industry_scenario_code: '',
-  industry_l1: '',
-  opportunity_type: '',
+  policy_title: [] as string[],
+  industry_scenario_code: [] as string[],
+  industry_l1: [] as string[],
+  opportunity_type: [] as string[],
   page: 1,
   page_size: 20,
 })
@@ -138,10 +138,10 @@ async function load() {
 }
 
 function onResetFilters() {
-  query.policy_title = ''
-  query.industry_scenario_code = ''
-  query.industry_l1 = ''
-  query.opportunity_type = ''
+  query.policy_title = []
+  query.industry_scenario_code = []
+  query.industry_l1 = []
+  query.opportunity_type = []
   onSearch()
 }
 

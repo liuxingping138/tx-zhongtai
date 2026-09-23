@@ -8,6 +8,7 @@ from fastapi.responses import Response
 from platform_common.actors import Actor
 from platform_common.enums import SecurityClass
 from platform_common.errors import ApiError, ErrorCode
+from platform_common.filters import FilterValue
 from platform_common.http_utils import success_json
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,12 +21,12 @@ RESOURCE = "policy.crawler_monitoring"
 
 
 def _filters(
-    province_name: str | None,
-    city_name: str | None,
-    site_name: str | None,
-    site_code: str | None,
-    tag: str | None,
-    health_status: str | None,
+    province_name: FilterValue,
+    city_name: FilterValue,
+    site_name: FilterValue,
+    site_code: FilterValue,
+    tag: FilterValue,
+    health_status: FilterValue,
     stale_days_min: int | None,
     abnormal_only: bool,
 ) -> dict[str, object]:
@@ -54,12 +55,12 @@ async def get_overview(
 @router.get("/tasks")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def list_tasks(
-    province_name: str | None = Query(default=None),
-    city_name: str | None = Query(default=None),
-    site_name: str | None = Query(default=None),
-    site_code: str | None = Query(default=None),
-    tag: str | None = Query(default=None),
-    health_status: Literal["normal", "watch", "broken", "never"] | None = Query(default=None),
+    province_name: list[str] | None = Query(default=None),
+    city_name: list[str] | None = Query(default=None),
+    site_name: list[str] | None = Query(default=None),
+    site_code: list[str] | None = Query(default=None),
+    tag: list[str] | None = Query(default=None),
+    health_status: list[Literal["normal", "watch", "broken", "never"]] | None = Query(default=None),
     stale_days_min: int | None = Query(default=None, ge=0),
     abnormal_only: bool = Query(default=False),
     page: int = Query(default=1, ge=1),
@@ -121,12 +122,12 @@ async def get_task_detail(
 @router.get("/tasks/export")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def export_tasks(
-    province_name: str | None = Query(default=None),
-    city_name: str | None = Query(default=None),
-    site_name: str | None = Query(default=None),
-    site_code: str | None = Query(default=None),
-    tag: str | None = Query(default=None),
-    health_status: Literal["normal", "watch", "broken", "never"] | None = Query(default=None),
+    province_name: list[str] | None = Query(default=None),
+    city_name: list[str] | None = Query(default=None),
+    site_name: list[str] | None = Query(default=None),
+    site_code: list[str] | None = Query(default=None),
+    tag: list[str] | None = Query(default=None),
+    health_status: list[Literal["normal", "watch", "broken", "never"]] | None = Query(default=None),
     stale_days_min: int | None = Query(default=None, ge=0),
     abnormal_only: bool = Query(default=False),
     session: AsyncSession = Depends(get_db_session),

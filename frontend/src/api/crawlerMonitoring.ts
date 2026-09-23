@@ -1,5 +1,5 @@
 import { http, request } from './http'
-import type { Page } from './types'
+import type { FilterParam, Page } from './types'
 
 export type HealthStatus = 'normal' | 'watch' | 'broken' | 'never'
 
@@ -44,12 +44,12 @@ export interface CrawlerOverview {
 }
 
 export interface CrawlerTaskFilters {
-  province_name?: string
-  city_name?: string
-  site_name?: string
-  site_code?: string
-  tag?: string
-  health_status?: string
+  province_name?: FilterParam
+  city_name?: FilterParam
+  site_name?: FilterParam
+  site_code?: FilterParam
+  tag?: FilterParam
+  health_status?: FilterParam
   stale_days_min?: number
   abnormal_only?: boolean
 }

@@ -19,6 +19,8 @@ export const http = axios.create({
   baseURL: '/api/v1',
   timeout: 30_000,
   withCredentials: true,
+  // 多选筛选按重复参数提交（a=1&a=2），后端 FastAPI 的 list 参数只认这种写法，不认 a[]=1。
+  paramsSerializer: { indexes: null },
 })
 
 http.interceptors.request.use((config) => {

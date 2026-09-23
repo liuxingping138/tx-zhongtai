@@ -40,11 +40,11 @@ const resultFiltered = ref(false)
 const items = ref<SourceItem[]>([])
 const total = ref(0)
 const query = reactive({
-  site_name: '',
-  province_name: '',
-  city_name: '',
-  tag: '',
-  crawl_priority: '',
+  site_name: [] as string[],
+  province_name: [] as string[],
+  city_name: [] as string[],
+  tag: [] as string[],
+  crawl_priority: [] as string[],
   page: 1,
   page_size: 20,
 })
@@ -126,11 +126,11 @@ async function load() {
 }
 
 function onResetFilters() {
-  query.site_name = ''
-  query.province_name = ''
-  query.city_name = ''
-  query.tag = ''
-  query.crawl_priority = ''
+  query.site_name = []
+  query.province_name = []
+  query.city_name = []
+  query.tag = []
+  query.crawl_priority = []
   onSearch()
 }
 

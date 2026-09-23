@@ -1,6 +1,6 @@
 import { postExcelImport, type ImportResult, type ImportStage } from './excelImport'
 import { http, request } from './http'
-import type { Page } from './types'
+import type { FilterParam, Page } from './types'
 
 export interface SourceItem {
   id: string
@@ -85,12 +85,12 @@ export interface InterpretationItem {
 export type { ImportResult } from './excelImport'
 
 export function listSources(params: {
-  site_name?: string
-  province_name?: string
-  city_name?: string
-  tag?: string
-  site_code?: string
-  crawl_priority?: string
+  site_name?: FilterParam
+  province_name?: FilterParam
+  city_name?: FilterParam
+  tag?: FilterParam
+  site_code?: FilterParam
+  crawl_priority?: FilterParam
   page?: number
   page_size?: number
 }): Promise<Page<SourceItem>> {
@@ -117,11 +117,11 @@ export function importSources(
 }
 
 export function listBaseTags(params: {
-  policy_name?: string
-  province_name?: string
-  policy_types?: string
-  is_penetrate?: string
-  need_interpret?: string
+  policy_name?: FilterParam
+  province_name?: FilterParam
+  policy_types?: FilterParam
+  is_penetrate?: FilterParam
+  need_interpret?: FilterParam
   page?: number
   page_size?: number
 }): Promise<Page<BaseTagItem>> {
@@ -144,10 +144,10 @@ export function importBaseTags(
 }
 
 export function listInterpretations(params: {
-  policy_title?: string
-  industry_scenario_code?: string
-  industry_l1?: string
-  opportunity_type?: string
+  policy_title?: FilterParam
+  industry_scenario_code?: FilterParam
+  industry_l1?: FilterParam
+  opportunity_type?: FilterParam
   page?: number
   page_size?: number
 }): Promise<Page<InterpretationItem>> {

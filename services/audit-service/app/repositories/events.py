@@ -4,8 +4,9 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+from platform_common.filters import FilterValue, filter_values
 from platform_common.options import OptionColumns, preview_options, search_options
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import AuditEvent
@@ -21,10 +22,10 @@ def apply_filters(
     occurred_from: datetime | None = None,
     occurred_to: datetime | None = None,
     actor_id: str | None = None,
-    actor_name: str | None = None,
-    module_code: str | None = None,
-    action_code: str | None = None,
-    outcome: str | None = None,
+    actor_name: FilterValue = None,
+    module_code: FilterValue = None,
+    action_code: FilterValue = None,
+    outcome: FilterValue = None,
 ):
     if occurred_from is not None:
         stmt = stmt.where(AuditEvent.occurred_at >= occurred_from)
@@ -32,14 +33,19 @@ def apply_filters(
         stmt = stmt.where(AuditEvent.occurred_at < occurred_to)
     if actor_id:
         stmt = stmt.where(AuditEvent.actor_id == actor_id)
-    if actor_name:
-        stmt = stmt.where(AuditEvent.actor_name_snapshot.like(f"%{_escape_like(actor_name)}%", escape="\\"))
-    if module_code:
-        stmt = stmt.where(AuditEvent.module_code == module_code)
-    if action_code:
-        stmt = stmt.where(AuditEvent.action_code == action_code)
-    if outcome:
-        stmt = stmt.where(AuditEvent.outcome == outcome)
+    names = filter_values(actor_name)
+    if names:
+        stmt = stmt.where(
+            or_(*(AuditEvent.actor_name_snapshot.like(f"%{_escape_like(name)}%", escape="\\") for name in names))
+        )
+    for column, value in (
+        (AuditEvent.module_code, module_code),
+        (AuditEvent.action_code, action_code),
+        (AuditEvent.outcome, outcome),
+    ):
+        values = filter_values(value)
+        if values:
+            stmt = stmt.where(column.in_(values))
     return stmt
 
 
@@ -49,10 +55,10 @@ async def count_events(
     occurred_from: datetime | None = None,
     occurred_to: datetime | None = None,
     actor_id: str | None = None,
-    actor_name: str | None = None,
-    module_code: str | None = None,
-    action_code: str | None = None,
-    outcome: str | None = None,
+    actor_name: FilterValue = None,
+    module_code: FilterValue = None,
+    action_code: FilterValue = None,
+    outcome: FilterValue = None,
 ) -> int:
     stmt = apply_filters(
         select(func.count()).select_from(AuditEvent),
@@ -75,10 +81,10 @@ async def list_events(
     occurred_from: datetime | None = None,
     occurred_to: datetime | None = None,
     actor_id: str | None = None,
-    actor_name: str | None = None,
-    module_code: str | None = None,
-    action_code: str | None = None,
-    outcome: str | None = None,
+    actor_name: FilterValue = None,
+    module_code: FilterValue = None,
+    action_code: FilterValue = None,
+    outcome: FilterValue = None,
 ) -> list[AuditEvent]:
     stmt = apply_filters(
         select(AuditEvent),

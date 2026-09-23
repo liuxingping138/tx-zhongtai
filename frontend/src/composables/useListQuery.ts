@@ -68,18 +68,34 @@ export function useListQuery<T extends Record<string, Value>>(query: T, reload: 
 
 const PAGING_KEYS = ['page', 'page_size']
 
+/** 把筛选值（多选数组或旧的单值）统一成去空、去重的字符串数组。 */
+export function filterList(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value : [value]
+  return [...new Set(raw.filter((item): item is string => typeof item === 'string' && item.trim() !== '').map(item => item.trim()))]
+}
+
+/** 多选里有这个值就去掉，没有就加上。状态卡片、图例这类「点一下筛选、再点取消」的入口用它。 */
+export function toggleValue(values: unknown, value: string): string[] {
+  const current = filterList(values)
+  return current.includes(value) ? current.filter(item => item !== value) : [...current, value]
+}
+
 /**
  * 取「已生效」的筛选条件用于导出。
  *
  * 用 applied 而不是 query：query 是用户正在输入、还没点查询的值，
  * 用它导出会导出屏幕上没看到的结果。去掉分页参数，导出本来就不分页。
  */
-export function filtersForExport(applied: Record<string, unknown>): Record<string, string> {
-  const out: Record<string, string> = {}
+export function filtersForExport(applied: Record<string, unknown>): Record<string, string | string[]> {
+  const out: Record<string, string | string[]> = {}
   for (const [key, value] of Object.entries(applied)) {
     if (PAGING_KEYS.includes(key)) continue
     if (typeof value === 'string' && value !== '') out[key] = value
     else if (typeof value === 'number') out[key] = String(value)
+    else if (Array.isArray(value)) {
+      const values = value.filter((item): item is string => typeof item === 'string' && item !== '')
+      if (values.length) out[key] = values
+    }
   }
   return out
 }

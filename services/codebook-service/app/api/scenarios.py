@@ -23,10 +23,10 @@ RESOURCE = "codebook.scenarios"
 @router.get("")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def list_items(
-    industry_scenario_code: str | None = Query(default=None),
-    industry_l1: str | None = Query(default=None),
-    scenario_tag: str | None = Query(default=None),
-    customer_group_name: str | None = Query(default=None),
+    industry_scenario_code: list[str] | None = Query(default=None),
+    industry_l1: list[str] | None = Query(default=None),
+    scenario_tag: list[str] | None = Query(default=None),
+    customer_group_name: list[str] | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session),
@@ -74,10 +74,10 @@ async def search_filter_options(
 @router.get("/export")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def export_items(
-    industry_scenario_code: str | None = Query(default=None),
-    industry_l1: str | None = Query(default=None),
-    scenario_tag: str | None = Query(default=None),
-    customer_group_name: str | None = Query(default=None),
+    industry_scenario_code: list[str] | None = Query(default=None),
+    industry_l1: list[str] | None = Query(default=None),
+    scenario_tag: list[str] | None = Query(default=None),
+    customer_group_name: list[str] | None = Query(default=None),
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_codebook_permission(RESOURCE, "export")),
 ):

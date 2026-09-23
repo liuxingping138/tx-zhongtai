@@ -50,9 +50,9 @@ const resultFiltered = ref(false)
 const items = ref<AreaCodeItem[]>([])
 const total = ref(0)
 const query = reactive({
-  prov_name: '',
-  city_name: '',
-  county_name: '',
+  prov_name: [] as string[],
+  city_name: [] as string[],
+  county_name: [] as string[],
   page: 1,
   page_size: 20,
 })
@@ -111,9 +111,9 @@ async function load() {
 }
 
 function onResetFilters() {
-  query.prov_name = ''
-  query.city_name = ''
-  query.county_name = ''
+  query.prov_name = []
+  query.city_name = []
+  query.county_name = []
   onSearch()
 }
 

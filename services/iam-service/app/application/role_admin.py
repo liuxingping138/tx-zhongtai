@@ -6,6 +6,7 @@ import re
 import uuid
 
 from platform_common.errors import ApiError, NotFoundError, PermissionDeniedError, VersionConflictError
+from platform_common.filters import FilterValue
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,7 +38,7 @@ def role_public(role: Role) -> dict[str, object]:
 async def list_roles_page(
     session: AsyncSession,
     *,
-    status: str | None,
+    status: FilterValue,
     page: int,
     page_size: int,
 ) -> tuple[list[dict[str, object]], int]:

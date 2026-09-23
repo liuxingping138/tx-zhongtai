@@ -18,9 +18,9 @@ import FilterBar from '@/components/FilterBar.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import { useFilterOptions } from '@/composables/useFilterOptions'
-import { filtersForExport, useListQuery } from '@/composables/useListQuery'
+import { filtersForExport, toggleValue, useListQuery } from '@/composables/useListQuery'
 import HealthBar from './HealthBar.vue'
-import { crawlerFilters, STATUS_BY_LABEL } from './filters'
+import { crawlerFilters, STATUS_BY_LABEL, statusValues } from './filters'
 import TaskTrend from './TaskTrend.vue'
 import TrendChart from './TrendChart.vue'
 
@@ -50,11 +50,11 @@ const syncNotice = computed(() => {
 })
 
 const query = reactive({
-  province_name: '',
-  city_name: '',
-  site_name: '',
-  tag: '',
-  health_status: '',
+  province_name: [] as string[],
+  city_name: [] as string[],
+  site_name: [] as string[],
+  tag: [] as string[],
+  health_status: [] as string[],
   page: 1,
   page_size: 20,
 })
@@ -92,7 +92,7 @@ async function load() {
   loading.value = true
   loadError.value = ''
   const filtered = Object.entries(query).some(
-    ([key, value]) => !['page', 'page_size'].includes(key) && Boolean(value),
+    ([key, value]) => !['page', 'page_size'].includes(key) && (Array.isArray(value) ? value.length > 0 : Boolean(value)),
   )
   try {
     const page = await listCrawlerTasks({ ...crawlerFilters(query), page: query.page, page_size: query.page_size })
@@ -133,17 +133,18 @@ function onSearch() {
 }
 
 function onResetFilters() {
-  query.province_name = ''
-  query.city_name = ''
-  query.site_name = ''
-  query.tag = ''
-  query.health_status = ''
+  query.province_name = []
+  query.city_name = []
+  query.site_name = []
+  query.tag = []
+  query.health_status = []
   onSearch()
 }
 
+/** 点图例把该状态加入多选，再次点击移出。以已生效条件为准，未提交的草稿不参与。 */
 function pickStatus(status: HealthStatus) {
   const label = Object.entries(STATUS_BY_LABEL).find(([, value]) => value === status)?.[0] ?? ''
-  query.health_status = label
+  query.health_status = toggleValue(listQuery.applied.health_status, label)
   onSearch()
 }
 
@@ -357,7 +358,7 @@ onMounted(() => { void reloadData() })
                 </header>
                 <HealthBar
                   :items="overview.health_distribution"
-                  :selected="STATUS_BY_LABEL[String(listQuery.applied.health_status)]"
+                  :selected="statusValues(listQuery.applied.health_status)"
                   @pick="pickStatus"
                 />
               </div>

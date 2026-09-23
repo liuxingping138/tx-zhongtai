@@ -5,7 +5,8 @@ import type { HealthStatus } from '@/api/crawlerMonitoring'
 
 const props = defineProps<{
   items: { status: HealthStatus; label: string; count: number }[]
-  selected?: HealthStatus
+  /** 已生效的状态筛选，可多选。 */
+  selected?: HealthStatus[]
 }>()
 const emit = defineEmits<{ pick: [status: HealthStatus] }>()
 const total = computed(() => props.items.reduce((sum, item) => sum + item.count, 0))
@@ -37,8 +38,8 @@ function percent(count: number): number {
         <button
           type="button"
           class="legend-item"
-          :class="{ selected: selected === item.status }"
-          :aria-pressed="selected === item.status"
+          :class="{ selected: !!selected?.includes(item.status) }"
+          :aria-pressed="!!selected?.includes(item.status)"
           @click="emit('pick', item.status)"
         >
           <span class="legend-name"><span
@@ -49,7 +50,7 @@ function percent(count: number): number {
           <span class="legend-pct">{{ percent(item.count) }}%</span>
           <el-icon
             class="selection-mark"
-            :class="{ visible: selected === item.status }"
+            :class="{ visible: !!selected?.includes(item.status) }"
           >
             <Check />
           </el-icon>

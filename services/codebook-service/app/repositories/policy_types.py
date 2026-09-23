@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from platform_common.filters import Filters
+from platform_common.filters import Filters, filter_values
 from sqlalchemy import ColumnElement, Integer, case, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -52,10 +52,11 @@ def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
     unknown = set(filters) - {"keyword"}
     if unknown:  # 未知字段直接报错，避免筛选被静默忽略
         raise KeyError(f"未知筛选字段: {sorted(unknown)}")
-    if not keyword:
+    keywords = filter_values(keyword)
+    if not keywords:
         return []
-    like = f"%{keyword}%"
-    return [or_(*(column.ilike(like) for column in KEYWORD_COLUMNS))]
+    # 多个关键词任一命中任一列即可。
+    return [or_(*(column.ilike(f"%{word}%") for word in keywords for column in KEYWORD_COLUMNS))]
 
 
 async def list_items(

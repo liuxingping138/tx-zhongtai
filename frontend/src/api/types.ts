@@ -1,3 +1,6 @@
+/** 筛选参数：多选下拉提交多个值，同一字段内是「或」。 */
+export type FilterParam = string | string[]
+
 export interface ApiResponse<T> {
   code: string
   message: string

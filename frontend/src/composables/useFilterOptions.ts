@@ -56,12 +56,14 @@ export function useFilterOptions(path: string) {
   }
 
   /**
-   * 地市字段的特殊绑定：选了省份就用该省的完整地市列表（数量有限、且更准确），
-   * 没选省份才回落到通用的预览 + 服务端搜索。
+   * 地市字段的特殊绑定：选了省份就用这些省的完整地市列表合集（数量有限、且更准确），
+   * 没选省份、或选中的省份里有未知省份时，回落到通用的预览 + 服务端搜索。
    */
-  function bindCity(field: string, province: string): FilterSelectBinding {
-    const scoped = province ? cityByProvince.value[province] : undefined
-    return scoped ? { options: scoped } : bind(field)
+  function bindCity(field: string, provinces: string | string[]): FilterSelectBinding {
+    const selected = (Array.isArray(provinces) ? provinces : [provinces]).filter(Boolean)
+    const scoped = selected.map(province => cityByProvince.value[province])
+    if (!selected.length || scoped.some(list => !list)) return bind(field)
+    return { options: [...new Set(scoped.flatMap(list => list ?? []))] }
   }
 
   return { load, bind, bindCity, get, cityByProvince, loaded }

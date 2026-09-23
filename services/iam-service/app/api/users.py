@@ -26,8 +26,8 @@ async def list_users(
     session: AsyncSession = Depends(get_db_session),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
-    username: str | None = None,
-    status: str | None = None,
+    username: list[str] | None = Query(default=None),
+    status: list[str] | None = Query(default=None),
     sort: str = "created_at",
 ) -> JSONResponse:
     items, total = await user_admin.list_users_page(

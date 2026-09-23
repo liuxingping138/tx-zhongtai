@@ -81,10 +81,10 @@ const resultFiltered = ref(false)
 const items = ref<ScenarioItem[]>([])
 const total = ref(0)
 const query = reactive({
-  industry_scenario_code: '',
-  industry_l1: '',
-  scenario_tag: '',
-  customer_group_name: '',
+  industry_scenario_code: [] as string[],
+  industry_l1: [] as string[],
+  scenario_tag: [] as string[],
+  customer_group_name: [] as string[],
   page: 1,
   page_size: 20,
 })
@@ -168,10 +168,10 @@ async function load() {
 }
 
 function onResetFilters() {
-  query.industry_scenario_code = ''
-  query.industry_l1 = ''
-  query.scenario_tag = ''
-  query.customer_group_name = ''
+  query.industry_scenario_code = []
+  query.industry_l1 = []
+  query.scenario_tag = []
+  query.customer_group_name = []
   onSearch()
 }
 

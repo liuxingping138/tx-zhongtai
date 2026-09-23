@@ -25,7 +25,7 @@
 |---|---|---|
 | 页面结构、总数、分页、加载失败 | `frontend/src/components/ListPage.vue` | title/hint、total/page/pageSize/loading/error，retry/change处理；结果区必须用 ScrollPort；概览区走 `summary` 插槽（标题与筛选之间，不参与拉伸） |
 | 结果区滚动 | `frontend/src/components/ScrollPort.vue` | 常显横/纵滑槽；两指分轴；默认每页 20 条时未露出的行必须能上下滚到 |
-| 查询 | `frontend/src/components/FilterBar.vue`、`FilterSelect.vue` | query 与 applied；桌面展开全部字段，advanced 只作字段分组不再桌面折叠 |
+| 查询 | `frontend/src/components/FilterBar.vue`、`FilterSelect.vue` | query 与 applied；桌面展开全部字段，advanced 只作字段分组不再桌面折叠。`FilterSelect` 一律多选，query 里筛选字段默认值是 `[]`（不是 `''`），重置也赋 `[]`；状态卡片这类「点一下筛选、再点取消」的入口用 `toggleValue` |
 | 业务表格/详情/手机摘要 | `frontend/src/components/BusinessTable.vue` | items、完整columns、selected、titleKey、可选summaryKeys、canWrite/loading/filtered，edit/reset |
 | 账号菜单 | `frontend/src/layouts/UserAccountMenu.vue` | 侧栏底部 / 手机顶栏头像；显示名 + `/me.roles` |
 | 浮层焦点 | `frontend/src/layouts/AdminLayout.vue` | 打开时把焦点送进浮层、关闭后送回触发按钮；落回 body 会让键盘用户从头 Tab |
@@ -132,7 +132,7 @@ docker compose -f deploy/compose/docker-compose.yml --env-file .env up -d --buil
 ## 6. 验收与文档同步
 
 - 检查一列一字段、默认即全字段、列设置数量正确、全部显示/默认恢复、刷新保留偏好；横滑到末列时操作列不遮挡数据。
-- 检查筛选：桌面一次看到全部条件；改条件未点查询出现「条件已改…」；查询后为「已筛选 N 项」；重置在无条件时禁用。
+- 检查筛选：每个下拉都能选多个值，多选结果是同字段「或」、跨字段「且」，导出带同样的多值条件；桌面一次看到全部条件；改条件未点查询出现「条件已改…」；查询后为「已筛选 N 项」；重置在无条件时禁用。
 - 检查结果区底边/右侧常显滑槽；默认 20 条时若首屏不足 20 行，必须能上下滚完全页；触控板上下不串成左右。
 - 检查侧栏底部账号：显示名 + 角色；折叠/手机顶栏仅头像。登录左侧使用已确认的客群关系图，节点不充当模块入口；爬虫监测不与客群相连，右侧认证行为保留。
 - 每个列表检查默认全字段和自定义列：首列宽度合理，恢复全列不跳位；横向滚动至末尾仍能操作。按 1920 / 1440 / 1280 / 1024 四档检查，另查 2560px 宽屏避免窄视口看似正常而宽屏表格只占半幅。手机端不检查。

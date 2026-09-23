@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from platform_common.clock import BEIJING, utcnow
-from platform_common.filters import Filters
+from platform_common.filters import Filters, ilike_any, in_any
 from sqlalchemy import ColumnElement, Date, Integer, and_, case, cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
@@ -34,14 +34,18 @@ def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
         if value is None or value == "" or value is False:
             continue
         if key in EXACT_FILTERS:
-            conds.append(CrawlerTaskHealth.health_status == value)
+            status = in_any(CrawlerTaskHealth.health_status, value)
+            if status is not None:
+                conds.append(status)
         elif key in NUMERIC_FILTERS:
-            conds.append(CrawlerTaskHealth.stale_days >= int(value))
+            conds.append(CrawlerTaskHealth.stale_days >= int(str(value)))
         elif key == "abnormal_only":
             conds.append(CrawlerTaskHealth.health_status.in_(ABNORMAL_STATUSES))
         else:
             column = FILTER_COLUMNS[key]  # 未知字段直接 KeyError，API 层转 422
-            conds.append(column.ilike(f"%{value}%"))
+            cond = ilike_any(column, value)
+            if cond is not None:
+                conds.append(cond)
     return conds
 
 

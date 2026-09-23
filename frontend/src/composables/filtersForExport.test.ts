@@ -23,7 +23,14 @@ describe('filtersForExport', () => {
     expect(filtersForExport({ page: 1, page_size: 20 })).toEqual({})
   })
 
-  it('忽略数组等非标量值，后端筛选参数都是标量', () => {
-    expect(filtersForExport({ tags: ['a', 'b'], tag: '政策' })).toEqual({ tag: '政策' })
+  it('保留多选的全部值，空多选和空字符串值不导出', () => {
+    expect(filtersForExport({ province_name: ['广东省', '', '海南省'], city_name: [], tag: '政策' })).toEqual({
+      province_name: ['广东省', '海南省'],
+      tag: '政策',
+    })
+  })
+
+  it('忽略对象等无法作为查询参数的值', () => {
+    expect(filtersForExport({ extra: { a: 1 }, tag: '政策' })).toEqual({ tag: '政策' })
   })
 })

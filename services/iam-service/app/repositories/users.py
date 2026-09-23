@@ -3,7 +3,8 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import func, select
+from platform_common.filters import FilterValue, filter_values
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -28,15 +29,17 @@ async def get_user_for_update(session: AsyncSession, user_id: uuid.UUID) -> User
     return result.scalar_one_or_none()
 
 
-def _apply_user_filters(stmt: Any, *, username: str | None, status: str | None) -> Any:
-    if username:
-        stmt = stmt.where(User.username.like(f"%{username.lower()}%"))
-    if status:
-        stmt = stmt.where(User.status == status)
+def _apply_user_filters(stmt: Any, *, username: FilterValue, status: FilterValue) -> Any:
+    names = filter_values(username)
+    if names:
+        stmt = stmt.where(or_(*(User.username.like(f"%{name.lower()}%") for name in names)))
+    statuses = filter_values(status)
+    if statuses:
+        stmt = stmt.where(User.status.in_(statuses))
     return stmt
 
 
-async def count_users(session: AsyncSession, *, username: str | None, status: str | None) -> int:
+async def count_users(session: AsyncSession, *, username: FilterValue, status: FilterValue) -> int:
     stmt = _apply_user_filters(select(func.count()).select_from(User), username=username, status=status)
     return int((await session.execute(stmt)).scalar_one())
 
@@ -44,8 +47,8 @@ async def count_users(session: AsyncSession, *, username: str | None, status: st
 async def list_users(
     session: AsyncSession,
     *,
-    username: str | None,
-    status: str | None,
+    username: FilterValue,
+    status: FilterValue,
     offset: int,
     limit: int,
     sort: str,

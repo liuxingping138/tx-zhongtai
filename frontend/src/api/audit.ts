@@ -1,5 +1,5 @@
 import { http, request } from './http'
-import type { AuditEventItem, Page } from './types'
+import type { AuditEventItem, FilterParam, Page } from './types'
 
 export function listAuditEvents(params: {
   page?: number
@@ -7,10 +7,10 @@ export function listAuditEvents(params: {
   occurred_from?: string
   occurred_to?: string
   actor_id?: string
-  actor_name?: string
-  module_code?: string
-  action_code?: string
-  outcome?: string
+  actor_name?: FilterParam
+  module_code?: FilterParam
+  action_code?: FilterParam
+  outcome?: FilterParam
 }): Promise<Page<AuditEventItem>> {
   return request(http.get('/audit/events', { params }))
 }

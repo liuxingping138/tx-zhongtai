@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from platform_common.filters import Filters
+from platform_common.filters import Filters, ilike_any
 from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
@@ -38,8 +38,9 @@ def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
     conds: list[ColumnElement[bool]] = []
     for key, value in filters.items():
         column = FILTER_COLUMNS[key]  # 未知字段直接报错，避免筛选被静默忽略
-        if value:
-            conds.append(column.ilike(f"%{value}%"))
+        cond = ilike_any(column, value)
+        if cond is not None:
+            conds.append(cond)
     return conds
 
 

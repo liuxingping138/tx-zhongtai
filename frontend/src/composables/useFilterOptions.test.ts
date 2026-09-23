@@ -74,6 +74,22 @@ describe('useFilterOptions', () => {
     await filters.load()
 
     expect(filters.bindCity('city_name', '').remoteSearch).toBeTypeOf('function')
+    expect(filters.bindCity('city_name', []).remoteSearch).toBeTypeOf('function')
+  })
+
+  it('多选省份时地市候选是这些省的合集', async () => {
+    fetchMock.mockResolvedValue({
+      options: { city_name: { items: ['打底'], truncated: true } },
+      city_by_province: { 江苏省: ['南京市', '苏州市'], 浙江省: ['杭州市', '苏州市'] },
+    })
+    const filters = useFilterOptions('/policy/sources')
+    await filters.load()
+
+    const scoped = filters.bindCity('city_name', ['江苏省', '浙江省'])
+    expect(scoped.options).toEqual(['南京市', '苏州市', '杭州市'])
+    expect(scoped.remoteSearch).toBeUndefined()
+    // 有一个省份不在对照表里（例如手动输入的），不能只给出部分地市，回落到服务端搜索。
+    expect(filters.bindCity('city_name', ['江苏省', '未知省']).remoteSearch).toBeTypeOf('function')
   })
 
   it('选项接口失败不抛错，筛选框退化为自由输入', async () => {

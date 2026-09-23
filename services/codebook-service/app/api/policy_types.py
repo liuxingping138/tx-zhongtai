@@ -23,7 +23,7 @@ RESOURCE = "codebook.policy_types"
 @router.get("")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def list_items(
-    keyword: str | None = Query(default=None),
+    keyword: list[str] | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session),
@@ -61,7 +61,7 @@ async def search_filter_options(
 @router.get("/export")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def export_items(
-    keyword: str | None = Query(default=None),
+    keyword: list[str] | None = Query(default=None),
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_codebook_permission(RESOURCE, "export")),
 ):

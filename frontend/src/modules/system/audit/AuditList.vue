@@ -19,10 +19,10 @@ const resultFiltered = ref(false)
 const events = ref<AuditEventItem[]>([])
 const total = ref(0)
 const query = reactive({
-  actor_name: '',
-  module_code: '',
-  action_code: '',
-  outcome: '',
+  actor_name: [] as string[],
+  module_code: [] as string[],
+  action_code: [] as string[],
+  outcome: [] as string[],
   range: [] as string[] | null,
   page: 1,
   page_size: 20,
@@ -78,10 +78,10 @@ async function load() {
 }
 
 function onResetFilters() {
-  query.actor_name = ''
-  query.module_code = ''
-  query.action_code = ''
-  query.outcome = ''
+  query.actor_name = []
+  query.module_code = []
+  query.action_code = []
+  query.outcome = []
   query.range = []
   onSearch()
 }
@@ -176,6 +176,9 @@ onMounted(() => {
             <el-form-item label="结果">
               <el-select
                 v-model="query.outcome"
+                multiple
+                collapse-tags
+                collapse-tags-tooltip
                 clearable
                 placeholder="全部"
               >

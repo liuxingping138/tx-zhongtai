@@ -23,9 +23,9 @@ RESOURCE = "codebook.area_codes"
 @router.get("")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def list_items(
-    prov_name: str | None = Query(default=None),
-    city_name: str | None = Query(default=None),
-    county_name: str | None = Query(default=None),
+    prov_name: list[str] | None = Query(default=None),
+    city_name: list[str] | None = Query(default=None),
+    county_name: list[str] | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session),
@@ -72,9 +72,9 @@ async def search_filter_options(
 @router.get("/export")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def export_items(
-    prov_name: str | None = Query(default=None),
-    city_name: str | None = Query(default=None),
-    county_name: str | None = Query(default=None),
+    prov_name: list[str] | None = Query(default=None),
+    city_name: list[str] | None = Query(default=None),
+    county_name: list[str] | None = Query(default=None),
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_codebook_permission(RESOURCE, "export")),
 ):

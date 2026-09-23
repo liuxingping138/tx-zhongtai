@@ -1,7 +1,7 @@
 import { postExcelImport, type ImportResult, type ImportStage } from './excelImport'
 import { getAccessToken, getCsrfToken } from './session'
 import { http, request } from './http'
-import type { Page } from './types'
+import type { FilterParam, Page } from './types'
 
 export interface PolicyTypeItem {
   id: string
@@ -57,7 +57,7 @@ export interface ScenarioItem {
 
 export type { ImportResult } from './excelImport'
 
-export function listPolicyTypes(params: { keyword?: string; page?: number; page_size?: number }): Promise<Page<PolicyTypeItem>> {
+export function listPolicyTypes(params: { keyword?: FilterParam; page?: number; page_size?: number }): Promise<Page<PolicyTypeItem>> {
   return request(http.get('/codebook/policy-types', { params }))
 }
 
@@ -80,10 +80,10 @@ export function importPolicyTypes(
 }
 
 export function listScenarios(params: {
-  industry_scenario_code?: string
-  industry_l1?: string
-  scenario_tag?: string
-  customer_group_name?: string
+  industry_scenario_code?: FilterParam
+  industry_l1?: FilterParam
+  scenario_tag?: FilterParam
+  customer_group_name?: FilterParam
   page?: number
   page_size?: number
 }): Promise<Page<ScenarioItem>> {
@@ -130,9 +130,9 @@ export interface AreaCodeItem {
 }
 
 export function listAreaCodes(params: {
-  prov_name?: string
-  city_name?: string
-  county_name?: string
+  prov_name?: FilterParam
+  city_name?: FilterParam
+  county_name?: FilterParam
   page?: number
   page_size?: number
 }): Promise<Page<AreaCodeItem>> {

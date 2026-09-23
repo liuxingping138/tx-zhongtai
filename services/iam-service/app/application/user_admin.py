@@ -6,6 +6,7 @@ import secrets
 import uuid
 
 from platform_common.errors import ApiError, NotFoundError, PermissionDeniedError, VersionConflictError
+from platform_common.filters import FilterValue
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -95,8 +96,8 @@ async def _guard_last_superadmin(
 async def list_users_page(
     session: AsyncSession,
     *,
-    username: str | None,
-    status: str | None,
+    username: FilterValue,
+    status: FilterValue,
     page: int,
     page_size: int,
     sort: str,

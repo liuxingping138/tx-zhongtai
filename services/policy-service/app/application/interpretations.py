@@ -7,7 +7,7 @@ from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
 from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionConflictError
 from platform_common.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async
-from platform_common.filters import Filters
+from platform_common.filters import Filters, FilterValue
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.audit_emit import enqueue_event
@@ -66,10 +66,10 @@ def _values(data: dict[str, str]) -> dict[str, str]:
 async def list_interpretations(
     session: AsyncSession,
     *,
-    policy_title: str | None,
-    industry_scenario_code: str | None,
-    industry_l1: str | None,
-    opportunity_type: str | None,
+    policy_title: FilterValue,
+    industry_scenario_code: FilterValue,
+    industry_l1: FilterValue,
+    opportunity_type: FilterValue,
     page: int,
     page_size: int,
 ) -> dict[str, Any]:

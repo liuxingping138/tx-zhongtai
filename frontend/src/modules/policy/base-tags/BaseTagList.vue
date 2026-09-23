@@ -37,11 +37,11 @@ const resultFiltered = ref(false)
 const items = ref<BaseTagItem[]>([])
 const total = ref(0)
 const query = reactive({
-  policy_name: '',
-  province_name: '',
-  policy_types: '',
-  is_penetrate: '',
-  need_interpret: '',
+  policy_name: [] as string[],
+  province_name: [] as string[],
+  policy_types: [] as string[],
+  is_penetrate: [] as string[],
+  need_interpret: [] as string[],
   page: 1,
   page_size: 20,
 })
@@ -132,11 +132,11 @@ async function load() {
 }
 
 function onResetFilters() {
-  query.policy_name = ''
-  query.province_name = ''
-  query.policy_types = ''
-  query.is_penetrate = ''
-  query.need_interpret = ''
+  query.policy_name = []
+  query.province_name = []
+  query.policy_types = []
+  query.is_penetrate = []
+  query.need_interpret = []
   onSearch()
 }
 

@@ -21,7 +21,7 @@ const loadError = ref('')
 const resultFiltered = ref(false)
 const roles = ref<RoleItem[]>([])
 const total = ref(0)
-const query = reactive({ page: 1, page_size: 20, status: '' })
+const query = reactive({ page: 1, page_size: 20, status: [] as string[] })
 const createVisible = ref(false)
 const creating = ref(false)
 const createForm = reactive({ code: '', name: '' })
@@ -76,7 +76,7 @@ async function load() {
 }
 
 function onResetFilters() {
-  query.status = ''
+  query.status = []
   onSearch()
 }
 
@@ -200,6 +200,9 @@ onMounted(() => {
           <el-form-item label="状态">
             <el-select
               v-model="query.status"
+              multiple
+              collapse-tags
+              collapse-tags-tooltip
               clearable
               placeholder="全部"
               @change="onSearch"

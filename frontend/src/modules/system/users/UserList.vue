@@ -31,8 +31,8 @@ const resultFiltered = ref(false)
 const users = ref<UserItem[]>([])
 const total = ref(0)
 const query = reactive({
-  username: '',
-  status: '',
+  username: [] as string[],
+  status: [] as string[],
   page: 1,
   page_size: 20,
 })
@@ -108,8 +108,8 @@ async function load() {
 }
 
 function onResetFilters() {
-  query.username = ''
-  query.status = ''
+  query.username = []
+  query.status = []
   onSearch()
 }
 
@@ -333,6 +333,9 @@ onMounted(() => {
           <el-form-item label="状态">
             <el-select
               v-model="query.status"
+              multiple
+              collapse-tags
+              collapse-tags-tooltip
               clearable
               placeholder="全部"
             >

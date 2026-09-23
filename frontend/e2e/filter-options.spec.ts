@@ -41,10 +41,10 @@ async function mockSession(page: Page, searches: SearchLog[], hold?: { route?: R
   })
 }
 
-/** 打开某个筛选项的下拉。 */
+/** 打开某个筛选项的下拉。多选模式下输入框很窄且被占位文字盖住，像用户一样点整个选择框。 */
 async function openFilter(page: Page, label: string) {
   const item = page.locator('.el-form-item').filter({ hasText: label }).first()
-  await item.locator('input').first().click()
+  await item.locator('.el-select__wrapper').first().click()
   return item
 }
 

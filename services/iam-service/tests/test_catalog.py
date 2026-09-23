@@ -23,4 +23,4 @@ def test_codebook_resources_are_published() -> None:
     assert by_code["policy.sources"].published is True
     assert by_code["policy.base_tags"].published is True
     assert by_code["policy.interpretations"].published is True
-    assert by_code["policy.crawler_monitoring"].published is False
+    assert by_code["policy.crawler_monitoring"].published is True

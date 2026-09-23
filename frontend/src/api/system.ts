@@ -1,11 +1,11 @@
 import { http, request } from './http'
-import type { GrantItem, Page, ResourceNode, RoleItem, UserItem } from './types'
+import type { FilterParam, GrantItem, Page, ResourceNode, RoleItem, UserItem } from './types'
 
 export function listUsers(params: {
   page?: number
   page_size?: number
-  username?: string
-  status?: string
+  username?: FilterParam
+  status?: FilterParam
   sort?: string
 }): Promise<Page<UserItem>> {
   return request(http.get('/system/users', { params }))
@@ -42,7 +42,7 @@ export function replaceUserRoles(userId: string, payload: { role_ids: string[]; 
   return request(http.put(`/system/users/${userId}/roles`, payload))
 }
 
-export function listRoles(params: { page?: number; page_size?: number; status?: string }): Promise<Page<RoleItem>> {
+export function listRoles(params: { page?: number; page_size?: number; status?: FilterParam }): Promise<Page<RoleItem>> {
   return request(http.get('/system/roles', { params }))
 }
 

@@ -35,7 +35,7 @@ const loadError = ref('')
 const resultFiltered = ref(false)
 const items = ref<PolicyTypeItem[]>([])
 const total = ref(0)
-const query = reactive({ keyword: '', page: 1, page_size: 20 })
+const query = reactive({ keyword: [] as string[], page: 1, page_size: 20 })
 const filters = useFilterOptions('/codebook/policy-types')
 const visible = ref(false)
 const saving = ref(false)
@@ -76,7 +76,7 @@ async function load() {
 }
 
 function onResetFilters() {
-  query.keyword = ''
+  query.keyword = []
   onSearch()
 }
 

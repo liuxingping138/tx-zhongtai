@@ -3,7 +3,8 @@ import { computed, ref, watch } from 'vue'
 
 const props = withDefaults(
   defineProps<{
-    modelValue: string
+    /** 多选：同一字段选多个值是「或」。空数组表示不筛选。 */
+    modelValue: string[]
     options: string[]
     labels?: Record<string, string>
     placeholder?: string
@@ -22,7 +23,7 @@ function optionLabel(value: string): string {
 }
 
 const emit = defineEmits<{
-  'update:modelValue': [value: string]
+  'update:modelValue': [value: string[]]
 }>()
 
 const MAX_SHOWN = 80
@@ -55,8 +56,8 @@ const shown = computed(() => {
 /** 已选中但不在当前候选里的值也要能显示出来，否则回填的筛选条件会变空白。 */
 const withSelected = computed(() => {
   const list = shown.value
-  const current = props.modelValue
-  return current && !list.includes(current) ? [current, ...list] : list
+  const missing = props.modelValue.filter(value => !list.includes(value))
+  return missing.length ? [...missing, ...list] : list
 })
 
 const emptyText = computed(() => {
@@ -109,8 +110,14 @@ function reset() {
   searching.value = false
 }
 
-function onChange(value: string | null) {
-  emit('update:modelValue', value ?? '')
+function onChange(value: string[] | null) {
+  // 去掉首尾空格和重复值：手动输入的「 广东 」与候选里的「广东」是同一个条件。
+  const next: string[] = []
+  for (const item of value ?? []) {
+    const text = String(item).trim()
+    if (text && !next.includes(text)) next.push(text)
+  }
+  emit('update:modelValue', next)
 }
 </script>
 
@@ -119,8 +126,13 @@ function onChange(value: string | null) {
     class="filter-select"
     :class="{ 'filter-select--short': size === 'short' }"
     :model-value="modelValue"
+    multiple
+    collapse-tags
+    collapse-tags-tooltip
+    :max-collapse-tags="1"
     filterable
     :allow-create="!labels"
+    :reserve-keyword="false"
     default-first-option
     clearable
     :loading="searching"

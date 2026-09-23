@@ -28,10 +28,10 @@ async def list_audit_events(
     occurred_from: datetime | None = None,
     occurred_to: datetime | None = None,
     actor_id: str | None = None,
-    actor_name: str | None = None,
-    module_code: str | None = None,
-    action_code: str | None = None,
-    outcome: str | None = None,
+    actor_name: list[str] | None = Query(default=None),
+    module_code: list[str] | None = Query(default=None),
+    action_code: list[str] | None = Query(default=None),
+    outcome: list[str] | None = Query(default=None),
 ) -> JSONResponse:
     items, total = await query_app.list_page(
         session,

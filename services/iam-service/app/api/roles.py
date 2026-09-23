@@ -26,7 +26,7 @@ async def list_roles(
     session: AsyncSession = Depends(get_db_session),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
-    status: str | None = None,
+    status: list[str] | None = Query(default=None),
 ) -> JSONResponse:
     items, total = await role_admin.list_roles_page(session, status=status, page=page, page_size=page_size)
     return success_json(paginate(items, total, page=page, page_size=page_size).model_dump())

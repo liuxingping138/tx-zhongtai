@@ -23,12 +23,12 @@ RESOURCE = "policy.sources"
 @router.get("")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def list_items(
-    site_name: str | None = Query(default=None),
-    province_name: str | None = Query(default=None),
-    city_name: str | None = Query(default=None),
-    tag: str | None = Query(default=None),
-    site_code: str | None = Query(default=None),
-    crawl_priority: str | None = Query(default=None),
+    site_name: list[str] | None = Query(default=None),
+    province_name: list[str] | None = Query(default=None),
+    city_name: list[str] | None = Query(default=None),
+    tag: list[str] | None = Query(default=None),
+    site_code: list[str] | None = Query(default=None),
+    crawl_priority: list[str] | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session),
@@ -78,12 +78,12 @@ async def search_filter_options(
 @router.get("/export")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def export_items(
-    site_name: str | None = Query(default=None),
-    province_name: str | None = Query(default=None),
-    city_name: str | None = Query(default=None),
-    tag: str | None = Query(default=None),
-    site_code: str | None = Query(default=None),
-    crawl_priority: str | None = Query(default=None),
+    site_name: list[str] | None = Query(default=None),
+    province_name: list[str] | None = Query(default=None),
+    city_name: list[str] | None = Query(default=None),
+    tag: list[str] | None = Query(default=None),
+    site_code: list[str] | None = Query(default=None),
+    crawl_priority: list[str] | None = Query(default=None),
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_policy_permission(RESOURCE, "export")),
 ):

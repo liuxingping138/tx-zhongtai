@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+from platform_common.filters import FilterValue
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import AuditEventOut
@@ -46,10 +47,10 @@ async def list_page(
     occurred_from: datetime | None,
     occurred_to: datetime | None,
     actor_id: str | None,
-    actor_name: str | None,
-    module_code: str | None,
-    action_code: str | None,
-    outcome: str | None,
+    actor_name: FilterValue,
+    module_code: FilterValue,
+    action_code: FilterValue,
+    outcome: FilterValue,
 ) -> tuple[list[AuditEventOut], int]:
     occurred_from = assume_beijing(occurred_from)
     occurred_to = assume_beijing(occurred_to)

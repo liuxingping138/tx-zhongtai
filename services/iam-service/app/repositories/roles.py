@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from platform_common.filters import FilterValue, filter_values
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,13 +26,14 @@ async def get_role_for_update(session: AsyncSession, role_id: uuid.UUID) -> Role
     return result.scalar_one_or_none()
 
 
-def _apply_role_filters(stmt: Any, *, status: str | None) -> Any:
-    if status:
-        stmt = stmt.where(Role.status == status)
+def _apply_role_filters(stmt: Any, *, status: FilterValue) -> Any:
+    statuses = filter_values(status)
+    if statuses:
+        stmt = stmt.where(Role.status.in_(statuses))
     return stmt
 
 
-async def count_roles(session: AsyncSession, *, status: str | None) -> int:
+async def count_roles(session: AsyncSession, *, status: FilterValue) -> int:
     stmt = _apply_role_filters(select(func.count()).select_from(Role), status=status)
     return int((await session.execute(stmt)).scalar_one())
 
@@ -39,7 +41,7 @@ async def count_roles(session: AsyncSession, *, status: str | None) -> int:
 async def list_roles(
     session: AsyncSession,
     *,
-    status: str | None,
+    status: FilterValue,
     offset: int,
     limit: int,
 ) -> list[Role]:
