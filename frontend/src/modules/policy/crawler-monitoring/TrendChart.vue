@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 /**
  * 日采集量折线。内联 SVG 手绘，不引图表库：全站只有这一处折线，
@@ -10,14 +10,22 @@ const props = defineProps<{
   height?: number
 }>()
 
-const VIEW_W = 960
+const chart = ref<HTMLElement>()
+const viewW = ref(960)
+let observer: ResizeObserver | undefined
+onMounted(() => {
+  observer = new ResizeObserver(([entry]) => { if (entry) viewW.value = Math.max(240, entry.contentRect.width) })
+  if (chart.value) observer.observe(chart.value)
+})
+onBeforeUnmount(() => observer?.disconnect())
 const viewH = computed(() => props.height ?? 220)
 const PAD = { top: 16, right: 12, bottom: 28, left: 52 }
 
-const maxRows = computed(() => Math.max(1, ...props.points.map((p) => p.rows)))
+const peakRows = computed(() => Math.max(0, ...props.points.map((p) => p.rows)))
+const maxRows = computed(() => Math.max(1, peakRows.value))
 
 const plot = computed(() => ({
-  w: VIEW_W - PAD.left - PAD.right,
+  w: viewW.value - PAD.left - PAD.right,
   h: viewH.value - PAD.top - PAD.bottom,
 }))
 
@@ -42,16 +50,17 @@ const areaPath = computed(() => {
 })
 
 /** Y 轴只画 0 / 中位 / 峰值三条，避免密集网格线压住数据。 */
-const yTicks = computed(() => [0, Math.round(maxRows.value / 2), maxRows.value])
+const yTicks = computed(() => [...new Set([0, Math.round(maxRows.value / 2), maxRows.value])])
 
 /** X 轴最多 6 个日期标签，点多了就抽稀，否则中文日期会叠在一起。 */
 const xTicks = computed(() => {
   const count = props.points.length
   if (count === 0) return []
-  const step = Math.max(1, Math.ceil(count / 6))
-  return props.points
-    .map((point, index) => ({ index, label: point.date.slice(5), rows: point.rows }))
-    .filter((item) => item.index % step === 0 || item.index === count - 1)
+  const tickCount = Math.min(count, Math.max(2, Math.min(6, Math.floor(plot.value.w / 80))))
+  return Array.from({ length: tickCount }, (_, i) => {
+    const index = Math.round(i * (count - 1) / Math.max(1, tickCount - 1))
+    return { index, label: props.points[index]!.date.slice(5) }
+  })
 })
 
 const lowest = computed(() => {
@@ -61,19 +70,22 @@ const lowest = computed(() => {
 </script>
 
 <template>
-  <div class="trend-chart">
+  <div
+    ref="chart"
+    class="trend-chart"
+  >
     <svg
-      :viewBox="`0 0 ${VIEW_W} ${viewH}`"
+      :viewBox="`0 0 ${viewW} ${viewH}`"
       preserveAspectRatio="none"
       role="img"
-      :aria-label="`近 ${points.length} 天日采集量趋势，峰值 ${maxRows} 条`"
+      :aria-label="`近 ${points.length} 天日采集量趋势，峰值 ${peakRows} 条`"
     >
       <g class="grid">
         <line
           v-for="tick in yTicks"
           :key="`g-${tick}`"
           :x1="PAD.left"
-          :x2="VIEW_W - PAD.right"
+          :x2="viewW - PAD.right"
           :y1="y(tick)"
           :y2="y(tick)"
         />
@@ -114,7 +126,7 @@ const lowest = computed(() => {
           :key="`x-${tick.index}`"
           :x="x(tick.index)"
           :y="viewH - 8"
-          text-anchor="middle"
+          :text-anchor="tick.index === points.length - 1 ? 'end' : 'middle'"
         >{{ tick.label }}</text>
       </g>
     </svg>
@@ -151,7 +163,7 @@ const lowest = computed(() => {
 }
 
 .dot-low {
-  fill: #c45656;
+  fill: var(--el-color-danger);
   opacity: 1;
 }
 

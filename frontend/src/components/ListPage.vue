@@ -113,8 +113,15 @@ async function onSize(value: number) {
 .list-page__heading { padding: 0 0 14px; }
 .list-page__heading h1 { margin: 0; font-size: var(--zt-title-size); line-height: 1.4; font-weight: 650; color: var(--zt-ink-900); }
 .list-page__heading p { margin: 4px 0 0; font-size: 13px; line-height: 1.6; color: var(--zt-ink-500); }
-/* 概览带不参与拉伸：它占多少高，结果区就少多少，页面整体仍只有一个滚动容器。 */
+/* 概览不挤压结果区。监测页自然纵向滚动，表格随窗口高度变化；收起概览可直接专注列表。 */
 .summary-band { flex: 0 0 auto; margin-bottom: 8px; }
+.list-page:has(.summary-band) { max-height: none; }
+.list-page:has(.summary-band) .table-card { flex: none; }
+.list-page:has(.summary-band) .scroll-port.list-page__results {
+  height: clamp(440px, calc(100dvh - 220px), 880px);
+  min-height: 440px;
+  flex: none;
+}
 .filter-card { padding: 14px 16px 16px; margin-bottom: 4px; background: #f6f8fb; border: 1px solid var(--zt-border); border-radius: var(--zt-radius); }
 .table-card { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; scroll-margin-top: 12px; }
 .list-page__toolbar { min-height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; }

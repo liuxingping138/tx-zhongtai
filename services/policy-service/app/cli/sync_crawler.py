@@ -21,16 +21,21 @@ import argparse
 import asyncio
 import json
 import logging
+import time
+from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
+from functools import wraps
 from typing import Any, cast
 
 import pymysql
-from sqlalchemy import CursorResult, text
+from platform_common.clock import BEIJING
+from sqlalchemy import CursorResult, delete, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.database import SessionLocal
+from app.core.database import SessionLocal, engine
+from app.domain.crawler_identity import site_key
 from app.domain.models import CrawlerDailyStat, CrawlerSyncRun, CrawlerTask
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -40,6 +45,24 @@ settings = get_settings()
 
 # 水位回退量：入库时间由数据库时钟写入，长事务可能让稍早的时间戳晚于水位才可见。
 _WATERMARK_OVERLAP_HOURS = 2
+
+
+def _retry_mysql_read[**P, R](operation: Callable[P, R]) -> Callable[P, R]:
+    """只重试瞬时连接错误；每次重新连接，认证和 SQL 错误立即失败。"""
+
+    @wraps(operation)
+    def read(*args: P.args, **kwargs: P.kwargs) -> R:
+        for attempt in range(1, 4):
+            try:
+                return operation(*args, **kwargs)
+            except pymysql.err.OperationalError as exc:
+                if not exc.args or exc.args[0] not in {2002, 2003, 2006, 2013, 2055} or attempt == 3:
+                    raise
+                logger.warning("source_read_retry operation=%s attempt=%s", operation.__name__, attempt)
+                time.sleep(2 ** (attempt - 1))
+        raise AssertionError("unreachable")
+
+    return read
 
 
 def _text_value(value: Any, limit: int) -> str:
@@ -66,6 +89,7 @@ def _mysql_connect() -> pymysql.connections.Connection:
     )
 
 
+@_retry_mysql_read
 def _fetch_rules() -> list[dict[str, Any]]:
     """读爬虫规则表。规则正文是 JSON 字符串，网站/标签都在 necessary_files 里。"""
 
@@ -84,6 +108,8 @@ def _fetch_rules() -> list[dict[str, Any]]:
         try:
             payload = json.loads(raw)
             need = payload.get("necessary_files") or {}
+            if not isinstance(need, dict):
+                raise ValueError("necessary_files 必须是对象")
         except (ValueError, AttributeError):
             skipped += 1
             continue
@@ -103,16 +129,21 @@ def _fetch_rules() -> list[dict[str, Any]]:
                 "rule_state": int(row.get("state") or 0),
             }
         )
+    if skipped:
+        raise ValueError(f"规则表有 {skipped} 条无法解析，未更新任务基线，请修复后重试")
+    for item in tasks:
+        item["site_key"] = site_key(item["site_code"], item["site_name"], item["province_name"], item["city_name"])
     logger.info("rules_fetched total=%s usable=%s skipped=%s", len(rows), len(tasks), skipped)
     return tasks
 
 
+@_retry_mysql_read
 def _fetch_day(day: date) -> list[dict[str, Any]]:
-    """单天按 (网站编码, 标签) 聚合。collect_date 上有索引，这条查询很快。"""
+    """单天按 (网站名称, 标签) 聚合；无名称时才使用编码。"""
 
     sql = f"""
-        SELECT COALESCE(author, '') AS site_code,
-               COALESCE(tag, '') AS tag,
+        SELECT MAX(TRIM(COALESCE(author, ''))) AS site_code,
+               TRIM(COALESCE(tag, '')) AS tag,
                MAX(site_name) AS site_name,
                MAX(prov_name) AS province_name,
                MAX(city_name) AS city_name,
@@ -121,7 +152,8 @@ def _fetch_day(day: date) -> list[dict[str, Any]]:
                SUM(content IS NOT NULL AND content <> '') AS content_count
         FROM {settings.crawler_data_table}
         WHERE collect_date = %s
-        GROUP BY COALESCE(author, ''), COALESCE(tag, '')
+        GROUP BY TRIM(COALESCE(site_name, '')), TRIM(COALESCE(tag, '')),
+                 CASE WHEN TRIM(COALESCE(site_name, '')) = '' THEN TRIM(COALESCE(author, '')) ELSE '' END
     """  # noqa: S608
     with _mysql_connect() as conn, conn.cursor() as cur:
         cur.execute(sql, (day.isoformat(),))
@@ -130,6 +162,10 @@ def _fetch_day(day: date) -> list[dict[str, Any]]:
     return [
         {
             "collect_date": day,
+            "site_key": site_key(
+                row["site_code"] or "", row["site_name"] or "", row["province_name"] or "", row["city_name"] or ""
+            ),
+            "identity_verified": True,
             "site_code": (row["site_code"] or "")[:100],
             "site_name": (row["site_name"] or "")[:255],
             "province_name": (row["province_name"] or "")[:64],
@@ -144,6 +180,8 @@ def _fetch_day(day: date) -> list[dict[str, Any]]:
 
 
 async def _upsert_tasks(session: AsyncSession, rows: list[dict[str, Any]]) -> int:
+    # 全量规则快照：同一事务内替换，删除/改名的规则不能永久留在基线里。
+    await session.execute(delete(CrawlerTask))
     if not rows:
         return 0
     now = datetime.now(UTC)
@@ -154,6 +192,7 @@ async def _upsert_tasks(session: AsyncSession, rows: list[dict[str, Any]]) -> in
         stmt = stmt.on_conflict_do_update(
             index_elements=[CrawlerTask.correlation],
             set_={
+                "site_key": stmt.excluded.site_key,
                 "site_code": stmt.excluded.site_code,
                 "site_name": stmt.excluded.site_name,
                 "province_name": stmt.excluded.province_name,
@@ -169,7 +208,11 @@ async def _upsert_tasks(session: AsyncSession, rows: list[dict[str, Any]]) -> in
     return written
 
 
-async def _upsert_daily(session: AsyncSession, rows: list[dict[str, Any]]) -> int:
+async def _upsert_daily(session: AsyncSession, rows: list[dict[str, Any]], *, day: date) -> int:
+    # 源查询是一整天的快照；同一事务先删除该日旧分组，才能反映删除、改标签和零结果。
+    if any(row["collect_date"] != day for row in rows):
+        raise ValueError("按日同步包含其他日期")
+    await session.execute(delete(CrawlerDailyStat).where(CrawlerDailyStat.collect_date == day))
     if not rows:
         return 0
     now = datetime.now(UTC)
@@ -178,7 +221,7 @@ async def _upsert_daily(session: AsyncSession, rows: list[dict[str, Any]]) -> in
         chunk = [dict(row, synced_at=now) for row in rows[chunk_start : chunk_start + 1000]]
         stmt = insert(CrawlerDailyStat).values(chunk)
         stmt = stmt.on_conflict_do_update(
-            index_elements=[CrawlerDailyStat.collect_date, CrawlerDailyStat.site_code, CrawlerDailyStat.tag],
+            index_elements=[CrawlerDailyStat.collect_date, CrawlerDailyStat.site_key, CrawlerDailyStat.tag],
             set_={
                 "site_name": stmt.excluded.site_name,
                 "province_name": stmt.excluded.province_name,
@@ -186,6 +229,7 @@ async def _upsert_daily(session: AsyncSession, rows: list[dict[str, Any]]) -> in
                 "row_count": stmt.excluded.row_count,
                 "named_count": stmt.excluded.named_count,
                 "content_count": stmt.excluded.content_count,
+                "identity_verified": stmt.excluded.identity_verified,
                 "synced_at": stmt.excluded.synced_at,
             },
         )
@@ -198,60 +242,68 @@ async def _upsert_daily(session: AsyncSession, rows: list[dict[str, Any]]) -> in
 _RECOMPUTE_HEALTH = text(
     """
     WITH agg AS (
-        SELECT site_code,
+        SELECT site_key,
+               MAX(site_code) AS site_code,
                tag,
                MAX(collect_date) AS last_collect_date,
-               COALESCE(SUM(row_count) FILTER (WHERE collect_date > CURRENT_DATE - 7), 0) AS count_7d,
-               COALESCE(SUM(row_count) FILTER (WHERE collect_date > CURRENT_DATE - 30), 0) AS count_30d,
-               COALESCE(SUM(row_count) FILTER (WHERE collect_date > CURRENT_DATE - 90), 0) AS count_90d,
+               COALESCE(SUM(row_count) FILTER (WHERE collect_date >
+                   CAST(now() AT TIME ZONE 'Asia/Shanghai' AS date) - 7), 0) AS count_7d,
+               COALESCE(SUM(row_count) FILTER (WHERE collect_date >
+                   CAST(now() AT TIME ZONE 'Asia/Shanghai' AS date) - 30), 0) AS count_30d,
+               COALESCE(SUM(row_count) FILTER (WHERE collect_date >
+                   CAST(now() AT TIME ZONE 'Asia/Shanghai' AS date) - 90), 0) AS count_90d,
                COALESCE(SUM(row_count), 0) AS count_total,
                (ARRAY_AGG(site_name ORDER BY collect_date DESC))[1] AS site_name,
                (ARRAY_AGG(province_name ORDER BY collect_date DESC))[1] AS province_name,
                (ARRAY_AGG(city_name ORDER BY collect_date DESC))[1] AS city_name
         FROM policy_crawler_daily_stats
-        GROUP BY site_code, tag
+        WHERE identity_verified
+        GROUP BY site_key, tag
     ),
     tasks AS (
-        SELECT DISTINCT ON (site_code, tag)
-               site_code, tag, site_name, province_name, city_name, source_url
+        SELECT DISTINCT ON (site_key, tag)
+               site_key, site_code, tag, site_name, province_name, city_name, source_url
         FROM policy_crawler_tasks
-        ORDER BY site_code, tag, synced_at DESC
+        ORDER BY site_key, tag, synced_at DESC, correlation
     ),
     keys AS (
-        SELECT site_code, tag FROM agg
+        SELECT site_key, tag FROM agg
         UNION
-        SELECT site_code, tag FROM tasks
+        SELECT site_key, tag FROM tasks
     )
     INSERT INTO policy_crawler_task_health (
-        id, site_code, site_name, province_name, city_name, tag, source_url,
+        id, site_key, site_code, site_name, province_name, city_name, tag, source_url,
         last_collect_date, stale_days, count_7d, count_30d, count_90d, count_total,
         health_status, in_rules, computed_at
     )
     SELECT gen_random_uuid(),
-           k.site_code,
+           k.site_key,
+           COALESCE(t.site_code, a.site_code, ''),
            COALESCE(NULLIF(t.site_name, ''), a.site_name, ''),
            COALESCE(NULLIF(t.province_name, ''), a.province_name, ''),
            COALESCE(NULLIF(t.city_name, ''), a.city_name, ''),
            k.tag,
            COALESCE(t.source_url, ''),
            a.last_collect_date,
-           CASE WHEN a.last_collect_date IS NULL THEN NULL ELSE CURRENT_DATE - a.last_collect_date END,
+           CASE WHEN a.last_collect_date IS NULL THEN NULL ELSE
+               CAST(now() AT TIME ZONE 'Asia/Shanghai' AS date) - a.last_collect_date END,
            COALESCE(a.count_7d, 0),
            COALESCE(a.count_30d, 0),
            COALESCE(a.count_90d, 0),
            COALESCE(a.count_total, 0),
            CASE
                WHEN a.last_collect_date IS NULL THEN 'never'
-               WHEN CURRENT_DATE - a.last_collect_date <= :normal_days THEN 'normal'
-               WHEN CURRENT_DATE - a.last_collect_date <= :watch_days THEN 'watch'
+               WHEN CAST(now() AT TIME ZONE 'Asia/Shanghai' AS date) - a.last_collect_date <= :normal_days THEN 'normal'
+               WHEN CAST(now() AT TIME ZONE 'Asia/Shanghai' AS date) - a.last_collect_date <= :watch_days THEN 'watch'
                ELSE 'broken'
            END,
-           t.site_code IS NOT NULL,
+           t.site_key IS NOT NULL,
            NOW()
     FROM keys k
-    LEFT JOIN agg a ON a.site_code = k.site_code AND a.tag = k.tag
-    LEFT JOIN tasks t ON t.site_code = k.site_code AND t.tag = k.tag
-    ON CONFLICT (site_code, tag) DO UPDATE SET
+    LEFT JOIN agg a ON a.site_key = k.site_key AND a.tag = k.tag
+    LEFT JOIN tasks t ON t.site_key = k.site_key AND t.tag = k.tag
+    ON CONFLICT (site_key, tag) DO UPDATE SET
+        site_code = EXCLUDED.site_code,
         site_name = EXCLUDED.site_name,
         province_name = EXCLUDED.province_name,
         city_name = EXCLUDED.city_name,
@@ -270,6 +322,14 @@ _RECOMPUTE_HEALTH = text(
 
 
 async def recompute_health(session: AsyncSession) -> int:
+    await session.execute(
+        text("""
+        DELETE FROM policy_crawler_task_health h
+        WHERE NOT EXISTS (SELECT 1 FROM policy_crawler_tasks t WHERE t.site_key=h.site_key AND t.tag=h.tag)
+          AND NOT EXISTS (SELECT 1 FROM policy_crawler_daily_stats d
+                          WHERE d.identity_verified AND d.site_key=h.site_key AND d.tag=h.tag)
+    """)
+    )
     # execute() 的静态类型是 Result，INSERT 实际拿到的是带 rowcount 的 CursorResult。
     result = cast(
         CursorResult[Any],
@@ -281,6 +341,7 @@ async def recompute_health(session: AsyncSession) -> int:
     return int(result.rowcount or 0)
 
 
+@_retry_mysql_read
 def _affected_days(since_ts: datetime) -> tuple[set[date], datetime | None]:
     """找出「入库时间晚于水位」的行涉及哪些采集日，以及本次见到的最大入库时间。
 
@@ -296,12 +357,12 @@ def _affected_days(since_ts: datetime) -> tuple[set[date], datetime | None]:
         GROUP BY collect_date
     """  # noqa: S608
     with _mysql_connect() as conn, conn.cursor() as cur:
-        cur.execute(sql, (since_ts.strftime("%Y-%m-%d %H:%M:%S"),))
+        cur.execute(sql, (since_ts.astimezone(BEIJING).strftime("%Y-%m-%d %H:%M:%S"),))
         rows = cast(list[dict[str, Any]], cur.fetchall())
 
     days = {row["collect_date"] for row in rows if row["collect_date"]}
     stamps = [row["max_created"] for row in rows if row["max_created"]]
-    return days, max(stamps) if stamps else None
+    return days, max(stamps).replace(tzinfo=BEIJING).astimezone(UTC) if stamps else None
 
 
 async def _last_watermark(session: AsyncSession) -> datetime | None:
@@ -319,7 +380,7 @@ async def _existing_days(session: AsyncSession, date_from: date, date_to: date) 
     result = await session.execute(
         text(
             "SELECT DISTINCT collect_date FROM policy_crawler_daily_stats "
-            "WHERE collect_date BETWEEN :date_from AND :date_to"
+            "WHERE collect_date BETWEEN :date_from AND :date_to AND identity_verified"
         ),
         {"date_from": date_from, "date_to": date_to},
     )
@@ -346,7 +407,7 @@ async def _days_to_sync(
         window = [today - timedelta(days=offset) for offset in range(days)]
         logger.info("watermark_missing fallback_from=%s", date_from)
         touched, new_mark = await asyncio.to_thread(
-            _affected_days, datetime.combine(date_from, datetime.min.time(), tzinfo=UTC)
+            _affected_days, datetime.combine(date_from, datetime.min.time(), tzinfo=BEIJING)
         )
         return sorted(set(window) | touched, reverse=True), new_mark
 
@@ -364,60 +425,84 @@ async def run(
     skip_existing: bool = False,
     use_watermark: bool = True,
 ) -> None:
-    today = date.today()
+    # 整次同步使用同一连接持有会话锁；按日 commit 不释放锁，避免两次回填交错覆盖。
+    async with engine.connect() as connection:
+        locked = await connection.scalar(text("SELECT pg_try_advisory_lock(72120260922)"))
+        await connection.commit()
+        if not locked:
+            raise RuntimeError("已有爬虫同步正在运行，请稍后重试")
+        try:
+            async with SessionLocal(bind=connection) as session:
+                await _run_sync(session, days, tasks_only, since, skip_existing, use_watermark)
+        finally:
+            await connection.rollback()
+            await connection.execute(text("SELECT pg_advisory_unlock(72120260922)"))
+            await connection.commit()
+
+
+async def _run_sync(
+    session: AsyncSession,
+    days: int,
+    tasks_only: bool,
+    since: date | None = None,
+    skip_existing: bool = False,
+    use_watermark: bool = True,
+) -> None:
+    today = datetime.now(BEIJING).date()
     started = datetime.now(UTC)
 
-    async with SessionLocal() as session:
-        targets, new_watermark = await _days_to_sync(
-            session, today=today, days=days, since=since, use_watermark=use_watermark
+    date_from = since or today
+    run_row = CrawlerSyncRun(started_at=started, date_from=date_from, date_to=today, status="running")
+    session.add(run_row)
+    await session.commit()
+
+    try:
+        targets, new_watermark = (
+            ([], None)
+            if tasks_only
+            else await _days_to_sync(session, today=today, days=days, since=since, use_watermark=use_watermark)
         )
         date_from = min(targets) if targets else today
-        run_row = CrawlerSyncRun(
-            started_at=started, date_from=date_from, date_to=today, status="running"
-        )
+        run_row.date_from = date_from
+        task_rows = await _upsert_tasks(session, await asyncio.to_thread(_fetch_rules))
+        await session.commit()
+        logger.info("tasks_synced rows=%s", task_rows)
+
+        stat_rows = 0
+        if not tasks_only:
+            # 长回填中途失败时用 --skip-existing 续跑，不必把已入库的日子再查一遍。
+            # 当天和昨天永远重算：当天数据还在写，昨天可能补录。
+            done = await _existing_days(session, date_from, today) if skip_existing else set()
+            always_redo = {today, today - timedelta(days=1)}
+            logger.info("days_to_sync count=%s newest=%s oldest=%s", len(targets), today, date_from)
+            for day in targets:
+                if day in done and day not in always_redo:
+                    continue
+                rows = await asyncio.to_thread(_fetch_day, day)
+                stat_rows += await _upsert_daily(session, rows, day=day)
+                await session.commit()
+                logger.info("day_synced date=%s groups=%s", day, len(rows))
+
+        health_rows = await recompute_health(session)
+        logger.info("health_recomputed rows=%s", health_rows)
+
+        run_row.task_rows = task_rows
+        run_row.stat_rows = stat_rows
+        run_row.health_rows = health_rows
+        run_row.status = "success"
+        run_row.finished_at = datetime.now(UTC)
+        # 水位只在真正跑完统计后前移；tasks-only 不动它，否则会跳过没算过的日子。
+        if new_watermark is not None and not tasks_only:
+            run_row.watermark = new_watermark
+        await session.commit()
+    except Exception as exc:  # noqa: BLE001
+        await session.rollback()
+        run_row.status = "failed"
+        run_row.error_message = str(exc)[:2000]
+        run_row.finished_at = datetime.now(UTC)
         session.add(run_row)
         await session.commit()
-
-        try:
-            task_rows = await _upsert_tasks(session, await asyncio.to_thread(_fetch_rules))
-            await session.commit()
-            logger.info("tasks_synced rows=%s", task_rows)
-
-            stat_rows = 0
-            if not tasks_only:
-                # 长回填中途失败时用 --skip-existing 续跑，不必把已入库的日子再查一遍。
-                # 当天和昨天永远重算：当天数据还在写，昨天可能补录。
-                done = await _existing_days(session, date_from, today) if skip_existing else set()
-                always_redo = {today, today - timedelta(days=1)}
-                logger.info("days_to_sync count=%s newest=%s oldest=%s", len(targets), today, date_from)
-                for day in targets:
-                    if day in done and day not in always_redo:
-                        continue
-                    rows = await asyncio.to_thread(_fetch_day, day)
-                    stat_rows += await _upsert_daily(session, rows)
-                    await session.commit()
-                    logger.info("day_synced date=%s groups=%s", day, len(rows))
-
-            health_rows = await recompute_health(session)
-            logger.info("health_recomputed rows=%s", health_rows)
-
-            run_row.task_rows = task_rows
-            run_row.stat_rows = stat_rows
-            run_row.health_rows = health_rows
-            run_row.status = "success"
-            run_row.finished_at = datetime.now(UTC)
-            # 水位只在真正跑完统计后前移；tasks-only 不动它，否则会跳过没算过的日子。
-            if new_watermark is not None and not tasks_only:
-                run_row.watermark = new_watermark
-            await session.commit()
-        except Exception as exc:  # noqa: BLE001
-            await session.rollback()
-            run_row.status = "failed"
-            run_row.error_message = str(exc)[:2000]
-            run_row.finished_at = datetime.now(UTC)
-            session.add(run_row)
-            await session.commit()
-            raise
+        raise
 
 
 def main() -> None:
@@ -425,7 +510,7 @@ def main() -> None:
     parser.add_argument(
         "--days",
         type=int,
-        default=settings.crawler_sync_days,
+        default=None,
         help="强制回算最近多少天（跳过水位判断）。默认按入库时间水位决定重算哪些采集日",
     )
     parser.add_argument(
@@ -447,13 +532,17 @@ def main() -> None:
         help="跳过库里已有的日期，用于长回填中途失败后续跑；当天和昨天仍会重算",
     )
     args = parser.parse_args()
+    if args.since and args.since > datetime.now(BEIJING).date():
+        parser.error("--since 不能晚于今天")
+    if args.skip_existing and args.since is None and args.days is None and not args.fixed_window:
+        parser.error("--skip-existing 只能配合人工固定区间使用")
     asyncio.run(
         run(
-            days=max(args.days, 1),
+            days=max(args.days if args.days is not None else settings.crawler_sync_days, 1),
             tasks_only=args.tasks_only,
             since=args.since,
             skip_existing=args.skip_existing,
-            use_watermark=not args.fixed_window,
+            use_watermark=args.days is None and not args.fixed_window,
         )
     )
 

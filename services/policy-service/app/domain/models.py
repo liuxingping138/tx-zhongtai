@@ -154,6 +154,7 @@ class CrawlerTask(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid, comment="主键")
     correlation: Mapped[str] = mapped_column(String(64), nullable=False, comment="爬虫规则唯一ID")
     # 实测网站编码格式不统一（11 位数字、GYQ、3200000000A 都有），不能按 11 位定长。
+    site_key: Mapped[str] = mapped_column(String(128), nullable=False, comment="网站内部关联键")
     site_code: Mapped[str] = mapped_column(String(100), nullable=False, default="", index=True, comment="网站编码")
     # 这张表只被健康快照重算按 (site_code, tag) 关联，没有按名称/省份查的场景，不建索引。
     site_name: Mapped[str] = mapped_column(String(255), nullable=False, default="", comment="网站名称")
@@ -169,7 +170,7 @@ class CrawlerDailyStat(Base):
     """任务 × 自然日 的采集量。页面所有趋势和健康度都从这张表算，不回查爬虫库。
 
     这是派生事实表，不是业务记录：没有任何代码按 id 引用它，每次同步都按
-    (采集日期, 网站编码, 标签) 覆盖写。UUID 主键索引实测零命中，还要在每次
+    (采集日期, 网站内部关联键, 标签) 覆盖写。UUID 主键索引实测零命中，还要在每次
     upsert 时维护，所以不跟其它业务表一样用 UUID，直接用这组天然键做主键。
     """
 
@@ -177,14 +178,16 @@ class CrawlerDailyStat(Base):
     __table_args__ = {"comment": "政策爬虫按天采集统计"}
 
     collect_date: Mapped[date] = mapped_column(Date, primary_key=True, index=True, comment="采集日期")
+    site_key: Mapped[str] = mapped_column(String(128), primary_key=True, comment="网站内部关联键")
     site_code: Mapped[str] = mapped_column(
-        String(100), primary_key=True, nullable=False, default="", index=True, comment="网站编码"
+        String(100), nullable=False, default="", index=True, comment="网站编码"
     )
     site_name: Mapped[str] = mapped_column(String(255), nullable=False, default="", comment="网站名称")
     # 页面按省份筛的是健康快照表，这张事实表没有按省份查的场景，不建索引。
     province_name: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="省份名称")
     city_name: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="地市名称")
     tag: Mapped[str] = mapped_column(String(255), primary_key=True, nullable=False, default="", comment="标签")
+    identity_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, comment="网站关联是否已校验")
     row_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="采集条数")
     named_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="有政策名称条数")
     content_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="有正文条数")
@@ -200,11 +203,12 @@ class CrawlerTaskHealth(Base):
 
     __tablename__ = "policy_crawler_task_health"
     __table_args__ = (
-        UniqueConstraint("site_code", "tag", name="uq_policy_crawler_task_health_key"),
+        UniqueConstraint("site_key", "tag", name="uq_policy_crawler_task_health_key"),
         {"comment": "政策爬虫任务健康快照"},
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid, comment="主键")
+    site_key: Mapped[str] = mapped_column(String(128), nullable=False, comment="网站内部关联键")
     site_code: Mapped[str] = mapped_column(String(100), nullable=False, default="", index=True, comment="网站编码")
     # 这三列是页面列表的筛选字段（省份、地市、网站名称），保留索引。
     site_name: Mapped[str] = mapped_column(String(255), nullable=False, default="", index=True, comment="网站名称")

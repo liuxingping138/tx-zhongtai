@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Download, Warning } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowUp, Download, Refresh, Warning } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
 
@@ -20,6 +20,7 @@ import ListPage from '@/components/ListPage.vue'
 import { useFilterOptions } from '@/composables/useFilterOptions'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import HealthBar from './HealthBar.vue'
+import { crawlerFilters, STATUS_BY_LABEL } from './filters'
 import TaskTrend from './TaskTrend.vue'
 import TrendChart from './TrendChart.vue'
 
@@ -36,12 +37,17 @@ const overviewLoading = ref(false)
 const overviewError = ref('')
 const trendDays = ref(30)
 
-const STATUS_BY_LABEL: Record<string, HealthStatus> = {
-  正常: 'normal',
-  观察: 'watch',
-  断爬: 'broken',
-  从未出数: 'never',
-}
+const overviewExpanded = ref(true)
+const syncNotice = computed(() => {
+  if (!overview.value) return ''
+  const { last_sync: sync, data_status: data } = overview.value
+  if (sync?.status === 'failed') return '最近一次同步失败，统计可能尚未完整更新。请检查同步日志后重试。'
+  if (sync?.status === 'running') return '数据正在同步，统计更新尚未完成。'
+  if (data.pending_backfill.days) return `有 ${data.pending_backfill.days} 天历史统计需要重新同步，当前统计暂不完整。`
+  if (data.stale) return '统计已超过 36 小时未更新，请检查同步任务。'
+  if (!sync) return '尚未同步采集数据。完成首次同步后，这里将显示采集概况。'
+  return ''
+})
 
 const query = reactive({
   province_name: '',
@@ -53,6 +59,7 @@ const query = reactive({
   page_size: 20,
 })
 const filters = useFilterOptions('/policy/crawler-monitoring/tasks')
+const healthLabels = Object.fromEntries(Object.keys(STATUS_BY_LABEL).map(label => [label, label]))
 const listQuery = useListQuery(query, load)
 
 const tableColumns = [
@@ -76,16 +83,6 @@ const detailColumns = computed(() => [...tableColumns])
 const defaultColumns = tableColumns.map((column) => column.prop)
 const selectedColumns = ref<string[]>([...defaultColumns])
 
-function currentFilters() {
-  return {
-    province_name: query.province_name || undefined,
-    city_name: query.city_name || undefined,
-    site_name: query.site_name || undefined,
-    tag: query.tag || undefined,
-    health_status: STATUS_BY_LABEL[query.health_status] || undefined,
-  }
-}
-
 let loadSequence = 0
 
 async function load() {
@@ -98,28 +95,35 @@ async function load() {
     ([key, value]) => !['page', 'page_size'].includes(key) && Boolean(value),
   )
   try {
-    const page = await listCrawlerTasks({ ...currentFilters(), page: query.page, page_size: query.page_size })
+    const page = await listCrawlerTasks({ ...crawlerFilters(query), page: query.page, page_size: query.page_size })
     if (sequence !== loadSequence) return
     items.value = page.items
     total.value = page.total
     resultFiltered.value = filtered
   } catch (error) {
     if (sequence !== loadSequence) return
-    loadError.value = errorMessage(error, '加载爬虫监测失败')
+    const message = errorMessage(error, '暂时无法获取任务，请稍后重新加载。')
+    loadError.value = message === '请求失败' ? '暂时无法获取任务，请稍后重新加载。' : message
   } finally {
     if (sequence === loadSequence) loading.value = false
   }
 }
 
+let overviewSequence = 0
 async function loadOverview() {
+  const sequence = ++overviewSequence
   overviewLoading.value = true
   overviewError.value = ''
   try {
-    overview.value = await getCrawlerOverview(trendDays.value)
+    const result = await getCrawlerOverview(trendDays.value)
+    if (sequence === overviewSequence) overview.value = result
   } catch (error) {
-    overviewError.value = errorMessage(error, '加载概览失败')
+    if (sequence === overviewSequence) {
+      const message = errorMessage(error, '暂时无法获取采集概况，请稍后重试。')
+      overviewError.value = message === '请求失败' ? '暂时无法获取采集概况，请稍后重试。' : message
+    }
   } finally {
-    overviewLoading.value = false
+    if (sequence === overviewSequence) overviewLoading.value = false
   }
 }
 
@@ -149,7 +153,7 @@ async function onExport() {
     await downloadFile(
       '/policy/crawler-monitoring/tasks/export',
       '爬虫监测.xlsx',
-      filtersForExport(listQuery.applied),
+      filtersForExport(crawlerFilters(listQuery.applied)),
     )
     ElMessage.success('下载已开始，请查看浏览器下载列表')
   } catch (error) {
@@ -162,7 +166,7 @@ async function onExport() {
 async function onExportAbnormal() {
   exportingAbnormal.value = true
   try {
-    await downloadFile('/policy/crawler-monitoring/tasks/export', '爬虫异常清单.xlsx', { abnormal_only: 'true' })
+    await downloadFile('/policy/crawler-monitoring/tasks/export', '爬虫异常清单.xlsx', { ...filtersForExport(crawlerFilters(listQuery.applied)), abnormal_only: 'true' })
     ElMessage.success('下载已开始，请查看浏览器下载列表')
   } catch (error) {
     ElMessage.error(errorMessage(error, '导出失败'))
@@ -176,11 +180,11 @@ async function onTrendDays(days: number) {
   await loadOverview()
 }
 
-onMounted(() => {
-  void load()
-  void loadOverview()
-  void filters.load()
-})
+async function reloadData() {
+  await Promise.all([load(), loadOverview(), filters.load()])
+}
+
+onMounted(() => { void reloadData() })
 </script>
 
 <template>
@@ -189,11 +193,11 @@ onMounted(() => {
       v-model:page="query.page"
       v-model:page-size="query.page_size"
       title="爬虫监测"
-      hint="按「网站 + 标签」监测政策爬虫的采集情况。统计每天同步一次，停更天数按最后一次采集到数据的日期计算。"
+      hint="按网站与标签查看采集情况，定位停更栏目与异常任务。"
       :loading="loading"
       :error="loadError"
       :total="total"
-      @retry="load"
+      @retry="reloadData"
       @change="load"
     >
       <template #actions>
@@ -204,13 +208,14 @@ onMounted(() => {
           <el-button
             :icon="Download"
             :loading="exporting"
+            :disabled="loading || !!loadError || total === 0"
             @click="onExport"
           >
             下载 Excel
           </el-button>
         </el-tooltip>
         <el-tooltip
-          content="只导出断爬和从未出数的任务，用于排查和派单。"
+          content="在当前已生效筛选结果中，导出断爬和从未出数的任务。"
           placement="bottom"
         >
           <el-button
@@ -218,6 +223,7 @@ onMounted(() => {
             plain
             :icon="Warning"
             :loading="exportingAbnormal"
+            :disabled="loading || !!loadError || total === 0"
             @click="onExportAbnormal"
           >
             下载异常清单
@@ -226,7 +232,45 @@ onMounted(() => {
       </template>
 
       <template #summary>
+        <div class="overview-heading">
+          <div class="overview-caption">
+            <h2>采集概况</h2>
+            <span
+              v-if="overview?.data_status.last_success_at"
+              class="sync-time"
+            >更新于 {{ overview.data_status.last_success_at }}</span>
+          </div>
+          <div class="overview-actions">
+            <el-button
+              :icon="Refresh"
+              text
+              :loading="overviewLoading"
+              @click="loadOverview"
+            >
+              刷新统计
+            </el-button>
+            <el-button
+              :icon="overviewExpanded ? ArrowUp : ArrowDown"
+              text
+              :aria-expanded="overviewExpanded"
+              aria-controls="crawler-overview"
+              @click="overviewExpanded = !overviewExpanded"
+            >
+              {{ overviewExpanded ? '收起概览' : '展开概览' }}
+            </el-button>
+          </div>
+        </div>
+        <el-alert
+          v-if="syncNotice"
+          :title="syncNotice"
+          :type="overview?.last_sync?.status === 'failed' ? 'error' : 'warning'"
+          :closable="false"
+          show-icon
+          class="sync-notice"
+        />
         <section
+          v-show="overviewExpanded"
+          id="crawler-overview"
           v-loading="overviewLoading"
           class="overview"
         >
@@ -240,7 +284,7 @@ onMounted(() => {
             <el-button
               link
               type="primary"
-              @click="loadOverview"
+              @click="reloadData"
             >
               重试
             </el-button>
@@ -269,9 +313,9 @@ onMounted(() => {
                 <span class="card-foot">共 {{ overview.cards.sites_total.toLocaleString() }} 个网站</span>
               </div>
               <div class="card card-alert">
-                <span class="card-label">断爬任务</span>
+                <span class="card-label">异常任务</span>
                 <strong class="card-value">{{ overview.cards.abnormal_tasks.toLocaleString() }}</strong>
-                <span class="card-foot">共 {{ overview.cards.total_tasks.toLocaleString() }} 个任务</span>
+                <span class="card-foot">断爬与从未出数 / 共 {{ overview.cards.total_tasks.toLocaleString() }} 项</span>
               </div>
               <div class="card card-alert">
                 <span class="card-label">整站失联</span>
@@ -282,7 +326,7 @@ onMounted(() => {
                 <span class="card-label">健康占比</span>
                 <strong class="card-value">{{ overview.cards.healthy_ratio }}%</strong>
                 <span class="card-foot">
-                  {{ overview.last_sync?.finished_at ? `同步于 ${overview.last_sync.finished_at}` : '尚未同步' }}
+                  正常与观察任务占比
                 </span>
               </div>
             </div>
@@ -313,6 +357,7 @@ onMounted(() => {
                 </header>
                 <HealthBar
                   :items="overview.health_distribution"
+                  :selected="STATUS_BY_LABEL[String(listQuery.applied.health_status)]"
                   @pick="pickStatus"
                 />
               </div>
@@ -352,6 +397,7 @@ onMounted(() => {
             <FilterSelect
               v-model="query.health_status"
               v-bind="filters.bind('health_status')"
+              :labels="healthLabels"
               size="short"
             />
           </el-form-item>
@@ -386,7 +432,7 @@ onMounted(() => {
       >
         <template #detail-extra="{ row }">
           <TaskTrend
-            :site-code="row.site_code"
+            :site-key="row.site_key"
             :tag="row.tag"
           />
         </template>
@@ -396,6 +442,14 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.overview-heading, .overview-caption, .overview-actions { display: flex; align-items: center; gap: 12px; }
+.overview-heading { justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px; }
+.overview-caption { flex-wrap: wrap; gap: 8px 16px; }
+.overview-caption h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--zt-ink-900); }
+.sync-time { color: var(--zt-ink-500); font-size: 12px; font-variant-numeric: tabular-nums; }
+.overview-actions { gap: 0; }
+.overview-actions .el-button { margin: 0; }
+.sync-notice { margin-bottom: 12px; }
 .overview {
   display: flex;
   flex-direction: column;
@@ -416,7 +470,8 @@ onMounted(() => {
   padding: var(--zt-space-3) var(--zt-space-4);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
+  min-height: 110px;
 }
 
 .card-label {
@@ -425,14 +480,14 @@ onMounted(() => {
 }
 
 .card-value {
-  font-size: 26px;
+  font-size: 28px;
   line-height: 1.2;
   color: var(--zt-ink-900);
   font-variant-numeric: tabular-nums;
 }
 
 .card-alert .card-value {
-  color: #c45656;
+  color: var(--el-color-danger);
 }
 
 .card-foot {
@@ -450,7 +505,7 @@ onMounted(() => {
 
 .panels {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.8fr) minmax(280px, 1fr);
   gap: var(--zt-space-3);
 }
 
@@ -458,7 +513,8 @@ onMounted(() => {
   background: var(--zt-panel);
   border: 1px solid var(--zt-border);
   border-radius: var(--zt-radius);
-  padding: var(--zt-space-3) var(--zt-space-4) var(--zt-space-4);
+  padding: var(--zt-space-4);
+  min-width: 0;
 }
 
 .panel-head {
@@ -491,13 +547,12 @@ onMounted(() => {
   word-break: break-all;
 }
 
-@media (max-width: 1280px) {
-  .cards {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .panels {
-    grid-template-columns: minmax(0, 1fr);
-  }
+@media (max-width: 1100px) {
+  .panels { grid-template-columns: minmax(0, 1fr) minmax(250px, 0.85fr); }
+  .cards { gap: 8px; }
+}
+@media (max-width: 767px) {
+  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .panels { grid-template-columns: minmax(0, 1fr); }
 }
 </style>

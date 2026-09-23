@@ -34,6 +34,7 @@ const count = computed(() => selected.value.filter(key => known.has(key)).length
     aria-label="设置显示列"
     width="280"
     placement="bottom-end"
+    :popper-options="{ modifiers: [{ name: 'preventOverflow', options: { altAxis: true, tether: false, padding: 12 } }] }"
   >
     <template #reference>
       <el-button
@@ -82,11 +83,12 @@ const count = computed(() => selected.value.filter(key => known.has(key)).length
 </template>
 <style scoped>
 .column-picker__count { margin-left: 6px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.column-picker { display: flex; flex-direction: column; max-height: calc(100dvh - 48px); }
 .column-picker__actions { display: flex; justify-content: space-between; border-top: 1px solid var(--zt-border); padding-top: 8px; }
 .column-picker__actions :deep(.el-button + .el-button) { margin-left: 0; }
 .column-picker h2 { margin: 0; font-size: 15px; color: var(--zt-ink-900); }
 .column-picker p { font-size: 12px; color: var(--zt-ink-500); }
-.column-picker__list { display: flex; flex-direction: column; max-height: 320px; overflow: auto; margin-bottom: 12px; }
+.column-picker__list { display: flex; flex-direction: column; min-height: 0; max-height: 320px; overflow: auto; margin-bottom: 12px; }
 .column-picker__list :deep(.el-checkbox) { height: auto; min-height: 36px; margin-right: 0; }
 .column-picker__list :deep(.el-checkbox__label) { white-space: normal; line-height: 1.5; }
 </style>

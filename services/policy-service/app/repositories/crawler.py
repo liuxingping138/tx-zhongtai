@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
+from platform_common.clock import BEIJING, utcnow
 from platform_common.filters import Filters
 from sqlalchemy import ColumnElement, Date, Integer, and_, case, cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,7 +31,7 @@ NUMERIC_FILTERS = ("stale_days_min",)
 def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
     conds: list[ColumnElement[bool]] = []
     for key, value in filters.items():
-        if not value:
+        if value is None or value == "" or value is False:
             continue
         if key in EXACT_FILTERS:
             conds.append(CrawlerTaskHealth.health_status == value)
@@ -56,6 +57,7 @@ _ORDER = (
     CrawlerTaskHealth.stale_days.desc().nullslast(),
     CrawlerTaskHealth.site_name,
     CrawlerTaskHealth.tag,
+    CrawlerTaskHealth.site_key,
 )
 
 
@@ -99,11 +101,11 @@ async def site_health_summary(session: AsyncSession) -> dict[str, int]:
     abnormal_tags = func.count().filter(CrawlerTaskHealth.health_status.in_(ABNORMAL_STATUSES))
     per_site = (
         select(
-            CrawlerTaskHealth.site_code.label("site_code"),
+            CrawlerTaskHealth.site_key.label("site_key"),
             normal_tags.label("alive"),
             abnormal_tags.label("dead"),
         )
-        .group_by(CrawlerTaskHealth.site_code)
+        .group_by(CrawlerTaskHealth.site_key)
         .subquery()
     )
     result = await session.execute(
@@ -123,7 +125,9 @@ async def daily_trend(session: AsyncSession, days: int) -> list[dict[str, Any]]:
     series = select(
         cast(
             func.generate_series(
-                func.current_date() - cast(days - 1, Integer), func.current_date(), text("'1 day'::interval")
+                cast(func.timezone("Asia/Shanghai", func.now()), Date) - cast(days - 1, Integer),
+                cast(func.timezone("Asia/Shanghai", func.now()), Date),
+                text("'1 day'::interval"),
             ),
             Date,
         ).label("day")
@@ -132,9 +136,13 @@ async def daily_trend(session: AsyncSession, days: int) -> list[dict[str, Any]]:
         select(
             CrawlerDailyStat.collect_date.label("day"),
             func.sum(CrawlerDailyStat.row_count).label("rows"),
-            func.count(func.distinct(CrawlerDailyStat.site_code)).label("sites"),
+            func.count(func.distinct(CrawlerDailyStat.site_key)).label("sites"),
         )
-        .where(CrawlerDailyStat.collect_date > func.current_date() - cast(days, Integer))
+        .where(
+            CrawlerDailyStat.identity_verified,
+            CrawlerDailyStat.collect_date
+            > cast(func.timezone("Asia/Shanghai", func.now()), Date) - cast(days, Integer),
+        )
         .group_by(CrawlerDailyStat.collect_date)
         .subquery()
     )
@@ -150,30 +158,55 @@ async def day_totals(session: AsyncSession, day: date) -> dict[str, int]:
     result = await session.execute(
         select(
             func.coalesce(func.sum(CrawlerDailyStat.row_count), 0),
-            func.count(func.distinct(CrawlerDailyStat.site_code)),
+            func.count(func.distinct(CrawlerDailyStat.site_key)),
             func.count(),
-        ).where(CrawlerDailyStat.collect_date == day)
+        ).where(CrawlerDailyStat.identity_verified, CrawlerDailyStat.collect_date == day)
     )
     rows, sites, tasks = result.one()
     return {"rows": int(rows), "sites": int(sites), "tasks": int(tasks)}
 
 
-async def task_daily_series(session: AsyncSession, *, site_code: str, tag: str, days: int) -> list[dict[str, Any]]:
+async def task_daily_series(session: AsyncSession, *, site_key: str, tag: str, days: int) -> list[dict[str, Any]]:
+    today = utcnow().astimezone(BEIJING).date()
+    start = today - timedelta(days=days - 1)
     result = await session.execute(
-        select(CrawlerDailyStat.collect_date, CrawlerDailyStat.row_count)
-        .where(
-            CrawlerDailyStat.site_code == site_code,
+        select(CrawlerDailyStat.collect_date, CrawlerDailyStat.row_count).where(
+            CrawlerDailyStat.site_key == site_key,
             CrawlerDailyStat.tag == tag,
-            CrawlerDailyStat.collect_date > func.current_date() - cast(days, Integer),
+            CrawlerDailyStat.identity_verified,
+            CrawlerDailyStat.collect_date.between(start, today),
         )
-        .order_by(CrawlerDailyStat.collect_date.desc())
     )
-    return [{"date": day.isoformat(), "rows": int(rows)} for day, rows in result.all()]
+    counts = {day: rows for day, rows in result.all()}
+    return [
+        {"date": (today - timedelta(days=i)).isoformat(), "rows": int(counts.get(today - timedelta(days=i), 0))}
+        for i in range(days)
+    ]
 
 
-async def get_task(session: AsyncSession, *, site_code: str, tag: str) -> CrawlerTaskHealth | None:
+async def get_task(session: AsyncSession, *, site_key: str, tag: str) -> CrawlerTaskHealth | None:
     result = await session.execute(
-        select(CrawlerTaskHealth).where(CrawlerTaskHealth.site_code == site_code, CrawlerTaskHealth.tag == tag)
+        select(CrawlerTaskHealth).where(CrawlerTaskHealth.site_key == site_key, CrawlerTaskHealth.tag == tag)
+    )
+    return result.scalar_one_or_none()
+
+
+async def pending_identity_backfill(session: AsyncSession) -> dict[str, Any]:
+    result = await session.execute(
+        select(func.count(func.distinct(CrawlerDailyStat.collect_date)), func.min(CrawlerDailyStat.collect_date)).where(
+            CrawlerDailyStat.identity_verified.is_(False)
+        )
+    )
+    count, first = result.one()
+    return {"days": int(count), "since": first.isoformat() if first else ""}
+
+
+async def last_successful_sync(session: AsyncSession) -> CrawlerSyncRun | None:
+    result = await session.execute(
+        select(CrawlerSyncRun)
+        .where(CrawlerSyncRun.status == "success")
+        .order_by(CrawlerSyncRun.started_at.desc())
+        .limit(1)
     )
     return result.scalar_one_or_none()
 

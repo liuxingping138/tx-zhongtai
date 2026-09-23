@@ -6,6 +6,7 @@ export type HealthStatus = 'normal' | 'watch' | 'broken' | 'never'
 export interface CrawlerTaskItem {
   id: string
   site_code: string
+  site_key: string
   site_name: string
   province_name: string
   city_name: string
@@ -38,7 +39,8 @@ export interface CrawlerOverview {
   }
   health_distribution: { status: HealthStatus; label: string; count: number }[]
   trend: { date: string; rows: number; sites: number }[]
-  last_sync: { status: string; finished_at: string; date_to: string; error_message: string | null } | null
+  data_status: { last_success_at: string; stale: boolean; pending_backfill: { days: number; since: string } }
+  last_sync: { status: string; started_at: string; finished_at: string; date_to: string; error_message: string | null } | null
 }
 
 export interface CrawlerTaskFilters {
@@ -63,7 +65,7 @@ export function listCrawlerTasks(
 }
 
 export function getCrawlerTaskDetail(params: {
-  site_code: string
+  site_key: string
   tag: string
   days?: number
 }): Promise<{ task: CrawlerTaskItem; series: { date: string; rows: number }[] }> {

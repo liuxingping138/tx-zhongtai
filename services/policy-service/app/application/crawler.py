@@ -6,7 +6,7 @@ from datetime import timedelta
 from typing import Any
 
 from platform_common.actors import Actor
-from platform_common.clock import format_beijing, utcnow
+from platform_common.clock import BEIJING, format_beijing, utcnow
 from platform_common.errors import ApiError, ErrorCode
 from platform_common.excel import build_workbook_async
 from platform_common.filters import Filters
@@ -24,6 +24,7 @@ _TREND_MAX_DAYS = 180
 def _to_out(row: CrawlerTaskHealth) -> dict[str, Any]:
     return {
         "id": str(row.id),
+        "site_key": row.site_key,
         "site_code": row.site_code,
         "site_name": row.site_name,
         "province_name": row.province_name,
@@ -52,16 +53,25 @@ async def list_tasks(session: AsyncSession, *, filters: Filters, page: int, page
 async def overview(session: AsyncSession, *, trend_days: int) -> dict[str, Any]:
     """页面顶部的卡片和两张图。一次查完，避免前端串行发四五个请求。"""
 
-    today = utcnow().date()
+    today = utcnow().astimezone(BEIJING).date()
     distribution = await repo.health_distribution(session)
     sites = await repo.site_health_summary(session)
     yesterday = await repo.day_totals(session, today - timedelta(days=1))
     day_before = await repo.day_totals(session, today - timedelta(days=2))
     sync_run = await repo.last_sync(session)
+    successful = await repo.last_successful_sync(session)
+    backfill = await repo.pending_identity_backfill(session)
 
     abnormal = sum(distribution.get(status, 0) for status in repo.ABNORMAL_STATUSES)
     total_tasks = sum(distribution.values())
     return {
+        "data_status": {
+            "last_success_at": format_beijing(successful.finished_at) if successful else "",
+            "stale": bool(
+                successful and successful.finished_at and utcnow() - successful.finished_at > timedelta(hours=36)
+            ),
+            "pending_backfill": backfill,
+        },
         "cards": {
             "yesterday_rows": yesterday["rows"],
             "yesterday_rows_delta": yesterday["rows"] - day_before["rows"],
@@ -80,6 +90,7 @@ async def overview(session: AsyncSession, *, trend_days: int) -> dict[str, Any]:
         "trend": await repo.daily_trend(session, min(trend_days, _TREND_MAX_DAYS)),
         "last_sync": {
             "status": sync_run.status if sync_run else "",
+            "started_at": format_beijing(sync_run.started_at) if sync_run else "",
             "finished_at": format_beijing(sync_run.finished_at) if sync_run and sync_run.finished_at else "",
             "date_to": sync_run.date_to.isoformat() if sync_run else "",
             "error_message": sync_run.error_message if sync_run else None,
@@ -89,13 +100,18 @@ async def overview(session: AsyncSession, *, trend_days: int) -> dict[str, Any]:
     }
 
 
-async def task_detail(session: AsyncSession, *, site_code: str, tag: str, days: int) -> dict[str, Any]:
-    row = await repo.get_task(session, site_code=site_code, tag=tag)
+async def task_detail(
+    session: AsyncSession, *, site_code: str, tag: str, days: int, site_key: str | None = None
+) -> dict[str, Any]:
+    key = site_key or (f"code:{site_code.strip()}" if site_code.strip() else "")
+    if not key:
+        raise ApiError("缺少网站标识，请刷新列表后重试", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    row = await repo.get_task(session, site_key=key, tag=tag)
     if row is None:
         raise ApiError("任务不存在", code=ErrorCode.RESOURCE_NOT_FOUND, http_status=404)
     return {
         "task": _to_out(row),
-        "series": await repo.task_daily_series(session, site_code=site_code, tag=tag, days=min(days, _TREND_MAX_DAYS)),
+        "series": await repo.task_daily_series(session, site_key=key, tag=tag, days=min(days, _TREND_MAX_DAYS)),
     }
 
 
@@ -113,7 +129,7 @@ async def list_options(session: AsyncSession) -> dict[str, Any]:
         "items": [HEALTH_STATUS_LABELS[status] for status in ("normal", "watch", "broken", "never")],
         "truncated": False,
     }
-    return items
+    return {"options": items}
 
 
 async def search_options(session: AsyncSession, *, field: str, keyword: str | None) -> list[str]:

@@ -23,7 +23,7 @@ help:
 	@echo "  make migrate          对已运行的 iam-service/audit-service 执行数据库迁移"
 	@echo "  make seed             幂等同步公共资源/动作/菜单与内置超级管理员角色"
 	@echo "  make seed-area-codes  从 SQL 种子导入省市区编码表（按区县编码去重）"
-	@echo "  make crawler-sync     同步爬虫采集量（日常增量，回算最近几天）"
+	@echo "  make crawler-sync     同步爬虫采集量（日常按入库时间水位增量重算）"
 	@echo "  make crawler-backfill 回填爬虫采集量，用 DAYS=365 指定窗口"
 	@echo "  make admin-create     创建初始管理员（密码从 ADMIN_PASSWORD 读取，不进命令行参数）"
 	@echo "  make check            Python 静态检查 + 前端类型检查/构建/lint"
@@ -79,25 +79,25 @@ dev-down:
 
 migrate:
 	@echo "== iam-service 迁移 =="
-	$(COMPOSE) exec -T iam-service uv run alembic upgrade head
+	$(COMPOSE) exec -T iam-service .venv/bin/alembic upgrade head
 	@echo "== audit-service 迁移 =="
-	$(COMPOSE) exec -T audit-service uv run alembic upgrade head
+	$(COMPOSE) exec -T audit-service .venv/bin/alembic upgrade head
 	@$(MAKE) provision-audit-cleanup
 	@$(MAKE) provision-codebook-db
 	@echo "== 授予审计清理权限 =="
-	$(COMPOSE) exec -T audit-service uv run python -m app.cli.grant_cleanup
+	$(COMPOSE) exec -T audit-service .venv/bin/python -m app.cli.grant_cleanup
 	@echo "== codebook-service 迁移 =="
-	$(COMPOSE) exec -T codebook-service uv run alembic upgrade head
+	$(COMPOSE) exec -T codebook-service .venv/bin/alembic upgrade head
 	@$(MAKE) provision-policy-db
 	@echo "== policy-service 迁移 =="
-	$(COMPOSE) exec -T policy-service uv run alembic upgrade head
+	$(COMPOSE) exec -T policy-service .venv/bin/alembic upgrade head
 
 migrate-check:
 	@# alembic check 需要连真实库，进不了 make check，单独跑。
 	@# model 改了但没写迁移、或迁移漏建索引/约束，都会在这里暴露。
 	@set -e; for s in iam-service audit-service codebook-service policy-service; do \
 		printf '%-20s ' "$$s"; \
-		$(COMPOSE) exec -T $$s uv run alembic check 2>&1 | tail -1; \
+		$(COMPOSE) exec -T $$s .venv/bin/alembic check 2>&1 | tail -1; \
 	done
 
 provision-audit-cleanup:
@@ -113,35 +113,35 @@ provision-policy-db:
 	$(COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-policy-db.sh
 
 outbox-replay:
-	$(COMPOSE) exec -T iam-service uv run python -m app.cli.outbox_replay
+	$(COMPOSE) exec -T iam-service .venv/bin/python -m app.cli.outbox_replay
 
 iam-session-cleanup:
 	@echo "== 清理已失效的会话与刷新令牌 =="
-	$(COMPOSE) exec -T iam-service uv run python -m app.cli.session_cleanup
+	$(COMPOSE) exec -T iam-service .venv/bin/python -m app.cli.session_cleanup
 
 audit-cleanup:
 	@set -a && . ./.env && set +a && \
 	$(COMPOSE) exec -T \
 		-e AUDIT_CLEANUP_DATABASE_URL=postgresql+asyncpg://$$AUDIT_CLEANUP_DB_USER:$$AUDIT_CLEANUP_DB_PASSWORD@postgres:5432/$$AUDIT_DB_NAME \
-		audit-service uv run python -m app.cli.cleanup
+		audit-service .venv/bin/python -m app.cli.cleanup
 
 seed:
-	$(COMPOSE) exec -T iam-service uv run python -m app.cli.seed
+	$(COMPOSE) exec -T iam-service .venv/bin/python -m app.cli.seed
 
 seed-area-codes:
-	$(COMPOSE) exec -T codebook-service uv run python -m app.cli.seed_area_codes
+	$(COMPOSE) exec -T codebook-service .venv/bin/python -m app.cli.seed_area_codes
 
-# 爬虫监测：从爬虫库按天聚合到 policy_db。日常只回算最近几天，够覆盖当天补录。
+# 爬虫监测：按入库时间水位找出受影响日期，再按采集日聚合到 policy_db。
 crawler-sync:
-	$(COMPOSE) exec -T policy-service uv run python -m app.cli.sync_crawler
+	$(COMPOSE) exec -T policy-service .venv/bin/python -m app.cli.sync_crawler
 
 # 回填历史窗口。整表聚合在爬虫库上跑不动，这里是按天分片查，365 天约 12 分钟。
 crawler-backfill:
-	$(COMPOSE) exec -T policy-service uv run python -m app.cli.sync_crawler --days $(or $(DAYS),365)
+	$(COMPOSE) exec -T policy-service .venv/bin/python -m app.cli.sync_crawler --days $(or $(DAYS),365)
 
 admin-create:
 	@if [ -z "$$ADMIN_PASSWORD" ]; then echo "请通过环境变量 ADMIN_PASSWORD 传入初始密码，不要写在命令行参数里。"; exit 2; fi
-	$(COMPOSE) exec -T -e ADMIN_USERNAME -e ADMIN_PASSWORD -e ADMIN_DISPLAY_NAME iam-service uv run python -m app.cli.admin_create
+	$(COMPOSE) exec -T -e ADMIN_USERNAME -e ADMIN_PASSWORD -e ADMIN_DISPLAY_NAME iam-service .venv/bin/python -m app.cli.admin_create
 
 check:
 	@echo "== Python 静态检查 =="
@@ -188,21 +188,21 @@ p6-down:
 	$(P6_COMPOSE) down -v
 
 p6-migrate:
-	$(P6_COMPOSE) exec -T iam-service uv run alembic upgrade head
-	$(P6_COMPOSE) exec -T audit-service uv run alembic upgrade head
+	$(P6_COMPOSE) exec -T iam-service .venv/bin/alembic upgrade head
+	$(P6_COMPOSE) exec -T audit-service .venv/bin/alembic upgrade head
 	$(P6_COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-audit-cleanup.sh
 	$(P6_COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-codebook-db.sh
-	$(P6_COMPOSE) exec -T audit-service uv run python -m app.cli.grant_cleanup
-	$(P6_COMPOSE) exec -T codebook-service uv run alembic upgrade head
+	$(P6_COMPOSE) exec -T audit-service .venv/bin/python -m app.cli.grant_cleanup
+	$(P6_COMPOSE) exec -T codebook-service .venv/bin/alembic upgrade head
 	$(P6_COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-policy-db.sh
-	$(P6_COMPOSE) exec -T policy-service uv run alembic upgrade head
+	$(P6_COMPOSE) exec -T policy-service .venv/bin/alembic upgrade head
 
 p6-seed:
-	$(P6_COMPOSE) exec -T iam-service uv run python -m app.cli.seed
+	$(P6_COMPOSE) exec -T iam-service .venv/bin/python -m app.cli.seed
 
 p6-admin:
 	@set -a && . ./$(P6_ENV) && set +a && \
-	$(P6_COMPOSE) exec -T -e ADMIN_USERNAME -e ADMIN_PASSWORD -e ADMIN_DISPLAY_NAME iam-service uv run python -m app.cli.admin_create
+	$(P6_COMPOSE) exec -T -e ADMIN_USERNAME -e ADMIN_PASSWORD -e ADMIN_DISPLAY_NAME iam-service .venv/bin/python -m app.cli.admin_create
 
 p6-backup:
 	@set -a && . ./$(P6_ENV) && set +a && \

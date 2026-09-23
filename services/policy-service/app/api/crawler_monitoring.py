@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query
@@ -58,7 +59,7 @@ async def list_tasks(
     site_name: str | None = Query(default=None),
     site_code: str | None = Query(default=None),
     tag: str | None = Query(default=None),
-    health_status: str | None = Query(default=None),
+    health_status: Literal["normal", "watch", "broken", "never"] | None = Query(default=None),
     stale_days_min: int | None = Query(default=None, ge=0),
     abnormal_only: bool = Query(default=False),
     page: int = Query(default=1, ge=1),
@@ -107,13 +108,14 @@ async def search_filter_options(
 async def get_task_detail(
     site_code: str = Query(default="", max_length=100),
     tag: str = Query(default="", max_length=255),
+    site_key: str | None = Query(default=None, max_length=128),
     days: int = Query(default=90, ge=7, le=180),
     session: AsyncSession = Depends(get_db_session),
     _: Actor = Depends(require_policy_permission(RESOURCE, "read")),
 ):
     """标签是层级路径、编码可能为空，都不适合放 path 参数，统一走 query。"""
 
-    return success_json(await service.task_detail(session, site_code=site_code, tag=tag, days=days))
+    return success_json(await service.task_detail(session, site_code=site_code, site_key=site_key, tag=tag, days=days))
 
 
 @router.get("/tasks/export")
@@ -124,7 +126,7 @@ async def export_tasks(
     site_name: str | None = Query(default=None),
     site_code: str | None = Query(default=None),
     tag: str | None = Query(default=None),
-    health_status: str | None = Query(default=None),
+    health_status: Literal["normal", "watch", "broken", "never"] | None = Query(default=None),
     stale_days_min: int | None = Query(default=None, ge=0),
     abnormal_only: bool = Query(default=False),
     session: AsyncSession = Depends(get_db_session),

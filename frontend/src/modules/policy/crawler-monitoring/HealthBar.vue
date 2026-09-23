@@ -1,16 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-
+import { Check } from '@element-plus/icons-vue'
 import type { HealthStatus } from '@/api/crawlerMonitoring'
 
 const props = defineProps<{
   items: { status: HealthStatus; label: string; count: number }[]
+  selected?: HealthStatus
 }>()
-
 const emit = defineEmits<{ pick: [status: HealthStatus] }>()
-
 const total = computed(() => props.items.reduce((sum, item) => sum + item.count, 0))
-
 function percent(count: number): number {
   return total.value === 0 ? 0 : Math.round((count / total.value) * 1000) / 10
 }
@@ -23,16 +21,12 @@ function percent(count: number): number {
       role="img"
       :aria-label="items.map((item) => `${item.label} ${item.count} 个`).join('，')"
     >
-      <button
+      <span
         v-for="item in items"
-        v-show="item.count > 0"
         :key="item.status"
-        type="button"
-        class="segment"
         :class="`seg-${item.status}`"
-        :style="{ width: `${percent(item.count)}%` }"
-        :title="`${item.label}：${item.count} 个（${percent(item.count)}%）`"
-        @click="emit('pick', item.status)"
+        :style="{ flexGrow: item.count }"
+        :title="`${item.label} ${percent(item.count)}%`"
       />
     </div>
     <ul class="legend">
@@ -43,15 +37,22 @@ function percent(count: number): number {
         <button
           type="button"
           class="legend-item"
+          :class="{ selected: selected === item.status }"
+          :aria-pressed="selected === item.status"
           @click="emit('pick', item.status)"
         >
-          <span
+          <span class="legend-name"><span
             class="swatch"
             :class="`seg-${item.status}`"
-          />
-          <span class="legend-label">{{ item.label }}</span>
+          />{{ item.label }}</span>
           <span class="legend-count">{{ item.count.toLocaleString() }}</span>
           <span class="legend-pct">{{ percent(item.count) }}%</span>
+          <el-icon
+            class="selection-mark"
+            :class="{ visible: selected === item.status }"
+          >
+            <Check />
+          </el-icon>
         </button>
       </li>
     </ul>
@@ -59,79 +60,26 @@ function percent(count: number): number {
 </template>
 
 <style scoped>
-.bar {
-  display: flex;
-  height: 18px;
-  border-radius: var(--zt-radius);
-  overflow: hidden;
-  background: var(--zt-soft);
-  border: 1px solid var(--zt-border);
-}
-
-.segment {
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  transition: opacity 160ms ease;
-}
-
-.segment:hover,
-.legend-item:hover {
-  opacity: 0.82;
-}
-
-.seg-normal {
-  background: #3f8f5e;
-}
-
-.seg-watch {
-  background: #c99a2e;
-}
-
-.seg-broken {
-  background: #c45656;
-}
-
-.seg-never {
-  background: var(--zt-ink-500);
-}
-
-.legend {
-  list-style: none;
-  margin: var(--zt-space-3) 0 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--zt-space-2) var(--zt-space-6);
-}
-
+.bar { display: flex; height: 8px; overflow: hidden; border-radius: 4px; background: var(--zt-soft); }
+.bar > span { flex-basis: 0; }
+.seg-normal { background: var(--el-color-success); }
+.seg-watch { background: var(--el-color-warning); }
+.seg-broken { background: var(--el-color-danger); }
+.seg-never { background: var(--zt-ink-500); }
+.legend { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 4px; }
 .legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--zt-space-2);
-  background: none;
-  border: none;
-  padding: 2px 0;
-  cursor: pointer;
-  font: inherit;
-  color: var(--zt-ink-700);
+  display: grid; grid-template-columns: minmax(76px, 1fr) auto 52px 16px; align-items: center;
+  gap: 8px; width: 100%; min-height: 46px; padding: 8px 10px;
+  background: transparent; border: 1px solid transparent; border-radius: var(--zt-radius);
+  font: inherit; color: var(--zt-ink-700); text-align: left; cursor: pointer;
 }
-
-.swatch {
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  display: inline-block;
-}
-
-.legend-count {
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  color: var(--zt-ink-900);
-}
-
-.legend-pct {
-  color: var(--zt-ink-500);
-  font-size: 12px;
-}
+.legend-item:hover { background: var(--zt-soft); }
+.legend-item.selected { background: var(--el-color-primary-light-9); border-color: var(--el-color-primary-light-7); }
+.legend-item:focus-visible { outline: 2px solid var(--zt-blue-600); outline-offset: 2px; }
+.legend-name { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.swatch { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.legend-count { color: var(--zt-ink-900); font-weight: 600; font-size: 16px; font-variant-numeric: tabular-nums; }
+.legend-pct { color: var(--zt-ink-500); text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
+.selection-mark { visibility: hidden; color: var(--zt-blue-600); }
+.selection-mark.visible { visibility: visible; }
 </style>

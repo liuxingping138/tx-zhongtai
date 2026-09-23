@@ -1,0 +1,77 @@
+{
+  "business_counts": {
+    "sources": 20002,
+    "interpretations": 3165,
+    "tags": 1870
+  },
+  "daily_stats": {
+    "groups": 1324169,
+    "source_rows": 10142366,
+    "first_day": "2023-10-18",
+    "last_day": "2026-09-23",
+    "pending_groups": 0,
+    "populated_days": 1069
+  },
+  "cards": {
+    "yesterday_rows": 6553,
+    "yesterday_rows_delta": -171,
+    "yesterday_sites": 1299,
+    "total_tasks": 27954,
+    "abnormal_tasks": 17923,
+    "healthy_ratio": 35.9,
+    "sites_total": 4937,
+    "sites_all_broken": 1262,
+    "sites_partial_broken": 2619
+  },
+  "health_distribution": [
+    {
+      "status": "normal",
+      "label": "正常",
+      "count": 6440
+    },
+    {
+      "status": "watch",
+      "label": "观察",
+      "count": 3591
+    },
+    {
+      "status": "broken",
+      "label": "断爬",
+      "count": 17750
+    },
+    {
+      "status": "never",
+      "label": "从未出数",
+      "count": 173
+    }
+  ],
+  "last_sync": {
+    "status": "success",
+    "started_at": "2026-09-23 11:52:40",
+    "finished_at": "2026-09-23 11:53:09",
+    "date_to": "2026-09-23",
+    "error_message": null
+  },
+  "source_samples": [
+    {
+      "date": "2023-10-18",
+      "groups": 130,
+      "source_rows": 24500,
+      "all_groups_match": true
+    },
+    {
+      "date": "2025-01-15",
+      "groups": 1984,
+      "source_rows": 9070,
+      "all_groups_match": true
+    },
+    {
+      "date": "2026-09-22",
+      "groups": 2093,
+      "source_rows": 6553,
+      "all_groups_match": true
+    }
+  ],
+  "name_without_code_detail": "passed",
+  "health_daily_totals_match": true
+}

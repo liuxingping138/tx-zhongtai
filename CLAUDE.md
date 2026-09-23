@@ -23,7 +23,7 @@ make check            # 质量门：Python ruff+mypy，前端 type-check+build+l
 make test-unit        # 后端 pytest + 前端 vitest
 make smoke            # 经网关冒烟
 make export-openapi   # 从运行中服务导出 OpenAPI
-make crawler-sync     # 同步爬虫采集量（日常增量，回算最近几天）
+make crawler-sync     # 按成功入库水位增量重算受影响日期
 ```
 
 运维类：`make iam-session-cleanup`（清理失效会话/令牌）、`make audit-cleanup`（清理到期审计）、
@@ -117,19 +117,23 @@ policy 和 codebook 的基础设施代码高度重复，已统一下沉。**新�
 
 ### 爬虫监测是只读统计，数据靠同步进来
 
-数据源是外部爬虫库（MySQL `crawler2021`，400 万行，前面挂 ShardingSphere 代理），
+数据源是外部爬虫库（MySQL `crawler2021`，前面挂 ShardingSphere 代理），
 **页面永远不查它**。`app/cli/sync_crawler.py` 按天聚合后写本服务的三张表：
 `policy_crawler_tasks`（任务基线，来自爬虫规则表的 JSON）、
 `policy_crawler_daily_stats`（任务×日采集量）、`policy_crawler_task_health`（健康快照，每次同步整体重算）。
 
-- 监测的最小单位是「网站编码 + 标签」的任务，不是网站。同一个站不同标签停更程度差别很大，
+- 监测的最小单位是「网站名称 + 标签」的任务，不是网站。名称缺失时才用原网站编码兜底；
+  编码允许为空，不生成假编码。同一个站不同标签停更程度差别很大，
   只看站级会把半死的站显示成正常
 - 核心指标是「停更天数」不是「今天有没有出数」：每天只有约 11% 的任务出数据，
   政策网站本来就不是天天更新
 - 首次回填必须覆盖到爬虫库最早的采集日期（`--since 2023-10-18`）。
   窗口开小了，窗口外停更的任务会被算成「从未出数」，把「停更 400 天」说成「从来没爬通」
-- 聚合按 `collect_date`（采集日）分桶，但爬虫是采集后才入库：实测入库普遍晚 1 天、最大滞后 4 天。
-  所以日常同步回算 7 天而不是 1 天，窗口小于最大滞后会让迟到的行永久漏算
+- 聚合按 `collect_date`（采集日）分桶，日常按入库时间水位找到受影响日期，再加当天重算，
+  不固定每天全量。`--days` / `--since` 是人工指定范围，适用于初始化、口径升级或数据修复。
+- 从旧编码口径升级到名称口径时，需要一次历史重算；普通 UI 发布和服务重启不需要。
+  迁移前备份，使用新镜像迁移与回填；中断后用同一范围加 `--skip-existing` 续跑。
+  详细步骤和真实增量验证见 `docs/配置说明.md` 与 `docs/reviews/crawler-monitoring-2026-09-23-release/README.md`
 
 ### 审计走 Outbox
 

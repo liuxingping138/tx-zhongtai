@@ -30,4 +30,4 @@ RUN useradd --create-home --shell /usr/sbin/nologin appuser && \
     chown -R appuser:appuser /srv
 USER appuser
 
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003"]
+CMD [".venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003"]

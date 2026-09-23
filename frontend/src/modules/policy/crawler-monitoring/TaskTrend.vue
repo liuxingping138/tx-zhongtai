@@ -1,31 +1,35 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 
 import { getCrawlerTaskDetail } from '@/api/crawlerMonitoring'
 import { errorMessage } from '@/api/errors'
 import TrendChart from './TrendChart.vue'
 
-const props = defineProps<{ siteCode: string; tag: string }>()
+const props = defineProps<{ siteKey: string; tag: string }>()
 
 const loading = ref(false)
 const error = ref('')
 const series = ref<{ date: string; rows: number }[]>([])
 
+let sequence = 0
+onBeforeUnmount(() => { sequence += 1 })
+
 async function load() {
+  const requestId = ++sequence
   loading.value = true
   error.value = ''
   series.value = []
   try {
-    const result = await getCrawlerTaskDetail({ site_code: props.siteCode, tag: props.tag, days: 90 })
-    series.value = [...result.series].reverse()
+    const result = await getCrawlerTaskDetail({ site_key: props.siteKey, tag: props.tag, days: 90 })
+    if (requestId === sequence) series.value = [...result.series].reverse()
   } catch (err) {
-    error.value = errorMessage(err, '加载采集趋势失败')
+    if (requestId === sequence) error.value = errorMessage(err, '加载采集趋势失败')
   } finally {
-    loading.value = false
+    if (requestId === sequence) loading.value = false
   }
 }
 
-watch(() => [props.siteCode, props.tag], load, { immediate: true })
+watch(() => [props.siteKey, props.tag], load, { immediate: true })
 </script>
 
 <template>
