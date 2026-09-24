@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
 import { routes } from './routes'
+import { useWorkspace } from '@/layouts/workspace'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -9,6 +10,12 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
+  // 兼容旧预览书签，正式页面不再需要开关；保留业务筛选和锚点。
+  if ('design-preview' in to.query) {
+    const query = { ...to.query }
+    delete query['design-preview']
+    return { path: to.path, query, hash: to.hash, replace: true }
+  }
   const auth = useAuthStore()
   if (!auth.bootstrapped) {
     await auth.bootstrap()
@@ -41,8 +48,9 @@ router.beforeEach(async (to) => {
     return { name: 'forbidden' }
   }
 
-  if (to.name === 'home' && !auth.mustChangePassword && auth.resources.length === 0) {
-    return { name: 'no-modules' }
+  if (to.name === 'home') {
+    const { groups } = useWorkspace()
+    return { path: groups.value[0]?.entries[0]?.path || '/no-modules', query: to.query, replace: true }
   }
 
   return true

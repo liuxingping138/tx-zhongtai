@@ -20,8 +20,9 @@ export const routes: RouteRecordRaw[] = [
       {
         path: '',
         name: 'home',
-        component: () => import('@/views/HomeView.vue'),
-        meta: { title: '工作台' },
+        // 保留 home 路由名供登录、改密和旧链接使用；全局守卫负责权限落点。
+        component: () => import('@/views/NoModulesView.vue'),
+        meta: { title: '业务模块' },
       },
       {
         path: 'profile',
@@ -45,7 +46,7 @@ export const routes: RouteRecordRaw[] = [
         path: 'system/roles/:roleId',
         name: 'system-role-detail',
         component: () => import('@/modules/system/roles/RoleDetail.vue'),
-        // menuPath：详情页不在菜单里，面包屑和侧栏高亮挂到角色列表下。
+        // menuPath：详情页不在菜单里，顶部与侧栏高亮挂到角色列表下。
         meta: { title: '角色详情', resource: 'system.roles', menuPath: '/system/roles' },
       },
       {

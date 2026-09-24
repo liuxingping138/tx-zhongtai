@@ -5,7 +5,7 @@ import { routes } from './routes'
 import { ROUTE_BY_NAME, pathForRouteName } from './menu'
 
 /**
- * 工作台和侧栏都靠 ROUTE_BY_NAME 把后端菜单的 route_name 翻成前端路径，
+ * 顶部导航和侧栏都靠 ROUTE_BY_NAME 把后端菜单的 route_name 翻成前端路径，
  * 查不到就把该菜单静默过滤掉。新增模块只改 router/index.ts 而漏了这张表时，
  * 页面能直接用 URL 打开、菜单却永远不出现，而且不报任何错——必须由测试兜住。
  *
