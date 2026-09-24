@@ -2,23 +2,17 @@
 
 面向政策、客户、招投标和标准码表的业务数据运营平台，采用 Vue 前端和 Python 微服务后端。当前公共框架已做到 **P6（完整集成验收）**：
 账号/会话/RBAC、Outbox Worker、审计查询、隔离验收、备份恢复与 OpenAPI 已交付。
-码表管理（政策类型、行业场景）与政策三个子模块（信源、基础标签、解读）已按用户提供的 Excel 接入。客户、招投标仍仅目录占位。
+码表管理（政策类型、行业场景、省市区编码）与政策三个子模块（信源、基础标签、解读）已按用户提供的 Excel 接入；
+爬虫监测（v1 按网站+标签、v2 按网站）为只读统计页，数据由同步脚本从外部爬虫库按天聚合。客户、招投标仍仅目录占位。
 
 产品展示名称统一为“业务数据运营平台”；仓库、包名及部署标识继续使用 `tx-zhongtai`，与现有开发环境保持兼容。
 
-详见：
+文档入口：
 
-- [UI 视觉规范](DESIGN.md) / [交互契约](UX-CONTRACT.md) / [UI 开发与复用指南](docs/UI开发规范.md) —— 新增、修改前端页面必读
-- [`docs/业务数据运营平台公共基础框架设计.md`](docs/业务数据运营平台公共基础框架设计.md) —— 架构设计
-- [`docs/Cursor公共框架开发计划.md`](docs/Cursor公共框架开发计划.md) —— 分阶段开发计划
-- [`docs/开发进度.md`](docs/开发进度.md) —— 当前实际进度与验证记录
-- [`docs/实现决策.md`](docs/实现决策.md) —— 端口、数据库、技术选型等实施细节
-- [`docs/业务表主键与导入导出分析.md`](docs/业务表主键与导入导出分析.md) —— 六张业务表的现状、限制与待业务确认事项；暂维持现有规则
-- [`CLAUDE.md`](CLAUDE.md) 的「硬性开发约定」—— 必须遵守的开发约定（ORM 中文 comment、开发栈/P6、UI 复用规范）
-- [`docs/配置说明.md`](docs/配置说明.md) / [`docs/部署与维护.md`](docs/部署与维护.md)
-- [`docs/openapi/`](docs/openapi/) —— 从运行中服务导出的 OpenAPI
-- [`docs/excel/`](docs/excel/) —— 用户提供的业务原始 Excel（信源、政策、场景等导入源文件）
-- [`docs/archive/`](docs/archive/) —— 历史 UI 验收记录与截图证据，仅供追溯，不代表现行规范
+- [`CLAUDE.md`](CLAUDE.md) —— 架构要点、硬性开发约定、排查提示，动手前先读
+- [UI 视觉规范](DESIGN.md) / [交互契约](UX-CONTRACT.md) —— 新增、修改前端页面必读
+- [`docs/README.md`](docs/README.md) —— 其余文档的分类索引：设计与决策（`design/`）、操作手册（`guides/`）、
+  开发进度、验收记录（`reviews/`）、OpenAPI、原始 Excel、历史归档（`archive/`）
 
 ## 技术栈
 
@@ -44,7 +38,7 @@ tx-zhongtai/
 ├── deploy/
 │   ├── gateway/               # Traefik 静态/动态配置
 │   └── compose/               # docker-compose.yml、Postgres 初始化脚本
-├── docs/                      # 架构设计、开发计划、进度、实施决策
+├── docs/                      # 设计决策、操作手册、进度、验收记录（索引见 docs/README.md）
 ├── Makefile
 ├── .env.example
 └── .gitignore / .dockerignore

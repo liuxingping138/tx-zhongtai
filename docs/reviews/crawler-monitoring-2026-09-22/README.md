@@ -94,4 +94,4 @@
 
 最终政策镜像：`sha256:75554cfca1c441d732464da059aee218cca825088cd9675bb668f53381e609eb`。最终前端镜像：`sha256:f6df4bf556318168f9e2b005490f471f585977e206d694879949462e92773c8c`。PostgreSQL 验收卷：`tx-crawler-qa-20260922-postgres-final`。
 
-具体命令与配置见 `docs/配置说明.md`。DESIGN.md、UX-CONTRACT.md、UI 开发规范已同步本轮标准。
+具体命令与配置见 `docs/guides/配置说明.md`。DESIGN.md、UX-CONTRACT.md、UI 开发规范已同步本轮标准。

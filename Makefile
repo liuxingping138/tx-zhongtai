@@ -20,7 +20,7 @@ help:
 	@echo "  make bootstrap        检查环境、安装依赖（不覆盖已有 .env）"
 	@echo "  make dev-up           启动本地开发环境（Compose）"
 	@echo "  make dev-down         停止本地开发环境（保留数据卷）"
-	@echo "  make migrate          对已运行的 iam-service/audit-service 执行数据库迁移"
+	@echo "  make migrate          对已运行的四个服务执行数据库迁移"
 	@echo "  make seed             幂等同步公共资源/动作/菜单与内置超级管理员角色"
 	@echo "  make seed-area-codes  从 SQL 种子导入省市区编码表（按区县编码去重）"
 	@echo "  make crawler-sync     同步爬虫采集量（日常按入库时间水位增量重算）"

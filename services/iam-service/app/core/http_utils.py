@@ -19,7 +19,7 @@ def client_ip(request: Request) -> str:
 
     因此 iam-service 的端口不得直接对外暴露，也不要在网关前再加一层
     未做同样清洗的代理——否则攻击者可以自行构造该头，绕过按 IP 的登录限流
-    并污染审计里的来源 IP。部署约束见 docs/部署与维护.md。
+    并污染审计里的来源 IP。部署约束见 docs/guides/部署与维护.md。
     """
 
     forwarded = request.headers.get("x-forwarded-for")

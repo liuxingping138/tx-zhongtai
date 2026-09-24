@@ -2,15 +2,15 @@
 
 ## 适配范围
 
-**只适配电脑端，下限 1024px**，按 1920 / 1440 / 1280 / 1024 四档验收。下文提到「手机」的条目如实描述代码里保留的 767px 以下分支，但手机端不是验收目标、不保证可用，不必为它新增适配。详见 [docs/UI开发规范.md](docs/UI开发规范.md) 第 0 节。
+**只适配电脑端，下限 1024px**，按 1920 / 1440 / 1280 / 1024 四档验收。下文提到「手机」的条目如实描述代码里保留的 767px 以下分支，但手机端不是验收目标、不保证可用，不必为它新增适配。详见 [docs/guides/UI开发规范.md](docs/guides/UI开发规范.md) 第 0 节。
 
 ## 产品与业务依据
 
 受众：政策和业务数据运营人员、系统管理员。工作：检索核对、维护记录、Excel 上传下载、审计追溯。当前简体中文，时间沿用 `frontend/src/utils/time.ts` 的北京时间规则。可访问性目标 WCAG 2.2 AA，本轮检查不等于完整认证。
 
-权威来源：`docs/openapi/{policy,codebook,iam,audit}.json`、`docs/业务表主键与导入导出分析.md`、`frontend/src/stores/auth.ts`、`frontend/src/router/index.ts` 及各模块 API 调用。2026-09-20 核对。不复制或改变业务主键、身份、权限、删除和导入覆盖规则。
+权威来源：`docs/openapi/{policy,codebook,iam,audit}.json`、`docs/design/业务表主键与导入导出分析.md`、`frontend/src/stores/auth.ts`、`frontend/src/router/index.ts` 及各模块 API 调用。2026-09-20 核对。不复制或改变业务主键、身份、权限、删除和导入覆盖规则。
 
-现行规范入口：[DESIGN.md](DESIGN.md)、[UI开发规范](docs/UI开发规范.md)。视觉规范见 `DESIGN.md`，runtime canonical 为 `frontend/src/styles/theme.css`。样板与验证见 `docs/archive/ui-review-2026-09-20/`，设计验收见 `docs/archive/design-qa.md`（均为历史归档，非现行标准）。
+现行规范入口：[DESIGN.md](DESIGN.md)、[UI开发规范](docs/guides/UI开发规范.md)。视觉规范见 `DESIGN.md`，runtime canonical 为 `frontend/src/styles/theme.css`。样板与验证见 `docs/archive/ui-review-2026-09-20/`，设计验收见 `docs/archive/design-qa.md`（均为历史归档，非现行标准）。
 
 ## Canonical UI Map
 
@@ -31,7 +31,7 @@
 
 ## 字段与列设置
 
-所有表格单元格只显示对应字段值，不混排辅助字段。BusinessTable 不再提供 secondaryKey。默认列清单和接入代码见 [UI开发规范](docs/UI开发规范.md)。ColumnPicker 与 BusinessTable 必须接收同一份完整 columns，不能把默认列当作全部可选列。
+所有表格单元格只显示对应字段值，不混排辅助字段。BusinessTable 不再提供 secondaryKey。默认列清单和接入代码见 [UI开发规范](docs/guides/UI开发规范.md)。ColumnPicker 与 BusinessTable 必须接收同一份完整 columns，不能把默认列当作全部可选列。
 
 默认展示完整 columns，defaults 必须等于完整字段键集合。“显示全部列”和“恢复默认列”均恢复全字段；用户取消勾选立即生效。表格按模块定义的 columns 顺序过滤，不按勾选先后排序。localStorage 键为 `zt:columns:v2:<userId>:<route.path>`，只存字段键。升级时读取旧v1；若等于上一版系统提供的核心列默认集合，则迁移为全字段，否则保留有效的自定义选择。已有v2自定义选择始终保留，未知键过滤，存储失败退回内存。不支持拖拽排序、跨设备同步或记录批量选择。
 

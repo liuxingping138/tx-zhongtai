@@ -1,7 +1,7 @@
 """会话/刷新令牌清理的单元测试。
 
 只验证 SQL 语义（删哪些行、按什么顺序删），不连数据库。
-真实数据库上的验证见 docs/部署与维护.md 里的记录。
+真实数据库上的验证见 docs/guides/部署与维护.md 里的记录。
 """
 
 from __future__ import annotations

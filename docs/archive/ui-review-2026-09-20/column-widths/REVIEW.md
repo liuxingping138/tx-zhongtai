@@ -68,6 +68,6 @@
 - `pnpm lint`、`pnpm type-check`：通过。
 - Docker单独重建frontend成功，内部执行`pnpm run build`通过，最新8080页面已实测。构建仍有原有主包超过500kB提示。
 - Frontend Design Premium strict审查：0 findings；`git diff --check`通过。
-- 已同步根目录DESIGN.md、UX-CONTRACT.md与docs/UI开发规范.md：首列无宽度特权、固定短字段、限幅长字段、稳定顺序、简短表头与fullLabel。
+- 已同步根目录DESIGN.md、UX-CONTRACT.md与docs/guides/UI开发规范.md：首列无宽度特权、固定短字段、限幅长字段、稳定顺序、简短表头与fullLabel。
 
 本轮范围为列宽、字段顺序、表头与响应式回归，未重复真实写入或上传测试。既往记录中的Playwright CLI授权与官方designmd lint网络限制仍沿用原验证边界，不把本轮视觉检查等同全业务端到端验收。

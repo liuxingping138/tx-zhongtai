@@ -97,11 +97,11 @@ final result: passed
 
 ## 最终入口与文档同步
 
-2026-09-20 已重建Docker frontend并从用户实际使用的 `http://localhost:8080/codebook/scenarios` 验证最新运行状态。证据：`docs/archive/ui-review-2026-09-20/deployed-8080-final.jpg`。文字列设置4/35、显示全部列、恢复默认列已可见；首格为单独的“IDC”，不含编码副文本。上文早期图是比较历史，后续实现必须遵循 DESIGN.md / UX-CONTRACT.md / docs/UI开发规范.md 的最终规则。
+2026-09-20 已重建Docker frontend并从用户实际使用的 `http://localhost:8080/codebook/scenarios` 验证最新运行状态。证据：`docs/archive/ui-review-2026-09-20/deployed-8080-final.jpg`。文字列设置4/35、显示全部列、恢复默认列已可见；首格为单独的“IDC”，不含编码副文本。上文早期图是比较历史，后续实现必须遵循 DESIGN.md / UX-CONTRACT.md / docs/guides/UI开发规范.md 的最终规则。
 
 
 ## 默认全字段修订（现行）
 
 用户明确确认默认全部字段、个人通过列设置隐藏。旧核心列默认及表格总宽上限已撤回。六个业务列表和三个系统列表已复查，重点补充2560px宽屏与1280px桌面；44px业务行、单行长文本、完整详情与390px手机摘要均有实测。[当前截图和验证记录](ui-review-2026-09-20/full-width/REVIEW.md)。
 
-同日续订：账号在侧栏底部（显示名 + `/me.roles`），登录页不改；桌面筛选一次展开、点查询生效；结果区 `ScrollPort` 常显横/纵滑槽，默认 20 条必须能上下滚完全页。现行条文以 DESIGN.md / UX-CONTRACT.md / docs/UI开发规范.md 为准。
+同日续订：账号在侧栏底部（显示名 + `/me.roles`），登录页不改；桌面筛选一次展开、点查询生效；结果区 `ScrollPort` 常显横/纵滑槽，默认 20 条必须能上下滚完全页。现行条文以 DESIGN.md / UX-CONTRACT.md / docs/guides/UI开发规范.md 为准。

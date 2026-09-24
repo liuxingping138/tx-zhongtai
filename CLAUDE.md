@@ -12,6 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 爬虫监测已接入（只读统计页，数据来自外部爬虫库的按天聚合）；另有精简版「爬虫监测 v2」与 v1 并存，
 只读采集总表、按网站统计，核对无误后计划下线 v1。
 **客户、招投标仅有占位目录**，未开发——不要为它们提前暴露无功能入口或做过度抽象。
+其余文档按 设计决策 / 操作手册 / 验收记录 / 归档 分类，索引见 `docs/README.md`。
 
 ## 常用命令
 
@@ -114,8 +115,10 @@ policy 和 codebook 的基础设施代码高度重复，已统一下沉。**新�
 它经 `platform_common.authz.AuthzClient` 调 iam-service 的 `/internal/v1/authorize`。
 **依赖失败一律返回 503，绝不当作放行**。网关不启用 ForwardAuth，授权全在服务内执行。
 
-路由必须带 `@classified(SecurityClass.*)`，`tests/test_route_security_class.py` 会强制检查
-（注意：该用例只校验声明存在，不校验是否真的挂了权限依赖）。
+路由必须带 `@classified(SecurityClass.*)`，`tests/test_route_security_class.py` 经
+`platform_common.route_audit.audit_routes` 强制检查：声明为 `resource_authorized` 的路由必须真的挂了
+权限依赖，挂了依赖的也不能错标成别的分级。新写的 `require_*_permission` 工厂要调 `mark_permission_dependency`，
+否则体检认不出来。
 
 ### 爬虫监测是只读统计，数据靠同步进来
 
@@ -135,7 +138,7 @@ policy 和 codebook 的基础设施代码高度重复，已统一下沉。**新�
   不固定每天全量。`--days` / `--since` 是人工指定范围，适用于初始化、口径升级或数据修复。
 - 从旧编码口径升级到名称口径时，需要一次历史重算；普通 UI 发布和服务重启不需要。
   迁移前备份，使用新镜像迁移与回填；中断后用同一范围加 `--skip-existing` 续跑。
-  详细步骤和真实增量验证见 `docs/配置说明.md` 与 `docs/reviews/crawler-monitoring-2026-09-23-release/README.md`
+  详细步骤和真实增量验证见 `docs/guides/配置说明.md` 与 `docs/reviews/crawler-monitoring-2026-09-23-release/README.md`
 
 ### 爬虫监测 v2：只用采集总表，按网站统计
 
@@ -214,7 +217,7 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
 
 ### 前端复用规范
 
-改页面前读 `DESIGN.md`、`UX-CONTRACT.md`、`docs/UI开发规范.md`。优先复用：
+改页面前读 `DESIGN.md`、`UX-CONTRACT.md`、`docs/guides/UI开发规范.md`。优先复用：
 
 `ListPage` / `FilterBar` / `FilterSelect` / `ScrollPort` / `BusinessTable` / `ColumnPicker` /
 `GroupedFields` / `UserAccountMenu`，基础视觉用 `theme.css`。

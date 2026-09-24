@@ -15,10 +15,7 @@ from app.core.database import SessionLocal
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("codebook.cli.seed_area_codes")
 
-_SQL_CANDIDATES = (
-    Path(__file__).resolve().parents[2] / "data" / "cfg_all_area_code_info.sql",
-    Path(__file__).resolve().parents[4] / "docs" / "configuration_cfg_all_area_code_info.sql",
-)
+_SQL_CANDIDATES = (Path(__file__).resolve().parents[2] / "data" / "cfg_all_area_code_info.sql",)
 
 
 def _sql_path() -> Path:

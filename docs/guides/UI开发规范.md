@@ -1,6 +1,6 @@
 # UI 开发与复用指南
 
-现行版本：2026-09-20。适用于已发布模块及未来客户、招投标、爬虫等模块。以用户最终确认、业务字段定义、[DESIGN.md](../DESIGN.md)、[UX-CONTRACT.md](../UX-CONTRACT.md) 为依据。审查目录里的图片记录设计过程，不替代现行规范。
+现行版本：2026-09-20。适用于已发布模块及未来客户、招投标、爬虫等模块。以用户最终确认、业务字段定义、[DESIGN.md](../../DESIGN.md)、[UX-CONTRACT.md](../../UX-CONTRACT.md) 为依据。审查目录里的图片记录设计过程，不替代现行规范。
 
 ## 0. 适配范围
 
@@ -145,7 +145,7 @@ docker compose -f deploy/compose/docker-compose.yml --env-file .env up -d --buil
 - frontend目录运行 `pnpm run type-check`、`pnpm run lint`、`pnpm run test`、`pnpm run build`。UI行为修改需补做浏览器检查；纯文档修改核对源码、相对链接和历史口径即可，不宣称新跑了业务测试。
 - 修改视觉值同步DESIGN.md；修改行为同步UX-CONTRACT.md；改组件API、默认列或服务入口同步本文件。在开发进度记录结果，不把历史截图和未跑测试描述成当前验收。
 
-当前实现与历史验证结果见 [实施记录](archive/ui-review-2026-09-20/IMPLEMENTATION.md)。Playwright CLI授权、官方designmd lint网络可用性等本轮遗留验证项保留在该记录中，不能用“规范已写好”替代验证完成。
+当前实现与历史验证结果见 [实施记录](../archive/ui-review-2026-09-20/IMPLEMENTATION.md)。Playwright CLI授权、官方designmd lint网络可用性等本轮遗留验证项保留在该记录中，不能用“规范已写好”替代验证完成。
 
 ## 带概览的监测列表
 
