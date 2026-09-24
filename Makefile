@@ -35,7 +35,7 @@ help:
 	@echo "  make test-e2e         Playwright 关键流程（需先 integration）"
 	@echo "  make smoke            经网关执行公共功能冒烟验证"
 	@echo "  make provision-audit-cleanup  为已有数据卷补建审计清理账号"
-	@echo "  make outbox-replay    重放 dead/failed Outbox 事件"
+	@echo "  make outbox-replay    重放 iam/policy/codebook 的 dead/failed Outbox 事件"
 	@echo "  make audit-cleanup    使用独立清理账号删除到期审计事件"
 	@echo "  make iam-session-cleanup  清理已过期/已撤销的会话与刷新令牌"
 	@echo "  make p6-up / p6-down  启动/销毁隔离验收栈（down 删除隔离卷）"
@@ -114,8 +114,13 @@ provision-policy-db:
 	@echo "== 补建政策库和账号（已有数据卷不会重跑 init） =="
 	$(COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-policy-db.sh
 
+# 三个服务各有一张 Outbox 表，逐个重放。只重放某一个：make outbox-replay OUTBOX_SERVICES=policy-service
+OUTBOX_SERVICES ?= iam-service policy-service codebook-service
 outbox-replay:
-	$(COMPOSE) exec -T iam-service .venv/bin/python -m app.cli.outbox_replay
+	@set -e; for s in $(OUTBOX_SERVICES); do \
+		echo "== $$s =="; \
+		$(COMPOSE) exec -T $$s .venv/bin/python -m app.cli.outbox_replay; \
+	done
 
 iam-session-cleanup:
 	@echo "== 清理已失效的会话与刷新令牌 =="

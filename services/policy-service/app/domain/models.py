@@ -335,6 +335,9 @@ class OutboxEvent(Base):
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="创建时间")
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True, comment="失败原因")
+    lease_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="租约截止时间"
+    )
 
 
 SOURCE_FIELDS = (

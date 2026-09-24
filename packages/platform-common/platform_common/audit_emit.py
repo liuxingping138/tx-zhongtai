@@ -126,44 +126,52 @@ class AuditEmitter:
         delivered = 0
         async with httpx.AsyncClient(base_url=settings.audit_ingest_url.rstrip("/"), timeout=5.0) as client:
             for event in events:
-                async with self._sessions() as session:
-                    try:
-                        response = await client.post(
-                            "/internal/v1/audit/events",
-                            json=self.to_ingest(event),
-                            headers={
-                                "X-Internal-Service": self._service_name,
-                                "X-Internal-Token": settings.audit_ingest_secret,
-                            },
-                        )
-                        row = await session.get(self._model, event.event_id)
-                        if row is None:
-                            continue
-                        if response.status_code < 300:
-                            await self._repo.mark_delivered(session, row)
-                            delivered += 1
-                        else:
-                            await self._repo.mark_retry(
-                                session,
-                                row,
-                                error=f"http:{response.status_code}",
-                                max_attempts=settings.worker_max_attempts,
-                            )
-                        await session.commit()
-                    except httpx.HTTPError as exc:
-                        row = await session.get(self._model, event.event_id)
-                        if row is not None:
-                            await self._repo.mark_retry(
-                                session,
-                                row,
-                                error=f"network:{exc.__class__.__name__}",
-                                max_attempts=settings.worker_max_attempts,
-                            )
-                            await session.commit()
-                        self._logger.warning(
-                            f"{self._log_name}_audit_deliver_failed", event_id=str(event.event_id)
-                        )
+                if await self._deliver_one(client, settings, event):
+                    delivered += 1
         return delivered
+
+    async def _deliver_one(self, client: httpx.AsyncClient, settings: _AuditSettings, event: Any) -> bool:
+        """投递一条并按租约回写结果。任何异常都落到失败重试，不让一条坏事件拖住整批。"""
+
+        expected_lease = event.lease_until
+        error: str | None = None
+        try:
+            response = await client.post(
+                "/internal/v1/audit/events",
+                json=self.to_ingest(event),
+                headers={
+                    "X-Internal-Service": self._service_name,
+                    "X-Internal-Token": settings.audit_ingest_secret,
+                },
+            )
+            if response.status_code >= 300:
+                error = f"http:{response.status_code}"
+        except httpx.HTTPError as exc:
+            error = f"network:{exc.__class__.__name__}"
+        except Exception as exc:  # noqa: BLE001 - 组装投递体等本地异常，按失败重试到上限后置 dead
+            self._logger.exception(f"{self._log_name}_audit_deliver_error", event_id=str(event.event_id))
+            error = f"error:{exc.__class__.__name__}"
+
+        async with self._sessions() as session:
+            if error is None:
+                ok = await self._repo.mark_delivered(session, event.event_id, expected_lease)
+            else:
+                ok = await self._repo.mark_retry(
+                    session,
+                    event.event_id,
+                    expected_lease,
+                    attempts=event.attempts,
+                    error=error,
+                    max_attempts=settings.worker_max_attempts,
+                )
+            await session.commit()
+        if not ok:
+            self._logger.warning(f"{self._log_name}_outbox_lease_lost", event_id=str(event.event_id))
+        elif error is not None:
+            self._logger.warning(
+                f"{self._log_name}_audit_deliver_failed", event_id=str(event.event_id), error=error
+            )
+        return ok and error is None
 
     async def outbox_loop(self, stop: asyncio.Event, settings: _AuditSettings) -> None:
         while not stop.is_set():

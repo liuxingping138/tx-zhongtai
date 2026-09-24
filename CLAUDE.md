@@ -165,7 +165,11 @@ policy 和 codebook 的基础设施代码高度重复，已统一下沉。**新�
 ### 审计走 Outbox
 
 业务写操作调 `enqueue_event(...)` 写本服务的 `*_outbox` 表（与业务同事务），
-再由 worker 投递到 audit-service。失败按指数退避重试，超上限置 dead，可用 `make outbox-replay` 重放。
+再由 worker 投递到 audit-service。失败按指数退避重试，超上限置 dead，可用 `make outbox-replay` 重放
+（覆盖 iam/policy/codebook，`OUTBOX_SERVICES=policy-service` 只跑一个）。
+
+认领时置 delivering 并写 `lease_until`，回写只在租约没被别人重新认领时生效。进程在投递途中重启，
+事件等租约（5 分钟）到期会被重新认领，不会永远卡在 delivering；审计服务按 `event_id` 去重，重投不重复入库。
 
 ### 网关
 
@@ -183,6 +187,8 @@ xlsx/zip/图片在 `excludedContentTypes` 里排除。
 - 表：`__table_args__` 带 `comment="中文表名"`；有约束时把该字典放 tuple 最后一项
 - 列：每个 `mapped_column(...)` 带 `comment="中文列名"`，与页面/Excel 表头对齐
 - Alembic `create_table` / `add_column` 同步带 comment；`COMMENT ON ... IS` 用 SQL 字面量，不能绑参数
+- 历史迁移不能 import 运行时的 `app.domain.models` / `Base.metadata`：模型以后新增的列在那一步还不存在，
+  空库从头迁移会报 column does not exist。需要表结构时像 `*_chinese_comments` 那样冻结成字典
 - `alembic_version` 不用注释
 
 ```python

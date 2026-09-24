@@ -12,3 +12,4 @@ enqueue = _repository.enqueue
 claim_pending = _repository.claim_pending
 mark_delivered = _repository.mark_delivered
 mark_retry = _repository.mark_retry
+replay = _repository.replay
