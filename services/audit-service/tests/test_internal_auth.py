@@ -21,7 +21,7 @@ def test_ingest_rejects_missing_internal_credentials() -> None:
         },
     )
     assert resp.status_code == 401
-    assert resp.json()["code"] == "AUTH_UNAUTHENTICATED"
+    assert resp.json()["code"] == "INTERNAL_CALLER_REJECTED"
 
 
 def test_query_rejects_anonymous() -> None:

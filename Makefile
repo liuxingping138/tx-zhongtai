@@ -166,6 +166,8 @@ check:
 	@(cd frontend && pnpm run build)
 	@echo "== 前端 lint =="
 	@(cd frontend && pnpm run lint)
+	@echo "== 范围与密钥扫描 =="
+	@python3 scripts/scan_scope.py
 
 test-unit:
 	@for pkg in $(PY_PACKAGES); do \

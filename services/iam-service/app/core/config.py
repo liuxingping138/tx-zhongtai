@@ -44,7 +44,10 @@ class Settings(BaseServiceSettings):
     cookie_secure: bool = False
     cookie_samesite: str = "strict"
 
+    # 账号维度：同一账号连续失败次数上限。
     login_max_failures: int = 5
+    # IP 维度：同一来源 IP 的失败次数上限。同一出口可能有多人，比账号维度宽；登录成功不清零。
+    login_max_failures_per_ip: int = 20
     login_lockout_seconds: int = 300
     # 会话与刷新令牌失效后的额外保留天数，供回溯近期登录情况；到期由清理任务删除。
     session_retention_days: int = 30

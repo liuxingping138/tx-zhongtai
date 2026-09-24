@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.clock import utcnow
 from app.core.config import Settings
 from app.core.jwt_tokens import issue_access_token
+from app.core.rate_limit import login_key_username
 from app.domain.enums import UserStatus
 from app.domain.models import RefreshToken, Session, User
 from app.domain.password import hash_password, needs_rehash, validate_password_policy, verify_password
@@ -24,7 +25,8 @@ UNIFIED_LOGIN_FAILURE = "用户名或密码错误"
 
 
 def normalize_username(username: str) -> str:
-    return username.strip().lower()
+    # 与登录限流的键共用一处规范化，两边不一致时换个大小写就能绕开账号锁定。
+    return login_key_username(username)
 
 
 class AuthService:

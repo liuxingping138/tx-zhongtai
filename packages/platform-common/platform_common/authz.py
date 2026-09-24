@@ -7,7 +7,24 @@ from typing import Any
 
 import httpx
 
-from platform_common.errors import DependencyUnavailableError, PermissionDeniedError, UnauthenticatedError
+from platform_common.errors import (
+    DependencyUnavailableError,
+    ErrorCode,
+    PermissionDeniedError,
+    UnauthenticatedError,
+)
+from platform_common.logging_setup import get_logger
+
+logger = get_logger("platform_common.authz")
+
+
+def _error_code(response: httpx.Response) -> str | None:
+    try:
+        raw: Any = response.json()
+    except ValueError:
+        return None
+    code = raw.get("code") if isinstance(raw, dict) else None
+    return code if isinstance(code, str) else None
 
 
 @dataclass(frozen=True)
@@ -58,6 +75,11 @@ class AuthzClient:
         if response.status_code >= 500:
             raise DependencyUnavailableError("鉴权服务暂时不可用")
         if response.status_code == 401:
+            if _error_code(response) == ErrorCode.INTERNAL_CALLER_REJECTED:
+                # 本服务的内部密钥配错了。当成「用户未登录」会让前端反复刷新会话再报错，
+                # 真正的原因却藏起来；按依赖不可用返回 503，并留日志给运维。
+                logger.error("authz_internal_caller_rejected", service=self._service_name)
+                raise DependencyUnavailableError("鉴权服务拒绝了本服务的内部调用凭据")
             raise UnauthenticatedError()
         if response.status_code == 403:
             raise PermissionDeniedError()

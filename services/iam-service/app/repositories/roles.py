@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from platform_common.filters import FilterValue, filter_values
+from platform_common.filters import FilterValue, contains_ilike, filter_values
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,7 +30,7 @@ async def get_role_for_update(session: AsyncSession, role_id: uuid.UUID) -> Role
 def _apply_role_filters(stmt: Any, *, status: FilterValue, name: FilterValue = None) -> Any:
     names = filter_values(name)
     if names:
-        stmt = stmt.where(or_(*(Role.name.ilike(f"%{item}%") for item in names)))
+        stmt = stmt.where(or_(*(contains_ilike(Role.name, item) for item in names)))
     statuses = filter_values(status)
     if statuses:
         stmt = stmt.where(Role.status.in_(statuses))

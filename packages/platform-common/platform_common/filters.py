@@ -30,13 +30,33 @@ def filter_values(value: FilterValue | Any) -> list[str]:
     return out
 
 
+LIKE_ESCAPE = "\\"
+
+
+def escape_like(text: str) -> str:
+    """转义 LIKE 通配符，让用户输入的 `%`、`_` 按字面匹配。
+
+    不转义时输入 `_` 会命中所有非空值，输入 `100%` 会把 `100` 开头的都查出来。
+    配合 ``column.ilike(..., escape=LIKE_ESCAPE)`` 使用。
+    """
+
+    return text.replace(LIKE_ESCAPE, LIKE_ESCAPE * 2).replace("%", "\\%").replace("_", "\\_")
+
+
+def contains_ilike(column: Any, text: str) -> ColumnElement[bool]:
+    """按字面包含匹配，忽略大小写。"""
+
+    cond: ColumnElement[bool] = column.ilike(f"%{escape_like(text)}%", escape=LIKE_ESCAPE)
+    return cond
+
+
 def ilike_any(column: Any, value: FilterValue) -> ColumnElement[bool] | None:
     """多个值任一模糊命中即可；没有有效值时返回 None，表示不参与过滤。"""
 
     values = filter_values(value)
     if not values:
         return None
-    return or_(*(column.ilike(f"%{item}%") for item in values))
+    return or_(*(contains_ilike(column, item) for item in values))
 
 
 def in_any(column: Any, value: FilterValue) -> ColumnElement[bool] | None:

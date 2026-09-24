@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import Depends, Request
 from platform_common.authz import AuthzClient
-from platform_common.errors import UnauthenticatedError
+from platform_common.errors import InternalCallerRejectedError, UnauthenticatedError
 from platform_common.request_context import get_request_id
 from platform_common.route_audit import mark_permission_dependency
 
@@ -33,7 +33,7 @@ def require_internal_caller(request: Request, settings: Settings) -> str:
     given = token.encode()
     wanted = (expected or "").encode()
     if not service or not expected or len(given) != len(wanted) or not hmac.compare_digest(given, wanted):
-        raise UnauthenticatedError("内部调用凭据无效")
+        raise InternalCallerRejectedError()
     return service
 
 

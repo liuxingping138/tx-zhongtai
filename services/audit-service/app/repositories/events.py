@@ -4,16 +4,12 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from platform_common.filters import FilterValue, filter_values
+from platform_common.filters import LIKE_ESCAPE, FilterValue, escape_like, filter_values
 from platform_common.options import OptionColumns, preview_options, search_options
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import AuditEvent
-
-
-def _escape_like(value: str) -> str:
-    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def apply_filters(
@@ -36,7 +32,7 @@ def apply_filters(
     names = filter_values(actor_name)
     if names:
         stmt = stmt.where(
-            or_(*(AuditEvent.actor_name_snapshot.like(f"%{_escape_like(name)}%", escape="\\") for name in names))
+            or_(*(AuditEvent.actor_name_snapshot.like(f"%{escape_like(name)}%", escape=LIKE_ESCAPE) for name in names))
         )
     for column, value in (
         (AuditEvent.module_code, module_code),

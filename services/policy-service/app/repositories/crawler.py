@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from platform_common.clock import BEIJING, utcnow
-from platform_common.filters import Filters, ilike_any, in_any
+from platform_common.filters import Filters, contains_ilike, ilike_any, in_any
 from sqlalchemy import ColumnElement, Date, Integer, and_, case, cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
@@ -224,7 +224,7 @@ async def distinct_values(session: AsyncSession, field: str, keyword: str | None
     column = FILTER_COLUMNS[field]
     stmt = select(func.distinct(column)).where(column != "")
     if keyword:
-        stmt = stmt.where(column.ilike(f"%{keyword}%"))
+        stmt = stmt.where(contains_ilike(column, keyword))
     result = await session.execute(stmt.order_by(column).limit(limit))
     return [value for value in result.scalars() if value]
 

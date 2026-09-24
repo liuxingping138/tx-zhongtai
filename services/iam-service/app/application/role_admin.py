@@ -203,6 +203,10 @@ async def replace_grants(
         raise NotFoundError("角色不存在")
     if role.version != version:
         raise VersionConflictError()
+    if role.is_builtin and role.code == SUPERADMIN_ROLE_CODE:
+        # 超级管理员固定拥有全部模块的全部功能，由 make seed 维护，页面上也是只读。
+        # 放开修改的话，删掉它的「权限分配」后就再没人能给别人分配角色。
+        raise PermissionDeniedError("超级管理员角色固定拥有全部权限，不能修改授权")
 
     normalized: list[tuple[uuid.UUID, str]] = []
     for resource_code, level in grants:

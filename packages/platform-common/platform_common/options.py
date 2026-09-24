@@ -21,6 +21,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
+from platform_common.filters import contains_ilike
+
 # 不输入关键词时直接给出的候选数量。超过这个基数的字段转为服务端搜索。
 PREVIEW_LIMIT = 200
 # 每次搜索返回的候选数量。
@@ -70,6 +72,6 @@ async def search_options(
     text = (keyword or "").strip()
     stmt = select(column).where(column.is_not(None)).where(column != "")
     if text:
-        stmt = stmt.where(column.ilike(f"%{text}%"))
+        stmt = stmt.where(contains_ilike(column, text))
     result = await session.execute(stmt.distinct().order_by(column).limit(limit))
     return [value for value in result.scalars() if value]

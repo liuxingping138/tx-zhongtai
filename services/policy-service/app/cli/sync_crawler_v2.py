@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import uuid
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, cast
 
@@ -209,15 +210,26 @@ async def _last_watermark(session: AsyncSession) -> datetime | None:
     )
 
 
-async def _unfinished_backfill_mark(session: AsyncSession) -> datetime | None:
-    """上一次没跑完的回填在开始时记下的水位。续跑必须沿用它，否则中断期间入库到已完成日期的数据会漏掉。"""
+async def _unfinished_backfill_mark(session: AsyncSession, *, exclude_run_id: uuid.UUID | None) -> datetime | None:
+    """上一次没跑完的回填在开始时记下的水位。续跑必须沿用它，否则中断期间入库到已完成日期的数据会漏掉。
 
-    return await session.scalar(
-        select(CrawlerV2SyncRun.watermark)
-        .where(CrawlerV2SyncRun.mode == MODE_BACKFILL, CrawlerV2SyncRun.status != "success")
+    - 排除本次运行：本次批次在规划前已以 running、水位为空写入，不排除就永远取到它自己。
+    - 从新到旧看，碰到成功的回填就停：更早的失败已被那次完整回填覆盖，沿用它只会让水位倒退。
+    """
+
+    stmt = (
+        select(CrawlerV2SyncRun.status, CrawlerV2SyncRun.watermark)
+        .where(CrawlerV2SyncRun.mode == MODE_BACKFILL)
         .order_by(CrawlerV2SyncRun.started_at.desc())
-        .limit(1)
     )
+    if exclude_run_id is not None:
+        stmt = stmt.where(CrawlerV2SyncRun.id != exclude_run_id)
+    for status, watermark in (await session.execute(stmt)).all():
+        if status == "success":
+            return None
+        if watermark is not None:
+            return cast(datetime, watermark)
+    return None
 
 
 async def _existing_days(session: AsyncSession, date_from: date, date_to: date) -> set[date]:
@@ -234,7 +246,14 @@ def _span(date_from: date, date_to: date) -> list[date]:
 
 
 async def plan(
-    session: AsyncSession, *, mode: str, today: date, days: int, since: date | None, skip_existing: bool
+    session: AsyncSession,
+    *,
+    mode: str,
+    today: date,
+    days: int,
+    since: date | None,
+    skip_existing: bool,
+    current_run_id: uuid.UUID | None = None,
 ) -> tuple[list[date], datetime | None]:
     """返回要重算的采集日（新到旧）和成功后要记录的水位；修复模式不动水位。"""
 
@@ -245,7 +264,7 @@ async def plan(
         # 先取水位再回填：回填期间新入库的数据入库时间一定晚于它，下次日常增量会补上。
         first_day, mark = await asyncio.to_thread(fetch_source_bounds)
         if skip_existing:
-            previous = await _unfinished_backfill_mark(session)
+            previous = await _unfinished_backfill_mark(session, exclude_run_id=current_run_id)
             if previous is not None and (mark is None or previous < mark):
                 mark = previous
         date_from = since or first_day or today
@@ -270,7 +289,15 @@ async def _sync(session: AsyncSession, *, mode: str, days: int, since: date | No
     await session.commit()
 
     try:
-        targets, mark = await plan(session, mode=mode, today=today, days=days, since=since, skip_existing=skip_existing)
+        targets, mark = await plan(
+            session,
+            mode=mode,
+            today=today,
+            days=days,
+            since=since,
+            skip_existing=skip_existing,
+            current_run_id=run_row.id,
+        )
         run_row.date_from = min(targets) if targets else None
         run_row.date_to = max(targets) if targets else None
         if mode == MODE_BACKFILL:

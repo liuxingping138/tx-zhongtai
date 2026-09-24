@@ -13,6 +13,8 @@ def _handler(request: httpx.Request) -> httpx.Response:
     if request.url.path == "/internal/v1/authorize":
         payload = json.loads(request.content)
         if request.headers.get("x-internal-token") != "secret":
+            return httpx.Response(401, json={"code": "INTERNAL_CALLER_REJECTED", "message": "no", "data": None})
+        if payload.get("access_token") == "expired":
             return httpx.Response(401, json={"code": "AUTH_UNAUTHENTICATED", "message": "no", "data": None})
         if payload.get("resource") == "down":
             return httpx.Response(503, json={"code": "DEPENDENCY_UNAVAILABLE", "message": "down", "data": None})
@@ -66,13 +68,28 @@ async def test_authz_client_dependency_failure_is_503() -> None:
 
 
 @pytest.mark.asyncio
-async def test_authz_client_bad_secret() -> None:
+async def test_authz_client_bad_secret_is_503_not_unauthenticated() -> None:
+    """本服务内部密钥配错是部署问题，不能让前端以为用户掉线、反复刷新会话。"""
+
     client = AuthzClient(
         base_url="http://iam",
         service_name="audit-service",
         service_secret="wrong",
         transport=httpx.MockTransport(_handler),
     )
-    with pytest.raises(UnauthenticatedError):
+    with pytest.raises(DependencyUnavailableError):
         await client.authorize(access_token="t", resource="system.users", action="list")
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_authz_client_expired_user_token_is_401() -> None:
+    client = AuthzClient(
+        base_url="http://iam",
+        service_name="audit-service",
+        service_secret="secret",
+        transport=httpx.MockTransport(_handler),
+    )
+    with pytest.raises(UnauthenticatedError):
+        await client.authorize(access_token="expired", resource="system.users", action="list")
     await client.aclose()

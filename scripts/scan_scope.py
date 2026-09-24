@@ -15,8 +15,9 @@ BUSINESS_DIRS = [
     ROOT / "services/tender-service",
 ]
 CODE_SUFFIX = {".py", ".ts", ".tsx", ".vue", ".js", ".sql"}
+# `(?<![:@])` 排除 Vue 模板里的属性绑定（`:password="oncePassword"` 绑的是变量名，不是口令）。
 SECRET_RE = re.compile(
-    r"(password\s*=\s*['\"](?!dev-only|p6-only|change-me)[^'\"]{8,}['\"]|"
+    r"((?<![:@])password\s*=\s*['\"](?!dev-only|p6-only|change-me)[^'\"]{8,}['\"]|"
     r"BEGIN (RSA |OPENSSH )?PRIVATE KEY)",
     re.I,
 )

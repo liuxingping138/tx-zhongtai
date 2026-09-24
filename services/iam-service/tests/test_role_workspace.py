@@ -169,3 +169,23 @@ def test_member_changes_require_grant_permission(path: str, method: str) -> None
 
     marks = [getattr(dep.call, "__authz_permission__", None) for dep in _route(path, method).dependant.dependencies]
     assert ("system.permissions", "grant") in marks
+
+
+@pytest.mark.asyncio
+async def test_builtin_superadmin_grants_are_read_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """删掉超管的「权限分配」后就再没人能分配角色，后端要和页面一样拒绝修改。"""
+
+    from platform_common.errors import PermissionDeniedError
+
+    from app.domain.catalog import SUPERADMIN_ROLE_CODE
+
+    superadmin = _role("超级管理员", code=SUPERADMIN_ROLE_CODE)
+    superadmin.is_builtin = True
+    monkeypatch.setattr(role_admin.role_repo, "get_role_for_update", AsyncMock(return_value=superadmin))
+    replace = AsyncMock()
+    monkeypatch.setattr(role_admin.role_repo, "replace_role_grants", replace)
+    with pytest.raises(PermissionDeniedError, match="不能修改授权"):
+        await role_admin.replace_grants(
+            MagicMock(), SimpleNamespace(id=uuid.uuid4()), superadmin.id, version=1, grants=[]
+        )
+    replace.assert_not_awaited()

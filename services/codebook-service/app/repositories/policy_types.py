@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from platform_common.filters import Filters, filter_values
+from platform_common.filters import Filters, contains_ilike, filter_values
 from sqlalchemy import ColumnElement, Integer, case, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -56,7 +56,7 @@ def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
     if not keywords:
         return []
     # 多个关键词任一命中任一列即可。
-    return [or_(*(column.ilike(f"%{word}%") for word in keywords for column in KEYWORD_COLUMNS))]
+    return [or_(*(contains_ilike(column, word) for word in keywords for column in KEYWORD_COLUMNS))]
 
 
 async def list_items(

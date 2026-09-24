@@ -17,6 +17,7 @@ from typing import Any
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from platform_common.request_context import get_request_id
@@ -36,6 +37,8 @@ class ErrorCode:
     VALIDATION_ERROR = "VALIDATION_ERROR"
     RATE_LIMITED = "RATE_LIMITED"
     DEPENDENCY_UNAVAILABLE = "DEPENDENCY_UNAVAILABLE"
+    # 服务间调用的内部凭据不对。这是部署配置错误，不是终端用户没登录，调用方要转成 503。
+    INTERNAL_CALLER_REJECTED = "INTERNAL_CALLER_REJECTED"
     INTERNAL_ERROR = "INTERNAL_ERROR"
 
 
@@ -59,6 +62,16 @@ class UnauthenticatedError(ApiError):
     code = ErrorCode.AUTH_UNAUTHENTICATED
 
     def __init__(self, message: str = "未认证或凭据已失效") -> None:
+        super().__init__(message)
+
+
+class InternalCallerRejectedError(ApiError):
+    """内部接口的调用方凭据不对。仍回 401，但用独立错误码，调用方据此区分「配置错」和「用户未登录」。"""
+
+    http_status = status.HTTP_401_UNAUTHORIZED
+    code = ErrorCode.INTERNAL_CALLER_REJECTED
+
+    def __init__(self, message: str = "内部调用凭据无效") -> None:
         super().__init__(message)
 
 
@@ -101,6 +114,14 @@ class DependencyUnavailableError(ApiError):
 
     def __init__(self, message: str = "依赖服务暂时不可用，请稍后重试") -> None:
         super().__init__(message)
+
+
+# PostgreSQL 唯一约束冲突。
+UNIQUE_VIOLATION = "23505"
+
+
+def is_unique_violation(exc: IntegrityError) -> bool:
+    return getattr(exc.orig, "sqlstate", None) == UNIQUE_VIOLATION
 
 
 def _error_body(code: str, message: str, request_id: str | None) -> dict[str, Any]:
@@ -151,6 +172,30 @@ def register_exception_handlers(app: FastAPI) -> None:
             status_code=exc.status_code,
             content=_error_body(code, message, get_request_id()),
             headers=getattr(exc, "headers", None),
+        )
+
+    @app.exception_handler(IntegrityError)
+    async def handle_integrity_error(request: Request, exc: IntegrityError) -> JSONResponse:
+        """并发新增撞上唯一约束时回 409，而不是 500。
+
+        业务层「先查重再插入」挡不住两个请求同时通过查重，最后由数据库唯一约束兜底。
+        这属于可预期的冲突，用户刷新后重试即可。非空、外键等其他完整性错误说明代码有缺陷，
+        仍按 500 记录，避免被当成普通冲突掩盖。
+        """
+
+        request_id = get_request_id()
+        if not is_unique_violation(exc):
+            logger.exception("完整性约束异常 request_id=%s", request_id)
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content=_error_body(ErrorCode.INTERNAL_ERROR, "服务器内部错误，请联系管理员", request_id),
+            )
+        logger.info("唯一约束冲突 request_id=%s", request_id)
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content=_error_body(
+                ErrorCode.VERSION_CONFLICT, "与已有记录重复，可能刚被他人新增，请刷新后重试", request_id
+            ),
         )
 
     @app.exception_handler(Exception)

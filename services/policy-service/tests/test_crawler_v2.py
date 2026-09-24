@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import uuid
 from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -137,6 +138,45 @@ async def test_resumed_backfill_keeps_earlier_watermark_and_skips_done_days(monk
     # 当天和昨天总是重算；已完成的更早日期跳过。
     assert targets == [TODAY, date(2026, 9, 22), date(2026, 9, 19)]
     assert mark == earlier
+
+
+class _RunHistory:
+    """按 started_at 倒序返回回填批次，记录收到的 SQL。"""
+
+    def __init__(self, rows: list[tuple[str, datetime | None]]) -> None:
+        self.rows = rows
+        self.sql = ""
+
+    async def execute(self, stmt: object) -> SimpleNamespace:
+        self.sql = str(stmt)
+        return SimpleNamespace(all=lambda: self.rows)
+
+
+@pytest.mark.asyncio
+async def test_resume_mark_excludes_the_current_run() -> None:
+    """本次批次已以 running、水位为空写入；不排除它，续跑就永远拿不到上次中断的水位。"""
+
+    earlier = datetime(2026, 9, 22, tzinfo=UTC)
+    session = _RunHistory([("failed", earlier)])
+    mark = await sync._unfinished_backfill_mark(session, exclude_run_id=uuid.uuid4())  # type: ignore[arg-type]
+    assert mark == earlier
+    assert "policy_crawler_v2_sync_runs.id !=" in session.sql
+
+
+@pytest.mark.asyncio
+async def test_resume_mark_stops_at_last_successful_backfill() -> None:
+    """成功回填之前的失败批次已被覆盖，沿用它的旧水位只会让下次增量重算大量日期。"""
+
+    old = datetime(2026, 1, 1, tzinfo=UTC)
+    session = _RunHistory([("success", datetime(2026, 2, 1, tzinfo=UTC)), ("failed", old)])
+    assert await sync._unfinished_backfill_mark(session, exclude_run_id=None) is None  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_resume_mark_skips_batches_that_died_before_recording_a_mark() -> None:
+    earlier = datetime(2026, 9, 22, tzinfo=UTC)
+    session = _RunHistory([("running", None), ("failed", earlier)])
+    assert await sync._unfinished_backfill_mark(session, exclude_run_id=None) == earlier  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio

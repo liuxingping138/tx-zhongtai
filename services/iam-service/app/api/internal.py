@@ -4,7 +4,7 @@ import hmac
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from platform_common.errors import UnauthenticatedError
+from platform_common.errors import InternalCallerRejectedError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import AuthorizeRequest
@@ -27,7 +27,7 @@ def require_internal_caller(request: Request, settings: Settings) -> str:
     given = token.encode()
     wanted = (expected or "").encode()
     if not service or not expected or len(given) != len(wanted) or not hmac.compare_digest(given, wanted):
-        raise UnauthenticatedError("内部调用凭据无效")
+        raise InternalCallerRejectedError()
     return service
 
 

@@ -4,6 +4,7 @@ from io import BytesIO
 
 from openpyxl import Workbook, load_workbook
 from platform_common.errors import ApiError, ErrorCode
+from platform_common.excel import append_text_row
 
 from app.application.area_match import AreaSnap, build_area_index, match_area_indexed
 
@@ -136,9 +137,9 @@ def build_resolve_workbook(content: bytes, catalog: list[AreaSnap]) -> tuple[byt
     book = Workbook()
     sheet = book.active
     sheet.title = "全部数据"
-    sheet.append(headers)
+    append_text_row(sheet, headers)
     for row in annotated:
-        sheet.append(row)
+        append_text_row(sheet, row)
     buffer = BytesIO()
     book.save(buffer)
     return buffer.getvalue(), matched, unmatched

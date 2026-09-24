@@ -21,7 +21,7 @@ make bootstrap        # 检查环境、装依赖、生成 .env（不覆盖已有
 make dev-up           # 启动开发栈（含 iam-worker）
 make dev-down         # 停止（保留数据卷）
 make migrate          # 执行各服务迁移
-make check            # 质量门：Python ruff+mypy，前端 type-check+build+lint
+make check            # 质量门：Python ruff+mypy，前端 type-check+build+lint，范围与密钥扫描
 make test-unit        # 后端 pytest + 前端 vitest
 make smoke            # 经网关冒烟
 make export-openapi   # 从运行中服务导出 OpenAPI
@@ -207,6 +207,8 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
 - 上传用 `read_upload_within_limit(file, settings.import_max_bytes)`。
   先 `await file.read()` 再判断长度，体积上限形同虚设
 - 导出前用 `count_filtered` 校验 `export_max_rows`（默认 10 万），超限不执行查询
+- 自己拼 Excel 时逐行用 `platform_common.excel.append_text_row`，别直接 `sheet.append`：openpyxl 会把 `=` 开头的
+  字符串存成公式，导出的网站名、导入内容里带 `=HYPERLINK(...)` 就成了打开即执行的活公式
 
 ### 列表与导出共用一份筛选定义
 
@@ -259,7 +261,7 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
 
 - `pg_stat_user_tables.n_live_tup` 是过期统计会显示 0 行，判断数据量用 `count(*)`
 - mypy 有缓存假报错，改完文件结构先 `rm -rf .mypy_cache`
-- 登录失败按账号+IP 限流 5 次 / 300 秒。探测后清理：
+- 登录失败按账号 5 次、IP 20 次 / 300 秒限流，账号键是小写后的用户名。探测后清理：
   `docker exec tx-zhongtai-redis-1 redis-cli del 'iam:login:user:<账号>' 'iam:login:ip:<IP>'`
 - Element Plus 的原生 checkbox 是 `opacity:0; 0x0` 隐藏元素，e2e 里 `check()` 会一直等可见，
   改点可见标签；hover 才出现的清除图标用 `dispatchEvent('click')`，

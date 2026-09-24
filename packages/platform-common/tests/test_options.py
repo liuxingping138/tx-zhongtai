@@ -23,7 +23,7 @@ class _Column:
     def __ne__(self, _other: object) -> _Column:  # type: ignore[override]
         return self
 
-    def ilike(self, pattern: str) -> _Column:
+    def ilike(self, pattern: str, escape: str | None = None) -> _Column:
         self.like = pattern
         return self
 

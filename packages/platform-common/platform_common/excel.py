@@ -13,6 +13,8 @@ from typing import Any
 
 from anyio import to_thread
 from openpyxl import Workbook, load_workbook
+from openpyxl.cell.cell import Cell
+from openpyxl.worksheet.worksheet import Worksheet
 
 from platform_common.clock import format_beijing
 from platform_common.columns import AUDIT_EXPORT_COLUMNS, ColumnSpec, header_to_field
@@ -65,6 +67,27 @@ def parse_sheet(
     return items
 
 
+def append_text_row(sheet: Worksheet, values: list[Any] | tuple[Any, ...]) -> None:
+    """追加一行，字符串一律按文本写入。
+
+    openpyxl 会把 ``=`` 开头的字符串当成公式保存，打开文件时 Excel 会执行它。
+    导出的值来自用户导入和外部爬虫库，``=HYPERLINK(...)`` 之类的内容不能变成活公式。
+    改成文本类型后单元格显示原样内容，再导回来也还是同一个字符串。
+    """
+
+    sheet.append([_as_text_cell(sheet, value) for value in values])
+
+
+def _as_text_cell(sheet: Worksheet, value: Any) -> Any:
+    # 只有 `=` 开头的字符串会被 openpyxl 判成公式。其余值原样交给 append；
+    # 不能 append 后再用 sheet.max_row 回头改类型——max_row 每次扫全表，大表导出会退化成平方复杂度。
+    if not (isinstance(value, str) and value.startswith("=")):
+        return value
+    cell = Cell(sheet, value=value)
+    cell.data_type = "s"
+    return cell
+
+
 def build_workbook(
     columns: tuple[ColumnSpec, ...],
     rows: list[dict[str, Any]],
@@ -76,7 +99,7 @@ def build_workbook(
     sheet = book.active
     sheet.title = sheet_name[:31]
     export_cols = (*columns, *AUDIT_EXPORT_COLUMNS) if include_audit else columns
-    sheet.append([spec.header for spec in export_cols])
+    append_text_row(sheet, [spec.header for spec in export_cols])
     for row in rows:
         values = []
         for spec in export_cols:
@@ -85,7 +108,7 @@ def build_workbook(
                 values.append(format_beijing(value))
             else:
                 values.append("" if value is None else str(value))
-        sheet.append(values)
+        append_text_row(sheet, values)
     buffer = BytesIO()
     book.save(buffer)
     return buffer.getvalue()

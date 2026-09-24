@@ -32,6 +32,7 @@ import argparse
 import asyncio
 import json
 import os
+import secrets
 import sys
 import uuid
 from dataclasses import dataclass, field
@@ -41,10 +42,11 @@ import httpx
 
 Verdict = Literal["allowed", "denied", "unauthenticated", "unavailable", "error"]
 
-# 探测账号统一口令。这些账号只在开发/隔离栈里存在，跑完会被置为 disabled。
+# 探测账号口令每次运行随机生成，不写死进仓库。这些账号只在开发/隔离栈里存在，跑完会被置为 disabled；
+# 复用已有账号时会先重置密码，所以不需要记住上一次的口令。
 # 新建账号一律带 must_change_password，初始口令必须与最终口令不同才能改密成功。
-PROBE_INITIAL_PASSWORD = "Probe#Initial2026"
-PROBE_PASSWORD = "Probe#Authz2026"
+PROBE_INITIAL_PASSWORD = f"Probe#Init-{secrets.token_urlsafe(12)}"
+PROBE_PASSWORD = f"Probe#Authz-{secrets.token_urlsafe(12)}"
 
 # 所有 Write schema 都是 extra="forbid"，带未知字段必然在校验阶段 422。
 INVALID_BODY = {"__authz_probe_unknown_field__": "1"}

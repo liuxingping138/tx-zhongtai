@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from platform_common.filters import FilterValue, filter_values
+from platform_common.filters import FilterValue, contains_ilike, filter_values
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -39,7 +39,7 @@ def _apply_user_filters(
         stmt = stmt.where(User.id.in_(select(UserRole.user_id).where(UserRole.role_id.in_(valid))))
     names = filter_values(username)
     if names:
-        stmt = stmt.where(or_(*(User.username.like(f"%{name.lower()}%") for name in names)))
+        stmt = stmt.where(or_(*(contains_ilike(User.username, name) for name in names)))
     statuses = filter_values(status)
     if statuses:
         stmt = stmt.where(User.status.in_(statuses))
