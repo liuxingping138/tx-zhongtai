@@ -128,6 +128,7 @@ onMounted(() => {
       :page-size="query.page_size"
       :loading="loading"
       :error="loadError"
+      expanded-results
       @retry="load"
       @update:page="query.page = $event"
       @update:page-size="query.page_size = $event"

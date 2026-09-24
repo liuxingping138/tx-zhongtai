@@ -4,8 +4,8 @@ import { Warning } from '@element-plus/icons-vue'
 import ScrollPort from './ScrollPort.vue'
 withDefaults(defineProps<{
   title: string; hint?: string; error?: string; total: number; page: number;
-  pageSize: number; loading?: boolean; hidePager?: boolean;
-}>(), { hint: '', error: '', loading: false, hidePager: false })
+  pageSize: number; loading?: boolean; hidePager?: boolean; expandedResults?: boolean;
+}>(), { hint: '', error: '', loading: false, hidePager: false, expandedResults: false })
 const emit = defineEmits<{
   'update:page': [value: number]; 'update:pageSize': [value: number]; change: []; retry: [];
 }>()
@@ -24,7 +24,10 @@ async function onSize(value: number) {
 }
 </script>
 <template>
-  <div class="list-page">
+  <div
+    class="list-page"
+    :class="{ 'list-page--expanded': expandedResults }"
+  >
     <header class="list-page__heading">
       <h1>{{ title }}</h1>
       <p v-if="hint">
@@ -120,6 +123,14 @@ async function onSize(value: number) {
 .list-page:has(.summary-band) .scroll-port.list-page__results {
   height: clamp(440px, calc(100dvh - 220px), 880px);
   min-height: 440px;
+  flex: none;
+}
+/* Audit trails need more visible rows than a one-screen grid can provide below five filters. */
+.list-page--expanded { max-height: none; }
+.list-page--expanded .table-card { flex: none; }
+.list-page--expanded .scroll-port.list-page__results {
+  height: clamp(560px, calc(100dvh - 190px), 880px);
+  min-height: 560px;
   flex: none;
 }
 .filter-card { padding: 14px 16px 16px; margin-bottom: 4px; background: #f6f8fb; border: 1px solid var(--zt-border); border-radius: var(--zt-radius); }

@@ -24,6 +24,7 @@
 
 - [开发进度](开发进度.md)：各阶段实际改动与验证结果，按时间追加。
 - [reviews/](reviews)：按「主题-日期」存放的验收证据（截图、接口与性能实测 JSON），带 README 的有文字结论：
+  - [system-access-2026-09-24](reviews/system-access-2026-09-24/README.md)：系统管理三模块与个人设置的 UI/UX 复查和调整
   - [crawler-monitoring-2026-09-22](reviews/crawler-monitoring-2026-09-22/README.md)：爬虫监测首版验收
   - [crawler-monitoring-2026-09-23-release](reviews/crawler-monitoring-2026-09-23-release/README.md)：名称口径升级的发布与真实增量核对
   - `crawler-monitoring-v2-2026-09-23/`、`system-rbac-2026-09-23/`：仅截图

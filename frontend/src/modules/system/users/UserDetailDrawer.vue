@@ -60,6 +60,7 @@ async function load() {
     if (current !== sequence) return
     user.value = detail
     draft.value = [...(detail.role_ids ?? [])]
+    guard.markSaved()
   } catch (error) {
     if (current !== sequence) return
     loadError.value = errorMessage(error, '暂时无法加载用户信息')
@@ -95,6 +96,7 @@ async function onSaveRoles() {
     const saved = await replaceUserRoles(user.value.id, { role_ids: draft.value, version: user.value.version })
     user.value = { ...user.value, ...saved }
     draft.value = [...(saved.role_ids ?? draft.value)]
+    guard.markSaved()
     editingRoles.value = false
     ElMessage.success('角色已更新，对方下次操作时即生效')
     emit('changed', user.value)

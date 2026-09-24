@@ -11,6 +11,11 @@ export function useUnsavedForm(visible: Ref<boolean>, value: () => unknown, savi
   }, { flush: 'sync' })
   const dirty = computed(() => visible.value && JSON.stringify(value()) !== baseline)
 
+  /** Call after an asynchronous form load or a successful save establishes a new clean value. */
+  function markSaved() {
+    baseline = JSON.stringify(value())
+  }
+
   async function canLeave(): Promise<boolean> {
     if (saving.value) return false
     if (!dirty.value) return true
@@ -43,5 +48,5 @@ export function useUnsavedForm(visible: Ref<boolean>, value: () => unknown, savi
   onMounted(() => window.addEventListener('beforeunload', beforeUnload))
   onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
   onBeforeRouteLeave(canLeave)
-  return { dirty, close, beforeClose, canLeave }
+  return { dirty, markSaved, close, beforeClose, canLeave }
 }

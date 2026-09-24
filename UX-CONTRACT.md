@@ -14,20 +14,16 @@
 
 ## Canonical UI Map
 
-| 能力 | 规范所有者 | 允许变体 |
-|---|---|---|
-| 列表/分页/反馈 | ListPage | 系统列表二维表；业务列表 BusinessTable；监测类页面用 `summary` 插槽加概览区 |
-| 概览卡片与图表 | ListPage `summary` 插槽 | 只读统计；图表用内联 SVG，不引图表库 |
-| 下拉与筛选 | FilterSelect / FilterBar + Element Plus | 可搜索、显式提交；桌面展开全部条件；手机才收起多余项 |
-| 日期 | Element Plus date-picker，现有中文 locale | 业务原始日期字符串保留文本编辑，不擅自转换数据 |
-| 表单 | GroupedFields / useFieldValidation | 分组业务字段、系统表单、密码表单 |
-| 浮层 | Element Plus Dialog/Drawer/MessageBox | 分组编辑、只读详情、导入结果 |
-| 状态消息 | Element Plus Message / Alert | 成功短消息；持久错误和结果 |
-| 结果区滚动 | ScrollPort | 常显横/纵滑槽；触控板分轴；禁止只靠系统悬浮条 |
-| 账号入口 | UserAccountMenu | 侧栏底部主行显示名、辅行角色；折叠/手机顶栏仅头像 |
-| 表格列选择 | ColumnPicker | 只影响当前页面显示，不改变数据/导出字段 |
-| 记录详情扩展 | BusinessTable `detail-extra` | 在完整字段之后追加模块内容，不替换既有详情 |
-| 登录入口 | LoginView + auth store | 左侧平台介绍；右侧原有账号认证，不从关系图直接进入模块 |
+| Capability | Canonical owner | Source of truth | Allowed variants | Verification |
+|---|---|---|---|---|
+| Select/Listbox | FilterSelect / FilterBar + Element Plus | 本文「列表、导航与手机」；`frontend/src/components/FilterSelect.vue` | 可搜索、多选、远程候选；显式查询后生效 | `frontend/src/composables/useFilterOptions.test.ts`；实际浏览器键盘与弹层检查 |
+| Date | Element Plus date-picker + 中文 locale | 本文「列表、导航与手机」；`frontend/src/utils/time.ts` | 筛选日期范围；业务原始日期仍按字段定义编辑 | 实际浏览器日期选择与北京时间检查 |
+| Form | GroupedFields / useFieldValidation | 本文「表单与错误」；`frontend/src/composables/useFieldValidation.ts` | 分组业务字段、系统表单、密码表单 | `frontend` 单测；实际浏览器校验、取消和错误恢复 |
+| Scrollbar | `theme.css` + ScrollPort | `DESIGN.md`「字体与布局」；本文「字段与列设置」 | 水平/垂直滑槽；`ListPage` 的概览和日志加高变体 | 1280/1024 实际浏览器溢出与滚动检查 |
+| Toast | Element Plus Message / Alert | 本文「表单与错误」；`frontend/src/styles/theme.css` | 成功短消息；持久错误、结果和确认留在页面/对话框 | 实际浏览器成功、失败与恢复检查 |
+| CRUD | 模块路由/API + ListPage/BusinessTable | 本文「列表、导航与手机」「系统管理」；后端 OpenAPI | 系统二维表；业务字段表；监测页概览；审计页加高结果区 | 前端单测、构建和实际浏览器主要流程检查 |
+
+其他项目专用所有者：`ListPage` 管理列表标题、筛选、分页与状态；`BusinessTable` 管理业务列和详情扩展；`ColumnPicker` 管理列显示偏好；`UserAccountMenu` 管理侧栏和窄屏账号入口；`LoginView` 与 auth store 管理登录页。概览卡片/图表只用 `ListPage` 的 `summary` 插槽，图表仍为只读内联 SVG。
 
 ## 字段与列设置
 
@@ -112,4 +108,7 @@ Element Plus 弹层负责层级、Escape、焦点约束和焦点返回；不使�
 - 给人分配角色即授权，所有入口同一门槛：需要「权限分配」可管理（只有超级管理员）。包括新增用户时带角色、用户详情调整角色、在角色一侧增删成员、复制角色（连同权限复制）。没有该权限时入口禁用并说明原因，后端同样拒绝，不因入口合并而放宽。
 - 「权限分配」只能属于超级管理员角色，其他角色该行锁定；超级管理员角色的权限只能查看。清空全表另有「仅超级管理员」限制，说明中如实标注。
 - 用户详情展示多角色叠加后的实际权限及来源角色；停用角色列出但标明不生效；账号未启用时提示权限暂不生效。从用户进入操作日志时，人员条件经 `history.state` 传入（人员名属非共享条件，不写 URL）。
+- 用户详情异步加载完成后以已保存角色作为草稿基线；仅打开「调整角色」再取消或关闭不提示未保存，有实际勾选变化时才提示。成功保存后重新建立基线。
+- 操作日志仍用 `ListPage`、`ScrollPort` 和服务端分页；结果区使用 `expandedResults` 变体，最少 560px，可随窗口增长到 880px，筛选多行时整页自然滚动，分页不遮挡数据。
+- 左下角账号菜单进入个人设置。页面只读展示账号、中文状态和已分配角色；修改密码须原密码、新密码和确认，保留逐字段错误与失败反馈；「退出全部设备」独立于保存密码，先告知会撤销全部设备会话，取消不执行，确认后显示忙碌状态并跳登录页。
 - 来源定义见 `frontend/src/modules/system/roles/`、`frontend/src/permissions/catalog.ts`、`services/iam-service/app/application/role_admin.py`；截图见 `docs/reviews/system-rbac-2026-09-23/`。
