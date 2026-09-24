@@ -109,7 +109,7 @@ test('roles: list is a normal filterable table and opens the detail page', async
   }))
   await page.goto('/system/roles')
   const policyRow = page.getByRole('row').filter({ hasText: '政策数据管理员' })
-  await expect(policyRow).toContainText('4 个模块，其中 2 个可管理')
+  await expect(policyRow).toContainText('4 个模块 · 其中 2 个可管理')
   await expect(policyRow).toContainText('3 人')
   await expect(page.getByRole('row').filter({ hasText: '码表管理员' })).toContainText('还没有设置权限')
 
@@ -251,11 +251,21 @@ test('users: create a user with roles in one step, and list shows roles', async 
   const dialog = page.getByRole('dialog', { name: '新增用户' })
   await dialog.getByLabel('用户名', { exact: true }).fill('lisi')
   await dialog.getByLabel('显示名', { exact: true }).fill('李四')
-  await expect(dialog.getByText('未选择角色')).toBeVisible()
+  // 浏览器不能把已保存的管理员账号密码自动填进来。
+  await expect(dialog.getByLabel('用户名', { exact: true })).toHaveAttribute('autocomplete', 'off')
+  await expect(dialog.getByLabel('显示名', { exact: true })).toHaveAttribute('autocomplete', 'off')
+  await expect(dialog.getByLabel('初始密码', { exact: true })).toHaveAttribute('autocomplete', 'new-password')
+
+  // 没选角色不预先警告，提交时确认一次；选择「返回选择」不会创建。
+  await dialog.getByRole('button', { name: '创建', exact: true }).click()
+  const confirm = page.getByRole('dialog', { name: '还没有选择角色' })
+  await expect(confirm).toBeVisible()
+  await confirm.getByRole('button', { name: '返回选择' }).click()
+  expect(created).toBeUndefined()
+
   await dialog.getByRole('checkbox', { name: /政策数据管理员/ }).click()
   await expect(dialog.getByRole('checkbox', { name: /政策数据管理员/ })).toHaveAttribute('aria-checked', 'true')
   await expect(dialog.getByText('负责政策表维护')).toBeVisible()
-  await expect(dialog.getByText('未选择角色')).toHaveCount(0)
   await dialog.getByRole('button', { name: '创建', exact: true }).click()
   await expect.poll(() => created?.role_ids).toEqual(['1'])
 })

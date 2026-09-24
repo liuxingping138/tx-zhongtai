@@ -80,3 +80,16 @@ export function grantDiff(before: GrantSnapshot[], after: GrantSnapshot[]): { co
   }
   return changes
 }
+
+/**
+ * 一句话概括角色能用多少模块。全部可管理时直接说「均可管理」，
+ * 不再写「12 个模块，其中 12 个可管理」这种要读两遍的句子。
+ */
+export function roleModuleSummary(counts?: { read: number; export: number; full: number }): string {
+  const full = counts?.full ?? 0
+  const opened = (counts?.read ?? 0) + (counts?.export ?? 0) + full
+  if (!opened) return ''
+  if (full === opened) return `${opened} 个模块 · 均可管理`
+  if (!full) return `${opened} 个模块 · 仅查看或导出`
+  return `${opened} 个模块 · 其中 ${full} 个可管理`
+}

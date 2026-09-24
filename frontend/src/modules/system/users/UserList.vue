@@ -140,10 +140,25 @@ const editError = ref('')
 watch(createVisible, (open) => { if (open) { createError.value = ''; void createValidation.validate({}) } })
 watch(editVisible, (open) => { if (open) { editError.value = ''; void editValidation.validate({}) } })
 
+async function confirmCreateWithoutRole(): Promise<boolean> {
+  try {
+    await ElMessageBox.confirm(
+      '没有角色的用户登录后看不到任何业务模块。可以先创建，之后在「查看」里补分配。',
+      '还没有选择角色',
+      { type: 'warning', confirmButtonText: '仍然创建', cancelButtonText: '返回选择', distinguishCancelAndClose: true },
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
 async function onCreate() {
   if (creating.value) return
   createError.value = ''
   if (!await createValidation.validate({username: createForm.username.trim() ? '' : '请填写用户名', display_name: createForm.display_name.trim() ? '' : '请填写显示名'})) return
+  // 不预先挂警告，只在真要创建一个「登录后什么都看不到」的账号时确认一次。
+  if (canGrant.value && !createRoles.value.length && !await confirmCreateWithoutRole()) return
   creating.value = true
   try {
     const result = await createUser({
@@ -565,9 +580,8 @@ onMounted(() => {
       title="新增用户"
       width="560px"
     >
-      <p class="editor-help">
-        用户名创建后不可修改；初始密码留空时由系统生成，首次登录须修改密码。
-      </p>
+      <!-- autocomplete 必须写：否则浏览器把已保存的管理员账号密码填进显示名和初始密码，
+           新用户会悄悄拿到管理员的密码。 -->
       <el-form
         ref="createFormRef"
         novalidate
@@ -582,55 +596,65 @@ onMounted(() => {
           :closable="false"
           class="form-submit-error"
         />
-        <el-form-item
-          :error="createValidation.errors.username"
-          label="用户名"
-          required
-        >
-          <el-input
-            v-model="createForm.username"
-            :aria-invalid="Boolean(createValidation.errors.username)"
-            aria-describedby="createForm-username-error"
-          />
-          <template #error>
-            <p
-              v-if="createValidation.errors.username"
-              id="createForm-username-error"
-              class="field-error"
-              role="alert"
-            >
-              {{ createValidation.errors.username }}
-            </p>
-          </template>
-        </el-form-item>
-        <el-form-item
-          :error="createValidation.errors.display_name"
-          label="显示名"
-          required
-        >
-          <el-input
-            v-model="createForm.display_name"
-            :aria-invalid="Boolean(createValidation.errors.display_name)"
-            aria-describedby="createForm-display_name-error"
-          />
-          <template #error>
-            <p
-              v-if="createValidation.errors.display_name"
-              id="createForm-display_name-error"
-              class="field-error"
-              role="alert"
-            >
-              {{ createValidation.errors.display_name }}
-            </p>
-          </template>
-        </el-form-item>
+        <div class="create-grid">
+          <el-form-item
+            :error="createValidation.errors.username"
+            label="用户名"
+            required
+          >
+            <el-input
+              v-model="createForm.username"
+              autocomplete="off"
+              placeholder="登录用，创建后不能改"
+              :aria-invalid="Boolean(createValidation.errors.username)"
+              aria-describedby="createForm-username-error"
+            />
+            <template #error>
+              <p
+                v-if="createValidation.errors.username"
+                id="createForm-username-error"
+                class="field-error"
+                role="alert"
+              >
+                {{ createValidation.errors.username }}
+              </p>
+            </template>
+          </el-form-item>
+          <el-form-item
+            :error="createValidation.errors.display_name"
+            label="显示名"
+            required
+          >
+            <el-input
+              v-model="createForm.display_name"
+              autocomplete="off"
+              placeholder="页面上显示的姓名"
+              :aria-invalid="Boolean(createValidation.errors.display_name)"
+              aria-describedby="createForm-display_name-error"
+            />
+            <template #error>
+              <p
+                v-if="createValidation.errors.display_name"
+                id="createForm-display_name-error"
+                class="field-error"
+                role="alert"
+              >
+                {{ createValidation.errors.display_name }}
+              </p>
+            </template>
+          </el-form-item>
+        </div>
         <el-form-item label="初始密码">
           <el-input
             v-model="createForm.password"
             type="password"
             show-password
-            placeholder="留空则系统生成"
+            autocomplete="new-password"
+            placeholder="留空则由系统生成"
           />
+          <p class="field-hint">
+            无论谁设置，用户首次登录都必须改成自己的密码。
+          </p>
         </el-form-item>
         <el-form-item
           label="角色"
@@ -642,12 +666,8 @@ onMounted(() => {
               :roles="allRoles"
               :disabled="creating"
             />
-            <p
-              v-if="!createRoles.length"
-              class="create-roles__warn"
-              role="status"
-            >
-              未选择角色：创建后该用户登录看不到任何业务模块，之后可在「查看」里补上。
+            <p class="field-hint">
+              角色决定能用哪些模块，可多选；不确定时也可以先不选，之后在「查看」里补。
             </p>
           </template>
           <p
@@ -793,15 +813,22 @@ onMounted(() => {
   display: block;
 }
 
-.create-roles__warn,
+/* 用户名、显示名都是短字段，并排放省一半高度。 */
+.create-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 16px;
+}
+
+.field-hint,
 .create-roles__note {
-  margin: 8px 0 0;
+  margin: 6px 0 0;
   font-size: 12px;
   line-height: 1.5;
 }
 
-.create-roles__warn {
-  color: #b26a00;
+.field-hint {
+  color: var(--zt-ink-500);
 }
 
 .create-roles__note {

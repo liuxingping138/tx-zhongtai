@@ -12,6 +12,7 @@ import FilterSelect from '@/components/FilterSelect.vue'
 import ListEmpty from '@/components/ListEmpty.vue'
 import ListPage from '@/components/ListPage.vue'
 import { useListQuery } from '@/composables/useListQuery'
+import { roleModuleSummary } from '@/permissions/levels'
 import { useAuthStore } from '@/stores/auth'
 import RoleFormDialog, { type RoleFormMode } from './RoleFormDialog.vue'
 
@@ -131,10 +132,7 @@ function onMore(command: string, role: RoleItem) {
 }
 
 function moduleSummary(role: RoleItem): string {
-  const counts = role.grant_counts
-  const opened = (counts?.read ?? 0) + (counts?.export ?? 0) + (counts?.full ?? 0)
-  if (!opened) return ''
-  return counts?.full ? `${opened} 个模块，其中 ${counts.full} 个可管理` : `${opened} 个模块`
+  return roleModuleSummary(role.grant_counts)
 }
 
 onMounted(() => {

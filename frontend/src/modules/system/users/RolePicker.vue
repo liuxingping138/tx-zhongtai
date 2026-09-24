@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 
 import type { RoleItem } from '@/api/types'
+import { roleModuleSummary } from '@/permissions/levels'
 
 /**
  * 选角色：每个角色带上职责说明和能用多少模块，让管理员按职责选，而不是按名字猜。
@@ -34,10 +35,7 @@ function toggle(role: RoleItem) {
 }
 
 function summary(role: RoleItem): string {
-  const counts = role.grant_counts
-  const opened = (counts?.read ?? 0) + (counts?.export ?? 0) + (counts?.full ?? 0)
-  if (!opened) return '还没有设置任何模块权限'
-  return counts?.full ? `已开通 ${opened} 个模块，其中 ${counts.full} 个可管理` : `已开通 ${opened} 个模块`
+  return roleModuleSummary(role.grant_counts) || '还没有设置任何模块权限'
 }
 </script>
 
@@ -90,12 +88,12 @@ function summary(role: RoleItem): string {
             >
               已停用，取消后不能再选
             </el-tag>
+            <span class="role-option__meta">{{ summary(role) }}</span>
           </span>
           <span
             v-if="role.description"
             class="role-option__desc"
           >{{ role.description }}</span>
-          <span class="role-option__meta">{{ summary(role) }}</span>
         </span>
       </button>
       <p
@@ -110,10 +108,10 @@ function summary(role: RoleItem): string {
 
 <style scoped>
 .role-picker { display: flex; flex-direction: column; gap: 8px; width: 100%; }
-.role-picker__list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; padding: 2px; }
+.role-picker__list { display: flex; flex-direction: column; gap: 6px; max-height: 280px; overflow-y: auto; padding: 2px; }
 .role-picker__empty { margin: 8px 0; font-size: 13px; color: var(--zt-ink-500); }
 .role-option {
-  display: flex; align-items: flex-start; gap: 12px; width: 100%; padding: 10px 12px;
+  display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 8px 12px;
   border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: #fff;
   text-align: left; font: inherit; cursor: pointer; transition: border-color 160ms ease, background-color 160ms ease;
 }
@@ -130,9 +128,10 @@ function summary(role: RoleItem): string {
 .role-option.is-on .role-option__box::after {
   content: ''; width: 8px; height: 4px; margin-top: -2px; border-left: 2px solid #fff; border-bottom: 2px solid #fff; transform: rotate(-45deg);
 }
-.role-option__text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.role-option__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .role-option__title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .role-option__title strong { font-size: 14px; color: var(--zt-ink-900); font-weight: 600; }
 .role-option__desc { font-size: 12px; line-height: 1.5; color: var(--zt-ink-700); }
-.role-option__meta { font-size: 12px; color: var(--zt-ink-500); }
+/* 模块概括靠右，一行读完「谁 · 能用多少」。 */
+.role-option__meta { margin-left: auto; padding-left: 12px; font-size: 12px; color: var(--zt-ink-500); white-space: nowrap; }
 </style>
