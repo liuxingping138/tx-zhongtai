@@ -16,18 +16,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 常用命令
 
+当前运行环境是 `1.119.196.77:8091`。在 Mac 上改代码并推送到 GitLab，再用 rsync 同步到服务器构建。不要在服务器 `git pull`，不要在本机 `make dev-up`。步骤见 `docs/guides/部署与维护.md`。
+
 ```bash
-make bootstrap        # 检查环境、装依赖、生成 .env（不覆盖已有）
-make dev-up           # 启动开发栈（含 iam-worker）
-make dev-down         # 停止（保留数据卷）
-make migrate          # 执行各服务迁移
 make check            # 质量门：Python ruff+mypy，前端 type-check+build+lint，范围与密钥扫描
-make test-unit        # 后端 pytest + 前端 vitest
-make smoke            # 经网关冒烟
-make export-openapi   # 从运行中服务导出 OpenAPI
-make crawler-sync     # 按成功入库水位增量重算受影响日期
-make crawler-v2-sync  # v2 日常增量；首次先 make crawler-v2-backfill 建立水位
+make test-unit        # 后端 pytest + 前端 vitest（不需要本机 Docker）
+make export-openapi   # 从本地 FastAPI 应用导出 OpenAPI
 ```
+
+服务器上的迁移、种子、爬虫同步和冒烟用该文档里的 `docker-compose` 命令，不用下面这些依赖本机 Compose 的 Make 目标。
 
 运维类：`make iam-session-cleanup`（清理失效会话/令牌）、`make audit-cleanup`（清理到期审计）、
 `make outbox-replay`（重放 dead/failed 事件）、`make admin-create`、`make seed-area-codes`。
@@ -42,26 +39,20 @@ cd services/policy-service && uv run pytest -q -k "export_rejects"
 # 前端单测
 cd frontend && pnpm vitest run src/composables/useFilterOptions.test.ts
 
-# e2e（Playwright）。默认指向 P6 的 8090，指到开发栈要显式覆盖：
-cd frontend && P6_GATEWAY=http://localhost:8080 pnpm exec playwright test filter-options
-cd frontend && P6_GATEWAY=http://localhost:8080 pnpm exec playwright test --grep "date range"
+# e2e（Playwright）默认指向 P6 的 8090。不要改指到 8091 的业务库。
+cd frontend && pnpm exec playwright test filter-options
+cd frontend && pnpm exec playwright test --grep "date range"
 ```
 
-### 前端改动必须重建容器
+### 前端改动必须在服务器上重建
 
-**8080 是 Docker 构建产物，不是热更新**。改了前端源码只刷新 8080 不会生效：
+入口是 `http://1.119.196.77:8091`，页面来自服务器上的 frontend 镜像，不是热更新。改了前端源码后按 `docs/guides/部署与维护.md` 同步并重建 `frontend`，只刷新浏览器不会生效。
 
-```bash
-docker compose -f deploy/compose/docker-compose.yml --env-file .env up -d --build --no-deps frontend
-```
+### 开发部署机 vs 本机 / P6
 
-重建后核对 8080 返回的资源哈希与 `frontend/dist/assets/` 一致。5173 才是 `pnpm dev` 热更新。
-
-### 开发栈 vs P6 隔离栈
-
-日常只用开发栈。P6 是一次性隔离验收环境（独立项目名/库/卷），
-`make test-integration` / `make test-e2e` 用它，**测完必须 `make p6-down`**，不要常开。
-Navicat 连开发栈 `127.0.0.1:5433`，不要连本机 Homebrew 的 5432，也不要连 P6。
+日常只使用 `1.119.196.77`。本机 Docker 栈已停止。P6 是一次性隔离验收环境，
+只在临时打开本机 Docker 时跑 `make test-integration` / `make test-e2e`，**测完必须 `make p6-down`**。
+不要把 Playwright 打到 8091 的业务库。Navicat 连 `1.119.196.77:5433`。
 
 ## 架构
 
