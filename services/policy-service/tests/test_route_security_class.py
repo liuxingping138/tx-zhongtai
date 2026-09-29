@@ -34,7 +34,9 @@ def test_every_api_route_carries_a_permission_dependency() -> None:
     mapping = permission_map(app)
     assert sorted(mapping) == sorted(_api_route_keys())
     wrong_service = {
-        key: marker for key, marker in mapping.items() if not marker[0].startswith("policy.")
+        key: marker
+        for key, marker in mapping.items()
+        if not marker[0].startswith("policy.") and marker[0] != "system.scheduler"
     }
     assert wrong_service == {}, f"以下路由挂到了别的服务的资源码: {wrong_service}"
 

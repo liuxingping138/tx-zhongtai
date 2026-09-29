@@ -21,6 +21,7 @@ export const PERMISSION_COLUMNS: { level: Exclude<GrantLevel, 'NONE'>; title: st
  * 查看和导出已经由列名说明。
  */
 const WRITE_ACTIONS: [code: string, text: string][] = [
+  ['execute', '立即执行任务'],
   ['create', '新增'],
   ['update', '编辑'],
   ['import', '导入 Excel'],

@@ -1,5 +1,5 @@
 import { computed, type Component } from 'vue'
-import { Collection, Connection, DataLine, Key, Link, MapLocation, Menu, Monitor, PriceTag, Reading, Tickets, User } from '@element-plus/icons-vue'
+import { Timer, Collection, Connection, DataLine, Key, Link, MapLocation, Menu, Monitor, PriceTag, Reading, Tickets, User } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { pathForRouteName } from '@/router/menu'
 
@@ -17,6 +17,7 @@ const descriptions: Record<string, string> = {
   '/codebook/area-codes': '维护省、市、区地域编码',
   '/system/users': '管理账号与角色分配',
   '/system/roles': '配置模块和操作权限',
+  '/system/scheduler': '配置每日同步与查看执行记录',
   '/system/audit': '追溯操作与权限变更',
 }
 
@@ -33,6 +34,7 @@ const entryIcons: Record<string, Component> = {
   '/system/users': User,
   '/system/roles': Key,
   '/system/audit': Tickets,
+  '/system/scheduler': Timer,
 }
 
 export function useWorkspace() {

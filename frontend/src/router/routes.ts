@@ -63,6 +63,12 @@ export const routes: RouteRecordRaw[] = [
         redirect: to => ({ name: 'system-role-detail', params: { roleId: String(to.params.roleId) } }),
       },
       {
+        path: 'system/scheduler',
+        name: 'system-scheduler',
+        component: () => import('@/modules/system/scheduler/SchedulerList.vue'),
+        meta: { title: '任务调度', resource: 'system.scheduler' },
+      },
+      {
         path: 'system/audit',
         name: 'system-audit',
         component: () => import('@/modules/system/audit/AuditList.vue'),

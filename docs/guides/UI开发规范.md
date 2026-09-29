@@ -158,3 +158,7 @@ docker compose -f deploy/compose/docker-compose.yml --env-file .env up -d --buil
 遵循 2026-09-22 用户确认：上方卡片保持正常尺寸，不能靠压缩卡片适应一屏。`ListPage` 检测 `summary` 插槽后解除一屏上限，结果高度采用 `clamp(440px, calc(100dvh - 220px), 880px)`；页面自然纵向滚动，表格保留 `ScrollPort` 双向滚动。1440×900 下结果区应为 680px，1024×768 下为 548px；收起概览后可集中看列表。验收时滚动到结果区核对第一行可点击、分页可达、横向拖动后操作列不遮盖字段。
 
 指标名称必须与统计口径一致。状态分布按名称、数量、比例对齐，有已选反馈；图表使用实际容器宽度，禁止固定宽 viewBox 把文字压小。同步时间放在概览标题区，失败或过期提示独立展示。
+
+## 任务调度复用示例
+
+`frontend/src/modules/system/scheduler/SchedulerList.vue`：系统配置型短列表复用 ListPage、ColumnPicker、ScrollPort、useUnsavedForm，结果区按内容显示并保留局部横向滚动；后台轮询不反复显示加载遮罩。`/system/scheduler` 是页面路径，`/api/v1/policy/scheduled-jobs` 是服务接口，权限归属由资源目录决定，不按前端 URL 推断。配置表单必须携带版本号；失败保留填写值；执行成功指“已入队”，不把请求成功当成同步已完成。

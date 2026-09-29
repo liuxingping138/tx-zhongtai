@@ -46,6 +46,7 @@ RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("system.users", "用户管理", "iam-service", NodeType.RESOURCE, True, 11, "system"),
     ResourceSpec("system.roles", "角色管理", "iam-service", NodeType.RESOURCE, True, 12, "system"),
     ResourceSpec("system.permissions", "权限分配", "iam-service", NodeType.RESOURCE, True, 13, "system"),
+    ResourceSpec("system.scheduler", "任务调度", "policy-service", NodeType.RESOURCE, True, 15, "system"),
     ResourceSpec("system.audit", "操作日志", "iam-service", NodeType.RESOURCE, True, 14, "system"),
     ResourceSpec("policy", "政策", "policy-service", NodeType.DIRECTORY, True, 20),
     ResourceSpec("policy.sources", "信源管理", "policy-service", NodeType.RESOURCE, True, 21, "policy"),
@@ -70,6 +71,9 @@ RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
 )
 
 ACTION_SPECS: tuple[ActionSpec, ...] = (
+    ActionSpec("system.scheduler", "list", GrantLevel.READ),
+    ActionSpec("system.scheduler", "update", GrantLevel.FULL),
+    ActionSpec("system.scheduler", "execute", GrantLevel.FULL),
     ActionSpec("system.users", "list", GrantLevel.READ),
     ActionSpec("system.users", "read", GrantLevel.READ),
     ActionSpec("system.users", "create", GrantLevel.FULL),
@@ -143,6 +147,7 @@ MENU_SPECS: tuple[MenuSpec, ...] = (
         "menu.system",
         enabled=False,
     ),
+    MenuSpec("menu.system.scheduler", "任务调度", 15, "system-scheduler", "system.scheduler", "menu.system"),
     MenuSpec("menu.system.audit", "操作日志", 14, "system-audit", "system.audit", "menu.system"),
     MenuSpec("menu.policy", "政策", 20, enabled=True),
     MenuSpec("menu.policy.sources", "信源管理", 21, "policy-sources", "policy.sources", "menu.policy", enabled=True),

@@ -6,6 +6,7 @@ export const MODULE_LABELS: Record<string, string> = {
   'system.roles': '角色管理',
   'system.permissions': '权限分配',
   'system.audit': '操作日志',
+  'system.scheduler': '任务调度',
   policy: '政策',
   'policy.sources': '信源管理',
   'policy.base_tags': '政策基础标签表',
@@ -41,6 +42,7 @@ export const ACTION_LABELS: Record<string, string> = {
   list: '查询列表',
   read: '查看',
   cleanup: '清理',
+  execute: '执行任务',
   purge: '清空',
   resolve: '补码',
 }

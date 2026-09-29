@@ -282,9 +282,19 @@ async def plan(
     return sorted(touched | {today}, reverse=True), mark or watermark
 
 
-async def _sync(session: AsyncSession, *, mode: str, days: int, since: date | None, skip_existing: bool) -> None:
+async def _sync(
+    session: AsyncSession,
+    *,
+    mode: str,
+    days: int,
+    since: date | None,
+    skip_existing: bool,
+    run_id: uuid.UUID | None = None,
+) -> None:
     today = datetime.now(BEIJING).date()
-    run_row = CrawlerV2SyncRun(mode=mode, started_at=datetime.now(UTC), status="running", days_synced=0, site_rows=0)
+    run_row = CrawlerV2SyncRun(
+        id=run_id or uuid.uuid4(), mode=mode, started_at=datetime.now(UTC), status="running", days_synced=0, site_rows=0
+    )
     session.add(run_row)
     await session.commit()
 
@@ -330,7 +340,9 @@ async def _sync(session: AsyncSession, *, mode: str, days: int, since: date | No
         raise
 
 
-async def run(*, mode: str, days: int = 7, since: date | None = None, skip_existing: bool = False) -> None:
+async def run(
+    *, mode: str, days: int = 7, since: date | None = None, skip_existing: bool = False, run_id: uuid.UUID | None = None
+) -> None:
     # 整次同步用同一连接持有会话锁：按日 commit 不释放锁，两次同步不会交错覆盖。
     async with engine.connect() as connection:
         locked = await connection.scalar(text("SELECT pg_try_advisory_lock(:key)"), {"key": SYNC_LOCK_KEY})
@@ -339,7 +351,7 @@ async def run(*, mode: str, days: int = 7, since: date | None = None, skip_exist
             raise RuntimeError("已有爬虫监测同步正在运行，请稍后重试")
         try:
             async with SessionLocal(bind=connection) as session:
-                await _sync(session, mode=mode, days=days, since=since, skip_existing=skip_existing)
+                await _sync(session, mode=mode, days=days, since=since, skip_existing=skip_existing, run_id=run_id)
         finally:
             await connection.rollback()
             await connection.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": SYNC_LOCK_KEY})

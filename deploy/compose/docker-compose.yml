@@ -193,6 +193,41 @@ services:
       timeout: 5s
       retries: 5
 
+  policy-worker:
+    build:
+      context: ../..
+      dockerfile: services/policy-service/Dockerfile
+    command: [".venv/bin/python", "-m", "app.worker"]
+    init: true
+    stop_grace_period: 45s
+    restart: unless-stopped
+    environment:
+      POLICY_ENVIRONMENT: ${ENVIRONMENT:-development}
+      POLICY_SERVICE_NAME: policy-worker
+      POLICY_LOG_LEVEL: ${POLICY_LOG_LEVEL:-INFO}
+      POLICY_DATABASE_URL: postgresql+asyncpg://${POLICY_DB_USER}:${POLICY_DB_PASSWORD}@postgres:5432/${POLICY_DB_NAME}
+      POLICY_CORS_ALLOW_ORIGINS: ${POLICY_CORS_ALLOW_ORIGINS:-[]}
+      POLICY_IAM_BASE_URL: http://iam-service:8001
+      POLICY_IAM_SERVICE_SECRET: ${POLICY_IAM_SERVICE_SECRET:-dev-only-change-me-internal}
+      POLICY_AUDIT_INGEST_URL: http://audit-service:8002
+      POLICY_AUDIT_INGEST_SECRET: ${POLICY_AUDIT_INGEST_SECRET:-dev-only-change-me-ingest}
+      POLICY_CRAWLER_MYSQL_HOST: ${POLICY_CRAWLER_MYSQL_HOST:-}
+      POLICY_CRAWLER_MYSQL_PORT: ${POLICY_CRAWLER_MYSQL_PORT:-3306}
+      POLICY_CRAWLER_MYSQL_USER: ${POLICY_CRAWLER_MYSQL_USER:-}
+      POLICY_CRAWLER_MYSQL_PASSWORD: ${POLICY_CRAWLER_MYSQL_PASSWORD:-}
+      POLICY_CRAWLER_MYSQL_DB: ${POLICY_CRAWLER_MYSQL_DB:-crawler2021}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - data
+      - gateway  # 外部 MySQL 数据源需要出站网络；不发布任何端口
+    healthcheck:
+      test: ["CMD", ".venv/bin/python", "-m", "app.worker.health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   iam-worker:
     build:
       context: ../..

@@ -378,3 +378,6 @@ INTERPRETATION_WRITE_FIELDS = (
     "is_new_scenario",
     "new_scenario_level",
 )
+
+# 注册调度模型，供 Alembic 与元数据校验发现。
+from app.domain.scheduler_models import ScheduledJob, ScheduledRun, SchedulerHeartbeat  # noqa: E402, F401

@@ -21,6 +21,7 @@ import argparse
 import asyncio
 import json
 import logging
+import uuid
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, cast
 
@@ -388,6 +389,7 @@ async def run(
     since: date | None = None,
     skip_existing: bool = False,
     use_watermark: bool = True,
+    run_id: uuid.UUID | None = None,
 ) -> None:
     # 整次同步使用同一连接持有会话锁；按日 commit 不释放锁，避免两次回填交错覆盖。
     async with engine.connect() as connection:
@@ -397,7 +399,7 @@ async def run(
             raise RuntimeError("已有爬虫同步正在运行，请稍后重试")
         try:
             async with SessionLocal(bind=connection) as session:
-                await _run_sync(session, days, tasks_only, since, skip_existing, use_watermark)
+                await _run_sync(session, days, tasks_only, since, skip_existing, use_watermark, run_id)
         finally:
             await connection.rollback()
             await connection.execute(text("SELECT pg_advisory_unlock(72120260922)"))
@@ -411,12 +413,15 @@ async def _run_sync(
     since: date | None = None,
     skip_existing: bool = False,
     use_watermark: bool = True,
+    run_id: uuid.UUID | None = None,
 ) -> None:
     today = datetime.now(BEIJING).date()
     started = datetime.now(UTC)
 
     date_from = since or today
-    run_row = CrawlerSyncRun(started_at=started, date_from=date_from, date_to=today, status="running")
+    run_row = CrawlerSyncRun(
+        id=run_id or uuid.uuid4(), started_at=started, date_from=date_from, date_to=today, status="running"
+    )
     session.add(run_row)
     await session.commit()
 

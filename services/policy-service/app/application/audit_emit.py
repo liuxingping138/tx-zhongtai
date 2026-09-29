@@ -10,6 +10,8 @@ from app.domain.models import OutboxEvent
 
 # 事件类型 -> (模块编码, 动作编码, 目标类型, 中文标签)
 _EVENT_META = {
+    "scheduler.updated": ("system.scheduler", "update", "scheduled_job", "修改每日同步计划"),
+    "scheduler.triggered": ("system.scheduler", "execute", "scheduled_job", "手动执行增量同步"),
     "policy.source.created": ("policy.sources", "create", "source", "新增信源"),
     "policy.source.updated": ("policy.sources", "update", "source", "编辑信源"),
     "policy.source.imported": ("policy.sources", "import", "source", "导入信源"),
