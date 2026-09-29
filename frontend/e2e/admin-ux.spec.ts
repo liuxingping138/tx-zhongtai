@@ -31,7 +31,7 @@ test('column picker defaults to all fields and can restore the full set', async 
 })
 
 for (const [path, count] of [
-  ['policy/sources', 12], ['policy/base-tags', 16], ['policy/interpretations', 20],
+  ['policy/sources', 12], ['policy/base-tags', 16], ['policy/interpretations', 21],
   ['codebook/policy-types', 3], ['codebook/scenarios', 31], ['codebook/area-codes', 11],
 ] as const) {
   test(`${path}: all database business fields remain editable in grouped forms`, async ({ page }) => {

@@ -105,4 +105,10 @@ INTERPRETATION_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec("info_level", "信息化等级"),
     ColumnSpec("is_new_scenario", "是否新增场景"),
     ColumnSpec("new_scenario_level", "新增场景级别"),
+    ColumnSpec("data_status", "数据状态"),
 )
+
+# 政策解读的数据状态：新录入、导入时默认待验证，人工核对后改为人工验证。
+DATA_STATUS_PENDING = "待验证"
+DATA_STATUS_VERIFIED = "人工验证"
+DATA_STATUS_CHOICES: tuple[str, ...] = (DATA_STATUS_PENDING, DATA_STATUS_VERIFIED)

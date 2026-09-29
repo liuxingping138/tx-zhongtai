@@ -74,3 +74,4 @@ class InterpretationWrite(BaseModel):
     info_level: str = ""
     is_new_scenario: str = ""
     new_scenario_level: str = ""
+    data_status: str = ""

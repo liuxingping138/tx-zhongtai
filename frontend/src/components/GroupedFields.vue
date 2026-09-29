@@ -8,6 +8,8 @@ export interface EditorField {
   long?: boolean
   hint?: string
   placeholder?: string
+  /** 取值固定的字段用下拉单选，不给自由输入。 */
+  choices?: string[]
 }
 export interface EditorGroup {
   title: string
@@ -81,7 +83,23 @@ defineExpose({ validate, setError })
           :error="errors[field.key]"
           :class="{ 'editor-field--wide': field.long }"
         >
+          <el-select
+            v-if="field.choices"
+            :id="`${prefix}-${field.key}`"
+            v-model="model[field.key]"
+            :aria-invalid="Boolean(errors[field.key])"
+            :placeholder="field.placeholder || `请选择${field.label}`"
+            :aria-describedby="[errors[field.key] ? `${prefix}-error-${field.key}` : '', field.hint ? `${prefix}-help-${field.key}` : ''].filter(Boolean).join(' ') || undefined"
+          >
+            <el-option
+              v-for="choice in field.choices"
+              :key="choice"
+              :label="choice"
+              :value="choice"
+            />
+          </el-select>
           <el-input
+            v-else
             :id="`${prefix}-${field.key}`"
             v-model="model[field.key]"
             :aria-invalid="Boolean(errors[field.key])"

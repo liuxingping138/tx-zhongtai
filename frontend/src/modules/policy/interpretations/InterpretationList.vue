@@ -53,7 +53,10 @@ const emptyForm = {
   info_level: '',
   is_new_scenario: '',
   new_scenario_level: '',
+  data_status: '待验证',
 }
+
+const DATA_STATUS_CHOICES = ['待验证', '人工验证']
 
 const loading = ref(false)
 const loadError = ref('')
@@ -64,7 +67,12 @@ const query = reactive({
   policy_title: [] as string[],
   industry_scenario_code: [] as string[],
   industry_l1: [] as string[],
+  scenario_l1_name: [] as string[],
   opportunity_type: [] as string[],
+  is_new_scenario: [] as string[],
+  new_scenario_level: [] as string[],
+  info_level: [] as string[],
+  data_status: [] as string[],
   page: 1,
   page_size: 20,
 })
@@ -97,6 +105,7 @@ const tableColumns = [
   { prop: 'info_level', label: '信息化等级', width: 110 },
   { prop: 'is_new_scenario', label: '是否新增场景', width: 120 },
   { prop: 'new_scenario_level', label: '新增场景级别', width: 120 },
+  { prop: 'data_status', label: '数据状态', width: 110 },
   { prop: 'created_at', label: '入库时间', width: 190, time: true },
   { prop: 'created_by_name', label: '入库人', width: 110 },
   { prop: 'updated_at', label: '更新时间', width: 190, time: true },
@@ -123,7 +132,12 @@ async function load() {
       policy_title: query.policy_title || undefined,
       industry_scenario_code: query.industry_scenario_code || undefined,
       industry_l1: query.industry_l1 || undefined,
+      scenario_l1_name: query.scenario_l1_name || undefined,
       opportunity_type: query.opportunity_type || undefined,
+      is_new_scenario: query.is_new_scenario || undefined,
+      new_scenario_level: query.new_scenario_level || undefined,
+      info_level: query.info_level || undefined,
+      data_status: query.data_status || undefined,
       page: query.page,
       page_size: query.page_size,
     })
@@ -143,7 +157,12 @@ function onResetFilters() {
   query.policy_title = []
   query.industry_scenario_code = []
   query.industry_l1 = []
+  query.scenario_l1_name = []
   query.opportunity_type = []
+  query.is_new_scenario = []
+  query.new_scenario_level = []
+  query.info_level = []
+  query.data_status = []
   onSearch()
 }
 
@@ -164,7 +183,7 @@ function openEdit(row: InterpretationItem) {
   editing.value = row
   Object.assign(form, emptyForm)
   for (const key of Object.keys(emptyForm) as (keyof typeof emptyForm)[]) {
-    form[key] = String(row[key] ?? '')
+    form[key] = String(row[key] ?? emptyForm[key])
   }
   visible.value = true
 }
@@ -247,6 +266,13 @@ const editorGroups: EditorGroup[] = [
         "label": "政策原文名称",
         "long": true,
         "required": true
+      },
+      {
+        "key": "data_status",
+        "label": "数据状态",
+        "hint": "新录入默认待验证；人工核对无误后改为人工验证。",
+        "required": true,
+        "choices": DATA_STATUS_CHOICES
       },
       {
         "key": "tenant_id",
@@ -496,7 +522,42 @@ const NO_EXPORT_HINT = '你的角色没有导出权限，如需下载 Excel 请�
               size="short"
             />
           </el-form-item>
+          <el-form-item label="一级场景">
+            <FilterSelect
+              v-model="query.scenario_l1_name"
+              v-bind="filters.bind('scenario_l1_name')"
+              size="short"
+            />
+          </el-form-item>
           <template #advanced>
+            <el-form-item label="是否新增场景">
+              <FilterSelect
+                v-model="query.is_new_scenario"
+                v-bind="filters.bind('is_new_scenario')"
+                size="short"
+              />
+            </el-form-item>
+            <el-form-item label="新增场景级别">
+              <FilterSelect
+                v-model="query.new_scenario_level"
+                v-bind="filters.bind('new_scenario_level')"
+                size="short"
+              />
+            </el-form-item>
+            <el-form-item label="信息化等级">
+              <FilterSelect
+                v-model="query.info_level"
+                v-bind="filters.bind('info_level')"
+                size="short"
+              />
+            </el-form-item>
+            <el-form-item label="数据状态">
+              <FilterSelect
+                v-model="query.data_status"
+                v-bind="filters.bind('data_status')"
+                size="short"
+              />
+            </el-form-item>
             <el-form-item label="机会类型">
               <FilterSelect
                 v-model="query.opportunity_type"

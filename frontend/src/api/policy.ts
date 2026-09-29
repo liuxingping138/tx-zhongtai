@@ -75,6 +75,7 @@ export interface InterpretationItem {
   info_level: string
   is_new_scenario: string
   new_scenario_level: string
+  data_status: string
   version: number
   created_at: string
   created_by_name: string
@@ -147,7 +148,12 @@ export function listInterpretations(params: {
   policy_title?: FilterParam
   industry_scenario_code?: FilterParam
   industry_l1?: FilterParam
+  scenario_l1_name?: FilterParam
   opportunity_type?: FilterParam
+  is_new_scenario?: FilterParam
+  new_scenario_level?: FilterParam
+  info_level?: FilterParam
+  data_status?: FilterParam
   page?: number
   page_size?: number
 }): Promise<Page<InterpretationItem>> {

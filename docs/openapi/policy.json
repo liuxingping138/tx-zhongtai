@@ -2329,6 +2329,25 @@
             }
           },
           {
+            "name": "scenario_l1_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scenario L1 Name"
+            }
+          },
+          {
             "name": "opportunity_type",
             "in": "query",
             "required": false,
@@ -2345,6 +2364,82 @@
                 }
               ],
               "title": "Opportunity Type"
+            }
+          },
+          {
+            "name": "is_new_scenario",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is New Scenario"
+            }
+          },
+          {
+            "name": "new_scenario_level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "New Scenario Level"
+            }
+          },
+          {
+            "name": "info_level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Info Level"
+            }
+          },
+          {
+            "name": "data_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Data Status"
             }
           },
           {
@@ -2575,6 +2670,25 @@
             }
           },
           {
+            "name": "scenario_l1_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scenario L1 Name"
+            }
+          },
+          {
             "name": "opportunity_type",
             "in": "query",
             "required": false,
@@ -2591,6 +2705,82 @@
                 }
               ],
               "title": "Opportunity Type"
+            }
+          },
+          {
+            "name": "is_new_scenario",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is New Scenario"
+            }
+          },
+          {
+            "name": "new_scenario_level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "New Scenario Level"
+            }
+          },
+          {
+            "name": "info_level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Info Level"
+            }
+          },
+          {
+            "name": "data_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Data Status"
             }
           }
         ],
@@ -3018,6 +3208,11 @@
           "new_scenario_level": {
             "type": "string",
             "title": "New Scenario Level",
+            "default": ""
+          },
+          "data_status": {
+            "type": "string",
+            "title": "Data Status",
             "default": ""
           }
         },

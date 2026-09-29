@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from platform_common.filters import Filters, ilike_any
+from platform_common.filters import Filters, ilike_any, in_any
 from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
@@ -35,15 +35,23 @@ FILTER_COLUMNS: dict[str, InstrumentedAttribute[str]] = {
     "policy_title": Interpretation.policy_title,
     "industry_scenario_code": Interpretation.industry_scenario_code,
     "industry_l1": Interpretation.industry_l1,
+    "scenario_l1_name": Interpretation.scenario_l1_name,
     "opportunity_type": Interpretation.opportunity_type,
+    "is_new_scenario": Interpretation.is_new_scenario,
+    "new_scenario_level": Interpretation.new_scenario_level,
+    "info_level": Interpretation.info_level,
+    "data_status": Interpretation.data_status,
 }
+
+# 取值有限的枚举字段用精确匹配：模糊匹配下选「一级」会把「一级场景」之类的值一并查出来。
+EXACT_FILTERS = frozenset({"is_new_scenario", "new_scenario_level", "info_level", "data_status"})
 
 
 def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
     conds: list[ColumnElement[bool]] = []
     for key, value in filters.items():
         column = FILTER_COLUMNS[key]  # 未知字段直接报错，避免筛选被静默忽略
-        cond = ilike_any(column, value)
+        cond = in_any(column, value) if key in EXACT_FILTERS else ilike_any(column, value)
         if cond is not None:
             conds.append(cond)
     return conds

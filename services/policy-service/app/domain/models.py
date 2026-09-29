@@ -130,6 +130,9 @@ class Interpretation(Base):
     info_level: Mapped[str] = mapped_column(String(32), nullable=False, default="", comment="信息化等级")
     is_new_scenario: Mapped[str] = mapped_column(String(32), nullable=False, default="", comment="是否新增场景")
     new_scenario_level: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="新增场景级别")
+    data_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="待验证", server_default="待验证", comment="数据状态"
+    )
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, comment="版本号")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="入库时间")
     created_by_id: Mapped[str] = mapped_column(String(64), nullable=False, comment="入库人ID")
@@ -377,6 +380,7 @@ INTERPRETATION_WRITE_FIELDS = (
     "info_level",
     "is_new_scenario",
     "new_scenario_level",
+    "data_status",
 )
 
 # 注册调度模型，供 Alembic 与元数据校验发现。

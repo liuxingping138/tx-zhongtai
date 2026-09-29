@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.application.audit_emit import enqueue_event
 from app.application.region import make_policy_uid, make_relation_key
 from app.core.config import get_settings
-from app.domain.fields import INTERPRETATION_COLUMNS
+from app.domain.fields import DATA_STATUS_CHOICES, DATA_STATUS_PENDING, INTERPRETATION_COLUMNS
 from app.domain.models import INTERPRETATION_WRITE_FIELDS, Interpretation
 from app.repositories import interpretations as repo
 from app.repositories import options as options_repo
@@ -45,6 +45,7 @@ def _to_out(row: Interpretation) -> dict[str, Any]:
         "info_level": row.info_level,
         "is_new_scenario": row.is_new_scenario,
         "new_scenario_level": row.new_scenario_level,
+        "data_status": row.data_status,
         "version": row.version,
         "created_at": format_beijing(row.created_at),
         "created_by_name": row.created_by_name,
@@ -57,10 +58,21 @@ def _values(data: dict[str, str]) -> dict[str, str]:
     values = {field: (data.get(field) or "").strip() for field in INTERPRETATION_WRITE_FIELDS}
     if not values["policy_uid"]:
         values["policy_uid"] = make_policy_uid(values["policy_title"])
+    # 没填数据状态（新增、旧模板导入）一律按待验证入库，不留空值。
+    if not values["data_status"]:
+        values["data_status"] = DATA_STATUS_PENDING
     values["relation_key"] = make_relation_key(
         values["policy_uid"], values["industry_scenario_code"], values["opportunity_type"]
     )
     return values
+
+
+def _data_status_error(values: dict[str, str]) -> str | None:
+    """数据状态只允许固定两项，写入前统一校验。"""
+
+    if values["data_status"] in DATA_STATUS_CHOICES:
+        return None
+    return f"数据状态只能是{'、'.join(DATA_STATUS_CHOICES)}"
 
 
 async def list_interpretations(
@@ -69,17 +81,27 @@ async def list_interpretations(
     policy_title: FilterValue,
     industry_scenario_code: FilterValue,
     industry_l1: FilterValue,
+    scenario_l1_name: FilterValue,
     opportunity_type: FilterValue,
+    is_new_scenario: FilterValue,
+    new_scenario_level: FilterValue,
+    info_level: FilterValue,
+    data_status: FilterValue,
     page: int,
     page_size: int,
 ) -> dict[str, Any]:
     items, total = await repo.list_items(
         session,
         filters={
-        "policy_title": policy_title,
-        "industry_scenario_code": industry_scenario_code,
-        "industry_l1": industry_l1,
-        "opportunity_type": opportunity_type,
+            "policy_title": policy_title,
+            "industry_scenario_code": industry_scenario_code,
+            "industry_l1": industry_l1,
+            "scenario_l1_name": scenario_l1_name,
+            "opportunity_type": opportunity_type,
+            "is_new_scenario": is_new_scenario,
+            "new_scenario_level": new_scenario_level,
+            "info_level": info_level,
+            "data_status": data_status,
         },
         page=page,
         page_size=page_size,
@@ -110,6 +132,8 @@ async def create_interpretation(session: AsyncSession, actor: Actor, data: dict[
     values = _values(data)
     if not values["policy_title"]:
         raise ApiError("政策原文名称不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    if message := _data_status_error(values):
+        raise ApiError(message, code=ErrorCode.VALIDATION_ERROR, http_status=422)
     if await repo.get_by_relation_key(session, values["relation_key"]):
         raise ApiError("已存在相同的关联主键", code=ErrorCode.VERSION_CONFLICT, http_status=409)
     now = utcnow()
@@ -148,7 +172,12 @@ async def update_interpretation(
     if data.get("version") != row.version:
         raise VersionConflictError()
     payload = {field: str(data.get(field, getattr(row, field) or "")) for field in INTERPRETATION_WRITE_FIELDS}
+    # 请求没带数据状态时沿用原值，避免旧客户端保存一次就把「人工验证」冲回「待验证」。
+    if not payload["data_status"].strip():
+        payload["data_status"] = row.data_status
     values = _values(payload)
+    if message := _data_status_error(values):
+        raise ApiError(message, code=ErrorCode.VALIDATION_ERROR, http_status=422)
     existing = await repo.get_by_relation_key(session, values["relation_key"])
     if existing and existing.id != row.id:
         raise ApiError("已存在相同的关联主键", code=ErrorCode.VERSION_CONFLICT, http_status=409)
@@ -185,6 +214,9 @@ async def import_interpretations(session: AsyncSession, actor: Actor, content: b
         values = _values(item)
         if not values["policy_title"]:
             skipped_rows.append({**values, "skip_reason": "政策原文名称为空"})
+            continue
+        if message := _data_status_error(values):
+            skipped_rows.append({**values, "skip_reason": message})
             continue
         if values["relation_key"] in seen:
             skipped_rows.append({**values, "skip_reason": "关联主键已存在"})
