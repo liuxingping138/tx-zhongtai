@@ -61,7 +61,7 @@
 |---|---|
 | `/policy/sources` | 16/16 |
 | `/policy/base-tags` | 20/20 |
-| `/policy/interpretations` | 26/26 |
+| `/policy/interpretations` | 27/27 |
 | `/codebook/policy-types` | 7/7 |
 | `/codebook/scenarios` | 35/35 |
 | `/codebook/area-codes` | 15/15 |
