@@ -10,6 +10,7 @@ import pytest  # noqa: E402
 from pydantic import ValidationError  # noqa: E402
 
 from app.api.scheduler import JobUpdate  # noqa: E402
+from app.application.scheduler import claim_failure  # noqa: E402
 from app.domain.scheduling import next_daily  # noqa: E402
 from app.worker.scheduler import fail_run, safe_error  # noqa: E402
 
@@ -29,6 +30,13 @@ def test_invalid_schedule_rejected(clock):
 def test_arbitrary_command_rejected():
     with pytest.raises(ValidationError):
         JobUpdate(enabled=True, daily_time="10:00", version=1, command="ls")
+
+
+def test_scheduled_success_requires_sync_batch_success():
+    assert claim_failure(None, "success") is None
+    assert claim_failure("同步超过 30 分钟，已中止本次执行", "running") == "同步超过 30 分钟，已中止本次执行"
+    assert claim_failure(None, "running") == "同步批次未成功完成"
+    assert claim_failure(None, None) == "同步批次未成功完成"
 
 
 def test_retries_bounded_and_error_safe():

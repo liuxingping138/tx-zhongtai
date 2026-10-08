@@ -13,7 +13,7 @@ from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from app.application.scheduler import latest_watermark, sync_result
+from app.application.scheduler import abandon_running_sync, claim_failure, latest_watermark, sync_result
 from app.core.database import SessionLocal, engine
 from app.domain.scheduler_models import ScheduledRun, SchedulerHeartbeat
 from app.domain.scheduling import LEADER_LOCK, MAX_ATTEMPTS, retry_delay
@@ -44,7 +44,10 @@ async def recover_interrupted() -> None:
             if result and result.get("status") == "success":
                 row.status, row.result, row.finished_at = "success", result, datetime.now(UTC)
             else:
-                fail_run(row, "执行进程中断，恢复后将继续按成功水位补齐增量", datetime.now(UTC))
+                message = "执行进程中断，恢复后将继续按成功水位补齐增量"
+                await abandon_running_sync(session, row, message)
+                fail_run(row, message, datetime.now(UTC))
+                row.result = await sync_result(session, row)
         await session.commit()
 
 
@@ -108,14 +111,17 @@ async def execute_claim(claim: tuple[uuid.UUID, str, uuid.UUID]) -> None:
     except Exception as exc:
         error = safe_error(exc)
         logger.warning("scheduled_sync_failed job=%s run=%s reason=%s", code, run_id, error)
-    # CancelledError 不在此处理，重启后由 recover 检查实际同步结果。
+    # CancelledError 留给进程退出后的 recover_interrupted。超时会进上面的 Exception。
     async with SessionLocal() as session:
         row = await session.get(ScheduledRun, run_id)
         if row is None:
             raise RuntimeError("执行记录丢失")
+        await abandon_running_sync(session, row, error or "同步批次未成功完成")
         row.result = await sync_result(session, row)
-        if error:
-            fail_run(row, error, datetime.now(UTC))
+        status = row.result.get("status") if row.result else None
+        failure = claim_failure(error, status if isinstance(status, str) else None)
+        if failure:
+            fail_run(row, failure, datetime.now(UTC))
         else:
             row.status, row.finished_at, row.error_message = "success", datetime.now(UTC), None
         await session.commit()

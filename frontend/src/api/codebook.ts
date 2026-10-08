@@ -1,5 +1,7 @@
+import type { AxiosResponse } from 'axios'
+
+import { isApiError } from './errors'
 import { postExcelImport, type ImportResult, type ImportStage } from './excelImport'
-import { getAccessToken, getCsrfToken } from './session'
 import { http, request } from './http'
 import type { FilterParam, Page } from './types'
 
@@ -158,41 +160,27 @@ export async function resolveAreaCodes(
   file: File,
   onProgress?: (percent: number, stage: ImportStage) => void,
 ): Promise<{ matched: number; unmatched: number; blob: Blob }> {
-  const headers: Record<string, string> = {}
-  const token = getAccessToken()
-  const csrf = getCsrfToken()
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
-  if (csrf) {
-    headers['X-CSRF-Token'] = csrf
-  }
   const body = new FormData()
   body.append('file', file)
   onProgress?.(10, 'upload')
-  let response: Response
   try {
-    response = await fetch('/api/v1/codebook/area-codes/resolve', {
-      method: 'POST',
-      headers,
-      body,
-      credentials: 'include',
-      signal: AbortSignal.timeout(600_000),
-    })
+    const response = (await http.post('/codebook/area-codes/resolve', body, {
+      responseType: 'blob',
+      timeout: 600_000,
+      onUploadProgress(event) {
+        if (!event.total) return
+        onProgress?.(Math.min(70, Math.round((event.loaded / event.total) * 70)), 'upload')
+      },
+    })) as AxiosResponse<Blob>
+    onProgress?.(80, 'parse')
+    const matched = Number(response.headers['x-matched-count'] || 0)
+    const unmatched = Number(response.headers['x-unmatched-count'] || 0)
+    return { matched, unmatched, blob: response.data }
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'TimeoutError') {
+    if (isApiError(error) && error.code === 'TIMEOUT') {
       throw new Error('补全省市区编码超时，请拆成更小的文件再上传')
     }
     throw error
-  }
-  onProgress?.(80, 'parse')
-  if (!response.ok) {
-    throw new Error('补全省市区编码失败')
-  }
-  return {
-    matched: Number(response.headers.get('X-Matched-Count') || 0),
-    unmatched: Number(response.headers.get('X-Unmatched-Count') || 0),
-    blob: await response.blob(),
   }
 }
 

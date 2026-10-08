@@ -157,6 +157,37 @@ async def test_recovery_does_not_repeat_completed_sync():
     assert await worker.claim_next() is None
 
 
+async def test_timeout_closes_running_sync_batch(monkeypatch):
+    await trigger()
+    claim = await worker.claim_next()
+    assert claim
+
+    async def hang(_code, sync_id):
+        async with SessionLocal() as session:
+            session.add(
+                CrawlerV2SyncRun(
+                    id=sync_id,
+                    mode="incremental",
+                    started_at=datetime.now(UTC),
+                    status="running",
+                    days_synced=0,
+                    site_rows=0,
+                )
+            )
+            await session.commit()
+        await asyncio.sleep(30)
+
+    monkeypatch.setattr(worker, "execute_sync", hang)
+    monkeypatch.setattr(worker, "TIMEOUT_SECONDS", 0.05)
+    await worker.execute_claim(claim)
+    async with SessionLocal() as session:
+        scheduled = await session.get(ScheduledRun, claim[0])
+        sync = await session.get(CrawlerV2SyncRun, claim[2])
+        assert scheduled is not None and scheduled.status == "retrying"
+        assert sync is not None and sync.status == "failed"
+        assert sync.error_message
+
+
 async def test_recovery_retries_interrupted_run_and_global_lock():
     await trigger()
     claim = await worker.claim_next()

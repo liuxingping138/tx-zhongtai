@@ -23,8 +23,11 @@ async def get_for_update(session: AsyncSession, item_id: uuid.UUID) -> PolicyTyp
     return await session.get(PolicyType, item_id, with_for_update=True)
 
 
-async def get_by_name(session: AsyncSession, type_name: str) -> PolicyType | None:
-    result = await session.execute(select(PolicyType).where(PolicyType.type_name == type_name))
+async def get_by_name(session: AsyncSession, type_name: str, *, lock: bool = False) -> PolicyType | None:
+    statement = select(PolicyType).where(PolicyType.type_name == type_name)
+    if lock:
+        statement = statement.with_for_update()
+    result = await session.execute(statement)
     return result.scalar_one_or_none()
 
 

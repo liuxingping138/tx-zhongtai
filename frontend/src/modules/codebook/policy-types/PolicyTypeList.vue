@@ -51,19 +51,19 @@ const listQuery = useListQuery(query, load)
 let loadSequence = 0
 
 async function load() {
-  void listQuery.commit()
-  listQuery.captureApplied()
+  const params = listQuery.requested()
+  void listQuery.commitPage()
   const sequence = ++loadSequence
   loading.value = true
   loadError.value = ''
-  const filtered = Object.entries(query).some(([key, value]) =>
+  const filtered = Object.entries(params).some(([key, value]) =>
     !['page', 'page_size'].includes(key) && (Array.isArray(value) ? value.length > 0 : Boolean(value)),
   )
   try {
     const page = await listPolicyTypes({
-      keyword: query.keyword || undefined,
-      page: query.page,
-      page_size: query.page_size,
+      keyword: params.keyword || undefined,
+      page: params.page,
+      page_size: params.page_size,
     })
     if (sequence !== loadSequence) return
     items.value = page.items
@@ -84,6 +84,7 @@ function onResetFilters() {
 
 function onSearch() {
   query.page = 1
+  listQuery.captureApplied()
   void load()
 }
 

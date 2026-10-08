@@ -43,6 +43,29 @@ describe('committed list navigation', () => {
     sync.captureApplied()
     expect(sync.applied.keyword).toBe('尚未查询')
   })
+  it('keeps uncommitted filters out of paging requests and the url', async () => {
+    const { query, route, sync, reload } = setup({ keyword: '已查询', page: '2' })
+    query.keyword = '草稿'
+    query.page = 3
+    const params = sync.requested()
+    expect(params.keyword).toBe('已查询')
+    expect(params.page).toBe(3)
+    await sync.commitPage()
+    expect(route.query).toEqual({ keyword: '已查询', page: '3' })
+    expect(query.keyword).toBe('草稿')
+    expect(sync.applied.keyword).toBe('已查询')
+    expect(reload).not.toHaveBeenCalled()
+  })
+  it('applies a legend toggle without adopting other drafts', () => {
+    const { query, sync } = setup({ keyword: '已查询', range: ['观察'] })
+    query.keyword = '草稿'
+    sync.replaceApplied('range', ['断爬'])
+    expect(sync.applied.range).toEqual(['断爬'])
+    expect(sync.applied.keyword).toBe('已查询')
+    expect(query.keyword).toBe('草稿')
+    expect(query.range).toEqual(['断爬'])
+    expect(query.page).toBe(1)
+  })
   it('restores browser navigation and ignores a different route', async () => {
     const { query, route, reload } = setup({ keyword: '旧条件' })
     route.query = { page: '4' }; await nextTick()

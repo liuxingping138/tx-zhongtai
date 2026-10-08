@@ -20,6 +20,7 @@ let inFlight: Promise<TokenPayload> | null = null
 const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(CHANNEL_NAME) : null
 
 const listeners = new Set<(token: string) => void>()
+const remoteLogoutListeners = new Set<() => void>()
 
 channel?.addEventListener('message', (event: MessageEvent<ChannelMessage>) => {
   const payload = event.data
@@ -28,6 +29,8 @@ channel?.addEventListener('message', (event: MessageEvent<ChannelMessage>) => {
   }
   if (payload.type === 'logout') {
     setAccessToken('')
+    setCsrfToken('')
+    remoteLogoutListeners.forEach((listener) => listener())
   }
 })
 
@@ -65,6 +68,12 @@ export function disarmAccessRefresh(): void {
 export function onAccessTokenChange(listener: (token: string) => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
+}
+
+/** 其它标签页退出时清本地身份。不要在回调里再次广播，否则标签之间会来回通知。 */
+export function onRemoteLogout(listener: () => void): () => void {
+  remoteLogoutListeners.add(listener)
+  return () => remoteLogoutListeners.delete(listener)
 }
 
 export function getCsrfToken(): string {

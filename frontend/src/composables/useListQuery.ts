@@ -2,6 +2,7 @@ import { reactive, watch } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 
 type Value = string | number | string[] | null
+const PAGING_KEYS = ['page', 'page_size']
 /** Commit on a query request, not each keystroke. No credentials or record data are stored. */
 export function useListQuery<T extends Record<string, Value>>(query: T, reload: () => Promise<void>, privateKeys: string[] = []) {
   const route = useRoute()
@@ -40,13 +41,24 @@ export function useListQuery<T extends Record<string, Value>>(query: T, reload: 
   captureApplied()
   committed = signature()
   let committing = false
-  async function commit() {
+  function requested(): T {
+    const next = JSON.parse(JSON.stringify(applied)) as T
+    const live = query as Record<string, Value>
+    const record = next as Record<string, Value>
+    for (const key of PAGING_KEYS) {
+      if (key in live) record[key] = live[key]
+    }
+    return next
+  }
+  async function writeUrl(source: T) {
     if (route.path !== path) return
     const next: LocationQueryRaw = { ...route.query }
-    for (const [key, value] of Object.entries(query)) {
+    for (const [key, value] of Object.entries(source)) {
       delete next[key]
       if (privateKeys.includes(key)) continue
-      if (Array.isArray(value) ? value.length : value !== '' && value !== null && value !== defaults[key]) next[key] = Array.isArray(value) ? value : String(value)
+      if (Array.isArray(value) ? value.length : value !== '' && value !== null && value !== defaults[key]) {
+        next[key] = Array.isArray(value) ? value : String(value)
+      }
     }
     committing = true
     try {
@@ -56,6 +68,32 @@ export function useListQuery<T extends Record<string, Value>>(query: T, reload: 
       committing = false
     }
   }
+  /** 显式把当前草稿写入地址栏。列表刷新不要用它，否则没点查询的条件会生效。 */
+  async function commit() {
+    await writeUrl(query as T)
+  }
+  /**
+   * 翻页、重试、保存后刷新：地址栏和请求只用已生效的筛选，加上当前页码。
+   * 输入框里的草稿留在表单上，等用户点查询。
+   */
+  async function commitPage() {
+    const source = requested()
+    const live = query as Record<string, Value>
+    const stored = applied as Record<string, Value>
+    for (const key of PAGING_KEYS) {
+      if (key in live) stored[key] = live[key]
+    }
+    await writeUrl(source)
+  }
+  /** 图例、状态卡片：只改已生效条件里的一列，其它未查询的草稿不参与。 */
+  function replaceApplied(key: string, value: Value) {
+    const stored = applied as Record<string, Value>
+    const live = query as Record<string, Value>
+    stored[key] = JSON.parse(JSON.stringify(value)) as Value
+    live[key] = JSON.parse(JSON.stringify(value)) as Value
+    if ('page' in live) live.page = 1
+    if ('page' in stored) stored.page = 1
+  }
   watch(() => route.query, () => {
     if (committing || route.path !== path || signature() === committed) return
     committed = signature()
@@ -63,10 +101,8 @@ export function useListQuery<T extends Record<string, Value>>(query: T, reload: 
     captureApplied()
     void reload()
   })
-  return { commit, applied, captureApplied }
+  return { commit, commitPage, requested, applied, captureApplied, replaceApplied }
 }
-
-const PAGING_KEYS = ['page', 'page_size']
 
 /** 把筛选值（多选数组或旧的单值）统一成去空、去重的字符串数组。 */
 export function filterList(value: unknown): string[] {

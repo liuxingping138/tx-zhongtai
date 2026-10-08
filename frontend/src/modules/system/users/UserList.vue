@@ -95,21 +95,21 @@ const listQuery = useListQuery(query, load, ['username'])
 let loadSequence = 0
 
 async function load() {
-  void listQuery.commit()
-  listQuery.captureApplied()
+  const params = listQuery.requested()
+  void listQuery.commitPage()
   const sequence = ++loadSequence
   loading.value = true
   loadError.value = ''
-  const filtered = Object.entries(query).some(([key, value]) =>
+  const filtered = Object.entries(params).some(([key, value]) =>
     !['page', 'page_size'].includes(key) && (Array.isArray(value) ? value.length > 0 : Boolean(value)),
   )
   try {
     const page = await listUsers({
-      page: query.page,
-      page_size: query.page_size,
-      username: query.username || undefined,
-      role_id: query.role_id || undefined,
-      status: query.status || undefined,
+      page: params.page,
+      page_size: params.page_size,
+      username: params.username || undefined,
+      role_id: params.role_id || undefined,
+      status: params.status || undefined,
     })
     if (sequence !== loadSequence) return
     users.value = page.items
@@ -132,6 +132,7 @@ function onResetFilters() {
 
 function onSearch() {
   query.page = 1
+  listQuery.captureApplied()
   void load()
 }
 

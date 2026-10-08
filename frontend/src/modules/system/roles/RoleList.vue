@@ -40,18 +40,18 @@ const formRole = ref<RoleItem | null>(null)
 
 let sequence = 0
 async function load() {
-  void listQuery.commit()
-  listQuery.captureApplied()
+  const params = listQuery.requested()
+  void listQuery.commitPage()
   const current = ++sequence
   loading.value = true
   loadError.value = ''
-  const filtered = query.name.length > 0 || query.status.length > 0
+  const filtered = params.name.length > 0 || params.status.length > 0
   try {
     const page = await listRoles({
-      page: query.page,
-      page_size: query.page_size,
-      name: query.name.length ? query.name : undefined,
-      status: query.status.length ? query.status : undefined,
+      page: params.page,
+      page_size: params.page_size,
+      name: params.name.length ? params.name : undefined,
+      status: params.status.length ? params.status : undefined,
     })
     if (current !== sequence) return
     roles.value = page.items
@@ -75,6 +75,7 @@ async function loadNameOptions() {
 
 function onSearch() {
   query.page = 1
+  listQuery.captureApplied()
   void load()
 }
 

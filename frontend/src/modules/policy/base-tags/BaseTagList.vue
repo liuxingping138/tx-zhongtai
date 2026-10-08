@@ -103,23 +103,23 @@ const listQuery = useListQuery(query, load)
 let loadSequence = 0
 
 async function load() {
-  void listQuery.commit()
-  listQuery.captureApplied()
+  const params = listQuery.requested()
+  void listQuery.commitPage()
   const sequence = ++loadSequence
   loading.value = true
   loadError.value = ''
-  const filtered = Object.entries(query).some(([key, value]) =>
+  const filtered = Object.entries(params).some(([key, value]) =>
     !['page', 'page_size'].includes(key) && (Array.isArray(value) ? value.length > 0 : Boolean(value)),
   )
   try {
     const page = await listBaseTags({
-      policy_name: query.policy_name || undefined,
-      province_name: query.province_name || undefined,
-      policy_types: query.policy_types || undefined,
-      is_penetrate: query.is_penetrate || undefined,
-      need_interpret: query.need_interpret || undefined,
-      page: query.page,
-      page_size: query.page_size,
+      policy_name: params.policy_name || undefined,
+      province_name: params.province_name || undefined,
+      policy_types: params.policy_types || undefined,
+      is_penetrate: params.is_penetrate || undefined,
+      need_interpret: params.need_interpret || undefined,
+      page: params.page,
+      page_size: params.page_size,
     })
     if (sequence !== loadSequence) return
     items.value = page.items
@@ -144,6 +144,7 @@ function onResetFilters() {
 
 function onSearch() {
   query.page = 1
+  listQuery.captureApplied()
   void load()
 }
 

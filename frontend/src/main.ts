@@ -7,6 +7,7 @@ import { createApp } from 'vue'
 import '@/styles/theme.css'
 
 import { setForbiddenHandler, setUnauthorizedHandler } from '@/api/http'
+import { onRemoteLogout } from '@/api/session'
 import { registerPermissionDirective } from '@/permissions/directive'
 import { useAuthStore } from '@/stores/auth'
 
@@ -24,6 +25,13 @@ registerPermissionDirective(app)
 const auth = useAuthStore()
 setUnauthorizedHandler(() => {
   auth.clearSession()
+  if (router.currentRoute.value.name !== 'login') {
+    void router.replace({ name: 'login' })
+  }
+})
+onRemoteLogout(() => {
+  auth.signedIn = false
+  auth.clearIdentity()
   if (router.currentRoute.value.name !== 'login') {
     void router.replace({ name: 'login' })
   }

@@ -138,7 +138,7 @@ async def import_policy_types(session: AsyncSession, actor: Actor, content: byte
         if not type_name:
             skipped_rows.append({**item, "skip_reason": "政策类型为空"})
             continue
-        row = await repo.get_by_name(session, type_name)
+        row = await repo.get_by_name(session, type_name, lock=True)
         if row is None:
             session.add(
                 PolicyType(

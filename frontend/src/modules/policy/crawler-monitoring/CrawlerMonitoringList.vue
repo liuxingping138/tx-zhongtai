@@ -90,16 +90,16 @@ const selectedColumns = ref<string[]>([...defaultColumns])
 let loadSequence = 0
 
 async function load() {
-  void listQuery.commit()
-  listQuery.captureApplied()
+  const params = listQuery.requested()
+  void listQuery.commitPage()
   const sequence = ++loadSequence
   loading.value = true
   loadError.value = ''
-  const filtered = Object.entries(query).some(
+  const filtered = Object.entries(params).some(
     ([key, value]) => !['page', 'page_size'].includes(key) && (Array.isArray(value) ? value.length > 0 : Boolean(value)),
   )
   try {
-    const page = await listCrawlerTasks({ ...crawlerFilters(query), page: query.page, page_size: query.page_size })
+    const page = await listCrawlerTasks({ ...crawlerFilters(params), page: params.page, page_size: params.page_size })
     if (sequence !== loadSequence) return
     items.value = page.items
     total.value = page.total
@@ -133,6 +133,7 @@ async function loadOverview() {
 
 function onSearch() {
   query.page = 1
+  listQuery.captureApplied()
   void load()
 }
 
@@ -148,8 +149,8 @@ function onResetFilters() {
 /** 点图例把该状态加入多选，再次点击移出。以已生效条件为准，未提交的草稿不参与。 */
 function pickStatus(status: HealthStatus) {
   const label = Object.entries(STATUS_BY_LABEL).find(([, value]) => value === status)?.[0] ?? ''
-  query.health_status = toggleValue(listQuery.applied.health_status, label)
-  onSearch()
+  listQuery.replaceApplied('health_status', toggleValue(listQuery.applied.health_status, label))
+  void load()
 }
 
 async function onExport() {

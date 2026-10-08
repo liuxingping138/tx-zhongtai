@@ -119,27 +119,27 @@ const listQuery = useListQuery(query, load)
 let loadSequence = 0
 
 async function load() {
-  void listQuery.commit()
-  listQuery.captureApplied()
+  const params = listQuery.requested()
+  void listQuery.commitPage()
   const sequence = ++loadSequence
   loading.value = true
   loadError.value = ''
-  const filtered = Object.entries(query).some(([key, value]) =>
+  const filtered = Object.entries(params).some(([key, value]) =>
     !['page', 'page_size'].includes(key) && (Array.isArray(value) ? value.length > 0 : Boolean(value)),
   )
   try {
     const page = await listInterpretations({
-      policy_title: query.policy_title || undefined,
-      industry_scenario_code: query.industry_scenario_code || undefined,
-      industry_l1: query.industry_l1 || undefined,
-      scenario_l1_name: query.scenario_l1_name || undefined,
-      opportunity_type: query.opportunity_type || undefined,
-      is_new_scenario: query.is_new_scenario || undefined,
-      new_scenario_level: query.new_scenario_level || undefined,
-      info_level: query.info_level || undefined,
-      data_status: query.data_status || undefined,
-      page: query.page,
-      page_size: query.page_size,
+      policy_title: params.policy_title || undefined,
+      industry_scenario_code: params.industry_scenario_code || undefined,
+      industry_l1: params.industry_l1 || undefined,
+      scenario_l1_name: params.scenario_l1_name || undefined,
+      opportunity_type: params.opportunity_type || undefined,
+      is_new_scenario: params.is_new_scenario || undefined,
+      new_scenario_level: params.new_scenario_level || undefined,
+      info_level: params.info_level || undefined,
+      data_status: params.data_status || undefined,
+      page: params.page,
+      page_size: params.page_size,
     })
     if (sequence !== loadSequence) return
     items.value = page.items
@@ -168,6 +168,7 @@ function onResetFilters() {
 
 function onSearch() {
   query.page = 1
+  listQuery.captureApplied()
   void load()
 }
 

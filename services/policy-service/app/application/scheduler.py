@@ -29,6 +29,36 @@ async def latest_watermark(session: AsyncSession, code: str):
     )
 
 
+def claim_failure(error: str | None, sync_status: str | None) -> str | None:
+    """调度成功只认底层同步批次已经写成 success。超时或中断不能记成成功。"""
+
+    if error:
+        return error
+    if sync_status == "success":
+        return None
+    return "同步批次未成功完成"
+
+
+async def abandon_running_sync(session: AsyncSession, row: ScheduledRun, message: str) -> None:
+    """超时或进程中断时，把仍停在 running 的同步批次收成失败。
+
+    ``wait_for`` 取消任务只会抛出 CancelledError，同步自己的 ``except Exception``
+    接不住，批次会永远停在 running。这里在调度事务里收口。
+    """
+
+    if row.sync_run_id is None:
+        return
+    if row.job_code == "crawler-v1":
+        sync = await session.get(CrawlerSyncRun, row.sync_run_id)
+    else:
+        sync = await session.get(CrawlerV2SyncRun, row.sync_run_id)
+    if sync is None or sync.status != "running":
+        return
+    sync.status = "failed"
+    sync.error_message = message[:2000]
+    sync.finished_at = datetime.now(UTC)
+
+
 async def sync_result(session: AsyncSession, row: ScheduledRun) -> dict[str, Any] | None:
     model = CrawlerSyncRun if row.job_code == "crawler-v1" else CrawlerV2SyncRun
     sync = await session.get(model, row.sync_run_id) if row.sync_run_id else None

@@ -71,21 +71,24 @@ def append_text_row(sheet: Worksheet, values: list[Any] | tuple[Any, ...]) -> No
     """追加一行，字符串一律按文本写入。
 
     openpyxl 会把 ``=`` 开头的字符串当成公式保存，打开文件时 Excel 会执行它。
-    导出的值来自用户导入和外部爬虫库，``=HYPERLINK(...)`` 之类的内容不能变成活公式。
-    改成文本类型后单元格显示原样内容，再导回来也还是同一个字符串。
+    ``+``、``-``、``@`` 和前导制表符/换行是 Excel 的其它公式入口。导出的值来自用户
+    导入和外部爬虫库，这些内容必须保持为文本，再导回来也还是同一个字符串。
     """
 
     sheet.append([_as_text_cell(sheet, value) for value in values])
 
 
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r", "\n")
+
+
 def _as_text_cell(sheet: Worksheet, value: Any) -> Any:
-    # 只有 `=` 开头的字符串会被 openpyxl 判成公式。其余值原样交给 append；
-    # 不能 append 后再用 sheet.max_row 回头改类型——max_row 每次扫全表，大表导出会退化成平方复杂度。
-    if not (isinstance(value, str) and value.startswith("=")):
-        return value
-    cell = Cell(sheet, value=value)
-    cell.data_type = "s"
-    return cell
+    # 公式前缀在 append 时就定成文本。不能 append 后再用 sheet.max_row 回头改类型——
+    # max_row 每次扫全表，大表导出会退化成平方复杂度。
+    if isinstance(value, str) and value.startswith(_FORMULA_PREFIXES):
+        cell = Cell(sheet, value=value)
+        cell.data_type = "s"
+        return cell
+    return value
 
 
 def build_workbook(

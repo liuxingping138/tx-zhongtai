@@ -1,7 +1,7 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
 
-import { getAccessToken, getCsrfToken, isAuthPublicPath, refreshSession, setAccessToken } from './session'
+import { getAccessToken, getCsrfToken, isAuthPublicPath, onAccessTokenChange, onRemoteLogout, refreshSession, setAccessToken } from './session'
 import type { ApiError, ApiResponse } from './types'
 
 interface RetryConfig extends InternalAxiosRequestConfig {
@@ -45,6 +45,9 @@ function toApiError(error: AxiosError<ApiResponseBody<unknown>>): ApiError {
       requestId: body?.request_id ?? null,
       retryAfter: error.response.headers['retry-after'] ?? null,
     }
+  }
+  if (error.code === 'ECONNABORTED') {
+    return { status: 0, code: 'TIMEOUT', message: '请求超时，请稍后重试', requestId: null }
   }
   return { status: 0, code: 'NETWORK_ERROR', message: '网络异常，请检查网络连接', requestId: null }
 }
@@ -101,8 +104,11 @@ http.interceptors.response.use(
         await refreshSession()
         return http(config)
       } catch {
-        setAccessToken('')
-        unauthorizedHandler?.()
+        if (!signingOut) {
+          signingOut = true
+          setAccessToken('')
+          unauthorizedHandler?.()
+        }
       }
     }
     const apiError = toApiError(error)
@@ -118,6 +124,14 @@ http.interceptors.response.use(
 
 let unauthorizedHandler: (() => void) | null = null
 let forbiddenHandler: (() => void) | null = null
+let signingOut = false
+
+onAccessTokenChange((token) => {
+  if (token) signingOut = false
+})
+onRemoteLogout(() => {
+  signingOut = true
+})
 
 export function setUnauthorizedHandler(handler: () => void): void {
   unauthorizedHandler = handler
