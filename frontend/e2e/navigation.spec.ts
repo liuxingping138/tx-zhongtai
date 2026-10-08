@@ -3,7 +3,8 @@ import { expect, test } from '@playwright/test'
 const menus = [
   { id: 'policy', parent_id: null, title: '政策', route_name: null, sort_order: 1 },
   { id: 'sources', parent_id: 'policy', title: '信源管理', route_name: 'policy-sources', resource_code: 'policy.sources', sort_order: 1 },
-  { id: 'types', parent_id: null, title: '政策类型码表', route_name: 'codebook-policy-types', resource_code: 'codebook.policy_types', sort_order: 2 },
+  { id: 'codebook', parent_id: null, title: '码表管理', route_name: null, sort_order: 2 },
+  { id: 'types', parent_id: 'codebook', title: '政策类型码表', route_name: 'codebook-policy-types', resource_code: 'codebook.policy_types', sort_order: 1 },
 ]
 
 test.beforeEach(async ({ page }) => {
@@ -18,66 +19,50 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-test('desktop collapse persists across reload and offers grouped and direct navigation', async ({ page }) => {
+test('desktop uses the top modules and the side list, with the account at the bottom', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto('/')
-  const sidebar = page.locator('#desktop-navigation')
-  await expect(sidebar).toHaveCSS('width', '220px')
-  await page.getByRole('button', { name: '收起侧栏', exact: true }).click()
-  await expect(sidebar).toHaveCSS('width', '64px')
-  await expect(sidebar.getByRole('button', { name: '测试管理员，打开账号菜单' })).toBeVisible()
-  await expect(sidebar.getByText('超级管理员', { exact: true })).toHaveCount(0)
-  await page.reload()
-  await expect(sidebar).toHaveCSS('width', '64px')
-  await sidebar.getByRole('menuitem', { name: '政策', exact: true }).hover()
-  await page.getByRole('menuitem', { name: '信源管理', exact: true }).click()
+  const rail = page.locator('.workspace-rail')
+  const domains = page.getByRole('navigation', { name: '一级模块' })
+  const modules = page.getByRole('navigation', { name: '子模块导航' })
+  await expect(rail).toHaveCSS('width', '216px')
+  await expect(domains.getByRole('link', { name: '政策', exact: true })).toHaveAttribute('aria-current', 'true')
+  await expect(modules.getByRole('link', { name: '信源管理', exact: true })).toBeVisible()
+  await expect(rail.getByRole('button', { name: '测试管理员，打开账号菜单' })).toBeVisible()
+  await expect(rail.getByText('超级管理员', { exact: true })).toBeVisible()
+
+  await modules.getByRole('link', { name: '信源管理', exact: true }).click()
   await expect(page).toHaveURL(/\/policy\/sources$/)
-  await expect(sidebar.locator('.has-active-child')).toHaveCount(1)
-  await sidebar.getByRole('menuitem', { name: '政策类型码表', exact: true }).click()
+  await expect(modules.getByRole('link', { name: '信源管理', exact: true })).toHaveAttribute('aria-current', 'page')
+
+  await domains.getByRole('link', { name: '码表管理', exact: true }).click()
   await expect(page).toHaveURL(/\/codebook\/policy-types$/)
-  const toggle = page.getByRole('button', { name: '展开侧栏', exact: true })
-  await toggle.focus()
-  await page.keyboard.press('Enter')
-  await expect(sidebar).toHaveCSS('width', '220px')
-  await expect(sidebar.getByRole('button', { name: '测试管理员，打开账号菜单' })).toBeVisible()
-  await expect(sidebar.getByText('超级管理员', { exact: true })).toBeVisible()
+  await expect(domains.getByRole('link', { name: '码表管理', exact: true })).toHaveAttribute('aria-current', 'true')
+  await expect(modules.getByRole('link', { name: '政策类型码表', exact: true })).toHaveAttribute('aria-current', 'page')
 })
 
-test('mobile drawer navigates, closes with Escape and restores focus', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto('/')
-  await expect(page.locator('#desktop-navigation')).toHaveCount(0)
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await expect(page.getByRole('banner').getByRole('button', { name: '测试管理员，打开账号菜单' })).toBeVisible()
-  const toggle = page.getByRole('button', { name: '打开导航菜单', exact: true })
-  await toggle.click()
-  const drawer = page.getByRole('dialog', { name: '导航菜单', exact: true })
-  await expect(drawer).toBeVisible()
-  await expect(drawer.getByRole('button', { name: '测试管理员，打开账号菜单' })).toBeVisible()
-  await expect(drawer.getByText('超级管理员', { exact: true })).toBeVisible()
-  await drawer.getByRole('menuitem', { name: '政策', exact: true }).click()
-  await drawer.getByRole('menuitem', { name: '信源管理', exact: true }).click()
-  await expect(page).toHaveURL(/\/policy\/sources$/)
-  await expect(drawer).toBeHidden()
-  await toggle.click()
-  await page.keyboard.press('Escape')
-  await expect(drawer).toBeHidden()
-  await expect(toggle).toBeFocused()
-  await toggle.click()
-  await page.getByRole('button', { name: '关闭导航菜单', exact: true }).click()
-  await expect(drawer).toBeHidden()
-})
-
-test('viewport changes close the drawer and preserve desktop choice', async ({ page }) => {
+test('1024px keeps the same navigation and narrows the side list', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto('/')
-  await page.getByRole('button', { name: '收起侧栏', exact: true }).click()
-  await page.setViewportSize({ width: 390, height: 844 })
-  await page.getByRole('button', { name: '打开导航菜单', exact: true }).click()
-  await expect(page.getByRole('dialog', { name: '导航菜单' })).toBeVisible()
-  await page.setViewportSize({ width: 960, height: 800 })
+  await page.setViewportSize({ width: 1024, height: 800 })
+  const rail = page.locator('.workspace-rail')
+  await expect(rail).toHaveCSS('width', '200px')
   await expect(page.getByRole('dialog', { name: '导航菜单' })).toHaveCount(0)
-  await expect(page.locator('#desktop-navigation')).toHaveCSS('width', '64px')
-  await page.getByRole('button', { name: '展开侧栏', exact: true }).click()
-  await expect(page.locator('#desktop-navigation')).toHaveCSS('width', '190px')
+  await expect(page.getByRole('button', { name: '收起侧栏' })).toHaveCount(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.getByRole('navigation', { name: '一级模块' }).getByRole('link', { name: '码表管理', exact: true }).click()
+  await expect(page).toHaveURL(/\/codebook\/policy-types$/)
+  await expect(page.getByRole('navigation', { name: '子模块导航' }).getByRole('link', { name: '政策类型码表', exact: true })).toBeVisible()
+})
+
+test('module search opens from the header and jumps to the chosen entry', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.goto('/')
+  await page.getByRole('button', { name: '查找模块', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: '查找模块' })
+  await expect(dialog).toBeVisible()
+  await dialog.getByLabel('模块名称或用途').fill('信源')
+  await dialog.getByRole('button', { name: /信源管理/ }).click()
+  await expect(page).toHaveURL(/\/policy\/sources$/)
+  await expect(dialog).toBeHidden()
 })

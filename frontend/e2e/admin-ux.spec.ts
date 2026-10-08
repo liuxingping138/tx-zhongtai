@@ -45,8 +45,18 @@ for (const [path, count] of [
 }
 
 test('unsaved form: cancel, Escape and navigation preserve input until discard is confirmed', async ({ page }) => {
-  await page.goto('/')
-  await page.getByRole('menuitem', { name: '信源管理', exact: true }).click()
+  await page.route('**/api/v1/auth/permissions', route => respond(route, {
+    resources: resources.map(code => ({ code, level: 'FULL' })),
+    menus: [
+      { id: 'policy', parent_id: null, title: '政策', route_name: null, resource_code: null, sort_order: 1 },
+      { id: 'sources', parent_id: 'policy', title: '信源管理', route_name: 'policy-sources', resource_code: 'policy.sources', sort_order: 1 },
+      { id: 'codebook', parent_id: null, title: '码表管理', route_name: null, resource_code: null, sort_order: 2 },
+      { id: 'types', parent_id: 'codebook', title: '政策类型', route_name: 'codebook-policy-types', resource_code: 'codebook.policy_types', sort_order: 1 },
+    ],
+  }))
+  await page.goto('/codebook/policy-types')
+  await page.getByRole('navigation', { name: '一级模块' }).getByRole('link', { name: '政策', exact: true }).click()
+  await expect(page).toHaveURL(/\/policy\/sources$/)
   await page.getByRole('button', { name: '新增', exact: true }).click()
   await page.getByRole('dialog').getByLabel('网站名称', { exact: true }).fill('未保存的网站')
   await expect(page.getByText('有未保存的修改')).toBeVisible()

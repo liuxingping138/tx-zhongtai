@@ -1,7 +1,6 @@
 import { expect, test, type Page, type Response } from '@playwright/test'
 
-const username = process.env.ADMIN_USERNAME || 'admin'
-const password = process.env.ADMIN_PASSWORD || ''
+import { currentAdminPassword, loginAdmin } from './adminSession'
 
 test.use({ viewport: { width: 1440, height: 900 } })
 
@@ -20,16 +19,13 @@ function trackProblems(page: Page) {
 }
 
 test('爬虫监测：概览、筛选、翻页和任务详情', async ({ page }) => {
-  test.skip(!password, '缺少 ADMIN_PASSWORD')
+  test.skip(!currentAdminPassword(), '缺少 ADMIN_PASSWORD')
   const problems = trackProblems(page)
 
-  await page.goto('/login?redirect=/policy/crawler-monitoring')
-  await page.getByLabel('用户名', { exact: true }).fill(username)
-  await page.getByLabel('密码', { exact: true }).fill(password)
-  await page.getByRole('button', { name: '登录' }).click()
+  await loginAdmin(page, '/policy/crawler-monitoring')
 
-  await expect(page.getByRole('heading', { name: '爬虫监测' })).toBeVisible({ timeout: 20_000 })
-  await expect(page.getByRole('menuitem', { name: '爬虫监测', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '爬虫监测', exact: true })).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('navigation', { name: '子模块导航' }).getByRole('link', { name: '爬虫监测', exact: true })).toBeVisible()
   await expect(page.getByText('昨日采集', { exact: true })).toBeVisible()
   await expect(page.getByText('异常任务', { exact: true })).toBeVisible()
   await expect(page.getByText('健康占比', { exact: true })).toBeVisible()

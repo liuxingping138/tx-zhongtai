@@ -1,19 +1,12 @@
 import { expect, test } from '@playwright/test'
 
-const username = process.env.ADMIN_USERNAME || 'p6admin'
-const password = process.env.ADMIN_PASSWORD || ''
+import { currentAdminPassword, loginAdmin } from './adminSession'
 
 test('登录后可见系统模块，刷新与第二标签页保持会话', async ({ page, context }) => {
-  test.skip(!password, '缺少 ADMIN_PASSWORD')
-  await page.goto('/login')
-  await page.getByLabel('用户名', { exact: true }).fill(username)
-  // 不加 exact 会连「显示密码」切换按钮一起命中。这条用例缺 ADMIN_PASSWORD 时会跳过，
-  // 所以加切换按钮之后选择器一直是坏的，直到真的带凭据跑才暴露。
-  await page.getByLabel('密码', { exact: true }).fill(password)
-  await page.getByRole('button', { name: '登录' }).click()
-  await expect(page.getByText('欢迎', { exact: false })).toBeVisible({ timeout: 20_000 })
-  await page.getByRole('menuitem', { name: '系统管理' }).click()
-  await expect(page.getByRole('menuitem', { name: '操作日志' })).toBeVisible()
+  test.skip(!currentAdminPassword(), '缺少 ADMIN_PASSWORD')
+  await loginAdmin(page)
+  await page.getByRole('navigation', { name: '一级模块' }).getByRole('link', { name: '系统管理', exact: true }).click()
+  await expect(page.getByRole('navigation', { name: '子模块导航' }).getByRole('link', { name: '操作日志', exact: true })).toBeVisible()
 
   await page.goto('/system/audit')
   await expect(page.getByRole('button', { name: '查询' })).toBeVisible()

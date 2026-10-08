@@ -45,7 +45,8 @@ test('audit: clearing the date range still submits the query', async ({ page }) 
   await inputs.nth(0).fill('2026-09-01 00:00:00')
   await inputs.nth(1).fill('2026-09-18 23:59:59')
   await inputs.nth(1).press('Enter')
-  await page.getByRole('heading', { name: '操作日志' }).click()
+  // 列表标题只给读屏用，并且被筛选区盖住，点它关不掉日期面板。点工具栏。
+  await page.locator('.list-page__toolbar').click()
   await page.locator('.el-date-editor').hover()
   // 清除图标只在 hover 时出现且带过渡动画，click() 等不到 stable；
   // force 点击又会因为指针移开而丢掉 hover，真正生效的是直接派发 click 事件。
@@ -125,11 +126,10 @@ test('roles: list is a normal filterable table and opens the detail page', async
 
   await page.getByRole('row').filter({ hasText: '码表管理员' }).getByRole('button', { name: '权限设置' }).click()
   await expect(page).toHaveURL(/\/system\/roles\/2$/)
-  // 面包屑挂在角色列表下，侧栏也高亮「角色与权限」。
-  await expect(page.locator('.el-breadcrumb')).toContainText('系统管理')
-  await expect(page.locator('.el-breadcrumb')).toContainText('角色与权限')
-  await expect(page.locator('.el-breadcrumb')).toContainText('角色详情')
-  await expect(page.locator('.el-menu-item.is-active')).toContainText('角色与权限')
+  // 详情不单独占菜单。顶栏停在系统管理，左侧高亮角色与权限，标题是角色名。
+  await expect(page.getByRole('navigation', { name: '一级模块' }).getByRole('link', { name: '系统管理', exact: true })).toHaveAttribute('aria-current', 'true')
+  await expect(page.getByRole('navigation', { name: '子模块导航' }).getByRole('link', { name: '角色与权限', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('heading', { name: '角色2', exact: true })).toBeVisible()
 })
 
 test('roles: permission table ticks cumulatively; saving locks the table and confirms in plain Chinese', async ({ page }) => {

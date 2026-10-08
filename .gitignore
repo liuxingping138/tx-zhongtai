@@ -24,6 +24,7 @@ deploy/compose/.p6.runtime
 deploy/backups/
 frontend/test-results/
 frontend/playwright-report/
+frontend/e2e/.admin-password
 deploy/secrets/
 .jwt-keys/
 *.pem

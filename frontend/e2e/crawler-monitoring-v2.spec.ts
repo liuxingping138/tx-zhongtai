@@ -1,7 +1,6 @@
 import { expect, test, type Page, type Response } from '@playwright/test'
 
-const username = process.env.ADMIN_USERNAME || 'admin'
-const password = process.env.ADMIN_PASSWORD || ''
+import { currentAdminPassword, loginAdmin } from './adminSession'
 
 test.use({ viewport: { width: 1440, height: 900 } })
 
@@ -25,16 +24,13 @@ const sitesResponse = (predicate: (url: URL) => boolean) => (response: Response)
 }
 
 test('爬虫监测 v2：卡片、筛选联动与导出', async ({ page }) => {
-  test.skip(!password, '缺少 ADMIN_PASSWORD')
+  test.skip(!currentAdminPassword(), '缺少 ADMIN_PASSWORD')
   const problems = trackProblems(page)
 
-  await page.goto('/login?redirect=/policy/crawler-monitoring-v2')
-  await page.getByLabel('用户名', { exact: true }).fill(username)
-  await page.getByLabel('密码', { exact: true }).fill(password)
-  await page.getByRole('button', { name: '登录' }).click()
+  await loginAdmin(page, '/policy/crawler-monitoring-v2')
 
-  await expect(page.getByRole('heading', { name: '爬虫监测 v2' })).toBeVisible({ timeout: 20_000 })
-  await expect(page.getByRole('menuitem', { name: '爬虫监测 v2' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '爬虫监测 v2', exact: true })).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('navigation', { name: '子模块导航' }).getByRole('link', { name: '爬虫监测 v2', exact: true })).toBeVisible()
   for (const label of ['网站总数', '数据总量', '昨日采集']) {
     await expect(page.locator('.card-label').filter({ hasText: label })).toBeVisible()
   }
@@ -76,15 +72,12 @@ test('爬虫监测 v2：卡片、筛选联动与导出', async ({ page }) => {
 })
 
 test('爬虫监测 v2：同一字段多选按「或」查询，导出带同样的多个值', async ({ page }) => {
-  test.skip(!password, '缺少 ADMIN_PASSWORD')
+  test.skip(!currentAdminPassword(), '缺少 ADMIN_PASSWORD')
   const problems = trackProblems(page)
   const provinces = ['海南省', '甘肃省']
 
-  await page.goto('/login?redirect=/policy/crawler-monitoring-v2')
-  await page.getByLabel('用户名', { exact: true }).fill(username)
-  await page.getByLabel('密码', { exact: true }).fill(password)
-  await page.getByRole('button', { name: '登录' }).click()
-  await expect(page.getByRole('heading', { name: '爬虫监测 v2' })).toBeVisible({ timeout: 20_000 })
+  await loginAdmin(page, '/policy/crawler-monitoring-v2')
+  await expect(page.getByRole('heading', { name: '爬虫监测 v2', exact: true })).toBeVisible({ timeout: 20_000 })
 
   const field = page.locator('.filter-bar .el-form-item').filter({ hasText: '省份' }).first()
   for (const province of provinces) {
