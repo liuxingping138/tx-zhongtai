@@ -3,7 +3,16 @@ SHELL := /bin/bash
 
 COMPOSE := docker compose -f deploy/compose/docker-compose.yml --env-file .env
 P6_ENV := deploy/compose/.p6.env
-P6_COMPOSE := docker compose -p tx-zhongtai-p6 -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.p6.yml --env-file $(P6_ENV)
+# 服务器上跑 P6（scripts/p6-on-server.sh 传 P6_SERVER=1）：那里只有 docker-compose 且要 sudo。
+# -A 经 askpass 取密码；-E 保留环境变量，p6-admin 的 `exec -e ADMIN_*` 靠它把账号传进容器。
+ifeq ($(P6_SERVER),1)
+P6_DOCKER := sudo -A -E docker
+P6_DOCKER_COMPOSE := sudo -A -E docker-compose
+else
+P6_DOCKER := docker
+P6_DOCKER_COMPOSE := docker compose
+endif
+P6_COMPOSE := $(P6_DOCKER_COMPOSE) -p tx-zhongtai-p6 -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.p6.yml --env-file $(P6_ENV)
 PY_PACKAGES := packages/platform-common services/iam-service services/audit-service services/codebook-service services/policy-service
 JWT_KEYS_DIR := deploy/secrets/jwt
 JWT_P6_DIR := deploy/secrets/jwt-p6
@@ -187,10 +196,11 @@ test-unit:
 
 p6-env:
 	@if [ ! -f $(P6_ENV) ]; then cp deploy/compose/p6.env.example $(P6_ENV); echo "已生成 $(P6_ENV)"; fi
+	@# 网关默认绑 0.0.0.0；P6 的账号密码是明文样例，在服务器上不能对外暴露，旧的 .p6.env 也补上。
+	@grep -q '^GATEWAY_BIND_ADDR=' $(P6_ENV) || echo 'GATEWAY_BIND_ADDR=127.0.0.1' >> $(P6_ENV)
 
 jwt-keys-p6:
-	@mkdir -p $(JWT_P6_DIR)
-	@cd services/iam-service && uv run python -c "from pathlib import Path; from app.core.jwt_keys import ensure_jwt_keys; ensure_jwt_keys(Path('../../$(JWT_P6_DIR)').resolve(), allow_generate=True)"
+	@bash scripts/gen-jwt-keys.sh $(JWT_P6_DIR)
 
 p6-up: p6-env jwt-keys-p6
 	# 必须带 --build：Compose 的镜像按项目名隔离（tx-zhongtai-p6-*），
@@ -257,7 +267,8 @@ test-e2e: p6-fixtures
 	@test -f deploy/compose/.p6.runtime || (echo "请先运行 make test-integration"; exit 2)
 	@set -a && . ./deploy/compose/.p6.runtime && set +a && \
 	export P6_GATEWAY=http://localhost:$$(grep -E '^GATEWAY_HTTP_PORT=' $(P6_ENV) | cut -d= -f2) && \
-	(cd frontend && pnpm exec playwright test)
+	if [ "$(P6_SERVER)" = "1" ]; then DOCKER="$(P6_DOCKER)" bash scripts/e2e-docker.sh; \
+	else (cd frontend && pnpm exec playwright test); fi
 
 smoke:
 	@echo "== 经网关冒烟验证（需要 make dev-up 已启动） =="

@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 常用命令
 
-当前运行环境是 `https://1.119.196.77`（8091 HTTP 自动跳转）。在 Mac 上改代码并推送到 GitLab，再用 rsync 同步到服务器构建。不要在服务器 `git pull`，不要在本机 `make dev-up`。步骤见 `docs/guides/部署与维护.md`。
+当前运行环境是 `https://1.119.196.77`（8091 HTTP 自动跳转）。在 Mac 上改代码并推送到 GitLab，再用 `scripts/sync-to-server.sh` 同步到服务器构建。不要在服务器 `git pull`，不要在本机 `make dev-up`。步骤见 `docs/guides/部署与维护.md`。
 
 ```bash
 make check            # 质量门：Python ruff+mypy，前端 type-check+build+lint，范围与密钥扫描
@@ -50,9 +50,11 @@ cd frontend && pnpm exec playwright test --grep "date range"
 
 ### 开发部署机 vs 本机 / P6
 
-日常只使用 `1.119.196.77`。本机 Docker 栈已停止。P6 是一次性隔离验收环境，
-只在临时打开本机 Docker 时跑 `make test-integration` / `make test-e2e`，**测完必须 `make p6-down`**。
-不要把 Playwright 打到 8091 的业务库。Navicat 连 `1.119.196.77:5433`。
+日常只使用 `1.119.196.77`。本机 Docker 栈已停止。分工：`make check` / `make test-unit` 在 Mac 上跑（不要 Docker）；
+集成和 e2e 在服务器上跑 P6：`bash scripts/p6-on-server.sh`（同步 → 集成 + e2e → 一定 `p6-down`），
+Mac 不用开 Docker。P6 与业务栈同机但隔离（项目名 `tx-zhongtai-p6`、独立卷与库，网关只绑 `127.0.0.1:8090`），
+不要把 Playwright 打到 8091 的业务库。同步一律用 `scripts/sync-to-server.sh`，排除列表只维护那一份。
+Navicat 连 `1.119.196.77:5433`。
 
 ## 架构
 
