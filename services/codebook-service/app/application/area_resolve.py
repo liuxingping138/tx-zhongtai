@@ -4,7 +4,7 @@ from io import BytesIO
 
 from openpyxl import Workbook
 from platform_common.errors import ApiError, ErrorCode
-from platform_common.excel import append_text_row, iter_workbook_rows
+from platform_common.excel import active_worksheet, append_text_row, iter_workbook_rows
 
 from app.application.area_match import AreaSnap, build_area_index, match_area_indexed
 
@@ -133,7 +133,7 @@ def build_resolve_workbook(content: bytes, catalog: list[AreaSnap]) -> tuple[byt
         annotated.append(filled)
 
     book = Workbook()
-    sheet = book.active
+    sheet = active_worksheet(book)
     sheet.title = "全部数据"
     append_text_row(sheet, headers)
     for row in annotated:

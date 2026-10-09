@@ -100,16 +100,20 @@ async def day_rows(session: AsyncSession, day: date) -> int:
 
 
 async def last_run(session: AsyncSession) -> CrawlerV2SyncRun | None:
-    return await session.scalar(select(CrawlerV2SyncRun).order_by(CrawlerV2SyncRun.started_at.desc()).limit(1))
+    run: CrawlerV2SyncRun | None = await session.scalar(
+        select(CrawlerV2SyncRun).order_by(CrawlerV2SyncRun.started_at.desc()).limit(1)
+    )
+    return run
 
 
 async def last_successful_run(session: AsyncSession) -> CrawlerV2SyncRun | None:
-    return await session.scalar(
+    run: CrawlerV2SyncRun | None = await session.scalar(
         select(CrawlerV2SyncRun)
         .where(CrawlerV2SyncRun.status == "success")
         .order_by(CrawlerV2SyncRun.started_at.desc())
         .limit(1)
     )
+    return run
 
 
 async def sync_lock_held(session: AsyncSession) -> bool:

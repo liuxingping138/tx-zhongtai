@@ -28,10 +28,12 @@ PREVIEW_LIMIT = 200
 # 每次搜索返回的候选数量。
 SEARCH_LIMIT = 50
 
-OptionColumns = Mapping[str, InstrumentedAttribute[str]]
+# 可空列也能做筛选项，空值在查询里过滤掉。
+OptionColumn = InstrumentedAttribute[str] | InstrumentedAttribute[str | None]
+OptionColumns = Mapping[str, OptionColumn]
 
 
-async def _distinct(session: AsyncSession, column: InstrumentedAttribute[str], limit: int) -> list[str]:
+async def _distinct(session: AsyncSession, column: OptionColumn, limit: int) -> list[str]:
     result = await session.execute(
         select(column).where(column.is_not(None)).where(column != "").distinct().order_by(column).limit(limit)
     )

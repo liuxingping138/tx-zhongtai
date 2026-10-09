@@ -4,7 +4,7 @@ from typing import Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from platform_common.actors import Actor
 from platform_common.enums import SecurityClass
 from platform_common.errors import ApiError, ErrorCode
@@ -33,7 +33,7 @@ def _filters(
 async def get_overview(
     session: AsyncSession = Depends(get_db_session),
     _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
-):
+) -> JSONResponse:
     return success_json(await service.overview(session))
 
 
@@ -48,7 +48,7 @@ async def list_sites(
     page_size: int = Query(default=20, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session),
     _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
-):
+) -> JSONResponse:
     return success_json(
         await service.list_sites(
             session, filters=_filters(province_name, city_name, site_name, status), page=page, page_size=page_size
@@ -61,7 +61,7 @@ async def list_sites(
 async def list_filter_options(
     session: AsyncSession = Depends(get_db_session),
     _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
-):
+) -> JSONResponse:
     return success_json(await service.list_options(session))
 
 
@@ -72,7 +72,7 @@ async def search_filter_options(
     q: str | None = Query(default=None, max_length=200),
     session: AsyncSession = Depends(get_db_session),
     _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
-):
+) -> JSONResponse:
     try:
         values = await service.search_filter_options(session, field=field, keyword=q)
     except KeyError as exc:
@@ -89,7 +89,7 @@ async def export_sites(
     status: list[SiteStatus] | None = Query(default=None),
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_policy_permission(RESOURCE, "export")),
-):
+) -> Response:
     payload = await service.export_sites(session, actor, _filters(province_name, city_name, site_name, status))
     return Response(
         content=payload,

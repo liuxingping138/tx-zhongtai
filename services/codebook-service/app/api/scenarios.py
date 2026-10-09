@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from platform_common.actors import Actor
 from platform_common.enums import SecurityClass
 from platform_common.errors import ApiError, ErrorCode
@@ -31,7 +31,7 @@ async def list_items(
     page_size: int = Query(default=20, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session),
     _: Actor = Depends(require_codebook_permission(RESOURCE, "list")),
-):
+) -> JSONResponse:
     return success_json(
         await service.list_scenarios(
             session,
@@ -50,7 +50,7 @@ async def list_items(
 async def list_filter_options(
     session: AsyncSession = Depends(get_db_session),
     _: Actor = Depends(require_codebook_permission(RESOURCE, "list")),
-):
+) -> JSONResponse:
     return success_json(await service.list_scenario_options(session))
 
 
@@ -61,7 +61,7 @@ async def search_filter_options(
     q: str | None = Query(default=None, max_length=200),
     session: AsyncSession = Depends(get_db_session),
     _: Actor = Depends(require_codebook_permission(RESOURCE, "list")),
-):
+) -> JSONResponse:
     """筛选项的服务端搜索。候选值过多的字段由前端按关键词调用。"""
 
     try:
@@ -80,7 +80,7 @@ async def export_items(
     customer_group_name: list[str] | None = Query(default=None),
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_codebook_permission(RESOURCE, "export")),
-):
+) -> Response:
     # 导出复用列表的筛选条件，保证「所见即所导」。
     payload = await service.export_scenarios(
         session,
@@ -106,7 +106,7 @@ async def import_items(
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_codebook_permission(RESOURCE, "import")),
     settings: Settings = Depends(get_settings),
-):
+) -> Response:
     content = await read_import_upload(request, settings.import_max_bytes)
     return import_result_response(await service.import_scenarios(session, actor, content), "scenarios-import.xlsx")
 
@@ -117,7 +117,7 @@ async def create_item(
     body: ScenarioWrite,
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_codebook_permission(RESOURCE, "create")),
-):
+) -> JSONResponse:
     return success_json(
         await service.create_scenario(session, actor, body.model_dump(exclude={"version"})),
         status_code=201,
@@ -130,7 +130,7 @@ async def get_item(
     item_id: uuid.UUID,
     session: AsyncSession = Depends(get_db_session),
     _: Actor = Depends(require_codebook_permission(RESOURCE, "read")),
-):
+) -> JSONResponse:
     return success_json(await service.get_scenario(session, item_id))
 
 
@@ -141,5 +141,5 @@ async def update_item(
     body: ScenarioPatch,
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_codebook_permission(RESOURCE, "update")),
-):
+) -> JSONResponse:
     return success_json(await service.update_scenario(session, actor, item_id, body.model_dump(exclude_unset=True)))

@@ -38,7 +38,9 @@ def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
             if status is not None:
                 conds.append(status)
         elif key in NUMERIC_FILTERS:
-            conds.append(CrawlerTaskHealth.stale_days >= int(str(value)))
+            if not isinstance(value, int | str):
+                raise TypeError(f"{key} 需要整数")
+            conds.append(CrawlerTaskHealth.stale_days >= int(value))
         elif key == "abnormal_only":
             conds.append(CrawlerTaskHealth.health_status.in_(ABNORMAL_STATUSES))
         else:

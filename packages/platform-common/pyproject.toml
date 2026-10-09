@@ -23,6 +23,7 @@ dependencies = [
 dev = [
   "ruff>=0.6,<1.0",
   "mypy>=1.11,<2.0",
+  "types-openpyxl>=3.1,<4.0",
   "pytest>=8.3,<9.0",
   "pytest-asyncio>=0.24,<0.25",
 ]
@@ -51,7 +52,6 @@ extend = "../../ruff.toml"
 [tool.mypy]
 python_version = "3.12"
 strict = true
-ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

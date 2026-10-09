@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any, TypedDict
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -17,6 +18,13 @@ from jwt.algorithms import RSAAlgorithm
 _CURRENT_NAME = "current.json"
 _PRIVATE_SUFFIX = ".pem"
 _PUBLIC_SUFFIX = ".pub"
+
+
+class JwtKeyMeta(TypedDict):
+    """`current.json` 的结构：当前签名密钥与轮换中保留验签的上一把。"""
+
+    current_kid: str
+    previous_kid: str | None
 
 
 class JwtKeyError(RuntimeError):
@@ -39,11 +47,12 @@ def _write_keypair(directory: Path, kid: str) -> None:
     (directory / f"{kid}{_PRIVATE_SUFFIX}").chmod(0o600)
 
 
-def ensure_jwt_keys(directory: Path, *, allow_generate: bool) -> dict:
+def ensure_jwt_keys(directory: Path, *, allow_generate: bool) -> JwtKeyMeta:
     directory.mkdir(parents=True, exist_ok=True)
     current_path = directory / _CURRENT_NAME
     if current_path.exists():
-        return json.loads(current_path.read_text(encoding="utf-8"))
+        meta: JwtKeyMeta = json.loads(current_path.read_text(encoding="utf-8"))
+        return meta
     if not allow_generate:
         raise JwtKeyError(f"JWT 密钥目录为空且不允许自动生成: {directory}")
     kid = "k1"
@@ -67,10 +76,10 @@ def load_public_pem(directory: Path, kid: str) -> bytes:
     return path.read_bytes()
 
 
-def build_jwks(directory: Path, meta: dict) -> dict:
+def build_jwks(directory: Path, meta: JwtKeyMeta) -> dict[str, list[dict[str, Any]]]:
     kids = [meta["current_kid"]]
-    if meta.get("previous_kid"):
-        kids.append(meta["previous_kid"])
+    if previous := meta.get("previous_kid"):
+        kids.append(previous)
     keys = []
     for kid in kids:
         public_pem = load_public_pem(directory, kid)

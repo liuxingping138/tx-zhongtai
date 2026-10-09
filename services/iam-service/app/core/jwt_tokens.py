@@ -48,8 +48,8 @@ def decode_access_token(token: str, settings: Settings) -> dict[str, Any]:
     if not isinstance(kid, str):
         raise UnauthenticatedError("访问令牌无效")
     allowed_kids = {meta["current_kid"]}
-    if meta.get("previous_kid"):
-        allowed_kids.add(meta["previous_kid"])
+    if previous := meta.get("previous_kid"):
+        allowed_kids.add(previous)
     if kid not in allowed_kids:
         raise UnauthenticatedError("访问令牌无效")
     try:

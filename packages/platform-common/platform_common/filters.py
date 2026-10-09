@@ -8,8 +8,9 @@ from typing import Any
 from sqlalchemy import ColumnElement, or_
 
 # 筛选值：多选下拉提交多个值（`?province_name=甲&province_name=乙`），同一字段内是「或」，
-# 不同字段之间是「且」。单个字符串等价于只选了一个值。
-FilterValue = str | Sequence[str] | None
+# 不同字段之间是「且」。单个字符串等价于只选了一个值。数值下限和开关类条件（如爬虫监测的
+# 「停更天数不少于」「只看异常」）分别用 int、bool。
+FilterValue = str | Sequence[str] | int | bool | None
 
 # 字段名 -> 筛选值。空值表示该条件不参与过滤。
 # 列表接口和导出接口传同一个结构，保证两边筛选语义一致。
@@ -21,7 +22,7 @@ def filter_values(value: FilterValue | Any) -> list[str]:
 
     if value is None:
         return []
-    raw = [value] if isinstance(value, str) else list(value)
+    raw = [value] if isinstance(value, str | int) else list(value)
     out: list[str] = []
     for item in raw:
         text = str(item).strip() if item is not None else ""

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 
 from platform_common.errors import NotFoundError, VersionConflictError
@@ -23,9 +24,10 @@ async def get_job(session: AsyncSession, code: str, *, lock: bool = False) -> Sc
 
 
 async def active_run(session: AsyncSession, code: str) -> ScheduledRun | None:
-    return await session.scalar(
+    run: ScheduledRun | None = await session.scalar(
         select(ScheduledRun).where(ScheduledRun.job_code == code, ScheduledRun.status.in_(ACTIVE))
     )
+    return run
 
 
 async def enqueue(
@@ -65,7 +67,7 @@ async def schedule_due(session: AsyncSession, now: datetime) -> None:
         job.next_run_at = next_daily(now, job.daily_time)
 
 
-async def history(session: AsyncSession, code: str, page: int, page_size: int):
+async def history(session: AsyncSession, code: str, page: int, page_size: int) -> tuple[Sequence[ScheduledRun], int]:
     where = ScheduledRun.job_code == code
     total = await session.scalar(select(func.count()).select_from(ScheduledRun).where(where)) or 0
     rows = (

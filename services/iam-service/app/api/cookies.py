@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import Response
 
 from app.core.config import Settings
 
 
-def _cookie_kwargs(settings: Settings) -> dict:
+def _cookie_kwargs(settings: Settings) -> dict[str, Any]:
     return {
         "httponly": True,
         "secure": settings.cookie_secure,

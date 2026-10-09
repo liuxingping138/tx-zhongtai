@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from platform_common.actors import Actor
 from platform_common.enums import SecurityClass
 from platform_common.http_utils import success_json
@@ -25,7 +26,7 @@ class JobUpdate(BaseModel):
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def list_jobs(
     session: AsyncSession = Depends(get_db_session), _: Actor = Depends(require_policy_permission(RESOURCE, "list"))
-):
+) -> JSONResponse:
     return success_json(jsonable_encoder(await service.list_jobs(session)))
 
 
@@ -36,7 +37,7 @@ async def update_job(
     payload: JobUpdate,
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_policy_permission(RESOURCE, "update")),
-):
+) -> JSONResponse:
     await service.update_job(session, code, actor, **payload.model_dump())
     return success_json({"saved": True})
 
@@ -47,7 +48,7 @@ async def trigger_job(
     code: str,
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_policy_permission(RESOURCE, "execute")),
-):
+) -> JSONResponse:
     return success_json(jsonable_encoder(await service.trigger_job(session, code, actor)), status_code=202)
 
 
@@ -59,5 +60,5 @@ async def history(
     page_size: int = Query(20, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session),
     _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
-):
+) -> JSONResponse:
     return success_json(jsonable_encoder(await service.history(session, code, page, page_size)))

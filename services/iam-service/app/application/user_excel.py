@@ -15,7 +15,7 @@ from anyio import to_thread
 from openpyxl import Workbook
 from platform_common.clock import format_beijing
 from platform_common.errors import ApiError, ErrorCode
-from platform_common.excel import SKIP_REASON_COLUMN, append_text_row, parse_sheet_async
+from platform_common.excel import SKIP_REASON_COLUMN, active_worksheet, append_text_row, parse_sheet_async
 from platform_common.filters import FilterValue
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -70,7 +70,7 @@ async def export_users(
 
 def _build_export(rows: list[dict[str, str]]) -> bytes:
     book = Workbook()
-    sheet = book.active
+    sheet = active_worksheet(book)
     sheet.title = "用户"
     append_text_row(sheet, [spec.header for spec in USER_EXPORT_COLUMNS])
     for row in rows:
@@ -195,7 +195,7 @@ async def build_import_result(outcome: ImportOutcome) -> bytes:
 
 def _build_import_result(outcome: ImportOutcome) -> bytes:
     book = Workbook()
-    created = book.active
+    created = active_worksheet(book)
     created.title = "初始密码"
     append_text_row(created, list(RESULT_CREATED_HEADERS))
     for item in outcome.created:

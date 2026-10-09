@@ -4,11 +4,11 @@ from typing import Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from platform_common.actors import Actor
 from platform_common.enums import SecurityClass
 from platform_common.errors import ApiError, ErrorCode
-from platform_common.filters import FilterValue
+from platform_common.filters import Filters, FilterValue
 from platform_common.http_utils import success_json
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,7 +29,7 @@ def _filters(
     health_status: FilterValue,
     stale_days_min: int | None,
     abnormal_only: bool,
-) -> dict[str, object]:
+) -> Filters:
     return {
         "province_name": province_name,
         "city_name": city_name,
@@ -48,7 +48,7 @@ async def get_overview(
     trend_days: int = Query(default=30, ge=7, le=180),
     session: AsyncSession = Depends(get_db_session),
     _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
-):
+) -> JSONResponse:
     return success_json(await service.overview(session, trend_days=trend_days))
 
 
@@ -67,7 +67,7 @@ async def list_tasks(
     page_size: int = Query(default=20, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session),
     _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
-):
+) -> JSONResponse:
     return success_json(
         await service.list_tasks(
             session,
@@ -85,7 +85,7 @@ async def list_tasks(
 async def list_filter_options(
     session: AsyncSession = Depends(get_db_session),
     _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
-):
+) -> JSONResponse:
     return success_json(await service.list_options(session))
 
 
@@ -96,7 +96,7 @@ async def search_filter_options(
     q: str | None = Query(default=None, max_length=200),
     session: AsyncSession = Depends(get_db_session),
     _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
-):
+) -> JSONResponse:
     try:
         values = await service.search_options(session, field=field, keyword=q)
     except KeyError as exc:
@@ -113,7 +113,7 @@ async def get_task_detail(
     days: int = Query(default=90, ge=7, le=180),
     session: AsyncSession = Depends(get_db_session),
     _: Actor = Depends(require_policy_permission(RESOURCE, "read")),
-):
+) -> JSONResponse:
     """标签是层级路径、编码可能为空，都不适合放 path 参数，统一走 query。"""
 
     return success_json(await service.task_detail(session, site_code=site_code, site_key=site_key, tag=tag, days=days))
@@ -132,7 +132,7 @@ async def export_tasks(
     abnormal_only: bool = Query(default=False),
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_policy_permission(RESOURCE, "export")),
-):
+) -> Response:
     payload = await service.export_tasks(
         session,
         actor,

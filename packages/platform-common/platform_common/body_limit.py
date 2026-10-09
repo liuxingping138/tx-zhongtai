@@ -9,15 +9,10 @@ Content-Length 的请求不会进入应用，没有 Bearer 的上传也不会开
 from __future__ import annotations
 
 import json
-from collections.abc import Awaitable, Callable
-from typing import Any
+
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from platform_common.errors import ErrorCode
-
-Scope = dict[str, Any]
-Message = dict[str, Any]
-Receive = Callable[[], Awaitable[Message]]
-Send = Callable[[Message], Awaitable[None]]
 
 _UPLOAD_SUFFIXES = ("/import", "/resolve")
 
@@ -55,7 +50,7 @@ async def _json_response(send: Send, status: int, code: str, message: str) -> No
 class RequestBodyLimitMiddleware:
     """按字节拒绝过大的请求。上传路径在缺少 Bearer 时直接 401，不读取正文。"""
 
-    def __init__(self, app: Any, *, max_bytes: int) -> None:
+    def __init__(self, app: ASGIApp, max_bytes: int) -> None:
         self.app = app
         self.max_bytes = max_bytes
 

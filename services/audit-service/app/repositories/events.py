@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.models import AuditEvent
 
 
-def apply_filters(
-    stmt: Select[tuple[AuditEvent]] | Select[tuple[int]],
+def apply_filters[S: (Select[tuple[AuditEvent]], Select[tuple[int]])](
+    stmt: S,
     *,
     occurred_from: datetime | None = None,
     occurred_to: datetime | None = None,
@@ -22,7 +22,7 @@ def apply_filters(
     module_code: FilterValue = None,
     action_code: FilterValue = None,
     outcome: FilterValue = None,
-):
+) -> S:
     if occurred_from is not None:
         stmt = stmt.where(AuditEvent.occurred_at >= occurred_from)
     if occurred_to is not None:

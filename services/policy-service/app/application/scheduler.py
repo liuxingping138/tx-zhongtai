@@ -19,14 +19,15 @@ def run_data(row: ScheduledRun) -> dict[str, Any]:
     return {col.name: getattr(row, col.name) for col in ScheduledRun.__table__.columns}
 
 
-async def latest_watermark(session: AsyncSession, code: str):
+async def latest_watermark(session: AsyncSession, code: str) -> datetime | None:
     model = CrawlerSyncRun if code == "crawler-v1" else CrawlerV2SyncRun
-    return await session.scalar(
+    watermark: datetime | None = await session.scalar(
         select(model.watermark)
         .where(model.status == "success", model.watermark.is_not(None))
         .order_by(model.started_at.desc())
         .limit(1)
     )
+    return watermark
 
 
 def claim_failure(error: str | None, sync_status: str | None) -> str | None:
@@ -48,6 +49,7 @@ async def abandon_running_sync(session: AsyncSession, row: ScheduledRun, message
 
     if row.sync_run_id is None:
         return
+    sync: CrawlerSyncRun | CrawlerV2SyncRun | None
     if row.job_code == "crawler-v1":
         sync = await session.get(CrawlerSyncRun, row.sync_run_id)
     else:

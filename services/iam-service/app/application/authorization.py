@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.authorization import AuthzDecision, evaluate_authorization
 from app.domain.enums import UserStatus
-from app.domain.models import User
+from app.domain.models import MenuItem, User
 from app.repositories import outbox as outbox_repo
 from app.repositories import resources as resource_repo
 from app.repositories import users as user_repo
@@ -134,7 +134,7 @@ async def visible_permissions(session: AsyncSession, user_id: uuid.UUID) -> dict
     }
 
 
-def _menu_payload(menu, resource_code: str | None) -> dict[str, object]:
+def _menu_payload(menu: MenuItem, resource_code: str | None) -> dict[str, object]:
     return {
         "id": str(menu.id),
         "parent_id": str(menu.parent_id) if menu.parent_id else None,

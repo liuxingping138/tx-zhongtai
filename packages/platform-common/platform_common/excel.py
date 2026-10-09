@@ -93,7 +93,8 @@ def iter_workbook_rows(
                         tag = element.tag.rsplit("}", 1)[-1]
                         row = col = 0
                         if tag == "dimension" and element.get("ref"):
-                            _, _, col, row = range_boundaries(element.attrib["ref"])
+                            _, _, max_col, max_row = range_boundaries(element.attrib["ref"])
+                            col, row = max_col or 0, max_row or 0
                         elif tag == "row":
                             cell_count = 0
                             row_count += 1
@@ -114,12 +115,12 @@ def iter_workbook_rows(
             sheet = book[book.sheetnames[0]]
             # 不相信工作表声明的尺寸；实际坐标已经在 XML 检查中限制。
             sheet.reset_dimensions()
-            for count, row in enumerate(sheet.iter_rows(values_only=True), 1):
+            for count, values in enumerate(sheet.iter_rows(values_only=True), 1):
                 if count > max_rows + 1:
                     raise ApiError("Excel 行数超过上限", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-                if len(row) > max_columns:
+                if len(values) > max_columns:
                     raise ApiError("Excel 列数超过上限", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-                yield row
+                yield values
         finally:
             book.close()
     except ApiError:
@@ -192,10 +193,20 @@ def _as_text_cell(sheet: Worksheet, value: Any) -> Any:
     # 公式前缀在 append 时就定成文本。不能 append 后再用 sheet.max_row 回头改类型——
     # max_row 每次扫全表，大表导出会退化成平方复杂度。
     if isinstance(value, str) and value.startswith(_FORMULA_PREFIXES):
-        cell = Cell(sheet, value=value)
+        # 行列号只是占位：append 会按单元格实际所在位置改写。
+        cell = Cell(sheet, row=1, column=1, value=value)
         cell.data_type = "s"
         return cell
     return value
+
+
+def active_worksheet(book: Workbook) -> Worksheet:
+    """新建工作簿的活动页一定是普通工作表；openpyxl 的类型上还可能是图表页或 None，这里收窄一次。"""
+
+    sheet = book.active
+    if not isinstance(sheet, Worksheet):
+        raise TypeError("工作簿没有可写的工作表")
+    return sheet
 
 
 def build_workbook(
@@ -206,7 +217,7 @@ def build_workbook(
     include_audit: bool = True,
 ) -> bytes:
     book = Workbook()
-    sheet = book.active
+    sheet = active_worksheet(book)
     sheet.title = sheet_name[:31]
     export_cols = (*columns, *AUDIT_EXPORT_COLUMNS) if include_audit else columns
     append_text_row(sheet, [spec.header for spec in export_cols])
