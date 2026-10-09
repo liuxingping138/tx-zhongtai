@@ -7,8 +7,8 @@ from datetime import timedelta
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas import IngestRequest
 from app.application.ingest import ingest_event
+from app.application.schemas import IngestRequest
 from app.core.clock import utcnow
 from app.domain.models import AuditEvent
 

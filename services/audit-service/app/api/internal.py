@@ -4,9 +4,9 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas import IngestRequest
 from app.api.security import classified, require_internal_caller
 from app.application.ingest import ingest_event
+from app.application.schemas import IngestRequest
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
 from app.core.http_utils import success_json

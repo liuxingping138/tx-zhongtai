@@ -9,8 +9,8 @@ from platform_common.errors import ApiError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas import IngestRequest
 from app.application.redact import redact
+from app.application.schemas import IngestRequest
 from app.core.clock import utcnow
 from app.domain.models import AuditEvent
 from app.repositories import events as event_repo

@@ -3,9 +3,9 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from app.api.schemas import IngestRequest
 from app.application.ingest import build_event, payload_bytes
 from app.application.redact import redact
+from app.application.schemas import IngestRequest
 
 
 def test_redact_nested_secrets() -> None:

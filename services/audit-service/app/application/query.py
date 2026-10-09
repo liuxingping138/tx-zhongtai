@@ -7,8 +7,8 @@ from typing import Any
 from platform_common.filters import FilterValue
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas import AuditEventOut
 from app.application.redact import redact
+from app.application.schemas import AuditEventOut
 from app.core.clock import assume_beijing
 from app.domain.models import AuditEvent
 from app.repositories import events as event_repo
