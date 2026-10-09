@@ -149,6 +149,10 @@ policy 和 codebook 的基础设施代码高度重复，已统一下沉。**新�
 而该资源只能授予超级管理员角色——这是防止「用户管理员给自己加超级管理员」的关键约束，改入口时不要放宽。
 权限页的模块分组、可选档位和中文说明都由 `frontend/src/permissions/catalog.ts` 从资源树推导。
 
+删除用户是逻辑删除：`status` 置 `UserStatus.DELETED`，同时吊销会话、清空角色，行保留以便操作日志对得上人。
+新写的用户查询（登录、列表、按名查找、改人前的存在性检查）都要排除 `DELETED`，
+否则已删账号会重新出现或能登录。
+
 没有授权记录时是 `NONE`，不表示另一档权限。已授权的三档逐档包含：`READ`（查看）< `EXPORT`（查看+导出）< `FULL`（含新增、编辑、导入）。新增模块时导出动作
 必须标 `GrantLevel.EXPORT`，`test_every_export_action_requires_export_tier` 会拦；前端导出按钮用 `auth.canExport`。
 越权探针 `tests/authz_probe.py` 会自建 `越权探测-*` 角色与 `probe.*` 账号，在开发栈跑完记得清掉。
@@ -162,6 +166,10 @@ policy 和 codebook 的基础设施代码高度重复，已统一下沉。**新�
 认领时置 delivering 并写 `lease_until`，回写只在租约没被别人重新认领时生效。进程在投递途中重启，
 租约到期后会被重新认领，不会永远卡在 delivering。IAM 默认租约 30 秒（`IAM_WORKER_LEASE_SECONDS`）；
 policy / codebook 走公共 Outbox，默认 5 分钟。审计服务按 `event_id` 去重，重投不重复入库。
+
+`audit_events` 对审计服务的应用账号只有 SELECT/INSERT，删改权被收回；到期清理用独立的清理账号
+（`make migrate` 里 `provision-audit-cleanup` + `app.cli.grant_cleanup` 负责授权）。
+新的审计写入逻辑不能依赖 UPDATE/DELETE，换库或重建后要重新跑这两步。
 
 ### 任务调度
 
