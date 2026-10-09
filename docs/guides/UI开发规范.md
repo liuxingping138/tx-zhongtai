@@ -19,7 +19,7 @@
 
 ## 导航接入（2026-09-24）
 
-顶部只展示当前账号可见的一级模块，左侧只展示当前模块的子菜单。根地址进入首个可见业务模块，无菜单沿用空权限页，不提供工作台。新增页面需登记路由及 `router/menu.ts`，并在 `layouts/workspace.ts` 配置用途说明和独立语义图标；统一 Element Plus Icons、17px、继承菜单颜色，禁止按父模块复用同一个图标。详情页用 `meta.menuPath` 关联所属列表。标志使用 `assets/brand/telelands-logo.svg`，不重绘或改变比例。
+顶部只展示当前账号可见的一级模块，左侧只展示当前模块的子菜单。一级模块顺序只由 iam 菜单 `sort_order` 决定（系统管理、政策、码表管理），前端不要再排序；根地址进入首个可见模块，无菜单沿用空权限页，不提供工作台。新增页面需登记路由及 `router/menu.ts`，并在 `layouts/workspace.ts` 配置用途说明和独立语义图标；统一 Element Plus Icons、17px、继承菜单颜色，禁止按父模块复用同一个图标。详情页用 `meta.menuPath` 关联所属列表。标志使用 `assets/brand/telelands-logo.svg`，不重绘或改变比例。
 
 顶栏76px，品牌/侧栏共用216px（1100px及以下200px）。账号固定左下角。基础色与宽高 token 由 theme.css 管理；外壳/列表适配由 workspace.css 管理，不新增页面专属基础色板。不存在设计预览分支；旧预览 URL 会清理参数并进入正式界面。
 
