@@ -1,3 +1,4 @@
+import { postExcelImport, type ImportResult, type ImportStage } from './excelImport'
 import { http, request } from './http'
 import type {
   EffectivePermission,
@@ -23,6 +24,11 @@ export function listUsers(params: {
   sort?: string
 }): Promise<Page<UserItem>> {
   return request(http.get('/system/users', { params }))
+}
+
+/** 批量建账号。结果文件（含初始密码、跳过的行）会自动下载，只给这一次。 */
+export function importUsers(file: File, onProgress?: (percent: number, stage: ImportStage) => void): Promise<ImportResult> {
+  return postExcelImport('/system/users/import', file, onProgress)
 }
 
 export function getUser(userId: string): Promise<UserItem> {

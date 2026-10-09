@@ -16,6 +16,8 @@ export interface ImportResult {
   report_filename?: string
   rejected?: boolean
   skipped_file?: string | null
+  /** 结果文件的说明，默认是「校验报告已自动下载」。用户导入的结果文件里是初始密码，需要换个说法。 */
+  report_note?: string
 }
 
 export type ImportStage = 'upload' | 'parse'

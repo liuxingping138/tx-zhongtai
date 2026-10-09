@@ -332,6 +332,40 @@ test('users: pending-role bar filters to accounts without roles', async ({ page 
     url.searchParams.get('page_size') !== '1' && url.searchParams.getAll('role_id').includes('none'))).toBe(true)
 })
 
+test('users: excel import shows initial-password note; export carries the applied filters', async ({ page }) => {
+  const exports: URL[] = []
+  await page.route('**/api/v1/system/roles?**', route => respond(route, { items: [role('1')], total: 1 }))
+  await page.route('**/api/v1/system/users?**', route => respond(route, { items: [], total: 0 }))
+  await page.route('**/api/v1/system/users/export?**', route => {
+    exports.push(new URL(route.request().url()))
+    return route.fulfill({ body: 'xlsx', contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  })
+  await page.route('**/api/v1/system/users/import', route => route.fulfill({
+    body: 'xlsx',
+    contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    headers: {
+      'Content-Disposition': 'attachment; filename="users-import.xlsx"',
+      'X-Import-Inserted': '2', 'X-Import-Skipped': '1', 'X-Import-Total': '3', 'X-Import-Rejected': '0', 'X-Import-Updated': '0',
+    },
+  }))
+  await page.goto('/system/users')
+
+  await page.locator('input[type=file]').setInputFiles({ name: '新同事.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: Buffer.from('x') })
+  const result = page.getByRole('dialog', { name: '导入完成', exact: true })
+  await expect(result.locator('dl')).toContainText('总记录3新增2更新0跳过1')
+  await expect(result).toContainText('「初始密码」页是新账号的初始密码，只给这一次')
+  await expect(result).toContainText('「跳过的行」页写了每行跳过的原因')
+  await result.getByRole('button', { name: '完成', exact: true }).click()
+  await expect(result).toHaveCount(0)
+
+  await page.locator('.filter-bar .el-form-item').filter({ hasText: '状态' }).locator('.el-select').click()
+  await page.getByRole('option', { name: '禁用' }).click()
+  await page.getByRole('button', { name: '查询', exact: true }).click()
+  await page.getByRole('button', { name: '下载 Excel' }).click()
+  await expect.poll(() => exports.length).toBe(1)
+  expect(exports[0].searchParams.getAll('status')).toEqual(['disabled'])
+})
+
 test('users: detail drawer shows effective permissions and their source roles', async ({ page }) => {
   await page.route('**/api/v1/system/roles?**', route => respond(route, { items: [role('1')], total: 1 }))
   await page.route('**/api/v1/system/users?**', route => respond(route, {

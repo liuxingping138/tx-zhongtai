@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import JSONResponse, Response
+from platform_common.http_utils import IMPORT_FILE_OPENAPI, read_import_upload
 from platform_common.responses import paginate
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import UserCreateRequest, UserRolesReplaceRequest, UserUpdateRequest
 from app.api.security import CurrentPrincipal, classified, require_permission
-from app.application import user_admin
-from app.application.authorization import assert_allowed
+from app.application import user_admin, user_excel
+from app.application.authorization import assert_allowed, is_allowed
+from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
 from app.core.http_utils import success_json
 from app.domain.enums import SecurityClass
@@ -46,6 +48,63 @@ async def list_users(
         sort=sort,
     )
     return success_json(paginate(items, total, page=page, page_size=page_size).model_dump())
+
+
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+@router.get("/users/export")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def export_users(
+    _principal: CurrentPrincipal = Depends(require_permission("system.users", "export")),
+    session: AsyncSession = Depends(get_db_session),
+    username: list[str] | None = Query(default=None),
+    status: list[str] | None = Query(default=None),
+    role_id: list[str] | None = Query(default=None),
+    keyword: list[str] | None = Query(default=None),
+) -> Response:
+    # 与列表同一套筛选，所见即所导。
+    payload = await user_excel.export_users(
+        session, username=username, status=status, role_id=role_id, keyword=keyword
+    )
+    return Response(
+        content=payload,
+        media_type=XLSX,
+        headers={"Content-Disposition": 'attachment; filename="users.xlsx"'},
+    )
+
+
+@router.post("/users/import", openapi_extra=IMPORT_FILE_OPENAPI)
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def import_users(
+    request: Request,
+    principal: CurrentPrincipal = Depends(require_permission("system.users", "import")),
+    session: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    """批量建账号。结果文件里有每个人的初始密码，只返回这一次。"""
+
+    content = await read_import_upload(request, settings.import_max_bytes)
+    # 角色列是否生效与页面建人同一门槛：分配角色即授权，需要「权限分配」可管理。
+    can_grant = await is_allowed(session, principal.user, "system.permissions", "grant")
+    outcome = await user_excel.import_users(session, principal.user, content, can_grant=can_grant)
+    payload = await user_excel.build_import_result(outcome)
+    return Response(
+        content=payload,
+        media_type=XLSX,
+        headers={
+            "Content-Disposition": 'attachment; filename="users-import.xlsx"',
+            "X-Import-Rejected": "0",
+            "X-Import-Inserted": str(len(outcome.created)),
+            "X-Import-Updated": "0",
+            "X-Import-Skipped": str(len(outcome.skipped)),
+            "X-Import-Total": str(outcome.total),
+            "Access-Control-Expose-Headers": (
+                "X-Import-Rejected, X-Import-Inserted, X-Import-Updated, "
+                "X-Import-Skipped, X-Import-Total, Content-Disposition"
+            ),
+        },
+    )
 
 
 @router.get("/users/{user_id}")

@@ -185,6 +185,7 @@ async def create_user(
     role_ids: list[uuid.UUID] | None = None,
     phone: str = "",
     email: str = "",
+    password_hash: str | None = None,
 ) -> tuple[dict[str, object], str | None]:
     """建账号时可一并分配角色，同一事务内完成，避免「建了人忘了给角色」登录后一片空白。
 
@@ -198,13 +199,16 @@ async def create_user(
     phone = normalize_phone(phone)
     email = normalize_email(email)
     temporary: str | None = None
-    raw_password = password
-    if raw_password is None:
-        temporary = generate_temporary_password()
-        raw_password = temporary
-    policy_error = validate_password_policy(raw_password)
-    if policy_error:
-        raise ApiError(policy_error)
+    if password_hash is None:
+        # 批量导入由调用方先在线程池里算好哈希；单个建账号在这里现算。
+        raw_password = password
+        if raw_password is None:
+            temporary = generate_temporary_password()
+            raw_password = temporary
+        policy_error = validate_password_policy(raw_password)
+        if policy_error:
+            raise ApiError(policy_error)
+        password_hash = hash_password(raw_password)
     now = utcnow()
     user = User(
         id=uuid.uuid4(),
@@ -212,7 +216,7 @@ async def create_user(
         display_name=display,
         phone=phone,
         email=email,
-        password_hash=hash_password(raw_password),
+        password_hash=password_hash,
         status=UserStatus.ACTIVE,
         must_change_password=True,
         version=1,

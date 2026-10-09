@@ -36,7 +36,7 @@ const hasReport = computed(() => Boolean(result.value?.report_blob || result.val
         v-if="hasReport"
         class="import-result__report"
       >
-        校验报告已自动下载，也可以点击下方按钮再次下载。
+        {{ result.report_note || '校验报告已自动下载，也可以点击下方按钮再次下载。' }}
       </p>
     </template>
     <template #footer>

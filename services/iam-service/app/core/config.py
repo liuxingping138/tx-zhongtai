@@ -55,6 +55,11 @@ class Settings(BaseServiceSettings):
     # 内部调用方：service_name -> 共享密钥。生产环境字段名含 secret，会被演示值检查拦截。
     internal_caller_secrets: dict[str, str] = Field(default_factory=dict)
 
+    # 用户 Excel：账号数量远小于业务表，上限按「一次导入一个部门」设定。
+    import_max_bytes: int = 5 * 1024 * 1024
+    user_import_max_rows: int = 500
+    export_max_rows: int = 100_000
+
     audit_ingest_url: str = "http://audit-service:8002"
     audit_ingest_secret: str = ""
     worker_batch_size: int = 20

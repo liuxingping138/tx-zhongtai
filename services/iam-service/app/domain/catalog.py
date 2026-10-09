@@ -81,6 +81,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ActionSpec("system.users", "reset_password", GrantLevel.FULL),
     ActionSpec("system.users", "revoke_sessions", GrantLevel.FULL),
     ActionSpec("system.users", "delete", GrantLevel.FULL),
+    ActionSpec("system.users", "export", GrantLevel.EXPORT),
+    ActionSpec("system.users", "import", GrantLevel.FULL),
     ActionSpec("system.roles", "list", GrantLevel.READ),
     ActionSpec("system.roles", "read", GrantLevel.READ),
     ActionSpec("system.roles", "create", GrantLevel.FULL),

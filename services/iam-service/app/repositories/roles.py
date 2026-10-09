@@ -61,6 +61,13 @@ async def list_roles(
     return list(result.scalars().all())
 
 
+async def list_all_roles(session: AsyncSession) -> list[Role]:
+    """导入按角色名称匹配时用，角色总数很少，一次全取。"""
+
+    result = await session.execute(select(Role))
+    return list(result.scalars().all())
+
+
 async def get_roles_by_ids(session: AsyncSession, role_ids: list[uuid.UUID]) -> list[Role]:
     if not role_ids:
         return []

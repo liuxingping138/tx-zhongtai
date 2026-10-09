@@ -7,6 +7,7 @@ import {
   NO_ROLE,
   createUser,
   deleteUser,
+  importUsers,
   listAllRoles,
   listUsers,
   resetUserPassword,
@@ -14,6 +15,9 @@ import {
   updateUser,
 } from '@/api/system'
 import { errorMessage } from '@/api/errors'
+import { downloadFile } from '@/api/download'
+import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
+import { Download, Upload } from '@element-plus/icons-vue'
 import type { RoleItem, UserItem } from '@/api/types'
 import { formatTime } from '@/utils/time'
 import RolePicker from './RolePicker.vue'
@@ -22,7 +26,7 @@ import { useAuthStore } from '@/stores/auth'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import FilterBar from '@/components/FilterBar.vue'
-import { useListQuery } from '@/composables/useListQuery'
+import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import ListEmpty from '@/components/ListEmpty.vue'
 import { useFieldValidation } from '@/composables/useFieldValidation'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
@@ -35,6 +39,7 @@ const canGrant = computed(() => auth.canFull('system.permissions'))
 const canReadRoles = computed(() => auth.canRead('system.roles'))
 const canAudit = computed(() => auth.canRead('system.audit'))
 const canEditUsers = computed(() => auth.canFull('system.users'))
+const canExportUsers = computed(() => auth.canExport('system.users'))
 /** 还没分配角色的账号数，给能分配角色的人一个入口直接筛出来。 */
 const pendingCount = ref(0)
 const loading = ref(false)
@@ -139,6 +144,39 @@ async function loadPendingCount() {
 function showPending() {
   query.role_id = [NO_ROLE]
   onSearch()
+}
+
+const IMPORT_HINT = '表头：用户名、显示名、电话、邮箱、角色。只新增不覆盖，已存在的用户名会跳过；'
+  + '结果文件里有每个人的初始密码，只下载这一次。'
+
+async function onImport(file: File) {
+  try {
+    const result = await runExcelImport(file, (onProgress) => importUsers(file, onProgress))
+    result.report_note = result.inserted
+      ? '结果文件已自动下载：「初始密码」页是新账号的初始密码，只给这一次，请发给本人，首次登录必须修改。'
+        + (result.skipped ? '「跳过的行」页写了每行跳过的原因。' : '')
+      : '结果文件已自动下载，「跳过的行」页写了每行跳过的原因。'
+    reportImportResult(result, '用户导入结果.xlsx')
+    if (result.inserted) await load()
+  } catch (error) {
+    ElMessage.error(errorMessage(error, '导入失败'))
+  }
+  return false
+}
+
+const exporting = ref(false)
+
+async function onExport() {
+  if (exporting.value) return
+  exporting.value = true
+  try {
+    await downloadFile('/system/users/export', '用户.xlsx', filtersForExport(listQuery.applied))
+    ElMessage.success('下载已开始，请查看浏览器下载列表')
+  } catch (error) {
+    ElMessage.error(errorMessage(error, '下载失败，请重试'))
+  } finally {
+    exporting.value = false
+  }
 }
 
 function onResetFilters() {
@@ -337,16 +375,47 @@ onMounted(() => {
           </el-button>
         </div>
       </template>
-      <template
-        v-if="canEditUsers"
-        #actions
-      >
+      <template #actions>
         <el-button
+          v-if="canEditUsers"
           type="primary"
           @click="openCreate"
         >
           新增用户
         </el-button>
+        <el-upload
+          v-if="canEditUsers"
+          :show-file-list="false"
+          accept=".xlsx"
+          :before-upload="onImport"
+        >
+          <el-tooltip
+            :content="IMPORT_HINT"
+            placement="bottom"
+          >
+            <el-button
+              :icon="Upload"
+              :disabled="importUi.visible"
+            >
+              上传 Excel
+            </el-button>
+          </el-tooltip>
+        </el-upload>
+        <el-tooltip
+          :content="canExportUsers ? '按当前已生效的筛选条件导出，不含密码。导出的文件改好后可以直接当导入模板。' : '你的角色没有导出权限，如需下载 Excel 请联系管理员开通「导出」。'"
+          placement="bottom"
+        >
+          <span>
+            <el-button
+              :icon="Download"
+              :loading="exporting"
+              :disabled="!canExportUsers"
+              @click="onExport"
+            >
+              下载 Excel
+            </el-button>
+          </span>
+        </el-tooltip>
       </template>
       <template #filters>
         <FilterBar

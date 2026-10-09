@@ -47,6 +47,13 @@ async def resolve_authorization(
     return decision, levels.get(resource_code)
 
 
+async def is_allowed(session: AsyncSession, user: User, resource_code: str, action_code: str) -> bool:
+    """只判断不拒绝，也不记越权审计：用于「有权限就多做一步」的场景，没有权限是正常分支。"""
+
+    decision, _level = await resolve_authorization(session, user, resource_code, action_code)
+    return decision == AuthzDecision.ALLOW
+
+
 async def assert_allowed(session: AsyncSession, user: User, resource_code: str, action_code: str) -> str | None:
     decision, level = await resolve_authorization(session, user, resource_code, action_code)
     if decision == AuthzDecision.ALLOW:

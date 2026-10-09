@@ -47,7 +47,7 @@
 | 详情子页 | `router/routes.ts` 的 `meta.menuPath` | 不在菜单里的详情页填所属列表路径，面包屑与侧栏高亮自动挂到列表下 |
 | 筛选项候选值 | `frontend/src/composables/useFilterOptions.ts` | `v-bind="filters.bind('字段')"`；候选少的字段整份预发、本地过滤，候选多的自动转服务端搜索。不要再自己 reactive 一份 options |
 | URL查询恢复 | `frontend/src/composables/useListQuery.ts` | query、load、私有字段列表 |
-| 上传状态与结果 | `frontend/src/components/ExcelImportProgress.vue`、`ExcelImportResult.vue` | 原模块导入接口及结果，不复制业务去重逻辑 |
+| 上传状态与结果 | `frontend/src/components/ExcelImportProgress.vue`、`ExcelImportResult.vue` | 原模块导入接口及结果，不复制业务去重逻辑；结果文件不是校验报告时（如用户导入的初始密码）用 `report_note` 换掉默认说明 |
 | 导航/基础色/字体/间距 | `frontend/src/layouts/AdminLayout.vue`、`layouts/workspace.ts`、`frontend/src/styles/theme.css`、`styles/workspace.css` | 路由、发布配置、资源权限；账号放侧栏底部，不复制导航或另建色板 |
 | 登录品牌区/认证 | `frontend/src/views/LoginView.vue`、`frontend/src/assets/login/customer-hub.webp` | 左侧客群关系图；爬虫监测独立无连线；800px及以下隐藏图并保留简介；右侧沿用认证表单 |
 
