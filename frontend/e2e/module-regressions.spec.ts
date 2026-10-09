@@ -93,15 +93,17 @@ test('roles: old permission links open the role detail page', async ({ page }) =
   await expect(page).toHaveURL(/\/system\/roles$/)
 })
 
-test('roles: list is a normal filterable table and opens the detail page', async ({ page }) => {
-  await page.route('**/api/v1/system/roles?**', route => {
-    const names = new URL(route.request().url()).searchParams.getAll('name')
-    const items = [{ ...role('1'), name: '政策数据管理员', description: '负责政策表', member_count: 3, grant_counts: { read: 1, export: 1, full: 2 } },
-      { ...role('2'), name: '码表管理员', member_count: 0, grant_counts: { read: 0, export: 0, full: 0 } }]
-    const filtered = names.length ? items.filter(item => names.some(name => item.name.includes(name))) : items
-    return respond(route, { items: filtered, total: filtered.length })
+test('roles: left list selects the first role, switches the right side, and guards unsaved grants', async ({ page }) => {
+  const items = [{ ...role('1'), name: '政策数据管理员', description: '负责政策表', member_count: 3 },
+    { ...role('2'), name: '码表管理员', member_count: 0 }]
+  await page.route('**/api/v1/system/roles?**', route => respond(route, { items, total: items.length }))
+  await page.route('**/api/v1/system/roles/*', route => {
+    const id = new URL(route.request().url()).pathname.split('/').pop() ?? '1'
+    const item = items.find(entry => entry.id === id) ?? items[0]
+    return respond(route, { ...item, grant_counts: { read: 0, export: 0, full: 0 } })
   })
-  await mockRoleDetail(page, (id, route) => respond(route, { role: role(id), grants: [] }))
+  await page.route('**/api/v1/system/resources', route => respond(route, { tree: sourcesTree }))
+  await page.route('**/api/v1/system/roles/*/grants', route => respond(route, { role: role('1'), grants: [] }))
   await page.route('**/api/v1/auth/permissions', route => respond(route, {
     resources: resources.map(code => ({ code, level: 'FULL' })),
     menus: [
@@ -110,27 +112,30 @@ test('roles: list is a normal filterable table and opens the detail page', async
     ],
   }))
   await page.goto('/system/roles')
-  const policyRow = page.getByRole('row').filter({ hasText: '政策数据管理员' })
-  await expect(policyRow).toContainText('4 个模块 · 其中 2 个可管理')
-  await expect(policyRow).toContainText('3 人')
-  await expect(page.getByRole('row').filter({ hasText: '码表管理员' })).toContainText('还没有设置权限')
+  // 没指定角色时默认打开第一个，右边不留空白。
+  await expect(page).toHaveURL(/\/system\/roles\/1$/)
+  const nav = page.getByRole('complementary', { name: '角色列表' })
+  await expect(nav.getByRole('button', { name: /政策数据管理员/ })).toHaveAttribute('aria-current', 'true')
+  await expect(nav.getByRole('button', { name: /政策数据管理员/ })).toContainText('3 人')
+  await expect(nav.getByRole('button', { name: /政策数据管理员/ })).toContainText('负责政策表')
+  await expect(page.getByRole('heading', { name: '政策数据管理员', exact: true })).toBeVisible()
 
-  const field = page.locator('.filter-bar .el-form-item').filter({ hasText: '角色名称' })
-  await field.locator('.el-select__wrapper').click()
-  await field.locator('input').first().fill('码表')
-  await page.keyboard.press('Enter')
-  await page.keyboard.press('Escape')
-  const filtered = page.waitForRequest(r => r.url().includes('/system/roles?') && r.url().includes('name='))
-  await page.getByRole('button', { name: '查询', exact: true }).click()
-  expect(new URL((await filtered).url()).searchParams.getAll('name')).toEqual(['码表'])
-  await expect(page.getByRole('row').filter({ hasText: '政策数据管理员' })).toHaveCount(0)
+  // 有未保存的权限修改时切换角色先确认；选「继续编辑」留在原角色。
+  await page.getByRole('checkbox', { name: '信源管理 查看', exact: true }).check()
+  await nav.getByRole('button', { name: /码表管理员/ }).click()
+  const discard = page.locator('.el-message-box')
+  await expect(discard).toContainText('切换后将丢弃')
+  await discard.getByRole('button', { name: '继续编辑' }).click()
+  await expect(discard).toHaveCount(0)
+  await expect(page).toHaveURL(/\/system\/roles\/1$/)
 
-  await page.getByRole('row').filter({ hasText: '码表管理员' }).getByRole('button', { name: '权限设置' }).click()
+  await page.getByRole('button', { name: '放弃修改', exact: true }).click()
+  await nav.getByRole('button', { name: /码表管理员/ }).click()
   await expect(page).toHaveURL(/\/system\/roles\/2$/)
-  // 详情不单独占菜单。顶栏停在系统管理，左侧高亮角色与权限，标题是角色名。
-  await expect(page.getByRole('navigation', { name: '一级模块' }).getByRole('link', { name: '系统管理', exact: true })).toHaveAttribute('aria-current', 'true')
+  await expect(page.getByRole('heading', { name: '码表管理员', exact: true })).toBeVisible()
+  await expect(nav.getByRole('button', { name: /码表管理员/ })).toHaveAttribute('aria-current', 'true')
+  // 侧栏仍高亮「角色与权限」。
   await expect(page.getByRole('navigation', { name: '子模块导航' }).getByRole('link', { name: '角色与权限', exact: true })).toHaveAttribute('aria-current', 'page')
-  await expect(page.getByRole('heading', { name: '角色2', exact: true })).toBeVisible()
 })
 
 test('roles: permission matrix cascades columns; saving locks the row and confirms in plain Chinese', async ({ page }) => {
@@ -330,6 +335,20 @@ test('users: pending-role bar filters to accounts without roles', async ({ page 
   await page.getByRole('button', { name: '只看这些' }).click()
   await expect.poll(() => requests.some(url =>
     url.searchParams.get('page_size') !== '1' && url.searchParams.getAll('role_id').includes('none'))).toBe(true)
+})
+
+test('users: keyword searches name/phone/email on 查询 and stays out of the address bar', async ({ page }) => {
+  const requests: URL[] = []
+  await page.route('**/api/v1/system/roles?**', route => respond(route, { items: [], total: 0 }))
+  await page.route('**/api/v1/system/users?**', route => {
+    requests.push(new URL(route.request().url()))
+    return respond(route, { items: [], total: 0 })
+  })
+  await page.goto('/system/users')
+  await page.getByPlaceholder('用户名、姓名、电话或邮箱').fill('13800131001')
+  await page.getByRole('button', { name: '查询', exact: true }).click()
+  await expect.poll(() => requests.some(url => url.searchParams.get('keyword') === '13800131001')).toBe(true)
+  expect(page.url()).not.toContain('13800131001')
 })
 
 test('users: excel import shows initial-password note; export carries the applied filters', async ({ page }) => {

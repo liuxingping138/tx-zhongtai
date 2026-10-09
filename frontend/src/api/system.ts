@@ -18,6 +18,8 @@ export function listUsers(params: {
   page?: number
   page_size?: number
   username?: FilterParam
+  /** 同时匹配用户名、显示名、电话、邮箱。 */
+  keyword?: FilterParam
   status?: FilterParam
   /** 角色 id，或 NO_ROLE 表示待分配角色。 */
   role_id?: FilterParam

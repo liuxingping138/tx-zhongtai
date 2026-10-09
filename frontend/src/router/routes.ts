@@ -39,15 +39,16 @@ export const routes: RouteRecordRaw[] = [
       {
         path: 'system/roles',
         name: 'system-roles',
-        component: () => import('@/modules/system/roles/RoleList.vue'),
+        component: () => import('@/modules/system/roles/RoleWorkspace.vue'),
         meta: { title: '角色与权限', resource: 'system.roles' },
       },
       {
+        // 和列表是同一个页面：左边列表，右边地址里这个角色的详情。
         path: 'system/roles/:roleId',
         name: 'system-role-detail',
-        component: () => import('@/modules/system/roles/RoleDetail.vue'),
-        // menuPath：详情页不在菜单里，顶部与侧栏高亮挂到角色列表下。
-        meta: { title: '角色详情', resource: 'system.roles', menuPath: '/system/roles' },
+        component: () => import('@/modules/system/roles/RoleWorkspace.vue'),
+        // menuPath：侧栏高亮挂到「角色与权限」下。
+        meta: { title: '角色与权限', resource: 'system.roles', menuPath: '/system/roles' },
       },
       {
         // 权限配置已并入「角色与权限」，旧书签和链接自动带着角色跳过去。

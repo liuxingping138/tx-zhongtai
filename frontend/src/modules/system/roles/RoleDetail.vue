@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, CopyDocument, EditPen } from '@element-plus/icons-vue'
+import { CopyDocument, EditPen } from '@element-plus/icons-vue'
 
 import { getRole, listResourceTree, listRoleGrants, replaceRoleGrants, updateRole } from '@/api/system'
 import { errorMessage, isApiError } from '@/api/errors'
@@ -15,9 +15,10 @@ import RoleFormDialog, { type RoleFormMode } from './RoleFormDialog.vue'
 import RoleMembersPanel from './RoleMembersPanel.vue'
 
 /**
- * 角色详情：上面是角色信息，下面分「权限设置」「成员」两个页签（参考 Strapi 的角色编辑页）。
- * 从列表进来只处理这一个角色，不必在左右两栏之间找当前选中的是谁。
+ * 角色详情：嵌在「角色与权限」右侧。上面是角色信息，下面分「权限设置」「成员」两个页签。
+ * 名称、状态、成员数、权限变化后通知左侧列表刷新。
  */
+const emit = defineEmits<{ changed: [] }>()
 const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
@@ -129,6 +130,7 @@ async function onSave() {
     })
     role.value = { ...role.value, ...result.role }
     original.value = { ...selected.value }
+    emit('changed')
     ElMessage.success(justCreated.value ? '权限已保存。下一步：到「成员」把角色分给同事' : '权限已保存，成员下次操作时即生效')
     void refreshRole()
   } catch (error) {
@@ -150,11 +152,13 @@ function openForm(mode: RoleFormMode) {
 
 async function onFormSaved(saved: RoleItem, mode: RoleFormMode) {
   if (mode === 'copy') {
+    emit('changed')
     void router.push({ name: 'system-role-detail', params: { roleId: saved.id }, query: { created: 'copy' } })
     return
   }
   role.value = { ...role.value, ...saved }
   ElMessage.success('角色信息已保存')
+  emit('changed')
   void refreshRole()
 }
 
@@ -173,6 +177,7 @@ async function onToggleStatus() {
   try {
     const saved = await updateRole(current.id, { status: next, version: current.version })
     role.value = { ...current, ...saved }
+    emit('changed')
     ElMessage.success(next === 'disabled' ? '角色已停用' : '角色已启用')
   } catch (error) {
     ElMessage.error(errorMessage(error, '操作失败'))
@@ -181,10 +186,7 @@ async function onToggleStatus() {
 
 function onMembersChanged(count: number) {
   if (role.value) role.value = { ...role.value, member_count: count }
-}
-
-function backToList() {
-  void router.push({ name: 'system-roles' })
+  emit('changed')
 }
 
 watch(tab, (value) => {
@@ -222,15 +224,6 @@ onMounted(() => {
     v-loading="loading && !role"
     class="role-detail"
   >
-    <el-button
-      link
-      :icon="ArrowLeft"
-      class="role-detail__back"
-      @click="backToList"
-    >
-      返回角色列表
-    </el-button>
-
     <div
       v-if="loadError && !role"
       class="role-detail__error"
@@ -251,7 +244,7 @@ onMounted(() => {
       <header class="role-head">
         <div class="role-head__main">
           <div class="role-head__title">
-            <h1>{{ role.name }}</h1>
+            <h2>{{ role.name }}</h2>
             <el-tag
               v-if="role.is_builtin"
               size="small"
@@ -374,7 +367,7 @@ onMounted(() => {
                 v-if="!readonly || saving"
                 class="role-body__guide"
               >
-                按菜单授权。每一项选一档：<strong>查看</strong>能进入，<strong>导出</strong>还能下载，<strong>管理</strong>还能新增、编辑、导入。选中的档已经包含它左边的能力。「开通整组」会把这一组开到各自最高档。最下面的「分配角色」不是菜单。
+                按菜单勾选。分组行的勾选框一次开通整列；最下面的「特殊能力」不是菜单。
               </p>
               <PermissionTable
                 v-model="selected"
@@ -434,7 +427,6 @@ onMounted(() => {
 
 <style scoped>
 .role-detail { display: flex; flex-direction: column; gap: 16px; min-height: 300px; }
-.role-detail__back { align-self: flex-start; margin-left: -4px; color: var(--zt-ink-700); }
 .role-detail__error {
   display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 48px 24px; text-align: center;
   border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: var(--zt-panel); color: var(--zt-ink-700);
@@ -449,7 +441,7 @@ onMounted(() => {
 }
 .role-head__main { min-width: 0; }
 .role-head__title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.role-head__title h1 { margin: 0; font-size: var(--zt-title-size); font-weight: 650; line-height: 1.4; color: var(--zt-ink-900); }
+.role-head__title h2 { margin: 0; font-size: 20px; font-weight: 650; line-height: 1.4; color: var(--zt-ink-900); }
 .role-head__desc { margin: 6px 0 0; max-width: 72ch; font-size: 14px; line-height: 1.6; color: var(--zt-ink-700); }
 .role-head__desc.is-empty { color: var(--zt-ink-500); }
 .role-head__stats { display: flex; flex-wrap: wrap; gap: 8px 32px; margin: 14px 0 0; }

@@ -23,7 +23,6 @@ import { formatTime } from '@/utils/time'
 import RolePicker from './RolePicker.vue'
 import UserDetailDrawer from './UserDetailDrawer.vue'
 import { useAuthStore } from '@/stores/auth'
-import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
@@ -48,13 +47,12 @@ const resultFiltered = ref(false)
 const users = ref<UserItem[]>([])
 const total = ref(0)
 const query = reactive({
-  username: [] as string[],
+  keyword: '',
   role_id: [] as string[],
   status: [] as string[],
   page: 1,
   page_size: 20,
 })
-const usernameOptions = ref<string[]>([])
 
 const createVisible = ref(false)
 const createForm = reactive({ username: '', display_name: '', phone: '', email: '', password: '' })
@@ -98,7 +96,8 @@ async function loadRoles() {
   }
 }
 
-const listQuery = useListQuery(query, load, ['username'])
+// 关键词可能是电话、邮箱，属于个人信息，不写进地址栏。
+const listQuery = useListQuery(query, load, ['keyword'])
 
 let loadSequence = 0
 
@@ -116,7 +115,7 @@ async function load() {
     const page = await listUsers({
       page: params.page,
       page_size: params.page_size,
-      username: params.username || undefined,
+      keyword: params.keyword.trim() || undefined,
       role_id: params.role_id || undefined,
       status: params.status || undefined,
     })
@@ -180,7 +179,7 @@ async function onExport() {
 }
 
 function onResetFilters() {
-  query.username = []
+  query.keyword = ''
   query.role_id = []
   query.status = []
   onSearch()
@@ -326,18 +325,8 @@ function clearOnce() {
   onceUsername.value = ''
 }
 
-async function loadUsernameOptions() {
-  try {
-    const page = await listUsers({ page: 1, page_size: 100 })
-    usernameOptions.value = page.items.map((item) => item.username)
-  } catch {
-    /* 选项失败不影响列表 */
-  }
-}
-
 onMounted(() => {
   void load()
-  void loadUsernameOptions()
   void loadRoles()
 })
 </script>
@@ -424,11 +413,12 @@ onMounted(() => {
           @search="onSearch"
           @reset="onResetFilters"
         >
-          <el-form-item label="用户名">
-            <FilterSelect
-              v-model="query.username"
-              :options="usernameOptions"
-              placeholder="输入或选择用户名"
+          <el-form-item label="关键词">
+            <el-input
+              v-model="query.keyword"
+              clearable
+              placeholder="用户名、姓名、电话或邮箱"
+              @keyup.enter="onSearch"
             />
           </el-form-item>
           <el-form-item
@@ -492,7 +482,7 @@ onMounted(() => {
         </template>
         <el-table-column
           label="用户名"
-          width="180"
+          width="130"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -539,7 +529,7 @@ onMounted(() => {
         </el-table-column>
         <el-table-column
           label="角色"
-          min-width="280"
+          min-width="200"
         >
           <template #default="{ row }">
             <div
@@ -589,7 +579,7 @@ onMounted(() => {
         </el-table-column>
         <el-table-column
           label="启用"
-          width="100"
+          width="120"
         >
           <template #default="{ row }">
             <template v-if="canEditUsers && row.id !== auth.user?.id">
@@ -896,6 +886,8 @@ onMounted(() => {
 .role-cell :deep(.el-tag) {
   height: auto;
   max-width: 100%;
+  padding: 1px 8px;
+  line-height: 20px;
   white-space: normal;
 }
 
@@ -905,6 +897,7 @@ onMounted(() => {
 
 .status-text {
   margin-left: 6px;
+  white-space: nowrap;
   font-size: 12px;
   color: var(--zt-ink-500);
 }
