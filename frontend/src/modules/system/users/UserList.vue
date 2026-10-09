@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 
 import {
+  NO_ROLE,
   createUser,
   deleteUser,
   listAllRoles,
@@ -12,7 +13,7 @@ import {
   revokeUserSessions,
   updateUser,
 } from '@/api/system'
-import { errorMessage, isApiError } from '@/api/errors'
+import { errorMessage } from '@/api/errors'
 import type { RoleItem, UserItem } from '@/api/types'
 import { formatTime } from '@/utils/time'
 import RolePicker from './RolePicker.vue'
@@ -33,6 +34,9 @@ const router = useRouter()
 const canGrant = computed(() => auth.canFull('system.permissions'))
 const canReadRoles = computed(() => auth.canRead('system.roles'))
 const canAudit = computed(() => auth.canRead('system.audit'))
+const canEditUsers = computed(() => auth.canFull('system.users'))
+/** 还没分配角色的账号数，给能分配角色的人一个入口直接筛出来。 */
+const pendingCount = ref(0)
 const loading = ref(false)
 const loadError = ref('')
 const resultFiltered = ref(false)
@@ -48,15 +52,10 @@ const query = reactive({
 const usernameOptions = ref<string[]>([])
 
 const createVisible = ref(false)
-const createForm = reactive({ username: '', display_name: '', password: '' })
+const createForm = reactive({ username: '', display_name: '', phone: '', email: '', password: '' })
 const createRoles = ref<string[]>([])
 const creating = ref(false)
 const allRoles = ref<RoleItem[]>([])
-
-const editVisible = ref(false)
-const editingSaving = ref(false)
-const editing = ref<UserItem | null>(null)
-const editForm = reactive({ display_name: '' })
 
 const detailVisible = ref(false)
 const detailUserId = ref<string | null>(null)
@@ -66,17 +65,20 @@ const oncePassword = ref('')
 const onceUsername = ref('')
 
 const createFormRef = ref<FormInstance>()
-const editFormRef = ref<FormInstance>()
 const createValidation = useFieldValidation(createForm, createFormRef)
-const editValidation = useFieldValidation(editForm, editFormRef)
 
 const createGuard = useUnsavedForm(createVisible, () => ({ ...createForm, roles: createRoles.value }), creating)
-const editGuard = useUnsavedForm(editVisible, () => editForm, editingSaving)
 
-function openCreate() {
+function resetCreateForm() {
   createForm.username = ''
   createForm.display_name = ''
+  createForm.phone = ''
+  createForm.email = ''
   createForm.password = ''
+}
+
+function openCreate() {
+  resetCreateForm()
   createRoles.value = []
   createVisible.value = true
   if (canGrant.value) void loadRoles()
@@ -104,6 +106,7 @@ async function load() {
   const filtered = Object.entries(params).some(([key, value]) =>
     !['page', 'page_size'].includes(key) && (Array.isArray(value) ? value.length > 0 : Boolean(value)),
   )
+  void loadPendingCount()
   try {
     const page = await listUsers({
       page: params.page,
@@ -124,6 +127,20 @@ async function load() {
   }
 }
 
+async function loadPendingCount() {
+  if (!canGrant.value) return
+  try {
+    pendingCount.value = (await listUsers({ page: 1, page_size: 1, role_id: NO_ROLE })).total
+  } catch {
+    /* 只是提示入口，失败不影响列表 */
+  }
+}
+
+function showPending() {
+  query.role_id = [NO_ROLE]
+  onSearch()
+}
+
 function onResetFilters() {
   query.username = []
   query.role_id = []
@@ -138,14 +155,12 @@ function onSearch() {
 }
 
 const createError = ref('')
-const editError = ref('')
 watch(createVisible, (open) => { if (open) { createError.value = ''; void createValidation.validate({}) } })
-watch(editVisible, (open) => { if (open) { editError.value = ''; void editValidation.validate({}) } })
 
 async function confirmCreateWithoutRole(): Promise<boolean> {
   try {
     await ElMessageBox.confirm(
-      '没有角色的用户登录后看不到任何业务模块。可以先创建，之后在「查看」里补分配。',
+      '没有角色的用户登录后看不到任何业务模块。可以先创建，之后在「待分配角色」里补。',
       '还没有选择角色',
       { type: 'warning', confirmButtonText: '仍然创建', cancelButtonText: '返回选择', distinguishCancelAndClose: true },
     )
@@ -166,14 +181,14 @@ async function onCreate() {
     const result = await createUser({
       username: createForm.username,
       display_name: createForm.display_name,
+      phone: createForm.phone.trim() || undefined,
+      email: createForm.email.trim() || undefined,
       password: createForm.password || undefined,
       role_ids: canGrant.value && createRoles.value.length ? createRoles.value : undefined,
     })
     createVisible.value = false
-    createForm.username = ''
-    createForm.display_name = ''
-    createForm.password = ''
-    ElMessage.success(createRoles.value.length || !canGrant.value ? '用户已创建' : '用户已创建，还没有分配角色')
+    resetCreateForm()
+    ElMessage.success(createRoles.value.length ? '用户已创建' : '用户已创建，已放进「待分配角色」')
     createRoles.value = []
     if (result.temporary_password) {
       oncePassword.value = result.temporary_password
@@ -185,39 +200,6 @@ async function onCreate() {
     createError.value = errorMessage(error, '创建失败，请检查后重试')
   } finally {
     creating.value = false
-  }
-}
-
-function openEdit(user: UserItem) {
-  editing.value = user
-  editForm.display_name = user.display_name
-  editVisible.value = true
-}
-
-async function onEdit() {
-  if (editingSaving.value) return
-  editError.value = ''
-  if (!await editValidation.validate({ display_name: editForm.display_name.trim() ? '' : '请填写显示名' })) return
-  if (!editing.value) {
-    return
-  }
-  editingSaving.value = true
-  try {
-    const userId = editing.value.id
-    await updateUser(userId, { display_name: editForm.display_name, version: editing.value.version })
-    ElMessage.success('已保存')
-    editVisible.value = false
-    await load()
-    if (userId === auth.user?.id) await auth.loadProfile()
-  } catch (error) {
-    if (isApiError(error) && error.status === 409) {
-      editError.value = '数据已被他人修改，请保留需要的内容，关闭后重新打开最新记录再编辑。'
-      await load()
-    } else {
-      editError.value = errorMessage(error, '保存失败，请检查后重试')
-    }
-  } finally {
-    editingSaving.value = false
   }
 }
 
@@ -293,6 +275,7 @@ function onDetailChanged(user: UserItem) {
   const index = users.value.findIndex(item => item.id === user.id)
   if (index >= 0) users.value[index] = { ...users.value[index], ...user }
   void loadRoles()
+  void loadPendingCount()
   if (user.id === auth.user?.id) void auth.loadProfile()
 }
 
@@ -325,7 +308,7 @@ onMounted(() => {
   <div>
     <ListPage
       title="用户管理"
-      hint="开通账号并分配角色。账号能用哪些模块由角色决定，点「查看」可看到每个人的实际权限。"
+      hint="账号能用哪些模块由角色决定。点「编辑」可以改信息、调角色，并看到这个人的实际权限。"
       :total="total"
       :page="query.page"
       :page-size="query.page_size"
@@ -337,7 +320,25 @@ onMounted(() => {
       @change="load"
     >
       <template
-        v-if="auth.canFull('system.users')"
+        v-if="canGrant && pendingCount > 0"
+        #summary
+      >
+        <div
+          class="pending-bar"
+          role="status"
+        >
+          <span>有 <strong>{{ pendingCount }}</strong> 个账号还没分配角色，登录后看不到任何模块。</span>
+          <el-button
+            link
+            type="primary"
+            @click="showPending"
+          >
+            只看这些
+          </el-button>
+        </div>
+      </template>
+      <template
+        v-if="canEditUsers"
         #actions
       >
         <el-button
@@ -374,6 +375,10 @@ onMounted(() => {
               filterable
               placeholder="全部"
             >
+              <el-option
+                label="待分配角色"
+                :value="NO_ROLE"
+              />
               <el-option
                 v-for="role in allRoles"
                 :key="role.id"
@@ -439,6 +444,31 @@ onMounted(() => {
           show-overflow-tooltip
         />
         <el-table-column
+          label="电话"
+          width="130"
+        >
+          <template #default="{ row }">
+            <span v-if="row.phone">{{ row.phone }}</span>
+            <span
+              v-else
+              class="muted"
+            >—</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="邮箱"
+          min-width="200"
+          show-overflow-tooltip
+        >
+          <template #default="{ row }">
+            <span v-if="row.email">{{ row.email }}</span>
+            <span
+              v-else
+              class="muted"
+            >—</span>
+          </template>
+        </el-table-column>
+        <el-table-column
           label="角色"
           min-width="280"
         >
@@ -478,18 +508,31 @@ onMounted(() => {
                 </el-tag>
               </el-tooltip>
             </div>
-            <span
+            <el-tag
               v-else
-              class="role-cell__none"
-            >未分配角色</span>
+              size="small"
+              type="warning"
+              effect="plain"
+            >
+              待分配角色
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column
-          label="状态"
+          label="启用"
           width="100"
         >
           <template #default="{ row }">
+            <template v-if="canEditUsers && row.id !== auth.user?.id">
+              <el-switch
+                :model-value="row.status === 'active'"
+                :aria-label="`${row.username} 的账号启用`"
+                @change="toggleStatus(row)"
+              />
+              <span class="status-text">{{ row.status === 'active' ? '启用' : '禁用' }}</span>
+            </template>
             <el-tag
+              v-else
               :type="row.status === 'active' ? 'success' : 'warning'"
               size="small"
             >
@@ -526,7 +569,7 @@ onMounted(() => {
         </el-table-column>
         <el-table-column
           label="操作"
-          width="220"
+          width="150"
           fixed="right"
         >
           <template #default="{ row }">
@@ -535,26 +578,10 @@ onMounted(() => {
               type="primary"
               @click="openDetail(row)"
             >
-              查看
-            </el-button>
-            <el-button
-              v-if="auth.canFull('system.users')"
-              link
-              type="primary"
-              @click="openEdit(row)"
-            >
-              编辑
-            </el-button>
-            <el-button
-              v-if="auth.canFull('system.users')"
-              link
-              type="primary"
-              @click="toggleStatus(row)"
-            >
-              {{ row.status === 'active' ? '禁用' : '启用' }}
+              {{ canGrant && !(row.roles ?? []).length ? '分配角色' : canEditUsers || canGrant ? '编辑' : '查看' }}
             </el-button>
             <el-dropdown
-              v-if="auth.canFull('system.users') || canAudit"
+              v-if="canEditUsers || canAudit"
               class="ops-more"
               trigger="click"
             >
@@ -672,6 +699,24 @@ onMounted(() => {
               </p>
             </template>
           </el-form-item>
+          <el-form-item label="电话">
+            <el-input
+              v-model="createForm.phone"
+              autocomplete="off"
+              inputmode="tel"
+              maxlength="32"
+              placeholder="11 位手机号，选填"
+            />
+          </el-form-item>
+          <el-form-item label="邮箱">
+            <el-input
+              v-model="createForm.email"
+              autocomplete="off"
+              inputmode="email"
+              maxlength="254"
+              placeholder="选填"
+            />
+          </el-form-item>
         </div>
         <el-form-item label="初始密码">
           <el-input
@@ -696,15 +741,23 @@ onMounted(() => {
               :disabled="creating"
             />
             <p class="field-hint">
-              角色决定能用哪些模块，可多选；不确定时也可以先不选，之后在「查看」里补。
+              角色决定能用哪些模块，可多选；不确定时也可以先不选，之后在「待分配角色」里补。
             </p>
           </template>
-          <p
-            v-else
-            class="create-roles__note"
-          >
-            分配角色只有超级管理员可以操作。创建后请联系超级管理员分配，否则该用户登录后看不到任何业务模块。
-          </p>
+          <template v-else>
+            <p
+              class="create-roles__note"
+              role="note"
+            >
+              分配角色需要超级管理员。可以先建账号，它会出现在「待分配角色」里，超级管理员在那里能直接看到并分配。
+            </p>
+            <RolePicker
+              v-if="allRoles.length"
+              :model-value="[]"
+              :roles="allRoles"
+              disabled
+            />
+          </template>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -729,78 +782,11 @@ onMounted(() => {
       </template>
     </el-dialog>
 
-    <el-dialog
-      v-model="editVisible"
-      class="editor-overlay"
-      :before-close="editGuard.beforeClose"
-      :close-on-click-modal="!editingSaving"
-      :close-on-press-escape="!editingSaving"
-      :show-close="!editingSaving"
-      title="编辑用户"
-      width="420px"
-    >
-      <el-form
-        ref="editFormRef"
-        novalidate
-        :disabled="editingSaving"
-        label-position="top"
-      >
-        <el-alert
-          v-if="editError"
-          :title="editError"
-          type="error"
-          show-icon
-          :closable="false"
-          class="form-submit-error"
-        />
-        <el-form-item
-          :error="editValidation.errors.display_name"
-          label="显示名"
-          required
-        >
-          <el-input
-            v-model="editForm.display_name"
-            :aria-invalid="Boolean(editValidation.errors.display_name)"
-            aria-describedby="editForm-display_name-error"
-          />
-          <template #error>
-            <p
-              v-if="editValidation.errors.display_name"
-              id="editForm-display_name-error"
-              class="field-error"
-              role="alert"
-            >
-              {{ editValidation.errors.display_name }}
-            </p>
-          </template>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <span
-          v-if="editGuard.dirty.value"
-          class="editor-dirty"
-          role="status"
-        >有未保存的修改</span>
-        <el-button
-          :disabled="editingSaving"
-          @click="editGuard.close"
-        >
-          取消
-        </el-button>
-        <el-button
-          type="primary"
-          :loading="editingSaving"
-          @click="onEdit"
-        >
-          保存
-        </el-button>
-      </template>
-    </el-dialog>
-
     <UserDetailDrawer
       v-model="detailVisible"
       :user-id="detailUserId"
       :roles="allRoles"
+      :can-edit="canEditUsers"
       :can-grant="canGrant"
       :can-audit="canAudit"
       @changed="onDetailChanged"
@@ -848,9 +834,24 @@ onMounted(() => {
   white-space: normal;
 }
 
-.role-cell__none {
-  color: #b26a00;
+.status-text {
+  margin-left: 6px;
   font-size: 12px;
+  color: var(--zt-ink-500);
+}
+
+.pending-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 0 0 12px;
+  padding: 8px 16px;
+  border: 1px solid #f3dcb2;
+  border-radius: var(--zt-radius);
+  background: #fff8ec;
+  color: #8a5a00;
+  font-size: 13px;
 }
 
 .create-roles :deep(.el-form-item__content) {

@@ -10,11 +10,15 @@ import type {
   UserItem,
 } from './types'
 
+/** 角色筛选里的特殊值：还没分配任何角色的账号。 */
+export const NO_ROLE = 'none'
+
 export function listUsers(params: {
   page?: number
   page_size?: number
   username?: FilterParam
   status?: FilterParam
+  /** 角色 id，或 NO_ROLE 表示待分配角色。 */
   role_id?: FilterParam
   sort?: string
 }): Promise<Page<UserItem>> {
@@ -28,6 +32,8 @@ export function getUser(userId: string): Promise<UserItem> {
 export function createUser(payload: {
   username: string
   display_name: string
+  phone?: string
+  email?: string
   password?: string
   role_ids?: string[]
 }): Promise<{ user: UserItem; temporary_password?: string }> {
@@ -36,7 +42,7 @@ export function createUser(payload: {
 
 export function updateUser(
   userId: string,
-  payload: { display_name?: string; status?: 'active' | 'disabled'; version: number },
+  payload: { display_name?: string; phone?: string; email?: string; status?: 'active' | 'disabled'; version: number },
 ): Promise<UserItem> {
   return request(http.patch(`/system/users/${userId}`, payload))
 }

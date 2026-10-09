@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Document } from '@element-plus/icons-vue'
 
-import { getUser, getUserPermissions, replaceUserRoles } from '@/api/system'
+import { getUser, getUserPermissions, replaceUserRoles, updateUser } from '@/api/system'
 import { errorMessage, isApiError } from '@/api/errors'
 import type { EffectivePermission, RoleItem, UserItem } from '@/api/types'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
@@ -12,7 +12,17 @@ import { LEVEL_TEXT } from '@/permissions/catalog'
 import { formatTime } from '@/utils/time'
 import RolePicker from './RolePicker.vue'
 
-const props = defineProps<{ userId: string | null; roles: RoleItem[]; canGrant: boolean; canAudit: boolean }>()
+/**
+ * 用户的查看与编辑合在一个抽屉里：基本信息、联系方式、角色一次改完一次保存。
+ * 角色能不能改由 canGrant 决定（只有超级管理员），看不到勾选框时会说明原因。
+ */
+const props = defineProps<{
+  userId: string | null
+  roles: RoleItem[]
+  canEdit: boolean
+  canGrant: boolean
+  canAudit: boolean
+}>()
 const visible = defineModel<boolean>({ required: true })
 const emit = defineEmits<{ changed: [user: UserItem] }>()
 const router = useRouter()
@@ -23,18 +33,24 @@ const accountActive = ref(true)
 const loading = ref(false)
 const loadError = ref('')
 const permissionError = ref('')
+const saveError = ref('')
+const form = reactive({ display_name: '', phone: '', email: '' })
 const draft = ref<string[]>([])
 const saving = ref(false)
-/** 默认只显示当前角色，点「调整角色」才展开选择列表，免得把实际权限挤到下面。 */
-const editingRoles = ref(false)
 
-const guard = useUnsavedForm(visible, () => [...draft.value].sort(), saving)
 const STATUS_TEXT: Record<string, string> = { active: '启用', disabled: '禁用' }
+const guard = useUnsavedForm(visible, () => ({ ...form, roles: [...draft.value].sort() }), saving)
 
 const rolesDirty = computed(() => {
   const saved = [...(user.value?.role_ids ?? [])].sort()
   return JSON.stringify(saved) !== JSON.stringify([...draft.value].sort())
 })
+const infoDirty = computed(() => !!user.value && (
+  form.display_name.trim() !== user.value.display_name
+  || form.phone.trim() !== (user.value.phone ?? '')
+  || form.email.trim() !== (user.value.email ?? '')
+))
+const editable = computed(() => props.canEdit || props.canGrant)
 
 /** 按分组整理，分组内保持后端的模块顺序。 */
 const grouped = computed(() => {
@@ -48,6 +64,14 @@ const grouped = computed(() => {
 
 const effectiveCount = computed(() => permissions.value.filter(item => item.level !== 'NONE').length)
 
+function fill(detail: UserItem) {
+  user.value = detail
+  form.display_name = detail.display_name
+  form.phone = detail.phone ?? ''
+  form.email = detail.email ?? ''
+  draft.value = [...(detail.role_ids ?? [])]
+}
+
 let sequence = 0
 async function load() {
   if (!props.userId) return
@@ -58,8 +82,7 @@ async function load() {
   try {
     const detail = await getUser(props.userId)
     if (current !== sequence) return
-    user.value = detail
-    draft.value = [...(detail.role_ids ?? [])]
+    fill(detail)
     guard.markSaved()
   } catch (error) {
     if (current !== sequence) return
@@ -67,11 +90,17 @@ async function load() {
     loading.value = false
     return
   }
+  await loadPermissions(current)
+}
+
+async function loadPermissions(current = sequence) {
+  if (!props.userId) return
   try {
     const result = await getUserPermissions(props.userId)
     if (current !== sequence) return
     permissions.value = result.items
     accountActive.value = result.account_active
+    permissionError.value = ''
   } catch (error) {
     if (current === sequence) permissionError.value = errorMessage(error, '暂时无法计算实际权限')
   } finally {
@@ -84,36 +113,51 @@ watch(() => [visible.value, props.userId] as const, ([open]) => {
     user.value = null
     permissions.value = []
     draft.value = []
-    editingRoles.value = false
+    saveError.value = ''
     void load()
   }
 }, { flush: 'sync' })
 
-async function onSaveRoles() {
-  if (!user.value || saving.value || !rolesDirty.value) return
+/** 先存基本信息再存角色：两个接口各自带版本号，第二次用第一次返回的新版本。 */
+async function onSave() {
+  if (!user.value || saving.value) return
+  saveError.value = ''
+  if (!form.display_name.trim()) {
+    saveError.value = '请填写显示名'
+    return
+  }
+  if (!infoDirty.value && !rolesDirty.value) {
+    visible.value = false
+    return
+  }
   saving.value = true
   try {
-    const saved = await replaceUserRoles(user.value.id, { role_ids: draft.value, version: user.value.version })
-    user.value = { ...user.value, ...saved }
-    draft.value = [...(saved.role_ids ?? draft.value)]
+    let current = user.value
+    if (infoDirty.value && props.canEdit) {
+      const saved = await updateUser(current.id, {
+        display_name: form.display_name.trim(),
+        phone: form.phone.trim(),
+        email: form.email.trim(),
+        version: current.version,
+      })
+      current = { ...current, ...saved }
+    }
+    if (rolesDirty.value && props.canGrant) {
+      const saved = await replaceUserRoles(current.id, { role_ids: draft.value, version: current.version })
+      current = { ...current, ...saved }
+    }
+    fill(current)
     guard.markSaved()
-    editingRoles.value = false
-    ElMessage.success('角色已更新，对方下次操作时即生效')
-    emit('changed', user.value)
-    const result = await getUserPermissions(user.value.id)
-    permissions.value = result.items
+    emit('changed', current)
+    ElMessage.success('已保存，对方下次操作时即生效')
+    visible.value = false
   } catch (error) {
-    ElMessage.error(isApiError(error) && error.status === 409
-      ? '该用户刚被其他人修改过，请关闭后重新打开再调整。'
-      : errorMessage(error, '保存角色失败'))
+    saveError.value = isApiError(error) && error.status === 409
+      ? '该用户刚被其他人修改过，请关闭后重新打开再改。'
+      : errorMessage(error, '保存失败，请检查后重试')
   } finally {
     saving.value = false
   }
-}
-
-function onCancelRoles() {
-  draft.value = [...(user.value?.role_ids ?? [])]
-  editingRoles.value = false
 }
 
 function sourceText(item: EffectivePermission): string {
@@ -158,65 +202,92 @@ async function openAudit() {
         </el-button>
       </div>
       <template v-else-if="user">
+        <el-alert
+          v-if="saveError"
+          :title="saveError"
+          type="error"
+          show-icon
+          :closable="false"
+        />
         <section class="block">
-          <h3>基本信息</h3>
-          <el-descriptions
-            :column="2"
-            border
-            size="small"
-          >
-            <el-descriptions-item label="用户名">
-              {{ user.username }}
-            </el-descriptions-item>
-            <el-descriptions-item label="显示名">
-              {{ user.display_name }}
-            </el-descriptions-item>
-            <el-descriptions-item label="账号状态">
+          <div class="block__head">
+            <h3>基本信息</h3>
+            <span class="block__hint">
               <el-tag
                 size="small"
                 :type="user.status === 'active' ? 'success' : 'warning'"
               >
                 {{ STATUS_TEXT[user.status] ?? user.status }}
               </el-tag>
-            </el-descriptions-item>
-            <el-descriptions-item label="须改密">
-              {{ user.must_change_password ? '是，下次登录需修改密码' : '否' }}
-            </el-descriptions-item>
-            <el-descriptions-item
-              label="创建时间"
-              :span="2"
+              创建于 {{ formatTime(user.created_at) }}{{ user.must_change_password ? '，下次登录需改密' : '' }}
+            </span>
+          </div>
+          <el-form
+            label-position="top"
+            :disabled="saving || !canEdit"
+            class="info-grid"
+            @submit.prevent
+          >
+            <el-form-item label="用户名">
+              <el-input
+                :model-value="user.username"
+                disabled
+              />
+            </el-form-item>
+            <el-form-item
+              label="显示名"
+              required
             >
-              {{ formatTime(user.created_at) }}
-            </el-descriptions-item>
-          </el-descriptions>
+              <el-input
+                v-model="form.display_name"
+                autocomplete="off"
+                maxlength="128"
+              />
+            </el-form-item>
+            <el-form-item label="电话">
+              <el-input
+                v-model="form.phone"
+                autocomplete="off"
+                inputmode="tel"
+                maxlength="32"
+                placeholder="11 位手机号，选填"
+              />
+            </el-form-item>
+            <el-form-item label="邮箱">
+              <el-input
+                v-model="form.email"
+                autocomplete="off"
+                inputmode="email"
+                maxlength="254"
+                placeholder="选填"
+              />
+            </el-form-item>
+          </el-form>
         </section>
 
         <section class="block">
           <div class="block__head">
             <h3>角色</h3>
-            <el-button
-              v-if="canGrant && !editingRoles"
-              link
-              type="primary"
-              @click="editingRoles = true"
-            >
-              调整角色
-            </el-button>
             <span
-              v-else-if="!canGrant"
+              v-if="!canGrant"
               class="block__hint"
-            >只有超级管理员可以调整角色</span>
-            <span
-              v-else
-              class="block__hint"
-            >勾选后点「保存角色」生效</span>
+            >分配角色需要超级管理员</span>
           </div>
-          <RolePicker
-            v-if="canGrant && editingRoles"
-            v-model="draft"
-            :roles="roles"
-            :disabled="saving"
-          />
+          <template v-if="canGrant">
+            <RolePicker
+              v-model="draft"
+              :roles="roles"
+              :disabled="saving"
+            />
+            <el-alert
+              v-if="!draft.length"
+              type="warning"
+              :closable="false"
+              show-icon
+              class="block__notice block__notice--after"
+              title="没有角色的账号登录后看不到任何业务模块。"
+            />
+          </template>
           <div
             v-else
             class="role-tags"
@@ -229,38 +300,13 @@ async function openAudit() {
             >
               {{ role.name }}{{ role.status === 'active' ? '' : '（已停用）' }}
             </el-tag>
-            <span
+            <el-tag
               v-if="!(user.roles ?? []).length"
-              class="muted"
-            >未分配角色</span>
-          </div>
-          <div
-            v-if="canGrant && editingRoles"
-            class="role-actions"
-          >
-            <el-alert
-              v-if="!draft.length"
               type="warning"
-              :closable="false"
-              show-icon
-              title="取消全部角色后，该用户登录将看不到任何业务模块。"
-            />
-            <div class="role-actions__buttons">
-              <el-button
-                :disabled="saving"
-                @click="onCancelRoles"
-              >
-                取消
-              </el-button>
-              <el-button
-                type="primary"
-                :loading="saving"
-                :disabled="!rolesDirty"
-                @click="onSaveRoles"
-              >
-                保存角色
-              </el-button>
-            </div>
+              effect="plain"
+            >
+              待分配角色
+            </el-tag>
           </div>
         </section>
 
@@ -282,7 +328,7 @@ async function openAudit() {
             type="info"
             :closable="false"
             show-icon
-            title="下面是已保存的权限，保存角色后会刷新。"
+            title="下面是已保存的权限，保存后按新角色生效。"
             class="block__notice"
           />
           <p
@@ -335,11 +381,24 @@ async function openAudit() {
       >
         查看操作记录
       </el-button>
+      <span
+        v-if="guard.dirty.value"
+        class="editor-dirty"
+        role="status"
+      >有未保存的修改</span>
       <el-button
         :disabled="saving"
         @click="guard.close"
       >
-        关闭
+        {{ editable ? '取消' : '关闭' }}
+      </el-button>
+      <el-button
+        v-if="editable && user"
+        type="primary"
+        :loading="saving"
+        @click="onSave"
+      >
+        保存
       </el-button>
     </template>
   </el-drawer>
@@ -356,9 +415,10 @@ async function openAudit() {
 .block__hint { font-size: 12px; color: var(--zt-ink-500); }
 .block__notice { margin-bottom: 12px; }
 .role-tags { display: flex; flex-wrap: wrap; gap: 8px; }
-.role-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
-.role-actions__buttons { display: flex; justify-content: flex-end; gap: 8px; }
-.role-actions__buttons .el-button + .el-button { margin-left: 0; }
+.block__notice--after { margin: 12px 0 0; }
+.info-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; }
+.info-grid :deep(.el-form-item) { margin-bottom: 12px; }
+.block__hint .el-tag { margin-right: 6px; }
 .muted { color: var(--zt-ink-500); font-size: 13px; }
 .perm-group + .perm-group { margin-top: 12px; }
 .perm-group h4 { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--zt-ink-500); }

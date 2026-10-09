@@ -155,17 +155,6 @@ onMounted(() => {
       @retry="load"
       @change="load"
     >
-      <template #summary>
-        <ol
-          class="role-steps"
-          aria-label="操作步骤"
-        >
-          <li><strong>1</strong><span>新增角色，写清它负责什么</span></li>
-          <li><strong>2</strong><span>点「权限设置」，勾选它能用的模块</span></li>
-          <li><strong>3</strong><span>点「成员」，把角色分给同事</span></li>
-        </ol>
-      </template>
-
       <template
         v-if="canManageRoles"
         #actions
@@ -373,15 +362,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.role-steps {
-  display: flex; flex-wrap: wrap; gap: 8px 32px; margin: 0 0 12px; padding: 12px 16px; list-style: none;
-  border: 1px solid #d6e6fb; border-radius: var(--zt-radius); background: #f5f9ff;
-}
-.role-steps li { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--zt-ink-700); }
-.role-steps strong {
-  display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%;
-  background: var(--zt-blue-600); color: #fff; font-size: 12px; font-weight: 600;
-}
 .role-name { display: inline-flex; align-items: center; gap: 6px; }
 .role-name__link { font-weight: 500; }
 .muted { color: var(--zt-ink-500); }

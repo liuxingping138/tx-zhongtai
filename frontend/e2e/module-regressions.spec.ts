@@ -24,7 +24,8 @@ for (const module of ['policy/sources', 'codebook/policy-types', 'system/users']
     let calls = 0
     await page.route(`**/api/v1/${module}?**`, async route => {
       const url = new URL(route.request().url())
-      if (url.searchParams.get('page_size') === '100') return respond(route, { items: [], total: 0 })
+      // 下拉选项（100 条）和「待分配角色」计数（1 条）不是列表查询，直接放过。
+      if (['100', '1'].includes(url.searchParams.get('page_size') ?? '')) return respond(route, { items: [], total: 0 })
       calls += 1
       if (calls === 1) { first = route; return }
       return respond(route, { items: [{ id: 'new', site_name: '最新结果', type_name: '最新结果', username: '最新结果' }], total: 1 })
@@ -132,7 +133,7 @@ test('roles: list is a normal filterable table and opens the detail page', async
   await expect(page.getByRole('heading', { name: '角色2', exact: true })).toBeVisible()
 })
 
-test('roles: permission menu picks one level; saving locks the row and confirms in plain Chinese', async ({ page }) => {
+test('roles: permission matrix cascades columns; saving locks the row and confirms in plain Chinese', async ({ page }) => {
   let saving: Route | undefined
   let payload: { grants: { resource_code: string; level: string }[] } | undefined
   await mockRoleDetail(page, (id, route) => {
@@ -141,14 +142,19 @@ test('roles: permission menu picks one level; saving locks the row and confirms 
   })
   await page.goto('/system/roles/1')
   const sources = page.locator('.perm-table__row').filter({ hasText: '信源管理' })
-  // 选「管理」即包含查看和导出，保存档位是 FULL。
-  await sources.getByRole('radio', { name: '管理', exact: true }).click()
-  await expect(sources.getByRole('radio', { name: '管理', exact: true })).toBeChecked()
+  const cell = (name: string) => sources.getByRole('checkbox', { name: `信源管理 ${name}`, exact: true })
+  // 勾「管理」自动带上查看和导出，保存档位是 FULL。
+  await cell('管理').check()
+  await expect(cell('查看')).toBeChecked()
+  await expect(cell('导出')).toBeChecked()
   await expect(page.getByText('有 1 项修改还没保存')).toBeVisible()
-  await sources.getByRole('radio', { name: '不开放', exact: true }).click()
+  // 取消「查看」整行清空，等于没改。
+  await cell('查看').uncheck()
+  await expect(cell('管理')).not.toBeChecked()
   await expect(page.getByText('有 1 项修改还没保存')).toHaveCount(0)
-  await sources.getByRole('radio', { name: '导出', exact: true }).click()
-  await expect(sources.getByRole('radio', { name: '导出', exact: true })).toBeChecked()
+  await cell('导出').check()
+  await expect(cell('查看')).toBeChecked()
+  await expect(cell('管理')).not.toBeChecked()
 
   await page.getByRole('button', { name: '保存权限', exact: true }).click()
   const confirm = page.locator('.el-message-box')
@@ -156,17 +162,17 @@ test('roles: permission menu picks one level; saving locks the row and confirms 
   await confirm.getByRole('button', { name: '保存', exact: true }).click()
   await expect.poll(() => saving !== undefined).toBe(true)
   expect(payload?.grants.find(item => item.resource_code === 'policy.sources')?.level).toBe('EXPORT')
-  await expect(sources.getByRole('radio', { name: '导出', exact: true })).toBeDisabled()
+  await expect(cell('导出')).toBeDisabled()
   await respond(saving!, { role: { ...role('1'), version: 2 }, grants: [{ resource_code: 'policy.sources', level: 'EXPORT' }] })
   await expect(page.getByText('有 1 项修改还没保存')).toHaveCount(0)
 })
 
-test('roles: modules only show the levels they actually have; unreleased modules are hidden', async ({ page }) => {
+test('roles: modules only show the columns they actually have; unreleased modules are hidden', async ({ page }) => {
   await mockRoleDetail(page, (id, route) => respond(route, { role: role(id), grants: [] }))
   await page.goto('/system/roles/1')
   const crawler = page.locator('.perm-table__row').filter({ hasText: '爬虫监测 v2' })
-  await expect(crawler.getByRole('radio')).toHaveCount(3)
-  await expect(crawler.getByRole('radio', { name: '管理', exact: true })).toHaveCount(0)
+  await expect(crawler.getByRole('checkbox')).toHaveCount(2)
+  await expect(crawler.getByRole('checkbox', { name: '爬虫监测 v2 管理', exact: true })).toHaveCount(0)
   await expect(crawler).toContainText('只读模块，没有新增或修改操作')
   await expect(page.locator('.perm-table__row').filter({ hasText: '信源管理' })).toContainText('管理包含：新增')
   await expect(page.getByText('客户', { exact: true })).toHaveCount(0)
@@ -177,12 +183,16 @@ test('roles: modules only show the levels they actually have; unreleased modules
   await page.getByLabel('搜索菜单').fill('')
   await expect(page.getByText('信源管理', { exact: true })).toBeVisible()
 
-  await page.locator('.perm-group__head').getByText('开通整组', { exact: true }).click()
-  await expect(page.locator('.perm-table__row').filter({ hasText: '信源管理' }).getByRole('radio', { name: '管理', exact: true })).toBeChecked()
-  await expect(crawler.getByRole('radio', { name: '导出', exact: true })).toBeChecked()
-  await expect(page.locator('.perm-group__head .el-checkbox')).toHaveClass(/is-checked/)
+  // 整组一列：勾「导出」两个菜单都到导出；再点一次全部取消导出、回到仅查看。
+  const groupExport = page.getByRole('checkbox', { name: '政策整组导出', exact: true })
+  await groupExport.check()
+  await expect(page.getByRole('checkbox', { name: '信源管理 导出', exact: true })).toBeChecked()
+  await expect(crawler.getByRole('checkbox', { name: '爬虫监测 v2 导出', exact: true })).toBeChecked()
+  await expect(page.getByRole('checkbox', { name: '政策整组查看', exact: true })).toBeChecked()
   await expect(page.getByText('有 2 项修改还没保存')).toBeVisible()
-  await page.locator('.perm-group__head').getByText('开通整组', { exact: true }).click()
+  await groupExport.uncheck()
+  await expect(crawler.getByRole('checkbox', { name: '爬虫监测 v2 查看', exact: true })).toBeChecked()
+  await page.getByRole('checkbox', { name: '政策整组查看', exact: true }).uncheck()
   await expect(page.getByText('有 2 项修改还没保存')).toHaveCount(0)
 })
 
@@ -273,7 +283,9 @@ test('users: create a user with roles in one step, and list shows roles', async 
   })
   await page.goto('/system/users')
   await expect(page.getByRole('row').filter({ hasText: 'zhangsan' })).toContainText('政策数据管理员')
-  await expect(page.getByRole('row').filter({ hasText: 'wangwu' })).toContainText('未分配角色')
+  await expect(page.getByRole('row').filter({ hasText: 'wangwu' })).toContainText('待分配角色')
+  // 没有角色的人，操作直接是「分配角色」。
+  await expect(page.getByRole('row').filter({ hasText: 'wangwu' }).getByRole('button', { name: '分配角色' })).toBeVisible()
 
   await page.getByRole('button', { name: '新增用户' }).click()
   const dialog = page.getByRole('dialog', { name: '新增用户' })
@@ -296,6 +308,28 @@ test('users: create a user with roles in one step, and list shows roles', async 
   await expect(dialog.getByText('负责政策表维护')).toBeVisible()
   await dialog.getByRole('button', { name: '创建', exact: true }).click()
   await expect.poll(() => created?.role_ids).toEqual(['1'])
+})
+
+test('users: pending-role bar filters to accounts without roles', async ({ page }) => {
+  const requests: URL[] = []
+  await page.route('**/api/v1/system/roles?**', route => respond(route, { items: [role('1')], total: 1 }))
+  await page.route('**/api/v1/system/users?**', route => {
+    const url = new URL(route.request().url())
+    requests.push(url)
+    if (url.searchParams.get('page_size') === '1') return respond(route, { items: [], total: 3 })
+    return respond(route, {
+      items: [{ id: 'u1', username: 'zhaolei', display_name: '赵磊', phone: '13588123307', email: 'zl@example.com', status: 'active', version: 1, created_at: '2026-09-23T08:00:00+00:00', roles: [] }],
+      total: 1,
+    })
+  })
+  await page.goto('/system/users')
+  const row = page.getByRole('row').filter({ hasText: 'zhaolei' })
+  await expect(row).toContainText('13588123307')
+  await expect(row).toContainText('zl@example.com')
+  await expect(page.getByText('有 3 个账号还没分配角色')).toBeVisible()
+  await page.getByRole('button', { name: '只看这些' }).click()
+  await expect.poll(() => requests.some(url =>
+    url.searchParams.get('page_size') !== '1' && url.searchParams.getAll('role_id').includes('none'))).toBe(true)
 })
 
 test('users: detail drawer shows effective permissions and their source roles', async ({ page }) => {

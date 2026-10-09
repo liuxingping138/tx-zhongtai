@@ -64,6 +64,9 @@ export interface UserItem {
   id: string
   username: string
   display_name: string
+  /** 联系方式只做记录展示，没填时是空串。 */
+  phone: string
+  email: string
   status: 'active' | 'disabled'
   must_change_password: boolean
   version: number
