@@ -81,5 +81,3 @@ async def list_all(session: AsyncSession) -> list[AreaCode]:
     """全表读取（不筛选）。导出请用 list_filtered，两者排序一致。"""
 
     return await list_filtered(session, {})
-
-

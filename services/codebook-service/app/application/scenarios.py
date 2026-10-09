@@ -57,10 +57,10 @@ async def list_scenarios(
     items, total = await repo.list_items(
         session,
         filters={
-        "industry_scenario_code": industry_scenario_code,
-        "industry_l1": industry_l1,
-        "scenario_tag": scenario_tag,
-        "customer_group_name": customer_group_name,
+            "industry_scenario_code": industry_scenario_code,
+            "industry_l1": industry_l1,
+            "scenario_tag": scenario_tag,
+            "customer_group_name": customer_group_name,
         },
         page=page,
         page_size=page_size,
@@ -75,9 +75,7 @@ async def list_scenario_options(session: AsyncSession) -> dict[str, Any]:
 async def search_scenario_options(session: AsyncSession, *, field: str, keyword: str | None) -> list[str]:
     """按关键词搜索筛选项候选值，供前端下拉的服务端搜索使用。"""
 
-    return await options_repo.search(
-        session, options_repo.SCENARIO_OPTION_COLUMNS, field=field, keyword=keyword
-    )
+    return await options_repo.search(session, options_repo.SCENARIO_OPTION_COLUMNS, field=field, keyword=keyword)
 
 
 async def get_scenario(session: AsyncSession, item_id: uuid.UUID) -> dict[str, Any]:

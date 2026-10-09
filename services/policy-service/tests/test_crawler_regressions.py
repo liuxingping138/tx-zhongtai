@@ -91,9 +91,7 @@ async def test_filter_options_match_shared_frontend_contract(monkeypatch: pytest
     monkeypatch.setattr(repo, "distinct_values", AsyncMock(return_value=["验收网站"]))
     result = await service.list_options(None)
     assert result["options"]["site_name"]["items"] == ["验收网站"]
-    assert result["options"]["health_status"] == {
-        "items": ["正常", "观察", "断爬", "从未出数"], "truncated": False
-    }
+    assert result["options"]["health_status"] == {"items": ["正常", "观察", "断爬", "从未出数"], "truncated": False}
 
 
 def test_source_grouping_uses_name_even_when_codes_vary(monkeypatch: pytest.MonkeyPatch) -> None:

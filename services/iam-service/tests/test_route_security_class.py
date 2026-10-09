@@ -48,7 +48,6 @@ def test_only_auth_routes_skip_rbac() -> None:
         for route in app.routes
         if isinstance(route, APIRoute) and route.path.startswith("/api/")
         for method in sorted(route.methods or [])
-        if f"{method} {route.path}" not in mapping
-        and not route.path.startswith(NON_RBAC_PREFIXES)
+        if f"{method} {route.path}" not in mapping and not route.path.startswith(NON_RBAC_PREFIXES)
     ]
     assert unguarded == [], f"以下对外路由既不是认证接口也没挂权限依赖: {unguarded}"

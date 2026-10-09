@@ -66,7 +66,6 @@ class AreaCodeWrite(BaseModel):
     county_name_short: str = ""
 
 
-
 class PolicyTypePatch(PolicyTypeWrite):
     """仅修改显式提供的字段；空字符串表示显式清空。"""
 

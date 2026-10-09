@@ -57,5 +57,3 @@ AREA_CODE_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec("city_name_short", "城市简称"),
     ColumnSpec("county_name_short", "区县简称"),
 )
-
-

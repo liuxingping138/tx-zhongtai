@@ -182,9 +182,7 @@ class CrawlerDailyStat(Base):
 
     collect_date: Mapped[date] = mapped_column(Date, primary_key=True, index=True, comment="采集日期")
     site_key: Mapped[str] = mapped_column(String(128), primary_key=True, comment="网站内部关联键")
-    site_code: Mapped[str] = mapped_column(
-        String(100), nullable=False, default="", index=True, comment="网站编码"
-    )
+    site_code: Mapped[str] = mapped_column(String(100), nullable=False, default="", index=True, comment="网站编码")
     site_name: Mapped[str] = mapped_column(String(255), nullable=False, default="", comment="网站名称")
     # 页面按省份筛的是健康快照表，这张事实表没有按省份查的场景，不建索引。
     province_name: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="省份名称")
@@ -338,9 +336,7 @@ class OutboxEvent(Base):
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="创建时间")
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True, comment="失败原因")
-    lease_until: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True, comment="租约截止时间"
-    )
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, comment="租约截止时间")
 
 
 SOURCE_FIELDS = (

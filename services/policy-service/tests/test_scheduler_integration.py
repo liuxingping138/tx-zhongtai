@@ -166,8 +166,12 @@ async def test_timeout_closes_running_sync_batch(monkeypatch):
     async with SessionLocal() as session:
         session.add(
             CrawlerV2SyncRun(
-                id=claim[2], mode="incremental", started_at=datetime.now(UTC),
-                status="running", days_synced=0, site_rows=0,
+                id=claim[2],
+                mode="incremental",
+                started_at=datetime.now(UTC),
+                status="running",
+                days_synced=0,
+                site_rows=0,
             )
         )
         await session.commit()

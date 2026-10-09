@@ -38,7 +38,5 @@ class BaseServiceSettings(BaseSettings):
                 continue
             value = getattr(self, field_name, None)
             if isinstance(value, str) and any(marker in value.lower() for marker in _DEMO_SECRET_MARKERS):
-                raise ValueError(
-                    f"生产环境配置项 {field_name} 看起来是示例/演示密钥，拒绝启动，请配置真实密钥。"
-                )
+                raise ValueError(f"生产环境配置项 {field_name} 看起来是示例/演示密钥，拒绝启动，请配置真实密钥。")
         return self

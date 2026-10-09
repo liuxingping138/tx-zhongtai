@@ -57,7 +57,7 @@ def test_sparse_rows_rejected_before_iteration() -> None:
         parse_sheet(buffer.getvalue(), _COLUMNS)
 
 
-@pytest.mark.parametrize("dimension", [b'<dimension ref="A1:A1"/>', b''])
+@pytest.mark.parametrize("dimension", [b'<dimension ref="A1:A1"/>', b""])
 def test_false_or_missing_dimension_cannot_hide_wide_cells(dimension: bytes) -> None:
     import re
     import zipfile
@@ -73,7 +73,7 @@ def test_false_or_missing_dimension_cannot_hide_wide_cells(dimension: bytes) -> 
         for name in src.namelist():
             data = src.read(name)
             if name == "xl/worksheets/sheet1.xml":
-                data = re.sub(rb'<dimension[^>]*/>', dimension, data)
+                data = re.sub(rb"<dimension[^>]*/>", dimension, data)
             dst.writestr(name, data)
     with pytest.raises(ApiError, match="列数超过上限"):
         parse_sheet(fixed.getvalue(), _COLUMNS)

@@ -14,9 +14,7 @@ from typing import Any
 
 import pytest
 
-os.environ.setdefault(
-    "CODEBOOK_DATABASE_URL", "postgresql+asyncpg://codebook_app:test@localhost:5432/codebook_db"
-)
+os.environ.setdefault("CODEBOOK_DATABASE_URL", "postgresql+asyncpg://codebook_app:test@localhost:5432/codebook_db")
 
 from platform_common.errors import VersionConflictError
 
@@ -67,9 +65,7 @@ def test_get_by_id_stays_lock_free_for_reads(repo: Any) -> None:
 
 
 @pytest.mark.parametrize(("module", "update_fn"), UPDATES, ids=[item[1] for item in UPDATES])
-def test_update_reads_through_the_row_lock(
-    monkeypatch: pytest.MonkeyPatch, module: Any, update_fn: str
-) -> None:
+def test_update_reads_through_the_row_lock(monkeypatch: pytest.MonkeyPatch, module: Any, update_fn: str) -> None:
     """更新必须走 get_for_update，并且仍然按 version 拦下过期提交。"""
 
     class _Row:

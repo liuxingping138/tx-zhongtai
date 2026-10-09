@@ -72,11 +72,7 @@ async def list_items(
     conds = _conditions(filters)
     total = int(await session.scalar(select(func.count()).select_from(PolicyType).where(*conds)) or 0)
     result = await session.execute(
-        select(PolicyType)
-        .where(*conds)
-        .order_by(*_ORDER_BY)
-        .offset((page - 1) * page_size)
-        .limit(page_size)
+        select(PolicyType).where(*conds).order_by(*_ORDER_BY).offset((page - 1) * page_size).limit(page_size)
     )
     return list(result.scalars()), total
 
@@ -90,9 +86,7 @@ async def count_filtered(session: AsyncSession, filters: Filters) -> int:
 async def list_filtered(session: AsyncSession, filters: Filters) -> list[PolicyType]:
     """导出用：与列表一致的筛选和排序，不分页。"""
 
-    result = await session.execute(
-        select(PolicyType).where(*_conditions(filters)).order_by(*_ORDER_BY)
-    )
+    result = await session.execute(select(PolicyType).where(*_conditions(filters)).order_by(*_ORDER_BY))
     return list(result.scalars())
 
 
@@ -100,5 +94,3 @@ async def list_all(session: AsyncSession) -> list[PolicyType]:
     """全表读取（不筛选）。导出请用 list_filtered，两者排序一致。"""
 
     return await list_filtered(session, {})
-
-

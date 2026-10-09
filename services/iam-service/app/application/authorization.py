@@ -34,9 +34,7 @@ async def resolve_authorization(
     action_code: str,
 ) -> tuple[AuthzDecision, str | None]:
     resource = await resource_repo.get_resource_by_code(session, resource_code)
-    action = (
-        await resource_repo.get_action(session, resource.id, action_code) if resource is not None else None
-    )
+    action = await resource_repo.get_action(session, resource.id, action_code) if resource is not None else None
     levels = await resource_repo.list_effective_levels(session, user.id)
     decision = evaluate_authorization(
         account_active=user.status == UserStatus.ACTIVE,

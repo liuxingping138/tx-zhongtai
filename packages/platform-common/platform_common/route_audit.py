@@ -25,9 +25,7 @@ from fastapi.routing import APIRoute
 RESOURCE_AUTHORIZED_VALUE = "resource_authorized"
 
 
-def mark_permission_dependency(
-    dependency: Callable[..., Any], *, resource: str, action: str
-) -> Callable[..., Any]:
+def mark_permission_dependency(dependency: Callable[..., Any], *, resource: str, action: str) -> Callable[..., Any]:
     """给鉴权依赖打标记，供路由体检识别。"""
 
     dependency.__authz_permission__ = (resource, action)  # type: ignore[attr-defined]
@@ -89,20 +87,14 @@ def audit_routes(
         if declared is None:
             issues.append(RouteIssue(methods, path, "未声明安全分级"))
         elif declared == RESOURCE_AUTHORIZED_VALUE and marker is None:
-            issues.append(
-                RouteIssue(methods, path, "声明了 resource_authorized 但没挂权限依赖")
-            )
+            issues.append(RouteIssue(methods, path, "声明了 resource_authorized 但没挂权限依赖"))
         elif marker is not None and declared != RESOURCE_AUTHORIZED_VALUE:
-            issues.append(
-                RouteIssue(methods, path, f"挂了权限依赖却声明为 {declared}")
-            )
+            issues.append(RouteIssue(methods, path, f"挂了权限依赖却声明为 {declared}"))
 
         if marker is not None:
             resource, action = marker
             if not resource or not action:
-                issues.append(
-                    RouteIssue(methods, path, f"权限依赖的资源码或动作码为空: {marker!r}")
-                )
+                issues.append(RouteIssue(methods, path, f"权限依赖的资源码或动作码为空: {marker!r}"))
     return issues
 
 

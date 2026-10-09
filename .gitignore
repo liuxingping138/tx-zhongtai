@@ -41,3 +41,8 @@ logs/
 
 # --- Docker 卷挂载数据（本地开发数据不入库） ---
 deploy/compose/.data/
+
+# 测试覆盖率数据，本地运行时生成
+.coverage
+.coverage.*
+htmlcov/

@@ -122,9 +122,7 @@ def _resolve_roles(raw: str, index: dict[str, list[Role]]) -> tuple[list[uuid.UU
 
 async def import_users(session: AsyncSession, actor: User, content: bytes, *, can_grant: bool) -> ImportOutcome:
     settings = get_settings()
-    rows = await parse_sheet_async(
-        content, USER_IMPORT_COLUMNS, subject="用户", max_rows=settings.user_import_max_rows
-    )
+    rows = await parse_sheet_async(content, USER_IMPORT_COLUMNS, subject="用户", max_rows=settings.user_import_max_rows)
     if not rows:
         raise ApiError("Excel 里没有数据", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     index = _role_index(await role_repo.list_all_roles(session)) if can_grant else {}

@@ -134,10 +134,7 @@ async def replay(
     limit: int = 200,
 ) -> int:
     stmt = (
-        select(OutboxEvent)
-        .where(OutboxEvent.status.in_(statuses))
-        .order_by(OutboxEvent.created_at.asc())
-        .limit(limit)
+        select(OutboxEvent).where(OutboxEvent.status.in_(statuses)).order_by(OutboxEvent.created_at.asc()).limit(limit)
     )
     if event_id is not None:
         stmt = stmt.where(OutboxEvent.event_id == event_id)

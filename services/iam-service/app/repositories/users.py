@@ -18,9 +18,7 @@ NO_ROLE = "none"
 
 
 async def get_user_by_username(session: AsyncSession, username: str) -> User | None:
-    result = await session.execute(
-        select(User).where(User.username == username, User.status != UserStatus.DELETED)
-    )
+    result = await session.execute(select(User).where(User.username == username, User.status != UserStatus.DELETED))
     return result.scalar_one_or_none()
 
 

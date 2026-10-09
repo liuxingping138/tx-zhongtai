@@ -64,9 +64,7 @@ def _has_any_area_code(item: dict[str, str]) -> bool:
     )
 
 
-async def _allocate_site_code(
-    session: AsyncSession, province_code: str, city_code: str, district_code: str
-) -> str:
+async def _allocate_site_code(session: AsyncSession, province_code: str, city_code: str, district_code: str) -> str:
     prefix = site_code_prefix(province_code, city_code, district_code)
     existing = await repo.list_site_codes_for_district(session, prefix)
     return next_site_code(prefix, existing)
@@ -87,12 +85,12 @@ async def list_sources(
     items, total = await repo.list_items(
         session,
         filters={
-        "site_name": site_name,
-        "province_name": province_name,
-        "city_name": city_name,
-        "tag": tag,
-        "site_code": site_code,
-        "crawl_priority": crawl_priority,
+            "site_name": site_name,
+            "province_name": province_name,
+            "city_name": city_name,
+            "tag": tag,
+            "site_code": site_code,
+            "crawl_priority": crawl_priority,
         },
         page=page,
         page_size=page_size,
@@ -107,9 +105,7 @@ async def list_source_options(session: AsyncSession) -> dict[str, Any]:
 async def search_source_options(session: AsyncSession, *, field: str, keyword: str | None) -> list[str]:
     """按关键词搜索筛选项候选值，供前端下拉的服务端搜索使用。"""
 
-    return await options_repo.search(
-        session, options_repo.SOURCE_OPTION_COLUMNS, field=field, keyword=keyword
-    )
+    return await options_repo.search(session, options_repo.SOURCE_OPTION_COLUMNS, field=field, keyword=keyword)
 
 
 async def get_source(session: AsyncSession, item_id: uuid.UUID) -> dict[str, Any]:
@@ -259,9 +255,7 @@ async def import_sources(session: AsyncSession, actor: Actor, content: bytes) ->
     for values, internal_id, site_code, _reason in staged:
         normalized = _normalized_values(values)
         if not site_code:
-            prefix = site_code_prefix(
-                normalized["province_code"], normalized["city_code"], normalized["district_code"]
-            )
+            prefix = site_code_prefix(normalized["province_code"], normalized["city_code"], normalized["district_code"])
             site_code = next_site_code(prefix, list(seen_site))
         seen_site.add(site_code)
         session.add(

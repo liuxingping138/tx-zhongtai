@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import os
 
-os.environ.setdefault(
-    "CODEBOOK_DATABASE_URL", "postgresql+asyncpg://codebook_app:test@localhost:5432/codebook_db"
-)
+os.environ.setdefault("CODEBOOK_DATABASE_URL", "postgresql+asyncpg://codebook_app:test@localhost:5432/codebook_db")
 os.environ.setdefault("CODEBOOK_IAM_SERVICE_SECRET", "unit-test")
 os.environ.setdefault("CODEBOOK_AUDIT_INGEST_SECRET", "unit-test")
 
@@ -38,9 +36,7 @@ def test_every_api_route_carries_a_permission_dependency() -> None:
 
     mapping = permission_map(app)
     assert sorted(mapping) == sorted(_api_route_keys())
-    wrong_service = {
-        key: marker for key, marker in mapping.items() if not marker[0].startswith("codebook.")
-    }
+    wrong_service = {key: marker for key, marker in mapping.items() if not marker[0].startswith("codebook.")}
     assert wrong_service == {}, f"以下路由挂到了别的服务的资源码: {wrong_service}"
 
 

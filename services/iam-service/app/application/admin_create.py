@@ -41,15 +41,11 @@ async def create_initial_admin(
     if role is None:
         raise AdminCreateError("尚未同步内置角色，请先执行 make seed")
 
-    existing = await session.execute(
-        select(User).where(User.username == normalized, User.status != UserStatus.DELETED)
-    )
+    existing = await session.execute(select(User).where(User.username == normalized, User.status != UserStatus.DELETED))
     user = existing.scalar_one_or_none()
     now = utcnow()
     if user is not None:
-        link = await session.execute(
-            select(UserRole).where(UserRole.user_id == user.id, UserRole.role_id == role.id)
-        )
+        link = await session.execute(select(UserRole).where(UserRole.user_id == user.id, UserRole.role_id == role.id))
         if link.scalar_one_or_none() is None:
             session.add(UserRole(user_id=user.id, role_id=role.id, created_at=now))
         return user, False

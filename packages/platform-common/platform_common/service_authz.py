@@ -51,9 +51,7 @@ def build_permission_dependency(
             request: Request,
             client: AuthzClient = Depends(get_client),
         ) -> Actor:
-            result = await client.authorize(
-                access_token=_bearer_token(request), resource=resource, action=action
-            )
+            result = await client.authorize(access_token=_bearer_token(request), resource=resource, action=action)
             actor_id = result.user_id or ""
             actor_name = result.display_name or result.username or actor_id
             if not actor_id:

@@ -168,9 +168,7 @@ class AuditEmitter:
         if not ok:
             self._logger.warning(f"{self._log_name}_outbox_lease_lost", event_id=str(event.event_id))
         elif error is not None:
-            self._logger.warning(
-                f"{self._log_name}_audit_deliver_failed", event_id=str(event.event_id), error=error
-            )
+            self._logger.warning(f"{self._log_name}_audit_deliver_failed", event_id=str(event.event_id), error=error)
         return ok and error is None
 
     async def outbox_loop(self, stop: asyncio.Event, settings: _AuditSettings) -> None:

@@ -57,9 +57,7 @@ def test_unknown_event_falls_back_to_default_module() -> None:
 
 
 def test_summary_appends_counts_in_fixed_order() -> None:
-    body = _emitter().to_ingest(
-        _Event("policy.source.purged", {"actor_name": "张三", "inserted": 5, "deleted": 20002})
-    )
+    body = _emitter().to_ingest(_Event("policy.source.purged", {"actor_name": "张三", "inserted": 5, "deleted": 20002}))
     assert body["summary"] == "清空信源表 / 张三 / 新增5条 / 清空20002条"
 
 

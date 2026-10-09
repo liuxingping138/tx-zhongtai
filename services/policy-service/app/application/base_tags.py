@@ -48,11 +48,11 @@ async def list_base_tags(
     items, total = await repo.list_items(
         session,
         filters={
-        "policy_name": policy_name,
-        "province_name": province_name,
-        "policy_types": policy_types,
-        "is_penetrate": is_penetrate,
-        "need_interpret": need_interpret,
+            "policy_name": policy_name,
+            "province_name": province_name,
+            "policy_types": policy_types,
+            "is_penetrate": is_penetrate,
+            "need_interpret": need_interpret,
         },
         page=page,
         page_size=page_size,
@@ -67,9 +67,7 @@ async def list_base_tag_options(session: AsyncSession) -> dict[str, Any]:
 async def search_base_tag_options(session: AsyncSession, *, field: str, keyword: str | None) -> list[str]:
     """按关键词搜索筛选项候选值，供前端下拉的服务端搜索使用。"""
 
-    return await options_repo.search(
-        session, options_repo.BASE_TAG_OPTION_COLUMNS, field=field, keyword=keyword
-    )
+    return await options_repo.search(session, options_repo.BASE_TAG_OPTION_COLUMNS, field=field, keyword=keyword)
 
 
 async def get_base_tag(session: AsyncSession, item_id: uuid.UUID) -> dict[str, Any]:

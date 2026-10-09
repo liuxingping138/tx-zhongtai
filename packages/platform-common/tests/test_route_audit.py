@@ -20,9 +20,7 @@ def _fake_client() -> AuthzClient:
     return cast(AuthzClient, object())
 
 
-require_permission = build_permission_dependency(
-    service_name="probe-service", get_client=_fake_client
-)
+require_permission = build_permission_dependency(service_name="probe-service", get_client=_fake_client)
 
 
 def _build_app() -> FastAPI:

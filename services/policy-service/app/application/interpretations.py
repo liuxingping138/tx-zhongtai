@@ -116,9 +116,7 @@ async def list_interpretation_options(session: AsyncSession) -> dict[str, Any]:
 async def search_interpretation_options(session: AsyncSession, *, field: str, keyword: str | None) -> list[str]:
     """按关键词搜索筛选项候选值，供前端下拉的服务端搜索使用。"""
 
-    return await options_repo.search(
-        session, options_repo.INTERPRETATION_OPTION_COLUMNS, field=field, keyword=keyword
-    )
+    return await options_repo.search(session, options_repo.INTERPRETATION_OPTION_COLUMNS, field=field, keyword=keyword)
 
 
 async def get_interpretation(session: AsyncSession, item_id: uuid.UUID) -> dict[str, Any]:

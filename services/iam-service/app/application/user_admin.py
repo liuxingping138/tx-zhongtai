@@ -143,9 +143,7 @@ async def list_users_page(
         raise ApiError("不支持的排序字段")
     page = max(page, 1)
     page_size = min(max(page_size, 1), 100)
-    total = await user_repo.count_users(
-        session, username=username, status=status, role_id=role_id, keyword=keyword
-    )
+    total = await user_repo.count_users(session, username=username, status=status, role_id=role_id, keyword=keyword)
     rows = await user_repo.list_users(
         session,
         username=username,
@@ -358,9 +356,7 @@ async def replace_roles(
     return await _set_roles(session, actor, user, role_ids)
 
 
-async def add_role_members(
-    session: AsyncSession, actor: User, role_id: uuid.UUID, user_ids: list[uuid.UUID]
-) -> int:
+async def add_role_members(session: AsyncSession, actor: User, role_id: uuid.UUID, user_ids: list[uuid.UUID]) -> int:
     """从角色一侧加人：在每个用户现有角色上追加该角色，规则与「给用户分配角色」完全一致。"""
 
     added = 0

@@ -75,10 +75,14 @@ async def test_chunked_upload_stops_at_byte_limit() -> None:
 
     boundary = "bound"
     body = (
-        f"--{boundary}\r\n"
-        'Content-Disposition: form-data; name="file"; filename="a.xlsx"\r\n'
-        "Content-Type: application/octet-stream\r\n\r\n"
-    ).encode() + (b"z" * 3000) + f"\r\n--{boundary}--\r\n".encode()
+        (
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="file"; filename="a.xlsx"\r\n'
+            "Content-Type: application/octet-stream\r\n\r\n"
+        ).encode()
+        + (b"z" * 3000)
+        + f"\r\n--{boundary}--\r\n".encode()
+    )
     chunks = [body[:10], body[10:40], body[40:]]
 
     class _Request:

@@ -106,9 +106,7 @@ async def replace_grants(
 ) -> JSONResponse:
     grants: list[tuple[str, str]] = [(item.resource_code, item.level) for item in body.grants]
     return success_json(
-        await role_admin.replace_grants(
-            session, principal.user, role_id, version=body.version, grants=grants
-        )
+        await role_admin.replace_grants(session, principal.user, role_id, version=body.version, grants=grants)
     )
 
 

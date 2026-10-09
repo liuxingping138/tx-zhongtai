@@ -142,6 +142,4 @@ async def update_item(
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_codebook_permission(RESOURCE, "update")),
 ):
-    return success_json(
-        await service.update_scenario(session, actor, item_id, body.model_dump(exclude_unset=True))
-    )
+    return success_json(await service.update_scenario(session, actor, item_id, body.model_dump(exclude_unset=True)))

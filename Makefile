@@ -167,11 +167,11 @@ admin-create:
 
 check:
 	@echo "== Python 静态检查 =="
-	@(cd packages/platform-common && uv run ruff check . && uv run mypy platform_common) || exit 1
-	@(cd services/iam-service && uv run ruff check . && uv run mypy app) || exit 1
-	@(cd services/audit-service && uv run ruff check . && uv run mypy app) || exit 1
-	@(cd services/codebook-service && uv run ruff check . && uv run mypy app) || exit 1
-	@(cd services/policy-service && uv run ruff check . && uv run mypy app) || exit 1
+	@(cd packages/platform-common && uv run ruff format --check . && uv run ruff check . && uv run mypy platform_common) || exit 1
+	@(cd services/iam-service && uv run ruff format --check . && uv run ruff check . && uv run mypy app) || exit 1
+	@(cd services/audit-service && uv run ruff format --check . && uv run ruff check . && uv run mypy app) || exit 1
+	@(cd services/codebook-service && uv run ruff format --check . && uv run ruff check . && uv run mypy app) || exit 1
+	@(cd services/policy-service && uv run ruff format --check . && uv run ruff check . && uv run mypy app) || exit 1
 	@echo "== 前端类型检查 =="
 	@(cd frontend && pnpm run type-check)
 	@echo "== 前端构建 =="

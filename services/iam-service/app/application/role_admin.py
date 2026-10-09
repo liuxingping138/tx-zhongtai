@@ -47,9 +47,7 @@ async def list_roles_page(
     page = max(page, 1)
     page_size = min(max(page_size, 1), 100)
     total = await role_repo.count_roles(session, status=status, name=name)
-    rows = await role_repo.list_roles(
-        session, status=status, name=name, offset=(page - 1) * page_size, limit=page_size
-    )
+    rows = await role_repo.list_roles(session, status=status, name=name, offset=(page - 1) * page_size, limit=page_size)
     return await _with_stats(session, rows), total
 
 

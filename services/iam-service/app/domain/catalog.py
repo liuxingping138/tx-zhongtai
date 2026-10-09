@@ -50,9 +50,7 @@ RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("system.audit", "操作日志", "iam-service", NodeType.RESOURCE, True, 14, "system"),
     ResourceSpec("policy", "政策", "policy-service", NodeType.DIRECTORY, True, 20),
     ResourceSpec("policy.sources", "信源管理", "policy-service", NodeType.RESOURCE, True, 21, "policy"),
-    ResourceSpec(
-        "policy.crawler_monitoring", "爬虫监测", "policy-service", NodeType.RESOURCE, True, 22, "policy"
-    ),
+    ResourceSpec("policy.crawler_monitoring", "爬虫监测", "policy-service", NodeType.RESOURCE, True, 22, "policy"),
     ResourceSpec(
         "policy.crawler_monitoring_v2", "爬虫监测 v2", "policy-service", NodeType.RESOURCE, True, 22, "policy"
     ),
@@ -61,13 +59,9 @@ RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("customer", "客户", "customer-service", NodeType.RESOURCE, False, 30),
     ResourceSpec("tender", "招投标", "tender-service", NodeType.RESOURCE, False, 40),
     ResourceSpec("codebook", "码表管理", "codebook-service", NodeType.DIRECTORY, True, 50),
-    ResourceSpec(
-        "codebook.policy_types", "政策类型码表", "codebook-service", NodeType.RESOURCE, True, 51, "codebook"
-    ),
+    ResourceSpec("codebook.policy_types", "政策类型码表", "codebook-service", NodeType.RESOURCE, True, 51, "codebook"),
     ResourceSpec("codebook.scenarios", "行业场景码表", "codebook-service", NodeType.RESOURCE, True, 52, "codebook"),
-    ResourceSpec(
-        "codebook.area_codes", "省市区编码表", "codebook-service", NodeType.RESOURCE, True, 53, "codebook"
-    ),
+    ResourceSpec("codebook.area_codes", "省市区编码表", "codebook-service", NodeType.RESOURCE, True, 53, "codebook"),
 )
 
 ACTION_SPECS: tuple[ActionSpec, ...] = (

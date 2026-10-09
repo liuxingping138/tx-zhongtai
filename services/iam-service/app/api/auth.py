@@ -194,7 +194,5 @@ async def change_password(
     settings: Settings = Depends(get_settings),
 ) -> JSONResponse:
     service = AuthService(session, settings)
-    access, refresh, _session_row = await service.change_password(
-        principal.user, body.old_password, body.new_password
-    )
+    access, refresh, _session_row = await service.change_password(principal.user, body.old_password, body.new_password)
     return _token_response(access, refresh, must_change_password=False, settings=settings)

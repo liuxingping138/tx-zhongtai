@@ -32,9 +32,7 @@ def new_request_id() -> str:
 class RequestIdMiddleware(BaseHTTPMiddleware):
     """为每个请求生成/透传请求 ID，写入上下文变量并回填响应头。"""
 
-    async def dispatch(
-        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         incoming = request.headers.get(REQUEST_ID_HEADER)
         request_id = incoming if incoming else new_request_id()
         token = _request_id_ctx.set(request_id)

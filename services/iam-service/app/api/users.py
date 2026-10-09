@@ -64,9 +64,7 @@ async def export_users(
     keyword: list[str] | None = Query(default=None),
 ) -> Response:
     # 与列表同一套筛选，所见即所导。
-    payload = await user_excel.export_users(
-        session, username=username, status=status, role_id=role_id, keyword=keyword
-    )
+    payload = await user_excel.export_users(session, username=username, status=status, role_id=role_id, keyword=keyword)
     return Response(
         content=payload,
         media_type=XLSX,
