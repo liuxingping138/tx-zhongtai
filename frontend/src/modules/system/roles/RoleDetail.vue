@@ -264,7 +264,7 @@ onMounted(() => {
             class="role-head__desc"
             :class="{ 'is-empty': !role.description }"
           >
-            {{ role.description || '还没有职责说明。补一句说明，给同事分配角色时更容易选对。' }}
+            {{ role.description || (role.is_builtin ? '内置角色：拥有全部模块的全部权限，也是唯一能给人分配角色的角色。' : '还没有职责说明。补一句说明，给同事分配角色时更容易选对。') }}
           </p>
           <dl class="role-head__stats">
             <div>
@@ -281,8 +281,9 @@ onMounted(() => {
             </div>
           </dl>
         </div>
+        <!-- 内置角色不能改名，也不能复制：复制超级管理员等于造出一个几乎全权限的普通角色。 -->
         <div
-          v-if="canManageRoles"
+          v-if="canManageRoles && !role.is_builtin"
           class="role-head__actions"
         >
           <el-button
@@ -306,10 +307,7 @@ onMounted(() => {
               </el-button>
             </span>
           </el-tooltip>
-          <el-button
-            v-if="!role.is_builtin"
-            @click="onToggleStatus"
-          >
+          <el-button @click="onToggleStatus">
             {{ role.status === 'active' ? '停用' : '启用' }}
           </el-button>
         </div>

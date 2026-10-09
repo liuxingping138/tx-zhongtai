@@ -55,7 +55,7 @@ const query = reactive({
 })
 
 const createVisible = ref(false)
-const createForm = reactive({ username: '', display_name: '', phone: '', email: '', password: '' })
+const createForm = reactive({ username: '', display_name: '', phone: '', email: '' })
 const createRoles = ref<string[]>([])
 const creating = ref(false)
 const allRoles = ref<RoleItem[]>([])
@@ -77,7 +77,6 @@ function resetCreateForm() {
   createForm.display_name = ''
   createForm.phone = ''
   createForm.email = ''
-  createForm.password = ''
 }
 
 function openCreate() {
@@ -220,7 +219,6 @@ async function onCreate() {
       display_name: createForm.display_name,
       phone: createForm.phone.trim() || undefined,
       email: createForm.email.trim() || undefined,
-      password: createForm.password || undefined,
       role_ids: canGrant.value && createRoles.value.length ? createRoles.value : undefined,
     })
     createVisible.value = false
@@ -685,7 +683,8 @@ onMounted(() => {
       </el-table>
     </ListPage>
 
-    <el-dialog
+    <!-- 与编辑用户同为右侧抽屉：建人和选角色在一处完成。 -->
+    <el-drawer
       v-model="createVisible"
       class="editor-overlay"
       :before-close="createGuard.beforeClose"
@@ -693,10 +692,9 @@ onMounted(() => {
       :close-on-press-escape="!creating"
       :show-close="!creating"
       title="新增用户"
-      width="560px"
+      size="600px"
     >
-      <!-- autocomplete 必须写：否则浏览器把已保存的管理员账号密码填进显示名和初始密码，
-           新用户会悄悄拿到管理员的密码。 -->
+      <!-- autocomplete 必须写：否则浏览器把已保存的管理员账号填进显示名。 -->
       <el-form
         ref="createFormRef"
         novalidate
@@ -777,16 +775,10 @@ onMounted(() => {
             />
           </el-form-item>
         </div>
+        <!-- 初始密码不让手填：避免弱密码和一批人共用同一个密码，统一由系统生成、只显示一次。 -->
         <el-form-item label="初始密码">
-          <el-input
-            v-model="createForm.password"
-            type="password"
-            show-password
-            autocomplete="new-password"
-            placeholder="留空则由系统生成"
-          />
           <p class="field-hint">
-            无论谁设置，用户首次登录都必须改成自己的密码。
+            创建后由系统生成，只显示一次，请复制发给本人；首次登录必须改成自己的密码。
           </p>
         </el-form-item>
         <el-form-item
@@ -839,7 +831,7 @@ onMounted(() => {
           创建
         </el-button>
       </template>
-    </el-dialog>
+    </el-drawer>
 
     <UserDetailDrawer
       v-model="detailVisible"

@@ -160,7 +160,7 @@ onMounted(load)
             >停用</el-tag>
           </span>
           <span class="role-item__count">{{ role.member_count ?? 0 }} 人</span>
-          <span class="role-item__desc">{{ role.description || '还没有职责说明' }}</span>
+          <span class="role-item__desc">{{ role.description || (role.is_builtin ? '全部权限，唯一能分配角色' : '还没有职责说明') }}</span>
         </button>
         <p
           v-if="!loading && !visibleRoles.length"

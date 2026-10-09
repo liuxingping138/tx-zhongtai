@@ -296,10 +296,12 @@ test('users: create a user with roles in one step, and list shows roles', async 
   const dialog = page.getByRole('dialog', { name: '新增用户' })
   await dialog.getByLabel('用户名', { exact: true }).fill('lisi')
   await dialog.getByLabel('显示名', { exact: true }).fill('李四')
-  // 浏览器不能把已保存的管理员账号密码自动填进来。
+  // 浏览器不能把已保存的管理员账号自动填进来。
   await expect(dialog.getByLabel('用户名', { exact: true })).toHaveAttribute('autocomplete', 'off')
   await expect(dialog.getByLabel('显示名', { exact: true })).toHaveAttribute('autocomplete', 'off')
-  await expect(dialog.getByLabel('初始密码', { exact: true })).toHaveAttribute('autocomplete', 'new-password')
+  // 初始密码只由系统生成，不提供手填。
+  await expect(dialog.locator('input[type="password"]')).toHaveCount(0)
+  await expect(dialog.getByText('创建后由系统生成，只显示一次')).toBeVisible()
 
   // 没选角色不预先警告，提交时确认一次；选择「返回选择」不会创建。
   await dialog.getByRole('button', { name: '创建', exact: true }).click()
@@ -313,6 +315,7 @@ test('users: create a user with roles in one step, and list shows roles', async 
   await expect(dialog.getByText('负责政策表维护')).toBeVisible()
   await dialog.getByRole('button', { name: '创建', exact: true }).click()
   await expect.poll(() => created?.role_ids).toEqual(['1'])
+  expect(created).not.toHaveProperty('password')
 })
 
 test('users: pending-role bar filters to accounts without roles', async ({ page }) => {
