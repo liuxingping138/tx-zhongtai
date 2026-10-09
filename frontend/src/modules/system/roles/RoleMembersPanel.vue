@@ -21,7 +21,7 @@ const candidates = ref<UserItem[]>([])
 const searching = ref(false)
 const picker = ref<{ blur: () => void }>()
 
-const STATUS_TEXT: Record<string, string> = { active: '启用', disabled: '禁用', archived: '归档' }
+const STATUS_TEXT: Record<string, string> = { active: '启用', disabled: '禁用' }
 const memberIds = computed(() => new Set(members.value.map(member => member.id)))
 
 let sequence = 0

@@ -399,10 +399,6 @@ onMounted(() => {
                 label="禁用"
                 value="disabled"
               />
-              <el-option
-                label="归档"
-                value="archived"
-              />
             </el-select>
           </el-form-item>
         </FilterBar>
@@ -494,10 +490,10 @@ onMounted(() => {
         >
           <template #default="{ row }">
             <el-tag
-              :type="row.status === 'active' ? 'success' : row.status === 'disabled' ? 'warning' : 'info'"
+              :type="row.status === 'active' ? 'success' : 'warning'"
               size="small"
             >
-              {{ row.status === 'active' ? '启用' : row.status === 'disabled' ? '禁用' : '归档' }}
+              {{ row.status === 'active' ? '启用' : '禁用' }}
             </el-tag>
           </template>
         </el-table-column>

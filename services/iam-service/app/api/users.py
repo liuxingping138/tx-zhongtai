@@ -29,11 +29,21 @@ async def list_users(
     page_size: int = Query(default=20, ge=1, le=100),
     username: list[str] | None = Query(default=None),
     status: list[str] | None = Query(default=None),
+    # 角色 id 之外还接受 none，表示「待分配角色」。
     role_id: list[str] | None = Query(default=None),
+    # 同时匹配用户名、显示名、电话、邮箱。
+    keyword: list[str] | None = Query(default=None),
     sort: str = "created_at",
 ) -> JSONResponse:
     items, total = await user_admin.list_users_page(
-        session, username=username, status=status, role_id=role_id, page=page, page_size=page_size, sort=sort
+        session,
+        username=username,
+        status=status,
+        role_id=role_id,
+        keyword=keyword,
+        page=page,
+        page_size=page_size,
+        sort=sort,
     )
     return success_json(paginate(items, total, page=page, page_size=page_size).model_dump())
 
@@ -75,6 +85,8 @@ async def create_user(
         principal.user,
         username=body.username,
         display_name=body.display_name,
+        phone=body.phone,
+        email=body.email,
         password=body.password,
         role_ids=body.role_ids,
     )
@@ -98,6 +110,8 @@ async def update_user(
             principal.user,
             user_id,
             display_name=body.display_name,
+            phone=body.phone,
+            email=body.email,
             status=body.status,
             version=body.version,
         )

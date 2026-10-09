@@ -44,6 +44,8 @@ class CsrfPayload(BaseModel):
 class UserCreateRequest(StrictModel):
     username: str = Field(min_length=3, max_length=64)
     display_name: str = Field(min_length=1, max_length=128)
+    phone: str = Field(default="", max_length=32)
+    email: str = Field(default="", max_length=254)
     password: str | None = Field(default=None, min_length=8, max_length=128)
     # 建账号时一并分配的角色；非空时要求操作人有「权限分配」可管理。
     role_ids: list[uuid.UUID] = Field(default_factory=list)
@@ -51,7 +53,10 @@ class UserCreateRequest(StrictModel):
 
 class UserUpdateRequest(StrictModel):
     display_name: str | None = Field(default=None, min_length=1, max_length=128)
-    status: Literal["active", "disabled", "archived"] | None = None
+    # 不传表示不改；传空串表示清空。
+    phone: str | None = Field(default=None, max_length=32)
+    email: str | None = Field(default=None, max_length=254)
+    status: Literal["active", "disabled"] | None = None
     version: int = Field(ge=1)
 
 

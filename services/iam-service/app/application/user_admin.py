@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import secrets
 import uuid
 
@@ -37,6 +38,27 @@ def validate_username(username: str) -> str:
     return normalized
 
 
+_PHONE_SEPARATORS = re.compile(r"[\s-]")
+_MOBILE = re.compile(r"1\d{10}")
+_EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+
+
+def normalize_phone(phone: str) -> str:
+    """去掉空格和连字符后须为 11 位手机号；空串表示没填。"""
+
+    digits = _PHONE_SEPARATORS.sub("", phone)
+    if digits and not _MOBILE.fullmatch(digits):
+        raise ApiError("电话须为 11 位手机号")
+    return digits
+
+
+def normalize_email(email: str) -> str:
+    value = email.strip()
+    if value and not _EMAIL.fullmatch(value):
+        raise ApiError("邮箱格式不正确")
+    return value
+
+
 def generate_temporary_password() -> str:
     return secrets.token_urlsafe(18)
 
@@ -46,6 +68,8 @@ def user_public(user: User) -> dict[str, object]:
         "id": str(user.id),
         "username": user.username,
         "display_name": user.display_name,
+        "phone": user.phone,
+        "email": user.email,
         "status": user.status,
         "must_change_password": user.must_change_password,
         "version": user.version,
@@ -113,17 +137,21 @@ async def list_users_page(
     page_size: int,
     sort: str,
     role_id: FilterValue = None,
+    keyword: FilterValue = None,
 ) -> tuple[list[dict[str, object]], int]:
     if sort not in {"created_at", "username"}:
         raise ApiError("不支持的排序字段")
     page = max(page, 1)
     page_size = min(max(page_size, 1), 100)
-    total = await user_repo.count_users(session, username=username, status=status, role_id=role_id)
+    total = await user_repo.count_users(
+        session, username=username, status=status, role_id=role_id, keyword=keyword
+    )
     rows = await user_repo.list_users(
         session,
         username=username,
         status=status,
         role_id=role_id,
+        keyword=keyword,
         offset=(page - 1) * page_size,
         limit=page_size,
         sort=sort,
@@ -155,6 +183,8 @@ async def create_user(
     display_name: str,
     password: str | None,
     role_ids: list[uuid.UUID] | None = None,
+    phone: str = "",
+    email: str = "",
 ) -> tuple[dict[str, object], str | None]:
     """建账号时可一并分配角色，同一事务内完成，避免「建了人忘了给角色」登录后一片空白。
 
@@ -165,6 +195,8 @@ async def create_user(
     display = display_name.strip()
     if not display:
         raise ApiError("显示名不能为空")
+    phone = normalize_phone(phone)
+    email = normalize_email(email)
     temporary: str | None = None
     raw_password = password
     if raw_password is None:
@@ -178,6 +210,8 @@ async def create_user(
         id=uuid.uuid4(),
         username=normalized,
         display_name=display,
+        phone=phone,
+        email=email,
         password_hash=hash_password(raw_password),
         status=UserStatus.ACTIVE,
         must_change_password=True,
@@ -212,13 +246,15 @@ async def update_user(
     display_name: str | None,
     status: str | None,
     version: int,
+    phone: str | None = None,
+    email: str | None = None,
 ) -> dict[str, object]:
     user = _require_live(await user_repo.get_user_for_update(session, user_id))
     if user.version != version:
         raise VersionConflictError()
     await _assert_can_manage_target(session, actor, user)
     if status is not None and status != user.status:
-        if status not in {UserStatus.ACTIVE, UserStatus.DISABLED, UserStatus.ARCHIVED}:
+        if status not in {UserStatus.ACTIVE, UserStatus.DISABLED}:
             raise ApiError("无效的用户状态")
         if status != UserStatus.ACTIVE:
             await _guard_last_superadmin(session, user, new_status=status)
@@ -230,6 +266,10 @@ async def update_user(
         if not display:
             raise ApiError("显示名不能为空")
         user.display_name = display
+    if phone is not None:
+        user.phone = normalize_phone(phone)
+    if email is not None:
+        user.email = normalize_email(email)
     user.updated_at = utcnow()
     user.version += 1
     await outbox_repo.enqueue(

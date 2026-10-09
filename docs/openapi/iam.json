@@ -331,6 +331,25 @@
             }
           },
           {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
             "name": "sort",
             "in": "query",
             "required": false,
@@ -1597,6 +1616,18 @@
             "minLength": 1,
             "title": "Display Name"
           },
+          "phone": {
+            "type": "string",
+            "maxLength": 32,
+            "title": "Phone",
+            "default": ""
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 254,
+            "title": "Email",
+            "default": ""
+          },
           "password": {
             "anyOf": [
               {
@@ -1666,14 +1697,37 @@
             ],
             "title": "Display Name"
           },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 254
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
           "status": {
             "anyOf": [
               {
                 "type": "string",
                 "enum": [
                   "active",
-                  "disabled",
-                  "archived"
+                  "disabled"
                 ]
               },
               {

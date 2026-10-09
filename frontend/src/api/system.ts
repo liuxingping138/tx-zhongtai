@@ -36,7 +36,7 @@ export function createUser(payload: {
 
 export function updateUser(
   userId: string,
-  payload: { display_name?: string; status?: 'active' | 'disabled' | 'archived'; version: number },
+  payload: { display_name?: string; status?: 'active' | 'disabled'; version: number },
 ): Promise<UserItem> {
   return request(http.patch(`/system/users/${userId}`, payload))
 }

@@ -34,6 +34,9 @@ class User(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid, comment="主键")
     username: Mapped[str] = mapped_column(String(64), nullable=False, comment="用户名")
     display_name: Mapped[str] = mapped_column(String(128), nullable=False, comment="显示名")
+    # 联系方式只做记录和展示，不用于登录或找回密码，所以不要求唯一。
+    phone: Mapped[str] = mapped_column(String(32), nullable=False, default="", server_default="", comment="电话")
+    email: Mapped[str] = mapped_column(String(254), nullable=False, default="", server_default="", comment="邮箱")
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False, comment="密码哈希")
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active", comment="状态")
     must_change_password: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, comment="必须改密")

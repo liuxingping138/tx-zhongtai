@@ -4,7 +4,7 @@ import uuid
 from typing import Any
 
 from platform_common.filters import FilterValue, contains_ilike, filter_values
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -12,6 +12,9 @@ from app.core.clock import utcnow
 from app.domain.catalog import SUPERADMIN_ROLE_CODE
 from app.domain.enums import NodeType, RoleStatus, UserStatus
 from app.domain.models import Resource, Role, RoleGrant, User, UserRole
+
+# 角色筛选里的特殊值：还没分配任何角色的账号。和真实角色 id 一起选时取「或」。
+NO_ROLE = "none"
 
 
 async def get_user_by_username(session: AsyncSession, username: str) -> User | None:
@@ -32,17 +35,32 @@ async def get_user_for_update(session: AsyncSession, user_id: uuid.UUID) -> User
 
 
 def _apply_user_filters(
-    stmt: Any, *, username: FilterValue, status: FilterValue, role_id: FilterValue = None
+    stmt: Any,
+    *,
+    username: FilterValue,
+    status: FilterValue,
+    role_id: FilterValue = None,
+    keyword: FilterValue = None,
 ) -> Any:
-    role_ids = [_uuid_or_none(item) for item in filter_values(role_id)]
-    if role_ids:
+    raw_roles = filter_values(role_id)
+    if raw_roles:
         # 选了多个角色是「或」：拥有其中任一角色即命中。非法 id 当作匹配不到，不报错。
-        valid = [item for item in role_ids if item is not None]
-        stmt = stmt.where(User.id.in_(select(UserRole.user_id).where(UserRole.role_id.in_(valid))))
+        valid = [item for item in (_uuid_or_none(raw) for raw in raw_roles if raw != NO_ROLE) if item is not None]
+        has_any_role = select(UserRole.user_id)
+        clauses = []
+        if valid:
+            clauses.append(User.id.in_(has_any_role.where(UserRole.role_id.in_(valid))))
+        if NO_ROLE in raw_roles:
+            clauses.append(User.id.not_in(has_any_role))
+        stmt = stmt.where(or_(*clauses)) if clauses else stmt.where(false())
     names = filter_values(username)
     if names:
         stmt = stmt.where(or_(*(contains_ilike(User.username, name) for name in names)))
-    # 已删除的账号不出现在列表里，筛选「禁用 / 归档」也不会把它们带出来。
+    words = filter_values(keyword)
+    if words:
+        searchable = (User.username, User.display_name, User.phone, User.email)
+        stmt = stmt.where(or_(*(contains_ilike(column, word) for word in words for column in searchable)))
+    # 已删除的账号不出现在列表里，筛选「禁用」也不会把它们带出来。
     stmt = stmt.where(User.status != UserStatus.DELETED)
     statuses = [item for item in filter_values(status) if item != UserStatus.DELETED]
     if statuses:
@@ -51,10 +69,15 @@ def _apply_user_filters(
 
 
 async def count_users(
-    session: AsyncSession, *, username: FilterValue, status: FilterValue, role_id: FilterValue = None
+    session: AsyncSession,
+    *,
+    username: FilterValue,
+    status: FilterValue,
+    role_id: FilterValue = None,
+    keyword: FilterValue = None,
 ) -> int:
     stmt = _apply_user_filters(
-        select(func.count()).select_from(User), username=username, status=status, role_id=role_id
+        select(func.count()).select_from(User), username=username, status=status, role_id=role_id, keyword=keyword
     )
     return int((await session.execute(stmt)).scalar_one())
 
@@ -68,8 +91,9 @@ async def list_users(
     limit: int,
     sort: str,
     role_id: FilterValue = None,
+    keyword: FilterValue = None,
 ) -> list[User]:
-    stmt = _apply_user_filters(select(User), username=username, status=status, role_id=role_id)
+    stmt = _apply_user_filters(select(User), username=username, status=status, role_id=role_id, keyword=keyword)
     if sort == "username":
         stmt = stmt.order_by(User.username.asc())
     else:

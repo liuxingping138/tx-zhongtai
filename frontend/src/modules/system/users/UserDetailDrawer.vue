@@ -29,7 +29,7 @@ const saving = ref(false)
 const editingRoles = ref(false)
 
 const guard = useUnsavedForm(visible, () => [...draft.value].sort(), saving)
-const STATUS_TEXT: Record<string, string> = { active: '启用', disabled: '禁用', archived: '归档' }
+const STATUS_TEXT: Record<string, string> = { active: '启用', disabled: '禁用' }
 
 const rolesDirty = computed(() => {
   const saved = [...(user.value?.role_ids ?? [])].sort()

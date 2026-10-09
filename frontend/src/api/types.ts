@@ -64,7 +64,7 @@ export interface UserItem {
   id: string
   username: string
   display_name: string
-  status: 'active' | 'disabled' | 'archived'
+  status: 'active' | 'disabled'
   must_change_password: boolean
   version: number
   created_at: string
@@ -143,7 +143,7 @@ export interface RoleMember {
   id: string
   username: string
   display_name: string
-  status: 'active' | 'disabled' | 'archived'
+  status: 'active' | 'disabled'
 }
 
 export interface EffectivePermission {
