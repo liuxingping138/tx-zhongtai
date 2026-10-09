@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import asyncio
 import uuid
 from typing import Any
 
 from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
 from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionConflictError
-from platform_common.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async
+from platform_common.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async, run_excel_parse
 from platform_common.filters import Filters, FilterValue
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -230,7 +229,7 @@ async def resolve_area_codes(session: AsyncSession, actor: Actor, content: bytes
         )
         for row in await repo.list_all(session)  # 地区匹配需要完整码表，不受导出筛选影响
     ]
-    payload, matched, unmatched = await asyncio.to_thread(build_resolve_workbook, content, catalog)
+    payload, matched, unmatched = await run_excel_parse(build_resolve_workbook, content, catalog)
     await enqueue_event(
         session,
         event_type="codebook.area_code.resolved",

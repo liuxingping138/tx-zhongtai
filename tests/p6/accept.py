@@ -161,7 +161,7 @@ def run() -> None:
         f"/api/v1/system/roles/{role_id}/grants",
         {
             "version": (gbody.get("data") or {}).get("role", {}).get("version", role["version"] + 1),
-            "grants": [{"resource_code": "policy.sources", "level": "READ"}],
+            "grants": [{"resource_code": "customer", "level": "READ"}],
         },
     )
     expect(unpublished == 403, f"A09 grant unpublished {unpublished} {ubody}")
@@ -245,12 +245,28 @@ def run() -> None:
     old_refresh = replay_api._cookie("refresh_token")
     rotated, _ = replay_api.call("POST", "/api/v1/auth/refresh", origin=origin)
     expect(rotated == 200, f"A07 rotate {rotated}")
+    new_refresh = replay_api._cookie("refresh_token")
     replay_api.csrf = replay_api._cookie("csrf_token")
     for cookie in list(replay_api.jar):
         if cookie.name == "refresh_token":
             cookie.value = old_refresh
+    # 隔离栈把宽限期设为 0，这次立即重放落在宽限期外。宽限期内重复成功由 iam 单测覆盖。
     replayed, rbody = replay_api.call("POST", "/api/v1/auth/refresh", origin=origin)
     expect(replayed == 401, f"A07 replay {replayed} {rbody}")
+    for cookie in list(replay_api.jar):
+        if cookie.name == "refresh_token":
+            cookie.value = new_refresh
+    replay_api.csrf = replay_api._cookie("csrf_token") or replay_api.csrf
+    revoked, revoked_body = replay_api.call("POST", "/api/v1/auth/refresh", origin=origin)
+    expect(revoked == 401, f"A07 family still usable {revoked} {revoked_body}")
+    denied, _ = replay_api.call("GET", "/api/v1/auth/me")
+    expect(denied == 401, f"A07 old access still usable {denied}")
+    count = compose_exec(
+        compose, "postgres", "psql", "-U", os.environ["POSTGRES_SUPERUSER"],
+        "-d", os.environ["IAM_DB_NAME"], "-tAc",
+        "SELECT count(*) FROM iam_outbox WHERE event_type='auth.refresh.replayed';",
+    ).strip()
+    expect(int(count) >= 1, "A07 replay audit was not committed")
     results.append("A07 ok")
 
     # A14 forged header / internal
@@ -358,7 +374,7 @@ def run() -> None:
             break
         time.sleep(2)
     if leftover != "0":
-        compose_exec(compose, "iam-service", "uv", "run", "python", "-m", "app.cli.outbox_replay")
+        compose_exec(compose, "iam-service", ".venv/bin/python", "-m", "app.cli.outbox_replay")
         for _ in range(30):
             leftover = compose_exec(
                 compose,

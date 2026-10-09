@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from io import BytesIO
 
-from openpyxl import Workbook, load_workbook
+from openpyxl import Workbook
 from platform_common.errors import ApiError, ErrorCode
-from platform_common.excel import append_text_row
+from platform_common.excel import append_text_row, iter_workbook_rows
 
 from app.application.area_match import AreaSnap, build_area_index, match_area_indexed
 
@@ -43,28 +43,26 @@ def _cell(value: object) -> str:
 
 
 def read_raw_sheet(content: bytes) -> tuple[list[str], list[list[str]]]:
+    rows = iter_workbook_rows(content)
     try:
-        book = load_workbook(BytesIO(content), read_only=True, data_only=True)
-    except Exception as exc:  # noqa: BLE001
-        raise ApiError("无法读取 Excel 文件", code=ErrorCode.VALIDATION_ERROR, http_status=422) from exc
-    sheet = book[book.sheetnames[0]]
-    rows = sheet.iter_rows(values_only=True)
-    headers: list[str] = []
-    for header_row in rows:
-        if header_row is None or all(cell is None or str(cell).strip() == "" for cell in header_row):
-            continue
-        headers = [_cell(cell) for cell in header_row]
-        while headers and headers[-1] == "":
-            headers.pop()
-        break
-    else:
-        raise ApiError("Excel 为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    items: list[list[str]] = []
-    for raw in rows:
-        if raw is None or all(cell is None or str(cell).strip() == "" for cell in raw):
-            continue
-        items.append([_cell(cell) for cell in raw[: len(headers)]])
-    return headers, items
+        headers: list[str] = []
+        for header_row in rows:
+            if all(cell is None or str(cell).strip() == "" for cell in header_row):
+                continue
+            headers = [_cell(cell) for cell in header_row]
+            while headers and headers[-1] == "":
+                headers.pop()
+            break
+        else:
+            raise ApiError("Excel 为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+        items: list[list[str]] = []
+        for raw in rows:
+            if all(cell is None or str(cell).strip() == "" for cell in raw):
+                continue
+            items.append([_cell(cell) for cell in raw[: len(headers)]])
+        return headers, items
+    finally:
+        rows.close()  # type: ignore[attr-defined]
 
 
 def _ensure_code_columns(

@@ -162,19 +162,18 @@ async def test_timeout_closes_running_sync_batch(monkeypatch):
     claim = await worker.claim_next()
     assert claim
 
-    async def hang(_code, sync_id):
-        async with SessionLocal() as session:
-            session.add(
-                CrawlerV2SyncRun(
-                    id=sync_id,
-                    mode="incremental",
-                    started_at=datetime.now(UTC),
-                    status="running",
-                    days_synced=0,
-                    site_rows=0,
-                )
+    # 先持久化已运行批次，再测试超时清理；不能假设远端 DB 在 50ms 内提交。
+    async with SessionLocal() as session:
+        session.add(
+            CrawlerV2SyncRun(
+                id=claim[2], mode="incremental", started_at=datetime.now(UTC),
+                status="running", days_synced=0, site_rows=0,
             )
-            await session.commit()
+        )
+        await session.commit()
+
+    async def hang(_code, sync_id):
+        assert sync_id == claim[2]
         await asyncio.sleep(30)
 
     monkeypatch.setattr(worker, "execute_sync", hang)

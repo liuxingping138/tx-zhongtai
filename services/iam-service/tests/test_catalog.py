@@ -25,3 +25,9 @@ def test_codebook_resources_are_published() -> None:
     assert by_code["policy.interpretations"].published is True
     assert by_code["policy.crawler_monitoring"].published is True
     assert by_code["policy.crawler_monitoring_v2"].published is True
+    assert by_code["system.roles"].name == "角色与权限"
+
+
+def test_user_delete_is_a_full_action() -> None:
+    actions = {(spec.resource_code, spec.action_code) for spec in ACTION_SPECS}
+    assert ("system.users", "delete") in actions

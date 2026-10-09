@@ -1,0 +1,12 @@
+[Unit]
+Description=Renew tx-zhongtai IP TLS certificate
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/tx-zhongtai-acme.env
+WorkingDirectory=/home/txkj/tx-zhongtai
+ExecStart=/usr/bin/bash /home/txkj/tx-zhongtai/scripts/renew_ip_cert.sh
+UMask=0077
+TimeoutStartSec=15min

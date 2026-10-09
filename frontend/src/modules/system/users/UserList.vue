@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 
 import {
   createUser,
+  deleteUser,
   listAllRoles,
   listUsers,
   resetUserPassword,
@@ -234,6 +235,23 @@ async function toggleStatus(user: UserItem) {
   }
 }
 
+async function onDelete(user: UserItem) {
+  const confirmed = await ElMessageBox.confirm(
+    `删除后，${user.username} 不能再登录，也不会出现在用户列表里。操作日志仍保留。这个用户名以后可以重新使用。`,
+    '删除用户',
+    { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消', confirmButtonClass: 'el-button--danger' },
+  ).then(() => true, () => false)
+  if (!confirmed) return
+  try {
+    await deleteUser(user.id)
+    ElMessage.success('已删除')
+    if (detailUserId.value === user.id) detailVisible.value = false
+    await load()
+  } catch (error) {
+    ElMessage.error(errorMessage(error, '删除失败'))
+  }
+}
+
 async function onReset(user: UserItem) {
   const confirmed = await ElMessageBox.confirm(`将重置 ${user.username} 的密码并强制其下次登录改密，是否继续？`, '重置密码', {
     type: 'warning',
@@ -426,22 +444,30 @@ onMounted(() => {
         />
         <el-table-column
           label="角色"
-          min-width="240"
+          min-width="280"
         >
           <template #default="{ row }">
             <div
               v-if="(row.roles ?? []).length"
               class="role-cell"
             >
-              <el-tag
+              <el-tooltip
                 v-for="role in (row.roles ?? []).slice(0, 2)"
                 :key="role.id"
-                size="small"
-                :type="role.status === 'active' ? 'primary' : 'info'"
-                effect="plain"
+                :content="`${role.name}${role.status === 'active' ? '' : '（停用）'}`"
+                placement="top"
+                :show-after="400"
               >
-                {{ role.name }}{{ role.status === 'active' ? '' : '（停用）' }}
-              </el-tag>
+                <span class="role-cell__tag">
+                  <el-tag
+                    size="small"
+                    :type="role.status === 'active' ? 'primary' : 'info'"
+                    effect="plain"
+                  >
+                    {{ role.name }}{{ role.status === 'active' ? '' : '（停用）' }}
+                  </el-tag>
+                </span>
+              </el-tooltip>
               <el-tooltip
                 v-if="(row.roles ?? []).length > 2"
                 :content="roleNames(row)"
@@ -544,6 +570,12 @@ onMounted(() => {
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
+                  <el-dropdown-item
+                    v-if="auth.canFull('system.users') && row.id !== auth.user?.id"
+                    @click="onDelete(row)"
+                  >
+                    删除
+                  </el-dropdown-item>
                   <el-dropdown-item
                     v-if="auth.canFull('system.users')"
                     @click="onReset(row)"
@@ -803,6 +835,21 @@ onMounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  min-width: 0;
+}
+
+.role-cell__tag {
+  max-width: 100%;
+}
+
+.role-cell :deep(.el-tag) {
+  height: auto;
+  max-width: 100%;
+  white-space: normal;
+}
+
+.role-cell :deep(.el-tag__content) {
+  white-space: normal;
 }
 
 .role-cell__none {

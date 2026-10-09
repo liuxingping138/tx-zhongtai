@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 备份四个服务库。默认只允许隔离库名（*_p6_db / *_itest / *_test）。
 set -euo pipefail
+umask 077
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=lib_guard.sh
 source "$ROOT/scripts/lib_guard.sh"

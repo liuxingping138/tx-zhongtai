@@ -39,14 +39,23 @@ def _business_ok() -> list[str]:
     return errors
 
 
-def _secret_scan() -> list[str]:
-    listed = subprocess.check_output(["git", "ls-files"], cwd=ROOT, text=True).splitlines()
+def tracked_files(root: Path | None = None) -> list[str]:
+    """用 NUL 分隔列出已跟踪及未忽略的新文件。不带 -z 时中文路径会被引号转义，Path 对不上就静默跳过。"""
+
+    base = root or ROOT
+    raw = subprocess.check_output(["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"], cwd=base, text=True)
+    return [rel for rel in raw.split("\0") if rel]
+
+
+def _secret_scan(root: Path | None = None) -> list[str]:
+    base = root or ROOT
+    listed = tracked_files(base)
     errors: list[str] = []
     skip = {"docs/openapi/iam.json", "docs/openapi/audit.json", "docs/openapi/codebook.json", "docs/openapi/policy.json"}
     for rel in listed:
         if rel in skip or rel.endswith(".lock") or "pnpm-lock" in rel:
             continue
-        path = ROOT / rel
+        path = base / rel
         if not path.is_file():
             continue
         try:

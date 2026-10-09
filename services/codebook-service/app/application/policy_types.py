@@ -104,7 +104,9 @@ async def update_policy_type(
         raise NotFoundError("政策类型不存在")
     if data.get("version") != row.version:
         raise VersionConflictError()
-    type_name = (data.get("type_name") or row.type_name).strip()
+    type_name = str(data.get("type_name", row.type_name)).strip()
+    if not type_name:
+        raise ApiError("政策类型不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     if type_name != row.type_name:
         existing = await repo.get_by_name(session, type_name)
         if existing and existing.id != row.id:

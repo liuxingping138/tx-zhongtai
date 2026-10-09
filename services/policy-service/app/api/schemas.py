@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SourceClearRequest(BaseModel):
@@ -75,3 +75,24 @@ class InterpretationWrite(BaseModel):
     is_new_scenario: str = ""
     new_scenario_level: str = ""
     data_status: str = ""
+
+
+class SourcePatch(SourceWrite):
+    """仅修改显式提供的字段；空字符串表示显式清空。"""
+
+    version: int = Field(ge=1)
+    site_name: str = ""
+
+
+class BaseTagPatch(BaseTagWrite):
+    """仅修改显式提供的字段；空字符串表示显式清空。"""
+
+    version: int = Field(ge=1)
+    policy_name: str = ""
+
+
+class InterpretationPatch(InterpretationWrite):
+    """仅修改显式提供的字段；空字符串表示显式清空。"""
+
+    version: int = Field(ge=1)
+    policy_title: str = ""

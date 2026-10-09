@@ -120,6 +120,8 @@ async def update_base_tag(
     if data.get("version") != row.version:
         raise VersionConflictError()
     values = _values({field: str(data.get(field, getattr(row, field) or "")) for field in BASE_TAG_FIELDS})
+    if not values["policy_name"]:
+        raise ApiError("政策名称不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     digest = content_hash(values, BASE_TAG_FIELDS)
     existing = await repo.get_by_hash(session, digest)
     if existing and existing.id != row.id:

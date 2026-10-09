@@ -11,21 +11,22 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_HTTP_TIMEOUT=120 \
     UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
 
-COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /uvx /usr/local/bin/
+COPY --from=ghcr.io/astral-sh/uv:0.12.13 /uv /uvx /usr/local/bin/
 
 WORKDIR /srv
 
 COPY packages/platform-common /srv/packages/platform-common
-COPY services/audit-service/pyproject.toml services/audit-service/.python-version /srv/services/audit-service/
+COPY services/audit-service/pyproject.toml services/audit-service/uv.lock services/audit-service/.python-version /srv/services/audit-service/
 
 WORKDIR /srv/services/audit-service
-RUN uv sync --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --no-install-project
 
 COPY services/audit-service/app /srv/services/audit-service/app
 COPY services/audit-service/migrations /srv/services/audit-service/migrations
 COPY services/audit-service/alembic.ini /srv/services/audit-service/alembic.ini
 
-RUN uv sync --no-dev
+RUN uv export --frozen --no-dev --no-emit-project --output-file /opt/requirements.frozen.txt \
+ && uv sync --frozen --no-dev
 
 EXPOSE 8002
 

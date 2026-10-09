@@ -7,7 +7,7 @@ import { ArrowLeft, CopyDocument, EditPen } from '@element-plus/icons-vue'
 import { getRole, listResourceTree, listRoleGrants, replaceRoleGrants, updateRole } from '@/api/system'
 import { errorMessage, isApiError } from '@/api/errors'
 import type { ResourceNode, RoleItem } from '@/api/types'
-import { LEVEL_TEXT, moduleGroups, moduleNames, SUPERADMIN_ROLE_CODE } from '@/permissions/catalog'
+import { LEVEL_TEXT, capabilityModules, moduleGroups, moduleNames, SUPERADMIN_ROLE_CODE } from '@/permissions/catalog'
 import { grantDiff, grantsFromTree, type GrantLevel } from '@/permissions/levels'
 import { useAuthStore } from '@/stores/auth'
 import PermissionTable from './PermissionTable.vue'
@@ -41,7 +41,11 @@ const formVisible = ref(false)
 const formMode = ref<RoleFormMode>('edit')
 
 const groups = computed(() => moduleGroups(tree.value))
-const names = computed(() => moduleNames(groups.value))
+const capabilities = computed(() => capabilityModules(tree.value))
+const names = computed(() => ({
+  ...moduleNames(groups.value),
+  ...Object.fromEntries(capabilities.value.map(module => [module.code, `分配角色 / ${module.name}`])),
+}))
 const isSuperRole = computed(() => role.value?.code === SUPERADMIN_ROLE_CODE && role.value.is_builtin)
 const readonly = computed(() => !canGrant.value || isSuperRole.value || loading.value || saving.value)
 const changes = computed(() =>
@@ -370,7 +374,7 @@ onMounted(() => {
                 v-if="!readonly || saving"
                 class="role-body__guide"
               >
-                勾选这个角色在每个模块能做的事：<strong>查看</strong>是能进入模块，<strong>导出</strong>是能下载 Excel，<strong>管理</strong>是能新增、编辑、导入。勾后面的会自动带上前面的。
+                按菜单授权。每一项选一档：<strong>查看</strong>能进入，<strong>导出</strong>还能下载，<strong>管理</strong>还能新增、编辑、导入。选中的档已经包含它左边的能力。「开通整组」会把这一组开到各自最高档。最下面的「分配角色」不是菜单。
               </p>
               <PermissionTable
                 v-model="selected"
@@ -378,6 +382,7 @@ onMounted(() => {
                 :original="original"
                 :disabled="readonly"
                 :role-code="role.code"
+                :capabilities="capabilities"
               />
               <!-- 钉在权限卡片底部：滚动时一直看得到，但不盖住表格内容。 -->
               <div

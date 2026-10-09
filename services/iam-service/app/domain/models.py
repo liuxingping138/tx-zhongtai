@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -19,10 +19,20 @@ def _uuid() -> uuid.UUID:
 
 class User(Base):
     __tablename__ = "iam_users"
-    __table_args__ = {"comment": "用户"}
+    # 已删除账号不占用户名，同名可以再建。和若依按 del_flag 校验用户名一样。
+    __table_args__ = (
+        Index(
+            "uq_iam_users_username_live",
+            "username",
+            unique=True,
+            postgresql_where=text("status <> 'deleted'"),
+            sqlite_where=text("status <> 'deleted'"),
+        ),
+        {"comment": "用户"},
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid, comment="主键")
-    username: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, comment="用户名")
+    username: Mapped[str] = mapped_column(String(64), nullable=False, comment="用户名")
     display_name: Mapped[str] = mapped_column(String(128), nullable=False, comment="显示名")
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False, comment="密码哈希")
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active", comment="状态")

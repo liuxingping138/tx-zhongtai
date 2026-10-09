@@ -11,43 +11,43 @@ http:
       rule: "PathPrefix(`/api/v1/auth`)"
       entryPoints: ["web"]
       service: iam-service
-      middlewares: ["compress"]
+      middlewares: ["compress", "request-limit"]
       priority: 100
     iam-system:
       rule: "PathPrefix(`/api/v1/system`)"
       entryPoints: ["web"]
       service: iam-service
-      middlewares: ["compress"]
+      middlewares: ["compress", "request-limit"]
       priority: 100
     audit:
       rule: "PathPrefix(`/api/v1/audit`)"
       entryPoints: ["web"]
       service: audit-service
-      middlewares: ["compress"]
+      middlewares: ["compress", "request-limit"]
       priority: 100
     codebook:
       rule: "PathPrefix(`/api/v1/codebook`)"
       entryPoints: ["web"]
       service: codebook-service
-      middlewares: ["compress"]
+      middlewares: ["compress", "request-limit"]
       priority: 100
     policy:
       rule: "PathPrefix(`/api/v1/policy`)"
       entryPoints: ["web"]
       service: policy-service
-      middlewares: ["compress"]
+      middlewares: ["compress", "request-limit"]
       priority: 100
     api-fallback:
       rule: "PathPrefix(`/api/v1`)"
       entryPoints: ["web"]
       service: api-fallback
-      middlewares: ["compress"]
+      middlewares: ["compress", "request-limit"]
       priority: 50
     frontend:
       rule: "PathPrefix(`/`)"
       entryPoints: ["web"]
       service: frontend
-      middlewares: ["compress"]
+      middlewares: ["compress", "request-limit"]
       priority: 1
 
   middlewares:
@@ -62,6 +62,10 @@ http:
           - "image/webp"
           - "image/png"
           - "image/jpeg"
+    # 20MB 导入上限再加 256KB multipart 边距。超过的请求在网关被拒绝，不会进到服务。
+    request-limit:
+      buffering:
+        maxRequestBodyBytes: 21233664
 
   services:
     iam-service:

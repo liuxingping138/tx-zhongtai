@@ -20,3 +20,12 @@ frontend/.vite/
 !.env.example
 
 docs/
+
+# 部署凭据、证书、数据库备份不进入 Docker 构建上下文。
+deploy/secrets/
+deploy/backups/
+deploy/compose/.p6.env
+deploy/compose/.p6.runtime
+frontend/e2e/.admin-password
+frontend/test-results/
+frontend/playwright-report/

@@ -7,18 +7,31 @@ openpyxl 是纯 CPU 同步库，服务里一律用 *_async 包装放到线程池
 from __future__ import annotations
 
 import base64
+import zipfile
+from collections.abc import Callable, Iterator
 from functools import partial
 from io import BytesIO
 from typing import Any
+from xml.etree.ElementTree import iterparse
 
-from anyio import to_thread
+from anyio import CapacityLimiter, to_thread
 from openpyxl import Workbook, load_workbook
 from openpyxl.cell.cell import Cell
+from openpyxl.utils.cell import coordinate_to_tuple, range_boundaries
 from openpyxl.worksheet.worksheet import Worksheet
 
 from platform_common.clock import format_beijing
 from platform_common.columns import AUDIT_EXPORT_COLUMNS, ColumnSpec, header_to_field
 from platform_common.errors import ApiError, ErrorCode
+
+# 20MB 压缩包不能代表解压后的大小。这些上限拦住超大表和压缩炸弹，
+# 同时仍盖住现有 10 万行导出上限对应的导入规模。
+EXCEL_MAX_UNCOMPRESSED_BYTES = 64 * 1024 * 1024
+EXCEL_MAX_ROWS = 100_000
+EXCEL_MAX_COLUMNS = 128
+EXCEL_MAX_ZIP_ENTRIES = 64
+EXCEL_PARSE_CONCURRENCY = 2
+_parse_limiter = CapacityLimiter(EXCEL_PARSE_CONCURRENCY)
 
 
 def _field_of(columns: tuple[ColumnSpec, ...], header: str) -> str | None:
@@ -28,43 +41,137 @@ def _field_of(columns: tuple[ColumnSpec, ...], header: str) -> str | None:
     return header_to_field(columns, header)
 
 
+def _reject_oversized_workbook(content: bytes, *, max_uncompressed_bytes: int) -> None:
+    """按声明大小和实际解压字节拒绝压缩炸弹。表头撒谎时以读到的字节为准。"""
+
+    if not content.startswith(b"PK"):
+        return
+    try:
+        archive = zipfile.ZipFile(BytesIO(content))
+    except zipfile.BadZipFile:
+        return
+    with archive:
+        infos = archive.infolist()
+        if len(infos) > EXCEL_MAX_ZIP_ENTRIES:
+            raise ApiError("Excel 内部文件过多", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+        declared = 0
+        for info in infos:
+            size = info.file_size
+            if size > max_uncompressed_bytes or declared + size > max_uncompressed_bytes:
+                raise ApiError("Excel 解压后过大", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+            declared += size
+        actual = 0
+        for info in infos:
+            with archive.open(info, "r") as handle:
+                while True:
+                    block = handle.read(1024 * 1024)
+                    if not block:
+                        break
+                    actual += len(block)
+                    if actual > max_uncompressed_bytes:
+                        raise ApiError("Excel 解压后过大", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+
+
+def iter_workbook_rows(
+    content: bytes,
+    *,
+    max_rows: int = EXCEL_MAX_ROWS,
+    max_columns: int = EXCEL_MAX_COLUMNS,
+    max_uncompressed_bytes: int = EXCEL_MAX_UNCOMPRESSED_BYTES,
+) -> Iterator[tuple[Any, ...]]:
+    """校验实际 XML 坐标，避免虚假 dimension 和稀疏行放大解析工作量。"""
+    try:
+        _reject_oversized_workbook(content, max_uncompressed_bytes=max_uncompressed_bytes)
+        with zipfile.ZipFile(BytesIO(content)) as archive:
+            for name in archive.namelist():
+                if not (name.startswith("xl/worksheets/") and name.endswith(".xml")):
+                    continue
+                row_count = 0
+                cell_count = 0
+                with archive.open(name) as source:
+                    for _, element in iterparse(source, events=("end",)):
+                        tag = element.tag.rsplit("}", 1)[-1]
+                        row = col = 0
+                        if tag == "dimension" and element.get("ref"):
+                            _, _, col, row = range_boundaries(element.attrib["ref"])
+                        elif tag == "row":
+                            cell_count = 0
+                            row_count += 1
+                            row = max(row_count, int(element.get("r", row_count)))
+                        elif tag == "c":
+                            cell_count += 1
+                            col = cell_count
+                            if element.get("r"):
+                                row, coordinate_col = coordinate_to_tuple(element.attrib["r"])
+                                col = max(col, coordinate_col)
+                        if row and row > max_rows + 1:
+                            raise ApiError("Excel 行数超过上限", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+                        if col and col > max_columns:
+                            raise ApiError("Excel 列数超过上限", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+                        element.clear()
+        book = load_workbook(BytesIO(content), read_only=True, data_only=True)
+        try:
+            sheet = book[book.sheetnames[0]]
+            # 不相信工作表声明的尺寸；实际坐标已经在 XML 检查中限制。
+            sheet.reset_dimensions()
+            for count, row in enumerate(sheet.iter_rows(values_only=True), 1):
+                if count > max_rows + 1:
+                    raise ApiError("Excel 行数超过上限", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+                if len(row) > max_columns:
+                    raise ApiError("Excel 列数超过上限", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+                yield row
+        finally:
+            book.close()
+    except ApiError:
+        raise
+    except Exception as exc:
+        raise ApiError("无法读取 Excel 文件", code=ErrorCode.VALIDATION_ERROR, http_status=422) from exc
+
+
 def parse_sheet(
     content: bytes,
     columns: tuple[ColumnSpec, ...],
     *,
     sheet_name: str | None = None,
     subject: str = "业务",
+    max_rows: int = EXCEL_MAX_ROWS,
+    max_columns: int = EXCEL_MAX_COLUMNS,
+    max_uncompressed_bytes: int = EXCEL_MAX_UNCOMPRESSED_BYTES,
 ) -> list[dict[str, str]]:
     del sheet_name  # 上传只读第一个 sheet，不看名称
+    rows = iter_workbook_rows(
+        content, max_rows=max_rows, max_columns=max_columns, max_uncompressed_bytes=max_uncompressed_bytes
+    )
     try:
-        book = load_workbook(BytesIO(content), read_only=True, data_only=True)
-    except Exception as exc:  # noqa: BLE001
-        raise ApiError("无法读取 Excel 文件", code=ErrorCode.VALIDATION_ERROR, http_status=422) from exc
-    sheet = book[book.sheetnames[0]]
-    rows = sheet.iter_rows(values_only=True)
-    mapping: list[str | None] = []
-    parse_columns = (*columns, SKIP_REASON_COLUMN)
-    for header_row in rows:
-        if header_row is None or all(cell is None or str(cell).strip() == "" for cell in header_row):
-            continue
-        mapping = [_field_of(columns, str(cell or "")) for cell in header_row]
-        if any(mapping):
-            break
-        raise ApiError(f"Excel 表头与{subject}字段不匹配", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    else:
-        raise ApiError("Excel 为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    items: list[dict[str, str]] = []
-    for raw in rows:
-        if raw is None or all(cell is None or str(cell).strip() == "" for cell in raw):
-            continue
-        item = {spec.field: "" for spec in parse_columns}
-        for idx, field in enumerate(mapping):
-            if not field or idx >= len(raw):
+        mapping: list[str | None] = []
+        parse_columns = (*columns, SKIP_REASON_COLUMN)
+        for header_row in rows:
+            if header_row is None or all(cell is None or str(cell).strip() == "" for cell in header_row):
                 continue
-            value = raw[idx]
-            item[field] = "" if value is None else str(value).strip()
-        items.append(item)
-    return items
+            if len(header_row) > max_columns:
+                raise ApiError("Excel 列数超过上限", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+            mapping = [_field_of(columns, str(cell or "")) for cell in header_row]
+            if any(mapping):
+                break
+            raise ApiError(f"Excel 表头与{subject}字段不匹配", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+        else:
+            raise ApiError("Excel 为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+        items: list[dict[str, str]] = []
+        for raw in rows:
+            if raw is None or all(cell is None or str(cell).strip() == "" for cell in raw):
+                continue
+            if len(items) >= max_rows:
+                raise ApiError("Excel 行数超过上限", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+            item = {spec.field: "" for spec in parse_columns}
+            for idx, field in enumerate(mapping):
+                if not field or idx >= len(raw):
+                    continue
+                value = raw[idx]
+                item[field] = "" if value is None else str(value).strip()
+            items.append(item)
+        return items
+    finally:
+        rows.close()  # type: ignore[attr-defined]
 
 
 def append_text_row(sheet: Worksheet, values: list[Any] | tuple[Any, ...]) -> None:
@@ -143,10 +250,25 @@ async def parse_sheet_async(
     *,
     sheet_name: str | None = None,
     subject: str = "业务",
+    max_rows: int = EXCEL_MAX_ROWS,
+    max_columns: int = EXCEL_MAX_COLUMNS,
+    max_uncompressed_bytes: int = EXCEL_MAX_UNCOMPRESSED_BYTES,
 ) -> list[dict[str, str]]:
-    """在线程池中解析 Excel，避免阻塞事件循环。"""
+    """在线程池中解析 Excel，避免阻塞事件循环。同时最多跑两个解析。"""
 
-    return await to_thread.run_sync(partial(parse_sheet, content, columns, sheet_name=sheet_name, subject=subject))
+    async with _parse_limiter:
+        return await to_thread.run_sync(
+            partial(
+                parse_sheet,
+                content,
+                columns,
+                sheet_name=sheet_name,
+                subject=subject,
+                max_rows=max_rows,
+                max_columns=max_columns,
+                max_uncompressed_bytes=max_uncompressed_bytes,
+            )
+        )
 
 
 async def build_workbook_async(
@@ -172,3 +294,9 @@ async def encode_skipped_file_async(
     """在线程池中生成校验报告，避免阻塞事件循环。"""
 
     return await to_thread.run_sync(partial(encode_skipped_file, columns, rows, sheet_name=sheet_name))
+
+
+async def run_excel_parse[ParseResult](func: Callable[..., ParseResult], *args: Any) -> ParseResult:
+    """地区解析与标准导入共用并发预算，整个解析/生成流程在线程池中完成。"""
+    async with _parse_limiter:
+        return await to_thread.run_sync(partial(func, *args))

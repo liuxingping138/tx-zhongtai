@@ -62,9 +62,7 @@ services:
       - redis-data:/data
     networks:
       - data
-    # 宿主机端口可通过 .env 的 REDIS_HOST_PORT 调整，避免与本机已运行的 Redis 冲突。
-    ports:
-      - "127.0.0.1:${REDIS_HOST_PORT:-6379}:6379"
+    # 不映射宿主机端口。登录限流只走 Docker 网络，映射出去只会扩大暴露面。
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -77,16 +75,22 @@ services:
       dockerfile: services/iam-service/Dockerfile
     restart: unless-stopped
     environment:
-      IAM_ENVIRONMENT: ${ENVIRONMENT:-development}
+      IAM_ENVIRONMENT: ${IAM_ENVIRONMENT:-${ENVIRONMENT:-development}}
       IAM_SERVICE_NAME: iam-service
       IAM_LOG_LEVEL: ${IAM_LOG_LEVEL:-INFO}
       IAM_DATABASE_URL: postgresql+asyncpg://${IAM_DB_USER}:${IAM_DB_PASSWORD}@postgres:5432/${IAM_DB_NAME}
       IAM_REDIS_URL: redis://redis:${REDIS_PORT:-6379}/${REDIS_DB:-0}
       IAM_CORS_ALLOW_ORIGINS: ${IAM_CORS_ALLOW_ORIGINS:-[]}
       IAM_JWT_KEYS_DIR: /secrets/jwt
-      IAM_COOKIE_SECURE: "false"
-      IAM_ACCESS_TOKEN_TTL_SECONDS: "28800"
-      IAM_CSRF_ALLOWED_ORIGINS: '["http://localhost:8080","http://127.0.0.1:8080","http://localhost:5173","http://127.0.0.1:5173"]'
+      IAM_COOKIE_SECURE: ${IAM_COOKIE_SECURE:-false}
+      IAM_ACCESS_TOKEN_TTL_SECONDS: ${IAM_ACCESS_TOKEN_TTL_SECONDS:-28800}
+      IAM_REFRESH_REUSE_GRACE_SECONDS: ${IAM_REFRESH_REUSE_GRACE_SECONDS:-30}
+      IAM_LOGIN_MAX_FAILURES: ${IAM_LOGIN_MAX_FAILURES:-5}
+      IAM_LOGIN_MAX_FAILURES_PER_IP: ${IAM_LOGIN_MAX_FAILURES_PER_IP:-20}
+      IAM_LOGIN_LOCKOUT_SECONDS: ${IAM_LOGIN_LOCKOUT_SECONDS:-300}
+      IAM_SESSION_RETENTION_DAYS: ${IAM_SESSION_RETENTION_DAYS:-30}
+      IAM_WORKER_LEASE_SECONDS: ${IAM_WORKER_LEASE_SECONDS:-30}
+      IAM_CSRF_ALLOWED_ORIGINS: '${IAM_CSRF_ALLOWED_ORIGINS:-["http://localhost:8080","http://127.0.0.1:8080","http://localhost:5173","http://127.0.0.1:5173"]}'
       IAM_INTERNAL_CALLER_SECRETS: ${IAM_INTERNAL_CALLER_SECRETS}
       IAM_AUDIT_INGEST_URL: http://audit-service:8002
       IAM_AUDIT_INGEST_SECRET: ${IAM_AUDIT_INGEST_SECRET:-dev-only-change-me-ingest}
@@ -112,7 +116,7 @@ services:
       dockerfile: services/audit-service/Dockerfile
     restart: unless-stopped
     environment:
-      AUDIT_ENVIRONMENT: ${ENVIRONMENT:-development}
+      AUDIT_ENVIRONMENT: ${AUDIT_ENVIRONMENT:-${ENVIRONMENT:-development}}
       AUDIT_SERVICE_NAME: audit-service
       AUDIT_LOG_LEVEL: ${AUDIT_LOG_LEVEL:-INFO}
       AUDIT_DATABASE_URL: postgresql+asyncpg://${AUDIT_DB_USER}:${AUDIT_DB_PASSWORD}@postgres:5432/${AUDIT_DB_NAME}
@@ -140,7 +144,9 @@ services:
       dockerfile: services/codebook-service/Dockerfile
     restart: unless-stopped
     environment:
-      CODEBOOK_ENVIRONMENT: ${ENVIRONMENT:-development}
+      CODEBOOK_ENVIRONMENT: ${CODEBOOK_ENVIRONMENT:-${ENVIRONMENT:-development}}
+      CODEBOOK_IMPORT_MAX_BYTES: ${CODEBOOK_IMPORT_MAX_BYTES:-20971520}
+      CODEBOOK_EXPORT_MAX_ROWS: ${CODEBOOK_EXPORT_MAX_ROWS:-100000}
       CODEBOOK_SERVICE_NAME: codebook-service
       CODEBOOK_LOG_LEVEL: ${CODEBOOK_LOG_LEVEL:-INFO}
       CODEBOOK_DATABASE_URL: postgresql+asyncpg://${CODEBOOK_DB_USER}:${CODEBOOK_DB_PASSWORD}@postgres:5432/${CODEBOOK_DB_NAME}
@@ -167,8 +173,14 @@ services:
       dockerfile: services/policy-service/Dockerfile
     restart: unless-stopped
     environment:
-      POLICY_ENVIRONMENT: ${ENVIRONMENT:-development}
+      POLICY_ENVIRONMENT: ${POLICY_ENVIRONMENT:-${ENVIRONMENT:-development}}
       POLICY_SERVICE_NAME: policy-service
+      POLICY_IMPORT_MAX_BYTES: ${POLICY_IMPORT_MAX_BYTES:-20971520}
+      POLICY_EXPORT_MAX_ROWS: ${POLICY_EXPORT_MAX_ROWS:-100000}
+      POLICY_CRAWLER_SYNC_DAYS: ${POLICY_CRAWLER_SYNC_DAYS:-7}
+      POLICY_CRAWLER_BACKFILL_DAYS: ${POLICY_CRAWLER_BACKFILL_DAYS:-365}
+      POLICY_CRAWLER_HEALTH_NORMAL_DAYS: ${POLICY_CRAWLER_HEALTH_NORMAL_DAYS:-7}
+      POLICY_CRAWLER_HEALTH_WATCH_DAYS: ${POLICY_CRAWLER_HEALTH_WATCH_DAYS:-30}
       POLICY_LOG_LEVEL: ${POLICY_LOG_LEVEL:-INFO}
       POLICY_DATABASE_URL: postgresql+asyncpg://${POLICY_DB_USER}:${POLICY_DB_PASSWORD}@postgres:5432/${POLICY_DB_NAME}
       POLICY_CORS_ALLOW_ORIGINS: ${POLICY_CORS_ALLOW_ORIGINS:-[]}
@@ -202,8 +214,14 @@ services:
     stop_grace_period: 45s
     restart: unless-stopped
     environment:
-      POLICY_ENVIRONMENT: ${ENVIRONMENT:-development}
+      POLICY_ENVIRONMENT: ${POLICY_ENVIRONMENT:-${ENVIRONMENT:-development}}
       POLICY_SERVICE_NAME: policy-worker
+      POLICY_IMPORT_MAX_BYTES: ${POLICY_IMPORT_MAX_BYTES:-20971520}
+      POLICY_EXPORT_MAX_ROWS: ${POLICY_EXPORT_MAX_ROWS:-100000}
+      POLICY_CRAWLER_SYNC_DAYS: ${POLICY_CRAWLER_SYNC_DAYS:-7}
+      POLICY_CRAWLER_BACKFILL_DAYS: ${POLICY_CRAWLER_BACKFILL_DAYS:-365}
+      POLICY_CRAWLER_HEALTH_NORMAL_DAYS: ${POLICY_CRAWLER_HEALTH_NORMAL_DAYS:-7}
+      POLICY_CRAWLER_HEALTH_WATCH_DAYS: ${POLICY_CRAWLER_HEALTH_WATCH_DAYS:-30}
       POLICY_LOG_LEVEL: ${POLICY_LOG_LEVEL:-INFO}
       POLICY_DATABASE_URL: postgresql+asyncpg://${POLICY_DB_USER}:${POLICY_DB_PASSWORD}@postgres:5432/${POLICY_DB_NAME}
       POLICY_CORS_ALLOW_ORIGINS: ${POLICY_CORS_ALLOW_ORIGINS:-[]}
@@ -235,8 +253,10 @@ services:
     command: [".venv/bin/python", "-m", "app.worker"]
     restart: unless-stopped
     environment:
-      IAM_ENVIRONMENT: ${ENVIRONMENT:-development}
+      IAM_ENVIRONMENT: ${IAM_ENVIRONMENT:-${ENVIRONMENT:-development}}
       IAM_SERVICE_NAME: iam-worker
+      IAM_WORKER_LEASE_SECONDS: ${IAM_WORKER_LEASE_SECONDS:-30}
+      IAM_SESSION_RETENTION_DAYS: ${IAM_SESSION_RETENTION_DAYS:-30}
       IAM_LOG_LEVEL: ${IAM_LOG_LEVEL:-INFO}
       IAM_DATABASE_URL: postgresql+asyncpg://${IAM_DB_USER}:${IAM_DB_PASSWORD}@postgres:5432/${IAM_DB_NAME}
       IAM_REDIS_URL: redis://redis:${REDIS_PORT:-6379}/${REDIS_DB:-0}
@@ -276,10 +296,9 @@ services:
     command:
       - "--configFile=/etc/traefik/traefik.yml"
     volumes:
-      - ../gateway/traefik.yml:/etc/traefik/traefik.yml:ro
-      - ../gateway/dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - ../gateway:/etc/traefik:ro
     ports:
-      - "${GATEWAY_HTTP_PORT:-8080}:80"
+      - "${GATEWAY_BIND_ADDR:-0.0.0.0}:${GATEWAY_HTTP_PORT:-8080}:80"
     networks:
       - gateway
     depends_on:

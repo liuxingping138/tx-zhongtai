@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 from platform_common.actors import Actor
 from platform_common.enums import SecurityClass
 from platform_common.errors import ApiError, ErrorCode
-from platform_common.http_utils import import_result_response, read_upload_within_limit, success_json
+from platform_common.http_utils import IMPORT_FILE_OPENAPI, import_result_response, read_import_upload, success_json
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas import SourceClearRequest, SourceWrite
+from app.api.schemas import SourceClearRequest, SourcePatch, SourceWrite
 from app.api.security import classified, require_policy_permission
 from app.application import sources as service
 from app.core.config import Settings, get_settings
@@ -119,15 +119,15 @@ async def clear_items(
     return success_json(await service.purge_sources(session, actor))
 
 
-@router.post("/import")
+@router.post("/import", openapi_extra=IMPORT_FILE_OPENAPI)
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def import_items(
-    file: UploadFile = File(...),
+    request: Request,
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_policy_permission(RESOURCE, "import")),
     settings: Settings = Depends(get_settings),
 ):
-    content = await read_upload_within_limit(file, settings.import_max_bytes)
+    content = await read_import_upload(request, settings.import_max_bytes)
     return import_result_response(await service.import_sources(session, actor, content), "sources-import.xlsx")
 
 
@@ -158,8 +158,10 @@ async def get_item(
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def update_item(
     item_id: uuid.UUID,
-    body: SourceWrite,
+    body: SourcePatch,
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_policy_permission(RESOURCE, "update")),
 ):
-    return success_json(await service.update_source(session, actor, item_id, body.model_dump()))
+    return success_json(
+        await service.update_source(session, actor, item_id, body.model_dump(exclude_unset=True))
+    )

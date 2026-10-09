@@ -8,7 +8,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.clock import utcnow
-from app.domain.enums import NodeType
+from app.domain.enums import NodeType, UserStatus
 from app.domain.models import Resource, Role, RoleGrant, User, UserRole
 
 
@@ -104,12 +104,15 @@ async def replace_role_grants(
 
 
 async def member_counts(session: AsyncSession, role_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
-    """每个角色分给了几个人（含已禁用账号，角色列表据此提示影响范围）。"""
+    """每个角色分给了几个人（含已禁用账号，不含已删除；角色列表据此提示影响范围）。"""
 
     if not role_ids:
         return {}
     result = await session.execute(
-        select(UserRole.role_id, func.count()).where(UserRole.role_id.in_(role_ids)).group_by(UserRole.role_id)
+        select(UserRole.role_id, func.count())
+        .join(User, User.id == UserRole.user_id)
+        .where(UserRole.role_id.in_(role_ids), User.status != UserStatus.DELETED)
+        .group_by(UserRole.role_id)
     )
     return {role_id: int(count) for role_id, count in result.all()}
 
@@ -135,7 +138,7 @@ async def list_role_members(session: AsyncSession, role_id: uuid.UUID) -> list[U
     result = await session.execute(
         select(User)
         .join(UserRole, UserRole.user_id == User.id)
-        .where(UserRole.role_id == role_id)
+        .where(UserRole.role_id == role_id, User.status != UserStatus.DELETED)
         .order_by(User.status, User.username)
     )
     return list(result.scalars().all())

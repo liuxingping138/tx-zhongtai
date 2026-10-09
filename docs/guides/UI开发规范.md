@@ -42,7 +42,7 @@
 | 系统字段验证 | `frontend/src/composables/useFieldValidation.ts` | 字段错误、提交验证，不覆盖业务规则 |
 | 未保存保护 | `frontend/src/composables/useUnsavedForm.ts` | visible、表单快照、saving；接close/beforeClose |
 | Excel 下载 | `frontend/src/api/download.ts` | `downloadFile(路径, 中文文件名, filtersForExport(listQuery.applied))`；导出按已生效筛选走，传 applied 不传 query；不要用裸 fetch，否则绕开 401 自动续期和统一中文错误提示 |
-| 权限展示 | `frontend/src/permissions/catalog.ts` | 模块分组、每个模块可选档位（有导出动作才有「导出」列，有写操作才有「管理」列）、「管理」包含的操作说明都从资源树推导，不在页面里手写模块清单；新增模块只需在 iam 目录登记动作并给导出动作标 `EXPORT` |
+| 权限展示 | `frontend/src/permissions/catalog.ts`、`modules/system/roles/PermissionTable.vue` | 按菜单分组，名称与菜单一致，一项一档。有导出动作才出现「导出」，有写操作才出现「管理」。「分配角色」单独放在菜单列表下面。说明从资源树推导，不在页面里手写模块清单。新增模块只需在 iam 目录登记动作并给导出动作标 `EXPORT` |
 | 导出按钮 | 各列表页 | 用 `auth.canExport(资源)` 判断；没有导出权限时按钮保留但禁用，悬停说明原因（工具栏入口必须保留） |
 | 详情子页 | `router/routes.ts` 的 `meta.menuPath` | 不在菜单里的详情页填所属列表路径，面包屑与侧栏高亮自动挂到列表下 |
 | 筛选项候选值 | `frontend/src/composables/useFilterOptions.ts` | `v-bind="filters.bind('字段')"`；候选少的字段整份预发、本地过滤，候选多的自动转服务端搜索。不要再自己 reactive 一份 options |
@@ -59,9 +59,9 @@
 
 | 路由 | 默认/全部数据列数量 |
 |---|---|
-| `/policy/sources` | 16/16 |
+| `/policy/sources` | 13（静态列；编辑表单里多出来的字段会追加到列设置） |
 | `/policy/base-tags` | 20/20 |
-| `/policy/interpretations` | 27/27 |
+| `/policy/interpretations` | 26（含数据状态） |
 | `/codebook/policy-types` | 7/7 |
 | `/codebook/scenarios` | 35/35 |
 | `/codebook/area-codes` | 15/15 |
@@ -123,20 +123,11 @@ ColumnPicker 按用户ID和route.path保存字段键，使用v2存储键；旧v1
 
 有 `width` 时该列固定；弹性列配置 `minWidth/grow`，未声明grow的列不分配余量。表格外框必须铺满内容区，与操作栏和分页右边缘对齐；不能用maxWidth限制表格总宽度。全列超过容器时在 ScrollPort 内横向滚动，操作列 CSS sticky 贴右侧。用户仅选择少量短字段时保留其紧凑宽度，允许表内空白。六个业务表表头通常40px、数据行44px；系统专用表保留已有操作密度。长内容单行省略，不挤高整行。系统用户/角色/审计同样走 ListPage + ScrollPort。不要写滚动提示文案，也不要用 Element Plus 悬浮条替代常显滑槽。
 
-## 5. 本地开发和更新页面
+## 5. 更新页面
 
-| 入口 | 页面来源 | 源码修改后 |
-|---|---|---|
-| `http://127.0.0.1:5173` | Vite开发服务，API代理到网关 | 正常自动热更新；未运行时在frontend目录执行 `pnpm dev --host 127.0.0.1` |
-| `http://localhost:8080` | Docker frontend里的构建产物，经网关访问 | 必须重建frontend镜像并替换容器；单纯刷新或restart旧容器不会更新源码 |
+当前页面来自服务器上的 frontend 镜像。改了前端源码后，按 [部署与维护](部署与维护.md) 同步并重建 `frontend`，只刷新浏览器不会变。
 
-在仓库根目录更新8080前端：
-
-```sh
-docker compose -f deploy/compose/docker-compose.yml --env-file .env up -d --build --no-deps frontend
-```
-
-只修改前端时使用上述单服务命令，不必重建数据库和全部后端。仅执行本机 `pnpm build` 不会把 dist 自动放入 Docker。不要把开发环境更新变成启动P6隔离栈。更新后验证8080的页面和静态资源，不把5173验证结果当成8080已更新。
+本机 `pnpm dev` 只在脱离服务器单独看界面时使用，不能代替服务器上的镜像。不要为了改页面去启动 P6。
 
 ## 6. 验收与文档同步
 

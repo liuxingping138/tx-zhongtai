@@ -44,7 +44,7 @@ class MenuSpec:
 RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("system", "系统管理", "iam-service", NodeType.DIRECTORY, True, 10),
     ResourceSpec("system.users", "用户管理", "iam-service", NodeType.RESOURCE, True, 11, "system"),
-    ResourceSpec("system.roles", "角色管理", "iam-service", NodeType.RESOURCE, True, 12, "system"),
+    ResourceSpec("system.roles", "角色与权限", "iam-service", NodeType.RESOURCE, True, 12, "system"),
     ResourceSpec("system.permissions", "权限分配", "iam-service", NodeType.RESOURCE, True, 13, "system"),
     ResourceSpec("system.scheduler", "任务调度", "policy-service", NodeType.RESOURCE, True, 15, "system"),
     ResourceSpec("system.audit", "操作日志", "iam-service", NodeType.RESOURCE, True, 14, "system"),
@@ -80,6 +80,7 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ActionSpec("system.users", "update", GrantLevel.FULL),
     ActionSpec("system.users", "reset_password", GrantLevel.FULL),
     ActionSpec("system.users", "revoke_sessions", GrantLevel.FULL),
+    ActionSpec("system.users", "delete", GrantLevel.FULL),
     ActionSpec("system.roles", "list", GrantLevel.READ),
     ActionSpec("system.roles", "read", GrantLevel.READ),
     ActionSpec("system.roles", "create", GrantLevel.FULL),

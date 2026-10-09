@@ -37,7 +37,7 @@ class AuthService:
     async def authenticate_password(self, username: str, password: str) -> User:
         normalized = normalize_username(username)
         user = await user_repo.get_user_by_username(self.session, normalized)
-        if user is None or not verify_password(user.password_hash, password):
+        if user is None or user.status == UserStatus.DELETED or not verify_password(user.password_hash, password):
             raise UnauthenticatedError(UNIFIED_LOGIN_FAILURE)
         if user.status != UserStatus.ACTIVE:
             raise UnauthenticatedError("账号不可用")
@@ -155,6 +155,8 @@ class AuthService:
                     "outcome": "denied",
                 },
             )
+            # 安全撤销必须持久化，再返回 401；请求依赖随后 rollback 不得撤销此结果。
+            await self.session.commit()
             raise UnauthenticatedError("刷新凭据已失效")
         if refresh_row.expires_at <= now or not session_repo.session_is_usable(session_row, now=now):
             raise UnauthenticatedError("刷新凭据已过期")

@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "docs" / "openapi"
+OUT = Path(os.environ.get("OPENAPI_OUT", ROOT / "docs" / "openapi"))
 
 
 def _prepare_env() -> None:

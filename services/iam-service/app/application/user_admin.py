@@ -94,6 +94,12 @@ async def _guard_last_superadmin(
         raise PermissionDeniedError("不能移除最后一个可登录超级管理员")
 
 
+def _require_live(user: User | None) -> User:
+    if user is None or getattr(user, "status", None) == UserStatus.DELETED:
+        raise NotFoundError("用户不存在")
+    return user
+
+
 def _role_brief(role: Role) -> dict[str, object]:
     return {"id": str(role.id), "name": role.name, "status": role.status, "is_builtin": role.is_builtin}
 
@@ -133,9 +139,7 @@ async def list_users_page(
 
 
 async def get_user(session: AsyncSession, user_id: uuid.UUID) -> dict[str, object]:
-    user = await user_repo.get_user_by_id(session, user_id)
-    if user is None:
-        raise NotFoundError("用户不存在")
+    user = _require_live(await user_repo.get_user_by_id(session, user_id))
     payload = user_public(user)
     roles = (await user_repo.roles_for_users(session, [user.id])).get(user.id, [])
     payload["role_ids"] = [str(role.id) for role in roles]
@@ -209,9 +213,7 @@ async def update_user(
     status: str | None,
     version: int,
 ) -> dict[str, object]:
-    user = await user_repo.get_user_for_update(session, user_id)
-    if user is None:
-        raise NotFoundError("用户不存在")
+    user = _require_live(await user_repo.get_user_for_update(session, user_id))
     if user.version != version:
         raise VersionConflictError()
     await _assert_can_manage_target(session, actor, user)
@@ -244,9 +246,7 @@ async def update_user(
 
 
 async def reset_password(session: AsyncSession, actor: User, user_id: uuid.UUID) -> str:
-    user = await user_repo.get_user_for_update(session, user_id)
-    if user is None:
-        raise NotFoundError("用户不存在")
+    user = _require_live(await user_repo.get_user_for_update(session, user_id))
     await _assert_can_manage_target(session, actor, user)
     temporary = generate_temporary_password()
     user.password_hash = hash_password(temporary)
@@ -264,9 +264,7 @@ async def reset_password(session: AsyncSession, actor: User, user_id: uuid.UUID)
 
 
 async def revoke_sessions(session: AsyncSession, actor: User, user_id: uuid.UUID) -> int:
-    user = await user_repo.get_user_by_id(session, user_id)
-    if user is None:
-        raise NotFoundError("用户不存在")
+    user = _require_live(await user_repo.get_user_by_id(session, user_id))
     await _assert_can_manage_target(session, actor, user)
     count = await session_repo.revoke_user_sessions(session, user.id)
     await outbox_repo.enqueue(
@@ -277,6 +275,31 @@ async def revoke_sessions(session: AsyncSession, actor: User, user_id: uuid.UUID
     return count
 
 
+async def delete_user(session: AsyncSession, actor: User, user_id: uuid.UUID) -> None:
+    """逻辑删除：账号从列表消失、不能登录，行仍留着对操作日志。同名用户名可以再建。"""
+
+    user = _require_live(await user_repo.get_user_for_update(session, user_id))
+    if actor.id == user.id:
+        raise PermissionDeniedError("不能删除当前登录的账号")
+    await _assert_can_manage_target(session, actor, user)
+    await _guard_last_superadmin(session, user, new_status=UserStatus.DELETED)
+    user.status = UserStatus.DELETED
+    user.updated_at = utcnow()
+    user.version += 1
+    await session_repo.revoke_user_sessions(session, user.id)
+    await user_repo.clear_user_roles(session, user.id)
+    await outbox_repo.enqueue(
+        session,
+        event_type="iam.user.deleted",
+        payload={
+            "actor_id": str(actor.id),
+            "target_id": str(user.id),
+            "username": user.username,
+            "outcome": "success",
+        },
+    )
+
+
 async def replace_roles(
     session: AsyncSession,
     actor: User,
@@ -285,9 +308,7 @@ async def replace_roles(
     *,
     version: int,
 ) -> dict[str, object]:
-    user = await user_repo.get_user_for_update(session, user_id)
-    if user is None:
-        raise NotFoundError("用户不存在")
+    user = _require_live(await user_repo.get_user_for_update(session, user_id))
     if user.version != version:
         raise VersionConflictError()
     return await _set_roles(session, actor, user, role_ids)
@@ -300,9 +321,7 @@ async def add_role_members(
 
     added = 0
     for user_id in dict.fromkeys(user_ids):
-        user = await user_repo.get_user_for_update(session, user_id)
-        if user is None:
-            raise NotFoundError("用户不存在")
+        user = _require_live(await user_repo.get_user_for_update(session, user_id))
         current = await user_repo.list_user_role_ids(session, user.id)
         if role_id in current:
             continue
@@ -312,9 +331,7 @@ async def add_role_members(
 
 
 async def remove_role_member(session: AsyncSession, actor: User, role_id: uuid.UUID, user_id: uuid.UUID) -> None:
-    user = await user_repo.get_user_for_update(session, user_id)
-    if user is None:
-        raise NotFoundError("用户不存在")
+    user = _require_live(await user_repo.get_user_for_update(session, user_id))
     current = await user_repo.list_user_role_ids(session, user.id)
     if role_id not in current:
         return
@@ -324,9 +341,7 @@ async def remove_role_member(session: AsyncSession, actor: User, role_id: uuid.U
 async def effective_permissions(session: AsyncSession, user_id: uuid.UUID) -> dict[str, object]:
     """用户在每个模块上的最终权限，以及来自哪些角色。停用角色列出但不计入。"""
 
-    user = await user_repo.get_user_by_id(session, user_id)
-    if user is None:
-        raise NotFoundError("用户不存在")
+    user = _require_live(await user_repo.get_user_by_id(session, user_id))
     grouped: dict[str, list[dict[str, object]]] = {}
     for code, level, role in await user_repo.list_user_grant_sources(session, user.id):
         grouped.setdefault(code, []).append(

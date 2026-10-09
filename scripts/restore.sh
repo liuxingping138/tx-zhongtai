@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 恢复四个服务库。目标库名必须与备份记录一致，且通过隔离名单校验。
 set -euo pipefail
+umask 077
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=lib_guard.sh
 source "$ROOT/scripts/lib_guard.sh"
@@ -49,25 +50,36 @@ if [ "${RESTORE_CONFIRM:-}" != "$IAM_DB_NAME" ]; then
   exit 2
 fi
 
+if [ -f "$BACKUP_PATH/SHA256SUMS" ]; then
+  (cd "$BACKUP_PATH" && sha256sum -c SHA256SUMS)
+fi
+
 COMPOSE="${BACKUP_COMPOSE:?请设置 BACKUP_COMPOSE}"
 echo "恢复 $BACKUP_PATH -> $IAM_DB_NAME / $AUDIT_DB_NAME / $POLICY_DB_NAME / $CODEBOOK_DB_NAME"
 
-# pg_restore --no-owner 后表属主是超级用户，必须把应用账号权限补回去。
+# pg_restore --no-owner 后对象属主是超级用户。GRANT 不含 ALTER/DROP，
+# 随后只把当前库 public 里的表、序列、函数改回应用账号。
 for svc in $SERVICES; do
   upper="$(svc_upper "$svc")"
   eval "db=\${${upper}_DB_NAME}"
   eval "app_user=\${${upper}_DB_USER}"
-  $COMPOSE exec -T postgres pg_restore -U "$POSTGRES_SUPERUSER" -d "$db" --clean --if-exists --no-owner < "$BACKUP_PATH/$svc.dump"
+  if ! printf '%s' "$app_user" | grep -Eq '^[A-Za-z_][A-Za-z0-9_]*$'; then
+    echo "非法应用账号名: $app_user" >&2
+    exit 2
+  fi
+  $COMPOSE exec -T postgres pg_restore -U "$POSTGRES_SUPERUSER" -d "$db" --clean --if-exists --no-owner --no-acl --exit-on-error --single-transaction < "$BACKUP_PATH/$svc.dump"
+  $COMPOSE exec -T postgres psql -U "$POSTGRES_SUPERUSER" -d "$db" -v ON_ERROR_STOP=1 -v app_owner="$app_user" \
+    < "$ROOT/scripts/assign_app_owner.sql"
   $COMPOSE exec -T postgres psql -U "$POSTGRES_SUPERUSER" -d "$db" \
     -c "GRANT ALL PRIVILEGES ON SCHEMA public TO \"${app_user}\";" \
     -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"${app_user}\";" \
     -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO \"${app_user}\";"
-  echo "  $svc -> $db (属主权限已还给 $app_user)"
+  echo "  $svc -> $db (对象属主已改为 $app_user)"
 done
 
-# 审计清理账号是只读专用账号，单独补。
+# 审计清理账号有 SELECT/DELETE，单独补。
 $COMPOSE exec -T postgres psql -U "$POSTGRES_SUPERUSER" -d "$AUDIT_DB_NAME" \
   -c "GRANT CONNECT ON DATABASE \"${AUDIT_DB_NAME}\" TO \"${AUDIT_CLEANUP_DB_USER}\";" \
   -c "GRANT USAGE ON SCHEMA public TO \"${AUDIT_CLEANUP_DB_USER}\";"
-$COMPOSE exec -T audit-service uv run python -m app.cli.grant_cleanup
+$COMPOSE exec -T audit-service .venv/bin/python -m app.cli.grant_cleanup
 echo "恢复完成"

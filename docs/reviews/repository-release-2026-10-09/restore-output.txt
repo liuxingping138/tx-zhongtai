@@ -1,0 +1,160 @@
+./audit.dump: 成功
+./codebook.dump: 成功
+./iam.dump: 成功
+./policy.dump: 成功
+./audit.dbname: 成功
+./codebook.dbname: 成功
+./iam.dbname: 成功
+./policy.dbname: 成功
+time="2026-10-09T11:15:04+08:00" level=warning msg="The \"IAM_INTERNAL_CALLER_SECRETS\" variable is not set. Defaulting to a blank string."
+time="2026-10-09T11:15:04+08:00" level=warning msg="The \"IAM_INTERNAL_CALLER_SECRETS\" variable is not set. Defaulting to a blank string."
+time="2026-10-09T11:15:04+08:00" level=warning msg="The \"AUDIT_INTERNAL_CALLER_SECRETS\" variable is not set. Defaulting to a blank string."
+ Container tx-zhongtai-p6-iam-worker-1 Stopping 
+ Container tx-zhongtai-p6-policy-worker-1 Stopping 
+ Container tx-zhongtai-p6-iam-worker-1 Stopped 
+ Container tx-zhongtai-p6-policy-worker-1 Stopped 
+time="2026-10-09T11:15:06+08:00" level=warning msg="The \"IAM_INTERNAL_CALLER_SECRETS\" variable is not set. Defaulting to a blank string."
+time="2026-10-09T11:15:06+08:00" level=warning msg="The \"AUDIT_INTERNAL_CALLER_SECRETS\" variable is not set. Defaulting to a blank string."
+time="2026-10-09T11:15:06+08:00" level=warning msg="The \"IAM_INTERNAL_CALLER_SECRETS\" variable is not set. Defaulting to a blank string."
+ Container tx-zhongtai-p6-iam-service-1 Stopping 
+ Container tx-zhongtai-p6-audit-service-1 Stopping 
+ Container tx-zhongtai-p6-policy-service-1 Stopping 
+ Container tx-zhongtai-p6-codebook-service-1 Stopping 
+ Container tx-zhongtai-p6-codebook-service-1 Stopped 
+ Container tx-zhongtai-p6-audit-service-1 Stopped 
+ Container tx-zhongtai-p6-iam-service-1 Stopped 
+ Container tx-zhongtai-p6-policy-service-1 Stopped 
+./audit.dump: 成功
+./codebook.dump: 成功
+./iam.dump: 成功
+./policy.dump: 成功
+./audit.dbname: 成功
+./codebook.dbname: 成功
+./iam.dbname: 成功
+./policy.dbname: 成功
+恢复 /home/txkj/tx-zhongtai-review-20261009/deploy/backups/restore-review -> iam_p6_db / audit_p6_db / policy_p6_db / codebook_p6_db
+ set_config 
+------------
+ iam_p6
+(1 row)
+
+DO
+GRANT
+GRANT
+GRANT
+  iam -> iam_p6_db (对象属主已改为 iam_p6)
+ set_config 
+------------
+ audit_p6
+(1 row)
+
+DO
+GRANT
+GRANT
+GRANT
+  audit -> audit_p6_db (对象属主已改为 audit_p6)
+ set_config 
+------------
+ policy_p6
+(1 row)
+
+DO
+GRANT
+GRANT
+GRANT
+  policy -> policy_p6_db (对象属主已改为 policy_p6)
+ set_config  
+-------------
+ codebook_p6
+(1 row)
+
+DO
+GRANT
+GRANT
+GRANT
+  codebook -> codebook_p6_db (对象属主已改为 codebook_p6)
+GRANT
+GRANT
+time="2026-10-09T11:15:28+08:00" level=warning msg="The \"IAM_INTERNAL_CALLER_SECRETS\" variable is not set. Defaulting to a blank string."
+time="2026-10-09T11:15:28+08:00" level=warning msg="The \"IAM_INTERNAL_CALLER_SECRETS\" variable is not set. Defaulting to a blank string."
+time="2026-10-09T11:15:28+08:00" level=warning msg="The \"AUDIT_INTERNAL_CALLER_SECRETS\" variable is not set. Defaulting to a blank string."
+ Container tx-zhongtai-p6-audit-service-run-48de644bcbb3 Creating 
+ Container tx-zhongtai-p6-audit-service-run-48de644bcbb3 Created 
+INFO:audit.cli.grant_cleanup:cleanup_grants_applied user=audit_p6_cleanup
+恢复完成
+time="2026-10-09T11:15:37+08:00" level=warning msg="The \"AUDIT_INTERNAL_CALLER_SECRETS\" variable is not set. Defaulting to a blank string."
+time="2026-10-09T11:15:37+08:00" level=warning msg="The \"IAM_INTERNAL_CALLER_SECRETS\" variable is not set. Defaulting to a blank string."
+time="2026-10-09T11:15:37+08:00" level=warning msg="The \"IAM_INTERNAL_CALLER_SECRETS\" variable is not set. Defaulting to a blank string."
+ Container tx-zhongtai-p6-postgres-1 Waiting 
+ Container tx-zhongtai-p6-redis-1 Waiting 
+ Container tx-zhongtai-p6-postgres-1 Waiting 
+ Container tx-zhongtai-p6-postgres-1 Waiting 
+ Container tx-zhongtai-p6-postgres-1 Waiting 
+ Container tx-zhongtai-p6-redis-1 Healthy 
+ Container tx-zhongtai-p6-postgres-1 Healthy 
+ Container tx-zhongtai-p6-postgres-1 Healthy 
+ Container tx-zhongtai-p6-audit-service-1 Starting 
+ Container tx-zhongtai-p6-policy-service-1 Starting 
+ Container tx-zhongtai-p6-postgres-1 Healthy 
+ Container tx-zhongtai-p6-iam-service-1 Starting 
+ Container tx-zhongtai-p6-postgres-1 Healthy 
+ Container tx-zhongtai-p6-codebook-service-1 Starting 
+ Container tx-zhongtai-p6-codebook-service-1 Started 
+ Container tx-zhongtai-p6-iam-service-1 Started 
+ Container tx-zhongtai-p6-policy-service-1 Started 
+ Container tx-zhongtai-p6-audit-service-1 Started 
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade a8c4d2e3f702 -> review_restore_probe
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running downgrade review_restore_probe -> a8c4d2e3f702
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+No new upgrade operations detected.
+iam-service restore_next_migration_ok
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade d3c9e8f1b302 -> review_restore_probe
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running downgrade review_restore_probe -> d3c9e8f1b302
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+No new upgrade operations detected.
+audit-service restore_next_migration_ok
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade f6a4c5d6e803 -> review_restore_probe
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running downgrade review_restore_probe -> f6a4c5d6e803
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+No new upgrade operations detected.
+codebook-service restore_next_migration_ok
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade e6f7a8b9c614 -> review_restore_probe
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running downgrade review_restore_probe -> e6f7a8b9c614
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.ddl.postgresql] Detected sequence named 'policy_scheduler_heartbeat_id_seq' as owned by integer column 'policy_scheduler_heartbeat(id)', assuming SERIAL and omitting
+No new upgrade operations detected.
+policy-service restore_next_migration_ok
+RESTORE_MIGRATIONS_OK
+2
+404
+20002
+26
+RESTORE_COMPLETE

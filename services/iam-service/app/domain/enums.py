@@ -9,6 +9,8 @@ class UserStatus(StrEnum):
     ACTIVE = "active"
     DISABLED = "disabled"
     ARCHIVED = "archived"
+    # 逻辑删除：行还在，用来对上操作日志；列表、登录和成员里都不再出现。
+    DELETED = "deleted"
 
 
 class RoleStatus(StrEnum):

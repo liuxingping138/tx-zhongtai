@@ -12,6 +12,8 @@ const route = useRoute()
 const router = useRouter()
 const activePath = computed(() => String(route.meta.menuPath || route.path))
 const activeGroup = computed(() => groups.value.find(group => group.entries.some(entry => entry.path === activePath.value)))
+// 403 不在任何菜单下。侧栏继续显示这个角色能进的菜单，避免只剩「个人设置」。
+const sidebarGroup = computed(() => activeGroup.value ?? (route.name === 'forbidden' ? groups.value[0] : undefined))
 const firstModulePath = computed(() => groups.value[0]?.entries[0]?.path || '/no-modules')
 const searchOpen = ref(false)
 const search = ref('')
@@ -81,15 +83,15 @@ function navigate(path: string) { searchOpen.value = false; void router.push(pat
     <div class="workspace-body">
       <aside
         class="workspace-rail"
-        :aria-label="(activeGroup?.title || '工作空间') + '子模块'"
+        :aria-label="(sidebarGroup?.title || '工作空间') + '子模块'"
       >
         <nav
           class="workspace-module-nav"
           aria-label="子模块导航"
         >
-          <template v-if="activeGroup">
+          <template v-if="sidebarGroup">
             <router-link
-              v-for="entry in activeGroup.entries"
+              v-for="entry in sidebarGroup.entries"
               :key="entry.path"
               :to="{ path: entry.path }"
               :class="{ 'is-active': activePath === entry.path }"

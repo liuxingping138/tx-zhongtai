@@ -176,6 +176,8 @@ async def update_interpretation(
     if not payload["data_status"].strip():
         payload["data_status"] = row.data_status
     values = _values(payload)
+    if not values["policy_title"]:
+        raise ApiError("政策原文名称不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     if message := _data_status_error(values):
         raise ApiError(message, code=ErrorCode.VALIDATION_ERROR, http_status=422)
     existing = await repo.get_by_relation_key(session, values["relation_key"])

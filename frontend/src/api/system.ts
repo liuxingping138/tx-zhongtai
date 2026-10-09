@@ -41,6 +41,10 @@ export function updateUser(
   return request(http.patch(`/system/users/${userId}`, payload))
 }
 
+export function deleteUser(userId: string): Promise<{ deleted: boolean }> {
+  return request(http.delete(`/system/users/${userId}`))
+}
+
 export function resetUserPassword(userId: string): Promise<{ temporary_password: string }> {
   return request(http.post(`/system/users/${userId}/reset-password`))
 }

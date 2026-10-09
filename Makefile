@@ -13,7 +13,7 @@ JWT_P6_DIR := deploy/secrets/jwt-p6
         seed-area-codes crawler-sync crawler-backfill crawler-v2-sync crawler-v2-backfill \
         provision-policy-db \
         outbox-replay audit-cleanup iam-session-cleanup p6-env p6-up p6-down p6-migrate p6-seed p6-admin \
-        p6-backup p6-restore export-openapi scan-scope
+        p6-backup p6-restore p6-fixtures export-openapi scan-scope
 
 help:
 	@echo "可用命令："
@@ -97,10 +97,8 @@ migrate:
 migrate-check:
 	@# alembic check 需要连真实库，进不了 make check，单独跑。
 	@# model 改了但没写迁移、或迁移漏建索引/约束，都会在这里暴露。
-	@set -e; for s in iam-service audit-service codebook-service policy-service; do \
-		printf '%-20s ' "$$s"; \
-		$(COMPOSE) exec -T $$s .venv/bin/alembic check 2>&1 | tail -1; \
-	done
+	@# 失败必须原样返回非零退出码，不能再把检查结果送进 tail。
+	COMPOSE_CMD="$(COMPOSE)" bash scripts/migrate_check.sh
 
 provision-audit-cleanup:
 	@echo "== 补建审计清理账号（已有数据卷不会重跑 init） =="
@@ -173,6 +171,10 @@ check:
 	@(cd frontend && pnpm run lint)
 	@echo "== 范围与密钥扫描 =="
 	@python3 scripts/scan_scope.py
+	@python3 scripts/test_scan_scope.py
+	@bash scripts/test_migrate_check.sh
+	@echo "== OpenAPI 与应用对象一致 =="
+	@bash scripts/check_openapi.sh
 
 test-unit:
 	@for pkg in $(PY_PACKAGES); do \
@@ -180,6 +182,8 @@ test-unit:
 		(cd $$pkg && uv run pytest -q) || exit 1; \
 	done
 	@(cd frontend && pnpm test)
+	@python3 scripts/test_scan_scope.py
+	@bash scripts/test_migrate_check.sh
 
 p6-env:
 	@if [ ! -f $(P6_ENV) ]; then cp deploy/compose/p6.env.example $(P6_ENV); echo "已生成 $(P6_ENV)"; fi
@@ -246,7 +250,10 @@ test-integration: p6-up
 	P6_RUNTIME_FILE=deploy/compose/.p6.runtime \
 	python3 tests/p6/accept.py
 
-test-e2e:
+p6-fixtures:
+	$(P6_COMPOSE) exec -T policy-service .venv/bin/python < tests/p6/seed_crawler.py
+
+test-e2e: p6-fixtures
 	@test -f deploy/compose/.p6.runtime || (echo "请先运行 make test-integration"; exit 2)
 	@set -a && . ./deploy/compose/.p6.runtime && set +a && \
 	export P6_GATEWAY=http://localhost:$$(grep -E '^GATEWAY_HTTP_PORT=' $(P6_ENV) | cut -d= -f2) && \

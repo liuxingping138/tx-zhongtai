@@ -1,0 +1,108 @@
+== Python 静态检查 ==
+All checks passed!
+Success: no issues found in 24 source files
+All checks passed!
+Success: no issues found in 53 source files
+All checks passed!
+Success: no issues found in 26 source files
+All checks passed!
+Success: no issues found in 31 source files
+All checks passed!
+Success: no issues found in 47 source files
+== 前端类型检查 ==
+$ vue-tsc -b --noEmit
+== 前端构建 ==
+$ vue-tsc -b && vite build
+vite v8.3.3 building client environment for production...
+transforming...
+✓ 1794 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                   0.89 kB │ gzip:   0.42 kB
+dist/assets/telelands-logo-BZ5X1SSK.svg           8.03 kB │ gzip:   2.98 kB
+dist/assets/customer-hub-BDewtZ-g.webp           78.20 kB
+dist/assets/AuditList-D1zkVYec.css                0.09 kB │ gzip:   0.10 kB
+dist/assets/BaseTagList-iiHQHMTS.css              0.13 kB │ gzip:   0.11 kB
+dist/assets/SourceList-CS4RHdsT.css               0.13 kB │ gzip:   0.11 kB
+dist/assets/RoleFormDialog-D5ObQRyE.css           0.16 kB │ gzip:   0.14 kB
+dist/assets/ChangePasswordView-D-4MkKAk.css       0.19 kB │ gzip:   0.15 kB
+dist/assets/RoleList-vGugaqSZ.css                 0.84 kB │ gzip:   0.40 kB
+dist/assets/ColumnPicker-B5X-2MHZ.css             0.89 kB │ gzip:   0.37 kB
+dist/assets/SchedulerList-WjqxcOhK.css            1.01 kB │ gzip:   0.40 kB
+dist/assets/GroupedFields-B9FfM-uj.css            1.50 kB │ gzip:   0.50 kB
+dist/assets/CrawlerMonitoringV2-CQpY1mqQ.css      2.42 kB │ gzip:   0.73 kB
+dist/assets/BusinessTable-htq5ixP_.css            2.70 kB │ gzip:   0.83 kB
+dist/assets/ListEmpty-ozv34Kar.css                3.05 kB │ gzip:   0.76 kB
+dist/assets/ProfileView-a7Vphcsf.css              3.23 kB │ gzip:   0.86 kB
+dist/assets/UserList-BX6eRQj9.css                 4.43 kB │ gzip:   1.25 kB
+dist/assets/CrawlerMonitoringList-Bxo98Sub.css    4.95 kB │ gzip:   1.29 kB
+dist/assets/ListPage-Dz_qXjt9.css                 4.95 kB │ gzip:   1.20 kB
+dist/assets/RoleDetail-BcTf40mR.css               6.38 kB │ gzip:   1.45 kB
+dist/assets/LoginView-42AO-m0o.css                7.06 kB │ gzip:   2.07 kB
+dist/assets/index-DEIA0bKZ.css                    9.71 kB │ gzip:   2.87 kB
+dist/assets/AdminLayout-Dn3a1o_l.css              9.81 kB │ gzip:   2.37 kB
+dist/assets/element-plus-NojSDrl8.css           360.17 kB │ gzip:  47.96 kB
+dist/assets/NotFound-CDNWo4R6.js                  0.27 kB │ gzip:   0.24 kB
+dist/assets/ForbiddenView-BNr0NGrq.js             0.28 kB │ gzip:   0.26 kB
+dist/assets/UnavailableView-D_2rqdGu.js           0.31 kB │ gzip:   0.28 kB
+dist/assets/NoModulesView-TuQ1fcaN.js             0.34 kB │ gzip:   0.33 kB
+dist/assets/useFieldValidation-CLDSlR9H.js        0.50 kB │ gzip:   0.35 kB
+dist/assets/time-BbkAMJmO.js                      0.65 kB │ gzip:   0.40 kB
+dist/assets/rolldown-runtime-hePW80VL.js          0.71 kB │ gzip:   0.42 kB
+dist/assets/useFilterOptions-XAgbCpLT.js          0.82 kB │ gzip:   0.50 kB
+dist/assets/useUnsavedForm-B_llk2zS.js            0.94 kB │ gzip:   0.62 kB
+dist/assets/policy-BpCv0QwJ.js                    0.96 kB │ gzip:   0.33 kB
+dist/assets/system-FsYVC3eB.js                    1.48 kB │ gzip:   0.48 kB
+dist/assets/codebook-D0-X-Cd8.js                  1.62 kB │ gzip:   0.75 kB
+dist/assets/catalog-CCTMy2Er.js                   2.19 kB │ gzip:   1.27 kB
+dist/assets/ColumnPicker-BsmQwBoQ.js              2.69 kB │ gzip:   1.45 kB
+dist/assets/ChangePasswordView-D5shqer5.js        3.41 kB │ gzip:   1.43 kB
+dist/assets/GroupedFields-BrG8QAT0.js             3.44 kB │ gzip:   1.57 kB
+dist/assets/errors-BZeKVfX1.js                    3.90 kB │ gzip:   1.91 kB
+dist/assets/RoleFormDialog-Ctwr5Tpl.js            4.80 kB │ gzip:   2.41 kB
+dist/assets/ListPage-CMqYp6Cg.js                  5.47 kB │ gzip:   2.36 kB
+dist/assets/LoginView-BfmzcWf6.js                 5.62 kB │ gzip:   2.61 kB
+dist/assets/BusinessTable-B7fbZSFn.js             5.64 kB │ gzip:   2.44 kB
+dist/assets/ProfileView-C6UrAWeB.js               6.11 kB │ gzip:   2.52 kB
+dist/assets/AdminLayout-CB2BSCCJ.js               6.14 kB │ gzip:   2.70 kB
+dist/assets/RoleList-DBGX4R0c.js                  7.03 kB │ gzip:   3.14 kB
+dist/assets/ListEmpty-CSi3Uz2v.js                 7.15 kB │ gzip:   3.28 kB
+dist/assets/PolicyTypeList-Bfrmz7I_.js            7.22 kB │ gzip:   3.44 kB
+dist/assets/AuditList-AneRgOtX.js                 7.58 kB │ gzip:   3.32 kB
+dist/assets/AreaCodeList-C-r8EYvU.js              8.94 kB │ gzip:   3.67 kB
+dist/assets/CrawlerMonitoringV2-DfhusRmV.js       9.22 kB │ gzip:   4.10 kB
+dist/assets/BaseTagList-DKO9td98.js              10.58 kB │ gzip:   4.28 kB
+dist/assets/SourceList-DWyTPufU.js               10.82 kB │ gzip:   4.59 kB
+dist/assets/SchedulerList-C6Dx1Mw5.js            11.02 kB │ gzip:   4.70 kB
+dist/assets/ScenarioList-C7QIGZCw.js             13.20 kB │ gzip:   4.51 kB
+dist/assets/InterpretationList-BuzLFvxn.js       13.26 kB │ gzip:   4.66 kB
+dist/assets/CrawlerMonitoringList-tomDwlrw.js    16.48 kB │ gzip:   6.55 kB
+dist/assets/RoleDetail-CsBHjAQJ.js               19.07 kB │ gzip:   7.08 kB
+dist/assets/index-E8HJ2oUv.js                    21.93 kB │ gzip:   8.35 kB
+dist/assets/UserList-DeYfjKcZ.js                 25.81 kB │ gzip:   8.59 kB
+dist/assets/vue-DQeLMVBF.js                      29.09 kB │ gzip:  11.67 kB
+dist/assets/vendor-Cwt1K6go.js                   49.95 kB │ gzip:  18.75 kB
+dist/assets/element-plus-CJ9iYeFc.js            998.45 kB │ gzip: 320.54 kB
+
+✓ built in 477ms
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+== 前端 lint ==
+$ eslint . --max-warnings=0
+== 范围与密钥扫描 ==
+scope_ok business_placeholder_only secrets_scan_clean
+scan_scope_unicode_ok
+migrate_check_failure_propagates
+== OpenAPI 与应用对象一致 ==
+{"service": "iam-service", "level": "info", "event": "logging_initialized", "timestamp": "2026-10-09T02:54:13.798075Z"}
+wrote /var/folders/88/c81mcbwx3d5_fb71fdcrhnhm0000gn/T/tmp.iSe630JNoW/iam.json paths=26
+{"service": "audit-service", "level": "info", "event": "logging_initialized", "timestamp": "2026-10-09T02:54:14.190045Z"}
+wrote /var/folders/88/c81mcbwx3d5_fb71fdcrhnhm0000gn/T/tmp.iSe630JNoW/audit.json paths=7
+{"service": "codebook-service", "level": "info", "event": "logging_initialized", "timestamp": "2026-10-09T02:54:14.627331Z"}
+wrote /var/folders/88/c81mcbwx3d5_fb71fdcrhnhm0000gn/T/tmp.iSe630JNoW/codebook.json paths=21
+{"service": "policy-service", "level": "info", "event": "logging_initialized", "timestamp": "2026-10-09T02:54:15.090598Z"}
+wrote /var/folders/88/c81mcbwx3d5_fb71fdcrhnhm0000gn/T/tmp.iSe630JNoW/policy.json paths=35
+openapi_matches_apps

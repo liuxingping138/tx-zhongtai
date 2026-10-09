@@ -4,18 +4,20 @@ import uuid
 from typing import Any
 
 from platform_common.filters import FilterValue, contains_ilike, filter_values
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.clock import utcnow
 from app.domain.catalog import SUPERADMIN_ROLE_CODE
-from app.domain.enums import NodeType, RoleStatus
+from app.domain.enums import NodeType, RoleStatus, UserStatus
 from app.domain.models import Resource, Role, RoleGrant, User, UserRole
 
 
 async def get_user_by_username(session: AsyncSession, username: str) -> User | None:
-    result = await session.execute(select(User).where(User.username == username))
+    result = await session.execute(
+        select(User).where(User.username == username, User.status != UserStatus.DELETED)
+    )
     return result.scalar_one_or_none()
 
 
@@ -40,7 +42,9 @@ def _apply_user_filters(
     names = filter_values(username)
     if names:
         stmt = stmt.where(or_(*(contains_ilike(User.username, name) for name in names)))
-    statuses = filter_values(status)
+    # 已删除的账号不出现在列表里，筛选「禁用 / 归档」也不会把它们带出来。
+    stmt = stmt.where(User.status != UserStatus.DELETED)
+    statuses = [item for item in filter_values(status) if item != UserStatus.DELETED]
     if statuses:
         stmt = stmt.where(User.status.in_(statuses))
     return stmt
@@ -88,6 +92,10 @@ async def user_has_builtin_superadmin(session: AsyncSession, user_id: uuid.UUID)
     )
     result = await session.execute(stmt)
     return result.scalar_one_or_none() is not None
+
+
+async def clear_user_roles(session: AsyncSession, user_id: uuid.UUID) -> None:
+    await session.execute(delete(UserRole).where(UserRole.user_id == user_id))
 
 
 async def lock_superadmin_users(session: AsyncSession) -> list[User]:

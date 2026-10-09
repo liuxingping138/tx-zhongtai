@@ -1,0 +1,62 @@
+-- packages/platform-common --
+............................................................             [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/starlette/testclient.py:37
+  /Users/liuxingping/Desktop/developer/project/tx-zhongtai/packages/platform-common/.venv/lib/python3.12/site-packages/starlette/testclient.py:37: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+60 passed, 1 warning in 0.43s
+-- services/iam-service --
+   Building iam-service @ file:///Users/liuxingping/Desktop/developer/project/tx-zhongtai/services/iam-service
+      Built iam-service @ file:///Users/liuxingping/Desktop/developer/project/tx-zhongtai/services/iam-service
+Uninstalled 1 package in 1ms
+Installed 1 package in 1ms
+.......................................................                  [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/starlette/testclient.py:37
+  /Users/liuxingping/Desktop/developer/project/tx-zhongtai/services/iam-service/.venv/lib/python3.12/site-packages/starlette/testclient.py:37: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+55 passed, 1 warning in 1.10s
+-- services/audit-service --
+..................                                                       [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/starlette/testclient.py:37
+  /Users/liuxingping/Desktop/developer/project/tx-zhongtai/services/audit-service/.venv/lib/python3.12/site-packages/starlette/testclient.py:37: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+18 passed, 1 warning in 0.42s
+-- services/codebook-service --
+.....s.............s................................                     [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/starlette/testclient.py:37
+  /Users/liuxingping/Desktop/developer/project/tx-zhongtai/services/codebook-service/.venv/lib/python3.12/site-packages/starlette/testclient.py:37: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+50 passed, 2 skipped, 1 warning in 0.88s
+-- services/policy-service --
+........................................................................ [ 52%]
+.....................................sssssssss..................         [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/starlette/testclient.py:37
+  /Users/liuxingping/Desktop/developer/project/tx-zhongtai/services/policy-service/.venv/lib/python3.12/site-packages/starlette/testclient.py:37: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+127 passed, 9 skipped, 1 warning in 1.41s
+$ vitest run
+
+ RUN  v5.0.3 /Users/liuxingping/Desktop/developer/project/tx-zhongtai/frontend
+
+
+ Test Files  12 passed (12)
+      Tests  68 passed (68)
+   Start at  10:11:31
+   Duration  756ms (tests 49%, import 27%, transform 22%, worker 2%)
+
+scan_scope_unicode_ok
+migrate_check_failure_propagates

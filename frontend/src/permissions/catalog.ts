@@ -9,13 +9,6 @@ export const LEVEL_TEXT: Record<GrantLevel, string> = {
   FULL: '可管理',
 }
 
-/** 权限表的三列。勾后面的列会自动勾上前面的列，取消前面的列会一并取消后面的列。 */
-export const PERMISSION_COLUMNS: { level: Exclude<GrantLevel, 'NONE'>; title: string; tip: string }[] = [
-  { level: 'READ', title: '查看', tip: '能进入这个模块，浏览列表和详情。' },
-  { level: 'EXPORT', title: '导出', tip: '能下载 Excel，把筛选结果带走。勾选后自动包含「查看」。' },
-  { level: 'FULL', title: '管理', tip: '能新增、编辑、导入等改数据的操作，每个模块具体包含什么见右侧说明。勾选后自动包含「查看」和「导出」。' },
-]
-
 /**
  * 动作的中文说明，按这个顺序展示（先增后改、先导入后清空）。只列「管理」档的写操作，
  * 查看和导出已经由列名说明。
@@ -24,6 +17,7 @@ const WRITE_ACTIONS: [code: string, text: string][] = [
   ['execute', '立即执行任务'],
   ['create', '新增'],
   ['update', '编辑'],
+  ['delete', '删除账号'],
   ['import', '导入 Excel'],
   ['reset_password', '重置密码'],
   ['revoke_sessions', '强制下线'],
@@ -84,16 +78,31 @@ export function moduleGroups(tree: ResourceNode[]): ModuleGroup[] {
   const loose: ModuleEntry[] = []
   for (const node of tree) {
     if (node.node_type === 'resource') {
-      if (node.published) loose.push(toEntry(node))
+      if (node.published && !SUPERADMIN_ONLY.has(node.code)) loose.push(toEntry(node))
       continue
     }
     const modules = (node.children ?? [])
-      .filter(child => child.node_type === 'resource' && child.published)
+      .filter(child => child.node_type === 'resource' && child.published && !SUPERADMIN_ONLY.has(child.code))
       .map(toEntry)
     if (modules.length) groups.push({ code: node.code, name: node.name, modules })
   }
   if (loose.length) groups.push({ code: '_other', name: '其他', modules: loose })
   return groups
+}
+
+/** 不在菜单里的能力。目前只有「分配角色」，单独展示，避免看成一个还能打开的旧页面。 */
+export function capabilityModules(tree: ResourceNode[]): ModuleEntry[] {
+  const found: ModuleEntry[] = []
+  const walk = (nodes: ResourceNode[]) => {
+    for (const node of nodes) {
+      if (node.node_type === 'resource' && node.published && SUPERADMIN_ONLY.has(node.code)) {
+        found.push({ ...toEntry(node), name: '分配角色' })
+      }
+      if (node.children?.length) walk(node.children)
+    }
+  }
+  walk(tree)
+  return found
 }
 
 /** 模块是否提供某一列（没有的列显示「—」）。 */

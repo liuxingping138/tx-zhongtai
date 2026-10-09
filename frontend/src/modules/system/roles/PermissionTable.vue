@@ -1,14 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { InfoFilled, Lock } from '@element-plus/icons-vue'
+import { computed, ref } from 'vue'
+import { Lock, Search } from '@element-plus/icons-vue'
 
 import {
-  isChecked,
+  levelHint,
   lockReason,
-  PERMISSION_COLUMNS,
-  rank,
-  supports,
-  toggleColumn,
   writesHint,
   type ModuleEntry,
   type ModuleGroup,
@@ -16,8 +12,8 @@ import {
 import type { GrantLevel } from '@/permissions/levels'
 
 /**
- * 角色权限表：行是模块，列是「查看 / 导出 / 管理」，勾选即授权（参考 Strapi、Directus 的角色权限矩阵）。
- * 档位逐档包含，所以勾后面的列自动勾上前面的列。
+ * 角色权限：按菜单分组纵向列出，一项只选一档。
+ * 档位逐档包含，选「导出」已经包含查看，选「管理」已经包含查看和导出。
  */
 const props = defineProps<{
   groups: ModuleGroup[]
@@ -25,10 +21,44 @@ const props = defineProps<{
   original: Record<string, GrantLevel>
   disabled: boolean
   roleCode?: string
+  capabilities?: ModuleEntry[]
 }>()
 const emit = defineEmits<{ 'update:modelValue': [value: Record<string, GrantLevel>] }>()
 
-const allModules = computed(() => props.groups.flatMap(group => group.modules))
+const LEVEL_SHORT: Record<GrantLevel, string> = {
+  NONE: '不开放',
+  READ: '查看',
+  EXPORT: '导出',
+  FULL: '管理',
+}
+
+const keyword = ref('')
+
+const visibleGroups = computed(() => {
+  const query = keyword.value.trim().toLowerCase()
+  if (!query) return props.groups
+  return props.groups.flatMap(group => {
+    if (group.name.toLowerCase().includes(query)) return [group]
+    const modules = group.modules.filter(module =>
+      module.name.toLowerCase().includes(query) || module.code.toLowerCase().includes(query))
+    return modules.length ? [{ ...group, modules }] : []
+  })
+})
+
+const visibleCapabilities = computed(() => {
+  const items = props.capabilities ?? []
+  const query = keyword.value.trim().toLowerCase()
+  if (!query) return items
+  return items.filter(module => `${module.name} ${module.code} 分配角色 权限`.toLowerCase().includes(query))
+})
+
+function capabilityHint(module: ModuleEntry): string {
+  const level = levelOf(module.code)
+  if (locked(module)) return lockReason(module.code, props.roleCode)
+  if (level === 'NONE') return '不能给人分配角色，也不能修改权限'
+  if (level === 'READ') return '只能查看权限设置，不能修改'
+  return '能给人分配角色，也能修改角色权限'
+}
 
 function levelOf(code: string): GrantLevel {
   return props.modelValue[code] ?? 'NONE'
@@ -42,207 +72,380 @@ function locked(module: ModuleEntry): boolean {
   return !!lockReason(module.code, props.roleCode)
 }
 
-function editable(modules: ModuleEntry[], column: GrantLevel): ModuleEntry[] {
-  return modules.filter(module => supports(module, column) && !locked(module))
-}
-
-function toggleCell(module: ModuleEntry, column: GrantLevel) {
-  emit('update:modelValue', { ...props.modelValue, [module.code]: toggleColumn(module, levelOf(module.code), column) })
-}
-
-/** 整列 / 整组勾选：全部已勾时取消，否则全部勾上。 */
-function toggleMany(modules: ModuleEntry[], column: GrantLevel) {
-  const targets = editable(modules, column)
-  if (!targets.length) return
-  const allOn = targets.every(module => isChecked(levelOf(module.code), column))
-  const next = { ...props.modelValue }
-  for (const module of targets) {
-    const current = levelOf(module.code)
-    if (allOn) next[module.code] = toggleColumn(module, current, column)
-    else if (rank(current) < rank(column)) next[module.code] = column
-  }
-  emit('update:modelValue', next)
-}
-
-function state(modules: ModuleEntry[], column: GrantLevel): { checked: boolean; indeterminate: boolean; empty: boolean } {
-  const targets = modules.filter(module => supports(module, column))
-  if (!targets.length) return { checked: false, indeterminate: false, empty: true }
-  const on = targets.filter(module => isChecked(levelOf(module.code), column)).length
-  return { checked: on === targets.length, indeterminate: on > 0 && on < targets.length, empty: false }
+function highest(module: ModuleEntry): GrantLevel {
+  return module.levels[module.levels.length - 1] ?? 'NONE'
 }
 
 function openedCount(group: ModuleGroup): number {
   return group.modules.filter(module => levelOf(module.code) !== 'NONE').length
 }
+
+function groupTargets(group: ModuleGroup): ModuleEntry[] {
+  return group.modules.filter(module => !locked(module))
+}
+
+function groupState(group: ModuleGroup): { checked: boolean; indeterminate: boolean } {
+  const targets = groupTargets(group)
+  if (!targets.length) return { checked: false, indeterminate: false }
+  const open = targets.filter(module => levelOf(module.code) !== 'NONE').length
+  const atMax = targets.filter(module => levelOf(module.code) === highest(module)).length
+  return {
+    checked: atMax === targets.length,
+    indeterminate: open > 0 && atMax < targets.length,
+  }
+}
+
+function setLevel(module: ModuleEntry, level: GrantLevel) {
+  if (props.disabled || locked(module) || !module.levels.includes(level)) return
+  emit('update:modelValue', { ...props.modelValue, [module.code]: level })
+}
+
+/** 开通整组：没到各自最高档时升到最高档，已经全开时再点一次全部关闭。 */
+function toggleGroup(group: ModuleGroup) {
+  const targets = groupTargets(group)
+  if (props.disabled || !targets.length) return
+  const allMax = targets.every(module => levelOf(module.code) === highest(module))
+  const next = { ...props.modelValue }
+  for (const module of targets) next[module.code] = allMax ? 'NONE' : highest(module)
+  emit('update:modelValue', next)
+}
 </script>
 
 <template>
-  <div class="perm-table-wrap">
-    <table
-      class="perm-table"
-      aria-label="模块权限"
-    >
-      <colgroup>
-        <col class="perm-table__col-name">
-        <col
-          v-for="column in PERMISSION_COLUMNS"
-          :key="column.level"
-          class="perm-table__col-check"
-        >
-        <col>
-      </colgroup>
-      <thead>
-        <tr>
-          <th scope="col">
-            模块
-          </th>
-          <th
-            v-for="column in PERMISSION_COLUMNS"
-            :key="column.level"
-            scope="col"
-            class="is-check"
-          >
-            <div class="perm-table__head">
-              <el-checkbox
-                v-if="!state(allModules, column.level).empty"
-                :model-value="state(allModules, column.level).checked"
-                :indeterminate="state(allModules, column.level).indeterminate"
-                :disabled="disabled"
-                :aria-label="`全部模块${column.title}`"
-                @change="toggleMany(allModules, column.level)"
-              />
-              <span>{{ column.title }}</span>
-              <el-tooltip
-                :content="column.tip"
-                placement="top"
-              >
-                <el-icon
-                  class="perm-table__tip"
-                  :aria-label="`${column.title}说明`"
-                >
-                  <InfoFilled />
-                </el-icon>
-              </el-tooltip>
-            </div>
-          </th>
-          <th
-            scope="col"
-            class="perm-table__desc-head"
-          >
-            说明
-          </th>
-        </tr>
-      </thead>
-      <tbody
-        v-for="group in groups"
-        :key="group.code"
+  <div class="perm-menu">
+    <div class="perm-menu__search">
+      <el-input
+        v-model="keyword"
+        clearable
+        placeholder="搜索菜单，例如省市区"
+        aria-label="搜索菜单"
       >
-        <tr class="perm-table__group">
-          <th scope="rowgroup">
-            <span class="perm-table__group-name">{{ group.name }}</span>
-            <span class="perm-table__group-count">已开通 {{ openedCount(group) }} / {{ group.modules.length }}</span>
-          </th>
-          <td
-            v-for="column in PERMISSION_COLUMNS"
-            :key="column.level"
-            class="is-check"
-          >
-            <el-checkbox
-              v-if="!state(group.modules, column.level).empty"
-              :model-value="state(group.modules, column.level).checked"
-              :indeterminate="state(group.modules, column.level).indeterminate"
-              :disabled="disabled || !editable(group.modules, column.level).length"
-              :aria-label="`${group.name}全部${column.title}`"
-              @change="toggleMany(group.modules, column.level)"
-            />
-          </td>
-          <td class="perm-table__desc">
-            整组勾选
-          </td>
-        </tr>
-        <tr
-          v-for="module in group.modules"
-          :key="module.code"
-          class="perm-table__row"
-          :class="{ 'is-changed': changed(module.code), 'is-on': levelOf(module.code) !== 'NONE' }"
+        <template #prefix>
+          <el-icon><Search /></el-icon>
+        </template>
+      </el-input>
+    </div>
+    <p
+      v-if="!visibleGroups.length && !visibleCapabilities.length"
+      class="perm-menu__empty"
+    >
+      没有匹配的菜单
+    </p>
+    <section
+      v-for="group in visibleGroups"
+      :key="group.code"
+      class="perm-group"
+    >
+      <div class="perm-group__head">
+        <span class="perm-group__name">{{ group.name }}</span>
+        <el-checkbox
+          :model-value="groupState(group).checked"
+          :indeterminate="groupState(group).indeterminate"
+          :disabled="disabled || !groupTargets(group).length"
+          @change="toggleGroup(group)"
         >
-          <th scope="row">
-            <span class="perm-table__name">
-              {{ module.name }}
-              <el-tooltip
-                v-if="locked(module)"
-                :content="lockReason(module.code, roleCode)"
-                placement="top"
-              >
-                <el-icon
-                  class="perm-table__lock"
-                  aria-label="已锁定"
-                ><Lock /></el-icon>
-              </el-tooltip>
-              <span
-                v-if="changed(module.code)"
-                class="perm-table__changed"
-              >已修改</span>
-            </span>
-          </th>
-          <td
-            v-for="column in PERMISSION_COLUMNS"
-            :key="column.level"
-            class="is-check"
+          开通整组
+        </el-checkbox>
+        <span class="perm-group__count">已开通 {{ openedCount(group) }} / {{ group.modules.length }}</span>
+      </div>
+      <div
+        v-for="module in group.modules"
+        :key="module.code"
+        class="perm-row perm-table__row"
+        :class="{ 'is-on': levelOf(module.code) !== 'NONE', 'is-changed': changed(module.code) }"
+      >
+        <div class="perm-row__name">
+          <span>{{ module.name }}</span>
+          <el-tooltip
+            v-if="locked(module)"
+            :content="lockReason(module.code, roleCode)"
+            placement="top"
           >
-            <el-checkbox
-              v-if="supports(module, column.level)"
-              :model-value="isChecked(levelOf(module.code), column.level)"
+            <el-icon
+              class="perm-row__lock"
+              aria-hidden="true"
+            >
+              <Lock />
+            </el-icon>
+          </el-tooltip>
+          <span
+            v-if="changed(module.code)"
+            class="perm-row__changed"
+          >已修改</span>
+        </div>
+        <div
+          class="perm-levels"
+          role="radiogroup"
+          :aria-label="`${module.name}的权限`"
+        >
+          <label
+            v-for="level in module.levels"
+            :key="level"
+            class="perm-levels__item"
+            :class="{
+              'is-selected': levelOf(module.code) === level && level !== 'NONE',
+              'is-quiet': level === 'NONE' && levelOf(module.code) === 'NONE',
+            }"
+          >
+            <input
+              type="radio"
+              :name="`grant-${module.code}`"
+              :value="level"
+              :checked="levelOf(module.code) === level"
               :disabled="disabled || locked(module)"
-              :aria-label="`${module.name}${column.title}`"
-              @change="toggleCell(module, column.level)"
-            />
-            <span
-              v-else
-              class="perm-table__na"
-              :title="`${module.name}没有${column.title}操作`"
-            >—</span>
-          </td>
-          <td class="perm-table__desc">
-            {{ locked(module) ? lockReason(module.code, roleCode) : writesHint(module) }}
-          </td>
-        </tr>
-      </tbody>
-    </table>
+              @change="setLevel(module, level)"
+            >
+            <span>{{ LEVEL_SHORT[level] }}</span>
+          </label>
+        </div>
+        <p class="perm-row__hint">
+          {{ levelHint(module, levelOf(module.code)) }} · {{ writesHint(module) }}
+        </p>
+      </div>
+    </section>
+    <section
+      v-if="visibleCapabilities.length"
+      class="perm-capability"
+    >
+      <div class="perm-capability__head">
+        <span class="perm-group__name">分配角色</span>
+        <span class="perm-capability__note">不是菜单。只有超级管理员能拥有，用来给人分配角色、修改权限。</span>
+      </div>
+      <div
+        v-for="module in visibleCapabilities"
+        :key="module.code"
+        class="perm-row perm-table__row"
+        :class="{ 'is-on': levelOf(module.code) !== 'NONE', 'is-changed': changed(module.code) }"
+      >
+        <div class="perm-row__name">
+          <span>{{ module.name }}</span>
+          <el-tooltip
+            v-if="locked(module)"
+            :content="lockReason(module.code, roleCode)"
+            placement="top"
+          >
+            <el-icon
+              class="perm-row__lock"
+              aria-hidden="true"
+            >
+              <Lock />
+            </el-icon>
+          </el-tooltip>
+          <span
+            v-if="changed(module.code)"
+            class="perm-row__changed"
+          >已修改</span>
+        </div>
+        <div
+          class="perm-levels"
+          role="radiogroup"
+          :aria-label="`${module.name}的权限`"
+        >
+          <label
+            v-for="level in module.levels"
+            :key="level"
+            class="perm-levels__item"
+            :class="{
+              'is-selected': levelOf(module.code) === level && level !== 'NONE',
+              'is-quiet': level === 'NONE' && levelOf(module.code) === 'NONE',
+            }"
+          >
+            <input
+              type="radio"
+              :name="`grant-${module.code}`"
+              :value="level"
+              :checked="levelOf(module.code) === level"
+              :disabled="disabled || locked(module)"
+              @change="setLevel(module, level)"
+            >
+            <span>{{ LEVEL_SHORT[level] }}</span>
+          </label>
+        </div>
+        <p class="perm-row__hint">
+          {{ capabilityHint(module) }}
+        </p>
+      </div>
+    </section>
   </div>
 </template>
 
 <style scoped>
-.perm-table-wrap { overflow-x: auto; border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: var(--zt-panel); }
-.perm-table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 14px; }
-.perm-table__col-name { width: 220px; }
-.perm-table__col-check { width: 96px; }
-.perm-table th, .perm-table td { padding: 10px 16px; border-bottom: 1px solid #eef1f6; text-align: left; font-weight: 400; color: var(--zt-ink-900); }
-.perm-table .is-check { text-align: center; padding-left: 8px; padding-right: 8px; }
-.perm-table thead th {
-  position: sticky; top: 0; z-index: 1; background: #f7f9fc; font-size: 13px; font-weight: 600;
-  color: var(--zt-ink-700); border-bottom: 1px solid var(--zt-border);
+.perm-menu {
+  border: 1px solid var(--zt-border);
+  border-radius: var(--zt-radius);
+  background: var(--zt-panel);
 }
-.perm-table__head { display: inline-flex; align-items: center; gap: 6px; }
-.perm-table__tip { color: var(--zt-ink-500); cursor: help; }
-.perm-table__desc-head { color: var(--zt-ink-500); }
-.perm-table__group th, .perm-table__group td { background: #fafbfd; border-top: 1px solid var(--zt-border); }
-.perm-table tbody:first-of-type .perm-table__group th,
-.perm-table tbody:first-of-type .perm-table__group td { border-top: none; }
-.perm-table__group-name { font-weight: 650; color: var(--zt-ink-900); }
-.perm-table__group-count { margin-left: 10px; font-size: 12px; color: var(--zt-ink-500); font-variant-numeric: tabular-nums; }
-.perm-table__group .perm-table__desc { font-size: 12px; }
-.perm-table__row th { padding-left: 32px; }
-.perm-table__row:hover th, .perm-table__row:hover td { background: #f7faff; }
-.perm-table__row:not(.is-on) .perm-table__name { color: var(--zt-ink-700); }
-.perm-table__row.is-changed th, .perm-table__row.is-changed td { background: #fffaf0; }
-.perm-table__name { display: inline-flex; align-items: center; gap: 6px; }
-.perm-table__lock { color: var(--zt-ink-500); }
-.perm-table__changed {
-  padding: 0 6px; border: 1px solid #f3d19e; border-radius: 4px; background: #fdf6ec;
-  font-size: 12px; line-height: 18px; color: #b26a00;
+
+.perm-menu__search {
+  padding: 12px 16px;
+  border-bottom: 1px solid #eef1f6;
 }
-.perm-table__na { color: #c0c6d0; }
-.perm-table__desc { font-size: 12px; line-height: 1.5; color: var(--zt-ink-500); }
-.perm-table :deep(.el-checkbox) { height: auto; }
+
+.perm-menu__empty {
+  margin: 0;
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--zt-ink-500);
+}
+
+.perm-group + .perm-group,
+.perm-capability {
+  border-top: 1px solid var(--zt-border);
+}
+
+.perm-capability__head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 10px 16px;
+  background: #fafbfd;
+}
+
+.perm-capability__note {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--zt-ink-500);
+}
+
+.perm-group__head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  background: #fafbfd;
+}
+
+.perm-group__name {
+  font-weight: 650;
+  color: var(--zt-ink-900);
+}
+
+.perm-group__count {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--zt-ink-500);
+  font-variant-numeric: tabular-nums;
+}
+
+.perm-row {
+  display: grid;
+  grid-template-columns: minmax(148px, 200px) auto minmax(180px, 1fr);
+  align-items: center;
+  gap: 8px 16px;
+  padding: 10px 16px 10px 28px;
+  border-top: 1px solid #eef1f6;
+}
+
+.perm-row:hover {
+  background: #f7faff;
+}
+
+.perm-row.is-changed {
+  background: #fffaf0;
+}
+
+.perm-row:not(.is-on) .perm-row__name {
+  color: var(--zt-ink-700);
+}
+
+.perm-row__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--zt-ink-900);
+}
+
+.perm-row__lock {
+  color: var(--zt-ink-500);
+}
+
+.perm-row__changed {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: #fdf0d5;
+  font-size: 12px;
+  line-height: 18px;
+  color: #9a702d;
+}
+
+.perm-levels {
+  display: inline-flex;
+  border: 1px solid var(--zt-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.perm-levels__item {
+  position: relative;
+  display: inline-flex;
+  margin: 0;
+  cursor: pointer;
+  border-left: 1px solid var(--zt-border);
+  color: var(--zt-ink-700);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.perm-levels__item:first-child {
+  border-left: 0;
+}
+
+.perm-levels__item span {
+  padding: 6px 12px;
+}
+
+.perm-levels__item input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+  cursor: inherit;
+}
+
+.perm-levels__item.is-selected {
+  background: #eef1fc;
+  color: #3558de;
+  font-weight: 650;
+}
+
+/* 没开通时不给「不开放」上色，避免整页都是蓝色选中态。 */
+.perm-levels__item.is-quiet {
+  background: transparent;
+  color: var(--zt-ink-500);
+  font-weight: 400;
+}
+
+.perm-levels__item:has(input:disabled) {
+  cursor: not-allowed;
+  color: #c0c6d0;
+}
+
+.perm-levels__item.is-selected:has(input:disabled) {
+  background: #f4f6fb;
+  color: #8b95a8;
+}
+
+.perm-levels__item:focus-within {
+  outline: 2px solid #3558de;
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.perm-row__hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--zt-ink-500);
+}
+
+@media (max-width: 960px) {
+  .perm-row {
+    grid-template-columns: 1fr;
+    padding-left: 16px;
+  }
+}
 </style>

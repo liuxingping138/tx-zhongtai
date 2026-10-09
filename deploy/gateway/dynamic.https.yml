@@ -1,0 +1,104 @@
+# HTTPS 动态路由。路径与 dynamic.yml 相同，入口改为 websecure。
+# 证书挂在文件 Provider 上，不使用 Docker Provider，也不依赖容器 labels。
+
+tls:
+  # IP 访问通常不发送 SNI，因此必须配置默认服务器证书。
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /certs/fullchain.pem
+        keyFile: /certs/privkey.pem
+  certificates:
+    - certFile: /certs/fullchain.pem
+      keyFile: /certs/privkey.pem
+
+http:
+  routers:
+    iam-auth:
+      rule: "PathPrefix(`/api/v1/auth`)"
+      entryPoints: ["websecure"]
+      service: iam-service
+      middlewares: ["compress", "request-limit"]
+      priority: 100
+      tls: {}
+    iam-system:
+      rule: "PathPrefix(`/api/v1/system`)"
+      entryPoints: ["websecure"]
+      service: iam-service
+      middlewares: ["compress", "request-limit"]
+      priority: 100
+      tls: {}
+    audit:
+      rule: "PathPrefix(`/api/v1/audit`)"
+      entryPoints: ["websecure"]
+      service: audit-service
+      middlewares: ["compress", "request-limit"]
+      priority: 100
+      tls: {}
+    codebook:
+      rule: "PathPrefix(`/api/v1/codebook`)"
+      entryPoints: ["websecure"]
+      service: codebook-service
+      middlewares: ["compress", "request-limit"]
+      priority: 100
+      tls: {}
+    policy:
+      rule: "PathPrefix(`/api/v1/policy`)"
+      entryPoints: ["websecure"]
+      service: policy-service
+      middlewares: ["compress", "request-limit"]
+      priority: 100
+      tls: {}
+    api-fallback:
+      rule: "PathPrefix(`/api/v1`)"
+      entryPoints: ["websecure"]
+      service: api-fallback
+      middlewares: ["compress", "request-limit"]
+      priority: 50
+      tls: {}
+    frontend:
+      rule: "PathPrefix(`/`)"
+      entryPoints: ["websecure"]
+      service: frontend
+      middlewares: ["compress", "request-limit"]
+      priority: 1
+      tls: {}
+
+  middlewares:
+    compress:
+      compress:
+        excludedContentTypes:
+          - "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          - "application/zip"
+          - "image/webp"
+          - "image/png"
+          - "image/jpeg"
+    request-limit:
+      buffering:
+        maxRequestBodyBytes: 21233664
+
+  services:
+    iam-service:
+      loadBalancer:
+        servers:
+          - url: "http://iam-service:8001"
+    audit-service:
+      loadBalancer:
+        servers:
+          - url: "http://audit-service:8002"
+    codebook-service:
+      loadBalancer:
+        servers:
+          - url: "http://codebook-service:8003"
+    policy-service:
+      loadBalancer:
+        servers:
+          - url: "http://policy-service:8004"
+    api-fallback:
+      loadBalancer:
+        servers:
+          - url: "http://api-fallback:80"
+    frontend:
+      loadBalancer:
+        servers:
+          - url: "http://frontend:80"

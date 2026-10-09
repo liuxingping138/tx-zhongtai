@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { ResourceNode } from '@/api/types'
-import { isChecked, levelHint, lockReason, moduleGroups, moduleNames, toggleColumn, writesHint } from './catalog'
+import { capabilityModules, isChecked, levelHint, lockReason, moduleGroups, moduleNames, toggleColumn, writesHint } from './catalog'
 
 function node(partial: Partial<ResourceNode> & Pick<ResourceNode, 'code' | 'name'>): ResourceNode {
   return {
@@ -97,6 +97,24 @@ describe('lockReason', () => {
     expect(lockReason('system.permissions', 'role-abc')).toContain('只能属于超级管理员')
     expect(lockReason('system.permissions', 'superadmin')).toBe('')
     expect(lockReason('policy.sources', 'role-abc')).toBe('')
+  })
+})
+
+describe('capabilityModules', () => {
+  it('「分配角色」不混进菜单分组', () => {
+    const withGrant = [
+      node({
+        code: 'system',
+        name: '系统管理',
+        node_type: 'directory',
+        children: [
+          node({ code: 'system.users', name: '用户管理', actions: [action('list', 'READ')] }),
+          node({ code: 'system.permissions', name: '权限分配', actions: [action('read', 'READ'), action('grant', 'FULL')] }),
+        ],
+      }),
+    ]
+    expect(moduleGroups(withGrant)[0].modules.map(module => module.name)).toEqual(['用户管理'])
+    expect(capabilityModules(withGrant).map(module => module.name)).toEqual(['分配角色'])
   })
 })
 

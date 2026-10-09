@@ -64,7 +64,10 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 },
                 {
                   "type": "null"
@@ -156,6 +159,85 @@
         }
       }
     },
+    "/api/v1/codebook/policy-types/options": {
+      "get": {
+        "tags": [
+          "codebook-policy-types"
+        ],
+        "summary": "List Filter Options",
+        "operationId": "list_filter_options_api_v1_codebook_policy_types_options_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/codebook/policy-types/options/search": {
+      "get": {
+        "tags": [
+          "codebook-policy-types"
+        ],
+        "summary": "Search Filter Options",
+        "description": "筛选项的服务端搜索。候选值过多的字段由前端按关键词调用。",
+        "operationId": "search_filter_options_api_v1_codebook_policy_types_options_search_get",
+        "parameters": [
+          {
+            "name": "field",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "title": "Field"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/codebook/policy-types/export": {
       "get": {
         "tags": [
@@ -163,12 +245,43 @@
         ],
         "summary": "Export Items",
         "operationId": "export_items_api_v1_codebook_policy_types_export_get",
+        "parameters": [
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -186,7 +299,16 @@
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_import_items_api_v1_codebook_policy_types_import_post"
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "file"
+                ]
               }
             }
           },
@@ -198,16 +320,6 @@
             "content": {
               "application/json": {
                 "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
               }
             }
           }
@@ -238,7 +350,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PolicyTypeWrite"
+                "$ref": "#/components/schemas/PolicyTypePatch"
               }
             }
           }
@@ -280,7 +392,10 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 },
                 {
                   "type": "null"
@@ -296,7 +411,10 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 },
                 {
                   "type": "null"
@@ -312,7 +430,10 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 },
                 {
                   "type": "null"
@@ -328,7 +449,10 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 },
                 {
                   "type": "null"
@@ -420,6 +544,85 @@
         }
       }
     },
+    "/api/v1/codebook/scenarios/options": {
+      "get": {
+        "tags": [
+          "codebook-scenarios"
+        ],
+        "summary": "List Filter Options",
+        "operationId": "list_filter_options_api_v1_codebook_scenarios_options_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/codebook/scenarios/options/search": {
+      "get": {
+        "tags": [
+          "codebook-scenarios"
+        ],
+        "summary": "Search Filter Options",
+        "description": "筛选项的服务端搜索。候选值过多的字段由前端按关键词调用。",
+        "operationId": "search_filter_options_api_v1_codebook_scenarios_options_search_get",
+        "parameters": [
+          {
+            "name": "field",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "title": "Field"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/codebook/scenarios/export": {
       "get": {
         "tags": [
@@ -427,12 +630,100 @@
         ],
         "summary": "Export Items",
         "operationId": "export_items_api_v1_codebook_scenarios_export_get",
+        "parameters": [
+          {
+            "name": "industry_scenario_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Industry Scenario Code"
+            }
+          },
+          {
+            "name": "industry_l1",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Industry L1"
+            }
+          },
+          {
+            "name": "scenario_tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scenario Tag"
+            }
+          },
+          {
+            "name": "customer_group_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Customer Group Name"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -450,7 +741,16 @@
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_import_items_api_v1_codebook_scenarios_import_post"
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "file"
+                ]
               }
             }
           },
@@ -462,16 +762,6 @@
             "content": {
               "application/json": {
                 "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
               }
             }
           }
@@ -541,7 +831,488 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ScenarioWrite"
+                "$ref": "#/components/schemas/ScenarioPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/codebook/area-codes": {
+      "get": {
+        "tags": [
+          "codebook-area-codes"
+        ],
+        "summary": "List Items",
+        "operationId": "list_items_api_v1_codebook_area_codes_get",
+        "parameters": [
+          {
+            "name": "prov_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prov Name"
+            }
+          },
+          {
+            "name": "city_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "City Name"
+            }
+          },
+          {
+            "name": "county_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "County Name"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "codebook-area-codes"
+        ],
+        "summary": "Create Item",
+        "operationId": "create_item_api_v1_codebook_area_codes_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AreaCodeWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/codebook/area-codes/options": {
+      "get": {
+        "tags": [
+          "codebook-area-codes"
+        ],
+        "summary": "List Filter Options",
+        "operationId": "list_filter_options_api_v1_codebook_area_codes_options_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/codebook/area-codes/options/search": {
+      "get": {
+        "tags": [
+          "codebook-area-codes"
+        ],
+        "summary": "Search Filter Options",
+        "description": "筛选项的服务端搜索。候选值过多的字段由前端按关键词调用。",
+        "operationId": "search_filter_options_api_v1_codebook_area_codes_options_search_get",
+        "parameters": [
+          {
+            "name": "field",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "title": "Field"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/codebook/area-codes/export": {
+      "get": {
+        "tags": [
+          "codebook-area-codes"
+        ],
+        "summary": "Export Items",
+        "operationId": "export_items_api_v1_codebook_area_codes_export_get",
+        "parameters": [
+          {
+            "name": "prov_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prov Name"
+            }
+          },
+          {
+            "name": "city_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "City Name"
+            }
+          },
+          {
+            "name": "county_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "County Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/codebook/area-codes/resolve": {
+      "post": {
+        "tags": [
+          "codebook-area-codes"
+        ],
+        "summary": "Resolve Items",
+        "operationId": "resolve_items_api_v1_codebook_area_codes_resolve_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/codebook/area-codes/import": {
+      "post": {
+        "tags": [
+          "codebook-area-codes"
+        ],
+        "summary": "Import Items",
+        "operationId": "import_items_api_v1_codebook_area_codes_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/codebook/area-codes/{item_id}": {
+      "get": {
+        "tags": [
+          "codebook-area-codes"
+        ],
+        "summary": "Get Item",
+        "operationId": "get_item_api_v1_codebook_area_codes__item_id__get",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "codebook-area-codes"
+        ],
+        "summary": "Update Item",
+        "operationId": "update_item_api_v1_codebook_area_codes__item_id__patch",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AreaCodePatch"
               }
             }
           }
@@ -571,33 +1342,149 @@
   },
   "components": {
     "schemas": {
-      "Body_import_items_api_v1_codebook_policy_types_import_post": {
+      "AreaCodePatch": {
         "properties": {
-          "file": {
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "prov_id": {
             "type": "string",
-            "format": "binary",
-            "title": "File"
+            "title": "Prov Id",
+            "default": ""
+          },
+          "prov_name": {
+            "type": "string",
+            "title": "Prov Name",
+            "default": ""
+          },
+          "city_id": {
+            "type": "string",
+            "title": "City Id",
+            "default": ""
+          },
+          "city_name": {
+            "type": "string",
+            "title": "City Name",
+            "default": ""
+          },
+          "county_id": {
+            "type": "string",
+            "title": "County Id",
+            "default": ""
+          },
+          "county_name": {
+            "type": "string",
+            "title": "County Name",
+            "default": ""
+          },
+          "alias_prov_name": {
+            "type": "string",
+            "title": "Alias Prov Name",
+            "default": ""
+          },
+          "alias_city_name": {
+            "type": "string",
+            "title": "Alias City Name",
+            "default": ""
+          },
+          "alias_county_name": {
+            "type": "string",
+            "title": "Alias County Name",
+            "default": ""
+          },
+          "city_name_short": {
+            "type": "string",
+            "title": "City Name Short",
+            "default": ""
+          },
+          "county_name_short": {
+            "type": "string",
+            "title": "County Name Short",
+            "default": ""
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
-          "file"
+          "version"
         ],
-        "title": "Body_import_items_api_v1_codebook_policy_types_import_post"
+        "title": "AreaCodePatch",
+        "description": "仅修改显式提供的字段；空字符串表示显式清空。"
       },
-      "Body_import_items_api_v1_codebook_scenarios_import_post": {
+      "AreaCodeWrite": {
         "properties": {
-          "file": {
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "prov_id": {
             "type": "string",
-            "format": "binary",
-            "title": "File"
+            "title": "Prov Id",
+            "default": ""
+          },
+          "prov_name": {
+            "type": "string",
+            "title": "Prov Name",
+            "default": ""
+          },
+          "city_id": {
+            "type": "string",
+            "title": "City Id",
+            "default": ""
+          },
+          "city_name": {
+            "type": "string",
+            "title": "City Name",
+            "default": ""
+          },
+          "county_id": {
+            "type": "string",
+            "title": "County Id",
+            "default": ""
+          },
+          "county_name": {
+            "type": "string",
+            "title": "County Name",
+            "default": ""
+          },
+          "alias_prov_name": {
+            "type": "string",
+            "title": "Alias Prov Name",
+            "default": ""
+          },
+          "alias_city_name": {
+            "type": "string",
+            "title": "Alias City Name",
+            "default": ""
+          },
+          "alias_county_name": {
+            "type": "string",
+            "title": "Alias County Name",
+            "default": ""
+          },
+          "city_name_short": {
+            "type": "string",
+            "title": "City Name Short",
+            "default": ""
+          },
+          "county_name_short": {
+            "type": "string",
+            "title": "County Name Short",
+            "default": ""
           }
         },
+        "additionalProperties": false,
         "type": "object",
-        "required": [
-          "file"
-        ],
-        "title": "Body_import_items_api_v1_codebook_scenarios_import_post"
+        "title": "AreaCodeWrite"
       },
       "HTTPValidationError": {
         "properties": {
@@ -611,6 +1498,37 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "PolicyTypePatch": {
+        "properties": {
+          "seq_no": {
+            "type": "string",
+            "title": "Seq No",
+            "default": ""
+          },
+          "type_name": {
+            "type": "string",
+            "title": "Type Name",
+            "default": ""
+          },
+          "definition": {
+            "type": "string",
+            "title": "Definition",
+            "default": ""
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version"
+        ],
+        "title": "PolicyTypePatch",
+        "description": "仅修改显式提供的字段；空字符串表示显式清空。"
       },
       "PolicyTypeWrite": {
         "properties": {
@@ -646,6 +1564,177 @@
           "type_name"
         ],
         "title": "PolicyTypeWrite"
+      },
+      "ScenarioPatch": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Version"
+          },
+          "industry_scenario_code": {
+            "type": "string",
+            "title": "Industry Scenario Code",
+            "default": ""
+          },
+          "industry_code": {
+            "type": "string",
+            "title": "Industry Code",
+            "default": ""
+          },
+          "industry_l1": {
+            "type": "string",
+            "title": "Industry L1",
+            "default": ""
+          },
+          "industry_l2": {
+            "type": "string",
+            "title": "Industry L2",
+            "default": ""
+          },
+          "industry_l3": {
+            "type": "string",
+            "title": "Industry L3",
+            "default": ""
+          },
+          "scenario_tag": {
+            "type": "string",
+            "title": "Scenario Tag",
+            "default": ""
+          },
+          "scenario_level": {
+            "type": "string",
+            "title": "Scenario Level",
+            "default": ""
+          },
+          "scenario_type": {
+            "type": "string",
+            "title": "Scenario Type",
+            "default": ""
+          },
+          "desc_90": {
+            "type": "string",
+            "title": "Desc 90",
+            "default": ""
+          },
+          "desc_130": {
+            "type": "string",
+            "title": "Desc 130",
+            "default": ""
+          },
+          "desc_pest": {
+            "type": "string",
+            "title": "Desc Pest",
+            "default": ""
+          },
+          "scenario_source": {
+            "type": "string",
+            "title": "Scenario Source",
+            "default": ""
+          },
+          "scenario_hierarchy": {
+            "type": "string",
+            "title": "Scenario Hierarchy",
+            "default": ""
+          },
+          "scenario_code": {
+            "type": "string",
+            "title": "Scenario Code",
+            "default": ""
+          },
+          "scenario_l1_name": {
+            "type": "string",
+            "title": "Scenario L1 Name",
+            "default": ""
+          },
+          "scenario_l1_desc": {
+            "type": "string",
+            "title": "Scenario L1 Desc",
+            "default": ""
+          },
+          "scenario_l2_name": {
+            "type": "string",
+            "title": "Scenario L2 Name",
+            "default": ""
+          },
+          "scenario_l2_desc": {
+            "type": "string",
+            "title": "Scenario L2 Desc",
+            "default": ""
+          },
+          "scenario_l3_name": {
+            "type": "string",
+            "title": "Scenario L3 Name",
+            "default": ""
+          },
+          "scenario_l3_desc": {
+            "type": "string",
+            "title": "Scenario L3 Desc",
+            "default": ""
+          },
+          "customer_group_name": {
+            "type": "string",
+            "title": "Customer Group Name",
+            "default": ""
+          },
+          "customer_group_industry": {
+            "type": "string",
+            "title": "Customer Group Industry",
+            "default": ""
+          },
+          "org_keywords": {
+            "type": "string",
+            "title": "Org Keywords",
+            "default": ""
+          },
+          "scope_keywords": {
+            "type": "string",
+            "title": "Scope Keywords",
+            "default": ""
+          },
+          "customer_level": {
+            "type": "string",
+            "title": "Customer Level",
+            "default": ""
+          },
+          "customer_category": {
+            "type": "string",
+            "title": "Customer Category",
+            "default": ""
+          },
+          "product_l1_name": {
+            "type": "string",
+            "title": "Product L1 Name",
+            "default": ""
+          },
+          "product_l2_name": {
+            "type": "string",
+            "title": "Product L2 Name",
+            "default": ""
+          },
+          "branch_count": {
+            "type": "string",
+            "title": "Branch Count",
+            "default": ""
+          },
+          "product_l1_sort": {
+            "type": "string",
+            "title": "Product L1 Sort",
+            "default": ""
+          },
+          "product_l2_sort": {
+            "type": "string",
+            "title": "Product L2 Sort",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version"
+        ],
+        "title": "ScenarioPatch",
+        "description": "仅修改显式提供的字段；空字符串表示显式清空。"
       },
       "ScenarioWrite": {
         "properties": {

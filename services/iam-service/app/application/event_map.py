@@ -16,6 +16,7 @@ _EVENT_META: dict[str, tuple[str, str, str, str]] = {
     "auth.password.changed": ("auth", "password_change", "user", "修改密码"),
     "iam.user.created": ("system.users", "create", "user", "创建用户"),
     "iam.user.updated": ("system.users", "update", "user", "更新用户"),
+    "iam.user.deleted": ("system.users", "delete", "user", "删除用户"),
     "iam.user.password_reset": ("system.users", "reset_password", "user", "重置密码"),
     "iam.user.sessions_revoked": ("system.users", "revoke_sessions", "user", "强制下线"),
     "iam.user.roles_replaced": ("system.users", "assign_roles", "user", "分配用户角色"),

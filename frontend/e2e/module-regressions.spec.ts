@@ -132,7 +132,7 @@ test('roles: list is a normal filterable table and opens the detail page', async
   await expect(page.getByRole('heading', { name: '角色2', exact: true })).toBeVisible()
 })
 
-test('roles: permission table ticks cumulatively; saving locks the table and confirms in plain Chinese', async ({ page }) => {
+test('roles: permission menu picks one level; saving locks the row and confirms in plain Chinese', async ({ page }) => {
   let saving: Route | undefined
   let payload: { grants: { resource_code: string; level: string }[] } | undefined
   await mockRoleDetail(page, (id, route) => {
@@ -141,18 +141,14 @@ test('roles: permission table ticks cumulatively; saving locks the table and con
   })
   await page.goto('/system/roles/1')
   const sources = page.locator('.perm-table__row').filter({ hasText: '信源管理' })
-  // 勾「管理」自动带上查看和导出。
-  await sources.getByRole('checkbox', { name: '信源管理管理' }).check({ force: true }).catch(async () => {
-    await sources.locator('.el-checkbox').nth(2).click()
-  })
-  await expect(sources.locator('.el-checkbox.is-checked')).toHaveCount(3)
+  // 选「管理」即包含查看和导出，保存档位是 FULL。
+  await sources.getByRole('radio', { name: '管理', exact: true }).click()
+  await expect(sources.getByRole('radio', { name: '管理', exact: true })).toBeChecked()
   await expect(page.getByText('有 1 项修改还没保存')).toBeVisible()
-  // 取消「查看」一并取消后面两列。
-  await sources.locator('.el-checkbox').nth(0).click()
-  await expect(sources.locator('.el-checkbox.is-checked')).toHaveCount(0)
+  await sources.getByRole('radio', { name: '不开放', exact: true }).click()
   await expect(page.getByText('有 1 项修改还没保存')).toHaveCount(0)
-  await sources.locator('.el-checkbox').nth(1).click()
-  await expect(sources.locator('.el-checkbox.is-checked')).toHaveCount(2)
+  await sources.getByRole('radio', { name: '导出', exact: true }).click()
+  await expect(sources.getByRole('radio', { name: '导出', exact: true })).toBeChecked()
 
   await page.getByRole('button', { name: '保存权限', exact: true }).click()
   const confirm = page.locator('.el-message-box')
@@ -160,20 +156,52 @@ test('roles: permission table ticks cumulatively; saving locks the table and con
   await confirm.getByRole('button', { name: '保存', exact: true }).click()
   await expect.poll(() => saving !== undefined).toBe(true)
   expect(payload?.grants.find(item => item.resource_code === 'policy.sources')?.level).toBe('EXPORT')
-  await expect(sources.locator('.el-checkbox.is-disabled')).toHaveCount(3)
+  await expect(sources.getByRole('radio', { name: '导出', exact: true })).toBeDisabled()
   await respond(saving!, { role: { ...role('1'), version: 2 }, grants: [{ resource_code: 'policy.sources', level: 'EXPORT' }] })
   await expect(page.getByText('有 1 项修改还没保存')).toHaveCount(0)
 })
 
-test('roles: modules only show the columns they actually have; unreleased modules are hidden', async ({ page }) => {
+test('roles: modules only show the levels they actually have; unreleased modules are hidden', async ({ page }) => {
   await mockRoleDetail(page, (id, route) => respond(route, { role: role(id), grants: [] }))
   await page.goto('/system/roles/1')
   const crawler = page.locator('.perm-table__row').filter({ hasText: '爬虫监测 v2' })
-  await expect(crawler.locator('.el-checkbox')).toHaveCount(2)
-  await expect(crawler.locator('.perm-table__na')).toHaveCount(1)
+  await expect(crawler.getByRole('radio')).toHaveCount(3)
+  await expect(crawler.getByRole('radio', { name: '管理', exact: true })).toHaveCount(0)
   await expect(crawler).toContainText('只读模块，没有新增或修改操作')
   await expect(page.locator('.perm-table__row').filter({ hasText: '信源管理' })).toContainText('管理包含：新增')
   await expect(page.getByText('客户', { exact: true })).toHaveCount(0)
+
+  await page.getByLabel('搜索菜单').fill('爬虫')
+  await expect(page.getByText('信源管理', { exact: true })).toHaveCount(0)
+  await expect(crawler).toBeVisible()
+  await page.getByLabel('搜索菜单').fill('')
+  await expect(page.getByText('信源管理', { exact: true })).toBeVisible()
+
+  await page.locator('.perm-group__head').getByText('开通整组', { exact: true }).click()
+  await expect(page.locator('.perm-table__row').filter({ hasText: '信源管理' }).getByRole('radio', { name: '管理', exact: true })).toBeChecked()
+  await expect(crawler.getByRole('radio', { name: '导出', exact: true })).toBeChecked()
+  await expect(page.locator('.perm-group__head .el-checkbox')).toHaveClass(/is-checked/)
+  await expect(page.getByText('有 2 项修改还没保存')).toBeVisible()
+  await page.locator('.perm-group__head').getByText('开通整组', { exact: true }).click()
+  await expect(page.getByText('有 2 项修改还没保存')).toHaveCount(0)
+})
+
+test('forbidden page keeps the allowed menu and returns to it', async ({ page }) => {
+  await page.route('**/api/v1/auth/permissions', route => respond(route, {
+    resources: [{ code: 'codebook.area_codes', level: 'FULL' }],
+    menus: [
+      { id: 'm-code', parent_id: null, title: '码表管理', route_name: null, resource_code: null, icon: null, sort_order: 1 },
+      { id: 'm-area', parent_id: 'm-code', title: '省市区编码表', route_name: 'codebook-area-codes', resource_code: 'codebook.area_codes', icon: null, sort_order: 1 },
+    ],
+  }))
+  await page.route('**/api/v1/codebook/area-codes**', route => respond(route, { items: [], total: 0, page: 1, page_size: 20 }))
+  await page.goto('/policy/sources')
+  await expect(page).toHaveURL(/\/forbidden/)
+  await expect(page.getByText('这个页面不在当前角色的菜单里')).toBeVisible()
+  const sidebar = page.getByRole('navigation', { name: '子模块导航' })
+  await expect(sidebar.getByRole('link', { name: '省市区编码表' })).toBeVisible()
+  await page.getByRole('button', { name: '返回省市区编码表' }).click()
+  await expect(page).toHaveURL(/\/codebook\/area-codes/)
 })
 
 test('roles: detail load failure shows a persistent error with a working retry', async ({ page }) => {

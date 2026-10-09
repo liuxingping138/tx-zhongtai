@@ -9,7 +9,10 @@
 - `platform_common.request_context`：请求 ID 中间件与上下文获取。
 - `platform_common.logging_setup`：结构化日志初始化与敏感字段脱敏处理器。
 - `platform_common.health`：`/health/live`、`/health/ready` 路由构建器。
-- `platform_common.outbox`：Outbox 事件写入的基础数据结构与仓储接口（不含具体业务事件类型）。
-- `platform_common.auth_client`：JWT 校验与内部 `/internal/v1/authorize` 调用客户端（P2/P3 阶段完善）。
+- `platform_common.outbox`：Outbox 仓储、认领和重放。默认租约 5 分钟。IAM 自己的仓储使用 30 秒。
+- `platform_common.authz` / `platform_common.service_authz`：业务服务调用 IAM `/internal/v1/authorize`。JWT 校验在 IAM，不在这个包里。
+- `platform_common.filters` / `platform_common.options`：列表筛选和筛选项预览。
+- `platform_common.excel` / `platform_common.columns`：Excel 读写、表头匹配。解析有解压大小、行列数和并发上限。
+- `platform_common.http_utils` / `platform_common.body_limit`：统一响应、上传大小限制。上传在鉴权通过之后才解析。
 
 不允许通过本包导入任何服务的数据库模型或业务表。

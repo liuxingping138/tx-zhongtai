@@ -54,32 +54,21 @@ tx-zhongtai/
 
 ## 快速开始
 
+日常在 Mac 上改代码，按 [部署与维护](docs/guides/部署与维护.md) 同步到服务器构建。入口以该文档为准。不要在服务器上 `git pull`，也不要把本机 Compose 当成日常环境。
+
+首次在一台空的隔离环境里初始化时：
+
 ```bash
-# 1. 检查环境、安装依赖、生成 .env（不会覆盖已存在的 .env）
 make bootstrap
-
-# 2. 按需修改 .env（尤其是各数据库密码；本机已有 PostgreSQL/Redis 时
-#    可调整 POSTGRES_HOST_PORT / REDIS_HOST_PORT 避免端口冲突）
-
-# 3. 启动本地环境（含 iam-worker）
+# 编辑 .env 里的密码
 make dev-up
-
-# 4. 执行数据库迁移，并补建审计清理账号
 make migrate
-
-# 5. 冒烟验证网关路由
-make smoke
-
-# 6. 打开浏览器访问网关地址（默认 http://localhost:8080）
-
-# 7. 隔离验收（独立库/卷，不会清掉开发数据；测完必须停掉）
-make test-integration
-make test-e2e
-make p6-down
+make seed
+make seed-area-codes
+ADMIN_PASSWORD='...' make admin-create
 ```
 
-停止开发环境（不删除数据卷）：`make dev-down`。  
-P6 只用于隔离验收，日常不要开着；详见 [`CLAUDE.md`](CLAUDE.md)。
+本机 Compose 和 P6 只用于临时隔离验收。测完执行 `make p6-down`，不要把隔离栈一直开着。详见 [`CLAUDE.md`](CLAUDE.md)。
 
 ## 各服务本地开发（不经 Docker）
 
@@ -113,12 +102,12 @@ pnpm dev   # 默认代理 /api 到 http://localhost:8080（网关）
 - 账号在侧栏底部（显示名 + 角色）；列表结果区常显横/纵滚动条，默认每页 20 条可滚完全页
 - 桌面筛选一次展开，点查询后生效；登录页保持现稿，不要自行改装饰
 
-日常只用 `make dev-up`。P6 是隔离验收栈，测完必须 `make p6-down`，不要常开。
+日常发布走服务器上的 Compose。本机 `make dev-up` 不是日常入口。P6 是隔离验收栈，测完必须 `make p6-down`。
 
 完整说明见 [`CLAUDE.md`](CLAUDE.md) 的「硬性开发约定」。
 
 ## 已知限制
 
-- 本期不执行生产部署；`deploy/gateway/traefik.prod.yml.example` 只是 HTTPS 模板。
+- 服务器按地址访问。HTTPS 使用文件 Provider 的 `deploy/gateway/traefik.https.yml`，不要拿 Docker Provider 的旧模板直接替换。
 - 最后管理员并发保护已有行锁实现，验收覆盖了禁用唯一管理员返回 403，未做双客户端压测。
-- 业务表、业务 API、业务页面仍未开发，等待后续需求。
+- 政策三张表、码表三张表、爬虫监测和任务调度已经接入。客户、招投标仍是占位目录。

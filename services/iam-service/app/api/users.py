@@ -104,6 +104,17 @@ async def update_user(
     )
 
 
+@router.delete("/users/{user_id}")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def delete_user(
+    user_id: uuid.UUID,
+    principal: CurrentPrincipal = Depends(require_permission("system.users", "delete")),
+    session: AsyncSession = Depends(get_db_session),
+) -> JSONResponse:
+    await user_admin.delete_user(session, principal.user, user_id)
+    return success_json({"deleted": True})
+
+
 @router.post("/users/{user_id}/reset-password")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def reset_password(

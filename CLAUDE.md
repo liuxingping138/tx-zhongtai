@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 常用命令
 
-当前运行环境是 `1.119.196.77:8091`。在 Mac 上改代码并推送到 GitLab，再用 rsync 同步到服务器构建。不要在服务器 `git pull`，不要在本机 `make dev-up`。步骤见 `docs/guides/部署与维护.md`。
+当前运行环境是 `https://1.119.196.77`（8091 HTTP 自动跳转）。在 Mac 上改代码并推送到 GitLab，再用 rsync 同步到服务器构建。不要在服务器 `git pull`，不要在本机 `make dev-up`。步骤见 `docs/guides/部署与维护.md`。
 
 ```bash
 make check            # 质量门：Python ruff+mypy，前端 type-check+build+lint，范围与密钥扫描
@@ -46,7 +46,7 @@ cd frontend && pnpm exec playwright test --grep "date range"
 
 ### 前端改动必须在服务器上重建
 
-入口是 `http://1.119.196.77:8091`，页面来自服务器上的 frontend 镜像，不是热更新。改了前端源码后按 `docs/guides/部署与维护.md` 同步并重建 `frontend`，只刷新浏览器不会生效。
+入口是 `https://1.119.196.77`，页面来自服务器上的 frontend 镜像，不是热更新。改了前端源码后按 `docs/guides/部署与维护.md` 同步并重建 `frontend`，只刷新浏览器不会生效。
 
 ### 开发部署机 vs 本机 / P6
 
@@ -149,7 +149,7 @@ policy 和 codebook 的基础设施代码高度重复，已统一下沉。**新�
 而该资源只能授予超级管理员角色——这是防止「用户管理员给自己加超级管理员」的关键约束，改入口时不要放宽。
 权限页的模块分组、可选档位和中文说明都由 `frontend/src/permissions/catalog.ts` 从资源树推导。
 
-授权四档逐档包含：`READ`（查看）< `EXPORT`（查看+导出）< `FULL`（含新增、编辑、导入）。新增模块时导出动作
+没有授权记录时是 `NONE`，不表示另一档权限。已授权的三档逐档包含：`READ`（查看）< `EXPORT`（查看+导出）< `FULL`（含新增、编辑、导入）。新增模块时导出动作
 必须标 `GrantLevel.EXPORT`，`test_every_export_action_requires_export_tier` 会拦；前端导出按钮用 `auth.canExport`。
 越权探针 `tests/authz_probe.py` 会自建 `越权探测-*` 角色与 `probe.*` 账号，在开发栈跑完记得清掉。
 
@@ -160,7 +160,8 @@ policy 和 codebook 的基础设施代码高度重复，已统一下沉。**新�
 （覆盖 iam/policy/codebook，`OUTBOX_SERVICES=policy-service` 只跑一个）。
 
 认领时置 delivering 并写 `lease_until`，回写只在租约没被别人重新认领时生效。进程在投递途中重启，
-事件等租约（5 分钟）到期会被重新认领，不会永远卡在 delivering；审计服务按 `event_id` 去重，重投不重复入库。
+租约到期后会被重新认领，不会永远卡在 delivering。IAM 默认租约 30 秒（`IAM_WORKER_LEASE_SECONDS`）；
+policy / codebook 走公共 Outbox，默认 5 分钟。审计服务按 `event_id` 去重，重投不重复入库。
 
 ### 任务调度
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PolicyTypeWrite(BaseModel):
@@ -65,3 +65,22 @@ class AreaCodeWrite(BaseModel):
     city_name_short: str = ""
     county_name_short: str = ""
 
+
+
+class PolicyTypePatch(PolicyTypeWrite):
+    """仅修改显式提供的字段；空字符串表示显式清空。"""
+
+    version: int = Field(ge=1)
+    type_name: str = ""
+
+
+class ScenarioPatch(ScenarioWrite):
+    """仅修改显式提供的字段；空字符串表示显式清空。"""
+
+    version: int = Field(ge=1)
+
+
+class AreaCodePatch(AreaCodeWrite):
+    """仅修改显式提供的字段；空字符串表示显式清空。"""
+
+    version: int = Field(ge=1)

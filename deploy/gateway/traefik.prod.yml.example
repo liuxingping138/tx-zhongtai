@@ -1,5 +1,6 @@
-# 生产环境 Traefik 静态配置模板。复制为 traefik.prod.yml 并按真实域名/证书方式调整后使用；
-# 本项目不在本期执行任何生产部署，这里只提供配置模板供后续参考。
+# 旧模板，使用 Docker Provider，和当前文件路由不兼容，不要直接拿来替换线上配置。
+# 没有域名、按地址访问时，用同目录的 traefik.https.yml、dynamic.https.yml
+# 和 deploy/compose/docker-compose.https.yml。证书续期见 scripts/renew_ip_cert.sh。
 
 entryPoints:
   web:

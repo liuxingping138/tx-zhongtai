@@ -1,0 +1,27 @@
+# 文件 Provider 的 HTTPS 入口。和本地 traefik.yml 使用同一套动态路由，不启用 Docker Provider。
+# HTTP 入口只做跳转。证书文件由续期脚本写到 /certs，动态配置变更后 Traefik 会重新加载。
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: ":443"
+          scheme: https
+  websecure:
+    address: ":443"
+
+providers:
+  file:
+    filename: /etc/traefik/dynamic.https.yml
+    watch: true
+
+api:
+  dashboard: false
+  insecure: false
+
+log:
+  level: INFO
+
+accessLog: {}

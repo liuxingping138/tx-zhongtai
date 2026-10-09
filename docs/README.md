@@ -31,9 +31,13 @@
 
 ## 资料与生成物
 
-- [openapi/](openapi)：`make export-openapi` 从运行中服务导出，不手改。`scripts/scan_scope.py` 按这里的路径检查。
+- [openapi/](openapi)：`make export-openapi` 在本地导入 FastAPI 应用后导出，不连接正在运行的服务，也不手改。`make check` 会重新导出并比较差异。
 - [excel/](excel)：用户提供的业务原始 Excel（信源、政策、场景的导入源文件）。
   省市区编码的原始 SQL 在 `services/codebook-service/data/cfg_all_area_code_info.sql`，`make seed-area-codes` 直接读它。
+
+## archive/ 与带日期的 reviews/ —— 只供追溯
+
+`archive/` 和 `reviews/` 里带日期的验收、计划、截图说明保留当时的端口、测试数量和界面。不要把它们改成当前服务器的操作步骤。现行做法以 `guides/` 和根目录规范为准。2026-10-08 审查的修复记录见 [repository-fix-2026-10-08](reviews/repository-fix-2026-10-08/README.md)。
 
 ## archive/ —— 已完成或已被取代，只供追溯
 
@@ -49,3 +53,5 @@
 
 - [任务调度](guides/任务调度.md)：每日增量计划、后台执行、重试及部署验证。
 - [任务调度验收](reviews/task-scheduler-2026-09-29/README.md)：空库迁移、并发/重试测试和真实增量结果。
+
+- [2026-10-09 审查修复与发布验收](reviews/repository-release-2026-10-09/README.md)：本次已发布版本、测试与恢复证据；历史审查报告保留修复前状态。
