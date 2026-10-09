@@ -25,12 +25,14 @@ from app.repositories import sessions as session_repo
 from app.repositories import users as user_repo
 
 USERNAME_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789._-")
+USERNAME_MIN_LENGTH = 3
+USERNAME_MAX_LENGTH = 64
 
 
 def validate_username(username: str) -> str:
     normalized = normalize_username(username)
-    if len(normalized) < 3 or len(normalized) > 64:
-        raise ApiError("用户名长度须为 3-64 个字符")
+    if not USERNAME_MIN_LENGTH <= len(normalized) <= USERNAME_MAX_LENGTH:
+        raise ApiError(f"用户名长度须为 {USERNAME_MIN_LENGTH}-{USERNAME_MAX_LENGTH} 个字符")
     if normalized[0] not in set("abcdefghijklmnopqrstuvwxyz"):
         raise ApiError("用户名须以字母开头")
     if any(ch not in USERNAME_CHARS for ch in normalized):

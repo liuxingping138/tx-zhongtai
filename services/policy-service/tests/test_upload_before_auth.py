@@ -9,13 +9,13 @@ os.environ.setdefault("POLICY_DATABASE_URL", "postgresql+asyncpg://policy_app:te
 os.environ.setdefault("POLICY_IAM_SERVICE_SECRET", "unit-test")
 os.environ.setdefault("POLICY_AUDIT_INGEST_SECRET", "unit-test")
 
-import pytest  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-from platform_common.errors import UnauthenticatedError  # noqa: E402
-from starlette.datastructures import Headers, UploadFile  # noqa: E402
+import pytest
+from fastapi.testclient import TestClient
+from platform_common.errors import UnauthenticatedError
+from starlette.datastructures import Headers, UploadFile
 
-from app.core.database import get_db_session  # noqa: E402
-from app.main import app  # noqa: E402
+from app.core.database import get_db_session
+from app.main import app
 
 
 async def _db():  # type: ignore[no-untyped-def]

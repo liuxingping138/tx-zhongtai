@@ -144,11 +144,11 @@ class AuditEmitter:
                     "X-Internal-Token": settings.audit_ingest_secret,
                 },
             )
-            if response.status_code >= 300:
+            if not response.is_success:
                 error = f"http:{response.status_code}"
         except httpx.HTTPError as exc:
             error = f"network:{exc.__class__.__name__}"
-        except Exception as exc:  # noqa: BLE001 - 组装投递体等本地异常，按失败重试到上限后置 dead
+        except Exception as exc:  # 组装投递体等本地异常，按失败重试到上限后置 dead
             self._logger.exception(f"{self._log_name}_audit_deliver_error", event_id=str(event.event_id))
             error = f"error:{exc.__class__.__name__}"
 
@@ -175,7 +175,7 @@ class AuditEmitter:
         while not stop.is_set():
             try:
                 await self.deliver_pending(settings)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 self._logger.exception(f"{self._log_name}_outbox_loop_failed")
             try:
                 await asyncio.wait_for(stop.wait(), timeout=settings.worker_poll_interval_seconds)

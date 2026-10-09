@@ -63,7 +63,7 @@ async def _deliver_one(settings: Settings, client: httpx.AsyncClient, event: Out
         )
         return
 
-    if response.status_code < 300:
+    if response.is_success:
         data = _json_data(response)
         async with SessionLocal() as session:
             ok = await outbox_repo.mark_delivered(session, event.event_id, expected_lease)

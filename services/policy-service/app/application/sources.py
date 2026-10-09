@@ -19,6 +19,9 @@ from app.domain.models import SOURCE_FIELDS, Source
 from app.repositories import options as options_repo
 from app.repositories import sources as repo
 
+# 与 policy_sources.site_code 的 String(16) 一致。
+SITE_CODE_MAX_LENGTH = 16
+
 
 def _to_out(row: Source) -> dict[str, Any]:
     return {
@@ -230,7 +233,7 @@ async def import_sources(session: AsyncSession, actor: Actor, content: bytes) ->
             reasons.append("网站名称+省份+地市+标签重复")
         if site_code:
             digits = digits_only(site_code)
-            if not digits or digits != site_code or len(site_code) > 16:
+            if not digits or digits != site_code or len(site_code) > SITE_CODE_MAX_LENGTH:
                 reasons.append("网站编码不合法")
             elif site_code in db_site:
                 reasons.append("网站编码已存在")
@@ -252,8 +255,9 @@ async def import_sources(session: AsyncSession, actor: Actor, content: bytes) ->
     now = utcnow()
     seen_site = set(db_site)
     seen_site.update(item[2] for item in staged if item[2])
-    for values, internal_id, site_code, _reason in staged:
+    for values, internal_id, given_code, _reason in staged:
         normalized = _normalized_values(values)
+        site_code = given_code
         if not site_code:
             prefix = site_code_prefix(normalized["province_code"], normalized["city_code"], normalized["district_code"])
             site_code = next_site_code(prefix, list(seen_site))

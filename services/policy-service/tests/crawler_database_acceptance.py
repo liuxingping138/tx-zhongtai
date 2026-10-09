@@ -26,33 +26,33 @@ from app.repositories import crawler as repo
 
 
 def rule(name: str, tag: str, code: str = "") -> dict:
-    return dict(
-        correlation=name + tag,
-        site_key=site_key(code, name),
-        site_code=code,
-        site_name=name,
-        province_name="海南省",
-        city_name="海口市",
-        tag=tag,
-        source_url="https://example.com/policies",
-        rule_state=1,
-    )
+    return {
+        "correlation": name + tag,
+        "site_key": site_key(code, name),
+        "site_code": code,
+        "site_name": name,
+        "province_name": "海南省",
+        "city_name": "海口市",
+        "tag": tag,
+        "source_url": "https://example.com/policies",
+        "rule_state": 1,
+    }
 
 
 def daily(day, name, tag, rows, code="") -> dict:
-    return dict(
-        collect_date=day,
-        site_key=site_key(code, name),
-        site_code=code,
-        site_name=name,
-        province_name="海南省",
-        city_name="海口市",
-        tag=tag,
-        row_count=rows,
-        named_count=rows,
-        content_count=0,
-        identity_verified=True,
-    )
+    return {
+        "collect_date": day,
+        "site_key": site_key(code, name),
+        "site_code": code,
+        "site_name": name,
+        "province_name": "海南省",
+        "city_name": "海口市",
+        "tag": tag,
+        "row_count": rows,
+        "named_count": rows,
+        "content_count": 0,
+        "identity_verified": True,
+    }
 
 
 async def main() -> None:

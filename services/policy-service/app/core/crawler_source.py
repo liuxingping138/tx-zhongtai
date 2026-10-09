@@ -15,6 +15,7 @@ logger = logging.getLogger("policy.crawler_source")
 
 # 只重试瞬时连接错误：连不上、连接中断、读超时。认证失败和 SQL 错误重试也没用。
 _TRANSIENT_ERRORS = {2002, 2003, 2006, 2013, 2055}
+_MAX_ATTEMPTS = 3
 
 
 def retry_mysql_read[**P, R](operation: Callable[P, R]) -> Callable[P, R]:
@@ -22,11 +23,11 @@ def retry_mysql_read[**P, R](operation: Callable[P, R]) -> Callable[P, R]:
 
     @wraps(operation)
     def read(*args: P.args, **kwargs: P.kwargs) -> R:
-        for attempt in range(1, 4):
+        for attempt in range(1, _MAX_ATTEMPTS + 1):
             try:
                 return operation(*args, **kwargs)
             except pymysql.err.OperationalError as exc:
-                if not exc.args or exc.args[0] not in _TRANSIENT_ERRORS or attempt == 3:
+                if not exc.args or exc.args[0] not in _TRANSIENT_ERRORS or attempt == _MAX_ATTEMPTS:
                     raise
                 logger.warning("source_read_retry operation=%s attempt=%s", operation.__name__, attempt)
                 time.sleep(2 ** (attempt - 1))

@@ -6,13 +6,13 @@ from types import SimpleNamespace
 
 os.environ.setdefault("POLICY_DATABASE_URL", "postgresql+asyncpg://policy_app:test@localhost:5432/policy_db")
 
-import pytest  # noqa: E402
-from pydantic import ValidationError  # noqa: E402
+import pytest
+from pydantic import ValidationError
 
-from app.api.scheduler import JobUpdate  # noqa: E402
-from app.application.scheduler import claim_failure  # noqa: E402
-from app.domain.scheduling import next_daily  # noqa: E402
-from app.worker.scheduler import fail_run, safe_error  # noqa: E402
+from app.api.scheduler import JobUpdate
+from app.application.scheduler import claim_failure
+from app.domain.scheduling import next_daily
+from app.worker.scheduler import fail_run, safe_error
 
 
 def test_daily_beijing_boundary_and_missed_days():

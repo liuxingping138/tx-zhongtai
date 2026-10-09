@@ -22,7 +22,7 @@ class PasswordChangeRequest(BaseModel):
 
 class TokenPayload(BaseModel):
     access_token: str
-    token_type: str = "Bearer"
+    token_type: str = "Bearer"  # noqa: S105  OAuth 令牌类型名，不是口令
     expires_in: int
     must_change_password: bool
 

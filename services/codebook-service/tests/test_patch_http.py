@@ -9,15 +9,15 @@ os.environ.setdefault("CODEBOOK_DATABASE_URL", "postgresql+asyncpg://codebook_ap
 os.environ.setdefault("CODEBOOK_IAM_SERVICE_SECRET", "unit-test")
 os.environ.setdefault("CODEBOOK_AUDIT_INGEST_SECRET", "unit-test")
 
-from fastapi.testclient import TestClient  # noqa: E402
-from platform_common.actors import Actor  # noqa: E402
+from fastapi.testclient import TestClient
+from platform_common.actors import Actor
 
-from app.api import area_codes as area_codes_api  # noqa: E402
-from app.api import policy_types as policy_types_api  # noqa: E402
-from app.api import scenarios as scenarios_api  # noqa: E402
-from app.api.schemas import ScenarioPatch  # noqa: E402
-from app.core.database import get_db_session  # noqa: E402
-from app.main import app  # noqa: E402
+from app.api import area_codes as area_codes_api
+from app.api import policy_types as policy_types_api
+from app.api import scenarios as scenarios_api
+from app.api.schemas import ScenarioPatch
+from app.core.database import get_db_session
+from app.main import app
 
 _ACTOR = Actor(id="00000000-0000-0000-0000-000000000001", name="测试")
 

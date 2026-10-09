@@ -92,10 +92,8 @@ async def list_users(
     keyword: FilterValue = None,
 ) -> list[User]:
     stmt = _apply_user_filters(select(User), username=username, status=status, role_id=role_id, keyword=keyword)
-    if sort == "username":
-        stmt = stmt.order_by(User.username.asc())
-    else:
-        stmt = stmt.order_by(User.created_at.desc())
+    order = User.username.asc() if sort == "username" else User.created_at.desc()
+    stmt = stmt.order_by(order)
     result = await session.execute(stmt.offset(offset).limit(limit))
     return list(result.scalars().all())
 

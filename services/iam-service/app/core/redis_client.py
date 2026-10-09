@@ -14,5 +14,5 @@ redis_client: Redis = Redis.from_url(settings.redis_url, decode_responses=True)
 async def check_redis_ready() -> bool:
     try:
         return bool(await redis_client.ping())
-    except Exception:  # noqa: BLE001 - 就绪检查只需要布尔结果
+    except Exception:  # noqa: BLE001  就绪检查只需要布尔结果
         return False

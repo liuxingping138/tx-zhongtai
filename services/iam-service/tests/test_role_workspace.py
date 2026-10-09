@@ -11,12 +11,12 @@ from unittest.mock import AsyncMock, MagicMock
 os.environ.setdefault("IAM_DATABASE_URL", "postgresql+asyncpg://iam_app:test@localhost:5432/iam_db")
 os.environ.setdefault("IAM_REDIS_URL", "redis://localhost:6379/0")
 
-import pytest  # noqa: E402
-from fastapi.routing import APIRoute  # noqa: E402
+import pytest
+from fastapi.routing import APIRoute
 
-from app.api.schemas import RoleCreateRequest, UserCreateRequest  # noqa: E402
-from app.application import role_admin, user_admin  # noqa: E402
-from app.main import app  # noqa: E402
+from app.api.schemas import RoleCreateRequest, UserCreateRequest
+from app.application import role_admin, user_admin
+from app.main import app
 
 
 def _role(name: str, status: str = "active", code: str = "r") -> SimpleNamespace:

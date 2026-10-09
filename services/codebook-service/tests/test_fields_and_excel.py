@@ -62,7 +62,7 @@ def test_parse_real_policy_type_enum_sheet() -> None:
 
 
 def test_content_hash_stable() -> None:
-    left = {field: "" for field in SCENARIO_FIELDS}
+    left = dict.fromkeys(SCENARIO_FIELDS, "")
     left["scenario_tag"] = "AI安监"
     right = dict(left)
     assert content_hash(left, SCENARIO_FIELDS) == content_hash(right, SCENARIO_FIELDS)

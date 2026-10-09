@@ -380,4 +380,8 @@ INTERPRETATION_WRITE_FIELDS = (
 )
 
 # 注册调度模型，供 Alembic 与元数据校验发现。
-from app.domain.scheduler_models import ScheduledJob, ScheduledRun, SchedulerHeartbeat  # noqa: E402, F401
+from app.domain.scheduler_models import (  # noqa: E402, F401  放在末尾避免循环导入，导入即注册到元数据
+    ScheduledJob,
+    ScheduledRun,
+    SchedulerHeartbeat,
+)

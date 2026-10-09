@@ -10,11 +10,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 os.environ.setdefault("POLICY_DATABASE_URL", "postgresql+asyncpg://policy_app:test@localhost:5432/policy_db")
 
-import pytest  # noqa: E402
+import pytest
 
-from app.application import crawler_v2 as service  # noqa: E402
-from app.cli import sync_crawler_v2 as sync  # noqa: E402
-from app.repositories import crawler_v2 as repo  # noqa: E402
+from app.application import crawler_v2 as service
+from app.cli import sync_crawler_v2 as sync
+from app.repositories import crawler_v2 as repo
 
 TODAY = date(2026, 9, 23)
 

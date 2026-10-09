@@ -20,6 +20,7 @@ from app.repositories import resources as resource_repo
 from app.repositories import roles as role_repo
 
 ROLE_CODE_RE = re.compile(r"^[a-z][a-z0-9._-]{1,63}$")
+ROLE_DESCRIPTION_MAX_LENGTH = 500
 
 
 def role_public(role: Role) -> dict[str, object]:
@@ -90,8 +91,8 @@ async def list_members(session: AsyncSession, role_id: uuid.UUID) -> list[dict[s
 
 def _clean_description(description: str | None) -> str:
     text = (description or "").strip()
-    if len(text) > 500:
-        raise ApiError("角色说明不能超过 500 字")
+    if len(text) > ROLE_DESCRIPTION_MAX_LENGTH:
+        raise ApiError(f"角色说明不能超过 {ROLE_DESCRIPTION_MAX_LENGTH} 字")
     return text
 
 
@@ -150,9 +151,8 @@ async def update_role(
         raise NotFoundError("角色不存在")
     if role.version != version:
         raise VersionConflictError()
-    if role.is_builtin:
-        if status is not None and status != role.status:
-            raise PermissionDeniedError("不能停用或修改内置角色状态")
+    if role.is_builtin and status is not None and status != role.status:
+        raise PermissionDeniedError("不能停用或修改内置角色状态")
     if status is not None:
         if status not in {RoleStatus.ACTIVE, RoleStatus.DISABLED}:
             raise ApiError("无效的角色状态")

@@ -7,6 +7,11 @@ import re
 
 _DIGITS = re.compile(r"\D")
 
+# 行政区划编码位数：省 2 位、市 4 位、区县 6 位，下级编码以上级编码为前缀。
+PROVINCE_CODE_LENGTH = 2
+CITY_CODE_LENGTH = 4
+DISTRICT_CODE_LENGTH = 6
+
 
 def digits_only(value: str | None) -> str:
     return _DIGITS.sub("", value or "")
@@ -19,47 +24,36 @@ def normalize_region(province_code: str, city_code: str, district_code: str) -> 
     city = digits_only(city_code)
     district = digits_only(district_code)
 
-    if not district and len(city) == 6:
-        district = city
-        city = city[:4]
-        if not province:
-            province = district[:2]
-    elif len(city) == 6:
-        city = city[:4]
+    if len(city) == DISTRICT_CODE_LENGTH:
+        if not district:
+            district = city
+        city = city[:CITY_CODE_LENGTH]
 
     if not province:
-        if len(district) >= 2:
-            province = district[:2]
-        elif len(city) >= 2:
-            province = city[:2]
-        else:
+        source = next((code for code in (district, city) if len(code) >= PROVINCE_CODE_LENGTH), "")
+        if not source:
             return "", "", ""
-    province = (province + "00")[:2]
+        province = source[:PROVINCE_CODE_LENGTH]
+    province = _fit(province, PROVINCE_CODE_LENGTH)
+    city = _fit(city, CITY_CODE_LENGTH) if city else _fit(province, CITY_CODE_LENGTH)
+    district = _fit(district, DISTRICT_CODE_LENGTH) if district else _fit(city, DISTRICT_CODE_LENGTH)
 
-    if not city:
-        city = province + "00"
-    elif len(city) < 4:
-        city = (city + "0000")[:4]
-    else:
-        city = city[:4]
+    return district[:PROVINCE_CODE_LENGTH], district[:CITY_CODE_LENGTH], district
 
-    if not district:
-        district = city + "00"
-    elif len(district) < 6:
-        district = (district + "000000")[:6]
-    else:
-        district = district[:6]
 
-    return district[:2], district[:4], district
+def _fit(code: str, length: int) -> str:
+    """右补 0 或截断到固定位数。"""
+
+    return code.ljust(length, "0")[:length]
 
 
 def make_internal_id(site_name: str, province_name: str, city_name: str, tag: str) -> str:
     raw = f"{site_name}{province_name}{city_name}{tag}"
-    return hashlib.md5(raw.encode("utf-8")).hexdigest()
+    return hashlib.md5(raw.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
 def make_policy_uid(policy_title: str) -> str:
-    return hashlib.md5((policy_title or "").encode("utf-8")).hexdigest()
+    return hashlib.md5((policy_title or "").encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
 def make_relation_key(policy_uid: str, industry_scenario_code: str, opportunity_type: str) -> str:
@@ -72,23 +66,19 @@ def site_code_prefix(province_code: str, city_code: str, district_code: str) -> 
     district = digits_only(district_code)
     city = digits_only(city_code)
     province = digits_only(province_code)
-    if len(district) >= 6:
-        return district[:6]
-    if len(city) >= 4:
-        return f"{city[:4]}00"
-    if len(province) >= 2:
-        return f"{province[:2]}0000"
+    if len(district) >= DISTRICT_CODE_LENGTH:
+        return district[:DISTRICT_CODE_LENGTH]
+    if len(city) >= CITY_CODE_LENGTH:
+        return _fit(city[:CITY_CODE_LENGTH], DISTRICT_CODE_LENGTH)
+    if len(province) >= PROVINCE_CODE_LENGTH:
+        return _fit(province[:PROVINCE_CODE_LENGTH], DISTRICT_CODE_LENGTH)
     return ""
 
 
 def next_site_code(district_code: str, existing_codes: list[str]) -> str:
     """同区县取当前网站编码最大序号再 +1。"""
 
-    prefix = digits_only(district_code)
-    if len(prefix) < 6:
-        prefix = (prefix + "000000")[:6]
-    else:
-        prefix = prefix[:6]
+    prefix = _fit(digits_only(district_code), DISTRICT_CODE_LENGTH)
     max_seq = 0
     for code in existing_codes:
         digits = digits_only(code)

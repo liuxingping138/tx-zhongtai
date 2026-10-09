@@ -14,12 +14,12 @@ os.environ.setdefault("POLICY_DATABASE_URL", "postgresql+asyncpg://policy_app:te
 os.environ.setdefault("POLICY_IAM_SERVICE_SECRET", "unit-test")
 os.environ.setdefault("POLICY_AUDIT_INGEST_SECRET", "unit-test")
 
-import pytest  # noqa: E402
+import pytest
 
-from app.application.crawler import _to_out  # noqa: E402
-from app.domain.fields import CRAWLER_TASK_COLUMNS, HEALTH_STATUS_LABELS  # noqa: E402
-from app.domain.models import CrawlerTaskHealth  # noqa: E402
-from app.repositories import crawler as repo  # noqa: E402
+from app.application.crawler import _to_out
+from app.domain.fields import CRAWLER_TASK_COLUMNS, HEALTH_STATUS_LABELS
+from app.domain.models import CrawlerTaskHealth
+from app.repositories import crawler as repo
 
 
 def _row(**overrides: object) -> CrawlerTaskHealth:

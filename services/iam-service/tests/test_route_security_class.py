@@ -6,10 +6,10 @@ import os
 os.environ.setdefault("IAM_DATABASE_URL", "postgresql+asyncpg://iam_app:test@localhost:5432/iam_db")
 os.environ.setdefault("IAM_REDIS_URL", "redis://localhost:6379/0")
 
-from fastapi.routing import APIRoute  # noqa: E402
-from platform_common.route_audit import audit_routes, permission_map  # noqa: E402
+from fastapi.routing import APIRoute
+from platform_common.route_audit import audit_routes, permission_map
 
-from app.main import app  # noqa: E402
+from app.main import app
 
 COVERED = ("/api/", "/internal/")
 

@@ -10,22 +10,22 @@ from unittest.mock import AsyncMock
 
 os.environ.setdefault("POLICY_DATABASE_URL", "postgresql+asyncpg://policy_app:test@localhost:5432/policy_db")
 
-import httpx  # noqa: E402
-import pytest  # noqa: E402
-import pytest_asyncio  # noqa: E402
-from platform_common.actors import Actor  # noqa: E402
-from platform_common.errors import PermissionDeniedError, VersionConflictError  # noqa: E402
-from sqlalchemy import delete, text  # noqa: E402
+import httpx
+import pytest
+import pytest_asyncio
+from platform_common.actors import Actor
+from platform_common.errors import PermissionDeniedError, VersionConflictError
+from sqlalchemy import delete, text
 
-from app.api.security import get_authz_client  # noqa: E402
-from app.application import scheduler as service  # noqa: E402
-from app.core.database import SessionLocal, engine  # noqa: E402
-from app.domain.models import CrawlerV2SyncRun  # noqa: E402
-from app.domain.scheduler_models import ScheduledRun  # noqa: E402
-from app.domain.scheduling import LEADER_LOCK  # noqa: E402
-from app.main import app  # noqa: E402
-from app.repositories import scheduler as repo  # noqa: E402
-from app.worker import scheduler as worker  # noqa: E402
+from app.api.security import get_authz_client
+from app.application import scheduler as service
+from app.core.database import SessionLocal, engine
+from app.domain.models import CrawlerV2SyncRun
+from app.domain.scheduler_models import ScheduledRun
+from app.domain.scheduling import LEADER_LOCK
+from app.main import app
+from app.repositories import scheduler as repo
+from app.worker import scheduler as worker
 
 pytestmark = pytest.mark.skipif(os.environ.get("SCHEDULER_INTEGRATION") != "1", reason="需要独立 scheduler_test 数据库")
 ACTOR = Actor(id=str(uuid.uuid4()), name="调度验收")
@@ -220,7 +220,7 @@ async def test_api_authorization_validation_and_queue():
                 raise PermissionDeniedError()
             return type("Principal", (), {"user_id": ACTOR.id, "display_name": ACTOR.name})()
 
-    app.dependency_overrides[get_authz_client] = lambda: Authz()
+    app.dependency_overrides[get_authz_client] = Authz
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         base = "/api/v1/policy/scheduled-jobs"
         assert (await client.get(base)).status_code == 401

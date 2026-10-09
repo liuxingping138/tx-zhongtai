@@ -69,7 +69,7 @@ async def assert_allowed(session: AsyncSession, user: User, resource_code: str, 
                     "outcome": "denied",
                 },
             )
-        except Exception:
+        except Exception:  # noqa: BLE001  拒绝审计写入失败不能改变「拒绝」结论，只记日志
             logger.warning("authz_denied_outbox_failed", resource=resource_code, action=action_code)
     raise PermissionDeniedError(_DECISION_MESSAGE[decision])
 
@@ -87,10 +87,13 @@ async def authorize_access_context(
     decision, level = await resolve_authorization(session, user, resource_code, action_code)
     allowed = decision == AuthzDecision.ALLOW
     reason = None if allowed else _DECISION_MESSAGE[decision]
-    if allowed and action_code in _SUPERADMIN_ACTIONS:
-        if not await user_repo.user_has_builtin_superadmin(session, user.id):
-            allowed = False
-            reason = "仅超级管理员可清空数据"
+    if (
+        allowed
+        and action_code in _SUPERADMIN_ACTIONS
+        and not await user_repo.user_has_builtin_superadmin(session, user.id)
+    ):
+        allowed = False
+        reason = "仅超级管理员可清空数据"
     return {
         "allowed": allowed,
         "reason": reason,

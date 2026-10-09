@@ -5,9 +5,9 @@ import os
 os.environ.setdefault("AUDIT_DATABASE_URL", "postgresql+asyncpg://audit_app:test@localhost:5432/audit_db")
 os.environ.setdefault("AUDIT_INTERNAL_CALLER_SECRETS", '{"iam-service":"unit-test-token"}')
 
-from fastapi.testclient import TestClient  # noqa: E402
+from fastapi.testclient import TestClient
 
-from app.main import app  # noqa: E402
+from app.main import app
 
 
 def test_ingest_rejects_missing_internal_credentials() -> None:

@@ -6,10 +6,10 @@ os.environ.setdefault("CODEBOOK_DATABASE_URL", "postgresql+asyncpg://codebook_ap
 os.environ.setdefault("CODEBOOK_IAM_SERVICE_SECRET", "unit-test")
 os.environ.setdefault("CODEBOOK_AUDIT_INGEST_SECRET", "unit-test")
 
-from fastapi.routing import APIRoute  # noqa: E402
-from platform_common.route_audit import audit_routes, permission_map  # noqa: E402
+from fastapi.routing import APIRoute
+from platform_common.route_audit import audit_routes, permission_map
 
-from app.main import app  # noqa: E402
+from app.main import app
 
 # 省市区解析是上传文件换回匹配结果，不落库，所以用 POST 挂 READ 级的 resolve 动作。
 READ_LEVEL_POST_ROUTES = {"POST /api/v1/codebook/area-codes/resolve"}

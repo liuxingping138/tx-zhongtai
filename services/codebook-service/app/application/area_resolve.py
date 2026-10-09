@@ -31,7 +31,7 @@ def _header_role(header: str) -> str | None:
     short = raw.split()[0]
     for role, titles in _ROLE_HEADERS:
         for title in titles:
-            if raw == title or short == title or raw.startswith(title):
+            if title in (raw, short) or raw.startswith(title):
                 return role
     return None
 

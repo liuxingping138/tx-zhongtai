@@ -60,7 +60,7 @@ def test_data_status_header_is_recognised() -> None:
 
 
 def test_blank_status_defaults_to_pending() -> None:
-    values = service._values({field: "" for field in INTERPRETATION_WRITE_FIELDS} | {"policy_title": "某政策"})
+    values = service._values(dict.fromkeys(INTERPRETATION_WRITE_FIELDS, "") | {"policy_title": "某政策"})
     assert values["data_status"] == "待验证"
 
 
@@ -82,7 +82,7 @@ def test_create_rejects_unknown_status() -> None:
 
 def _row(status: str) -> Interpretation:
     now = datetime.now(UTC)
-    values = {field: "" for field in INTERPRETATION_WRITE_FIELDS}
+    values = dict.fromkeys(INTERPRETATION_WRITE_FIELDS, "")
     values.update(policy_title="某政策", policy_uid="uid-1", data_status=status)
     return Interpretation(
         id=uuid.uuid4(),

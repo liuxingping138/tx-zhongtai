@@ -11,11 +11,11 @@ import os
 os.environ.setdefault("AUDIT_DATABASE_URL", "postgresql+asyncpg://audit_app:test@localhost:5432/audit_db")
 os.environ.setdefault("AUDIT_INGEST_SECRET", "unit-test")
 
-import pytest  # noqa: E402
-from fastapi.routing import APIRoute  # noqa: E402
+import pytest
+from fastapi.routing import APIRoute
 
-from app.main import app  # noqa: E402
-from app.repositories.events import OPTION_COLUMNS  # noqa: E402
+from app.main import app
+from app.repositories.events import OPTION_COLUMNS
 
 
 def _query_params(path: str) -> set[str]:

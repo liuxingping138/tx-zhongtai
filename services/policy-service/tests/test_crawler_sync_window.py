@@ -15,9 +15,9 @@ os.environ.setdefault("POLICY_DATABASE_URL", "postgresql+asyncpg://policy_app:te
 os.environ.setdefault("POLICY_IAM_SERVICE_SECRET", "unit-test")
 os.environ.setdefault("POLICY_AUDIT_INGEST_SECRET", "unit-test")
 
-import pytest  # noqa: E402
+import pytest
 
-from app.cli import sync_crawler  # noqa: E402
+from app.cli import sync_crawler
 
 TODAY = date(2026, 9, 22)
 

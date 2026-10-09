@@ -29,5 +29,5 @@ async def check_database_ready() -> bool:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         return True
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  就绪检查只需要布尔结果
         return False

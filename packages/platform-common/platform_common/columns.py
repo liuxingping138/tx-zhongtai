@@ -44,7 +44,7 @@ def header_to_field(columns: tuple[ColumnSpec, ...], header: str) -> str | None:
     short = normalize_header(raw)
     if not raw:
         return None
-    exact = [spec for spec in columns if raw == spec.header or short == spec.header]
+    exact = [spec for spec in columns if spec.header in (raw, short)]
     if exact:
         return exact[0].field
     prefixed = [spec for spec in columns if raw.startswith(spec.header) or (short and short.startswith(spec.header))]

@@ -4,10 +4,10 @@ import os
 
 os.environ.setdefault("AUDIT_DATABASE_URL", "postgresql+asyncpg://audit_app:test@localhost:5432/audit_db")
 
-from platform_common.route_audit import audit_routes, permission_map  # noqa: E402
+from platform_common.route_audit import audit_routes, permission_map
 
-from app.api.security import AUDIT_RESOURCE  # noqa: E402
-from app.main import app  # noqa: E402
+from app.api.security import AUDIT_RESOURCE
+from app.main import app
 
 COVERED = ("/api/", "/internal/")
 

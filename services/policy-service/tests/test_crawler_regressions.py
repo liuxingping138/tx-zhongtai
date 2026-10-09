@@ -9,12 +9,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 os.environ.setdefault("POLICY_DATABASE_URL", "postgresql+asyncpg://policy_app:test@localhost:5432/policy_db")
 
-import pytest  # noqa: E402
+import pytest
 
-from app.application import crawler as service  # noqa: E402
-from app.cli import sync_crawler as sync  # noqa: E402
-from app.domain.crawler_identity import site_key  # noqa: E402
-from app.repositories import crawler as repo  # noqa: E402
+from app.application import crawler as service
+from app.cli import sync_crawler as sync
+from app.domain.crawler_identity import site_key
+from app.repositories import crawler as repo
 
 
 def test_empty_codes_do_not_merge_different_websites() -> None:
@@ -79,7 +79,9 @@ async def test_beijing_midnight_uses_local_yesterday(monkeypatch: pytest.MonkeyP
 
 async def test_sparse_series_preserves_zero_days(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(repo, "utcnow", lambda: datetime(2026, 9, 22, 6, tzinfo=UTC))
-    session = SimpleNamespace(execute=AsyncMock(return_value=SimpleNamespace(all=lambda: [(date(2026, 9, 20), 7)])))
+    rows = [(date(2026, 9, 20), 7)]
+    result = SimpleNamespace(tuples=lambda: SimpleNamespace(all=lambda: rows))
+    session = SimpleNamespace(execute=AsyncMock(return_value=result))
     series = await repo.task_daily_series(session, site_key="code:123", tag="通知", days=7)
     assert len(series) == 7
     assert series[0] == {"date": "2026-09-22", "rows": 0}

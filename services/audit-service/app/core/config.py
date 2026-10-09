@@ -32,7 +32,7 @@ class Settings(BaseServiceSettings):
     def _reject_demo_internal_secrets_in_production(self) -> Settings:
         if self.environment == Environment.PRODUCTION:
             markers = ("dev-", "example", "changeme", "test-secret")
-            for token in list(self.internal_caller_secrets.values()) + [self.iam_service_secret]:
+            for token in [*self.internal_caller_secrets.values(), self.iam_service_secret]:
                 if token and any(marker in token.lower() for marker in markers):
                     raise ValueError("生产环境内部调用密钥看起来是示例值，拒绝启动")
         return self

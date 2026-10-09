@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 
 from platform_common.config import BaseServiceSettings, Environment
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import SettingsConfigDict
+
+# 爬虫库表名会拼进 SQL（表名不能参数绑定），只允许「库名.表名」形式的标识符。
+_TABLE_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")
 
 
 class Settings(BaseServiceSettings):
@@ -37,6 +41,14 @@ class Settings(BaseServiceSettings):
     crawler_mysql_db: str = "crawler2021"
     crawler_data_table: str = "csys_policy_info_source_all"
     crawler_rules_table: str = "policy_rules_alls_spider"
+
+    @field_validator("crawler_data_table", "crawler_rules_table")
+    @classmethod
+    def _table_name_is_identifier(cls, value: str) -> str:
+        if not _TABLE_NAME.fullmatch(value):
+            raise ValueError(f"爬虫库表名只能包含字母、数字、下划线：{value!r}")
+        return value
+
     # 日常同步回算最近几天。爬虫是「采集后入库」，实测入库普遍比 collect_date 晚 1 天，
     # 近 60 天里最大滞后 4 天。窗口必须大于最大滞后，否则迟到的行进库时窗口已经滑过它的
     # collect_date，那天的统计会永久少算。7 天是在实测滞后上留了余量。

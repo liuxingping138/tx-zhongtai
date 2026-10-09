@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import uuid
 from datetime import datetime, timedelta
@@ -9,21 +10,21 @@ from datetime import datetime, timedelta
 os.environ.setdefault("IAM_DATABASE_URL", "postgresql+asyncpg://iam_app:test@localhost:5432/iam_db")
 os.environ.setdefault("IAM_REDIS_URL", "redis://localhost:6379/0")
 
-import pytest  # noqa: E402
-from platform_common.errors import UnauthenticatedError  # noqa: E402
-from sqlalchemy import select  # noqa: E402
-from sqlalchemy.dialects.postgresql import JSONB, UUID  # noqa: E402
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine  # noqa: E402
-from sqlalchemy.ext.compiler import compiles  # noqa: E402
-from sqlalchemy.pool import StaticPool  # noqa: E402
+import pytest
+from platform_common.errors import UnauthenticatedError
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.pool import StaticPool
 
-import app.core.database as database  # noqa: E402
-from app.application.auth_service import AuthService  # noqa: E402
-from app.core.config import Settings  # noqa: E402
-from app.core.database import get_db_session  # noqa: E402
-from app.domain.enums import UserStatus  # noqa: E402
-from app.domain.models import Base, OutboxEvent, RefreshToken, Session, User  # noqa: E402
-from app.domain.tokens import hash_refresh_token  # noqa: E402
+from app.application.auth_service import AuthService
+from app.core import database
+from app.core.config import Settings
+from app.core.database import get_db_session
+from app.domain.enums import UserStatus
+from app.domain.models import Base, OutboxEvent, RefreshToken, Session, User
+from app.domain.tokens import hash_refresh_token
 
 # SQLite 不保留时区。这里用同一套无时区时间，只验证事务提交；线上 Postgres 存的是带时区时间。
 _NOW = datetime(2026, 10, 8, 9, 0)
@@ -59,10 +60,8 @@ async def _call(service_session_factory, raw: str, settings: Settings):  # type:
         with pytest.raises(UnauthenticatedError):
             await generator.athrow(exc)
         return None
-    try:
+    with contextlib.suppress(StopAsyncIteration):
         await anext(generator)
-    except StopAsyncIteration:
-        pass
     return result
 
 

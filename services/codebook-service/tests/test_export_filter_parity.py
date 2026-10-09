@@ -12,11 +12,11 @@ os.environ.setdefault("CODEBOOK_DATABASE_URL", "postgresql+asyncpg://codebook_ap
 os.environ.setdefault("CODEBOOK_IAM_SERVICE_SECRET", "unit-test")
 os.environ.setdefault("CODEBOOK_AUDIT_INGEST_SECRET", "unit-test")
 
-import pytest  # noqa: E402
-from fastapi.routing import APIRoute  # noqa: E402
+import pytest
+from fastapi.routing import APIRoute
 
-from app.main import app  # noqa: E402
-from app.repositories import area_codes, policy_types, scenarios  # noqa: E402
+from app.main import app
+from app.repositories import area_codes, policy_types, scenarios
 
 PAGING = {"page", "page_size"}
 

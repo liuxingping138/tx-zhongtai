@@ -202,9 +202,10 @@ async def _assert_exportable(session: AsyncSession, filters: Filters) -> None:
 
 async def export_policy_types(session: AsyncSession, actor: Actor, filters: Filters) -> bytes:
     await _assert_exportable(session, filters)
-    rows = []
-    for item in await repo.list_filtered(session, filters):
-        rows.append(_to_out(item) | {"seq_no": item.seq_no, "type_name": item.type_name, "definition": item.definition})
+    rows = [
+        _to_out(item) | {"seq_no": item.seq_no, "type_name": item.type_name, "definition": item.definition}
+        for item in await repo.list_filtered(session, filters)
+    ]
     await enqueue_event(
         session,
         event_type="codebook.policy_type.exported",

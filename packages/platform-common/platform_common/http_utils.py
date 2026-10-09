@@ -118,8 +118,7 @@ async def read_import_upload(request: Request, max_bytes: int) -> bytes:
             raise ApiError("请上传 Excel 文件", code=ErrorCode.VALIDATION_ERROR, http_status=422)
         if upload.size is not None and upload.size > max_bytes:
             raise ApiError("导入文件过大", code=ErrorCode.VALIDATION_ERROR, http_status=413)
-        data = await read_upload_within_limit(upload, max_bytes)
-        return data
+        return await read_upload_within_limit(upload, max_bytes)
     except MultiPartException as exc:
         raise ApiError("上传表单无效或超过限制", code=ErrorCode.VALIDATION_ERROR, http_status=413) from exc
     finally:

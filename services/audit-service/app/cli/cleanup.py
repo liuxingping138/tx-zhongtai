@@ -25,9 +25,9 @@ async def main() -> None:
         raise SystemExit("清理连接不能与应用连接相同")
 
     cleanup_engine = create_async_engine(cleanup_url, pool_pre_ping=True)
-    CleanupSession = async_sessionmaker(cleanup_engine, expire_on_commit=False)
+    cleanup_sessions = async_sessionmaker(cleanup_engine, expire_on_commit=False)
     try:
-        async with CleanupSession() as cleanup_session:
+        async with cleanup_sessions() as cleanup_session:
             deleted = await delete_expired(cleanup_session, retention_days=settings.retention_days)
         async with SessionLocal() as app_session:
             await record_cleanup(

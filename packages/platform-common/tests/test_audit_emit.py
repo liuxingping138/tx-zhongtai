@@ -9,7 +9,11 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+import httpx
+import pytest
+
 from platform_common.audit_emit import AuditEmitter
+from platform_common.outbox import OutboxRepository
 
 EVENT_META = {
     "policy.source.created": ("policy.sources", "create", "source", "新增信源"),
@@ -83,10 +87,6 @@ def test_target_id_is_stringified_or_none() -> None:
 
 # ---- 投递循环：本地异常不能拖住整批，租约失效时不覆盖别人的结果 ----
 
-import httpx  # noqa: E402
-import pytest  # noqa: E402
-
-from platform_common.outbox import OutboxRepository  # noqa: E402
 
 LEASE = datetime(2026, 9, 24, 1, 0, tzinfo=UTC)
 
@@ -142,7 +142,7 @@ def _leased(event_type: str, payload: Any) -> _Event:
 
 def _wired(repo: _Repo, monkeypatch: pytest.MonkeyPatch) -> AuditEmitter:
     emitter = _emitter()
-    emitter._sessions = lambda: _Session()  # type: ignore[assignment]
+    emitter._sessions = _Session  # type: ignore[assignment]
     emitter._repo = repo
     transport = httpx.MockTransport(lambda _request: httpx.Response(201, json={"code": "OK"}))
     real_client = httpx.AsyncClient

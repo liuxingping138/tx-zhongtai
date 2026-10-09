@@ -34,16 +34,16 @@ build-backend = "hatchling.build"
 packages = ["app"]
 
 [tool.ruff]
-line-length = 120
-target-version = "py312"
-# 迁移脚本由 alembic 按模板生成，格式沿用 alembic 官方模板，不做风格检查。
-extend-exclude = ["migrations/versions"]
+# 规则在仓库根目录 ruff.toml，这里只写本包特有的例外。
+extend = "../../ruff.toml"
 
-[tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
-
-[tool.ruff.lint.per-file-ignores]
-"app/api/*.py" = ["B008"]
+[tool.ruff.lint.extend-per-file-ignores]
+# 存量基线（2026-10-09 登记）：结构性问题按 docs/guides/工程规范.md 第 8 节分批整改，
+# 修完一条删一条；不许往这里加新条目，新代码必须直接满足规则。
+"app/api/security.py" = ["PLW0603"]
+"app/application/cleanup.py" = ["PLC0415"]
+"app/application/query.py" = ["PLR0913"]
+"app/repositories/events.py" = ["PLR0913"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

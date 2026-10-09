@@ -36,7 +36,7 @@ def build_health_router(readiness_checks: dict[str, ReadinessCheck] | None = Non
         for name, check in checks.items():
             try:
                 results[name] = await check()
-            except Exception:  # noqa: BLE001 - 依赖检查失败即标记未就绪，不向上抛出
+            except Exception:  # noqa: BLE001  依赖检查失败即标记未就绪，不向上抛出
                 results[name] = False
 
         healthy = all(results.values()) if results else True

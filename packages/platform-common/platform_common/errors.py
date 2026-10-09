@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
+from http import HTTPStatus
 from typing import Any
 
 from fastapi import FastAPI, Request, status
@@ -165,7 +166,9 @@ def register_exception_handlers(app: FastAPI) -> None:
             status.HTTP_429_TOO_MANY_REQUESTS: ErrorCode.RATE_LIMITED,
             status.HTTP_503_SERVICE_UNAVAILABLE: ErrorCode.DEPENDENCY_UNAVAILABLE,
         }
-        default_code = ErrorCode.INTERNAL_ERROR if exc.status_code >= 500 else ErrorCode.BAD_REQUEST
+        default_code = (
+            ErrorCode.INTERNAL_ERROR if exc.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR else ErrorCode.BAD_REQUEST
+        )
         code = code_map.get(exc.status_code, default_code)
         message = exc.detail if isinstance(exc.detail, str) else "请求处理失败"
         return JSONResponse(

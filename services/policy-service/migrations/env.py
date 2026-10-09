@@ -12,7 +12,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
-from app.domain import models as _policy_models  # noqa: F401
+from app.domain import models as _policy_models  # noqa: F401  导入即注册模型到 Base.metadata
 
 config = context.config
 

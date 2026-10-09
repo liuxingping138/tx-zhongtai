@@ -58,7 +58,7 @@ def _text_value(value: Any, limit: int) -> str:
 def _fetch_rules() -> list[dict[str, Any]]:
     """读爬虫规则表。规则正文是 JSON 字符串，网站/标签都在 necessary_files 里。"""
 
-    sql = f"SELECT id, correlation, state, rule FROM {settings.crawler_rules_table}"  # noqa: S608
+    sql = f"SELECT id, correlation, state, rule FROM {settings.crawler_rules_table}"  # noqa: S608  表名经 Settings 校验为标识符，值走参数绑定
     with _mysql_connect() as conn, conn.cursor() as cur:
         cur.execute(sql)
         rows = cast(list[dict[str, Any]], cur.fetchall())
@@ -119,7 +119,7 @@ def _fetch_day(day: date) -> list[dict[str, Any]]:
         WHERE collect_date = %s
         GROUP BY TRIM(COALESCE(site_name, '')), TRIM(COALESCE(tag, '')),
                  CASE WHEN TRIM(COALESCE(site_name, '')) = '' THEN TRIM(COALESCE(author, '')) ELSE '' END
-    """  # noqa: S608
+    """  # noqa: S608  表名经 Settings 校验为标识符，值走参数绑定
     with _mysql_connect() as conn, conn.cursor() as cur:
         cur.execute(sql, (day.isoformat(),))
         rows = cast(list[dict[str, Any]], cur.fetchall())
@@ -320,7 +320,7 @@ def _affected_days(since_ts: datetime) -> tuple[set[date], datetime | None]:
         FROM {settings.crawler_data_table}
         WHERE create_time > %s AND collect_date IS NOT NULL
         GROUP BY collect_date
-    """  # noqa: S608
+    """  # noqa: S608  表名经 Settings 校验为标识符，值走参数绑定
     with _mysql_connect() as conn, conn.cursor() as cur:
         cur.execute(sql, (since_ts.astimezone(BEIJING).strftime("%Y-%m-%d %H:%M:%S"),))
         rows = cast(list[dict[str, Any]], cur.fetchall())
@@ -464,7 +464,7 @@ async def _run_sync(
         if new_watermark is not None and not tasks_only:
             run_row.watermark = new_watermark
         await session.commit()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         await session.rollback()
         run_row.status = "failed"
         run_row.error_message = str(exc)[:2000]

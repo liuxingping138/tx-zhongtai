@@ -68,7 +68,7 @@ def fetch_day(day: date, today: date) -> list[dict[str, Any]]:
         FROM {table}
         WHERE collect_date = %s AND (status IS NULL OR status <> '-1')
         GROUP BY TRIM(COALESCE(site_name, '')), TRIM(COALESCE(prov_name, '')), TRIM(COALESCE(city_name, ''))
-    """  # noqa: S608
+    """  # noqa: S608  表名经 Settings 校验为标识符，值走参数绑定
     with mysql_connect() as conn, conn.cursor() as cur:
         cur.execute(sql, (today.isoformat(), day.isoformat()))
         rows = cast(list[dict[str, Any]], cur.fetchall())
@@ -122,7 +122,7 @@ def fetch_affected_days(since: datetime) -> tuple[set[date], datetime | None]:
         FROM {table}
         WHERE create_time > %s
         GROUP BY collect_date
-    """  # noqa: S608
+    """  # noqa: S608  表名经 Settings 校验为标识符，值走参数绑定
     with mysql_connect() as conn, conn.cursor() as cur:
         cur.execute(sql, (since.astimezone(BEIJING).strftime("%Y-%m-%d %H:%M:%S"),))
         rows = cast(list[dict[str, Any]], cur.fetchall())
@@ -137,9 +137,9 @@ def fetch_source_bounds() -> tuple[date | None, datetime | None]:
 
     table = get_settings().crawler_data_table
     with mysql_connect() as conn, conn.cursor() as cur:
-        cur.execute(f"SELECT MIN(collect_date) AS first_day FROM {table}")  # noqa: S608
+        cur.execute(f"SELECT MIN(collect_date) AS first_day FROM {table}")  # noqa: S608  表名经 Settings 校验为标识符，值走参数绑定
         first_day = cast(dict[str, Any], cur.fetchone())["first_day"]
-        cur.execute(f"SELECT MAX(create_time) AS max_created FROM {table}")  # noqa: S608
+        cur.execute(f"SELECT MAX(create_time) AS max_created FROM {table}")  # noqa: S608  表名经 Settings 校验为标识符，值走参数绑定
         max_created = cast(dict[str, Any], cur.fetchone())["max_created"]
     return first_day, _source_time(max_created) if max_created else None
 

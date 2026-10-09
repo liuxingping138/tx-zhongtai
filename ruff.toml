@@ -1,0 +1,55 @@
+# 全部 Python 包共用的 ruff 配置，各包 pyproject 用 `extend` 引用，只在本包写特有例外。
+# 规则依据见 docs/guides/工程规范.md 第 4 节。
+line-length = 120
+target-version = "py312"
+# 迁移脚本由 alembic 按模板生成，不做风格检查。
+extend-exclude = ["**/migrations/versions"]
+
+[lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # import 排序
+    "UP",       # 新语法
+    "B",        # 常见缺陷
+    "BLE",      # 捕获过宽的 Exception：确需兜底时 noqa 写明原因
+    "SIM",      # 可简化的写法
+    "RET",      # return 写法
+    "C4",       # 推导式
+    "C90",      # 圈复杂度
+    "N",        # 命名
+    "S",        # 安全（bandit）
+    "DTZ",      # 无时区 datetime：时间一律经 platform_common.clock
+    "ASYNC",    # 协程里的阻塞调用
+    "PERF",     # 性能反模式
+    "PL",       # pylint：参数个数、分支数、魔法数字等
+    "RUF",      # ruff 自有规则
+    "T20",      # print
+]
+
+ignore = [
+    # 中文注释、文档和文案本来就用全角标点（，：（）），不是容易混淆的字符。
+    "RUF001", "RUF002", "RUF003",
+]
+
+# 多余的 noqa 后面常带着原因说明，自动删除会把说明一起删掉，必须手动处理。
+unfixable = ["RUF100"]
+
+[lint.mccabe]
+max-complexity = 10
+
+[lint.pylint]
+max-args = 6
+
+[lint.per-file-ignores]
+# FastAPI 路由：依赖注入写在参数默认值里（B008）；每个查询参数就是一个函数参数，
+# 筛选多的列表接口必然超过 6 个，参数个数由接口契约决定，不在这里限制。
+"**/app/api/*.py" = ["B008", "PLR0913", "PLR0917"]
+# SQLAlchemy 的 __table_args__、pydantic Settings 的列表默认值会被框架复制，不是共享的可变类属性。
+"**/app/domain/*models.py" = ["RUF012"]
+"**/app/core/config.py" = ["RUF012"]
+# 测试：assert 与字面量期望值是正常写法；先改环境变量或打补丁再在函数内 import；
+# 需要构造爬虫库返回的无时区时间；验收脚本用 print 输出结果；用临时表名拼测试 SQL。
+"**/tests/**" = ["S101", "S105", "S106", "S608", "PLR2004", "PLC0415", "DTZ001", "T201"]
+# 命令行入口输出结果给运维看。
+"**/app/cli/*.py" = ["T201"]

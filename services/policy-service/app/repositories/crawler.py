@@ -181,7 +181,7 @@ async def task_daily_series(session: AsyncSession, *, site_key: str, tag: str, d
             CrawlerDailyStat.collect_date.between(start, today),
         )
     )
-    counts = {day: rows for day, rows in result.all()}
+    counts = dict(result.tuples().all())
     return [
         {"date": (today - timedelta(days=i)).isoformat(), "rows": int(counts.get(today - timedelta(days=i), 0))}
         for i in range(days)

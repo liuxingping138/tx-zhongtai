@@ -108,7 +108,7 @@ async def execute_claim(claim: tuple[uuid.UUID, str, uuid.UUID]) -> None:
     error = None
     try:
         await asyncio.wait_for(execute_sync(code, sync_id), timeout=TIMEOUT_SECONDS)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001  任何同步失败都要落到执行记录并按策略重试，不能让 worker 退出
         error = safe_error(exc)
         logger.warning("scheduled_sync_failed job=%s run=%s reason=%s", code, run_id, error)
     # CancelledError 留给进程退出后的 recover_interrupted。超时会进上面的 Exception。
@@ -184,7 +184,7 @@ async def main() -> None:
     while not stop.is_set():
         try:
             await lead(stop)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001  数据库或锁暂时不可用时等待后重试，调度进程常驻不退出
             logger.warning("scheduler_unavailable reason=%s", type(exc).__name__)
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=POLL_SECONDS)
