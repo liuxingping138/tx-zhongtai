@@ -140,9 +140,7 @@ ColumnPicker 按用户ID和route.path保存字段键，使用v2存储键；旧v1
 - 检查上传和下载都可用、反馈明确；模拟写入用例优先隔离/模拟接口，不拿真实数据随意测试。
 - 检查 1024px 起各档桌面宽度、长文本、键盘焦点、列设置浮层、无整页横向溢出。系统二维表允许局部横向滚动。
 - frontend目录运行 `pnpm run type-check`、`pnpm run lint`、`pnpm run test`、`pnpm run build`。UI行为修改需补做浏览器检查；纯文档修改核对源码、相对链接和历史口径即可，不宣称新跑了业务测试。
-- 修改视觉值同步DESIGN.md；修改行为同步UX-CONTRACT.md；改组件API、默认列或服务入口同步本文件。在开发进度记录结果，不把历史截图和未跑测试描述成当前验收。
-
-当前实现与历史验证结果见 [实施记录](../archive/ui-review-2026-09-20/IMPLEMENTATION.md)。Playwright CLI授权、官方designmd lint网络可用性等本轮遗留验证项保留在该记录中，不能用“规范已写好”替代验证完成。
+- 修改视觉值同步DESIGN.md；修改行为同步UX-CONTRACT.md；改组件API、默认列或服务入口同步本文件。文档只写现行做法，不把历史截图和未跑测试描述成当前验收。
 
 ## 带概览的监测列表
 

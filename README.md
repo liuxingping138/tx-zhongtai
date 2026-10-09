@@ -12,7 +12,7 @@
 - [`CLAUDE.md`](CLAUDE.md) —— 架构要点、硬性开发约定、排查提示，动手前先读
 - [UI 视觉规范](DESIGN.md) / [交互契约](UX-CONTRACT.md) —— 新增、修改前端页面必读
 - [`docs/README.md`](docs/README.md) —— 其余文档的分类索引：设计与决策（`design/`）、操作手册（`guides/`）、
-  开发进度、验收记录（`reviews/`）、OpenAPI、原始 Excel、历史归档（`archive/`）
+  验收记录（`reviews/`）、OpenAPI、原始 Excel
 
 ## 技术栈
 

@@ -18,15 +18,17 @@
 | --- | --- |
 | [UI 开发与复用指南](guides/UI开发规范.md) | 新页面接入步骤、默认列清单、列宽、验收与文档同步 |
 | [配置说明](guides/配置说明.md) | `.env` 字段、会话与导入导出限制、爬虫监测 v1/v2 同步与口径升级 |
-| [部署与维护](guides/部署与维护.md) | Mac 推送 GitLab，再 rsync 到 `1.119.196.77:8091` 构建。另有备份恢复、指标告警、会话清理 |
+| [部署与维护](guides/部署与维护.md) | Mac 推送 GitLab，`scripts/sync-to-server.sh` 同步到 `1.119.196.77` 构建；服务器上跑 P6 验收、备份恢复、指标告警、会话清理 |
+| [任务调度](guides/任务调度.md) | 每日增量计划、后台执行、重试及部署验证 |
 
-## 进度与验收记录
+## 验收记录
 
-- [开发进度](开发进度.md)：各阶段实际改动与验证结果，按时间追加。
 - [reviews/](reviews)：按「主题-日期」存放的验收证据（截图、接口与性能实测 JSON），带 README 的有文字结论：
   - [system-access-2026-09-24](reviews/system-access-2026-09-24/README.md)：系统管理三模块与个人设置的 UI/UX 复查和调整
   - [crawler-monitoring-2026-09-22](reviews/crawler-monitoring-2026-09-22/README.md)：爬虫监测首版验收
   - [crawler-monitoring-2026-09-23-release](reviews/crawler-monitoring-2026-09-23-release/README.md)：名称口径升级的发布与真实增量核对
+  - [task-scheduler-2026-09-29](reviews/task-scheduler-2026-09-29/README.md)：任务调度的空库迁移、并发/重试测试和真实增量结果
+  - [repository-release-2026-10-09](reviews/repository-release-2026-10-09/README.md)：审查修复与发布验收
   - `crawler-monitoring-v2-2026-09-23/`、`system-rbac-2026-09-23/`：仅截图
 
 ## 资料与生成物
@@ -35,23 +37,10 @@
 - [excel/](excel)：用户提供的业务原始 Excel（信源、政策、场景的导入源文件）。
   省市区编码的原始 SQL 在 `services/codebook-service/data/cfg_all_area_code_info.sql`，`make seed-area-codes` 直接读它。
 
-## archive/ 与带日期的 reviews/ —— 只供追溯
-
-`archive/` 和 `reviews/` 里带日期的验收、计划、截图说明保留当时的端口、测试数量和界面。不要把它们改成当前服务器的操作步骤。现行做法以 `guides/` 和根目录规范为准。2026-10-08 审查的修复记录见 [repository-fix-2026-10-08](reviews/repository-fix-2026-10-08/README.md)。
-
-## archive/ —— 已完成或已被取代，只供追溯
-
-- [Cursor 公共框架开发计划](archive/Cursor公共框架开发计划.md)：P0～P6 分阶段计划与提示词，已全部执行完。
-- [开发约定](archive/开发约定.md)：已并入 CLAUDE.md。
-- [design-qa](archive/design-qa.md)、[ui-review-2026-09-20/](archive/ui-review-2026-09-20)：早期 UI 验收过程，其中部分方案已被用户否定。
+`reviews/` 是带日期的一次性验收证据，保留当时的端口、测试数量和界面，不当作现行操作步骤。现行做法以 `guides/` 和根目录规范为准。
 
 ## 放置规则
 
 - 长期有效的「为什么」放 `design/`；可照着执行的步骤放 `guides/`；一次性验收证据放 `reviews/<主题>-<日期>/`。
-- 文档被取代时移到 `archive/`，在开头注明取代它的文档，不要直接删除。
+- 文档只写现行做法：被取代或过时的内容直接删除，不另设归档，历史留在 git 里。
 - 移动或改名后用 `git grep` 查旧路径，代码注释和测试里也有引用。
-
-- [任务调度](guides/任务调度.md)：每日增量计划、后台执行、重试及部署验证。
-- [任务调度验收](reviews/task-scheduler-2026-09-29/README.md)：空库迁移、并发/重试测试和真实增量结果。
-
-- [2026-10-09 审查修复与发布验收](reviews/repository-release-2026-10-09/README.md)：本次已发布版本、测试与恢复证据；历史审查报告保留修复前状态。
