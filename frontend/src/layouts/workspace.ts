@@ -49,7 +49,8 @@ export function useWorkspace() {
       if (!result.has(key)) result.set(key, { key, title: parent?.title || '业务模块', entries: [] })
       result.get(key)!.entries.push({ title: item.title, path, description: descriptions[path] || '进入业务模块', icon: entryIcons[path] || Menu })
     }
-    return [...result.values()].sort((a, b) => Number(a.key === 'system') - Number(b.key === 'system'))
+    // 模块顺序以 iam 菜单 sort_order 为准（系统管理、政策、码表管理），前端不再另行调整。
+    return [...result.values()]
   })
   return { auth, groups }
 }

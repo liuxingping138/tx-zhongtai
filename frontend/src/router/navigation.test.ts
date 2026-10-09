@@ -47,8 +47,14 @@ describe('正式导航入口和原权限门禁', () => {
     expect(router.currentRoute.value.name).toBe('no-modules')
   })
 
-  it('首个业务模块优先于系统管理，与顶部导航一致', async () => {
+  it('根地址进入菜单顺序的首个模块，与顶部导航一致', async () => {
     auth.visibleMenus = [menu('系统管理', null), menu('用户管理', 'system-users', '系统管理'), menu('政策', null), menu('信源', 'policy-sources', '政策')]
+    await router.push('/')
+    expect(router.currentRoute.value.path).toBe('/system/users')
+  })
+
+  it('没有系统管理权限时，根地址进入首个业务模块', async () => {
+    auth.visibleMenus = [menu('政策', null), menu('信源', 'policy-sources', '政策'), menu('码表管理', null), menu('政策类型', 'codebook-policy-types', '码表管理')]
     await router.push('/')
     expect(router.currentRoute.value.path).toBe('/policy/sources')
   })

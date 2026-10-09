@@ -334,7 +334,8 @@ function onColumn(group: ModuleGroup, column: Column) {
 
 .perm-matrix {
   width: 100%;
-  min-width: 640px;
+  /* 1200px 宽的屏幕上详情区只有约 590px，最小宽度再大会把「管理包含」列裁到横向滚动里。 */
+  min-width: 520px;
   border-collapse: collapse;
 }
 
@@ -393,6 +394,14 @@ function onColumn(group: ModuleGroup, column: Column) {
   font-size: 12px;
   color: var(--zt-ink-500);
   font-variant-numeric: tabular-nums;
+}
+
+/* 「已开通 4 / 4」固定放在分组名下一行：放同一行时会随列宽时而同行、时而折行，
+   各分组对不齐；整体不换行，不把「/ 4」拆开。 */
+.perm-group__count {
+  display: block;
+  margin-left: 0;
+  white-space: nowrap;
 }
 
 .perm-row:hover {
