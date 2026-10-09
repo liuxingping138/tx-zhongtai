@@ -1,6 +1,0 @@
-F01 REPLAY_TXN revoke_called=1 audit_enqueued=1 commits=0 rollbacks=1
-F02 UPLOAD_REPRO status=401 parsed_bytes=22020096 parsed_before_auth=22020096
-F03 PATCH_REPRO submitted=[scenario_tag,version] cleared_unsubmitted_fields=30
-F07 injected COMPOSE command exit=42; four ERROR messages; make migrate-check exit=0
-
-These are local reproductions; no real database or server writes were performed.

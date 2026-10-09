@@ -87,7 +87,7 @@ Element Plus 弹层负责层级、Escape、焦点约束和焦点返回；不使�
 - 昨日、停更天数、7/30/90 天窗口均按北京时间自然日计算。详情近 90 天逐日补零；最后采集之后的零值仍展示。
 - 请求失败后，“重新加载”同时重试列表、概览与筛选候选。筛选候选接口沿用公共 `options` 包装；健康状态仅允许合法候选。
 - 同步失败、运行中、超过 36 小时未更新、首次未同步、旧统计待回填分别提供持久提示；更新时间只采用最后一次成功的同步。失败原文保留后端日志，不把连接异常中的内部信息直接呈现给业务用户。
-- 来源定义见 `services/policy-service/app/cli/sync_crawler.py`、`app/application/crawler.py`；回归证据见 `docs/reviews/crawler-monitoring-2026-09-22/`。
+- 来源定义见 `services/policy-service/app/cli/sync_crawler.py`、`app/application/crawler.py`。
 
 ## 爬虫监测 v2
 
@@ -117,7 +117,7 @@ Element Plus 弹层负责层级、Escape、焦点约束和焦点返回；不使�
 - 用户的查看和编辑是同一个抽屉：基本信息（显示名、电话、邮箱）和角色直接可改，一次「保存」；不再有单独的编辑弹窗和「调整角色」开关。异步加载完成后以已保存值作为草稿基线，有实际修改才提示未保存。成功保存后重新建立基线。
 - 操作日志仍用 `ListPage`、`ScrollPort` 和服务端分页；结果区使用 `expandedResults` 变体，最少 560px，可随窗口增长到 880px，筛选多行时整页自然滚动，分页不遮挡数据。
 - 左下角账号菜单进入个人设置。页面只读展示账号、中文状态和已分配角色；修改密码须原密码、新密码和确认，保留逐字段错误与失败反馈；「退出全部设备」独立于保存密码，先告知会撤销全部设备会话，取消不执行，确认后显示忙碌状态并跳登录页。
-- 来源定义见 `frontend/src/modules/system/roles/`、`frontend/src/permissions/catalog.ts`、`services/iam-service/app/application/role_admin.py`；截图见 `docs/reviews/system-rbac-2026-09-23/`。
+- 来源定义见 `frontend/src/modules/system/roles/`、`frontend/src/permissions/catalog.ts`、`services/iam-service/app/application/role_admin.py`。
 
 ## 任务调度（2026-09-29）
 

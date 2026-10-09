@@ -1,4 +1,0 @@
-area_resolve_129_columns_accepted 129
-common_sparse_row_100003_accepted 1
-over_limit_status 413
-temporary_files_closed_after_rejection [False]
