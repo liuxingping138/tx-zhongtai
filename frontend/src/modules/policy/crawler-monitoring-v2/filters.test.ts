@@ -14,7 +14,7 @@ describe('siteFilters', () => {
   })
 
   it('ignores unknown status labels instead of sending them', () => {
-    expect(siteFilters({ status: ['断爬'] }).status).toBeUndefined()
+    expect(siteFilters({ status: ['未知状态'] }).status).toBeUndefined()
   })
 })
 

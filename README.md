@@ -30,14 +30,15 @@ tx-zhongtai/
 ├── services/
 │   ├── iam-service/          # 身份权限服务；Compose 中 iam-worker 共用此镜像
 │   ├── audit-service/        # 审计写入、查询与到期清理
-│   ├── policy-service/       # 政策：信源、基础标签、解读
+│   ├── policy-service/       # 政策：信源、基础标签、解读、爬虫监测；任务调度（policy-worker 共用此镜像）
 │   ├── customer-service/     # 业务占位目录，仅 .gitkeep
 │   ├── tender-service/       # 业务占位目录，仅 .gitkeep
-│   └── codebook-service/     # 码表：政策类型、行业场景
-├── packages/platform-common/ # 公共协议、异常、日志、健康检查等基础代码包
+│   └── codebook-service/     # 码表：政策类型、行业场景、省市区编码
+├── packages/platform-common/ # 跨服务公共包：响应与异常、鉴权依赖、Outbox、审计入队、Excel、筛选等
 ├── deploy/
 │   ├── gateway/               # Traefik 静态/动态配置
 │   └── compose/               # docker-compose.yml、Postgres 初始化脚本
+├── scripts/                   # 同步到服务器、P6 验收、备份恢复、OpenAPI 导出等脚本
 ├── docs/                      # 设计决策、操作手册、OpenAPI、原始 Excel（索引见 docs/README.md）
 ├── Makefile
 ├── .env.example
@@ -48,7 +49,7 @@ tx-zhongtai/
 
 - Python 3.12（通过 `uv` 管理，不依赖系统 Python 版本）
 - Node.js ≥ 20.19（本机验证环境：Node 24 + pnpm 12）
-- Docker + Docker Compose v2
+- Docker + Docker Compose（只在临时隔离验收时用；服务器上是独立的 `docker-compose` 程序）
 - `uv`（Python 依赖与虚拟环境管理）：<https://docs.astral.sh/uv/>
 - `pnpm`：<https://pnpm.io/installation>
 
@@ -73,7 +74,7 @@ ADMIN_PASSWORD='...' make admin-create
 ## 各服务本地开发（不经 Docker）
 
 ```bash
-# platform-common / iam-service / audit-service 任一目录下：
+# packages/platform-common 或 services/ 下任一服务目录：
 cd services/iam-service
 uv python pin 3.12
 uv sync --extra dev
@@ -89,7 +90,7 @@ pnpm dev   # 默认代理 /api 到 http://localhost:8080（网关）
 
 参见 `make help`。关键命令：`bootstrap`、`dev-up`、`dev-down`、`migrate`、
 `check`（Python 静态检查 + 前端类型检查/构建/lint）、`test-unit`、`smoke`。
-`seed`、`admin-create`、`test-integration`、`test-e2e` 已可在隔离栈上使用。
+集成测试和 e2e 在服务器 P6 上跑：`bash scripts/p6-on-server.sh`。
 
 ## 开发约定（必须遵守）
 

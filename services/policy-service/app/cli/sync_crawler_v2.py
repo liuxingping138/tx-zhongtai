@@ -1,4 +1,4 @@
-"""爬虫监测 v2 同步的命令行入口，逻辑在 app.crawler.application.crawler_sync_v2。
+"""爬虫监测同步的命令行入口，逻辑在 app.crawler.application.crawler_sync_v2。
 
 用法见 app.crawler.application.crawler_sync_v2 模块说明。
 """
@@ -17,7 +17,7 @@ from app.crawler.application.crawler_sync_v2 import MODE_BACKFILL, MODE_INCREMEN
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    parser = argparse.ArgumentParser(description="爬虫监测 v2：按网站同步采集总表的统计")
+    parser = argparse.ArgumentParser(description="爬虫监测：按网站同步采集总表的统计")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--backfill", action="store_true", help="从总表最早采集日回填到今天，并建立水位")
     group.add_argument("--days", type=int, default=None, help="修复：固定重算最近多少天，不动水位")

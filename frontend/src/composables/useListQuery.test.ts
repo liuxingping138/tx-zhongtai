@@ -56,14 +56,14 @@ describe('committed list navigation', () => {
     expect(sync.applied.keyword).toBe('已查询')
     expect(reload).not.toHaveBeenCalled()
   })
-  it('applies a legend toggle without adopting other drafts', () => {
-    const { query, sync } = setup({ keyword: '已查询', range: ['观察'] })
+  it('applies a status card toggle without adopting other drafts', () => {
+    const { query, sync } = setup({ keyword: '已查询', range: ['关注'] })
     query.keyword = '草稿'
-    sync.replaceApplied('range', ['断爬'])
-    expect(sync.applied.range).toEqual(['断爬'])
+    sync.replaceApplied('range', ['停更'])
+    expect(sync.applied.range).toEqual(['停更'])
     expect(sync.applied.keyword).toBe('已查询')
     expect(query.keyword).toBe('草稿')
-    expect(query.range).toEqual(['断爬'])
+    expect(query.range).toEqual(['停更'])
     expect(query.page).toBe(1)
   })
   it('restores browser navigation and ignores a different route', async () => {

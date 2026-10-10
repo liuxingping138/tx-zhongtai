@@ -149,7 +149,7 @@ class TestExecuteSync:
         await worker.execute_sync("crawler-v2", sync_id)
         run.assert_awaited_once_with(mode="incremental", run_id=sync_id)
         with pytest.raises(RuntimeError, match="未知任务"):
-            await worker.execute_sync("crawler-v1", sync_id)
+            await worker.execute_sync("no-such-job", sync_id)
 
 
 class TestRecover:

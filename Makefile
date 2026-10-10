@@ -37,7 +37,7 @@ help:
 	@echo "  make admin-create     创建初始管理员（密码从 ADMIN_PASSWORD 读取，不进命令行参数）"
 	@echo "  make check            Python 静态检查 + 前端类型检查/构建/lint"
 	@echo "  make migrate-check    检查各服务 model 与数据库是否漂移（需开发栈已启动）"
-	@echo "  make test-unit        运行三个 Python 包 + 前端的单元测试"
+	@echo "  make test-unit        运行五个 Python 包（platform-common + iam/audit/codebook/policy）+ 前端的单元测试"
 	@echo "  make test-integration 隔离栈 A01-A15 等真实依赖验收"
 	@echo "  make test-e2e         Playwright 关键流程（需先 integration）"
 	@echo "  make smoke            经网关执行公共功能冒烟验证"
@@ -119,7 +119,7 @@ provision-policy-db:
 	@echo "== 补建政策库和账号（已有数据卷不会重跑 init） =="
 	$(COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-policy-db.sh
 
-# 三个服务各有一张 Outbox 表，逐个重放。只重放某一个：make outbox-replay OUTBOX_SERVICES=policy-service
+# iam、policy、codebook 各有一张 Outbox 表，逐个重放。只重放某一个：make outbox-replay OUTBOX_SERVICES=policy-service
 OUTBOX_SERVICES ?= iam-service policy-service codebook-service
 outbox-replay:
 	@set -e; for s in $(OUTBOX_SERVICES); do \

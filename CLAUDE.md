@@ -52,7 +52,8 @@ cd frontend && pnpm exec playwright test --grep "date range"
 日常只使用 `1.119.196.77`。本机 Docker 栈已停止。分工：`make check` / `make test-unit` 在 Mac 上跑（不要 Docker）；
 集成和 e2e 在服务器上跑 P6：`bash scripts/p6-on-server.sh`（同步 → 集成 + e2e → 一定 `p6-down`），
 Mac 不用开 Docker。P6 与业务栈同机但隔离（项目名 `tx-zhongtai-p6`、独立卷与库，网关只绑 `127.0.0.1:8090`），
-不要把 Playwright 打到 8091 的业务库。同步一律用 `scripts/sync-to-server.sh`，排除列表只维护那一份。
+不要把 Playwright 打到 8091 的业务库。同步一律用 `scripts/sync-to-server.sh`，排除列表只维护那一份。脚本带 `--delete`，
+服务器上独有的文件（`.env`、密钥、P6 运行时文件等）全靠排除列表保护，新增服务器独有文件前先加进去。
 Navicat 连 `1.119.196.77:5433`。
 
 ## 架构
@@ -99,7 +100,9 @@ policy 和 codebook 的基础设施代码高度重复，已统一下沉。**新�
 
 `api/`（路由、Query 参数、权限依赖）→ `application/`（业务编排、审计入队）→
 `repositories/`（SQLAlchemy 查询）→ `domain/`（models、fields 列清单）。
-`core/` 放配置、数据库、clock 等。
+`core/` 放配置、数据库等。依赖方向由各服务的 import-linter 契约强制（`make check` 跑 `lint-imports`）。
+policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/` 三个子包，每个子包内部仍是这四层，
+跨领域共用的审计入队、鉴权依赖、Outbox 表放 `app/common/`。
 
 ### 鉴权链路
 
@@ -131,7 +134,7 @@ policy 和 codebook 的基础设施代码高度重复，已统一下沉。**新�
 
 ### 系统管理：给人分配角色即授权
 
-菜单四项：用户管理、角色与权限（原角色管理 + 权限分配合并）、操作日志、任务调度。给人分配角色的所有入口
+菜单四项：用户管理、角色与权限（角色和权限分配在同一页）、操作日志、任务调度。给人分配角色的所有入口
 （建人带角色、用户详情调角色、角色侧增删成员、复制角色）都要求 `system.permissions:grant`，
 而该资源只能授予超级管理员角色——这是防止「用户管理员给自己加超级管理员」的关键约束，改入口时不要放宽。
 权限页的模块分组、可选档位和中文说明都由 `frontend/src/permissions/catalog.ts` 从资源树推导。
@@ -162,7 +165,8 @@ policy / codebook 走公共 Outbox，默认 5 分钟。审计服务按 `event_id
 
 系统管理的任务调度页面 `/system/scheduler` 使用政策服务接口 `/api/v1/policy/scheduled-jobs`，
 资源 `system.scheduler` 归属 `policy-service`；READ 可查看，FULL 可设置计划和手动执行。
-`policy-worker` 独立容器持 PostgreSQL 全局会话锁，按北京时间每日 10:00 / 10:10 串行调度两套增量任务。
+`policy-worker` 独立容器持 PostgreSQL 全局会话锁，按北京时间每日调度任务。目前只有一项：爬虫监测增量同步
+（任务编码 `crawler-v2`，默认 10:10，时刻可在页面改）。
 配置、执行队列、重试状态持久化在政策库；重启错过多天只合并一次增量。
 初始化无成功水位时拒绝自动同步，需要先完成历史回填，不能自动退回短窗口。
 worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 internal data 网络会无法连接源库。
@@ -227,12 +231,20 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
 `ListPage` / `FilterBar` / `FilterSelect` / `ScrollPort` / `BusinessTable` / `ColumnPicker` /
 `GroupedFields` / `UserAccountMenu`，基础视觉用 `theme.css`。
 
+新增业务列表页 = 一份 `fields.ts`（`TABLE_COLUMNS` / `SUMMARY_KEYS` / `EDITOR_GROUPS`）+ 页面，照 `modules/policy/base-tags/BaseTagList.vue` 组装：
+
+- 查询与加载：`useListQuery`（FilterBar 直接接 `listQuery.search` / `listQuery.resetFilters`）+ `useListLoader`（只采用最后一次请求的结果）
+- 列：`useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)` 给出 ColumnPicker 和 BusinessTable 共用的完整列
+- 新增编辑：`useRecordEditor` + `RecordEditorDrawer`（分组表单、跨字段校验、409 冲突保留草稿、未保存保护都在里面），不要在页面里自己拼抽屉
+- 工具栏：`ImportButton`、`ExportButton` + `useExcelExport`、`AuditLogButton`
+- 权限矩阵的勾选联动、整组勾选、锁定和搜索是 `permissions/matrix.ts` 里的纯函数，改交互先改它和单测
+
 - 筛选项：`v-bind="filters.bind('字段')"`（`useFilterOptions`），不要自己再维护一份 options
 - 筛选一律多选：前端 query 字段默认 `[]`，`http` 按重复参数（`a=1&a=2`）提交；后端参数写
   `list[str] | None = Query(default=None)`，仓储用 `platform_common.filters` 的 `ilike_any`（模糊，同字段「或」）
   或 `in_any`（枚举精确）。只写 `str | None` 会让多选只剩最后一个值生效
-- Excel 下载：`downloadFile(路径, 中文文件名, filtersForExport(listQuery.applied))`，
-  **不要用裸 fetch**——会绕开 401 自动续期和统一中文错误提示
+- Excel 下载：经 `useExcelExport({ path, filename, filters: () => filtersForExport(listQuery.applied) })`，
+  底层是 `downloadFile`。**不要用裸 fetch**——会绕开 401 自动续期和统一中文错误提示
 - 导出传 `applied` 而非 `query`：`query` 是用户还没点查询的输入
 - 修改共享组件或约定，同步更新 DESIGN.md / UX-CONTRACT.md / UI开发规范.md
 

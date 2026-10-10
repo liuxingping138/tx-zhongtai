@@ -87,7 +87,7 @@ export function useListQuery<T extends Record<string, Value>>(query: T, reload: 
     }
     await writeUrl(source)
   }
-  /** 图例、状态卡片：只改已生效条件里的一列，其它未查询的草稿不参与。 */
+  /** 状态卡片这类入口：只改已生效条件里的一列，其它未查询的草稿不参与。 */
   function replaceApplied(key: string, value: Value) {
     const stored = applied as Record<string, Value>
     const live = query as Record<string, Value>
