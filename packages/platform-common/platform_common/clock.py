@@ -12,6 +12,15 @@ def utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+def assume_beijing(value: datetime | None) -> datetime | None:
+    """页面上选的时间不带时区，按北京时间理解；已带时区的原样返回。"""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=BEIJING)
+    return value
+
+
 def format_beijing(value: Any) -> str:
     if value is None or value == "":
         return ""

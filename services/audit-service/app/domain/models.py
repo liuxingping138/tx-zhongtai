@@ -6,11 +6,10 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+from platform_common.orm_base import Base
 from sqlalchemy import DateTime, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
-
-from app.core.orm_base import Base
 
 
 class AuditEvent(Base):

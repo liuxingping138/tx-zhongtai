@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import uuid
 
+from platform_common.clock import utcnow
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.auth_service import normalize_username
-from app.core.clock import utcnow
 from app.domain.catalog import SUPERADMIN_ROLE_CODE
 from app.domain.enums import UserStatus
 from app.domain.models import Role, User, UserRole

@@ -5,13 +5,13 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
+from platform_common.clock import utcnow
 from platform_common.errors import ApiError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.redact import redact
 from app.application.schemas import IngestRequest
-from app.core.clock import utcnow
 from app.domain.models import AuditEvent
 from app.repositories import events as event_repo
 

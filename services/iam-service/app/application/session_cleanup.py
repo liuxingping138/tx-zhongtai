@@ -17,11 +17,11 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from platform_common.clock import utcnow
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.selectable import ScalarSelect
 
-from app.core.clock import utcnow
 from app.domain.models import RefreshToken, Session
 
 

@@ -3,10 +3,10 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
+from platform_common.clock import utcnow
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.clock import utcnow
 from app.domain.models import RefreshToken, Session
 
 

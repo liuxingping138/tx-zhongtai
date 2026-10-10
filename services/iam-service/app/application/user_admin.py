@@ -6,13 +6,13 @@ import re
 import secrets
 import uuid
 
+from platform_common.clock import utcnow
 from platform_common.errors import ApiError, NotFoundError, PermissionDeniedError, VersionConflictError
 from platform_common.filters import FilterValue
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.auth_service import normalize_username
-from app.core.clock import utcnow
 from app.domain.authorization import max_level, remaining_loginable_superadmins
 from app.domain.catalog import SUPERADMIN_ROLE_CODE
 from app.domain.enums import UserStatus

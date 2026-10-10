@@ -3,11 +3,11 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from platform_common.clock import utcnow
 from platform_common.filters import FilterValue, contains_ilike, filter_values
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.clock import utcnow
 from app.domain.enums import NodeType, UserStatus
 from app.domain.models import Resource, Role, RoleGrant, User, UserRole
 

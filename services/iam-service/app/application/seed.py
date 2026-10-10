@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import uuid
 
+from platform_common.clock import utcnow
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.clock import utcnow
 from app.domain.catalog import (
     ACTION_SPECS,
     MENU_SPECS,

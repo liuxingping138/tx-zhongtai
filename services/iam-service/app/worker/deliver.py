@@ -4,11 +4,11 @@ from datetime import timedelta
 from typing import Any
 
 import httpx
+from platform_common.clock import utcnow
 from platform_common.logging_setup import get_logger
 
 from app.application.event_map import map_outbox_to_ingest
 from app.application.outbox_policy import next_retry_delay, next_status
-from app.core.clock import utcnow
 from app.core.config import Settings
 from app.core.database import SessionLocal
 from app.domain.models import OutboxEvent

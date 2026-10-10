@@ -8,9 +8,9 @@ from typing import Any
 
 import jwt
 from jwt import InvalidTokenError
+from platform_common.clock import utcnow
 from platform_common.errors import UnauthenticatedError
 
-from app.core.clock import utcnow
 from app.core.config import Settings
 from app.core.jwt_keys import ensure_jwt_keys, load_private_pem, load_public_pem
 

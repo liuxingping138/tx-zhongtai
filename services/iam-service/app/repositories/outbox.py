@@ -6,11 +6,11 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any
 
+from platform_common.clock import utcnow
 from platform_common.redaction import redact
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.clock import utcnow
 from app.domain.enums import OutboxStatus
 from app.domain.models import OutboxEvent
 

@@ -6,11 +6,10 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+from platform_common.orm_base import Base
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from app.core.orm_base import Base
 
 
 def _uuid() -> uuid.UUID:

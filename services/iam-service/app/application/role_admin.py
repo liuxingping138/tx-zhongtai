@@ -5,12 +5,12 @@ from __future__ import annotations
 import re
 import uuid
 
+from platform_common.clock import utcnow
 from platform_common.errors import ApiError, NotFoundError, PermissionDeniedError, VersionConflictError
 from platform_common.filters import FilterValue
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.clock import utcnow
 from app.domain.authorization import SYSTEM_PERMISSIONS_CODE
 from app.domain.catalog import SUPERADMIN_ROLE_CODE
 from app.domain.enums import GrantLevel, NodeType, RoleStatus

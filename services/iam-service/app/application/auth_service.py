@@ -6,10 +6,10 @@ import uuid
 from datetime import timedelta
 from typing import Any
 
+from platform_common.clock import utcnow
 from platform_common.errors import ApiError, UnauthenticatedError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.clock import utcnow
 from app.core.config import Settings
 from app.core.jwt_tokens import issue_access_token
 from app.core.rate_limit import login_key_username

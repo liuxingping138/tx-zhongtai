@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from app.core.clock import assume_beijing
+from platform_common.clock import assume_beijing
 
 
 def test_assume_beijing_naive():
