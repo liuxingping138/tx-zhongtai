@@ -148,8 +148,7 @@ async def export_tasks(session: AsyncSession, actor: Actor, filters: Filters) ->
     await enqueue_event(
         session,
         event_type="policy.crawler_monitoring.exported",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         extra={"count": len(rows), "abnormal_only": bool(filters.get("abnormal_only"))},
     )
     sheet = "爬虫异常清单" if filters.get("abnormal_only") else "爬虫监测"

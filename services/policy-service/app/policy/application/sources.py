@@ -157,8 +157,7 @@ async def create_source(session: AsyncSession, actor: Actor, data: dict[str, str
     await enqueue_event(
         session,
         event_type="policy.source.created",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         target_id=str(row.id),
         changes={"site_code": site_code, "site_name": row.site_name},
     )
@@ -201,8 +200,7 @@ async def update_source(
     await enqueue_event(
         session,
         event_type="policy.source.updated",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         target_id=str(row.id),
         changes=changes,
     )
@@ -289,8 +287,7 @@ async def import_sources(session: AsyncSession, actor: Actor, content: bytes) ->
     await enqueue_event(
         session,
         event_type="policy.source.imported",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         extra={"inserted": inserted, "skipped": 0},
     )
     return {
@@ -307,8 +304,7 @@ async def purge_sources(session: AsyncSession, actor: Actor) -> dict[str, Any]:
     await enqueue_event(
         session,
         event_type="policy.source.purged",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         extra={"deleted": deleted},
     )
     return {"deleted": deleted}
@@ -338,8 +334,7 @@ async def export_sources(session: AsyncSession, actor: Actor, filters: Filters) 
     await enqueue_event(
         session,
         event_type="policy.source.exported",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         extra={"count": len(rows)},
     )
     return await build_workbook_async(SOURCE_COLUMNS, rows, sheet_name="网站编码")

@@ -71,7 +71,7 @@ def test_parse_uses_first_sheet_only() -> None:
     other.append(["不该读到", "上海市", "新闻"])
     raw = BytesIO()
     book.save(raw)
-    items = parse_sheet(raw.getvalue(), SOURCE_COLUMNS, sheet_name="网站-0430-编码")
+    items = parse_sheet(raw.getvalue(), SOURCE_COLUMNS)
     assert len(items) == 1
     assert items[0]["site_name"] == "财政局"
 

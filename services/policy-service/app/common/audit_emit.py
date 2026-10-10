@@ -41,9 +41,7 @@ _EVENT_META = {
 
 _emitter = AuditEmitter(
     service_name="policy-service",
-    log_name="policy",
     event_meta=_EVENT_META,
-    default_module="policy",
     outbox_model=OutboxEvent,
     session_factory=SessionLocal,
     get_settings=get_settings,

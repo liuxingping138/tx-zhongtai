@@ -115,8 +115,7 @@ async def create_area_code(session: AsyncSession, actor: Actor, data: dict[str, 
     await enqueue_event(
         session,
         event_type="codebook.area_code.created",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         target_id=str(row.id),
         changes={"county_id": row.county_id, "county_name": row.county_name},
     )
@@ -146,8 +145,7 @@ async def update_area_code(
     await enqueue_event(
         session,
         event_type="codebook.area_code.updated",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         target_id=str(row.id),
         changes=changes,
     )
@@ -197,8 +195,7 @@ async def upsert_area_code_rows(
     await enqueue_event(
         session,
         event_type=event_type,
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         extra={"inserted": inserted, "skipped": len(skipped_rows)},
     )
     return {
@@ -231,8 +228,7 @@ async def resolve_area_codes(session: AsyncSession, actor: Actor, content: bytes
     await enqueue_event(
         session,
         event_type="codebook.area_code.resolved",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         extra={"matched": matched, "unmatched": unmatched, "total": matched + unmatched},
     )
     return payload, matched, unmatched
@@ -262,8 +258,7 @@ async def export_area_codes(session: AsyncSession, actor: Actor, filters: Filter
     await enqueue_event(
         session,
         event_type="codebook.area_code.exported",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         extra={"count": len(rows)},
     )
     return await build_workbook_async(AREA_CODE_COLUMNS, rows, sheet_name="省市区编码表")

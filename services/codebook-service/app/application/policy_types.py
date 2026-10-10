@@ -86,8 +86,7 @@ async def create_policy_type(session: AsyncSession, actor: Actor, data: dict[str
     await enqueue_event(
         session,
         event_type="codebook.policy_type.created",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         target_id=str(row.id),
         changes={"type_name": row.type_name},
     )
@@ -119,8 +118,7 @@ async def update_policy_type(
     await enqueue_event(
         session,
         event_type="codebook.policy_type.updated",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         target_id=str(row.id),
         changes=changes,
     )
@@ -169,8 +167,7 @@ async def import_policy_types(session: AsyncSession, actor: Actor, content: byte
     await enqueue_event(
         session,
         event_type="codebook.policy_type.imported",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         extra={"inserted": inserted, "updated": updated, "skipped": len(skipped_rows)},
     )
     return {
@@ -209,8 +206,7 @@ async def export_policy_types(session: AsyncSession, actor: Actor, filters: Filt
     await enqueue_event(
         session,
         event_type="codebook.policy_type.exported",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         extra={"count": len(rows)},
     )
     return await build_workbook_async(POLICY_TYPE_COLUMNS, rows, sheet_name="政策类型枚举值")

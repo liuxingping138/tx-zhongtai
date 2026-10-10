@@ -27,9 +27,7 @@ _EVENT_META = {
 
 _emitter = AuditEmitter(
     service_name="codebook-service",
-    log_name="codebook",
     event_meta=_EVENT_META,
-    default_module="codebook",
     outbox_model=OutboxEvent,
     session_factory=SessionLocal,
     get_settings=get_settings,

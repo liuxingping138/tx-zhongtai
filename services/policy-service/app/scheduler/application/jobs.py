@@ -133,8 +133,7 @@ async def update_job(
     await enqueue_event(
         session,
         event_type="scheduler.updated",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         target_id=code,
         changes={"before": before, "after": {"enabled": enabled, "daily_time": daily_time}},
     )
@@ -146,8 +145,7 @@ async def trigger_job(session: AsyncSession, code: str, actor: Actor) -> dict[st
     await enqueue_event(
         session,
         event_type="scheduler.triggered",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         target_id=code,
         extra={"run_id": str(row.id)},
     )

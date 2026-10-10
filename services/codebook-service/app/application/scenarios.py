@@ -107,8 +107,7 @@ async def create_scenario(session: AsyncSession, actor: Actor, data: dict[str, s
     await enqueue_event(
         session,
         event_type="codebook.scenario.created",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         target_id=str(row.id),
         changes={"industry_scenario_code": row.industry_scenario_code, "scenario_tag": row.scenario_tag},
     )
@@ -138,8 +137,7 @@ async def update_scenario(
     await enqueue_event(
         session,
         event_type="codebook.scenario.updated",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         target_id=str(row.id),
         changes=changes,
     )
@@ -177,8 +175,7 @@ async def import_scenarios(session: AsyncSession, actor: Actor, content: bytes) 
     await enqueue_event(
         session,
         event_type="codebook.scenario.imported",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         extra={"inserted": inserted, "skipped": len(skipped_rows)},
     )
     return {
@@ -214,8 +211,7 @@ async def export_scenarios(session: AsyncSession, actor: Actor, filters: Filters
     await enqueue_event(
         session,
         event_type="codebook.scenario.exported",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         extra={"count": len(rows)},
     )
     return await build_workbook_async(SCENARIO_COLUMNS, rows, sheet_name="行业场景字典表")

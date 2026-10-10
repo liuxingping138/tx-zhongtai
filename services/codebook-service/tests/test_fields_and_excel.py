@@ -151,7 +151,7 @@ def test_parse_uses_first_sheet_only() -> None:
     other.append(["9", "不该读到", "x"])
     raw = BytesIO()
     book.save(raw)
-    items = parse_sheet(raw.getvalue(), POLICY_TYPE_COLUMNS, sheet_name="政策类型枚举值")
+    items = parse_sheet(raw.getvalue(), POLICY_TYPE_COLUMNS)
     assert items[0]["type_name"] == "顶层规划类"
 
 

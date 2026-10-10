@@ -150,13 +150,11 @@ def parse_sheet(
     content: bytes,
     columns: tuple[ColumnSpec, ...],
     *,
-    sheet_name: str | None = None,
     subject: str = "业务",
     max_rows: int = EXCEL_MAX_ROWS,
     max_columns: int = EXCEL_MAX_COLUMNS,
     max_uncompressed_bytes: int = EXCEL_MAX_UNCOMPRESSED_BYTES,
 ) -> list[dict[str, str]]:
-    del sheet_name  # 上传只读第一个 sheet，不看名称
     rows = iter_workbook_rows(
         content, max_rows=max_rows, max_columns=max_columns, max_uncompressed_bytes=max_uncompressed_bytes
     )
@@ -276,7 +274,6 @@ async def parse_sheet_async(
     content: bytes,
     columns: tuple[ColumnSpec, ...],
     *,
-    sheet_name: str | None = None,
     subject: str = "业务",
     max_rows: int = EXCEL_MAX_ROWS,
     max_columns: int = EXCEL_MAX_COLUMNS,
@@ -290,7 +287,6 @@ async def parse_sheet_async(
                 parse_sheet,
                 content,
                 columns,
-                sheet_name=sheet_name,
                 subject=subject,
                 max_rows=max_rows,
                 max_columns=max_columns,

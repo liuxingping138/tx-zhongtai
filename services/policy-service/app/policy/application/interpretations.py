@@ -153,8 +153,7 @@ async def create_interpretation(session: AsyncSession, actor: Actor, data: dict[
     await enqueue_event(
         session,
         event_type="policy.interpretation.created",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         target_id=str(row.id),
         changes={"policy_title": row.policy_title, "relation_key": row.relation_key},
     )
@@ -196,8 +195,7 @@ async def update_interpretation(
     await enqueue_event(
         session,
         event_type="policy.interpretation.updated",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         target_id=str(row.id),
         changes=changes,
     )
@@ -244,8 +242,7 @@ async def import_interpretations(session: AsyncSession, actor: Actor, content: b
     await enqueue_event(
         session,
         event_type="policy.interpretation.imported",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         extra={"inserted": inserted, "skipped": len(skipped_rows)},
     )
     return {
@@ -281,8 +278,7 @@ async def export_interpretations(session: AsyncSession, actor: Actor, filters: F
     await enqueue_event(
         session,
         event_type="policy.interpretation.exported",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         extra={"count": len(rows)},
     )
     return await build_workbook_async(INTERPRETATION_COLUMNS, rows, sheet_name="政策解读表")

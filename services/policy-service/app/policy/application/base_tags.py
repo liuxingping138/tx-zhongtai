@@ -101,8 +101,7 @@ async def create_base_tag(session: AsyncSession, actor: Actor, data: dict[str, s
     await enqueue_event(
         session,
         event_type="policy.base_tag.created",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         target_id=str(row.id),
         changes={"policy_name": row.policy_name},
     )
@@ -140,8 +139,7 @@ async def update_base_tag(
     await enqueue_event(
         session,
         event_type="policy.base_tag.updated",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         target_id=str(row.id),
         changes=changes,
     )
@@ -211,8 +209,7 @@ async def import_base_tags(session: AsyncSession, actor: Actor, content: bytes) 
     await enqueue_event(
         session,
         event_type="policy.base_tag.imported",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         extra={"inserted": inserted, "skipped": 0},
     )
     return {
@@ -248,8 +245,7 @@ async def export_base_tags(session: AsyncSession, actor: Actor, filters: Filters
     await enqueue_event(
         session,
         event_type="policy.base_tag.exported",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         extra={"count": len(rows)},
     )
     return await build_workbook_async(BASE_TAG_COLUMNS, rows, sheet_name="政策基础信息表")

@@ -96,8 +96,7 @@ async def export_sites(session: AsyncSession, actor: Actor, filters: Filters) ->
     await enqueue_event(
         session,
         event_type="policy.crawler_monitoring_v2.exported",
-        actor_id=actor.id,
-        actor_name=actor.name,
+        actor=actor,
         extra={"count": len(rows)},
     )
     return await build_workbook_async(CRAWLER_SITE_COLUMNS, rows, sheet_name="爬虫监测")

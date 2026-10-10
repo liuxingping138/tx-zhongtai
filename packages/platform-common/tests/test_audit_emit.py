@@ -34,9 +34,7 @@ class _Event:
 def _emitter() -> AuditEmitter:
     return AuditEmitter(
         service_name="policy-service",
-        log_name="policy",
         event_meta=EVENT_META,
-        default_module="policy",
         outbox_model=object,
         session_factory=None,  # type: ignore[arg-type]
         get_settings=lambda: None,  # type: ignore[arg-type,return-value]

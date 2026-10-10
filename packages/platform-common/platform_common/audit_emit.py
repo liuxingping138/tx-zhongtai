@@ -15,6 +15,7 @@ from typing import Any, Protocol
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from platform_common.actors import Actor
 from platform_common.logging_setup import get_logger
 from platform_common.outbox import OutboxRepository
 from platform_common.redaction import redact
@@ -42,37 +43,35 @@ class AuditEmitter:
         self,
         *,
         service_name: str,
-        log_name: str,
         event_meta: EventMeta,
-        default_module: str,
         outbox_model: type[Any],
         session_factory: async_sessionmaker[AsyncSession],
         get_settings: Callable[[], _AuditSettings],
     ) -> None:
         self._service_name = service_name
         self._event_meta = event_meta
-        self._default_module = default_module
         self._model = outbox_model
         self._sessions = session_factory
         self._get_settings = get_settings
         self._repo = OutboxRepository(outbox_model)
-        self._logger = get_logger(f"{log_name}.audit")
-        self._log_name = log_name
+        # 日志前缀和未登记事件的默认模块都取服务名前缀：policy-service → policy。
+        self._log_name = service_name.removesuffix("-service")
+        self._default_module = self._log_name
+        self._logger = get_logger(f"{self._log_name}.audit")
 
     async def enqueue_event(
         self,
         session: AsyncSession,
         *,
         event_type: str,
-        actor_id: str,
-        actor_name: str,
+        actor: Actor,
         target_id: str | None = None,
         changes: dict[str, Any] | None = None,
         extra: dict[str, Any] | None = None,
     ) -> None:
         payload: dict[str, Any] = {
-            "actor_id": actor_id,
-            "actor_name": actor_name,
+            "actor_id": actor.id,
+            "actor_name": actor.name,
             "target_id": target_id,
             "outcome": "success",
             "request_id": get_request_id(),
