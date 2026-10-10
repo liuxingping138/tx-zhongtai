@@ -404,7 +404,11 @@ def run() -> None:
     audit_api.token = live_token
     down, dbody = audit_api.call("GET", "/api/v1/audit/events")
     expect(down == 503, f"A11 expected 503 got {down} {dbody}")
-    subprocess.check_call([*compose, "start", "iam-service"])
+    # 刚 stop 完，compose 偶尔读到过时状态，以为容器还在运行：start 和普通 up -d 都返回成功却不启动，
+    # 网关随后一直 502。强制重建，确保 iam 真的重新跑起来。
+    subprocess.check_call([*compose, "up", "-d", "--no-deps", "--no-build", "--force-recreate", "iam-service"])
+    running = compose_exec(compose, "iam-service", "true")
+    expect(running == "", f"A11 iam-service not running after restart: {running!r}")
     wait_gateway(base)
     results.append("A11 ok")
 
