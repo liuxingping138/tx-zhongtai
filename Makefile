@@ -188,7 +188,7 @@ check:
 test-unit:
 	@for pkg in $(PY_PACKAGES); do \
 		echo "-- $$pkg --"; \
-		(cd $$pkg && uv run pytest -q) || exit 1; \
+		(cd $$pkg && uv run pytest -q --cov --cov-report=) || exit 1; \
 	done
 	@(cd frontend && pnpm test)
 	@python3 scripts/test_scan_scope.py
