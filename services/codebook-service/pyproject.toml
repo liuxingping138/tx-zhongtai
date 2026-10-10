@@ -53,10 +53,6 @@ extend = "../../ruff.toml"
 [tool.ruff.lint.extend-per-file-ignores]
 # 建表/插入语句必须保持单行，parse_area_sql 是按行解析的，换行会改掉用例本身。
 "tests/test_fields_and_excel.py" = ["E501"]
-# 存量基线（2026-10-09 登记）：结构性问题按 docs/guides/工程规范.md 第 8 节分批整改，
-# 修完一条删一条；不许往这里加新条目，新代码必须直接满足规则。
-"app/application/area_match.py" = ["C901"]
-"app/application/scenarios.py" = ["PLR0913"]
 
 [tool.importlinter]
 root_package = "app"

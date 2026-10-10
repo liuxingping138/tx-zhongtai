@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse, Response
 from platform_common.actors import Actor
 from platform_common.enums import SecurityClass
 from platform_common.errors import ApiError, ErrorCode
+from platform_common.filters import Filters
 from platform_common.http_utils import IMPORT_FILE_OPENAPI, import_result_response, read_import_upload, success_json
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,13 +21,24 @@ router = APIRouter(prefix="/api/v1/codebook/scenarios", tags=["codebook-scenario
 RESOURCE = "codebook.scenarios"
 
 
-@router.get("")
-@classified(SecurityClass.RESOURCE_AUTHORIZED)
-async def list_items(
+def scenario_filters(
     industry_scenario_code: list[str] | None = Query(default=None),
     industry_l1: list[str] | None = Query(default=None),
     scenario_tag: list[str] | None = Query(default=None),
     customer_group_name: list[str] | None = Query(default=None),
+) -> Filters:
+    return {
+        "industry_scenario_code": industry_scenario_code,
+        "industry_l1": industry_l1,
+        "scenario_tag": scenario_tag,
+        "customer_group_name": customer_group_name,
+    }
+
+
+@router.get("")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def list_items(
+    filters: Filters = Depends(scenario_filters),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session),
@@ -35,10 +47,7 @@ async def list_items(
     return success_json(
         await service.list_scenarios(
             session,
-            industry_scenario_code=industry_scenario_code,
-            industry_l1=industry_l1,
-            scenario_tag=scenario_tag,
-            customer_group_name=customer_group_name,
+            filters,
             page=page,
             page_size=page_size,
         )
@@ -74,10 +83,7 @@ async def search_filter_options(
 @router.get("/export")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def export_items(
-    industry_scenario_code: list[str] | None = Query(default=None),
-    industry_l1: list[str] | None = Query(default=None),
-    scenario_tag: list[str] | None = Query(default=None),
-    customer_group_name: list[str] | None = Query(default=None),
+    filters: Filters = Depends(scenario_filters),
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_codebook_permission(RESOURCE, "export")),
 ) -> Response:
@@ -85,12 +91,7 @@ async def export_items(
     payload = await service.export_scenarios(
         session,
         actor,
-        {
-            "industry_scenario_code": industry_scenario_code,
-            "industry_l1": industry_l1,
-            "scenario_tag": scenario_tag,
-            "customer_group_name": customer_group_name,
-        },
+        filters,
     )
     return Response(
         content=payload,

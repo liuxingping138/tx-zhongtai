@@ -2,21 +2,27 @@
 
 from __future__ import annotations
 
-import re
-import secrets
 import uuid
 
 from platform_common.clock import utcnow
 from platform_common.errors import ApiError, NotFoundError, PermissionDeniedError, VersionConflictError
-from platform_common.filters import FilterValue
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.audit_outbox import enqueue_independent
-from app.application.auth_service import normalize_username
+from app.application.user_fields import (
+    NewUser,
+    UserChanges,
+    generate_temporary_password,
+    normalize_email,
+    normalize_phone,
+    validate_display_name,
+    validate_username,
+)
 from app.domain.authorization import max_level, remaining_loginable_superadmins
 from app.domain.catalog import SUPERADMIN_ROLE_CODE
 from app.domain.enums import UserStatus
+from app.domain.filters import UserFilters
 from app.domain.models import Role, User
 from app.domain.password import hash_password, validate_password_policy
 from app.repositories import outbox as outbox_repo
@@ -24,46 +30,6 @@ from app.repositories import resources as resource_repo
 from app.repositories import roles as role_repo
 from app.repositories import sessions as session_repo
 from app.repositories import users as user_repo
-
-USERNAME_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789._-")
-USERNAME_MIN_LENGTH = 3
-USERNAME_MAX_LENGTH = 64
-
-
-def validate_username(username: str) -> str:
-    normalized = normalize_username(username)
-    if not USERNAME_MIN_LENGTH <= len(normalized) <= USERNAME_MAX_LENGTH:
-        raise ApiError(f"用户名长度须为 {USERNAME_MIN_LENGTH}-{USERNAME_MAX_LENGTH} 个字符")
-    if normalized[0] not in set("abcdefghijklmnopqrstuvwxyz"):
-        raise ApiError("用户名须以字母开头")
-    if any(ch not in USERNAME_CHARS for ch in normalized):
-        raise ApiError("用户名仅允许字母、数字、点、下划线和连字符")
-    return normalized
-
-
-_PHONE_SEPARATORS = re.compile(r"[\s-]")
-_MOBILE = re.compile(r"1\d{10}")
-_EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
-
-
-def normalize_phone(phone: str) -> str:
-    """去掉空格和连字符后须为 11 位手机号；空串表示没填。"""
-
-    digits = _PHONE_SEPARATORS.sub("", phone)
-    if digits and not _MOBILE.fullmatch(digits):
-        raise ApiError("电话须为 11 位手机号")
-    return digits
-
-
-def normalize_email(email: str) -> str:
-    value = email.strip()
-    if value and not _EMAIL.fullmatch(value):
-        raise ApiError("邮箱格式不正确")
-    return value
-
-
-def generate_temporary_password() -> str:
-    return secrets.token_urlsafe(18)
 
 
 def user_public(user: User) -> dict[str, object]:
@@ -132,31 +98,14 @@ def _role_brief(role: Role) -> dict[str, object]:
 
 
 async def list_users_page(
-    session: AsyncSession,
-    *,
-    username: FilterValue,
-    status: FilterValue,
-    page: int,
-    page_size: int,
-    sort: str,
-    role_id: FilterValue = None,
-    keyword: FilterValue = None,
+    session: AsyncSession, filters: UserFilters, *, page: int, page_size: int, sort: str
 ) -> tuple[list[dict[str, object]], int]:
     if sort not in {"created_at", "username"}:
         raise ApiError("不支持的排序字段")
     page = max(page, 1)
     page_size = min(max(page_size, 1), 100)
-    total = await user_repo.count_users(session, username=username, status=status, role_id=role_id, keyword=keyword)
-    rows = await user_repo.list_users(
-        session,
-        username=username,
-        status=status,
-        role_id=role_id,
-        keyword=keyword,
-        offset=(page - 1) * page_size,
-        limit=page_size,
-        sort=sort,
-    )
+    total = await user_repo.count_users(session, filters)
+    rows = await user_repo.list_users(session, filters, offset=(page - 1) * page_size, limit=page_size, sort=sort)
     # 列表直接带上角色：管理员一眼能看出「谁是政策管理员」，不必逐个打开。
     roles = await user_repo.roles_for_users(session, [row.id for row in rows])
     items: list[dict[str, object]] = []
@@ -176,33 +125,20 @@ async def get_user(session: AsyncSession, user_id: uuid.UUID) -> dict[str, objec
     return payload
 
 
-async def create_user(
-    session: AsyncSession,
-    actor: User,
-    *,
-    username: str,
-    display_name: str,
-    password: str | None,
-    role_ids: list[uuid.UUID] | None = None,
-    phone: str = "",
-    email: str = "",
-    password_hash: str | None = None,
-) -> tuple[dict[str, object], str | None]:
+async def create_user(session: AsyncSession, actor: User, data: NewUser) -> tuple[dict[str, object], str | None]:
     """建账号时可一并分配角色，同一事务内完成，避免「建了人忘了给角色」登录后一片空白。
 
-    是否有权分配角色由调用方先校验（需要「权限分配」可管理）。
+    是否有权分配角色由调用方先校验（需要「权限分配」可管理）。返回的第二项是生成的临时口令。
     """
 
-    normalized = validate_username(username)
-    display = display_name.strip()
-    if not display:
-        raise ApiError("显示名不能为空")
-    phone = normalize_phone(phone)
-    email = normalize_email(email)
+    normalized = validate_username(data.username)
+    display = validate_display_name(data.display_name)
+    phone = normalize_phone(data.phone)
+    email = normalize_email(data.email)
     temporary: str | None = None
+    password_hash = data.password_hash
     if password_hash is None:
-        # 批量导入由调用方先在线程池里算好哈希；单个建账号在这里现算。
-        raw_password = password
+        raw_password = data.password
         if raw_password is None:
             temporary = generate_temporary_password()
             raw_password = temporary
@@ -234,8 +170,8 @@ async def create_user(
         event_type="iam.user.created",
         payload={"actor_id": str(actor.id), "target_id": str(user.id), "username": user.username, "outcome": "success"},
     )
-    if role_ids:
-        payload = await _set_roles(session, actor, user, role_ids)
+    if data.role_ids:
+        payload = await _set_roles(session, actor, user, data.role_ids)
         return payload, temporary
     payload = user_public(user)
     payload["role_ids"] = []
@@ -244,20 +180,13 @@ async def create_user(
 
 
 async def update_user(
-    session: AsyncSession,
-    actor: User,
-    user_id: uuid.UUID,
-    *,
-    display_name: str | None,
-    status: str | None,
-    version: int,
-    phone: str | None = None,
-    email: str | None = None,
+    session: AsyncSession, actor: User, user_id: uuid.UUID, changes: UserChanges
 ) -> dict[str, object]:
     user = _require_live(await user_repo.get_user_for_update(session, user_id))
-    if user.version != version:
+    if user.version != changes.version:
         raise VersionConflictError()
     await _assert_can_manage_target(session, actor, user)
+    status = changes.status
     if status is not None and status != user.status:
         if status not in {UserStatus.ACTIVE, UserStatus.DISABLED}:
             raise ApiError("无效的用户状态")
@@ -266,15 +195,12 @@ async def update_user(
         user.status = status
         if status != UserStatus.ACTIVE:
             await session_repo.revoke_user_sessions(session, user.id)
-    if display_name is not None:
-        display = display_name.strip()
-        if not display:
-            raise ApiError("显示名不能为空")
-        user.display_name = display
-    if phone is not None:
-        user.phone = normalize_phone(phone)
-    if email is not None:
-        user.email = normalize_email(email)
+    if changes.display_name is not None:
+        user.display_name = validate_display_name(changes.display_name)
+    if changes.phone is not None:
+        user.phone = normalize_phone(changes.phone)
+    if changes.email is not None:
+        user.email = normalize_email(changes.email)
     user.updated_at = utcnow()
     user.version += 1
     await outbox_repo.enqueue(

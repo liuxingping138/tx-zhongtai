@@ -7,7 +7,7 @@ from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
 from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionConflictError
 from platform_common.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async
-from platform_common.filters import Filters, FilterValue
+from platform_common.filters import Filters
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.audit_emit import enqueue_event
@@ -46,22 +46,14 @@ def _apply(row: Scenario, data: dict[str, str]) -> dict[str, Any]:
 
 async def list_scenarios(
     session: AsyncSession,
+    filters: Filters,
     *,
-    industry_scenario_code: FilterValue,
-    industry_l1: FilterValue,
-    scenario_tag: FilterValue,
-    customer_group_name: FilterValue,
     page: int,
     page_size: int,
 ) -> dict[str, Any]:
     items, total = await repo.list_items(
         session,
-        filters={
-            "industry_scenario_code": industry_scenario_code,
-            "industry_l1": industry_l1,
-            "scenario_tag": scenario_tag,
-            "customer_group_name": customer_group_name,
-        },
+        filters=filters,
         page=page,
         page_size=page_size,
     )

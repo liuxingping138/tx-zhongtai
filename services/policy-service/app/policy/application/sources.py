@@ -2,17 +2,25 @@ from __future__ import annotations
 
 import uuid
 from collections import Counter
+from dataclasses import dataclass
 from typing import Any
 
 from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
 from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionConflictError
-from platform_common.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async
-from platform_common.filters import Filters, FilterValue
+from platform_common.excel import build_workbook_async, parse_sheet_async
+from platform_common.filters import Filters
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.audit_emit import enqueue_event
 from app.core.config import get_settings
+from app.policy.application.importing import (
+    add_in_batches,
+    inserted_result,
+    mark,
+    missing_area_reason,
+    rejected_result,
+)
 from app.policy.application.region import (
     digits_only,
     make_internal_id,
@@ -81,26 +89,14 @@ async def _allocate_site_code(session: AsyncSession, province_code: str, city_co
 
 async def list_sources(
     session: AsyncSession,
+    filters: Filters,
     *,
-    site_name: FilterValue,
-    province_name: FilterValue,
-    city_name: FilterValue,
-    tag: FilterValue,
-    site_code: FilterValue,
-    crawl_priority: FilterValue,
     page: int,
     page_size: int,
 ) -> dict[str, Any]:
     items, total = await repo.list_items(
         session,
-        filters={
-            "site_name": site_name,
-            "province_name": province_name,
-            "city_name": city_name,
-            "tag": tag,
-            "site_code": site_code,
-            "crawl_priority": crawl_priority,
-        },
+        filters=filters,
         page=page,
         page_size=page_size,
     )
@@ -207,68 +203,71 @@ async def update_source(
     return _to_out(row)
 
 
-async def import_sources(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, Any]:
-    parsed = await parse_sheet_async(content, SOURCE_COLUMNS, subject="政策")
-    db_internal = await repo.list_internal_ids(session)
-    db_site = await repo.list_site_codes(session)
-    staged: list[tuple[dict[str, str], str, str, str]] = []
-    for item in parsed:
-        values = {field: (item.get(field) or "").strip() for field in SOURCE_FIELDS}
-        internal_id = make_internal_id(values["site_name"], values["province_name"], values["city_name"], values["tag"])
-        site_code = (item.get("site_code") or "").strip()
-        resolve_reason = (item.get("skip_reason") or "").strip()
-        staged.append((values, internal_id, site_code, resolve_reason))
-    file_internal = Counter(item[1] for item in staged)
-    file_site = Counter(item[2] for item in staged if item[2])
-    marked: list[dict[str, str]] = []
-    blocked = 0
-    for values, internal_id, site_code, resolve_reason in staged:
+@dataclass(frozen=True, slots=True)
+class _StagedSource:
+    values: dict[str, str]
+    internal_id: str
+    site_code: str
+    # 文件自带的校验说明，见 missing_area_reason。
+    carried_reason: str
+
+
+def _stage(item: dict[str, str]) -> _StagedSource:
+    values = {field: (item.get(field) or "").strip() for field in SOURCE_FIELDS}
+    return _StagedSource(
+        values=values,
+        internal_id=make_internal_id(values["site_name"], values["province_name"], values["city_name"], values["tag"]),
+        site_code=(item.get("site_code") or "").strip(),
+        carried_reason=(item.get("skip_reason") or "").strip(),
+    )
+
+
+def _site_code_reasons(site_code: str, db_site: set[str], file_site: Counter[str]) -> list[str]:
+    if not site_code:
+        return []
+    reasons: list[str] = []
+    if digits_only(site_code) != site_code or len(site_code) > SITE_CODE_MAX_LENGTH:
+        reasons.append("网站编码不合法")
+    elif site_code in db_site:
+        reasons.append("网站编码已存在")
+    if file_site[site_code] > 1:
+        reasons.append("文件内网站编码重复")
+    return reasons
+
+
+def _check_rows(staged: list[_StagedSource], db_internal: set[str], db_site: set[str]) -> list[list[str]]:
+    file_internal = Counter(row.internal_id for row in staged)
+    file_site = Counter(row.site_code for row in staged if row.site_code)
+    checked: list[list[str]] = []
+    for row in staged:
         reasons: list[str] = []
-        if not site_code and not _has_any_area_code(values):
-            if resolve_reason and resolve_reason != "通过":
-                reasons.append(resolve_reason)
-            else:
-                reasons.append("省市区编码为空")
-        if not values["site_name"]:
+        # 省市区编码只用来分配网站编码，自带网站编码的行可以不填。
+        if not row.site_code and not _has_any_area_code(row.values):
+            reasons.append(missing_area_reason(row.carried_reason))
+        if not row.values["site_name"]:
             reasons.append("网站名称为空")
-        if internal_id in db_internal:
+        if row.internal_id in db_internal:
             reasons.append("内部唯一id已存在")
-        if file_internal[internal_id] > 1:
+        if file_internal[row.internal_id] > 1:
             reasons.append("网站名称+省份+地市+标签重复")
-        if site_code:
-            digits = digits_only(site_code)
-            if not digits or digits != site_code or len(site_code) > SITE_CODE_MAX_LENGTH:
-                reasons.append("网站编码不合法")
-            elif site_code in db_site:
-                reasons.append("网站编码已存在")
-            if file_site[site_code] > 1:
-                reasons.append("文件内网站编码重复")
-        marked.append({**values, "site_code": site_code, "skip_reason": "；".join(reasons) if reasons else "通过"})
-        if reasons:
-            blocked += 1
-    if blocked:
-        return {
-            "inserted": 0,
-            "updated": 0,
-            "skipped": blocked,
-            "total": len(parsed),
-            "rejected": True,
-            "skipped_file": await encode_skipped_file_async(SOURCE_COLUMNS, marked),
-        }
-    inserted = 0
+        reasons.extend(_site_code_reasons(row.site_code, db_site, file_site))
+        checked.append(reasons)
+    return checked
+
+
+def _build_rows(actor: Actor, staged: list[_StagedSource], db_site: set[str]) -> list[Source]:
     now = utcnow()
-    seen_site = set(db_site)
-    seen_site.update(item[2] for item in staged if item[2])
-    for values, internal_id, given_code, _reason in staged:
-        normalized = _normalized_values(values)
-        site_code = given_code
-        if not site_code:
-            prefix = site_code_prefix(normalized["province_code"], normalized["city_code"], normalized["district_code"])
-            site_code = next_site_code(prefix, list(seen_site))
-        seen_site.add(site_code)
-        session.add(
+    taken = db_site | {row.site_code for row in staged if row.site_code}
+    built: list[Source] = []
+    for row in staged:
+        normalized = _normalized_values(row.values)
+        site_code = row.site_code or next_site_code(
+            site_code_prefix(normalized["province_code"], normalized["city_code"], normalized["district_code"]), taken
+        )
+        taken.add(site_code)
+        built.append(
             Source(
-                internal_id=internal_id,
+                internal_id=row.internal_id,
                 site_code=site_code,
                 version=1,
                 created_at=now,
@@ -280,23 +279,29 @@ async def import_sources(session: AsyncSession, actor: Actor, content: bytes) ->
                 **normalized,
             )
         )
-        inserted += 1
-        if inserted % 200 == 0:
-            await session.flush()
-    await session.flush()
+    return built
+
+
+async def import_sources(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, Any]:
+    parsed = await parse_sheet_async(content, SOURCE_COLUMNS, subject="政策")
+    staged = [_stage(item) for item in parsed]
+    db_site = await repo.list_site_codes(session)
+    checked = _check_rows(staged, await repo.list_internal_ids(session), db_site)
+    blocked = sum(1 for reasons in checked if reasons)
+    if blocked:
+        marked = [
+            mark({**row.values, "site_code": row.site_code}, reasons)
+            for row, reasons in zip(staged, checked, strict=True)
+        ]
+        return await rejected_result(SOURCE_COLUMNS, marked, blocked=blocked)
+    inserted = await add_in_batches(session, _build_rows(actor, staged, db_site))
     await enqueue_event(
         session,
         event_type="policy.source.imported",
         actor=actor,
         extra={"inserted": inserted, "skipped": 0},
     )
-    return {
-        "inserted": inserted,
-        "updated": 0,
-        "skipped": 0,
-        "total": len(parsed),
-        "skipped_file": None,
-    }
+    return inserted_result(inserted)
 
 
 async def purge_sources(session: AsyncSession, actor: Actor) -> dict[str, Any]:

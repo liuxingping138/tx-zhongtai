@@ -27,6 +27,9 @@ FILTER_COLUMNS: dict[str, InstrumentedAttribute[str]] = {
 EXACT_FILTERS = ("health_status",)
 NUMERIC_FILTERS = ("stale_days_min",)
 
+# v1 同步进程持有的会话级 advisory lock，与 v2 的键不同，两套同步互不阻塞。
+SYNC_LOCK_KEY = 72120260922
+
 
 def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
     conds: list[ColumnElement[bool]] = []

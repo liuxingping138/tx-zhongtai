@@ -7,7 +7,8 @@ from platform_common.errors import ApiError
 from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
 
-from app.application.user_admin import normalize_email, normalize_phone
+from app.application.user_fields import normalize_email, normalize_phone
+from app.domain.filters import UserFilters
 from app.domain.models import User
 from app.repositories.users import NO_ROLE, _apply_user_filters
 
@@ -35,23 +36,23 @@ def test_email_is_trimmed_and_checked() -> None:
 
 
 def test_no_role_filter_selects_users_without_any_role() -> None:
-    sql = _sql(_apply_user_filters(select(User), username=None, status=None, role_id=[NO_ROLE]))
+    sql = _sql(_apply_user_filters(select(User), UserFilters(role_id=[NO_ROLE])))
     assert "NOT IN (SELECT iam_user_roles.user_id" in sql
 
 
 def test_no_role_combines_with_real_roles_as_or() -> None:
     role = "2b1f0a52-5c1e-4c55-9d7d-6b1c2f0b9a10"
-    sql = _sql(_apply_user_filters(select(User), username=None, status=None, role_id=[role, NO_ROLE]))
+    sql = _sql(_apply_user_filters(select(User), UserFilters(role_id=[role, NO_ROLE])))
     assert " OR " in sql
     assert "NOT IN" in sql and "iam_user_roles.role_id IN" in sql
 
 
 def test_only_invalid_role_ids_match_nothing() -> None:
-    sql = _sql(_apply_user_filters(select(User), username=None, status=None, role_id=["not-a-uuid"]))
+    sql = _sql(_apply_user_filters(select(User), UserFilters(role_id=["not-a-uuid"])))
     assert "false" in sql.lower()
 
 
 def test_keyword_searches_name_phone_and_email() -> None:
-    sql = _sql(_apply_user_filters(select(User), username=None, status=None, keyword=["138"]))
+    sql = _sql(_apply_user_filters(select(User), UserFilters(keyword=["138"])))
     for column in ("username", "display_name", "phone", "email"):
         assert f"iam_users.{column}" in sql

@@ -122,41 +122,58 @@ def _lookup(index: dict[str, list[AreaSnap]], name: str) -> list[AreaSnap]:
     return hits
 
 
+def _in_province(rows: list[AreaSnap], province: str) -> list[AreaSnap]:
+    if not province:
+        return rows
+    return [row for row in rows if name_hit(province, row.prov_name, row.alias_prov_name)]
+
+
+def _in_city(rows: list[AreaSnap], city: str) -> list[AreaSnap]:
+    if not city:
+        return rows
+    return [row for row in rows if name_hit(city, row.city_name, row.alias_city_name, row.city_name_short)]
+
+
+def _county_candidates(index: AreaIndex, province: str, city: str, county: str) -> list[AreaSnap]:
+    hits = _in_city(_in_province(_lookup(index.county, county), province), city)
+    return _unique(hits, lambda row: (row.county_id,))
+
+
+def _city_candidates(index: AreaIndex, province: str, city: str) -> list[AreaSnap]:
+    hits = _in_province(_lookup(index.city, city), province)
+    return _unique(hits, lambda row: (row.prov_id, row.city_id))
+
+
+def _province_candidates(index: AreaIndex, province: str) -> list[AreaSnap]:
+    return _unique(_lookup(index.province, province), lambda row: (row.prov_id,))
+
+
 def match_area_indexed(index: AreaIndex, province: str, city: str, county: str) -> MatchResult:
     """能齐三级就配三级，否则二级，再否则省份。省/市/区任一配上编码即算已关联。"""
 
     province = fold(province)
     city = fold(city)
     county = fold(county)
-    marks: list[str] = []
     if not province and not city and not county:
         return _fail("缺少省市区名称")
+    marks: list[str] = []
 
     if county:
-        hits = _lookup(index.county, county)
-        if province:
-            hits = [row for row in hits if name_hit(province, row.prov_name, row.alias_prov_name)]
-        if city:
-            hits = [row for row in hits if name_hit(city, row.city_name, row.alias_city_name, row.city_name_short)]
-        uniq = _unique(hits, lambda row: (row.county_id,))
+        uniq = _county_candidates(index, province, city, county)
         if len(uniq) == 1:
             row = uniq[0]
             return MatchResult(True, 3, row.prov_id, row.city_id, row.county_id)
         marks.append("区县不标准" if not uniq else "区县不唯一，请补全省市名称")
 
     if city:
-        hits = _lookup(index.city, city)
-        if province:
-            hits = [row for row in hits if name_hit(province, row.prov_name, row.alias_prov_name)]
-        uniq = _unique(hits, lambda row: (row.prov_id, row.city_id))
+        uniq = _city_candidates(index, province, city)
         if len(uniq) == 1:
             row = uniq[0]
             return MatchResult(True, 2, row.prov_id, row.city_id, "", "；".join(marks))
         marks.append("地市不标准" if not uniq else "地市不唯一，请补全省份")
 
     if province:
-        hits = _lookup(index.province, province)
-        uniq = _unique(hits, lambda row: (row.prov_id,))
+        uniq = _province_candidates(index, province)
         if len(uniq) == 1:
             row = uniq[0]
             return MatchResult(True, 1, row.prov_id, "", "", "；".join(marks))

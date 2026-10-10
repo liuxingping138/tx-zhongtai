@@ -7,7 +7,7 @@ from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
 from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionConflictError
 from platform_common.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async, run_excel_parse
-from platform_common.filters import Filters, FilterValue
+from platform_common.filters import Filters
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.area_match import AreaSnap
@@ -57,20 +57,14 @@ def _require_county_id(values: dict[str, str]) -> str:
 
 async def list_area_codes(
     session: AsyncSession,
+    filters: Filters,
     *,
-    prov_name: FilterValue,
-    city_name: FilterValue,
-    county_name: FilterValue,
     page: int,
     page_size: int,
 ) -> dict[str, Any]:
     items, total = await repo.list_items(
         session,
-        filters={
-            "prov_name": prov_name,
-            "city_name": city_name,
-            "county_name": county_name,
-        },
+        filters=filters,
         page=page,
         page_size=page_size,
     )

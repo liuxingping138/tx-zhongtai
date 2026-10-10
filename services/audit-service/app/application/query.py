@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from dataclasses import replace
 from typing import Any
 
 from platform_common.clock import assume_beijing
-from platform_common.filters import FilterValue
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.redact import redact
 from app.application.schemas import AuditEventOut
+from app.domain.filters import EventFilters
 from app.domain.models import AuditEvent
 from app.repositories import events as event_repo
 
@@ -40,42 +40,16 @@ def to_out(row: AuditEvent) -> AuditEventOut:
 
 
 async def list_page(
-    session: AsyncSession,
-    *,
-    page: int,
-    page_size: int,
-    occurred_from: datetime | None,
-    occurred_to: datetime | None,
-    actor_id: str | None,
-    actor_name: FilterValue,
-    module_code: FilterValue,
-    action_code: FilterValue,
-    outcome: FilterValue,
+    session: AsyncSession, filters: EventFilters, *, page: int, page_size: int
 ) -> tuple[list[AuditEventOut], int]:
-    occurred_from = assume_beijing(occurred_from)
-    occurred_to = assume_beijing(occurred_to)
-    total = await event_repo.count_events(
-        session,
-        occurred_from=occurred_from,
-        occurred_to=occurred_to,
-        actor_id=actor_id,
-        actor_name=actor_name,
-        module_code=module_code,
-        action_code=action_code,
-        outcome=outcome,
+    # 页面传来的时间不带时区，按北京时间理解。
+    filters = replace(
+        filters,
+        occurred_from=assume_beijing(filters.occurred_from),
+        occurred_to=assume_beijing(filters.occurred_to),
     )
-    rows = await event_repo.list_events(
-        session,
-        offset=(page - 1) * page_size,
-        limit=page_size,
-        occurred_from=occurred_from,
-        occurred_to=occurred_to,
-        actor_id=actor_id,
-        actor_name=actor_name,
-        module_code=module_code,
-        action_code=action_code,
-        outcome=outcome,
-    )
+    total = await event_repo.count_events(session, filters)
+    rows = await event_repo.list_events(session, filters, offset=(page - 1) * page_size, limit=page_size)
     return [to_out(row) for row in rows], total
 
 

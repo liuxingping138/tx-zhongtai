@@ -30,7 +30,7 @@ async def _run(monkeypatch: pytest.MonkeyPatch, *, watermark: datetime | None, t
         return touched, datetime(2026, 9, 22, 6, 0, tzinfo=UTC)
 
     monkeypatch.setattr(sync_crawler, "_last_watermark", fake_last_watermark)
-    monkeypatch.setattr(sync_crawler, "_affected_days", fake_affected)
+    monkeypatch.setattr(sync_crawler, "fetch_affected_days", fake_affected)
     days, mark = await sync_crawler._days_to_sync(
         _FakeSession(), today=TODAY, days=kwargs.get("days", 7), since=kwargs.get("since"), use_watermark=True
     )

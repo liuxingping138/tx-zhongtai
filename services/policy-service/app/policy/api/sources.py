@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse, Response
 from platform_common.actors import Actor
 from platform_common.enums import SecurityClass
 from platform_common.errors import ApiError, ErrorCode
+from platform_common.filters import Filters
 from platform_common.http_utils import IMPORT_FILE_OPENAPI, import_result_response, read_import_upload, success_json
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,15 +21,28 @@ router = APIRouter(prefix="/api/v1/policy/sources", tags=["policy-sources"])
 RESOURCE = "policy.sources"
 
 
-@router.get("")
-@classified(SecurityClass.RESOURCE_AUTHORIZED)
-async def list_items(
+def source_filters(
     site_name: list[str] | None = Query(default=None),
     province_name: list[str] | None = Query(default=None),
     city_name: list[str] | None = Query(default=None),
     tag: list[str] | None = Query(default=None),
     site_code: list[str] | None = Query(default=None),
     crawl_priority: list[str] | None = Query(default=None),
+) -> Filters:
+    return {
+        "site_name": site_name,
+        "province_name": province_name,
+        "city_name": city_name,
+        "tag": tag,
+        "site_code": site_code,
+        "crawl_priority": crawl_priority,
+    }
+
+
+@router.get("")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def list_items(
+    filters: Filters = Depends(source_filters),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session),
@@ -37,12 +51,7 @@ async def list_items(
     return success_json(
         await service.list_sources(
             session,
-            site_name=site_name,
-            province_name=province_name,
-            city_name=city_name,
-            tag=tag,
-            site_code=site_code,
-            crawl_priority=crawl_priority,
+            filters,
             page=page,
             page_size=page_size,
         )
@@ -78,12 +87,7 @@ async def search_filter_options(
 @router.get("/export")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def export_items(
-    site_name: list[str] | None = Query(default=None),
-    province_name: list[str] | None = Query(default=None),
-    city_name: list[str] | None = Query(default=None),
-    tag: list[str] | None = Query(default=None),
-    site_code: list[str] | None = Query(default=None),
-    crawl_priority: list[str] | None = Query(default=None),
+    filters: Filters = Depends(source_filters),
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_policy_permission(RESOURCE, "export")),
 ) -> Response:
@@ -91,14 +95,7 @@ async def export_items(
     payload = await service.export_sources(
         session,
         actor,
-        {
-            "site_name": site_name,
-            "province_name": province_name,
-            "city_name": city_name,
-            "tag": tag,
-            "site_code": site_code,
-            "crawl_priority": crawl_priority,
-        },
+        filters,
     )
     return Response(
         content=payload,

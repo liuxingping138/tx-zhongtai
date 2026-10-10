@@ -7,11 +7,12 @@ from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
 from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionConflictError
 from platform_common.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async
-from platform_common.filters import Filters, FilterValue
+from platform_common.filters import Filters
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.audit_emit import enqueue_event
 from app.core.config import get_settings
+from app.policy.application.importing import add_in_batches
 from app.policy.application.region import make_policy_uid, make_relation_key
 from app.policy.domain.fields import DATA_STATUS_CHOICES, DATA_STATUS_PENDING, INTERPRETATION_COLUMNS
 from app.policy.domain.models import INTERPRETATION_WRITE_FIELDS, Interpretation
@@ -77,32 +78,14 @@ def _data_status_error(values: dict[str, str]) -> str | None:
 
 async def list_interpretations(
     session: AsyncSession,
+    filters: Filters,
     *,
-    policy_title: FilterValue,
-    industry_scenario_code: FilterValue,
-    industry_l1: FilterValue,
-    scenario_l1_name: FilterValue,
-    opportunity_type: FilterValue,
-    is_new_scenario: FilterValue,
-    new_scenario_level: FilterValue,
-    info_level: FilterValue,
-    data_status: FilterValue,
     page: int,
     page_size: int,
 ) -> dict[str, Any]:
     items, total = await repo.list_items(
         session,
-        filters={
-            "policy_title": policy_title,
-            "industry_scenario_code": industry_scenario_code,
-            "industry_l1": industry_l1,
-            "scenario_l1_name": scenario_l1_name,
-            "opportunity_type": opportunity_type,
-            "is_new_scenario": is_new_scenario,
-            "new_scenario_level": new_scenario_level,
-            "info_level": info_level,
-            "data_status": data_status,
-        },
+        filters=filters,
         page=page,
         page_size=page_size,
     )
@@ -202,26 +185,22 @@ async def update_interpretation(
     return _to_out(row)
 
 
-async def import_interpretations(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, Any]:
-    parsed = await parse_sheet_async(content, INTERPRETATION_COLUMNS, subject="政策")
-    inserted = 0
-    skipped_rows: list[dict[str, str]] = []
+def _import_skip_reason(values: dict[str, str], seen: set[str]) -> str | None:
+    if not values["policy_title"]:
+        return "政策原文名称为空"
+    if message := _data_status_error(values):
+        return message
+    if values["relation_key"] in seen:
+        return "关联主键已存在"
+    return None
+
+
+def _build_rows(actor: Actor, accepted: list[dict[str, str]]) -> list[Interpretation]:
     now = utcnow()
-    seen = await repo.list_relation_keys(session)
-    for item in parsed:
-        values = _values(item)
-        if not values["policy_title"]:
-            skipped_rows.append({**values, "skip_reason": "政策原文名称为空"})
-            continue
-        if message := _data_status_error(values):
-            skipped_rows.append({**values, "skip_reason": message})
-            continue
-        if values["relation_key"] in seen:
-            skipped_rows.append({**values, "skip_reason": "关联主键已存在"})
-            continue
-        seen.add(values["relation_key"])
+    rows: list[Interpretation] = []
+    for values in accepted:
         item_id = uuid.uuid4()
-        session.add(
+        rows.append(
             Interpretation(
                 id=item_id,
                 record_id=str(item_id),
@@ -235,10 +214,23 @@ async def import_interpretations(session: AsyncSession, actor: Actor, content: b
                 **values,
             )
         )
-        inserted += 1
-        if inserted % 200 == 0:
-            await session.flush()
-    await session.flush()
+    return rows
+
+
+async def import_interpretations(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, Any]:
+    parsed = await parse_sheet_async(content, INTERPRETATION_COLUMNS, subject="政策")
+    skipped_rows: list[dict[str, str]] = []
+    accepted: list[dict[str, str]] = []
+    seen = await repo.list_relation_keys(session)
+    for item in parsed:
+        values = _values(item)
+        reason = _import_skip_reason(values, seen)
+        if reason:
+            skipped_rows.append({**values, "skip_reason": reason})
+            continue
+        seen.add(values["relation_key"])
+        accepted.append(values)
+    inserted = await add_in_batches(session, _build_rows(actor, accepted))
     await enqueue_event(
         session,
         event_type="policy.interpretation.imported",

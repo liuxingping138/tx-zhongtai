@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import Iterable
 
 _DIGITS = re.compile(r"\D")
 
@@ -75,7 +76,7 @@ def site_code_prefix(province_code: str, city_code: str, district_code: str) -> 
     return ""
 
 
-def next_site_code(district_code: str, existing_codes: list[str]) -> str:
+def next_site_code(district_code: str, existing_codes: Iterable[str]) -> str:
     """同区县取当前网站编码最大序号再 +1。"""
 
     prefix = _fit(digits_only(district_code), DISTRICT_CODE_LENGTH)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import asdict
 from io import BytesIO
 from types import SimpleNamespace
 from typing import Any
@@ -11,6 +12,7 @@ import pytest
 from openpyxl import Workbook, load_workbook
 
 from app.application import user_excel
+from app.application.user_fields import NewUser
 from app.domain.enums import RoleStatus
 
 HEADERS = ["用户名", "显示名", "电话", "邮箱", "角色"]
@@ -41,9 +43,9 @@ def created(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     async def list_all_roles(_session: object) -> list[object]:
         return [EDITOR, VIEWER, OLD]
 
-    async def create_user(_session: object, _actor: object, **kwargs: Any) -> tuple[dict[str, object], None]:
-        calls.append(kwargs)
-        roles = [{"name": role.name} for role in (EDITOR, VIEWER) if role.id in kwargs["role_ids"]]
+    async def create_user(_session: object, _actor: object, data: NewUser) -> tuple[dict[str, object], None]:
+        calls.append(asdict(data))
+        roles = [{"name": role.name} for role in (EDITOR, VIEWER) if role.id in data.role_ids]
         return {"roles": roles}, None
 
     monkeypatch.setattr(user_excel.user_repo, "get_user_by_username", get_by_username)

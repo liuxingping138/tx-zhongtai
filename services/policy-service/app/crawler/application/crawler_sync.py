@@ -18,7 +18,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import uuid
 from dataclasses import dataclass
@@ -32,10 +31,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import SessionLocal, engine
-from app.crawler.domain.identity import site_key
 from app.crawler.domain.models import CrawlerDailyStat, CrawlerSyncRun, CrawlerTask
-from app.crawler.repositories.source import mysql_connect as _mysql_connect
-from app.crawler.repositories.source import retry_mysql_read as _retry_mysql_read
+from app.crawler.repositories.crawler import SYNC_LOCK_KEY
+from app.crawler.repositories.crawler_source import fetch_affected_days, fetch_day, fetch_rules
 
 logger = logging.getLogger("policy.cli.sync_crawler")
 
@@ -55,104 +53,6 @@ class SyncRequest:
     skip_existing: bool = False
     use_watermark: bool = True
     run_id: uuid.UUID | None = None
-
-
-def _text_value(value: Any, limit: int) -> str:
-    """规则 JSON 里同一个键可能是字符串也可能是数字（如 author），统一成字符串。"""
-
-    if value is None:
-        return ""
-    return str(value).strip()[:limit]
-
-
-@_retry_mysql_read
-def _fetch_rules() -> list[dict[str, Any]]:
-    """读爬虫规则表。规则正文是 JSON 字符串，网站/标签都在 necessary_files 里。"""
-
-    sql = f"SELECT id, correlation, state, rule FROM {settings.crawler_rules_table}"  # noqa: S608  表名经 Settings 校验为标识符，值走参数绑定
-    with _mysql_connect() as conn, conn.cursor() as cur:
-        cur.execute(sql)
-        rows = cast(list[dict[str, Any]], cur.fetchall())
-
-    tasks: list[dict[str, Any]] = []
-    skipped = 0
-    for row in rows:
-        raw = row.get("rule")
-        if not raw:
-            skipped += 1
-            continue
-        try:
-            payload = json.loads(raw)
-            need = payload.get("necessary_files") or {}
-            if not isinstance(need, dict):
-                raise ValueError("necessary_files 必须是对象")
-        except (ValueError, AttributeError):
-            skipped += 1
-            continue
-        correlation = _text_value(row.get("correlation"), 64)
-        if not correlation:
-            skipped += 1
-            continue
-        tasks.append(
-            {
-                "correlation": correlation,
-                "site_code": _text_value(need.get("author"), 100),
-                "site_name": _text_value(need.get("site_name"), 255),
-                "province_name": _text_value(need.get("prov_name"), 64),
-                "city_name": _text_value(need.get("city_name"), 64),
-                "tag": _text_value(need.get("tag"), 255),
-                "source_url": _text_value(need.get("source_url"), 2000),
-                "rule_state": int(row.get("state") or 0),
-            }
-        )
-    if skipped:
-        raise ValueError(f"规则表有 {skipped} 条无法解析，未更新任务基线，请修复后重试")
-    for item in tasks:
-        item["site_key"] = site_key(item["site_code"], item["site_name"], item["province_name"], item["city_name"])
-    logger.info("rules_fetched total=%s usable=%s skipped=%s", len(rows), len(tasks), skipped)
-    return tasks
-
-
-@_retry_mysql_read
-def _fetch_day(day: date) -> list[dict[str, Any]]:
-    """单天按 (网站名称, 标签) 聚合；无名称时才使用编码。"""
-
-    sql = f"""
-        SELECT MAX(TRIM(COALESCE(author, ''))) AS site_code,
-               TRIM(COALESCE(tag, '')) AS tag,
-               MAX(site_name) AS site_name,
-               MAX(prov_name) AS province_name,
-               MAX(city_name) AS city_name,
-               COUNT(*) AS row_count,
-               SUM(name IS NOT NULL AND name <> '') AS named_count,
-               SUM(content IS NOT NULL AND content <> '') AS content_count
-        FROM {settings.crawler_data_table}
-        WHERE collect_date = %s
-        GROUP BY TRIM(COALESCE(site_name, '')), TRIM(COALESCE(tag, '')),
-                 CASE WHEN TRIM(COALESCE(site_name, '')) = '' THEN TRIM(COALESCE(author, '')) ELSE '' END
-    """  # noqa: S608  表名经 Settings 校验为标识符，值走参数绑定
-    with _mysql_connect() as conn, conn.cursor() as cur:
-        cur.execute(sql, (day.isoformat(),))
-        rows = cast(list[dict[str, Any]], cur.fetchall())
-
-    return [
-        {
-            "collect_date": day,
-            "site_key": site_key(
-                row["site_code"] or "", row["site_name"] or "", row["province_name"] or "", row["city_name"] or ""
-            ),
-            "identity_verified": True,
-            "site_code": (row["site_code"] or "")[:100],
-            "site_name": (row["site_name"] or "")[:255],
-            "province_name": (row["province_name"] or "")[:64],
-            "city_name": (row["city_name"] or "")[:64],
-            "tag": (row["tag"] or "")[:255],
-            "row_count": int(row["row_count"] or 0),
-            "named_count": int(row["named_count"] or 0),
-            "content_count": int(row["content_count"] or 0),
-        }
-        for row in rows
-    ]
 
 
 async def _upsert_tasks(session: AsyncSession, rows: list[dict[str, Any]]) -> int:
@@ -317,30 +217,6 @@ async def recompute_health(session: AsyncSession) -> int:
     return int(result.rowcount or 0)
 
 
-@_retry_mysql_read
-def _affected_days(since_ts: datetime) -> tuple[set[date], datetime | None]:
-    """找出「入库时间晚于水位」的行涉及哪些采集日，以及本次见到的最大入库时间。
-
-    爬虫是采集后才入库，两者能差好几天且没有保证上限。固定天数窗口一旦小于实际滞后，
-    迟到的行进库时窗口已经滑过它的采集日，那天就永久少算。改成按入库时间反查采集日，
-    不管滞后多久都能把对应的那天捞回来重算。
-    """
-
-    sql = f"""
-        SELECT collect_date, MAX(create_time) AS max_created
-        FROM {settings.crawler_data_table}
-        WHERE create_time > %s AND collect_date IS NOT NULL
-        GROUP BY collect_date
-    """  # noqa: S608  表名经 Settings 校验为标识符，值走参数绑定
-    with _mysql_connect() as conn, conn.cursor() as cur:
-        cur.execute(sql, (since_ts.astimezone(BEIJING).strftime("%Y-%m-%d %H:%M:%S"),))
-        rows = cast(list[dict[str, Any]], cur.fetchall())
-
-    days = {row["collect_date"] for row in rows if row["collect_date"]}
-    stamps = [row["max_created"] for row in rows if row["max_created"]]
-    return days, max(stamps).replace(tzinfo=BEIJING).astimezone(UTC) if stamps else None
-
-
 async def _last_watermark(session: AsyncSession) -> datetime | None:
     result = await session.execute(
         text(
@@ -383,13 +259,13 @@ async def _days_to_sync(
         window = [today - timedelta(days=offset) for offset in range(days)]
         logger.info("watermark_missing fallback_from=%s", date_from)
         touched, new_mark = await asyncio.to_thread(
-            _affected_days, datetime.combine(date_from, datetime.min.time(), tzinfo=BEIJING)
+            fetch_affected_days, datetime.combine(date_from, datetime.min.time(), tzinfo=BEIJING)
         )
         return sorted(set(window) | touched, reverse=True), new_mark
 
     # 回退一点再查：入库时间由数据库时钟写入，长事务可能让稍早的时间戳晚于水位才可见。
     probe_from = watermark - timedelta(hours=_WATERMARK_OVERLAP_HOURS)
-    touched, new_mark = await asyncio.to_thread(_affected_days, probe_from)
+    touched, new_mark = await asyncio.to_thread(fetch_affected_days, probe_from)
     # 当天数据还在写，无论水位怎么说都要重算。
     return sorted(touched | {today}, reverse=True), new_mark
 
@@ -404,7 +280,7 @@ async def run(
 ) -> None:
     # 整次同步使用同一连接持有会话锁；按日 commit 不释放锁，避免两次回填交错覆盖。
     async with engine.connect() as connection:
-        locked = await connection.scalar(text("SELECT pg_try_advisory_lock(72120260922)"))
+        locked = await connection.scalar(text("SELECT pg_try_advisory_lock(:key)"), {"key": SYNC_LOCK_KEY})
         await connection.commit()
         if not locked:
             raise RuntimeError("已有爬虫同步正在运行，请稍后重试")
@@ -413,7 +289,7 @@ async def run(
                 await _run_sync(session, SyncRequest(days, tasks_only, since, skip_existing, use_watermark, run_id))
         finally:
             await connection.rollback()
-            await connection.execute(text("SELECT pg_advisory_unlock(72120260922)"))
+            await connection.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": SYNC_LOCK_KEY})
             await connection.commit()
 
 
@@ -438,7 +314,7 @@ async def _run_sync(session: AsyncSession, request: SyncRequest) -> None:
         )
         date_from = min(targets) if targets else today
         run_row.date_from = date_from
-        task_rows = await _upsert_tasks(session, await asyncio.to_thread(_fetch_rules))
+        task_rows = await _upsert_tasks(session, await asyncio.to_thread(fetch_rules))
         await session.commit()
         logger.info("tasks_synced rows=%s", task_rows)
 
@@ -452,7 +328,7 @@ async def _run_sync(session: AsyncSession, request: SyncRequest) -> None:
             for day in targets:
                 if day in done and day not in always_redo:
                     continue
-                rows = await asyncio.to_thread(_fetch_day, day)
+                rows = await asyncio.to_thread(fetch_day, day)
                 stat_rows += await _upsert_daily(session, rows, day=day)
                 await session.commit()
                 logger.info("day_synced date=%s groups=%s", day, len(rows))

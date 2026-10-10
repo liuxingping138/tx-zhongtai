@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import pytest
+from fastapi.dependencies.utils import get_flat_dependant
 from fastapi.routing import APIRoute
 
 from app.main import app
@@ -16,7 +17,8 @@ from app.repositories.events import OPTION_COLUMNS
 def _query_params(path: str) -> set[str]:
     for route in app.routes:
         if isinstance(route, APIRoute) and route.path == path and "GET" in route.methods:
-            return {p.name for p in route.dependant.query_params}
+            # 筛选参数写在共用的依赖里，要展开依赖树才能拿全。
+            return {p.name for p in get_flat_dependant(route.dependant).query_params}
     raise AssertionError(f"未找到路由 {path}")
 
 

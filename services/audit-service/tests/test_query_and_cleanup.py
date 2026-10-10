@@ -17,6 +17,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.application import cleanup, ingest, query
 from app.application.schemas import IngestRequest
+from app.domain.filters import EventFilters
 from app.domain.models import AuditEvent
 from app.repositories import events as event_repo
 
@@ -39,22 +40,24 @@ def body(**overrides: Any) -> IngestRequest:
 
 class TestApplyFilters:
     def test_no_conditions_adds_no_where(self) -> None:
-        assert "WHERE" not in sql(event_repo.apply_filters(select(AuditEvent), actor_name=[], module_code=""))
+        assert "WHERE" not in sql(
+            event_repo.apply_filters(select(AuditEvent), EventFilters(actor_name=[], module_code=""))
+        )
 
     def test_time_range_is_half_open(self) -> None:
         start, end = datetime(2026, 10, 1, tzinfo=UTC), datetime(2026, 10, 2, tzinfo=UTC)
-        text = sql(event_repo.apply_filters(select(AuditEvent), occurred_from=start, occurred_to=end))
+        text = sql(event_repo.apply_filters(select(AuditEvent), EventFilters(occurred_from=start, occurred_to=end)))
         assert "occurred_at >= '2026-10-01" in text
         assert "occurred_at < '2026-10-02" in text
 
     def test_multi_select_uses_in_and_fields_are_anded(self) -> None:
-        text = sql(event_repo.apply_filters(select(AuditEvent), module_code=["a", "b"], outcome="failed"))
+        text = sql(event_repo.apply_filters(select(AuditEvent), EventFilters(module_code=["a", "b"], outcome="failed")))
         assert "module_code IN ('a', 'b')" in text
         assert "outcome IN ('failed')" in text
         assert " AND " in text
 
     def test_actor_name_is_fuzzy_and_escapes_wildcards(self) -> None:
-        stmt = event_repo.apply_filters(select(AuditEvent), actor_name=["张%三", "李_四"])
+        stmt = event_repo.apply_filters(select(AuditEvent), EventFilters(actor_name=["张%三", "李_四"]))
         patterns = set(stmt.compile(dialect=postgresql.dialect()).params.values())
         assert {"%张\\%三%", "%李\\_四%"} <= patterns
         assert " OR " in sql(stmt)
@@ -107,20 +110,11 @@ class TestQuery:
         monkeypatch.setattr(event_repo, "count_events", count)
         monkeypatch.setattr(event_repo, "list_events", rows)
         items, total = await query.list_page(
-            AsyncMock(),
-            page=3,
-            page_size=20,
-            occurred_from=datetime(2026, 10, 1, 8, 0),
-            occurred_to=None,
-            actor_id=None,
-            actor_name=None,
-            module_code=None,
-            action_code=None,
-            outcome=None,
+            AsyncMock(), EventFilters(occurred_from=datetime(2026, 10, 1, 8, 0)), page=3, page_size=20
         )
         assert (items, total) == ([], 0)
         assert count.await_args is not None
-        assert count.await_args.kwargs["occurred_from"] == datetime(2026, 10, 1, 8, 0, tzinfo=BEIJING)
+        assert count.await_args.args[1].occurred_from == datetime(2026, 10, 1, 8, 0, tzinfo=BEIJING)
         assert rows.await_args is not None
         assert rows.await_args.kwargs["offset"] == 40
         assert rows.await_args.kwargs["limit"] == 20

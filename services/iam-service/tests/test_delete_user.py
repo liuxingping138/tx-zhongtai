@@ -14,13 +14,14 @@ from app.application import auth_service as auth_module
 from app.application import user_admin
 from app.application.auth_service import UNIFIED_LOGIN_FAILURE, AuthService
 from app.domain.enums import UserStatus
+from app.domain.filters import UserFilters
 from app.domain.models import User
 from app.domain.password import hash_password
 from app.repositories.users import _apply_user_filters
 
 
 def test_user_list_always_excludes_deleted() -> None:
-    stmt = _apply_user_filters(select(User), username=None, status=["disabled", "deleted"])
+    stmt = _apply_user_filters(select(User), UserFilters(status=["disabled", "deleted"]))
     values = list(stmt.compile().params.values())
     # 排除条件带一次 deleted；传进来的 deleted 不会进入筛选列表。
     assert values.count(UserStatus.DELETED) == 1

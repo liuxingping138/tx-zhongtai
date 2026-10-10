@@ -78,10 +78,9 @@ async def update_role(
             session,
             principal.user,
             role_id,
-            name=body.name,
-            status=body.status,
-            version=body.version,
-            description=body.description,
+            role_admin.RoleChanges(
+                version=body.version, name=body.name, description=body.description, status=body.status
+            ),
         )
     )
 

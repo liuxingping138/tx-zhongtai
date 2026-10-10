@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse, Response
 from platform_common.actors import Actor
 from platform_common.enums import SecurityClass
 from platform_common.errors import ApiError, ErrorCode
-from platform_common.filters import Filters, FilterValue
+from platform_common.filters import Filters
 from platform_common.http_utils import success_json
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,15 +20,18 @@ router = APIRouter(prefix="/api/v1/policy/crawler-monitoring", tags=["policy-cra
 RESOURCE = "policy.crawler_monitoring"
 
 
-def _filters(
-    province_name: FilterValue,
-    city_name: FilterValue,
-    site_name: FilterValue,
-    site_code: FilterValue,
-    tag: FilterValue,
-    health_status: FilterValue,
-    stale_days_min: int | None,
-    abnormal_only: bool,
+HealthStatus = Literal["normal", "watch", "broken", "never"]
+
+
+def task_filters(
+    province_name: list[str] | None = Query(default=None),
+    city_name: list[str] | None = Query(default=None),
+    site_name: list[str] | None = Query(default=None),
+    site_code: list[str] | None = Query(default=None),
+    tag: list[str] | None = Query(default=None),
+    health_status: list[HealthStatus] | None = Query(default=None),
+    stale_days_min: int | None = Query(default=None, ge=0),
+    abnormal_only: bool = Query(default=False),
 ) -> Filters:
     return {
         "province_name": province_name,
@@ -55,14 +58,7 @@ async def get_overview(
 @router.get("/tasks")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def list_tasks(
-    province_name: list[str] | None = Query(default=None),
-    city_name: list[str] | None = Query(default=None),
-    site_name: list[str] | None = Query(default=None),
-    site_code: list[str] | None = Query(default=None),
-    tag: list[str] | None = Query(default=None),
-    health_status: list[Literal["normal", "watch", "broken", "never"]] | None = Query(default=None),
-    stale_days_min: int | None = Query(default=None, ge=0),
-    abnormal_only: bool = Query(default=False),
+    filters: Filters = Depends(task_filters),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session),
@@ -71,9 +67,7 @@ async def list_tasks(
     return success_json(
         await service.list_tasks(
             session,
-            filters=_filters(
-                province_name, city_name, site_name, site_code, tag, health_status, stale_days_min, abnormal_only
-            ),
+            filters=filters,
             page=page,
             page_size=page_size,
         )
@@ -122,23 +116,12 @@ async def get_task_detail(
 @router.get("/tasks/export")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def export_tasks(
-    province_name: list[str] | None = Query(default=None),
-    city_name: list[str] | None = Query(default=None),
-    site_name: list[str] | None = Query(default=None),
-    site_code: list[str] | None = Query(default=None),
-    tag: list[str] | None = Query(default=None),
-    health_status: list[Literal["normal", "watch", "broken", "never"]] | None = Query(default=None),
-    stale_days_min: int | None = Query(default=None, ge=0),
-    abnormal_only: bool = Query(default=False),
+    filters: Filters = Depends(task_filters),
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_policy_permission(RESOURCE, "export")),
 ) -> Response:
-    payload = await service.export_tasks(
-        session,
-        actor,
-        _filters(province_name, city_name, site_name, site_code, tag, health_status, stale_days_min, abnormal_only),
-    )
-    name = "爬虫异常清单.xlsx" if abnormal_only else "爬虫监测.xlsx"
+    payload = await service.export_tasks(session, actor, filters)
+    name = "爬虫异常清单.xlsx" if filters["abnormal_only"] else "爬虫监测.xlsx"
     return Response(
         content=payload,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

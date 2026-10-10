@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse, Response
 from platform_common.actors import Actor
 from platform_common.enums import SecurityClass
 from platform_common.errors import ApiError, ErrorCode
-from platform_common.filters import Filters, FilterValue
+from platform_common.filters import Filters
 from platform_common.http_utils import success_json
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,8 +22,11 @@ RESOURCE = "policy.crawler_monitoring_v2"
 SiteStatus = Literal["normal", "watch", "stale"]
 
 
-def _filters(
-    province_name: FilterValue, city_name: FilterValue, site_name: FilterValue, status: FilterValue
+def site_filters(
+    province_name: list[str] | None = Query(default=None),
+    city_name: list[str] | None = Query(default=None),
+    site_name: list[str] | None = Query(default=None),
+    status: list[SiteStatus] | None = Query(default=None),
 ) -> Filters:
     return {"province_name": province_name, "city_name": city_name, "site_name": site_name, "status": status}
 
@@ -40,20 +43,13 @@ async def get_overview(
 @router.get("/sites")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def list_sites(
-    province_name: list[str] | None = Query(default=None),
-    city_name: list[str] | None = Query(default=None),
-    site_name: list[str] | None = Query(default=None),
-    status: list[SiteStatus] | None = Query(default=None),
+    filters: Filters = Depends(site_filters),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session),
     _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
 ) -> JSONResponse:
-    return success_json(
-        await service.list_sites(
-            session, filters=_filters(province_name, city_name, site_name, status), page=page, page_size=page_size
-        )
-    )
+    return success_json(await service.list_sites(session, filters=filters, page=page, page_size=page_size))
 
 
 @router.get("/sites/options")
@@ -83,14 +79,11 @@ async def search_filter_options(
 @router.get("/sites/export")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def export_sites(
-    province_name: list[str] | None = Query(default=None),
-    city_name: list[str] | None = Query(default=None),
-    site_name: list[str] | None = Query(default=None),
-    status: list[SiteStatus] | None = Query(default=None),
+    filters: Filters = Depends(site_filters),
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_policy_permission(RESOURCE, "export")),
 ) -> Response:
-    payload = await service.export_sites(session, actor, _filters(province_name, city_name, site_name, status))
+    payload = await service.export_sites(session, actor, filters)
     return Response(
         content=payload,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

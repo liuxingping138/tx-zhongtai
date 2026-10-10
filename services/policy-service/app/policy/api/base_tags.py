@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse, Response
 from platform_common.actors import Actor
 from platform_common.enums import SecurityClass
 from platform_common.errors import ApiError, ErrorCode
+from platform_common.filters import Filters
 from platform_common.http_utils import IMPORT_FILE_OPENAPI, import_result_response, read_import_upload, success_json
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,14 +21,26 @@ router = APIRouter(prefix="/api/v1/policy/base-tags", tags=["policy-base-tags"])
 RESOURCE = "policy.base_tags"
 
 
-@router.get("")
-@classified(SecurityClass.RESOURCE_AUTHORIZED)
-async def list_items(
+def base_tag_filters(
     policy_name: list[str] | None = Query(default=None),
     province_name: list[str] | None = Query(default=None),
     policy_types: list[str] | None = Query(default=None),
     is_penetrate: list[str] | None = Query(default=None),
     need_interpret: list[str] | None = Query(default=None),
+) -> Filters:
+    return {
+        "policy_name": policy_name,
+        "province_name": province_name,
+        "policy_types": policy_types,
+        "is_penetrate": is_penetrate,
+        "need_interpret": need_interpret,
+    }
+
+
+@router.get("")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def list_items(
+    filters: Filters = Depends(base_tag_filters),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session),
@@ -36,11 +49,7 @@ async def list_items(
     return success_json(
         await service.list_base_tags(
             session,
-            policy_name=policy_name,
-            province_name=province_name,
-            policy_types=policy_types,
-            is_penetrate=is_penetrate,
-            need_interpret=need_interpret,
+            filters,
             page=page,
             page_size=page_size,
         )
@@ -76,11 +85,7 @@ async def search_filter_options(
 @router.get("/export")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def export_items(
-    policy_name: list[str] | None = Query(default=None),
-    province_name: list[str] | None = Query(default=None),
-    policy_types: list[str] | None = Query(default=None),
-    is_penetrate: list[str] | None = Query(default=None),
-    need_interpret: list[str] | None = Query(default=None),
+    filters: Filters = Depends(base_tag_filters),
     session: AsyncSession = Depends(get_db_session),
     actor: Actor = Depends(require_policy_permission(RESOURCE, "export")),
 ) -> Response:
@@ -88,13 +93,7 @@ async def export_items(
     payload = await service.export_base_tags(
         session,
         actor,
-        {
-            "policy_name": policy_name,
-            "province_name": province_name,
-            "policy_types": policy_types,
-            "is_penetrate": is_penetrate,
-            "need_interpret": need_interpret,
-        },
+        filters,
     )
     return Response(
         content=payload,

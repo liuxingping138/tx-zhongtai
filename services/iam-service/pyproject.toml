@@ -52,14 +52,6 @@ default = true
 # 规则在仓库根目录 ruff.toml，这里只写本包特有的例外。
 extend = "../../ruff.toml"
 
-[tool.ruff.lint.extend-per-file-ignores]
-# 存量基线（2026-10-09 登记）：结构性问题按 docs/guides/工程规范.md 第 8 节分批整改，
-# 修完一条删一条；不许往这里加新条目，新代码必须直接满足规则。
-"app/application/role_admin.py" = ["PLR0913"]
-"app/application/user_admin.py" = ["PLR0913"]
-"app/application/user_excel.py" = ["C901"]
-"app/repositories/users.py" = ["PLR0913"]
-
 [tool.mypy]
 python_version = "3.12"
 strict = true

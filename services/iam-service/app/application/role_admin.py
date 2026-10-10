@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from dataclasses import dataclass
 
 from platform_common.clock import utcnow
 from platform_common.errors import ApiError, NotFoundError, PermissionDeniedError, VersionConflictError
@@ -137,34 +138,38 @@ async def create_role(
     return role_public(role)
 
 
+@dataclass(frozen=True, slots=True)
+class RoleChanges:
+    """改角色的字段。None 表示不改。"""
+
+    version: int
+    name: str | None = None
+    description: str | None = None
+    status: str | None = None
+
+
 async def update_role(
-    session: AsyncSession,
-    actor: User,
-    role_id: uuid.UUID,
-    *,
-    name: str | None,
-    status: str | None,
-    version: int,
-    description: str | None = None,
+    session: AsyncSession, actor: User, role_id: uuid.UUID, changes: RoleChanges
 ) -> dict[str, object]:
     role = await role_repo.get_role_for_update(session, role_id)
     if role is None:
         raise NotFoundError("角色不存在")
-    if role.version != version:
+    if role.version != changes.version:
         raise VersionConflictError()
+    status = changes.status
     if role.is_builtin and status is not None and status != role.status:
         raise PermissionDeniedError("不能停用或修改内置角色状态")
     if status is not None:
         if status not in {RoleStatus.ACTIVE, RoleStatus.DISABLED}:
             raise ApiError("无效的角色状态")
         role.status = status
-    if name is not None:
-        display = name.strip()
+    if changes.name is not None:
+        display = changes.name.strip()
         if not display:
             raise ApiError("角色名称不能为空")
         role.name = display
-    if description is not None:
-        role.description = _clean_description(description)
+    if changes.description is not None:
+        role.description = _clean_description(changes.description)
     role.updated_at = utcnow()
     role.version += 1
     await outbox_repo.enqueue(

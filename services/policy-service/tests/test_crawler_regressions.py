@@ -13,6 +13,7 @@ from app.crawler.application import crawler as service
 from app.crawler.application import crawler_sync as sync
 from app.crawler.domain.identity import site_key
 from app.crawler.repositories import crawler as repo
+from app.crawler.repositories import crawler_source
 
 
 def test_empty_codes_do_not_merge_different_websites() -> None:
@@ -37,7 +38,7 @@ async def test_tasks_only_does_not_probe_data_or_move_watermark(monkeypatch: pyt
     session = SimpleNamespace(add=MagicMock(), commit=AsyncMock(), rollback=AsyncMock())
     probe = AsyncMock(side_effect=AssertionError("must not query data table"))
     monkeypatch.setattr(sync, "_days_to_sync", probe)
-    monkeypatch.setattr(sync, "_fetch_rules", lambda: [])
+    monkeypatch.setattr(sync, "fetch_rules", lambda: [])
     monkeypatch.setattr(sync, "_upsert_tasks", AsyncMock(return_value=0))
     monkeypatch.setattr(sync, "recompute_health", AsyncMock(return_value=0))
     await sync._run_sync(session, sync.SyncRequest(days=7, tasks_only=True))
@@ -130,8 +131,8 @@ def test_source_grouping_uses_name_even_when_codes_vary(monkeypatch: pytest.Monk
     def source():
         yield SimpleNamespace(cursor=cursor)
 
-    monkeypatch.setattr(sync, "_mysql_connect", source)
-    rows = sync._fetch_day(date(2026, 9, 22))
+    monkeypatch.setattr(crawler_source, "mysql_connect", source)
+    rows = crawler_source.fetch_day(date(2026, 9, 22))
     assert {row["site_name"]: row["row_count"] for row in rows} == {"甲网站": 2, "乙网站": 1}
     assert {row["site_key"] for row in rows} == {site_key("", "甲网站"), site_key("", "乙网站")}
     connection.close()

@@ -7,12 +7,19 @@ from typing import Any
 from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
 from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionConflictError
-from platform_common.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async
-from platform_common.filters import Filters, FilterValue
+from platform_common.excel import build_workbook_async, parse_sheet_async
+from platform_common.filters import Filters
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.audit_emit import enqueue_event
 from app.core.config import get_settings
+from app.policy.application.importing import (
+    add_in_batches,
+    inserted_result,
+    mark,
+    missing_area_reason,
+    rejected_result,
+)
 from app.policy.domain.fields import BASE_TAG_COLUMNS
 from app.policy.domain.models import BASE_TAG_FIELDS, BaseTag, content_hash
 from app.policy.repositories import base_tags as repo
@@ -36,24 +43,14 @@ def _values(data: dict[str, str]) -> dict[str, str]:
 
 async def list_base_tags(
     session: AsyncSession,
+    filters: Filters,
     *,
-    policy_name: FilterValue,
-    province_name: FilterValue,
-    policy_types: FilterValue,
-    is_penetrate: FilterValue,
-    need_interpret: FilterValue,
     page: int,
     page_size: int,
 ) -> dict[str, Any]:
     items, total = await repo.list_items(
         session,
-        filters={
-            "policy_name": policy_name,
-            "province_name": province_name,
-            "policy_types": policy_types,
-            "is_penetrate": is_penetrate,
-            "need_interpret": need_interpret,
-        },
+        filters=filters,
         page=page,
         page_size=page_size,
     )
@@ -150,75 +147,57 @@ def _has_any_area_code(item: dict[str, str]) -> bool:
     return bool((item.get("province_code") or "").strip() or (item.get("city_code") or "").strip())
 
 
-async def import_base_tags(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, Any]:
-    parsed = await parse_sheet_async(content, BASE_TAG_COLUMNS, subject="政策")
-    db_hashes = await repo.list_hashes(session)
-    staged: list[tuple[dict[str, str], str, str]] = []
-    for item in parsed:
-        values = _values(item)
-        digest = content_hash(values, BASE_TAG_FIELDS)
-        staged.append((values, digest, (item.get("skip_reason") or "").strip()))
-    file_hashes = Counter(item[1] for item in staged)
-    marked: list[dict[str, str]] = []
-    blocked = 0
-    for values, digest, resolve_reason in staged:
+def _check_rows(staged: list[tuple[dict[str, str], str, str]], db_hashes: set[str]) -> list[list[str]]:
+    file_hashes = Counter(digest for _values, digest, _reason in staged)
+    checked: list[list[str]] = []
+    for values, digest, carried_reason in staged:
         reasons: list[str] = []
         if not _has_any_area_code(values):
-            if resolve_reason and resolve_reason != "通过":
-                reasons.append(resolve_reason)
-            else:
-                reasons.append("省市区编码为空")
+            reasons.append(missing_area_reason(carried_reason))
         if not values["policy_name"]:
             reasons.append("政策名称为空")
         if digest in db_hashes:
             reasons.append("内容已存在")
         if file_hashes[digest] > 1:
             reasons.append("文件内内容重复")
-        marked.append({**values, "skip_reason": "；".join(reasons) if reasons else "通过"})
-        if reasons:
-            blocked += 1
+        checked.append(reasons)
+    return checked
+
+
+async def import_base_tags(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, Any]:
+    parsed = await parse_sheet_async(content, BASE_TAG_COLUMNS, subject="政策")
+    staged: list[tuple[dict[str, str], str, str]] = []
+    for item in parsed:
+        values = _values(item)
+        staged.append((values, content_hash(values, BASE_TAG_FIELDS), (item.get("skip_reason") or "").strip()))
+    checked = _check_rows(staged, await repo.list_hashes(session))
+    blocked = sum(1 for reasons in checked if reasons)
     if blocked:
-        return {
-            "inserted": 0,
-            "updated": 0,
-            "skipped": blocked,
-            "total": len(parsed),
-            "rejected": True,
-            "skipped_file": await encode_skipped_file_async(BASE_TAG_COLUMNS, marked),
-        }
-    inserted = 0
+        marked = [mark(values, reasons) for (values, _digest, _reason), reasons in zip(staged, checked, strict=True)]
+        return await rejected_result(BASE_TAG_COLUMNS, marked, blocked=blocked)
     now = utcnow()
-    for values, digest, _reason in staged:
-        session.add(
-            BaseTag(
-                content_hash=digest,
-                version=1,
-                created_at=now,
-                created_by_id=actor.id,
-                created_by_name=actor.name,
-                updated_at=now,
-                updated_by_id=actor.id,
-                updated_by_name=actor.name,
-                **values,
-            )
+    rows = (
+        BaseTag(
+            content_hash=digest,
+            version=1,
+            created_at=now,
+            created_by_id=actor.id,
+            created_by_name=actor.name,
+            updated_at=now,
+            updated_by_id=actor.id,
+            updated_by_name=actor.name,
+            **values,
         )
-        inserted += 1
-        if inserted % 200 == 0:
-            await session.flush()
-    await session.flush()
+        for values, digest, _reason in staged
+    )
+    inserted = await add_in_batches(session, rows)
     await enqueue_event(
         session,
         event_type="policy.base_tag.imported",
         actor=actor,
         extra={"inserted": inserted, "skipped": 0},
     )
-    return {
-        "inserted": inserted,
-        "updated": 0,
-        "skipped": 0,
-        "total": len(parsed),
-        "skipped_file": None,
-    }
+    return inserted_result(inserted)
 
 
 async def _assert_exportable(session: AsyncSession, filters: Filters) -> None:

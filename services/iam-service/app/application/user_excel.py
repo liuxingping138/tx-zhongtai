@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from io import BytesIO
 
 from anyio import to_thread
@@ -16,13 +16,21 @@ from openpyxl import Workbook
 from platform_common.clock import format_beijing
 from platform_common.errors import ApiError, ErrorCode
 from platform_common.excel import SKIP_REASON_COLUMN, active_worksheet, append_text_row, parse_sheet_async
-from platform_common.filters import FilterValue
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application import user_admin
+from app.application.user_fields import (
+    NewUser,
+    generate_temporary_password,
+    normalize_email,
+    normalize_phone,
+    validate_display_name,
+    validate_username,
+)
 from app.core.config import get_settings
 from app.domain.enums import RoleStatus
 from app.domain.fields import STATUS_TEXT, USER_EXPORT_COLUMNS, USER_IMPORT_COLUMNS
+from app.domain.filters import UserFilters
 from app.domain.models import Role, User
 from app.domain.password import hash_password
 from app.repositories import roles as role_repo
@@ -32,18 +40,10 @@ ROLE_SEPARATORS = re.compile(r"[、,，;；\n]")
 ROLES_IGNORED_NOTE = "角色列已忽略：分配角色需要超级管理员，已放进「待分配角色」"
 
 
-async def export_users(
-    session: AsyncSession,
-    *,
-    username: FilterValue,
-    status: FilterValue,
-    role_id: FilterValue,
-    keyword: FilterValue,
-) -> bytes:
+async def export_users(session: AsyncSession, filters: UserFilters) -> bytes:
     """按列表同一套筛选导出，所见即所导。不含任何密码相关字段。"""
 
-    filters = {"username": username, "status": status, "role_id": role_id, "keyword": keyword}
-    total = await user_repo.count_users(session, **filters)
+    total = await user_repo.count_users(session, filters)
     limit = get_settings().export_max_rows
     if total > limit:
         raise ApiError(
@@ -51,7 +51,7 @@ async def export_users(
             code=ErrorCode.VALIDATION_ERROR,
             http_status=422,
         )
-    users = await user_repo.list_users(session, **filters, offset=0, limit=max(total, 1), sort="username")
+    users = await user_repo.list_users(session, filters, offset=0, limit=max(total, 1), sort="username")
     roles = await user_repo.roles_for_users(session, [user.id for user in users])
     rows = [
         {
@@ -120,70 +120,73 @@ def _resolve_roles(raw: str, index: dict[str, list[Role]]) -> tuple[list[uuid.UU
     return ids, ""
 
 
+@dataclass(frozen=True, slots=True)
+class _ImportRow:
+    user: NewUser
+    note: str
+
+
 async def import_users(session: AsyncSession, actor: User, content: bytes, *, can_grant: bool) -> ImportOutcome:
     settings = get_settings()
     rows = await parse_sheet_async(content, USER_IMPORT_COLUMNS, subject="用户", max_rows=settings.user_import_max_rows)
     if not rows:
         raise ApiError("Excel 里没有数据", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    index = _role_index(await role_repo.list_all_roles(session)) if can_grant else {}
+    # 不能分配角色时不查角色表：角色列整列忽略，按名称匹配不到也不算错。
+    index = _role_index(await role_repo.list_all_roles(session)) if can_grant else None
     outcome = ImportOutcome()
     seen: set[str] = set()
-
-    def skip(row: dict[str, str], reason: str) -> None:
-        outcome.skipped.append({**row, SKIP_REASON_COLUMN.field: reason})
-
     for row in rows:
-        try:
-            username = user_admin.validate_username(row["username"])
-            if not row["display_name"].strip():
-                raise ApiError("显示名不能为空")
-            phone = user_admin.normalize_phone(row["phone"])
-            email = user_admin.normalize_email(row["email"])
-        except ApiError as exc:
-            skip(row, exc.message)
-            continue
-        if username in seen:
-            skip(row, "文件里有重复的用户名，只建第一行")
-            continue
-        seen.add(username)
-        if await user_repo.get_user_by_username(session, username) is not None:
-            skip(row, "用户名已存在，未改动原账号")
-            continue
-        role_ids: list[uuid.UUID] = []
-        note = ""
-        if row["roles"].strip():
-            if can_grant:
-                role_ids, error = _resolve_roles(row["roles"], index)
-                if error:
-                    skip(row, error)
-                    continue
-            else:
-                note = ROLES_IGNORED_NOTE
-        temporary = user_admin.generate_temporary_password()
-        # Argon2 一次几十毫秒，几百行在协程里算会把整个服务卡住，放线程池。
-        hashed = await to_thread.run_sync(hash_password, temporary)
-        payload, _ = await user_admin.create_user(
-            session,
-            actor,
-            username=username,
-            display_name=row["display_name"],
-            password=None,
-            role_ids=role_ids,
-            phone=phone,
-            email=email,
-            password_hash=hashed,
-        )
-        roles = payload.get("roles") or []
-        outcome.created.append(
-            {
-                "username": username,
-                "display_name": row["display_name"].strip(),
-                "roles": "、".join(str(role["name"]) for role in roles) if isinstance(roles, list) else "",
-                "password": temporary,
-                "note": note or ("" if role_ids else "还没有角色，已放进「待分配角色」"),
-            }
-        )
+        prepared = await _prepare_row(session, row, seen, index)
+        if isinstance(prepared, str):
+            outcome.skipped.append({**row, SKIP_REASON_COLUMN.field: prepared})
+        else:
+            outcome.created.append(await _create_imported(session, actor, prepared))
     return outcome
+
+
+async def _prepare_row(
+    session: AsyncSession, row: dict[str, str], seen: set[str], index: dict[str, list[Role]] | None
+) -> _ImportRow | str:
+    """校验一行并解析角色。可以建账号时返回入参，否则返回跳过原因。"""
+
+    try:
+        username = validate_username(row["username"])
+        validate_display_name(row["display_name"])
+        phone = normalize_phone(row["phone"])
+        email = normalize_email(row["email"])
+    except ApiError as exc:
+        return exc.message
+    if username in seen:
+        return "文件里有重复的用户名，只建第一行"
+    seen.add(username)
+    if await user_repo.get_user_by_username(session, username) is not None:
+        return "用户名已存在，未改动原账号"
+    role_ids: list[uuid.UUID] = []
+    note = ""
+    if row["roles"].strip():
+        if index is None:
+            note = ROLES_IGNORED_NOTE
+        else:
+            role_ids, error = _resolve_roles(row["roles"], index)
+            if error:
+                return error
+    user = NewUser(username=username, display_name=row["display_name"], phone=phone, email=email, role_ids=role_ids)
+    return _ImportRow(user=user, note=note or ("" if role_ids else "还没有角色，已放进「待分配角色」"))
+
+
+async def _create_imported(session: AsyncSession, actor: User, item: _ImportRow) -> dict[str, str]:
+    temporary = generate_temporary_password()
+    # Argon2 一次几十毫秒，几百行在协程里算会把整个服务卡住，放线程池。
+    hashed = await to_thread.run_sync(hash_password, temporary)
+    payload, _ = await user_admin.create_user(session, actor, replace(item.user, password_hash=hashed))
+    roles = payload.get("roles") or []
+    return {
+        "username": item.user.username,
+        "display_name": item.user.display_name.strip(),
+        "roles": "、".join(str(role["name"]) for role in roles) if isinstance(roles, list) else "",
+        "password": temporary,
+        "note": item.note,
+    }
 
 
 RESULT_CREATED_HEADERS = ("用户名", "显示名", "角色", "初始密码", "备注")
