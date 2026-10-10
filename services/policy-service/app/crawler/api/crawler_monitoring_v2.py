@@ -1,0 +1,98 @@
+from __future__ import annotations
+
+from typing import Literal
+from urllib.parse import quote
+
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import JSONResponse, Response
+from platform_common.actors import Actor
+from platform_common.enums import SecurityClass
+from platform_common.errors import ApiError, ErrorCode
+from platform_common.filters import Filters, FilterValue
+from platform_common.http_utils import success_json
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.common.security import classified, require_policy_permission
+from app.core.database import get_db_session
+from app.crawler.application import crawler_v2 as service
+
+router = APIRouter(prefix="/api/v1/policy/crawler-monitoring-v2", tags=["policy-crawler-monitoring-v2"])
+RESOURCE = "policy.crawler_monitoring_v2"
+
+SiteStatus = Literal["normal", "watch", "stale"]
+
+
+def _filters(
+    province_name: FilterValue, city_name: FilterValue, site_name: FilterValue, status: FilterValue
+) -> Filters:
+    return {"province_name": province_name, "city_name": city_name, "site_name": site_name, "status": status}
+
+
+@router.get("/overview")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def get_overview(
+    session: AsyncSession = Depends(get_db_session),
+    _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
+) -> JSONResponse:
+    return success_json(await service.overview(session))
+
+
+@router.get("/sites")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def list_sites(
+    province_name: list[str] | None = Query(default=None),
+    city_name: list[str] | None = Query(default=None),
+    site_name: list[str] | None = Query(default=None),
+    status: list[SiteStatus] | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    session: AsyncSession = Depends(get_db_session),
+    _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
+) -> JSONResponse:
+    return success_json(
+        await service.list_sites(
+            session, filters=_filters(province_name, city_name, site_name, status), page=page, page_size=page_size
+        )
+    )
+
+
+@router.get("/sites/options")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def list_filter_options(
+    session: AsyncSession = Depends(get_db_session),
+    _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
+) -> JSONResponse:
+    return success_json(await service.list_options(session))
+
+
+@router.get("/sites/options/search")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def search_filter_options(
+    field: str = Query(..., min_length=1, max_length=64),
+    q: str | None = Query(default=None, max_length=200),
+    session: AsyncSession = Depends(get_db_session),
+    _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
+) -> JSONResponse:
+    try:
+        values = await service.search_filter_options(session, field=field, keyword=q)
+    except KeyError as exc:
+        raise ApiError("未知的筛选字段", code=ErrorCode.VALIDATION_ERROR, http_status=422) from exc
+    return success_json({"items": values})
+
+
+@router.get("/sites/export")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def export_sites(
+    province_name: list[str] | None = Query(default=None),
+    city_name: list[str] | None = Query(default=None),
+    site_name: list[str] | None = Query(default=None),
+    status: list[SiteStatus] | None = Query(default=None),
+    session: AsyncSession = Depends(get_db_session),
+    actor: Actor = Depends(require_policy_permission(RESOURCE, "export")),
+) -> Response:
+    payload = await service.export_sites(session, actor, _filters(province_name, city_name, site_name, status))
+    return Response(
+        content=payload,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote('爬虫监测.xlsx')}"},
+    )

@@ -16,7 +16,7 @@ from platform_common.excel import (
 )
 from platform_common.http_utils import read_upload_within_limit
 
-from app.domain.fields import SOURCE_COLUMNS
+from app.policy.domain.fields import SOURCE_COLUMNS
 
 
 def _upload(payload: bytes) -> UploadFile:

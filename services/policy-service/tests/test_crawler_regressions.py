@@ -11,11 +11,11 @@ os.environ.setdefault("POLICY_DATABASE_URL", "postgresql+asyncpg://policy_app:te
 
 import pytest
 
-from app.application import crawler as service
-from app.application import crawler_sync as sync
 from app.cli import sync_crawler as sync_cli
-from app.domain.crawler_identity import site_key
-from app.repositories import crawler as repo
+from app.crawler.application import crawler as service
+from app.crawler.application import crawler_sync as sync
+from app.crawler.domain.identity import site_key
+from app.crawler.repositories import crawler as repo
 
 
 def test_empty_codes_do_not_merge_different_websites() -> None:

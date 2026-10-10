@@ -12,8 +12,8 @@ os.environ.setdefault("POLICY_DATABASE_URL", "postgresql+asyncpg://policy_app:te
 
 from platform_common.errors import ApiError
 
-from app.application import base_tags, interpretations, sources
 from app.core.config import get_settings
+from app.policy.application import base_tags, interpretations, sources
 
 MODULES = [
     (sources, "export_sources", {"site_name": "北京"}),

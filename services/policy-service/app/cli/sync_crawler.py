@@ -1,6 +1,6 @@
-"""同步爬虫采集量（v1 任务口径）的命令行入口，逻辑在 app.application.crawler_sync。
+"""同步爬虫采集量（v1 任务口径）的命令行入口，逻辑在 app.crawler.application.crawler_sync。
 
-用法见 app.application.crawler_sync 模块说明。
+用法见 app.crawler.application.crawler_sync 模块说明。
 """
 
 from __future__ import annotations
@@ -12,8 +12,8 @@ from datetime import date, datetime
 
 from platform_common.clock import BEIJING
 
-from app.application.crawler_sync import run
 from app.core.config import get_settings
+from app.crawler.application.crawler_sync import run
 
 settings = get_settings()
 

@@ -116,7 +116,7 @@ policy 和 codebook 的基础设施代码高度重复，已统一下沉。**新�
 ### 爬虫监测是只读统计，数据靠同步进来
 
 数据源是外部爬虫库（MySQL `crawler2021`，前面挂 ShardingSphere 代理），
-**页面永远不查它**。`app/cli/sync_crawler.py` 按天聚合后写本服务的三张表：
+**页面永远不查它**。`app/crawler/application/crawler_sync.py`（命令行入口 `python -m app.cli.sync_crawler`）按天聚合后写本服务的三张表：
 `policy_crawler_tasks`（任务基线，来自爬虫规则表的 JSON）、
 `policy_crawler_daily_stats`（任务×日采集量）、`policy_crawler_task_health`（健康快照，每次同步整体重算）。
 
@@ -135,13 +135,13 @@ policy 和 codebook 的基础设施代码高度重复，已统一下沉。**新�
 
 ### 爬虫监测 v2：只用采集总表，按网站统计
 
-`app/cli/sync_crawler_v2.py` 只读 `csys_policy_info_source_all`，不读规则表。网站身份是
+`app/crawler/application/crawler_sync_v2.py`（入口 `python -m app.cli.sync_crawler_v2`）只读 `csys_policy_info_source_all`，不读规则表。网站身份是
 「网站名称 + 省份 + 地市」的**原始值**（用户确认不做别名归一），停更天数按最新入库日期算。
 本地三张表：`policy_crawler_site_daily`（网站×采集日，按天整体替换）、`policy_crawler_sites`
 （页面唯一读取的快照）、`policy_crawler_v2_sync_runs`（水位与状态）。表、水位、锁、菜单权限都与 v1 独立。
 
 - 没有成功回填过时日常同步直接报错，不用短窗口算出偏小的总量
-- 同步持有 advisory lock（键见 `repositories/crawler_v2.py`），概览据 `pg_locks` 把停在 running 的批次识别为中断
+- 同步持有 advisory lock（键见 `app/crawler/repositories/crawler_v2.py`），概览据 `pg_locks` 把停在 running 的批次识别为中断
 - ShardingSphere 不支持 `REGEXP` 和多列 `COUNT(DISTINCT)`，写源库 SQL 时用 `LIKE`、单列聚合
 
 ### 系统管理：给人分配角色即授权
@@ -199,7 +199,7 @@ xlsx/zip/图片在 `excludedContentTypes` 里排除。
 - 表：`__table_args__` 带 `comment="中文表名"`；有约束时把该字典放 tuple 最后一项
 - 列：每个 `mapped_column(...)` 带 `comment="中文列名"`，与页面/Excel 表头对齐
 - Alembic `create_table` / `add_column` 同步带 comment；`COMMENT ON ... IS` 用 SQL 字面量，不能绑参数
-- 历史迁移不能 import 运行时的 `app.domain.models` / `Base.metadata`：模型以后新增的列在那一步还不存在，
+- 历史迁移不能 import 运行时的 model 模块（如 `app.domain.models`、政策服务的 `app.models`）/ `Base.metadata`：模型以后新增的列在那一步还不存在，
   空库从头迁移会报 column does not exist。需要表结构时像 `*_chinese_comments` 那样冻结成字典
 - `alembic_version` 不用注释
 

@@ -2,7 +2,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 
 from app.core.database import SessionLocal, engine
-from app.domain.scheduler_models import SchedulerHeartbeat
+from app.scheduler.domain.models import SchedulerHeartbeat
 
 
 async def main() -> None:

@@ -15,8 +15,9 @@ os.environ.setdefault("POLICY_AUDIT_INGEST_SECRET", "unit-test")
 import pytest
 from fastapi.routing import APIRoute
 
+from app.crawler.repositories import crawler, crawler_v2
 from app.main import app
-from app.repositories import base_tags, crawler, crawler_v2, interpretations, sources
+from app.policy.repositories import base_tags, interpretations, sources
 
 PAGING = {"page", "page_size"}
 

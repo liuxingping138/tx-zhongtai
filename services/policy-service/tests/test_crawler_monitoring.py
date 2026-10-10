@@ -16,10 +16,10 @@ os.environ.setdefault("POLICY_AUDIT_INGEST_SECRET", "unit-test")
 
 import pytest
 
-from app.application.crawler import _to_out
-from app.domain.fields import CRAWLER_TASK_COLUMNS, HEALTH_STATUS_LABELS
-from app.domain.models import CrawlerTaskHealth
-from app.repositories import crawler as repo
+from app.crawler.application.crawler import _to_out
+from app.crawler.domain.fields import CRAWLER_TASK_COLUMNS, HEALTH_STATUS_LABELS
+from app.crawler.domain.models import CrawlerTaskHealth
+from app.crawler.repositories import crawler as repo
 
 
 def _row(**overrides: object) -> CrawlerTaskHealth:

@@ -10,7 +10,7 @@ os.environ.setdefault("POLICY_DATABASE_URL", "postgresql+asyncpg://policy_app:te
 import pymysql
 import pytest
 
-from app.core import crawler_source
+from app.crawler.repositories import source as crawler_source
 
 
 def test_transient_source_disconnect_reconnects_with_bounded_retry(monkeypatch: pytest.MonkeyPatch) -> None:

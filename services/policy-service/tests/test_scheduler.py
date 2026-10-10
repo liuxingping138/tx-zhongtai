@@ -9,9 +9,9 @@ os.environ.setdefault("POLICY_DATABASE_URL", "postgresql+asyncpg://policy_app:te
 import pytest
 from pydantic import ValidationError
 
-from app.api.scheduler import JobUpdate
-from app.application.scheduler import claim_failure
-from app.domain.scheduling import next_daily
+from app.scheduler.api.jobs import JobUpdate
+from app.scheduler.application.jobs import claim_failure
+from app.scheduler.domain.scheduling import next_daily
 from app.worker.scheduler import fail_run, safe_error
 
 

@@ -87,7 +87,7 @@ Element Plus 弹层负责层级、Escape、焦点约束和焦点返回；不使�
 - 昨日、停更天数、7/30/90 天窗口均按北京时间自然日计算。详情近 90 天逐日补零；最后采集之后的零值仍展示。
 - 请求失败后，“重新加载”同时重试列表、概览与筛选候选。筛选候选接口沿用公共 `options` 包装；健康状态仅允许合法候选。
 - 同步失败、运行中、超过 36 小时未更新、首次未同步、旧统计待回填分别提供持久提示；更新时间只采用最后一次成功的同步。失败原文保留后端日志，不把连接异常中的内部信息直接呈现给业务用户。
-- 来源定义见 `services/policy-service/app/cli/sync_crawler.py`、`app/application/crawler.py`。
+- 来源定义见 `services/policy-service/app/crawler/application/crawler_sync.py`、`crawler.py`。
 
 ## 爬虫监测 v2
 
@@ -97,7 +97,7 @@ Element Plus 弹层负责层级、Escape、焦点约束和焦点返回；不使�
 - 明细默认按停更天数从少到多、再按数据总量从大到小排序：按「停更」筛选时刚停更的网站在最前，停更多年的老站在最后。
 - 明细沿用 `ListPage`/`FilterBar`/`BusinessTable`/`ColumnPicker`；下载 Excel 按已生效条件导出，不提供单独的异常清单按钮（按状态筛选后下载即可）。
 - 同步失败、意外中断（批次停在运行中但同步锁已释放）、运行中、首次未同步、超过 36 小时未更新分别持久提示；接口不返回失败原文。
-- 来源定义见 `services/policy-service/app/cli/sync_crawler_v2.py`、`app/application/crawler_v2.py`。
+- 来源定义见 `services/policy-service/app/crawler/application/crawler_sync_v2.py`、`crawler_v2.py`。
 
 ## 系统管理
 

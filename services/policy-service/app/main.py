@@ -15,16 +15,16 @@ from platform_common.logging_setup import get_logger, setup_logging
 from platform_common.request_context import RequestIdMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
-from app.api.base_tags import router as base_tags_router
-from app.api.crawler_monitoring import router as crawler_monitoring_router
-from app.api.crawler_monitoring_v2 import router as crawler_monitoring_v2_router
-from app.api.interpretations import router as interpretations_router
-from app.api.scheduler import router as scheduler_router
-from app.api.security import get_authz_client
-from app.api.sources import router as sources_router
-from app.application.audit_emit import outbox_loop
+from app.common.audit_emit import outbox_loop
+from app.common.security import get_authz_client
 from app.core.config import get_settings
 from app.core.database import check_database_ready
+from app.crawler.api.crawler_monitoring import router as crawler_monitoring_router
+from app.crawler.api.crawler_monitoring_v2 import router as crawler_monitoring_v2_router
+from app.policy.api.base_tags import router as base_tags_router
+from app.policy.api.interpretations import router as interpretations_router
+from app.policy.api.sources import router as sources_router
+from app.scheduler.api.jobs import router as scheduler_router
 
 settings = get_settings()
 setup_logging(settings.service_name, level=settings.log_level, json_output=settings.environment != "development")

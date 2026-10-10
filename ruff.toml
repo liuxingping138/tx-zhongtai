@@ -42,11 +42,11 @@ max-complexity = 10
 max-args = 6
 
 [lint.per-file-ignores]
-# FastAPI 路由：依赖注入写在参数默认值里（B008）；每个查询参数就是一个函数参数，
+# FastAPI 路由（app/api 或按领域分包的 app/<领域>/api）：依赖注入写在参数默认值里（B008）；每个查询参数就是一个函数参数，
 # 筛选多的列表接口必然超过 6 个，参数个数由接口契约决定，不在这里限制。
-"**/app/api/*.py" = ["B008", "PLR0913", "PLR0917"]
+"**/api/*.py" = ["B008", "PLR0913", "PLR0917"]
 # SQLAlchemy 的 __table_args__、pydantic Settings 的列表默认值会被框架复制，不是共享的可变类属性。
-"**/app/domain/*models.py" = ["RUF012"]
+"**/models.py" = ["RUF012"]
 "**/app/core/config.py" = ["RUF012"]
 # 测试：assert 与字面量期望值是正常写法；先改环境变量或打补丁再在函数内 import；
 # 需要构造爬虫库返回的无时区时间；验收脚本用 print 输出结果；用临时表名拼测试 SQL。

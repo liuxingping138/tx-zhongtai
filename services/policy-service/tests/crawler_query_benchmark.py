@@ -17,9 +17,9 @@ from time import perf_counter
 
 sys.path.insert(0, str(Path.cwd()))
 
-from app.application import crawler as service
 from app.core.database import SessionLocal, engine
-from app.repositories import crawler as repo
+from app.crawler.application import crawler as service
+from app.crawler.repositories import crawler as repo
 
 
 async def main() -> None:

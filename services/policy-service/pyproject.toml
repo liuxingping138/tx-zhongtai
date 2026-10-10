@@ -55,40 +55,54 @@ extend = "../../ruff.toml"
 [tool.ruff.lint.extend-per-file-ignores]
 # 存量基线（2026-10-09 登记）：结构性问题按 docs/guides/工程规范.md 第 8 节分批整改，
 # 修完一条删一条；不许往这里加新条目，新代码必须直接满足规则。
-"app/api/security.py" = ["PLW0603"]
-"app/application/base_tags.py" = ["C901", "PLR0913"]
-"app/application/crawler.py" = ["PLC0415"]
-"app/application/interpretations.py" = ["PLR0913"]
-"app/application/sources.py" = ["C901", "PLR0912", "PLR0913", "PLR0915"]
+"app/common/security.py" = ["B008", "PLW0603"]  # B008 是 FastAPI 依赖注入的正常写法；PLW0603 是存量
+"app/policy/application/base_tags.py" = ["C901", "PLR0913"]
+"app/crawler/application/crawler.py" = ["PLC0415"]
+"app/policy/application/interpretations.py" = ["PLR0913"]
+"app/policy/application/sources.py" = ["C901", "PLR0912", "PLR0913", "PLR0915"]
 "tests/crawler_database_acceptance.py" = ["PLR0915"]
 "tests/crawler_query_benchmark.py" = ["C901"]
 
 [tool.importlinter]
 root_package = "app"
 
-# 分层规则见 docs/guides/工程规范.md 第 2.4 节：只能往下依赖，入口层不跳过 application 直接用仓储。
+# 规则见 docs/guides/工程规范.md 第 2 节。政策服务按领域分包（决策 A），每个领域内部同样分层。
 [[tool.importlinter.contracts]]
-name = "分层：入口 → application → repositories → domain"
+name = "领域内分层：api → application → repositories → domain"
 type = "layers"
-layers = [
-    "app.api | app.cli | app.worker",
-    "app.application",
-    "app.repositories",
-    "app.domain",
-]
+containers = ["app.policy", "app.crawler", "app.scheduler"]
+layers = ["api", "application", "repositories", "domain"]
 
 [[tool.importlinter.contracts]]
-name = "core 是基础设施，不依赖业务层"
+name = "政策与爬虫监测互不依赖"
+type = "independence"
+modules = ["app.policy", "app.crawler"]
+
+[[tool.importlinter.contracts]]
+name = "调度只经爬虫的 application 触发同步，不依赖政策"
 type = "forbidden"
-source_modules = ["app.core"]
-forbidden_modules = ["app.api", "app.application", "app.repositories"]
+source_modules = ["app.scheduler"]
+forbidden_modules = ["app.policy", "app.crawler.api", "app.crawler.repositories"]
+# 经爬虫 application 间接用到它的仓储是正常链路。
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "政策和爬虫监测不依赖调度"
+type = "forbidden"
+source_modules = ["app.policy", "app.crawler"]
+forbidden_modules = ["app.scheduler"]
+
+[[tool.importlinter.contracts]]
+name = "common、core 不依赖任何领域"
+type = "forbidden"
+source_modules = ["app.common", "app.core"]
+forbidden_modules = ["app.policy", "app.crawler", "app.scheduler"]
 
 [[tool.importlinter.contracts]]
 name = "入口层不跳过 application 直接用仓储"
 type = "forbidden"
-source_modules = ["app.api", "app.cli", "app.worker"]
-forbidden_modules = ["app.repositories"]
-# 只管直接导入；经 application 间接用到仓储是正常链路。
+source_modules = ["app.cli", "app.worker", "app.policy.api", "app.crawler.api", "app.scheduler.api"]
+forbidden_modules = ["app.policy.repositories", "app.crawler.repositories", "app.scheduler.repositories"]
 allow_indirect_imports = true
 
 [tool.pytest.ini_options]

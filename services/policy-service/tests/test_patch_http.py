@@ -12,11 +12,11 @@ os.environ.setdefault("POLICY_AUDIT_INGEST_SECRET", "unit-test")
 from fastapi.testclient import TestClient
 from platform_common.actors import Actor
 
-from app.api import base_tags as base_tags_api
-from app.api import interpretations as interpretations_api
-from app.api import sources as sources_api
 from app.core.database import get_db_session
 from app.main import app
+from app.policy.api import base_tags as base_tags_api
+from app.policy.api import interpretations as interpretations_api
+from app.policy.api import sources as sources_api
 
 _ACTOR = Actor(id="00000000-0000-0000-0000-000000000001", name="测试")
 

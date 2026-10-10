@@ -18,11 +18,11 @@ sys.path.insert(0, str(Path.cwd()))
 from platform_common.clock import BEIJING
 from sqlalchemy import text
 
-from app.application import crawler as service
-from app.application import crawler_sync as sync
 from app.core.database import SessionLocal, engine
-from app.domain.crawler_identity import site_key
-from app.repositories import crawler as repo
+from app.crawler.application import crawler as service
+from app.crawler.application import crawler_sync as sync
+from app.crawler.domain.identity import site_key
+from app.crawler.repositories import crawler as repo
 
 
 def rule(name: str, tag: str, code: str = "") -> dict:

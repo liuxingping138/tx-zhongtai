@@ -6,8 +6,8 @@ import asyncio
 
 from platform_common.outbox import OutboxRepository, run_replay_cli
 
+from app.common.models import OutboxEvent
 from app.core.database import SessionLocal
-from app.domain.models import OutboxEvent
 
 if __name__ == "__main__":
     asyncio.run(run_replay_cli(SessionLocal, OutboxRepository(OutboxEvent), service="policy-service"))

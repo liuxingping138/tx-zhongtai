@@ -20,10 +20,10 @@ os.environ.setdefault("POLICY_DATABASE_URL", "postgresql+asyncpg://policy_app:te
 
 from platform_common.errors import VersionConflictError
 
-from app.application import base_tags, interpretations, sources
-from app.repositories import base_tags as base_tags_repo
-from app.repositories import interpretations as interpretations_repo
-from app.repositories import sources as sources_repo
+from app.policy.application import base_tags, interpretations, sources
+from app.policy.repositories import base_tags as base_tags_repo
+from app.policy.repositories import interpretations as interpretations_repo
+from app.policy.repositories import sources as sources_repo
 
 UPDATES = [
     (sources, "update_source"),

@@ -12,10 +12,10 @@ os.environ.setdefault("POLICY_DATABASE_URL", "postgresql+asyncpg://policy_app:te
 
 import pytest
 
-from app.application import crawler_sync_v2 as sync
-from app.application import crawler_v2 as service
 from app.cli import sync_crawler_v2 as sync_cli
-from app.repositories import crawler_v2 as repo
+from app.crawler.application import crawler_sync_v2 as sync
+from app.crawler.application import crawler_v2 as service
+from app.crawler.repositories import crawler_v2 as repo
 
 TODAY = date(2026, 9, 23)
 

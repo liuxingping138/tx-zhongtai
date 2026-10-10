@@ -19,10 +19,10 @@ from platform_common.columns import header_to_field
 from platform_common.errors import ApiError
 from sqlalchemy.dialects import postgresql
 
-from app.application import interpretations as service
-from app.domain.fields import DATA_STATUS_CHOICES, INTERPRETATION_COLUMNS
-from app.domain.models import INTERPRETATION_WRITE_FIELDS, Interpretation
-from app.repositories import interpretations as repo
+from app.policy.application import interpretations as service
+from app.policy.domain.fields import DATA_STATUS_CHOICES, INTERPRETATION_COLUMNS
+from app.policy.domain.models import INTERPRETATION_WRITE_FIELDS, Interpretation
+from app.policy.repositories import interpretations as repo
 
 
 class _FakeActor:

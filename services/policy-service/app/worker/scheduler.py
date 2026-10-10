@@ -13,18 +13,18 @@ from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from app.application.crawler_sync import run as run_v1
-from app.application.crawler_sync_v2 import run as run_v2
-from app.application.scheduler import (
+from app.core.database import SessionLocal, engine
+from app.crawler.application.crawler_sync import run as run_v1
+from app.crawler.application.crawler_sync_v2 import run as run_v2
+from app.scheduler.application.jobs import (
     abandon_running_sync,
     claim_failure,
     claim_next_run,
     latest_watermark,
     sync_result,
 )
-from app.core.database import SessionLocal, engine
-from app.domain.scheduler_models import ScheduledRun, SchedulerHeartbeat
-from app.domain.scheduling import LEADER_LOCK, MAX_ATTEMPTS, retry_delay
+from app.scheduler.domain.models import ScheduledRun, SchedulerHeartbeat
+from app.scheduler.domain.scheduling import LEADER_LOCK, MAX_ATTEMPTS, retry_delay
 
 logger = logging.getLogger("policy.scheduler")
 POLL_SECONDS = 5

@@ -1,6 +1,6 @@
-"""爬虫监测 v2 同步的命令行入口，逻辑在 app.application.crawler_sync_v2。
+"""爬虫监测 v2 同步的命令行入口，逻辑在 app.crawler.application.crawler_sync_v2。
 
-用法见 app.application.crawler_sync_v2 模块说明。
+用法见 app.crawler.application.crawler_sync_v2 模块说明。
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from datetime import date, datetime
 
 from platform_common.clock import BEIJING
 
-from app.application.crawler_sync_v2 import MODE_BACKFILL, MODE_INCREMENTAL, MODE_REPAIR, run
+from app.crawler.application.crawler_sync_v2 import MODE_BACKFILL, MODE_INCREMENTAL, MODE_REPAIR, run
 
 
 def main() -> None:

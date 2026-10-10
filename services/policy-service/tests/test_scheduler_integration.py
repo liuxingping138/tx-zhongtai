@@ -17,14 +17,14 @@ from platform_common.actors import Actor
 from platform_common.errors import PermissionDeniedError, VersionConflictError
 from sqlalchemy import delete, text
 
-from app.api.security import get_authz_client
-from app.application import scheduler as service
+from app.common.security import get_authz_client
 from app.core.database import SessionLocal, engine
-from app.domain.models import CrawlerV2SyncRun
-from app.domain.scheduler_models import ScheduledRun
-from app.domain.scheduling import LEADER_LOCK
+from app.crawler.domain.models import CrawlerV2SyncRun
 from app.main import app
-from app.repositories import scheduler as repo
+from app.scheduler.application import jobs as service
+from app.scheduler.domain.models import ScheduledRun
+from app.scheduler.domain.scheduling import LEADER_LOCK
+from app.scheduler.repositories import jobs as repo
 from app.worker import scheduler as worker
 
 pytestmark = pytest.mark.skipif(os.environ.get("SCHEDULER_INTEGRATION") != "1", reason="需要独立 scheduler_test 数据库")
