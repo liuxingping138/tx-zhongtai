@@ -280,7 +280,7 @@ async def plan(
 
     watermark = await _last_watermark(session)
     if watermark is None:
-        raise RuntimeError("尚未建立同步水位，请先执行一次回填：make crawler-v2-backfill")
+        raise RuntimeError("尚未建立同步水位，请先执行一次回填：make crawler-backfill")
     touched, mark = await asyncio.to_thread(fetch_affected_days, watermark - _WATERMARK_OVERLAP)
     # 当天数据还在写，无论水位怎么说都重算。水位没有新数据时保持原值。
     return sorted(touched | {today}, reverse=True), mark or watermark

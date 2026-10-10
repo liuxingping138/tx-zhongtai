@@ -33,7 +33,7 @@ class BaseServiceSettings(BaseSettings):
     def _reject_demo_secrets_in_production(self) -> BaseServiceSettings:
         if self.environment != Environment.PRODUCTION:
             return self
-        for field_name in self.model_fields:
+        for field_name in type(self).model_fields:
             if "secret" not in field_name and "key" not in field_name and "password" not in field_name:
                 continue
             value = getattr(self, field_name, None)

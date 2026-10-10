@@ -64,6 +64,7 @@ asyncio_mode = "auto"
 [dependency-groups]
 dev = [
     "httpx>=0.27.2",
+    "python-multipart>=0.0.12,<0.0.20",
 ]
 
 [tool.coverage.run]
@@ -73,4 +74,4 @@ source = ["platform_common"]
 # 单测覆盖率下限（不含 P6 集成测试），以 2026-10-09 实测值取整为基线，只升不降；补了测试就把它调高。
 # 精度 2 位：默认 0 位会把 65.89% 四舍五入成 66% 再比较，门槛就松了半个点。
 precision = 2
-fail_under = 71
+fail_under = 90
