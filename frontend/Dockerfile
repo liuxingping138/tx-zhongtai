@@ -5,7 +5,8 @@ WORKDIR /srv
 # 版本必须与本地生成 pnpm-lock.yaml / pnpm-workspace.yaml 的 pnpm 版本一致，避免格式不兼容。
 RUN npm install -g pnpm@12.4.1
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
+# pnpm 包缓存挂在 BuildKit 缓存里，锁文件变了也只下载新增的包。
+RUN --mount=type=cache,target=/pnpm-store pnpm install --frozen-lockfile --store-dir /pnpm-store
 COPY frontend/ ./
 RUN pnpm run build
 

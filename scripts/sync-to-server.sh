@@ -16,6 +16,8 @@ rsync -az -e "ssh -i $HOME/.ssh/tx-zhongtai-deploy -o IdentitiesOnly=yes" \
   --exclude '.venv/' \
   --exclude '__pycache__/' \
   --exclude '.mypy_cache/' \
+  --exclude '.coverage' \
+  --exclude 'htmlcov/' \
   --exclude 'frontend/dist/' \
   --exclude '.env' \
   --exclude 'deploy/secrets/' \
