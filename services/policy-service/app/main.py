@@ -19,7 +19,6 @@ from app.common.audit_emit import outbox_loop
 from app.common.security import get_authz_client
 from app.core.config import get_settings
 from app.core.database import check_database_ready
-from app.crawler.api.crawler_monitoring import router as crawler_monitoring_router
 from app.crawler.api.crawler_monitoring_v2 import router as crawler_monitoring_v2_router
 from app.policy.api.base_tags import router as base_tags_router
 from app.policy.api.interpretations import router as interpretations_router
@@ -67,7 +66,6 @@ def create_app() -> FastAPI:
     app.include_router(scheduler_router)
     app.include_router(sources_router)
     app.include_router(base_tags_router)
-    app.include_router(crawler_monitoring_router)
     app.include_router(crawler_monitoring_v2_router)
     app.include_router(interpretations_router)
     return app

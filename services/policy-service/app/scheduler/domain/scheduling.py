@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 BEIJING = ZoneInfo("Asia/Shanghai")
-JOBS = {"crawler-v1": "爬虫任务监测增量同步", "crawler-v2": "爬虫网站监测增量同步"}
+JOBS = {"crawler-v2": "爬虫监测增量同步"}
 ACTIVE = ("queued", "running", "retrying")
 MAX_ATTEMPTS = 3
 LEADER_LOCK = 72120260929

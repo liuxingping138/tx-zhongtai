@@ -5,13 +5,14 @@ from __future__ import annotations
 import uuid
 
 from platform_common.clock import utcnow
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.catalog import (
     ACTION_SPECS,
     MENU_SPECS,
     RESOURCE_SPECS,
+    RETIRED_RESOURCE_CODES,
     SUPERADMIN_ROLE_CODE,
     SUPERADMIN_ROLE_NAME,
 )
@@ -156,7 +157,21 @@ async def _ensure_superadmin_role(session: AsyncSession, resources: dict[str, Re
     return role
 
 
+async def _retire_resources(session: AsyncSession) -> int:
+    """删除已下线资源及其菜单、授权、动作。重复执行没有副作用。"""
+
+    ids = list(await session.scalars(select(Resource.id).where(Resource.code.in_(RETIRED_RESOURCE_CODES))))
+    if not ids:
+        return 0
+    await session.execute(delete(MenuItem).where(MenuItem.resource_id.in_(ids)))
+    await session.execute(delete(RoleGrant).where(RoleGrant.resource_id.in_(ids)))
+    await session.execute(delete(ResourceAction).where(ResourceAction.resource_id.in_(ids)))
+    await session.execute(delete(Resource).where(Resource.id.in_(ids)))
+    return len(ids)
+
+
 async def sync_catalog(session: AsyncSession) -> dict[str, int]:
+    await _retire_resources(session)
     resources = await _upsert_resources(session)
     await _upsert_actions(session, resources)
     await _upsert_menus(session, resources)

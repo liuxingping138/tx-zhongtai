@@ -23,14 +23,14 @@ const sitesResponse = (predicate: (url: URL) => boolean) => (response: Response)
   return predicate(new URL(response.url()))
 }
 
-test('爬虫监测 v2：卡片、筛选联动与导出', async ({ page }) => {
+test('爬虫监测：卡片、筛选联动与导出', async ({ page }) => {
   test.skip(!currentAdminPassword(), '缺少 ADMIN_PASSWORD')
   const problems = trackProblems(page)
 
   await loginAdmin(page, '/policy/crawler-monitoring-v2')
 
-  await expect(page.getByRole('heading', { name: '爬虫监测 v2', exact: true })).toBeVisible({ timeout: 20_000 })
-  await expect(page.getByRole('navigation', { name: '子模块导航' }).getByRole('link', { name: '爬虫监测 v2', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '爬虫监测', exact: true })).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('navigation', { name: '子模块导航' }).getByRole('link', { name: '爬虫监测', exact: true })).toBeVisible()
   for (const label of ['网站总数', '数据总量', '昨日采集']) {
     await expect(page.locator('.card-label').filter({ hasText: label })).toBeVisible()
   }
@@ -71,13 +71,13 @@ test('爬虫监测 v2：卡片、筛选联动与导出', async ({ page }) => {
   expect(problems.httpErrors).toEqual([])
 })
 
-test('爬虫监测 v2：同一字段多选按「或」查询，导出带同样的多个值', async ({ page }) => {
+test('爬虫监测：同一字段多选按「或」查询，导出带同样的多个值', async ({ page }) => {
   test.skip(!currentAdminPassword(), '缺少 ADMIN_PASSWORD')
   const problems = trackProblems(page)
   const provinces = ['海南省', '甘肃省']
 
   await loginAdmin(page, '/policy/crawler-monitoring-v2')
-  await expect(page.getByRole('heading', { name: '爬虫监测 v2', exact: true })).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('heading', { name: '爬虫监测', exact: true })).toBeVisible({ timeout: 20_000 })
 
   const field = page.locator('.filter-bar .el-form-item').filter({ hasText: '省份' }).first()
   for (const province of provinces) {

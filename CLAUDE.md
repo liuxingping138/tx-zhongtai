@@ -9,8 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 当前进度：公共框架已到 P6（账号/会话/RBAC、Outbox、审计、隔离验收、备份恢复、OpenAPI），
 政策三张表（信源、基础标签、解读）与码表三张表（政策类型、行业场景、省市区编码）已接入，
-爬虫监测已接入（只读统计页，数据来自外部爬虫库的按天聚合）；另有精简版「爬虫监测 v2」与 v1 并存，
-只读采集总表、按网站统计，核对无误后计划下线 v1。
+爬虫监测已接入（只读统计页，数据来自外部爬虫库采集总表的按天聚合，按网站统计）。
 **客户、招投标仅有占位目录**，未开发——不要为它们提前暴露无功能入口或做过度抽象。
 其余文档按 设计决策 / 操作手册 分类，索引见 `docs/README.md`。文档只写与现有代码一致的现状，过时内容直接删除，历史留在 git 里。
 
@@ -115,34 +114,20 @@ policy 和 codebook 的基础设施代码高度重复，已统一下沉。**新�
 
 ### 爬虫监测是只读统计，数据靠同步进来
 
-数据源是外部爬虫库（MySQL `crawler2021`，前面挂 ShardingSphere 代理），
-**页面永远不查它**。`app/crawler/application/crawler_sync.py`（命令行入口 `python -m app.cli.sync_crawler`）按天聚合后写本服务的三张表：
-`policy_crawler_tasks`（任务基线，来自爬虫规则表的 JSON）、
-`policy_crawler_daily_stats`（任务×日采集量）、`policy_crawler_task_health`（健康快照，每次同步整体重算）。
+数据源是外部爬虫库（MySQL `crawler2021`，前面挂 ShardingSphere 代理），**页面永远不查它**。
+`app/crawler/application/crawler_sync_v2.py`（入口 `python -m app.cli.sync_crawler_v2`，`make crawler-sync`）
+只读采集总表 `csys_policy_info_source_all`，按天聚合后写本服务的三张表：
+`policy_crawler_site_daily`（网站×采集日，按天整体替换）、`policy_crawler_sites`（页面唯一读取的快照）、
+`policy_crawler_v2_sync_runs`（水位与状态）。资源编码、路由、表名里保留 `v2` 字样是历史原因，页面和菜单叫「爬虫监测」。
 
-- 监测的最小单位是「网站名称 + 标签」的任务，不是网站。名称缺失时才用原网站编码兜底；
-  编码允许为空，不生成假编码。同一个站不同标签停更程度差别很大，
-  只看站级会把半死的站显示成正常
-- 核心指标是「停更天数」不是「今天有没有出数」：每天只有约 11% 的任务出数据，
-  政策网站本来就不是天天更新
-- 首次回填必须覆盖到爬虫库最早的采集日期（`--since 2023-10-18`）。
-  窗口开小了，窗口外停更的任务会被算成「从未出数」，把「停更 400 天」说成「从来没爬通」
-- 聚合按 `collect_date`（采集日）分桶，日常按入库时间水位找到受影响日期，再加当天重算，
-  不固定每天全量。`--days` / `--since` 是人工指定范围，适用于初始化、口径升级或数据修复。
-- 从旧编码口径升级到名称口径时，需要一次历史重算；普通 UI 发布和服务重启不需要。
-  迁移前备份，使用新镜像迁移与回填；中断后用同一范围加 `--skip-existing` 续跑。
-  详细步骤见 `docs/guides/配置说明.md`
-
-### 爬虫监测 v2：只用采集总表，按网站统计
-
-`app/crawler/application/crawler_sync_v2.py`（入口 `python -m app.cli.sync_crawler_v2`）只读 `csys_policy_info_source_all`，不读规则表。网站身份是
-「网站名称 + 省份 + 地市」的**原始值**（用户确认不做别名归一），停更天数按最新入库日期算。
-本地三张表：`policy_crawler_site_daily`（网站×采集日，按天整体替换）、`policy_crawler_sites`
-（页面唯一读取的快照）、`policy_crawler_v2_sync_runs`（水位与状态）。表、水位、锁、菜单权限都与 v1 独立。
-
-- 没有成功回填过时日常同步直接报错，不用短窗口算出偏小的总量
+- 监测单位是「网站名称 + 省份 + 地市」的**原始值**（用户确认不做别名归一），停更天数按最新入库日期算
+- 核心指标是「停更天数」不是「今天有没有出数」：政策网站本来就不是天天更新
+- 首次必须回填到爬虫库最早的采集日期；没有成功回填过时日常同步直接报错，不用短窗口算出偏小的总量
+- 聚合按 `collect_date`（采集日）分桶，日常按入库时间水位找到受影响日期，再加当天重算，不固定每天全量。
+  `--days` / `--since` 是人工指定范围，适用于初始化、口径升级或数据修复
 - 同步持有 advisory lock（键见 `app/crawler/repositories/crawler_v2.py`），概览据 `pg_locks` 把停在 running 的批次识别为中断
 - ShardingSphere 不支持 `REGEXP` 和多列 `COUNT(DISTINCT)`，写源库 SQL 时用 `LIKE`、单列聚合
+- 整表 `GROUP BY` 在代理后跑十分钟都出不来，带 `collect_date` 的单天聚合只要 1.4 秒：全量统计按天循环，别写一条大 SQL
 
 ### 系统管理：给人分配角色即授权
 
@@ -290,8 +275,6 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
   `click({force:true})` 会静默失效（测试变绿但实际没点到）
 - e2e 里 `getByLabel('字段名')` 会同时命中列设置弹层的同名复选框，需限定 `.el-drawer` 作用域
 - Excel 表头匹配一律走 `header_to_field`：它按**最长前缀**匹配，按列顺序取第一个会把「省份编码」错配成「省份」
-- 爬虫库在 ShardingSphere 代理后面，整表 `GROUP BY` 跑十分钟都出不来（实测被迫 kill），
-  但带 `collect_date` 的单天聚合只要 1.4 秒。要全量统计就按天循环，别写一条大 SQL
 
 ## 已知限制
 

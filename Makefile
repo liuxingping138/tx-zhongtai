@@ -19,7 +19,7 @@ JWT_P6_DIR := deploy/secrets/jwt-p6
 
 .PHONY: p6-logs help bootstrap jwt-keys jwt-keys-p6 dev-up dev-down migrate migrate-check seed admin-create check \
         test-unit test-integration test-e2e smoke provision-audit-cleanup provision-codebook-db \
-        seed-area-codes crawler-sync crawler-backfill crawler-v2-sync crawler-v2-backfill \
+        seed-area-codes crawler-sync crawler-backfill \
         provision-policy-db \
         outbox-replay audit-cleanup iam-session-cleanup p6-env p6-up p6-down p6-migrate p6-seed p6-admin \
         p6-backup p6-restore p6-fixtures export-openapi scan-scope
@@ -32,10 +32,8 @@ help:
 	@echo "  make migrate          对已运行的四个服务执行数据库迁移"
 	@echo "  make seed             幂等同步公共资源/动作/菜单与内置超级管理员角色"
 	@echo "  make seed-area-codes  从 SQL 种子导入省市区编码表（按区县编码去重）"
-	@echo "  make crawler-sync     同步爬虫采集量（日常按入库时间水位增量重算）"
-	@echo "  make crawler-backfill 回填爬虫采集量，用 DAYS=365 指定窗口"
-	@echo "  make crawler-v2-sync  爬虫监测 v2 日常同步（按入库时间水位增量）"
-	@echo "  make crawler-v2-backfill 爬虫监测 v2 首次回填（从总表最早采集日起，建立水位）"
+	@echo "  make crawler-sync     爬虫监测日常同步（按入库时间水位增量）"
+	@echo "  make crawler-backfill 爬虫监测首次回填（从总表最早采集日起，建立水位）"
 	@echo "  make admin-create     创建初始管理员（密码从 ADMIN_PASSWORD 读取，不进命令行参数）"
 	@echo "  make check            Python 静态检查 + 前端类型检查/构建/lint"
 	@echo "  make migrate-check    检查各服务 model 与数据库是否漂移（需开发栈已启动）"
@@ -145,20 +143,12 @@ seed:
 seed-area-codes:
 	$(COMPOSE) exec -T codebook-service .venv/bin/python -m app.cli.seed_area_codes
 
-# 爬虫监测：按入库时间水位找出受影响日期，再按采集日聚合到 policy_db。
+# 爬虫监测：只读采集总表，按「网站名称 + 省份 + 地市」统计。首次必须先回填建立水位。
 crawler-sync:
-	$(COMPOSE) exec -T policy-service .venv/bin/python -m app.cli.sync_crawler
-
-# 回填历史窗口。整表聚合在爬虫库上跑不动，这里是按天分片查，365 天约 12 分钟。
-crawler-backfill:
-	$(COMPOSE) exec -T policy-service .venv/bin/python -m app.cli.sync_crawler --days $(or $(DAYS),365)
-
-# 爬虫监测 v2：只读采集总表，按「网站名称 + 省份 + 地市」统计。首次必须先回填建立水位。
-crawler-v2-sync:
 	$(COMPOSE) exec -T policy-service .venv/bin/python -m app.cli.sync_crawler_v2
 
 # 回填中断后用 ARGS=--skip-existing 续跑。
-crawler-v2-backfill:
+crawler-backfill:
 	$(COMPOSE) exec -T policy-service .venv/bin/python -m app.cli.sync_crawler_v2 --backfill $(ARGS)
 
 admin-create:

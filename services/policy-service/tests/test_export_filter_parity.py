@@ -10,7 +10,7 @@ import pytest
 from fastapi.dependencies.utils import get_flat_dependant
 from fastapi.routing import APIRoute
 
-from app.crawler.repositories import crawler, crawler_v2
+from app.crawler.repositories import crawler_v2
 from app.main import app
 from app.policy.repositories import base_tags, interpretations, sources
 
@@ -20,15 +20,11 @@ TABLES = [
     ("/api/v1/policy/sources", sources),
     ("/api/v1/policy/base-tags", base_tags),
     ("/api/v1/policy/interpretations", interpretations),
-    ("/api/v1/policy/crawler-monitoring/tasks", crawler),
     ("/api/v1/policy/crawler-monitoring-v2/sites", crawler_v2),
 ]
 
-# 爬虫监测除了模糊匹配的列，还有状态精确匹配和停更天数下限，它们不在 FILTER_COLUMNS 里。
-EXTRA_FILTERS = {
-    "/api/v1/policy/crawler-monitoring/tasks": {"health_status", "stale_days_min", "abnormal_only"},
-    "/api/v1/policy/crawler-monitoring-v2/sites": {"status"},
-}
+# 爬虫监测除了模糊匹配的列，还有状态精确匹配，它不在 FILTER_COLUMNS 里。
+EXTRA_FILTERS = {"/api/v1/policy/crawler-monitoring-v2/sites": {"status"}}
 
 
 def _query_params(path: str) -> set[str]:

@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.audit_emit import enqueue_event
-from app.crawler.domain.models import CrawlerSyncRun, CrawlerV2SyncRun
+from app.crawler.domain.models import CrawlerV2SyncRun
 from app.scheduler.domain.models import ScheduledJob, ScheduledRun, SchedulerHeartbeat
 from app.scheduler.domain.scheduling import JOBS, next_daily
 from app.scheduler.repositories import jobs as repo
@@ -21,11 +21,10 @@ def run_data(row: ScheduledRun) -> dict[str, Any]:
 
 
 async def latest_watermark(session: AsyncSession, code: str) -> datetime | None:
-    model = CrawlerSyncRun if code == "crawler-v1" else CrawlerV2SyncRun
     watermark: datetime | None = await session.scalar(
-        select(model.watermark)
-        .where(model.status == "success", model.watermark.is_not(None))
-        .order_by(model.started_at.desc())
+        select(CrawlerV2SyncRun.watermark)
+        .where(CrawlerV2SyncRun.status == "success", CrawlerV2SyncRun.watermark.is_not(None))
+        .order_by(CrawlerV2SyncRun.started_at.desc())
         .limit(1)
     )
     return watermark
@@ -50,11 +49,7 @@ async def abandon_running_sync(session: AsyncSession, row: ScheduledRun, message
 
     if row.sync_run_id is None:
         return
-    sync: CrawlerSyncRun | CrawlerV2SyncRun | None
-    if row.job_code == "crawler-v1":
-        sync = await session.get(CrawlerSyncRun, row.sync_run_id)
-    else:
-        sync = await session.get(CrawlerV2SyncRun, row.sync_run_id)
+    sync = await session.get(CrawlerV2SyncRun, row.sync_run_id)
     if sync is None or sync.status != "running":
         return
     sync.status = "failed"
@@ -63,14 +58,10 @@ async def abandon_running_sync(session: AsyncSession, row: ScheduledRun, message
 
 
 async def sync_result(session: AsyncSession, row: ScheduledRun) -> dict[str, Any] | None:
-    model = CrawlerSyncRun if row.job_code == "crawler-v1" else CrawlerV2SyncRun
-    sync = await session.get(model, row.sync_run_id) if row.sync_run_id else None
+    sync = await session.get(CrawlerV2SyncRun, row.sync_run_id) if row.sync_run_id else None
     if sync is None:
         return row.result
-    fields = ["date_from", "date_to", "watermark", "status"]
-    fields += (
-        ["task_rows", "stat_rows", "health_rows"] if row.job_code == "crawler-v1" else ["days_synced", "site_rows"]
-    )
+    fields = ["date_from", "date_to", "watermark", "status", "days_synced", "site_rows"]
     return {
         key: (value.isoformat() if hasattr(value, "isoformat") else value)
         for key in fields

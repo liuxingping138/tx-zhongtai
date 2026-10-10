@@ -14,7 +14,6 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.core.database import SessionLocal, engine
-from app.crawler.application.crawler_sync import run as run_v1
 from app.crawler.application.crawler_sync_v2 import run as run_v2
 from app.scheduler.application.jobs import (
     abandon_running_sync,
@@ -64,13 +63,11 @@ async def claim_next() -> tuple[uuid.UUID, str, uuid.UUID] | None:
 
 
 async def execute_sync(code: str, sync_id: uuid.UUID) -> None:
-    # 空库不自动跑短窗口、也不自动全量回填，两个任务都要求已有成功水位。
+    # 空库不自动跑短窗口、也不自动全量回填，要求已有成功水位。
     async with SessionLocal() as session:
         if await latest_watermark(session, code) is None:
             raise RuntimeError("尚未建立同步水位，请先完成首次历史回填，再执行增量同步")
-    if code == "crawler-v1":
-        await run_v1(days=7, tasks_only=False, run_id=sync_id)
-    elif code == "crawler-v2":
+    if code == "crawler-v2":
         await run_v2(mode="incremental", run_id=sync_id)
     else:
         raise RuntimeError("未知任务，拒绝执行")

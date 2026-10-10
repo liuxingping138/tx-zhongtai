@@ -10,7 +10,7 @@ DATABASE_URL = "postgresql+asyncpg://policy_app:test@localhost:5432/policy_db"
 
 @pytest.mark.parametrize("table", ["csys_policy_info_source_all", "crawler2021.policy_rules_alls_spider"])
 def test_crawler_table_accepts_plain_identifiers(table: str) -> None:
-    settings = Settings(database_url=DATABASE_URL, crawler_data_table=table, crawler_rules_table=table)
+    settings = Settings(database_url=DATABASE_URL, crawler_data_table=table)
 
     assert settings.crawler_data_table == table
 

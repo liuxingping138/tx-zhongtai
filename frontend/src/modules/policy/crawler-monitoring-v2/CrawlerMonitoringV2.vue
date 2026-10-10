@@ -180,7 +180,7 @@ const NO_EXPORT_HINT = '你的角色没有导出权限，如需下载 Excel 请�
     <ListPage
       v-model:page="query.page"
       v-model:page-size="query.page_size"
-      title="爬虫监测 v2"
+      title="爬虫监测"
       hint="按网站查看数据总量、最新入库时间与停更天数，停更天数按最新入库日期计算。"
       :loading="loading"
       :error="loadError"

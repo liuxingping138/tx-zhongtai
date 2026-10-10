@@ -40,22 +40,15 @@ class Settings(BaseServiceSettings):
     crawler_mysql_password: str = ""
     crawler_mysql_db: str = "crawler2021"
     crawler_data_table: str = "csys_policy_info_source_all"
-    crawler_rules_table: str = "policy_rules_alls_spider"
 
-    @field_validator("crawler_data_table", "crawler_rules_table")
+    @field_validator("crawler_data_table")
     @classmethod
     def _table_name_is_identifier(cls, value: str) -> str:
         if not _TABLE_NAME.fullmatch(value):
             raise ValueError(f"爬虫库表名只能包含字母、数字、下划线：{value!r}")
         return value
 
-    # 日常同步回算最近几天。爬虫是「采集后入库」，实测入库普遍比 collect_date 晚 1 天，
-    # 近 60 天里最大滞后 4 天。窗口必须大于最大滞后，否则迟到的行进库时窗口已经滑过它的
-    # collect_date，那天的统计会永久少算。7 天是在实测滞后上留了余量。
-    crawler_sync_days: int = 7
-    # 首次回填窗口。窗口外没出过数的任务一律按「长期断爬」处理，不再回查大表。
-    crawler_backfill_days: int = 365
-    # 健康分档阈值（停更天数）：<=normal 正常，<=watch 观察，其余断爬。
+    # 状态分档阈值（停更天数）：<=normal 正常，<=watch 关注，其余停更。
     crawler_health_normal_days: int = 7
     crawler_health_watch_days: int = 30
 

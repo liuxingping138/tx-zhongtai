@@ -41,6 +41,9 @@ class MenuSpec:
     enabled: bool = True
 
 
+# 已下线的资源：同步清单时连同它的菜单、授权和动作一起清掉，否则角色权限页还会列出已不存在的模块。
+RETIRED_RESOURCE_CODES: tuple[str, ...] = ("policy.crawler_monitoring",)
+
 RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("system", "系统管理", "iam-service", NodeType.DIRECTORY, True, 10),
     ResourceSpec("system.users", "用户管理", "iam-service", NodeType.RESOURCE, True, 11, "system"),
@@ -50,10 +53,7 @@ RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("system.audit", "操作日志", "iam-service", NodeType.RESOURCE, True, 14, "system"),
     ResourceSpec("policy", "政策", "policy-service", NodeType.DIRECTORY, True, 20),
     ResourceSpec("policy.sources", "信源管理", "policy-service", NodeType.RESOURCE, True, 21, "policy"),
-    ResourceSpec("policy.crawler_monitoring", "爬虫监测", "policy-service", NodeType.RESOURCE, True, 22, "policy"),
-    ResourceSpec(
-        "policy.crawler_monitoring_v2", "爬虫监测 v2", "policy-service", NodeType.RESOURCE, True, 22, "policy"
-    ),
+    ResourceSpec("policy.crawler_monitoring_v2", "爬虫监测", "policy-service", NodeType.RESOURCE, True, 22, "policy"),
     ResourceSpec("policy.interpretations", "政策解读列表", "policy-service", NodeType.RESOURCE, True, 23, "policy"),
     ResourceSpec("policy.base_tags", "政策基础标签表", "policy-service", NodeType.RESOURCE, True, 24, "policy"),
     ResourceSpec("customer", "客户", "customer-service", NodeType.RESOURCE, False, 30),
@@ -111,9 +111,6 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ActionSpec("policy.sources", "update", GrantLevel.FULL),
     ActionSpec("policy.sources", "import", GrantLevel.FULL),
     ActionSpec("policy.sources", "purge", GrantLevel.FULL),
-    ActionSpec("policy.crawler_monitoring", "list", GrantLevel.READ),
-    ActionSpec("policy.crawler_monitoring", "read", GrantLevel.READ),
-    ActionSpec("policy.crawler_monitoring", "export", GrantLevel.EXPORT),
     ActionSpec("policy.crawler_monitoring_v2", "list", GrantLevel.READ),
     ActionSpec("policy.crawler_monitoring_v2", "export", GrantLevel.EXPORT),
     ActionSpec("policy.base_tags", "list", GrantLevel.READ),
@@ -149,17 +146,8 @@ MENU_SPECS: tuple[MenuSpec, ...] = (
     MenuSpec("menu.policy", "政策", 20, enabled=True),
     MenuSpec("menu.policy.sources", "信源管理", 21, "policy-sources", "policy.sources", "menu.policy", enabled=True),
     MenuSpec(
-        "menu.policy.crawler",
-        "爬虫监测",
-        22,
-        "policy-crawler-monitoring",
-        "policy.crawler_monitoring",
-        "menu.policy",
-        enabled=True,
-    ),
-    MenuSpec(
         "menu.policy.crawler_v2",
-        "爬虫监测 v2",
+        "爬虫监测",
         22,
         "policy-crawler-monitoring-v2",
         "policy.crawler_monitoring_v2",

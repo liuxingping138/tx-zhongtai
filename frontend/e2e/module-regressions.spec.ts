@@ -63,7 +63,7 @@ const sourcesTree = [{
   id: 'g', code: 'policy', name: '政策', node_type: 'directory', published: true, children: [
     { id: 'r', code: 'policy.sources', name: '信源管理', node_type: 'resource', published: true, children: [],
       actions: [{ action_code: 'list', required_level: 'READ' }, { action_code: 'export', required_level: 'EXPORT' }, { action_code: 'create', required_level: 'FULL' }] },
-    { id: 'c', code: 'policy.crawler_monitoring_v2', name: '爬虫监测 v2', node_type: 'resource', published: true, children: [],
+    { id: 'c', code: 'policy.crawler_monitoring_v2', name: '爬虫监测', node_type: 'resource', published: true, children: [],
       actions: [{ action_code: 'list', required_level: 'READ' }, { action_code: 'export', required_level: 'EXPORT' }] },
   ],
 }, { id: 'u', code: 'customer', name: '客户', node_type: 'directory', published: false, children: [] }]
@@ -175,9 +175,9 @@ test('roles: permission matrix cascades columns; saving locks the row and confir
 test('roles: modules only show the columns they actually have; unreleased modules are hidden', async ({ page }) => {
   await mockRoleDetail(page, (id, route) => respond(route, { role: role(id), grants: [] }))
   await page.goto('/system/roles/1')
-  const crawler = page.locator('.perm-table__row').filter({ hasText: '爬虫监测 v2' })
+  const crawler = page.locator('.perm-table__row').filter({ hasText: '爬虫监测' })
   await expect(crawler.getByRole('checkbox')).toHaveCount(2)
-  await expect(crawler.getByRole('checkbox', { name: '爬虫监测 v2 管理', exact: true })).toHaveCount(0)
+  await expect(crawler.getByRole('checkbox', { name: '爬虫监测 管理', exact: true })).toHaveCount(0)
   await expect(crawler).toContainText('只读模块，没有新增或修改操作')
   await expect(page.locator('.perm-table__row').filter({ hasText: '信源管理' })).toContainText('管理包含：新增')
   await expect(page.getByText('客户', { exact: true })).toHaveCount(0)
@@ -192,11 +192,11 @@ test('roles: modules only show the columns they actually have; unreleased module
   const groupExport = page.getByRole('checkbox', { name: '政策整组导出', exact: true })
   await groupExport.check()
   await expect(page.getByRole('checkbox', { name: '信源管理 导出', exact: true })).toBeChecked()
-  await expect(crawler.getByRole('checkbox', { name: '爬虫监测 v2 导出', exact: true })).toBeChecked()
+  await expect(crawler.getByRole('checkbox', { name: '爬虫监测 导出', exact: true })).toBeChecked()
   await expect(page.getByRole('checkbox', { name: '政策整组查看', exact: true })).toBeChecked()
   await expect(page.getByText('有 2 项修改还没保存')).toBeVisible()
   await groupExport.uncheck()
-  await expect(crawler.getByRole('checkbox', { name: '爬虫监测 v2 查看', exact: true })).toBeChecked()
+  await expect(crawler.getByRole('checkbox', { name: '爬虫监测 查看', exact: true })).toBeChecked()
   await page.getByRole('checkbox', { name: '政策整组查看', exact: true }).uncheck()
   await expect(page.getByText('有 2 项修改还没保存')).toHaveCount(0)
 })

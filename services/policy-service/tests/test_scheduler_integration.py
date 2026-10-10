@@ -206,8 +206,6 @@ async def test_recovery_retries_interrupted_run_and_global_lock():
 async def test_empty_database_refuses_automatic_backfill():
     with pytest.raises(RuntimeError, match="首次历史回填"):
         await worker.execute_sync("crawler-v2", uuid.uuid4())
-    with pytest.raises(RuntimeError, match="首次历史回填"):
-        await worker.execute_sync("crawler-v1", uuid.uuid4())
 
 
 async def test_api_authorization_validation_and_queue():
