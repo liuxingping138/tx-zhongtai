@@ -11,6 +11,7 @@ from platform_common.filters import FilterValue
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.audit_outbox import enqueue_independent
 from app.domain.authorization import SYSTEM_PERMISSIONS_CODE
 from app.domain.catalog import SUPERADMIN_ROLE_CODE
 from app.domain.enums import GrantLevel, NodeType, RoleStatus
@@ -216,7 +217,7 @@ async def replace_grants(
         if resource is None:
             raise PermissionDeniedError("未知资源不可授权")
         if not resource.published or resource.node_type != NodeType.RESOURCE:
-            await outbox_repo.enqueue_independent(
+            await enqueue_independent(
                 event_type="iam.role.grant_denied",
                 payload={
                     "actor_id": str(actor.id),

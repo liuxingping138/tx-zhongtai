@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import os
 from unittest.mock import MagicMock
-
-os.environ.setdefault("POLICY_DATABASE_URL", "postgresql+asyncpg://policy_app:test@localhost:5432/policy_db")
 
 import pymysql
 import pytest

@@ -1,11 +1,5 @@
 from __future__ import annotations
 
-import os
-
-os.environ.setdefault("POLICY_DATABASE_URL", "postgresql+asyncpg://policy_app:test@localhost:5432/policy_db")
-os.environ.setdefault("POLICY_IAM_SERVICE_SECRET", "unit-test")
-os.environ.setdefault("POLICY_AUDIT_INGEST_SECRET", "unit-test")
-
 from fastapi.routing import APIRoute
 from platform_common.route_audit import audit_routes, permission_map
 

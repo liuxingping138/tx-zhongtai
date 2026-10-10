@@ -1,9 +1,5 @@
 from __future__ import annotations
 
-import os
-
-os.environ.setdefault("AUDIT_DATABASE_URL", "postgresql+asyncpg://audit_app:test@localhost:5432/audit_db")
-
 from fastapi.testclient import TestClient
 
 from app.main import app

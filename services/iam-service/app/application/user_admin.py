@@ -12,6 +12,7 @@ from platform_common.filters import FilterValue
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.audit_outbox import enqueue_independent
 from app.application.auth_service import normalize_username
 from app.domain.authorization import max_level, remaining_loginable_superadmins
 from app.domain.catalog import SUPERADMIN_ROLE_CODE
@@ -84,7 +85,7 @@ async def _assert_can_manage_target(session: AsyncSession, actor: User, target: 
     actor_is_super = await user_repo.user_has_builtin_superadmin(session, actor.id)
     target_is_super = await user_repo.user_has_builtin_superadmin(session, target.id)
     if target_is_super and not actor_is_super:
-        await outbox_repo.enqueue_independent(
+        await enqueue_independent(
             event_type="iam.user.protect_denied",
             payload={
                 "actor_id": str(actor.id),
@@ -113,7 +114,7 @@ async def _guard_last_superadmin(
         remove_role=remove_role,
     )
     if remaining < 1:
-        await outbox_repo.enqueue_independent(
+        await enqueue_independent(
             event_type="iam.superadmin.protect",
             payload={"target_id": str(target.id), "outcome": "denied", "reason": "last_superadmin"},
         )

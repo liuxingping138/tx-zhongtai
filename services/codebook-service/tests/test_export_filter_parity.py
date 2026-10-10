@@ -6,12 +6,6 @@
 
 from __future__ import annotations
 
-import os
-
-os.environ.setdefault("CODEBOOK_DATABASE_URL", "postgresql+asyncpg://codebook_app:test@localhost:5432/codebook_db")
-os.environ.setdefault("CODEBOOK_IAM_SERVICE_SECRET", "unit-test")
-os.environ.setdefault("CODEBOOK_AUDIT_INGEST_SECRET", "unit-test")
-
 import pytest
 from fastapi.routing import APIRoute
 

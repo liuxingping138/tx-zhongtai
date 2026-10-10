@@ -38,28 +38,6 @@ async def enqueue(
     return event
 
 
-async def enqueue_independent(
-    *,
-    event_type: str,
-    payload: dict[str, Any],
-    event_id: uuid.UUID | None = None,
-    schema_version: int = 1,
-) -> None:
-    """失败/拒绝类事件：独立事务提交，避免被业务回滚带掉。"""
-
-    from app.core.database import SessionLocal
-
-    async with SessionLocal() as session:
-        await enqueue(
-            session,
-            event_type=event_type,
-            payload=payload,
-            event_id=event_id,
-            schema_version=schema_version,
-        )
-        await session.commit()
-
-
 async def claim_batch(
     session: AsyncSession,
     *,

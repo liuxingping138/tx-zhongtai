@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import timedelta
 
 from platform_common.clock import utcnow
@@ -34,8 +35,6 @@ async def record_cleanup(
     retention_days: int,
     max_bytes: int,
 ) -> None:
-    import uuid
-
     now = utcnow()
     await ingest_event(
         app_session,

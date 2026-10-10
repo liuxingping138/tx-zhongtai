@@ -58,7 +58,6 @@ extend = "../../ruff.toml"
 "app/application/role_admin.py" = ["PLR0913"]
 "app/application/user_admin.py" = ["PLR0913"]
 "app/application/user_excel.py" = ["C901"]
-"app/repositories/outbox.py" = ["PLC0415"]
 "app/repositories/users.py" = ["PLR0913"]
 
 [tool.mypy]

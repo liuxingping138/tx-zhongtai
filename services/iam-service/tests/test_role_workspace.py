@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import os
 import uuid
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
-
-os.environ.setdefault("IAM_DATABASE_URL", "postgresql+asyncpg://iam_app:test@localhost:5432/iam_db")
-os.environ.setdefault("IAM_REDIS_URL", "redis://localhost:6379/0")
 
 import pytest
 from fastapi.routing import APIRoute

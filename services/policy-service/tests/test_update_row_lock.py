@@ -9,15 +9,12 @@ version 比对是「先读后写」，SQLAlchemy 发出的 UPDATE 不带版本�
 from __future__ import annotations
 
 import asyncio
-import os
 import uuid
 from typing import Any
 
 import pytest
 
 # 与 test_route_security_class.py 一致：导入 app 模块前必须先给出数据库配置。
-os.environ.setdefault("POLICY_DATABASE_URL", "postgresql+asyncpg://policy_app:test@localhost:5432/policy_db")
-
 from platform_common.errors import VersionConflictError
 
 from app.policy.application import base_tags, interpretations, sources

@@ -51,8 +51,6 @@ default = true
 extend = "../../ruff.toml"
 
 [tool.ruff.lint.extend-per-file-ignores]
-# FastAPI 依赖注入本来就写在参数默认值里，与各服务 app/api/*.py 的豁免一致。
-"platform_common/service_authz.py" = ["B008"]
 # 路由体检的自测要照真实路由的写法造样例，否则验不出漏挂依赖。
 "tests/test_route_audit.py" = ["B008"]
 # 存量基线（2026-10-09 登记）：结构性问题按 docs/guides/工程规范.md 第 8 节分批整改，

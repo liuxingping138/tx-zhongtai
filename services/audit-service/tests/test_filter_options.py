@@ -6,11 +6,6 @@
 
 from __future__ import annotations
 
-import os
-
-os.environ.setdefault("AUDIT_DATABASE_URL", "postgresql+asyncpg://audit_app:test@localhost:5432/audit_db")
-os.environ.setdefault("AUDIT_INGEST_SECRET", "unit-test")
-
 import pytest
 from fastapi.routing import APIRoute
 

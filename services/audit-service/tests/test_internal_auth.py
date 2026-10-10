@@ -1,10 +1,5 @@
 from __future__ import annotations
 
-import os
-
-os.environ.setdefault("AUDIT_DATABASE_URL", "postgresql+asyncpg://audit_app:test@localhost:5432/audit_db")
-os.environ.setdefault("AUDIT_INTERNAL_CALLER_SECRETS", '{"iam-service":"unit-test-token"}')
-
 from fastapi.testclient import TestClient
 
 from app.main import app

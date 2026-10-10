@@ -8,8 +8,9 @@ policy / codebook 等业务服务的鉴权逻辑完全一致，只有服务名�
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Callable
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import Depends, Request
 
@@ -37,19 +38,27 @@ def _bearer_token(request: Request) -> str:
     return header[7:].strip()
 
 
-def build_permission_dependency(
-    *,
-    service_name: str,
-    get_client: Callable[..., AuthzClient],
-) -> Callable[[str, str], Callable[..., Any]]:
-    """构造本服务的 require_*_permission 工厂。"""
+@functools.cache
+def cached_authz_client(
+    *, base_url: str, service_name: str, service_secret: str, timeout_seconds: float
+) -> AuthzClient:
+    """同一组配置只建一个 AuthzClient，复用它的 HTTP 连接池；配置不同（如测试换了地址）自然是另一个客户端。"""
 
-    del service_name  # 服务名已在 get_client 构造 AuthzClient 时写入
+    return AuthzClient(
+        base_url=base_url,
+        service_name=service_name,
+        service_secret=service_secret,
+        timeout_seconds=timeout_seconds,
+    )
+
+
+def build_permission_dependency(get_client: Callable[..., AuthzClient]) -> Callable[[str, str], Callable[..., Any]]:
+    """构造本服务的 require_*_permission 工厂；服务名在 get_client 构造 AuthzClient 时已写入。"""
 
     def require_permission(resource: str, action: str) -> Callable[..., Any]:
         async def dependency(
             request: Request,
-            client: AuthzClient = Depends(get_client),
+            client: Annotated[AuthzClient, Depends(get_client)],
         ) -> Actor:
             result = await client.authorize(access_token=_bearer_token(request), resource=resource, action=action)
             actor_id = result.user_id or ""

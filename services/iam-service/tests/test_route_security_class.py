@@ -1,11 +1,6 @@
 from __future__ import annotations
 
-import os
-
 # 不要依赖同目录其他用例先设好环境变量，否则单独跑这个文件会在导入 app 时就失败。
-os.environ.setdefault("IAM_DATABASE_URL", "postgresql+asyncpg://iam_app:test@localhost:5432/iam_db")
-os.environ.setdefault("IAM_REDIS_URL", "redis://localhost:6379/0")
-
 from fastapi.routing import APIRoute
 from platform_common.route_audit import audit_routes, permission_map
 

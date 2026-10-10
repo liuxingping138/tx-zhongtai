@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import os
 from datetime import UTC, datetime
 from types import SimpleNamespace
-
-os.environ.setdefault("POLICY_DATABASE_URL", "postgresql+asyncpg://policy_app:test@localhost:5432/policy_db")
 
 import pytest
 from pydantic import ValidationError

@@ -2,12 +2,7 @@
 
 from __future__ import annotations
 
-import os
 import uuid
-
-os.environ.setdefault("POLICY_DATABASE_URL", "postgresql+asyncpg://policy_app:test@localhost:5432/policy_db")
-os.environ.setdefault("POLICY_IAM_SERVICE_SECRET", "unit-test")
-os.environ.setdefault("POLICY_AUDIT_INGEST_SECRET", "unit-test")
 
 from fastapi.testclient import TestClient
 from platform_common.actors import Actor

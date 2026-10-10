@@ -85,7 +85,7 @@ async def test_cannot_delete_the_last_superadmin(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(user_admin.user_repo, "get_user_for_update", get_for_update)
     monkeypatch.setattr(user_admin.user_repo, "user_has_builtin_superadmin", AsyncMock(return_value=True))
     monkeypatch.setattr(user_admin.user_repo, "lock_superadmin_users", lock)
-    monkeypatch.setattr(user_admin.outbox_repo, "enqueue_independent", AsyncMock())
+    monkeypatch.setattr(user_admin, "enqueue_independent", AsyncMock())
 
     with pytest.raises(PermissionDeniedError, match="最后一个可登录超级管理员"):
         await user_admin.delete_user(SimpleNamespace(), actor, target.id)

@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-import os
-
-os.environ.setdefault("AUDIT_DATABASE_URL", "postgresql+asyncpg://audit_app:test@localhost:5432/audit_db")
-
 import uuid
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace

@@ -8,14 +8,10 @@ version 比对是「先读后写」，SQLAlchemy 发出的 UPDATE 不带版本�
 from __future__ import annotations
 
 import asyncio
-import os
 import uuid
 from typing import Any
 
 import pytest
-
-os.environ.setdefault("CODEBOOK_DATABASE_URL", "postgresql+asyncpg://codebook_app:test@localhost:5432/codebook_db")
-
 from platform_common.errors import VersionConflictError
 
 from app.application import area_codes, policy_types, scenarios

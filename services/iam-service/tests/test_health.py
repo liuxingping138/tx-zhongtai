@@ -1,10 +1,5 @@
 from __future__ import annotations
 
-import os
-
-os.environ.setdefault("IAM_DATABASE_URL", "postgresql+asyncpg://iam_app:test@localhost:5432/iam_db")
-os.environ.setdefault("IAM_REDIS_URL", "redis://localhost:6379/0")
-
 from fastapi.testclient import TestClient
 
 from app.main import app

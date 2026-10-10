@@ -10,6 +10,7 @@ from platform_common.clock import BEIJING, format_beijing, utcnow
 from platform_common.errors import ApiError, ErrorCode
 from platform_common.excel import build_workbook_async
 from platform_common.filters import Filters
+from platform_common.options import PREVIEW_LIMIT, SEARCH_LIMIT
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.audit_emit import enqueue_event
@@ -116,8 +117,6 @@ async def task_detail(
 
 
 async def list_options(session: AsyncSession) -> dict[str, Any]:
-    from platform_common.options import PREVIEW_LIMIT
-
     items: dict[str, Any] = {}
     for field in repo.FILTER_COLUMNS:
         values = await repo.distinct_values(session, field, None, PREVIEW_LIMIT + 1)
@@ -133,8 +132,6 @@ async def list_options(session: AsyncSession) -> dict[str, Any]:
 
 
 async def search_options(session: AsyncSession, *, field: str, keyword: str | None) -> list[str]:
-    from platform_common.options import SEARCH_LIMIT
-
     return await repo.distinct_values(session, field, keyword, SEARCH_LIMIT)
 
 

@@ -3,12 +3,8 @@
 from __future__ import annotations
 
 import contextlib
-import os
 import uuid
 from datetime import datetime, timedelta
-
-os.environ.setdefault("IAM_DATABASE_URL", "postgresql+asyncpg://iam_app:test@localhost:5432/iam_db")
-os.environ.setdefault("IAM_REDIS_URL", "redis://localhost:6379/0")
 
 import pytest
 from platform_common.errors import UnauthenticatedError

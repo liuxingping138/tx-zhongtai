@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import os
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
-
-os.environ.setdefault("POLICY_DATABASE_URL", "postgresql+asyncpg://policy_app:test@localhost:5432/policy_db")
 
 import pytest
 

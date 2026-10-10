@@ -8,10 +8,10 @@ from platform_common.errors import PermissionDeniedError, UnauthenticatedError
 from platform_common.logging_setup import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.audit_outbox import enqueue_independent
 from app.domain.authorization import AuthzDecision, evaluate_authorization
 from app.domain.enums import UserStatus
 from app.domain.models import MenuItem, User
-from app.repositories import outbox as outbox_repo
 from app.repositories import resources as resource_repo
 from app.repositories import users as user_repo
 
@@ -58,7 +58,7 @@ async def assert_allowed(session: AsyncSession, user: User, resource_code: str, 
         return level
     if action_code in _WRITE_ACTIONS:
         try:
-            await outbox_repo.enqueue_independent(
+            await enqueue_independent(
                 event_type="iam.authz.denied",
                 payload={
                     "actor_id": str(user.id),
