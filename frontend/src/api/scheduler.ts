@@ -6,8 +6,7 @@ export interface ScheduledRun {
   status: 'queued' | 'running' | 'retrying' | 'success' | 'failed' | 'cancelled'
   attempts: number; created_at: string; scheduled_at: string; available_at: string
   started_at: string | null; finished_at: string | null; error_message: string | null
-  result: { date_from?: string; date_to?: string; watermark?: string; days_synced?: number;
-    task_rows?: number; stat_rows?: number; health_rows?: number; site_rows?: number } | null
+  result: { date_from?: string; date_to?: string; watermark?: string; days_synced?: number; site_rows?: number } | null
 }
 export interface ScheduledJob {
   code: string; name: string; enabled: boolean; daily_time: string; next_run_at: string | null

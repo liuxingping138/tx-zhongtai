@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { ArrowDown, ArrowUp, Download, Refresh } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ArrowDown, ArrowUp, Refresh } from '@element-plus/icons-vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import {
@@ -11,13 +10,14 @@ import {
   type CrawlerV2Overview,
   type SiteStatus,
 } from '@/api/crawlerMonitoringV2'
-import { downloadFile } from '@/api/download'
 import { errorMessage } from '@/api/errors'
 import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
+import ExportButton from '@/components/ExportButton.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
+import { useExcelExport } from '@/composables/useExcelExport'
 import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useAuthStore } from '@/stores/auth'
 import { filtersForExport, toggleValue, useListQuery } from '@/composables/useListQuery'
@@ -25,8 +25,6 @@ import { compactCount, siteFilters, STATUS_BY_LABEL, statusValues } from './filt
 
 const LIST_ERROR = '暂时无法获取网站列表，请稍后重新加载。'
 const auth = useAuthStore()
-/** 导出单独一档：只读角色能看不能导，按钮保留但禁用并说明原因。 */
-const canExport = computed(() => auth.canExport('policy.crawler_monitoring_v2'))
 const OVERVIEW_ERROR = '暂时无法获取采集概况，请稍后重试。'
 
 const loading = ref(false)
@@ -34,7 +32,6 @@ const loadError = ref('')
 const resultFiltered = ref(false)
 const items = ref<CrawlerSiteItem[]>([])
 const total = ref(0)
-const exporting = ref(false)
 
 const overview = ref<CrawlerV2Overview | null>(null)
 const overviewLoading = ref(false)
@@ -52,6 +49,11 @@ const query = reactive({
 const filters = useFilterOptions(`${CRAWLER_V2_BASE}/sites`)
 const statusLabels = Object.fromEntries(Object.keys(STATUS_BY_LABEL).map(label => [label, label]))
 const listQuery = useListQuery(query, load)
+const { exporting, onExport } = useExcelExport({
+  path: `${CRAWLER_V2_BASE}/sites/export`,
+  filename: '爬虫监测.xlsx',
+  filters: () => filtersForExport(siteFilters(listQuery.applied)),
+})
 
 const tableColumns = [
   { prop: 'site_name', label: '网站名称', minWidth: 220, grow: 2 },
@@ -134,20 +136,6 @@ async function loadOverview() {
   }
 }
 
-function onSearch() {
-  query.page = 1
-  listQuery.captureApplied()
-  void load()
-}
-
-function onResetFilters() {
-  query.site_name = []
-  query.province_name = []
-  query.city_name = []
-  query.status = []
-  onSearch()
-}
-
 /** 点卡片把该状态加入多选，再次点击移出。以已生效条件为准，未提交的草稿不参与。 */
 function pickStatus(status: SiteStatus) {
   const label = Object.entries(STATUS_BY_LABEL).find(([, value]) => value === status)?.[0] ?? ''
@@ -155,24 +143,11 @@ function pickStatus(status: SiteStatus) {
   void load()
 }
 
-async function onExport() {
-  exporting.value = true
-  try {
-    await downloadFile(`${CRAWLER_V2_BASE}/sites/export`, '爬虫监测.xlsx', filtersForExport(siteFilters(listQuery.applied)))
-    ElMessage.success('下载已开始，请查看浏览器下载列表')
-  } catch (error) {
-    ElMessage.error(errorMessage(error, '导出失败，请稍后重试'))
-  } finally {
-    exporting.value = false
-  }
-}
-
 async function reloadData() {
   await Promise.all([load(), loadOverview(), filters.load()])
 }
 
 onMounted(() => { void reloadData() })
-const NO_EXPORT_HINT = '你的角色没有导出权限，如需下载 Excel 请联系管理员开通「导出」。'
 </script>
 
 <template>
@@ -189,21 +164,13 @@ const NO_EXPORT_HINT = '你的角色没有导出权限，如需下载 Excel 请�
       @change="load"
     >
       <template #actions>
-        <el-tooltip
-          :content="canExport ? '按当前已生效的筛选条件导出网站明细。' : NO_EXPORT_HINT"
-          placement="bottom"
-        >
-          <span>
-            <el-button
-              :icon="Download"
-              :loading="exporting"
-              :disabled="!canExport || loading || !!loadError || total === 0"
-              @click="onExport"
-            >
-              下载 Excel
-            </el-button>
-          </span>
-        </el-tooltip>
+        <ExportButton
+          :allowed="auth.canExport('policy.crawler_monitoring_v2')"
+          :loading="exporting"
+          :disabled="loading || !!loadError || total === 0"
+          hint="按当前已生效的筛选条件导出网站明细。"
+          @click="onExport"
+        />
       </template>
 
       <template #summary>
@@ -306,8 +273,8 @@ const NO_EXPORT_HINT = '你的角色没有导出权限，如需下载 Excel 请�
         <FilterBar
           :query="query"
           :applied="listQuery.applied"
-          @search="onSearch"
-          @reset="onResetFilters"
+          @search="listQuery.search"
+          @reset="listQuery.resetFilters"
         >
           <el-form-item label="网站名称">
             <FilterSelect
@@ -358,7 +325,7 @@ const NO_EXPORT_HINT = '你的角色没有导出权限，如需下载 Excel 请�
         :can-write="false"
         :loading="loading"
         :filtered="resultFiltered"
-        @reset="onResetFilters"
+        @reset="listQuery.resetFilters"
       />
     </ListPage>
   </div>

@@ -4,11 +4,11 @@ import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vu
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { CopyDocument, EditPen } from '@element-plus/icons-vue'
 
-import { getRole, listResourceTree, listRoleGrants, replaceRoleGrants, updateRole } from '@/api/system'
-import { errorMessage, isApiError } from '@/api/errors'
-import type { ResourceNode, RoleItem } from '@/api/types'
-import { LEVEL_TEXT, capabilityModules, moduleGroups, moduleNames, SUPERADMIN_ROLE_CODE } from '@/permissions/catalog'
-import { grantDiff, grantsFromTree, type GrantLevel } from '@/permissions/levels'
+import { updateRole } from '@/api/system'
+import { errorMessage } from '@/api/errors'
+import type { RoleItem } from '@/api/types'
+import { useRoleGrants } from '@/composables/useRoleGrants'
+import { SUPERADMIN_ROLE_CODE } from '@/permissions/catalog'
 import { useAuthStore } from '@/stores/auth'
 import PermissionTable from './PermissionTable.vue'
 import RoleFormDialog, { type RoleFormMode } from './RoleFormDialog.vue'
@@ -16,7 +16,7 @@ import RoleMembersPanel from './RoleMembersPanel.vue'
 
 /**
  * 角色详情：嵌在「角色与权限」右侧。上面是角色信息，下面分「权限设置」「成员」两个页签。
- * 名称、状态、成员数、权限变化后通知左侧列表刷新。
+ * 名称、状态、成员数、权限变化后通知左侧列表刷新。授权草稿和保存在 useRoleGrants。
  */
 const emit = defineEmits<{ changed: [] }>()
 const auth = useAuthStore()
@@ -28,122 +28,24 @@ const canSeeGrants = computed(() => auth.canRead('system.permissions'))
 const canGrant = computed(() => auth.canFull('system.permissions'))
 
 const roleId = computed(() => String(route.params.roleId ?? ''))
-const role = ref<RoleItem | null>(null)
-const tree = ref<ResourceNode[]>([])
-const selected = ref<Record<string, GrantLevel>>({})
-const original = ref<Record<string, GrantLevel>>({})
-const loading = ref(false)
-const saving = ref(false)
-const loadError = ref('')
 const tab = ref<'grants' | 'members'>(route.query.tab === 'members' ? 'members' : 'grants')
 const justCreated = ref(typeof route.query.created === 'string' ? route.query.created : '')
 
-const formVisible = ref(false)
-const formMode = ref<RoleFormMode>('edit')
-
-const groups = computed(() => moduleGroups(tree.value))
-const capabilities = computed(() => capabilityModules(tree.value))
-const names = computed(() => ({
-  ...moduleNames(groups.value),
-  ...Object.fromEntries(capabilities.value.map(module => [module.code, `分配角色 / ${module.name}`])),
-}))
 const isSuperRole = computed(() => role.value?.code === SUPERADMIN_ROLE_CODE && role.value.is_builtin)
 const readonly = computed(() => !canGrant.value || isSuperRole.value || loading.value || saving.value)
-const changes = computed(() =>
-  grantDiff(grantsFromTree(tree.value, original.value), grantsFromTree(tree.value, selected.value)),
-)
-const openedCount = computed(() => Object.values(selected.value).filter(level => level !== 'NONE').length)
+const {
+  role, groups, capabilities, selected, original, loading, saving, loadError, changes, openedCount,
+  load, refreshRole, confirmDiscard, reset: onReset, save: onSave,
+} = useRoleGrants({
+  roleId: () => roleId.value,
+  canSeeGrants: () => canSeeGrants.value,
+  readonly: () => readonly.value,
+  justCreated: () => justCreated.value,
+  saved: () => emit('changed'),
+})
 
-function collect(nodes: ResourceNode[], grants: Record<string, GrantLevel>, out: Record<string, GrantLevel>) {
-  for (const node of nodes) {
-    if (node.node_type === 'resource' && node.published) out[node.code] = grants[node.code] ?? 'NONE'
-    if (node.children?.length) collect(node.children, grants, out)
-  }
-}
-
-async function load() {
-  loading.value = true
-  loadError.value = ''
-  try {
-    const [detail, resources, grants] = await Promise.all([
-      getRole(roleId.value),
-      canSeeGrants.value ? (tree.value.length ? { tree: tree.value } : listResourceTree()) : { tree: [] as ResourceNode[] },
-      canSeeGrants.value ? listRoleGrants(roleId.value) : null,
-    ])
-    tree.value = resources.tree
-    role.value = detail
-    const map: Record<string, GrantLevel> = {}
-    for (const grant of grants?.grants ?? []) map[grant.resource_code] = grant.level
-    const next: Record<string, GrantLevel> = {}
-    collect(tree.value, map, next)
-    selected.value = next
-    original.value = { ...next }
-  } catch (error) {
-    loadError.value = errorMessage(error, '暂时无法加载这个角色，请稍后重试。')
-  } finally {
-    loading.value = false
-  }
-}
-
-async function refreshRole() {
-  try {
-    role.value = await getRole(roleId.value)
-  } catch {
-    /* 仅刷新统计数字，失败不打扰 */
-  }
-}
-
-async function confirmDiscard(message: string): Promise<boolean> {
-  if (!changes.value.length) return true
-  return ElMessageBox.confirm(message, '放弃未保存的权限修改？', {
-    type: 'warning',
-    confirmButtonText: '放弃修改',
-    cancelButtonText: '继续编辑',
-  }).then(() => true, () => false)
-}
-
-function onReset() {
-  selected.value = { ...original.value }
-}
-
-async function onSave() {
-  if (saving.value || !role.value || !changes.value.length || readonly.value) return
-  const summary = changes.value
-    .map(item => `${names.value[item.code] ?? item.code}：${LEVEL_TEXT[item.from]} → ${LEVEL_TEXT[item.to]}`)
-    .join('\n')
-  saving.value = true
-  try {
-    await ElMessageBox.confirm(summary, `保存「${role.value.name}」的 ${changes.value.length} 项权限修改？`, {
-      type: 'warning',
-      confirmButtonText: '保存',
-      cancelButtonText: '再看看',
-      customClass: 'grant-confirm',
-    })
-  } catch {
-    saving.value = false
-    return
-  }
-  try {
-    const result = await replaceRoleGrants(role.value.id, {
-      version: role.value.version,
-      grants: grantsFromTree(tree.value, selected.value),
-    })
-    role.value = { ...role.value, ...result.role }
-    original.value = { ...selected.value }
-    emit('changed')
-    ElMessage.success(justCreated.value ? '权限已保存。下一步：到「成员」把角色分给同事' : '权限已保存，成员下次操作时即生效')
-    void refreshRole()
-  } catch (error) {
-    if (isApiError(error) && error.status === 409) {
-      await ElMessageBox.alert('这个角色的权限刚被其他人修改过，将为你加载最新内容，请重新调整后再保存。', '权限已被修改')
-      await load()
-    } else {
-      ElMessage.error(errorMessage(error, '保存失败'))
-    }
-  } finally {
-    saving.value = false
-  }
-}
+const formVisible = ref(false)
+const formMode = ref<RoleFormMode>('edit')
 
 function openForm(mode: RoleFormMode) {
   formMode.value = mode

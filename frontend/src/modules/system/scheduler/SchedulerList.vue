@@ -2,15 +2,17 @@
 import { computed, onMounted, onBeforeUnmount, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
-import { listJobs, listRuns, triggerJob, updateJob, type ScheduledJob, type ScheduledRun, type SchedulerOverview } from '@/api/scheduler'
+import { listJobs, triggerJob, updateJob, type ScheduledJob, type SchedulerOverview } from '@/api/scheduler'
 import { errorMessage } from '@/api/errors'
 import { useAuthStore } from '@/stores/auth'
 import { formatTime } from '@/utils/time'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import ListPage from '@/components/ListPage.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
-import ScrollPort from '@/components/ScrollPort.vue'
 import type { DataColumn } from '@/components/dataColumns'
+import SchedulerHistoryDrawer from './SchedulerHistoryDrawer.vue'
+import { STATUS_TEXT, statusType, type RunStatus } from './runStatus'
+import { useSchedulerHistory } from './useSchedulerHistory'
 
 const auth = useAuthStore()
 const canManage = computed(() => auth.canFull('system.scheduler'))
@@ -30,12 +32,6 @@ const columns: DataColumn[] = [
 const defaults = columns.map(col => col.prop)
 const selected = ref([...defaults])
 const visibleColumns = computed(() => columns.filter(col => selected.value.includes(col.prop)))
-const statusText: Record<ScheduledRun['status'], string> = {
-  queued: '排队中', running: '执行中', retrying: '等待重试', success: '成功', failed: '失败', cancelled: '已取消',
-}
-function statusType(status?: ScheduledRun['status']) {
-  return status === 'success' ? 'success' : status === 'failed' ? 'danger' : status === 'retrying' ? 'warning' : 'info'
-}
 function cell(job: ScheduledJob, prop: string) {
   if (prop === 'name') return job.name
   if (prop === 'daily_time') return job.daily_time
@@ -96,44 +92,17 @@ async function save() {
   } catch (e) { formError.value = errorMessage(e, '保存失败，请重试') }
   finally { saving.value = false }
 }
-const historyJob = ref<ScheduledJob | null>(null)
-const drawer = ref(false)
-const records = ref<ScheduledRun[]>([])
-const historyLoading = ref(false)
-const historyError = ref('')
-const page = ref(1)
-const total = ref(0)
-let historySeq = 0
-async function loadHistory(quiet = false) {
-  if (!historyJob.value) return
-  const seq = ++historySeq
-  historyLoading.value = !quiet
-  try {
-    const data = await listRuns(historyJob.value.code, page.value)
-    if (seq !== historySeq || disposed) return
-    records.value = data.items; total.value = data.total; historyError.value = ''
-  } catch (e) { if (seq === historySeq) historyError.value = errorMessage(e, '执行记录加载失败') }
-  finally { if (seq === historySeq) historyLoading.value = false }
-}
-function showHistory(job: ScheduledJob) {
-  historyJob.value = job; page.value = 1; records.value = []; total.value = 0; drawer.value = true
-  void loadHistory()
-}
-function duration(row: ScheduledRun) {
-  if (!row.started_at || !row.finished_at) return '—'
-  const seconds = Math.max(0, Math.round((Date.parse(row.finished_at) - Date.parse(row.started_at)) / 1000))
-  return seconds < 60 ? `${seconds} 秒` : `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒`
-}
+const history = useSchedulerHistory()
 let timer: ReturnType<typeof setTimeout> | undefined
 async function poll() {
   if (!document.hidden) {
     await load(true)
-    if (drawer.value && !historyLoading.value) await loadHistory(true)
+    if (history.visible.value && !history.loading.value) await history.load(true)
   }
   if (!disposed) timer = setTimeout(() => { void poll() }, 5000)
 }
 onMounted(async () => { await load(); if (!disposed) timer = setTimeout(() => { void poll() }, 5000) })
-onBeforeUnmount(() => { disposed = true; historySeq++; clearTimeout(timer) })
+onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
 </script>
 
 <template>
@@ -211,7 +180,7 @@ onBeforeUnmount(() => { disposed = true; historySeq++; clearTimeout(timer) })
               :type="statusType(row.last_run?.status)"
               size="small"
             >
-              {{ row.last_run ? statusText[row.last_run.status as ScheduledRun['status']] : '尚未执行' }}
+              {{ row.last_run ? STATUS_TEXT[row.last_run.status as RunStatus] : '尚未执行' }}
             </el-tag>
             <span v-else>{{ cell(row, col.prop) }}</span>
           </template>
@@ -243,7 +212,7 @@ onBeforeUnmount(() => { disposed = true; historySeq++; clearTimeout(timer) })
             <el-button
               link
               type="primary"
-              @click="showHistory(row)"
+              @click="history.open(row)"
             >
               执行记录
             </el-button>
@@ -309,140 +278,14 @@ onBeforeUnmount(() => { disposed = true; historySeq++; clearTimeout(timer) })
         </el-button>
       </template>
     </el-dialog>
-    <el-drawer
-      v-model="drawer"
-      :title="`${historyJob?.name ?? ''} · 执行记录`"
-      size="min(1120px, 96vw)"
-    >
-      <div class="history-toolbar">
-        <span>共 {{ total }} 次执行 · 时间均为北京时间</span><el-button
-          :loading="historyLoading"
-          :icon="Refresh"
-          @click="loadHistory()"
-        >
-          刷新记录
-        </el-button>
-      </div>
-      <el-alert
-        v-if="historyError"
-        :title="historyError"
-        type="error"
-        :closable="false"
-        show-icon
-      />
-      <ScrollPort class="history-table">
-        <el-table
-          v-loading="historyLoading"
-          :data="records"
-          row-key="id"
-          :empty-text="historyLoading ? '正在加载执行记录…' : '暂无执行记录，计划触发或手动执行后会在这里显示。'"
-        >
-          <el-table-column type="expand">
-            <template #default="{ row }">
-              <div class="run-detail">
-                <p>执行编号：{{ row.id }}</p>
-                <p>发起人：{{ row.actor_name }} · 原计划时间：{{ formatTime(row.scheduled_at) }}</p>
-                <el-alert
-                  v-if="row.error_message"
-                  :title="row.error_message"
-                  :type="row.status === 'failed' ? 'error' : 'warning'"
-                  :closable="false"
-                />
-                <p v-if="row.status === 'retrying'">
-                  下次重试：{{ formatTime(row.available_at) }}
-                </p>
-                <template v-if="row.result">
-                  <p>处理日期：{{ row.result.date_from || '—' }} 至 {{ row.result.date_to || '—' }}</p>
-                  <p>数据更新至：{{ formatTime(row.result.watermark) }}</p>
-                  <p v-if="row.result.days_synced !== undefined">
-                    已处理 {{ row.result.days_synced }} 个采集日 · 网站快照 {{ row.result.site_rows ?? '—' }} 条
-                  </p>
-                  <p v-if="row.result.task_rows !== undefined">
-                    任务基线 {{ row.result.task_rows }} 条 · 日统计 {{ row.result.stat_rows }} 条 · 健康快照 {{ row.result.health_rows }} 条
-                  </p>
-                </template>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column
-            label="触发方式"
-            width="100"
-          >
-            <template #default="{ row }">
-              {{ row.trigger === 'manual' ? '手动执行' : '每日计划' }}
-            </template>
-          </el-table-column>
-          <el-table-column
-            label="状态"
-            width="110"
-          >
-            <template #default="{ row }">
-              <el-tag
-                :type="statusType(row.status)"
-                size="small"
-              >
-                {{ statusText[row.status as ScheduledRun['status']] }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column
-            label="入队时间"
-            width="185"
-          >
-            <template #default="{ row }">
-              {{ formatTime(row.created_at) }}
-            </template>
-          </el-table-column>
-          <el-table-column
-            label="开始时间"
-            width="185"
-          >
-            <template #default="{ row }">
-              {{ formatTime(row.started_at) }}
-            </template>
-          </el-table-column>
-          <el-table-column
-            label="结束时间"
-            width="185"
-          >
-            <template #default="{ row }">
-              {{ formatTime(row.finished_at) }}
-            </template>
-          </el-table-column>
-          <el-table-column
-            label="总耗时"
-            width="115"
-          >
-            <template #default="{ row }">
-              {{ duration(row) }}
-            </template>
-          </el-table-column>
-          <el-table-column
-            prop="attempts"
-            label="尝试次数"
-            width="100"
-          />
-        </el-table>
-      </ScrollPort>
-      <el-pagination
-        v-model:current-page="page"
-        :page-size="20"
-        :total="total"
-        layout="prev, pager, next"
-        @current-change="loadHistory()"
-      />
-    </el-drawer>
+    <SchedulerHistoryDrawer :history="history" />
   </div>
 </template>
 
 <style scoped>
-.scheduler-strip, .scheduler-strip > div, .history-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.scheduler-strip, .scheduler-strip > div { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .scheduler-strip { padding: 14px 16px; border: 1px solid var(--zt-border); background: var(--zt-panel); border-radius: var(--zt-radius); color: var(--zt-ink-500); font-size: 13px; }
 .scheduler-note { color: var(--zt-ink-500); font-size: 13px; line-height: 1.8; margin: 16px 0; }
 .scheduler-page :deep(.list-page) { min-height: 0; max-height: none; }
 .scheduler-page :deep(.list-page__results) { flex: none; min-height: 180px; }
-.history-toolbar { margin-bottom: 16px; color: var(--zt-ink-500); font-size: 13px; }
-.history-table { height: min(66vh, 650px); border: 1px solid var(--zt-border); border-radius: var(--zt-radius); margin: 16px 0; }
-.run-detail { padding: 8px 24px; color: var(--zt-ink-700); font-size: 13px; overflow-wrap: anywhere; }
-.run-detail p { line-height: 1.7; }
 </style>

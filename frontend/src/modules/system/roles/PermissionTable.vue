@@ -2,20 +2,27 @@
 import { computed, ref } from 'vue'
 import { Lock, Search } from '@element-plus/icons-vue'
 
-import {
-  isChecked,
-  lockReason,
-  supports,
-  toggleColumn,
-  writesHint,
-  type ModuleEntry,
-  type ModuleGroup,
-} from '@/permissions/catalog'
+import { lockReason, writesHint, type ModuleEntry, type ModuleGroup } from '@/permissions/catalog'
 import type { GrantLevel } from '@/permissions/levels'
+import {
+  COLUMNS,
+  columnState as groupColumnState,
+  filterCapabilities,
+  filterGroups,
+  isChanged,
+  isLocked,
+  levelOf as grantLevel,
+  openedCount as groupOpenedCount,
+  toggleCell,
+  toggleGroupColumn,
+  type Column,
+} from '@/permissions/matrix'
+import PermissionCells from './PermissionCells.vue'
 
 /**
  * 角色权限矩阵：行是菜单，列是查看 / 导出 / 管理，和常见后台的勾选习惯一致。
  * 存下来的仍是一个档位（逐档包含）：勾「管理」自动带上前两列，取消「查看」整行清空。
+ * 勾选规则在 permissions/matrix.ts，这里只负责渲染和把结果抛给父组件。
  */
 const props = defineProps<{
   groups: ModuleGroup[]
@@ -27,80 +34,31 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ 'update:modelValue': [value: Record<string, GrantLevel>] }>()
 
-type Column = Exclude<GrantLevel, 'NONE'>
-const COLUMNS: { level: Column; label: string; what: string }[] = [
-  { level: 'READ', label: '查看', what: '打开菜单，看列表和详情' },
-  { level: 'EXPORT', label: '导出', what: '下载 Excel' },
-  { level: 'FULL', label: '管理', what: '新增、编辑、导入等' },
-]
-
 const keyword = ref('')
+const visibleGroups = computed(() => filterGroups(props.groups, keyword.value))
+const visibleCapabilities = computed(() => filterCapabilities(props.capabilities ?? [], keyword.value))
 
-const visibleGroups = computed(() => {
-  const query = keyword.value.trim().toLowerCase()
-  if (!query) return props.groups
-  return props.groups.flatMap(group => {
-    if (group.name.toLowerCase().includes(query)) return [group]
-    const modules = group.modules.filter(module =>
-      module.name.toLowerCase().includes(query) || module.code.toLowerCase().includes(query))
-    return modules.length ? [{ ...group, modules }] : []
-  })
-})
-
-const visibleCapabilities = computed(() => {
-  const items = props.capabilities ?? []
-  const query = keyword.value.trim().toLowerCase()
-  if (!query) return items
-  return items.filter(module => `${module.name} ${module.code} 分配角色 权限`.toLowerCase().includes(query))
-})
+const levelOf = (code: string) => grantLevel(props.modelValue, code)
+const changed = (code: string) => isChanged(props.modelValue, props.original, code)
+const locked = (module: ModuleEntry) => isLocked(module, props.roleCode)
+const openedCount = (group: ModuleGroup) => groupOpenedCount(group, props.modelValue)
+const columnState = (group: ModuleGroup, column: Column) => groupColumnState(group, column, props.modelValue, props.roleCode)
 
 function capabilityHint(module: ModuleEntry): string {
   if (locked(module)) return lockReason(module.code, props.roleCode)
   return '能给人分配角色，也能修改角色权限'
 }
 
-function levelOf(code: string): GrantLevel {
-  return props.modelValue[code] ?? 'NONE'
-}
-
-function changed(code: string): boolean {
-  return levelOf(code) !== (props.original[code] ?? 'NONE')
-}
-
-function locked(module: ModuleEntry): boolean {
-  return !!lockReason(module.code, props.roleCode)
-}
-
-function openedCount(group: ModuleGroup): number {
-  return group.modules.filter(module => levelOf(module.code) !== 'NONE').length
-}
-
 function onCell(module: ModuleEntry, column: Column) {
-  if (props.disabled || locked(module) || !supports(module, column)) return
-  emit('update:modelValue', { ...props.modelValue, [module.code]: toggleColumn(module, levelOf(module.code), column) })
+  if (props.disabled) return
+  const next = toggleCell(module, column, props.modelValue, props.roleCode)
+  if (next) emit('update:modelValue', next)
 }
 
-function columnTargets(group: ModuleGroup, column: Column): ModuleEntry[] {
-  return group.modules.filter(module => !locked(module) && supports(module, column))
-}
-
-function columnState(group: ModuleGroup, column: Column): { checked: boolean; indeterminate: boolean; empty: boolean } {
-  const targets = columnTargets(group, column)
-  const on = targets.filter(module => isChecked(levelOf(module.code), column)).length
-  return { checked: targets.length > 0 && on === targets.length, indeterminate: on > 0 && on < targets.length, empty: !targets.length }
-}
-
-/** 整组一列：没勾满就全部勾上（已有更高档的保留），已勾满再点一次全部取消这一列。 */
 function onColumn(group: ModuleGroup, column: Column) {
-  const targets = columnTargets(group, column)
-  if (props.disabled || !targets.length) return
-  const allOn = targets.every(module => isChecked(levelOf(module.code), column))
-  const next = { ...props.modelValue }
-  for (const module of targets) {
-    const current = levelOf(module.code)
-    if (allOn || !isChecked(current, column)) next[module.code] = toggleColumn(module, current, column)
-  }
-  emit('update:modelValue', next)
+  if (props.disabled) return
+  const next = toggleGroupColumn(group, column, props.modelValue, props.roleCode)
+  if (next) emit('update:modelValue', next)
 }
 </script>
 
@@ -209,25 +167,12 @@ function onColumn(group: ModuleGroup, column: Column) {
                 class="perm-row__changed"
               >已修改</span>
             </th>
-            <td
-              v-for="column in COLUMNS"
-              :key="column.level"
-              class="perm-matrix__col"
-            >
-              <input
-                v-if="supports(module, column.level)"
-                type="checkbox"
-                :aria-label="`${module.name} ${column.label}`"
-                :checked="isChecked(levelOf(module.code), column.level)"
-                :disabled="disabled || locked(module)"
-                @change="onCell(module, column.level)"
-              >
-              <span
-                v-else
-                class="perm-matrix__na"
-                title="这个菜单没有这项操作"
-              >—</span>
-            </td>
+            <PermissionCells
+              :module="module"
+              :level="levelOf(module.code)"
+              :disabled="disabled || locked(module)"
+              @toggle="onCell(module, $event)"
+            />
             <td class="perm-row__hint">
               {{ writesHint(module) }}
             </td>
@@ -265,24 +210,12 @@ function onColumn(group: ModuleGroup, column: Column) {
                 <Lock />
               </el-icon>
             </th>
-            <td
-              v-for="column in COLUMNS"
-              :key="column.level"
-              class="perm-matrix__col"
-            >
-              <input
-                v-if="supports(module, column.level)"
-                type="checkbox"
-                :aria-label="`${module.name} ${column.label}`"
-                :checked="isChecked(levelOf(module.code), column.level)"
-                :disabled="disabled || locked(module)"
-                @change="onCell(module, column.level)"
-              >
-              <span
-                v-else
-                class="perm-matrix__na"
-              >—</span>
-            </td>
+            <PermissionCells
+              :module="module"
+              :level="levelOf(module.code)"
+              :disabled="disabled || locked(module)"
+              @toggle="onCell(module, $event)"
+            />
             <td class="perm-row__hint">
               {{ capabilityHint(module) }}
             </td>
@@ -355,12 +288,13 @@ function onColumn(group: ModuleGroup, column: Column) {
   color: var(--zt-ink-500);
 }
 
-.perm-matrix .perm-matrix__col {
+/* 格子在子组件 PermissionCells 里渲染，作用域样式要用 :deep 才够得到。 */
+.perm-matrix :deep(.perm-matrix__col) {
   width: 76px;
   text-align: center;
 }
 
-.perm-matrix input[type="checkbox"] {
+.perm-matrix :deep(input[type="checkbox"]) {
   width: 16px;
   height: 16px;
   margin: 0;
@@ -369,11 +303,11 @@ function onColumn(group: ModuleGroup, column: Column) {
   cursor: pointer;
 }
 
-.perm-matrix input[type="checkbox"]:disabled {
+.perm-matrix :deep(input[type="checkbox"]:disabled) {
   cursor: not-allowed;
 }
 
-.perm-matrix__na {
+.perm-matrix :deep(.perm-matrix__na) {
   color: #c0c6d0;
 }
 
