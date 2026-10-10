@@ -62,7 +62,7 @@ def read_raw_sheet(content: bytes) -> tuple[list[str], list[list[str]]]:
             items.append([_cell(cell) for cell in raw[: len(headers)]])
         return headers, items
     finally:
-        rows.close()  # type: ignore[attr-defined]
+        rows.close()
 
 
 def _ensure_code_columns(

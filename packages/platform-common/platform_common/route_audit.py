@@ -28,7 +28,7 @@ RESOURCE_AUTHORIZED_VALUE = "resource_authorized"
 def mark_permission_dependency(dependency: Callable[..., Any], *, resource: str, action: str) -> Callable[..., Any]:
     """给鉴权依赖打标记，供路由体检识别。"""
 
-    dependency.__authz_permission__ = (resource, action)  # type: ignore[attr-defined]
+    dependency.__authz_permission__ = (resource, action)  # type: ignore[attr-defined]  # 函数对象上挂自定义标记，mypy 不认识这个属性
     return dependency
 
 

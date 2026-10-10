@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import base64
 import zipfile
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator
 from functools import partial
 from io import BytesIO
 from typing import IO, TYPE_CHECKING, Any
@@ -118,7 +118,7 @@ def iter_workbook_rows(
     max_rows: int = EXCEL_MAX_ROWS,
     max_columns: int = EXCEL_MAX_COLUMNS,
     max_uncompressed_bytes: int = EXCEL_MAX_UNCOMPRESSED_BYTES,
-) -> Iterator[tuple[Any, ...]]:
+) -> Generator[tuple[Any, ...], None, None]:
     """校验实际 XML 坐标，避免虚假 dimension 和稀疏行放大解析工作量。"""
     try:
         _reject_oversized_workbook(content, max_uncompressed_bytes=max_uncompressed_bytes)
@@ -187,7 +187,7 @@ def parse_sheet(
             items.append(item)
         return items
     finally:
-        rows.close()  # type: ignore[attr-defined]
+        rows.close()
 
 
 def append_text_row(sheet: Worksheet, values: list[Any] | tuple[Any, ...]) -> None:

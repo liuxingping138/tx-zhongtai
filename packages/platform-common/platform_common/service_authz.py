@@ -25,7 +25,7 @@ def classified(security_class: SecurityClass) -> Callable[[Callable[..., Any]], 
     """给路由标注安全分级，供路由安全用例检查。"""
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        func.__security_class__ = security_class  # type: ignore[attr-defined]
+        func.__security_class__ = security_class  # type: ignore[attr-defined]  # 函数对象上挂自定义标记，mypy 不认识这个属性
         return func
 
     return decorator
@@ -60,7 +60,7 @@ def build_permission_dependency(get_client: Callable[..., AuthzClient]) -> Calla
             request: Request,
             # get_client 是闭包变量：本模块启用了延迟标注，写进 Annotated 会变成 FastAPI 解析不了的字符串，
             # 参数会被误当成查询参数。这里只能用默认值写法。
-            client: AuthzClient = Depends(get_client),  # noqa: B008
+            client: AuthzClient = Depends(get_client),  # noqa: B008  闭包依赖不能写成 Annotated，原因见上
         ) -> Actor:
             result = await client.authorize(access_token=_bearer_token(request), resource=resource, action=action)
             actor_id = result.user_id or ""
