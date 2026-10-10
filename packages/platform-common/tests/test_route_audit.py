@@ -80,3 +80,10 @@ def test_permission_map_reports_resource_and_action() -> None:
     mapping = permission_map(_build_app())
     assert mapping["GET /api/v1/probe/guarded"] == ("probe.items", "list")
     assert "POST /api/v1/probe/forgot-dependency" not in mapping
+
+
+def test_permission_dependency_does_not_leak_into_query_parameters() -> None:
+    # 鉴权客户端是闭包里的依赖，标注写法不对时 FastAPI 会把它当成查询参数，所有受保护接口都会出错。
+    schema = _build_app().openapi()
+    parameters = schema["paths"]["/api/v1/probe/guarded"]["get"].get("parameters", [])
+    assert [parameter["name"] for parameter in parameters] == []

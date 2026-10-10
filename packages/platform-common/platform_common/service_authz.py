@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Callable
-from typing import Annotated, Any
+from typing import Any
 
 from fastapi import Depends, Request
 
@@ -58,7 +58,9 @@ def build_permission_dependency(get_client: Callable[..., AuthzClient]) -> Calla
     def require_permission(resource: str, action: str) -> Callable[..., Any]:
         async def dependency(
             request: Request,
-            client: Annotated[AuthzClient, Depends(get_client)],
+            # get_client 是闭包变量：本模块启用了延迟标注，写进 Annotated 会变成 FastAPI 解析不了的字符串，
+            # 参数会被误当成查询参数。这里只能用默认值写法。
+            client: AuthzClient = Depends(get_client),  # noqa: B008
         ) -> Actor:
             result = await client.authorize(access_token=_bearer_token(request), resource=resource, action=action)
             actor_id = result.user_id or ""
