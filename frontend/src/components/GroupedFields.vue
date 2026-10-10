@@ -1,21 +1,6 @@
 <script setup lang="ts">
 import { nextTick, ref, useId, watch } from 'vue'
-export interface EditorField {
-  key: string
-  label: string
-  maxLength?: number
-  required?: boolean
-  long?: boolean
-  hint?: string
-  placeholder?: string
-  /** 取值固定的字段用下拉单选，不给自由输入。 */
-  choices?: string[]
-}
-export interface EditorGroup {
-  title: string
-  hint: string
-  fields: EditorField[]
-}
+import type { EditorGroup } from './editorGroups'
 const props = defineProps<{ groups: EditorGroup[]; submitError?: string }>()
 const model = defineModel<Record<string, string>>({ required: true })
 const root = ref<HTMLElement>()

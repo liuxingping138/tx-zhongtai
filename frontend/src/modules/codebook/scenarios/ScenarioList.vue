@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { Plus, Upload, Download, Clock } from '@element-plus/icons-vue'
-import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
+import { computed, onMounted, reactive } from 'vue'
+import { ElMessage } from 'element-plus'
 
 import {
   createScenario,
@@ -11,72 +10,29 @@ import {
   updateScenario,
   type ScenarioItem,
 } from '@/api/codebook'
-import { errorMessage, isApiError } from '@/api/errors'
-import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
-import FilterSelect from '@/components/FilterSelect.vue'
-import ListPage from '@/components/ListPage.vue'
-import FilterBar from '@/components/FilterBar.vue'
-import { useFilterOptions } from '@/composables/useFilterOptions'
-import { useExcelExport } from '@/composables/useExcelExport'
-import { useListLoader } from '@/composables/useListLoader'
-import { filtersForExport, useListQuery } from '@/composables/useListQuery'
+import { errorMessage } from '@/api/errors'
+import { reportImportResult, runExcelImport } from '@/api/excelImport'
+import AuditLogButton from '@/components/AuditLogButton.vue'
 import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
-import GroupedFields, { type EditorGroup } from '@/components/GroupedFields.vue'
-import { useUnsavedForm } from '@/composables/useUnsavedForm'
+import ExportButton from '@/components/ExportButton.vue'
+import FilterBar from '@/components/FilterBar.vue'
+import FilterSelect from '@/components/FilterSelect.vue'
+import ImportButton from '@/components/ImportButton.vue'
+import ListPage from '@/components/ListPage.vue'
+import RecordEditorDrawer from '@/components/RecordEditorDrawer.vue'
+import { useDetailColumns } from '@/composables/useDetailColumns'
+import { useExcelExport } from '@/composables/useExcelExport'
+import { useFilterOptions } from '@/composables/useFilterOptions'
+import { useListLoader } from '@/composables/useListLoader'
+import { filtersForExport, useListQuery } from '@/composables/useListQuery'
+import { useRecordEditor } from '@/composables/useRecordEditor'
 import { useAuthStore } from '@/stores/auth'
+import { EDITOR_GROUPS, SUMMARY_KEYS, TABLE_COLUMNS } from './fields'
 
+const RESOURCE = 'codebook.scenarios'
 const auth = useAuthStore()
-/** 导出单独一档：只读角色能看不能导，按钮保留但禁用并说明原因。 */
-const canExport = computed(() => auth.canExport('codebook.scenarios'))
-const router = useRouter()
-const canWrite = computed(() => auth.canFull('codebook.scenarios'))
-const canAudit = computed(() => auth.canRead('system.audit'))
-
-const fields: { key: keyof ScenarioItem; label: string }[] = [
-  { key: 'industry_scenario_code', label: '行业场景编码' },
-  { key: 'industry_code', label: '行业编码' },
-  { key: 'industry_l1', label: '项目一级行业' },
-  { key: 'industry_l2', label: '项目二级行业' },
-  { key: 'industry_l3', label: '项目三级行业' },
-  { key: 'scenario_tag', label: '场景标签' },
-  { key: 'scenario_level', label: '场景level' },
-  { key: 'scenario_type', label: '场景类型' },
-  { key: 'desc_90', label: '场景描述(90字)' },
-  { key: 'desc_130', label: '场景描述(130字)' },
-  { key: 'desc_pest', label: '场景描述(PEST总结)' },
-  { key: 'scenario_source', label: '场景来源' },
-  { key: 'scenario_hierarchy', label: '场景层级' },
-  { key: 'scenario_code', label: '场景编码' },
-  { key: 'scenario_l1_name', label: '项目一级场景名称' },
-  { key: 'scenario_l1_desc', label: '项目一级场景描述' },
-  { key: 'scenario_l2_name', label: '项目二级场景名称' },
-  { key: 'scenario_l2_desc', label: '项目二级场景描述' },
-  { key: 'scenario_l3_name', label: '项目三级场景名称' },
-  { key: 'scenario_l3_desc', label: '项目三级场景描述' },
-  { key: 'customer_group_name', label: '客群名称' },
-  { key: 'customer_group_industry', label: '客群行业' },
-  { key: 'org_keywords', label: '机构及企业名称包含关键词' },
-  { key: 'scope_keywords', label: '经营范围包含' },
-  { key: 'customer_level', label: '客户等级' },
-  { key: 'customer_category', label: '客户类别' },
-  { key: 'product_l1_name', label: '项目一级产品名称' },
-  { key: 'product_l2_name', label: '项目二级产品名称' },
-  { key: 'branch_count', label: '下属分支机构数' },
-  { key: 'product_l1_sort', label: '一级产品排序（正序）' },
-  { key: 'product_l2_sort', label: '二级产品排序（正序）' },
-]
-
-const longFields = new Set([
-  'desc_90',
-  'desc_130',
-  'desc_pest',
-  'scenario_l1_desc',
-  'scenario_l2_desc',
-  'scenario_l3_desc',
-  'org_keywords',
-  'scope_keywords',
-])
+const canWrite = computed(() => auth.canFull(RESOURCE))
 
 const query = reactive({
   industry_scenario_code: [] as string[],
@@ -86,133 +42,33 @@ const query = reactive({
   page: 1,
   page_size: 20,
 })
-const visible = ref(false)
-const saving = ref(false)
-const saveError = ref('')
-const editing = ref<ScenarioItem | null>(null)
-const form = reactive<Record<string, string>>({})
 const filters = useFilterOptions('/codebook/scenarios')
-
-const columnLabels: Record<string, string> = {
-  industry_l1: '一级行业',
-  industry_l2: '二级行业',
-  industry_l3: '三级行业',
-  scenario_l1_name: '一级场景',
-  scenario_l2_name: '二级场景',
-  scenario_l3_name: '三级场景',
-  scenario_l1_desc: '一级场景描述',
-  scenario_l2_desc: '二级场景描述',
-  scenario_l3_desc: '三级场景描述',
-  org_keywords: '机构名称关键词',
-  product_l1_name: '一级产品',
-  product_l2_name: '二级产品',
-  branch_count: '分支机构数',
-  product_l1_sort: '一级产品排序',
-  product_l2_sort: '二级产品排序',
-}
-
-const tableColumns = [
-  ...fields.map((field) => ({
-    prop: field.key,
-    label: columnLabels[field.key] || field.label,
-    fullLabel: field.label,
-    ...(longFields.has(field.key) ? { width: 300, wrap: true }
-      : field.key === 'industry_scenario_code' ? { width: 220 }
-      : field.key === 'scenario_tag' ? { minWidth: 220, grow: 1 }
-      : field.key === 'customer_group_name' ? { minWidth: 230, grow: 2 }
-      : field.key === 'product_l1_name' ? { minWidth: 180, grow: 1 }
-      : { width: 160 }),
-  })),
-  { prop: 'created_at', label: '入库时间', width: 190, time: true },
-  { prop: 'created_by_name', label: '入库人', width: 110 },
-  { prop: 'updated_at', label: '更新时间', width: 190, time: true },
-  { prop: 'updated_by_name', label: '操作人', width: 110 },
-]
-
-
-
 const listQuery = useListQuery(query, (): Promise<void> => load())
-
 const { items, total, loading, loadError, resultFiltered, load } = useListLoader({
   requested: () => listQuery.requested(),
   commitPage: () => listQuery.commitPage(),
-  fetch: (params) => listScenarios({
-      industry_scenario_code: params.industry_scenario_code || undefined,
-      industry_l1: params.industry_l1 || undefined,
-      scenario_tag: params.scenario_tag || undefined,
-      customer_group_name: params.customer_group_name || undefined,
-      page: params.page,
-      page_size: params.page_size,
-  }),
+  fetch: listScenarios,
   errorText: '加载行业场景码表失败',
 })
+const { columns, defaults, selected } = useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)
 
-function onResetFilters() {
-  query.industry_scenario_code = []
-  query.industry_l1 = []
-  query.scenario_tag = []
-  query.customer_group_name = []
-  onSearch()
+async function refresh() {
+  await Promise.all([load(), filters.load()])
 }
 
-function onSearch() {
-  query.page = 1
-  listQuery.captureApplied()
-  void load()
-}
-
-function openCreate() {
-  saveError.value = ''
-  editing.value = null
-  for (const field of fields) {
-    form[field.key] = ''
-  }
-  visible.value = true
-}
-
-function openEdit(row: ScenarioItem) {
-  saveError.value = ''
-  editing.value = row
-  for (const field of fields) {
-    form[field.key] = String(row[field.key] ?? '')
-  }
-  visible.value = true
-}
-
-async function onSave() {
-  if (saving.value) return
-  saveError.value = ''
-  if (!await editorFields.value?.validate()) return
-  saving.value = true
-  try {
-    if (editing.value) {
-      await updateScenario(editing.value.id, { ...form, version: editing.value.version })
-    } else {
-      await createScenario({ ...form })
-    }
-    ElMessage.success('已保存')
-    visible.value = false
-    await Promise.all([load(), filters.load()])
-  } catch (error) {
-    if (isApiError(error) && error.status === 409) {
-      await ElMessageBox.alert(
-        editing.value ? '数据已被他人修改，请重新加载后再编辑。' : '已存在完全相同的场景记录。',
-        '无法保存',
-      )
-      await load()
-    } else {
-      saveError.value = errorMessage(error, '保存失败，请检查后重试')
-    }
-  } finally {
-    saving.value = false
-  }
-}
+const editor = useRecordEditor<ScenarioItem>({
+  noun: '行业场景码表',
+  groups: EDITOR_GROUPS,
+  create: createScenario,
+  update: (row, form) => updateScenario(row.id, { ...form, version: row.version }),
+  refresh,
+})
 
 async function onImport(file: File) {
   try {
     const result = await runExcelImport(file, (onProgress) => importScenarios(file, onProgress))
     reportImportResult(result, '行业场景-跳过明细.xlsx')
-    await Promise.all([load(), filters.load()])
+    await refresh()
   } catch (error) {
     ElMessage.error(errorMessage(error, '导入失败'))
   }
@@ -225,261 +81,10 @@ const { exporting, onExport } = useExcelExport({
   filters: () => filtersForExport(listQuery.applied),
 })
 
-function openLogs() {
-  void router.push({ name: 'system-audit', query: { module_code: 'codebook.scenarios' } })
-}
-
 onMounted(() => {
   void load()
   void filters.load()
 })
-
-const editorGroups: EditorGroup[] = [
-  {
-    "title": "行业与场景标识",
-    "hint": "编码用于关联业务数据，请与现有码表保持一致。",
-    "fields": [
-      {
-        "key": "industry_scenario_code",
-        "label": "行业场景编码",
-        "long": false,
-        "required": false,
-        "maxLength": 64
-      },
-      {
-        "key": "industry_code",
-        "label": "行业编码",
-        "long": false,
-        "required": false,
-        "maxLength": 32
-      },
-      {
-        "key": "industry_l1",
-        "label": "项目一级行业",
-        "long": false,
-        "required": false,
-        "maxLength": 128
-      },
-      {
-        "key": "industry_l2",
-        "label": "项目二级行业",
-        "long": false,
-        "required": false,
-        "maxLength": 128
-      },
-      {
-        "key": "industry_l3",
-        "label": "项目三级行业",
-        "long": false,
-        "required": false,
-        "maxLength": 128
-      },
-      {
-        "key": "scenario_tag",
-        "label": "场景标签",
-        "long": false,
-        "required": false,
-        "maxLength": 255
-      },
-      {
-        "key": "scenario_level",
-        "label": "场景level",
-        "long": false,
-        "required": false,
-        "maxLength": 16
-      },
-      {
-        "key": "scenario_type",
-        "label": "场景类型",
-        "long": false,
-        "required": false,
-        "maxLength": 16
-      },
-      {
-        "key": "scenario_source",
-        "label": "场景来源",
-        "long": false,
-        "required": false
-      },
-      {
-        "key": "scenario_hierarchy",
-        "label": "场景层级",
-        "long": false,
-        "required": false,
-        "maxLength": 64
-      },
-      {
-        "key": "scenario_code",
-        "label": "场景编码",
-        "long": false,
-        "required": false,
-        "maxLength": 64
-      }
-    ]
-  },
-  {
-    "title": "场景描述",
-    "hint": "分别填写不同用途的场景摘要和层级说明。",
-    "fields": [
-      {
-        "key": "desc_90",
-        "label": "场景描述(90字)",
-        "long": true,
-        "required": false
-      },
-      {
-        "key": "desc_130",
-        "label": "场景描述(130字)",
-        "long": true,
-        "required": false
-      },
-      {
-        "key": "desc_pest",
-        "label": "场景描述(PEST总结)",
-        "long": true,
-        "required": false
-      },
-      {
-        "key": "scenario_l1_name",
-        "label": "项目一级场景名称",
-        "long": false,
-        "required": false,
-        "maxLength": 255
-      },
-      {
-        "key": "scenario_l1_desc",
-        "label": "项目一级场景描述",
-        "long": true,
-        "required": false
-      },
-      {
-        "key": "scenario_l2_name",
-        "label": "项目二级场景名称",
-        "long": false,
-        "required": false,
-        "maxLength": 255
-      },
-      {
-        "key": "scenario_l2_desc",
-        "label": "项目二级场景描述",
-        "long": true,
-        "required": false
-      },
-      {
-        "key": "scenario_l3_name",
-        "label": "项目三级场景名称",
-        "long": false,
-        "required": false,
-        "maxLength": 255
-      },
-      {
-        "key": "scenario_l3_desc",
-        "label": "项目三级场景描述",
-        "long": true,
-        "required": false
-      }
-    ]
-  },
-  {
-    "title": "目标客群",
-    "hint": "描述适用客群及筛选线索。",
-    "fields": [
-      {
-        "key": "customer_group_name",
-        "label": "客群名称",
-        "long": false,
-        "required": false,
-        "maxLength": 255
-      },
-      {
-        "key": "customer_group_industry",
-        "label": "客群行业",
-        "long": false,
-        "required": false,
-        "maxLength": 255
-      },
-      {
-        "key": "org_keywords",
-        "label": "机构及企业名称包含关键词",
-        "long": true,
-        "required": false
-      },
-      {
-        "key": "scope_keywords",
-        "label": "经营范围包含",
-        "long": true,
-        "required": false
-      },
-      {
-        "key": "customer_level",
-        "label": "客户等级",
-        "long": false,
-        "required": false,
-        "maxLength": 255
-      },
-      {
-        "key": "customer_category",
-        "label": "客户类别",
-        "long": false,
-        "required": false,
-        "maxLength": 255
-      }
-    ]
-  },
-  {
-    "title": "产品与排序",
-    "hint": "补充产品名称及展示顺序，排序按正序填写。",
-    "fields": [
-      {
-        "key": "product_l1_name",
-        "label": "项目一级产品名称",
-        "long": false,
-        "required": false,
-        "maxLength": 255
-      },
-      {
-        "key": "product_l2_name",
-        "label": "项目二级产品名称",
-        "long": false,
-        "required": false,
-        "maxLength": 255
-      },
-      {
-        "key": "branch_count",
-        "label": "下属分支机构数",
-        "long": false,
-        "required": false,
-        "maxLength": 64
-      },
-      {
-        "key": "product_l1_sort",
-        "label": "一级产品排序（正序）",
-        "long": false,
-        "required": false,
-        "maxLength": 32
-      },
-      {
-        "key": "product_l2_sort",
-        "label": "二级产品排序（正序）",
-        "long": false,
-        "required": false,
-        "maxLength": 32
-      }
-    ]
-  }
-]
-const editorFields = ref<InstanceType<typeof GroupedFields>>()
-const editorGuard = useUnsavedForm(visible, () => form, saving)
-
-const legacyDefaults = ['scenario_tag', 'industry_l1', 'customer_group_name', 'product_l1_name']
-
-const detailColumns = computed(() => {
-  const known = new Set(tableColumns.map(col => String(col.prop)))
-  return [...tableColumns, ...editorGroups.flatMap(group => group.fields).filter(field => !known.has(field.key)).map(field => ({ prop: field.key, label: field.label }))]
-})
-const defaultColumns = computed(() => detailColumns.value.map(col => col.prop))
-const selectedColumns = ref([...defaultColumns.value])
-const NO_EXPORT_HINT = '你的角色没有导出权限，如需下载 Excel 请联系管理员开通「导出」。'
 </script>
 
 <template>
@@ -502,57 +107,28 @@ const NO_EXPORT_HINT = '你的角色没有导出权限，如需下载 Excel 请�
           v-if="canWrite"
           type="primary"
           :icon="Plus"
-          @click="openCreate"
+          @click="editor.openCreate"
         >
           新增
         </el-button>
-        <el-upload
+        <ImportButton
           v-if="canWrite"
-          :show-file-list="false"
-          accept=".xlsx"
-          :before-upload="onImport"
-        >
-          <el-tooltip
-            content="按整行内容去重，重复记录会跳过；导入完成后可查看结果和校验报告。"
-            placement="bottom"
-          >
-            <el-button
-              :icon="Upload"
-              :disabled="importUi.visible"
-            >
-              上传 Excel
-            </el-button>
-          </el-tooltip>
-        </el-upload>
-        <el-tooltip
-          :content="canExport ? '按当前已生效的筛选条件导出；未筛选时导出全表。' : NO_EXPORT_HINT"
-          placement="bottom"
-        >
-          <span>
-            <el-button
-              :icon="Download"
-              :loading="exporting"
-              :disabled="!canExport"
-              @click="onExport"
-            >
-              下载 Excel
-            </el-button>
-          </span>
-        </el-tooltip>
-        <el-button
-          v-if="canAudit"
-          :icon="Clock"
-          @click="openLogs"
-        >
-          操作记录
-        </el-button>
+          hint="按整行内容去重，重复记录会跳过；导入完成后可查看结果和校验报告。"
+          :upload="onImport"
+        />
+        <ExportButton
+          :allowed="auth.canExport(RESOURCE)"
+          :loading="exporting"
+          @click="onExport"
+        />
+        <AuditLogButton :module="RESOURCE" />
       </template>
       <template #filters>
         <FilterBar
           :query="query"
           :applied="listQuery.applied"
-          @search="onSearch"
-          @reset="onResetFilters"
+          @search="listQuery.search"
+          @reset="listQuery.resetFilters"
         >
           <el-form-item label="行业场景编码">
             <FilterSelect
@@ -585,70 +161,29 @@ const NO_EXPORT_HINT = '你的角色没有导出权限，如需下载 Excel 请�
       </template>
       <template #tools>
         <ColumnPicker
-          v-model="selectedColumns"
-          :columns="detailColumns"
-          :defaults="defaultColumns"
-          :legacy-defaults="legacyDefaults"
+          v-model="selected"
+          :columns="columns"
+          :defaults="defaults"
+          :legacy-defaults="SUMMARY_KEYS"
         />
       </template>
       <BusinessTable
         :items="items"
-        :columns="detailColumns"
-        :selected="selectedColumns"
-        :summary-keys="legacyDefaults"
+        :columns="columns"
+        :selected="selected"
+        :summary-keys="SUMMARY_KEYS"
         title-key="scenario_tag"
         detail-title="行业场景详情"
         :can-write="canWrite"
         :loading="loading"
         :filtered="resultFiltered"
-        @reset="onResetFilters"
-        @edit="openEdit"
+        @reset="listQuery.resetFilters"
+        @edit="editor.openEdit"
       />
     </ListPage>
-    <el-drawer
-      v-model="visible"
-      class="editor-overlay"
-      destroy-on-close
-      :before-close="editorGuard.beforeClose"
-      :close-on-click-modal="!saving"
-      :close-on-press-escape="!saving"
-      :show-close="!saving"
-      :title="editing ? '编辑行业场景码表' : '新增行业场景码表'"
-      size="700px"
-    >
-      <el-form
-        novalidate
-        :disabled="saving"
-        label-position="top"
-        @submit.prevent="onSave"
-      >
-        <GroupedFields
-          ref="editorFields"
-          :model-value="form"
-          :groups="editorGroups"
-          :submit-error="saveError"
-        />
-      </el-form>
-      <template #footer>
-        <span
-          v-if="editorGuard.dirty.value"
-          class="editor-dirty"
-          role="status"
-        >有未保存的修改</span>
-        <el-button
-          :disabled="saving"
-          @click="editorGuard.close"
-        >
-          取消
-        </el-button>
-        <el-button
-          type="primary"
-          :loading="saving"
-          @click="onSave"
-        >
-          保存
-        </el-button>
-      </template>
-    </el-drawer>
+    <RecordEditorDrawer
+      :editor="editor"
+      :groups="EDITOR_GROUPS"
+    />
   </div>
 </template>

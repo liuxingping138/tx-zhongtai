@@ -96,6 +96,21 @@ export function useListQuery<T extends Record<string, Value>>(query: T, reload: 
     if ('page' in live) live.page = 1
     if ('page' in stored) stored.page = 1
   }
+  /** 点「查询」：回到第一页，把输入框里的条件作为已生效条件，再加载。 */
+  function search() {
+    const live = query as Record<string, Value>
+    if ('page' in live) live.page = 1
+    captureApplied()
+    void reload()
+  }
+  /** 点「重置」：筛选条件恢复成进页面时的初始值（每页条数不变），再按查询处理。 */
+  function resetFilters() {
+    const live = query as Record<string, Value>
+    for (const [key, value] of Object.entries(defaults)) {
+      if (!PAGING_KEYS.includes(key)) live[key] = JSON.parse(JSON.stringify(value)) as Value
+    }
+    search()
+  }
   watch(() => route.query, () => {
     if (committing || route.path !== path || signature() === committed) return
     committed = signature()
@@ -103,7 +118,7 @@ export function useListQuery<T extends Record<string, Value>>(query: T, reload: 
     captureApplied()
     void reload()
   })
-  return { commit, commitPage, requested, applied, captureApplied, replaceApplied }
+  return { commit, commitPage, requested, applied, captureApplied, replaceApplied, search, resetFilters }
 }
 
 /** 把筛选值（多选数组或旧的单值）统一成去空、去重的字符串数组。 */

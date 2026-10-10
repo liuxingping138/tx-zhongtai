@@ -73,4 +73,19 @@ describe('committed list navigation', () => {
     route.path = '/other'; route.query = { keyword: '其他页' }; await nextTick()
     expect(query.keyword).toBe(''); expect(reload).toHaveBeenCalledTimes(1)
   })
+  it('查询回到第一页，把输入框里的条件变成已生效条件再加载', () => {
+    const { query, sync, reload } = setup({ page: '3' })
+    query.keyword = '新条件'
+    sync.search()
+    expect(query.page).toBe(1)
+    expect(sync.applied.keyword).toBe('新条件')
+    expect(reload).toHaveBeenCalledOnce()
+  })
+  it('重置把筛选恢复成初始值，每页条数保持不变', () => {
+    const { query, sync, reload } = setup({ keyword: '旧条件', range: ['2026-01-01', '2026-02-01'], page: '2', page_size: '50' })
+    sync.resetFilters()
+    expect(query).toEqual({ keyword: '', username: '', range: [], page: 1, page_size: 50 })
+    expect(sync.applied.keyword).toBe('')
+    expect(reload).toHaveBeenCalledOnce()
+  })
 })
