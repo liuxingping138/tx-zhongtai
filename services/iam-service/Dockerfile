@@ -4,13 +4,12 @@
 
 FROM python:3.12.7-slim-bookworm AS base
 
-# 官方包文件从国外 CDN 下载只有几十 KB/s，大包会在 120 秒内下不完。
+# 下载源在各服务 pyproject 的 [[tool.uv.index]]（阿里云）里配置并写进 uv.lock；--frozen 只认锁文件里的地址。
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    UV_HTTP_TIMEOUT=120 \
-    UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple
+    UV_HTTP_TIMEOUT=120
 
 COPY --from=ghcr.io/astral-sh/uv:0.12.13 /uv /uvx /usr/local/bin/
 
