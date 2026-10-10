@@ -166,6 +166,15 @@ wheels = [
 ]
 
 [[package]]
+name = "defusedxml"
+version = "0.7.1"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple" }
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/0f/d5/c66da9b79e5bdb124974bfe172b4daf3c984ebd9c2a06e2b8a4dc7331c72/defusedxml-0.7.1.tar.gz", hash = "sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl", hash = "sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61" },
+]
+
+[[package]]
 name = "et-xmlfile"
 version = "2.0.0"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple" }
@@ -457,6 +466,7 @@ version = "0.1.0"
 source = { editable = "../../packages/platform-common" }
 dependencies = [
     { name = "anyio" },
+    { name = "defusedxml" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "openpyxl" },
@@ -470,6 +480,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "anyio", specifier = ">=4.4,<5.0" },
+    { name = "defusedxml", specifier = ">=0.7,<0.8" },
     { name = "fastapi", specifier = ">=0.115,<0.116" },
     { name = "httpx", specifier = ">=0.27,<0.28" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.11,<2.0" },
@@ -483,6 +494,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6,<1.0" },
     { name = "sqlalchemy", specifier = ">=2.0,<2.1" },
     { name = "structlog", specifier = ">=24.4,<25.0" },
+    { name = "types-defusedxml", marker = "extra == 'dev'", specifier = ">=0.7,<0.8" },
     { name = "types-openpyxl", marker = "extra == 'dev'", specifier = ">=3.1,<4.0" },
 ]
 provides-extras = ["dev"]
@@ -526,6 +538,7 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "ruff" },
+    { name = "types-defusedxml" },
     { name = "types-openpyxl" },
     { name = "types-pymysql" },
 ]
@@ -549,6 +562,7 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.12,<0.0.20" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6,<1.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0,<2.1" },
+    { name = "types-defusedxml", marker = "extra == 'dev'", specifier = ">=0.7,<0.8" },
     { name = "types-openpyxl", marker = "extra == 'dev'", specifier = ">=3.1,<4.0" },
     { name = "types-pymysql", marker = "extra == 'dev'", specifier = ">=1.1,<1.2" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30,<0.31" },
@@ -824,6 +838,15 @@ source = { registry = "https://mirrors.aliyun.com/pypi/simple" }
 sdist = { url = "https://mirrors.aliyun.com/pypi/packages/78/a3/e811a94ac3853826805253c906faa99219b79951c7d58605e89c79e65768/structlog-24.4.0.tar.gz", hash = "sha256:b27bfecede327a6d2da5fbc96bd859f114ecc398a6389d664f62085ee7ae6fc4" }
 wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/bf/65/813fc133609ebcb1299be6a42e5aea99d6344afb35ccb43f67e7daaa3b92/structlog-24.4.0-py3-none-any.whl", hash = "sha256:597f61e80a91cc0749a9fd2a098ed76715a1c8a01f73e336b746504d1aad7610" },
+]
+
+[[package]]
+name = "types-defusedxml"
+version = "0.7.0.20260504"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple" }
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/da/d2/4553c8fa9cdebfe1e84b950cf790a4d2376a97fa016e43f7c65323fa6c7d/types_defusedxml-0.7.0.20260504.tar.gz", hash = "sha256:2ab2828a3f97111ba1c16cee273ad4124a831fc9198c41bf8368ff6ea48ad300" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/bf/2d/8a4b5ba1d732b8bc691f0efbb1c6f77cb5f6f473b2afe181d83d910773c5/types_defusedxml-0.7.0.20260504-py3-none-any.whl", hash = "sha256:a959e3a0a43b93e464bd625d91ec9193a2703ddc10443bdd627792485fae0b10" },
 ]
 
 [[package]]

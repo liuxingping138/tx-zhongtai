@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import io
+import zipfile
 
 import pytest
+from defusedxml import EntitiesForbidden
 from openpyxl import Workbook
 
 from platform_common.columns import ColumnSpec
@@ -100,3 +102,24 @@ async def test_resolve_and_import_share_actual_concurrency_budget() -> None:
 
     await asyncio.gather(*(run_excel_parse(work) for _ in range(6)))
     assert peak == 2
+
+
+def _with_entity_bomb(content: bytes) -> bytes:
+    """把工作表 XML 换成带实体定义的版本：标准库解析器会展开实体，defusedxml 必须拒绝。"""
+    source = zipfile.ZipFile(io.BytesIO(content))
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w") as target:
+        for info in source.infolist():
+            data = source.read(info.filename)
+            if info.filename == "xl/worksheets/sheet1.xml":
+                bomb = b'<!DOCTYPE worksheet [<!ENTITY a "aaaaaaaaaa"><!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;">]>'
+                assert b"<!DOCTYPE" not in data
+                data = bomb + data
+            target.writestr(info, data)
+    return out.getvalue()
+
+
+def test_entity_definitions_in_uploaded_xml_are_rejected() -> None:
+    with pytest.raises(ApiError, match="无法读取 Excel 文件") as caught:
+        parse_sheet(_with_entity_bomb(_sheet(1)), _COLUMNS)
+    assert isinstance(caught.value.__cause__, EntitiesForbidden)

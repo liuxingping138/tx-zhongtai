@@ -16,6 +16,8 @@ dependencies = [
   "SQLAlchemy>=2.0,<2.1",
   # excel 模块：业务表导入导出
   "openpyxl>=3.1,<4.0",
+  # 上传的 xlsx 是不可信 XML：坐标检查用 defusedxml，禁止实体展开和外部实体
+  "defusedxml>=0.7,<0.8",
   "anyio>=4.4,<5.0",
 ]
 
@@ -23,6 +25,7 @@ dependencies = [
 dev = [
   "ruff>=0.6,<1.0",
   "mypy>=1.11,<2.0",
+  "types-defusedxml>=0.7,<0.8",
   "types-openpyxl>=3.1,<4.0",
   "pytest>=8.3,<9.0",
   "pytest-asyncio>=0.24,<0.25",
@@ -55,7 +58,7 @@ extend = "../../ruff.toml"
 # 存量基线（2026-10-09 登记）：结构性问题按 docs/guides/工程规范.md 第 8 节分批整改，
 # 修完一条删一条；不许往这里加新条目，新代码必须直接满足规则。
 "platform_common/audit_emit.py" = ["PLR0913"]
-"platform_common/excel.py" = ["C901", "PLR0912", "PLR0913", "S314"]
+"platform_common/excel.py" = ["PLR0913"]
 
 [tool.mypy]
 python_version = "3.12"

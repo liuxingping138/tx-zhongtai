@@ -11,10 +11,10 @@ import zipfile
 from collections.abc import Callable, Iterator
 from functools import partial
 from io import BytesIO
-from typing import Any
-from xml.etree.ElementTree import iterparse
+from typing import IO, TYPE_CHECKING, Any
 
 from anyio import CapacityLimiter, to_thread
+from defusedxml.ElementTree import iterparse as safe_iterparse
 from openpyxl import Workbook, load_workbook
 from openpyxl.cell.cell import Cell
 from openpyxl.utils.cell import coordinate_to_tuple, range_boundaries
@@ -23,6 +23,9 @@ from openpyxl.worksheet.worksheet import Worksheet
 from platform_common.clock import format_beijing
 from platform_common.columns import AUDIT_EXPORT_COLUMNS, ColumnSpec, header_to_field
 from platform_common.errors import ApiError, ErrorCode
+
+if TYPE_CHECKING:
+    from xml.etree.ElementTree import Element
 
 # 20MB 压缩包不能代表解压后的大小。这些上限拦住超大表和压缩炸弹，
 # 同时仍盖住现有 10 万行导出上限对应的导入规模。
@@ -72,6 +75,43 @@ def _reject_oversized_workbook(content: bytes, *, max_uncompressed_bytes: int) -
                         raise ApiError("Excel 解压后过大", code=ErrorCode.VALIDATION_ERROR, http_status=422)
 
 
+def _element_extent(element: Element, tag: str, row_count: int, cell_count: int) -> tuple[int, int, int, int]:
+    """返回该元素声明或实际占用的 (行, 列)，以及更新后的行计数、本行单元格计数。0 表示不涉及。"""
+
+    row = col = 0
+    if tag == "dimension" and element.get("ref"):
+        _, _, max_col, max_row = range_boundaries(element.attrib["ref"])
+        col, row = max_col or 0, max_row or 0
+    elif tag == "row":
+        cell_count = 0
+        row_count += 1
+        row = max(row_count, int(element.get("r", row_count)))
+    elif tag == "c":
+        cell_count += 1
+        col = cell_count
+        if element.get("r"):
+            row, coordinate_col = coordinate_to_tuple(element.attrib["r"])
+            col = max(col, coordinate_col)
+    return row, col, row_count, cell_count
+
+
+def _check_sheet_coordinates(source: IO[bytes], *, max_rows: int, max_columns: int) -> None:
+    """按工作表 XML 的实际坐标限制行列数，不相信声明的 dimension，也挡住稀疏行放大解析量。
+
+    上传文件不可信，用 defusedxml 解析：禁止实体展开和外部实体。
+    """
+
+    row_count = cell_count = 0
+    for _, element in safe_iterparse(source, events=("end",)):
+        tag = element.tag.rsplit("}", 1)[-1]
+        row, col, row_count, cell_count = _element_extent(element, tag, row_count, cell_count)
+        if row and row > max_rows + 1:
+            raise ApiError("Excel 行数超过上限", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+        if col and col > max_columns:
+            raise ApiError("Excel 列数超过上限", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+        element.clear()
+
+
 def iter_workbook_rows(
     content: bytes,
     *,
@@ -84,32 +124,9 @@ def iter_workbook_rows(
         _reject_oversized_workbook(content, max_uncompressed_bytes=max_uncompressed_bytes)
         with zipfile.ZipFile(BytesIO(content)) as archive:
             for name in archive.namelist():
-                if not (name.startswith("xl/worksheets/") and name.endswith(".xml")):
-                    continue
-                row_count = 0
-                cell_count = 0
-                with archive.open(name) as source:
-                    for _, element in iterparse(source, events=("end",)):
-                        tag = element.tag.rsplit("}", 1)[-1]
-                        row = col = 0
-                        if tag == "dimension" and element.get("ref"):
-                            _, _, max_col, max_row = range_boundaries(element.attrib["ref"])
-                            col, row = max_col or 0, max_row or 0
-                        elif tag == "row":
-                            cell_count = 0
-                            row_count += 1
-                            row = max(row_count, int(element.get("r", row_count)))
-                        elif tag == "c":
-                            cell_count += 1
-                            col = cell_count
-                            if element.get("r"):
-                                row, coordinate_col = coordinate_to_tuple(element.attrib["r"])
-                                col = max(col, coordinate_col)
-                        if row and row > max_rows + 1:
-                            raise ApiError("Excel 行数超过上限", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-                        if col and col > max_columns:
-                            raise ApiError("Excel 列数超过上限", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-                        element.clear()
+                if name.startswith("xl/worksheets/") and name.endswith(".xml"):
+                    with archive.open(name) as source:
+                        _check_sheet_coordinates(source, max_rows=max_rows, max_columns=max_columns)
         book = load_workbook(BytesIO(content), read_only=True, data_only=True)
         try:
             sheet = book[book.sheetnames[0]]
