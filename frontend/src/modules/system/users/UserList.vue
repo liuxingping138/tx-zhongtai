@@ -1,32 +1,25 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 
-import {
-  NO_ROLE,
-  deleteUser,
-  importUsers,
-  listAllRoles,
-  listUsers,
-  resetUserPassword,
-  revokeUserSessions,
-  updateUser,
-} from '@/api/system'
+import { NO_ROLE, importUsers, listAllRoles, listUsers } from '@/api/system'
 import { errorMessage } from '@/api/errors'
-import { downloadFile } from '@/api/download'
-import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
-import { Download, Upload } from '@element-plus/icons-vue'
+import { reportImportResult, runExcelImport } from '@/api/excelImport'
 import type { RoleItem, UserItem } from '@/api/types'
-import { formatTime } from '@/utils/time'
+import ExportButton from '@/components/ExportButton.vue'
+import FilterBar from '@/components/FilterBar.vue'
+import ImportButton from '@/components/ImportButton.vue'
+import ListPage from '@/components/ListPage.vue'
+import PasswordOnceDialog from '@/components/PasswordOnceDialog.vue'
+import { useExcelExport } from '@/composables/useExcelExport'
+import { useListLoader } from '@/composables/useListLoader'
+import { filtersForExport, useListQuery } from '@/composables/useListQuery'
+import { useUserActions } from '@/composables/useUserActions'
+import { useAuthStore } from '@/stores/auth'
 import UserCreateDrawer from './UserCreateDrawer.vue'
 import UserDetailDrawer from './UserDetailDrawer.vue'
-import { useAuthStore } from '@/stores/auth'
-import ListPage from '@/components/ListPage.vue'
-import FilterBar from '@/components/FilterBar.vue'
-import { filtersForExport, useListQuery } from '@/composables/useListQuery'
-import ListEmpty from '@/components/ListEmpty.vue'
-import PasswordOnceDialog from '@/components/PasswordOnceDialog.vue'
+import UserTable from './UserTable.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -35,14 +28,7 @@ const canGrant = computed(() => auth.canFull('system.permissions'))
 const canReadRoles = computed(() => auth.canRead('system.roles'))
 const canAudit = computed(() => auth.canRead('system.audit'))
 const canEditUsers = computed(() => auth.canFull('system.users'))
-const canExportUsers = computed(() => auth.canExport('system.users'))
-/** 还没分配角色的账号数，给能分配角色的人一个入口直接筛出来。 */
-const pendingCount = ref(0)
-const loading = ref(false)
-const loadError = ref('')
-const resultFiltered = ref(false)
-const users = ref<UserItem[]>([])
-const total = ref(0)
+
 const query = reactive({
   keyword: '',
   role_id: [] as string[],
@@ -50,21 +36,27 @@ const query = reactive({
   page: 1,
   page_size: 20,
 })
-
-const createVisible = ref(false)
 const allRoles = ref<RoleItem[]>([])
+/** 还没分配角色的账号数，给能分配角色的人一个入口直接筛出来。 */
+const pendingCount = ref(0)
 
-const detailVisible = ref(false)
-const detailUserId = ref<string | null>(null)
-
-const onceVisible = ref(false)
-const oncePassword = ref('')
-const onceUsername = ref('')
-
-function openCreate() {
-  createVisible.value = true
-  if (canGrant.value) void loadRoles()
-}
+// 关键词可能是电话、邮箱，属于个人信息，不写进地址栏。
+const listQuery = useListQuery(query, (): Promise<void> => load(), ['keyword'])
+const { items, total, loading, loadError, resultFiltered, load } = useListLoader({
+  requested: () => listQuery.requested(),
+  commitPage: () => listQuery.commitPage(),
+  fetch: (params) => {
+    void loadPendingCount()
+    return listUsers({
+      page: params.page,
+      page_size: params.page_size,
+      keyword: params.keyword.trim() || undefined,
+      role_id: params.role_id || undefined,
+      status: params.status || undefined,
+    })
+  },
+  errorText: '加载用户失败',
+})
 
 async function loadRoles() {
   if (!canReadRoles.value) return
@@ -72,41 +64,6 @@ async function loadRoles() {
     allRoles.value = await listAllRoles()
   } catch {
     /* 角色列表失败不影响用户列表；筛选退化为不可选，分配角色处会显示空列表。 */
-  }
-}
-
-// 关键词可能是电话、邮箱，属于个人信息，不写进地址栏。
-const listQuery = useListQuery(query, load, ['keyword'])
-
-let loadSequence = 0
-
-async function load() {
-  const params = listQuery.requested()
-  void listQuery.commitPage()
-  const sequence = ++loadSequence
-  loading.value = true
-  loadError.value = ''
-  const filtered = Object.entries(params).some(([key, value]) =>
-    !['page', 'page_size'].includes(key) && (Array.isArray(value) ? value.length > 0 : Boolean(value)),
-  )
-  void loadPendingCount()
-  try {
-    const page = await listUsers({
-      page: params.page,
-      page_size: params.page_size,
-      keyword: params.keyword.trim() || undefined,
-      role_id: params.role_id || undefined,
-      status: params.status || undefined,
-    })
-    if (sequence !== loadSequence) return
-    users.value = page.items
-    total.value = page.total
-    resultFiltered.value = filtered
-  } catch (error) {
-    if (sequence !== loadSequence) return
-    loadError.value = errorMessage(error, '加载用户失败')
-  } finally {
-    if (sequence === loadSequence) loading.value = false
   }
 }
 
@@ -121,7 +78,7 @@ async function loadPendingCount() {
 
 function showPending() {
   query.role_id = [NO_ROLE]
-  onSearch()
+  listQuery.search()
 }
 
 const IMPORT_HINT = '表头：用户名、显示名、电话、邮箱、角色。只新增不覆盖，已存在的用户名会跳过；'
@@ -142,104 +99,40 @@ async function onImport(file: File) {
   return false
 }
 
-const exporting = ref(false)
+const { exporting, onExport } = useExcelExport({
+  path: '/system/users/export',
+  filename: '用户.xlsx',
+  filters: () => filtersForExport(listQuery.applied),
+})
 
-async function onExport() {
-  if (exporting.value) return
-  exporting.value = true
-  try {
-    await downloadFile('/system/users/export', '用户.xlsx', filtersForExport(listQuery.applied))
-    ElMessage.success('下载已开始，请查看浏览器下载列表')
-  } catch (error) {
-    ElMessage.error(errorMessage(error, '下载失败，请重试'))
-  } finally {
-    exporting.value = false
-  }
+// 密码只显示一次：重置密码和新建账号共用同一个弹窗。
+const onceVisible = ref(false)
+const oncePassword = ref('')
+const onceUsername = ref('')
+
+function showPassword(username: string, password: string) {
+  onceUsername.value = username
+  oncePassword.value = password
+  onceVisible.value = true
 }
 
-function onResetFilters() {
-  query.keyword = ''
-  query.role_id = []
-  query.status = []
-  onSearch()
+function clearOnce() {
+  oncePassword.value = ''
+  onceUsername.value = ''
 }
 
-function onSearch() {
-  query.page = 1
-  listQuery.captureApplied()
-  void load()
+const createVisible = ref(false)
+const detailVisible = ref(false)
+const detailUserId = ref<string | null>(null)
+
+function openCreate() {
+  createVisible.value = true
+  if (canGrant.value) void loadRoles()
 }
 
 function onCreated(result: { username: string; temporaryPassword: string | null }) {
-  if (result.temporaryPassword) {
-    oncePassword.value = result.temporaryPassword
-    onceUsername.value = result.username
-    onceVisible.value = true
-  }
+  if (result.temporaryPassword) showPassword(result.username, result.temporaryPassword)
   void load()
-}
-
-async function toggleStatus(user: UserItem) {
-  const next = user.status === 'active' ? 'disabled' : 'active'
-  const label = next === 'disabled' ? '禁用' : '启用'
-  const confirmed = await ElMessageBox.confirm(`确认${label}用户 ${user.username} ？`, '请确认', { type: 'warning' }).then(() => true, () => false)
-  if (!confirmed) return
-  try {
-    await updateUser(user.id, { status: next, version: user.version })
-    ElMessage.success(`已${label}`)
-    await load()
-  } catch (error) {
-    ElMessage.error(errorMessage(error, `${label}失败`))
-  }
-}
-
-async function onDelete(user: UserItem) {
-  const confirmed = await ElMessageBox.confirm(
-    `删除后，${user.username} 不能再登录，也不会出现在用户列表里。操作日志仍保留。这个用户名以后可以重新使用。`,
-    '删除用户',
-    { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消', confirmButtonClass: 'el-button--danger' },
-  ).then(() => true, () => false)
-  if (!confirmed) return
-  try {
-    await deleteUser(user.id)
-    ElMessage.success('已删除')
-    if (detailUserId.value === user.id) detailVisible.value = false
-    await load()
-  } catch (error) {
-    ElMessage.error(errorMessage(error, '删除失败'))
-  }
-}
-
-async function onReset(user: UserItem) {
-  const confirmed = await ElMessageBox.confirm(`将重置 ${user.username} 的密码并强制其下次登录改密，是否继续？`, '重置密码', {
-    type: 'warning',
-  }).then(() => true, () => false)
-  if (!confirmed) return
-  try {
-    const result = await resetUserPassword(user.id)
-    oncePassword.value = result.temporary_password
-    onceUsername.value = user.username
-    onceVisible.value = true
-    ElMessage.success('已重置密码')
-    await load()
-  } catch (error) {
-    ElMessage.error(errorMessage(error, '重置失败'))
-  }
-}
-
-async function onRevoke(user: UserItem) {
-  const confirmed = await ElMessageBox.confirm(`确认强制下线 ${user.username} 的全部会话？`, '强制下线', { type: 'warning' }).then(() => true, () => false)
-  if (!confirmed) return
-  try {
-    const result = await revokeUserSessions(user.id)
-    ElMessage.success(`已撤销 ${result.revoked} 个会话`)
-  } catch (error) {
-    ElMessage.error(errorMessage(error, '下线失败'))
-  }
-}
-
-function roleNames(user: UserItem): string {
-  return (user.roles ?? []).map(role => role.name).join('、')
 }
 
 function openDetail(user: UserItem) {
@@ -248,8 +141,8 @@ function openDetail(user: UserItem) {
 }
 
 function onDetailChanged(user: UserItem) {
-  const index = users.value.findIndex(item => item.id === user.id)
-  if (index >= 0) users.value[index] = { ...users.value[index], ...user }
+  const index = items.value.findIndex(item => item.id === user.id)
+  if (index >= 0) items.value[index] = { ...items.value[index], ...user }
   void loadRoles()
   void loadPendingCount()
   if (user.id === auth.user?.id) void auth.loadProfile()
@@ -259,10 +152,13 @@ function openAudit(user: UserItem) {
   void router.push({ name: 'system-audit', state: { auditActor: user.display_name } })
 }
 
-function clearOnce() {
-  oncePassword.value = ''
-  onceUsername.value = ''
-}
+const actions = useUserActions({
+  reload: load,
+  showPassword,
+  deleted: (userId) => {
+    if (detailUserId.value === userId) detailVisible.value = false
+  },
+})
 
 onMounted(() => {
   void load()
@@ -311,53 +207,31 @@ onMounted(() => {
         >
           新增用户
         </el-button>
-        <el-upload
+        <ImportButton
           v-if="canEditUsers"
-          :show-file-list="false"
-          accept=".xlsx"
-          :before-upload="onImport"
-        >
-          <el-tooltip
-            :content="IMPORT_HINT"
-            placement="bottom"
-          >
-            <el-button
-              :icon="Upload"
-              :disabled="importUi.visible"
-            >
-              上传 Excel
-            </el-button>
-          </el-tooltip>
-        </el-upload>
-        <el-tooltip
-          :content="canExportUsers ? '按当前已生效的筛选条件导出，不含密码。导出的文件改好后可以直接当导入模板。' : '你的角色没有导出权限，如需下载 Excel 请联系管理员开通「导出」。'"
-          placement="bottom"
-        >
-          <span>
-            <el-button
-              :icon="Download"
-              :loading="exporting"
-              :disabled="!canExportUsers"
-              @click="onExport"
-            >
-              下载 Excel
-            </el-button>
-          </span>
-        </el-tooltip>
+          :hint="IMPORT_HINT"
+          :upload="onImport"
+        />
+        <ExportButton
+          :allowed="auth.canExport('system.users')"
+          :loading="exporting"
+          hint="按当前已生效的筛选条件导出，不含密码。导出的文件改好后可以直接当导入模板。"
+          @click="onExport"
+        />
       </template>
       <template #filters>
         <FilterBar
           :query="query"
           :applied="listQuery.applied"
-          @search="onSearch"
-          @reset="onResetFilters"
+          @search="listQuery.search"
+          @reset="listQuery.resetFilters"
         >
           <el-form-item label="关键词">
             <el-input
               v-model="query.keyword"
               clearable
               placeholder="用户名、姓名、电话或邮箱"
-              @keyup.enter="onSearch"
+              @keyup.enter="listQuery.search"
             />
           </el-form-item>
           <el-form-item
@@ -406,222 +280,18 @@ onMounted(() => {
           </el-form-item>
         </FilterBar>
       </template>
-      <el-table
-        v-loading="loading"
-        class="data-table"
-        :data="users"
-        stripe
-      >
-        <template #empty>
-          <ListEmpty
-            :loading="loading"
-            :filtered="resultFiltered"
-            @reset="onResetFilters"
-          />
-        </template>
-        <el-table-column
-          label="用户名"
-          width="130"
-          show-overflow-tooltip
-        >
-          <template #default="{ row }">
-            <el-button
-              link
-              type="primary"
-              class="user-link"
-              @click="openDetail(row)"
-            >
-              {{ row.username }}
-            </el-button>
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="display_name"
-          label="显示名"
-          min-width="140"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          label="电话"
-          width="130"
-        >
-          <template #default="{ row }">
-            <span v-if="row.phone">{{ row.phone }}</span>
-            <span
-              v-else
-              class="muted"
-            >—</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          label="邮箱"
-          min-width="200"
-          show-overflow-tooltip
-        >
-          <template #default="{ row }">
-            <span v-if="row.email">{{ row.email }}</span>
-            <span
-              v-else
-              class="muted"
-            >—</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          label="角色"
-          min-width="200"
-        >
-          <template #default="{ row }">
-            <div
-              v-if="(row.roles ?? []).length"
-              class="role-cell"
-            >
-              <el-tooltip
-                v-for="role in (row.roles ?? []).slice(0, 2)"
-                :key="role.id"
-                :content="`${role.name}${role.status === 'active' ? '' : '（停用）'}`"
-                placement="top"
-                :show-after="400"
-              >
-                <span class="role-cell__tag">
-                  <el-tag
-                    size="small"
-                    :type="role.status === 'active' ? 'primary' : 'info'"
-                    effect="plain"
-                  >
-                    {{ role.name }}{{ role.status === 'active' ? '' : '（停用）' }}
-                  </el-tag>
-                </span>
-              </el-tooltip>
-              <el-tooltip
-                v-if="(row.roles ?? []).length > 2"
-                :content="roleNames(row)"
-                placement="top"
-              >
-                <el-tag
-                  size="small"
-                  type="info"
-                  effect="plain"
-                >
-                  +{{ (row.roles ?? []).length - 2 }}
-                </el-tag>
-              </el-tooltip>
-            </div>
-            <el-tag
-              v-else
-              size="small"
-              type="warning"
-              effect="plain"
-            >
-              待分配角色
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column
-          label="启用"
-          width="120"
-        >
-          <template #default="{ row }">
-            <template v-if="canEditUsers && row.id !== auth.user?.id">
-              <el-switch
-                :model-value="row.status === 'active'"
-                :aria-label="`${row.username} 的账号启用`"
-                @change="toggleStatus(row)"
-              />
-              <span class="status-text">{{ row.status === 'active' ? '启用' : '禁用' }}</span>
-            </template>
-            <el-tag
-              v-else
-              :type="row.status === 'active' ? 'success' : 'warning'"
-              size="small"
-            >
-              {{ row.status === 'active' ? '启用' : '禁用' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column
-          label="须改密"
-          width="90"
-        >
-          <template #default="{ row }">
-            <el-tag
-              v-if="row.must_change_password"
-              size="small"
-              type="warning"
-              effect="plain"
-            >
-              是
-            </el-tag>
-            <span
-              v-else
-              class="muted"
-            >否</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          label="创建时间"
-          width="190"
-        >
-          <template #default="{ row }">
-            <span class="muted">{{ formatTime(row.created_at) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          label="操作"
-          width="150"
-          fixed="right"
-        >
-          <template #default="{ row }">
-            <el-button
-              link
-              type="primary"
-              @click="openDetail(row)"
-            >
-              {{ canGrant && !(row.roles ?? []).length ? '分配角色' : canEditUsers || canGrant ? '编辑' : '查看' }}
-            </el-button>
-            <el-dropdown
-              v-if="canEditUsers || canAudit"
-              class="ops-more"
-              trigger="click"
-            >
-              <el-button
-                link
-                type="primary"
-              >
-                更多
-              </el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item
-                    v-if="auth.canFull('system.users') && row.id !== auth.user?.id"
-                    @click="onDelete(row)"
-                  >
-                    删除
-                  </el-dropdown-item>
-                  <el-dropdown-item
-                    v-if="auth.canFull('system.users')"
-                    @click="onReset(row)"
-                  >
-                    重置密码
-                  </el-dropdown-item>
-                  <el-dropdown-item
-                    v-if="auth.canFull('system.users')"
-                    @click="onRevoke(row)"
-                  >
-                    强制下线
-                  </el-dropdown-item>
-                  <el-dropdown-item
-                    v-if="canAudit"
-                    :divided="auth.canFull('system.users')"
-                    @click="openAudit(row)"
-                  >
-                    操作记录
-                  </el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-          </template>
-        </el-table-column>
-      </el-table>
+      <UserTable
+        :users="items"
+        :loading="loading"
+        :filtered="resultFiltered"
+        @open="openDetail"
+        @toggle="actions.toggleStatus"
+        @remove="actions.remove"
+        @reset-password="actions.resetPassword"
+        @revoke="actions.revokeSessions"
+        @audit="openAudit"
+        @reset="listQuery.resetFilters"
+      />
     </ListPage>
 
     <UserCreateDrawer
@@ -651,47 +321,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.muted {
-  color: var(--zt-ink-500);
-}
-
-.user-link { font-weight: 500; }
-
-.ops-more {
-  margin-left: 12px;
-  vertical-align: middle;
-}
-
-.role-cell {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  min-width: 0;
-}
-
-.role-cell__tag {
-  max-width: 100%;
-}
-
-.role-cell :deep(.el-tag) {
-  height: auto;
-  max-width: 100%;
-  padding: 1px 8px;
-  line-height: 20px;
-  white-space: normal;
-}
-
-.role-cell :deep(.el-tag__content) {
-  white-space: normal;
-}
-
-.status-text {
-  margin-left: 6px;
-  white-space: nowrap;
-  font-size: 12px;
-  color: var(--zt-ink-500);
-}
-
 .pending-bar {
   display: flex;
   flex-wrap: wrap;
