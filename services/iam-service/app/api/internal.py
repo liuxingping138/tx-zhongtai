@@ -9,13 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import AuthorizeRequest
 from app.api.security import classified, principal_from_access_token
+from app.application import outbox_delivery
 from app.application.authorization import authorize_access_context
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
 from app.core.http_utils import success_json
 from app.core.jwt_keys import build_jwks, ensure_jwt_keys
 from app.domain.enums import SecurityClass
-from app.repositories import outbox as outbox_repo
 
 router = APIRouter(prefix="/internal/v1", tags=["internal"])
 
@@ -60,4 +60,4 @@ async def outbox_metrics(
     settings: Settings = Depends(get_settings),
 ) -> JSONResponse:
     require_internal_caller(request, settings)
-    return success_json(await outbox_repo.metrics(session))
+    return success_json(await outbox_delivery.metrics(session))

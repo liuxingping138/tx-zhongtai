@@ -1,11 +1,15 @@
+"""Outbox 投递与运维：认领待投递事件发往审计服务，按租约回写结果；指标与受控重放。"""
+
 from __future__ import annotations
 
+import uuid
 from datetime import timedelta
 from typing import Any
 
 import httpx
 from platform_common.clock import utcnow
 from platform_common.logging_setup import get_logger
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.event_map import map_outbox_to_ingest
 from app.application.outbox_policy import next_retry_delay, next_status
@@ -133,3 +137,20 @@ async def _mark_failure(
     else:
         DeliveryCounters.retried += 1
         logger.warning("outbox_retry", event_id=str(event_id), error=error_message, attempts=attempts)
+
+
+async def metrics(session: AsyncSession) -> dict[str, Any]:
+    """各状态事件数与最老未完成事件的等待时长，供 worker 日志和内部指标接口使用。"""
+    return await outbox_repo.metrics(session)
+
+
+async def replay(
+    session: AsyncSession,
+    *,
+    event_id: uuid.UUID | None,
+    event_type: str | None,
+    statuses: tuple[str, ...],
+    limit: int,
+) -> int:
+    """把指定状态的事件重置为 pending 重新投递，返回重置条数；调用方负责提交事务。"""
+    return await outbox_repo.replay(session, event_id=event_id, event_type=event_type, statuses=statuses, limit=limit)

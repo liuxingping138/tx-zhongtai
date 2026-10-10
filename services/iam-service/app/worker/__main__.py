@@ -6,10 +6,10 @@ import signal
 import httpx
 from platform_common.logging_setup import get_logger, setup_logging
 
+from app.application import outbox_delivery
+from app.application.outbox_delivery import DeliveryCounters, claim_and_deliver
 from app.core.config import get_settings
 from app.core.database import SessionLocal
-from app.repositories import outbox as outbox_repo
-from app.worker.deliver import DeliveryCounters, claim_and_deliver
 
 settings = get_settings()
 setup_logging(settings.service_name, level=settings.log_level, json_output=settings.environment != "development")
@@ -18,7 +18,7 @@ logger = get_logger("iam.worker")
 
 async def _log_metrics() -> None:
     async with SessionLocal() as session:
-        snapshot = await outbox_repo.metrics(session)
+        snapshot = await outbox_delivery.metrics(session)
     logger.info(
         "outbox_metrics",
         **snapshot,

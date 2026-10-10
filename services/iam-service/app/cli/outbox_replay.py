@@ -7,9 +7,9 @@ import asyncio
 import logging
 import uuid
 
+from app.application import outbox_delivery
 from app.core.database import SessionLocal
 from app.domain.enums import OutboxStatus
-from app.repositories import outbox as outbox_repo
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("iam.cli.outbox_replay")
@@ -28,7 +28,7 @@ async def main() -> None:
         raise SystemExit("status 只能是 dead/failed/pending/delivering")
     event_id = uuid.UUID(args.event_id) if args.event_id else None
     async with SessionLocal() as session:
-        count = await outbox_repo.replay(
+        count = await outbox_delivery.replay(
             session,
             event_id=event_id,
             event_type=args.event_type,

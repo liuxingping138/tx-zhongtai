@@ -18,7 +18,9 @@ from app.api.security import (
     require_authenticated,
     require_restricted_or_authenticated,
 )
+from app.application import auth_service
 from app.application.auth_service import AuthService
+from app.application.authorization import visible_permissions
 from app.core.config import Settings, get_settings
 from app.core.database import SessionLocal, get_db_session
 from app.core.http_utils import client_ip, client_user_agent, success_json
@@ -26,7 +28,6 @@ from app.core.rate_limit import LoginRateLimiter
 from app.core.redis_client import redis_client
 from app.domain.enums import SecurityClass
 from app.domain.tokens import generate_csrf_token
-from app.repositories import users as user_repo
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -162,14 +163,15 @@ async def me(
     session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
     user = principal.user
+    is_superadmin, roles = await auth_service.role_summary(session, user.id)
     payload = MePayload(
         id=str(user.id),
         username=user.username,
         display_name=user.display_name,
         must_change_password=user.must_change_password,
         status=user.status,
-        is_superadmin=await user_repo.user_has_builtin_superadmin(session, user.id),
-        roles=await user_repo.list_user_role_names(session, user.id),
+        is_superadmin=is_superadmin,
+        roles=roles,
     )
     return success_json(payload.model_dump())
 
@@ -180,7 +182,6 @@ async def permissions(
     principal: CurrentPrincipal = Depends(require_authenticated),
     session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
-    from app.application.authorization import visible_permissions
 
     return success_json(await visible_permissions(session, principal.user.id))
 

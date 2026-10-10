@@ -12,13 +12,13 @@ from platform_common.errors import PermissionDeniedError, UnauthenticatedError
 from platform_common.route_audit import mark_permission_dependency
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application import auth_service
+from app.application.authorization import assert_allowed
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
 from app.core.jwt_tokens import decode_access_token
-from app.domain.enums import SecurityClass, UserStatus
+from app.domain.enums import SecurityClass
 from app.domain.models import Session, User
-from app.repositories import sessions as session_repo
-from app.repositories import users as user_repo
 
 
 def classified(security_class: SecurityClass) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
@@ -77,16 +77,7 @@ async def principal_from_access_token(
     except KeyError as exc:
         raise UnauthenticatedError() from exc
 
-    user = await user_repo.get_user_by_id(session, uuid.UUID(user_id))
-    session_row = await session_repo.get_session(session, uuid.UUID(session_id))
-    if user is None or session_row is None:
-        raise UnauthenticatedError()
-    if user.status != UserStatus.ACTIVE:
-        raise UnauthenticatedError("账号不可用")
-    if not session_repo.session_is_usable(session_row):
-        raise UnauthenticatedError()
-    if session_row.user_id != user.id:
-        raise UnauthenticatedError()
+    user, session_row = await auth_service.load_principal(session, uuid.UUID(user_id), uuid.UUID(session_id))
     return CurrentPrincipal(user=user, session=session_row, claims=claims)
 
 
@@ -115,7 +106,6 @@ def require_permission(resource: str, action: str) -> Callable[..., Any]:
         principal: CurrentPrincipal = Depends(require_authenticated),
         session: AsyncSession = Depends(get_db_session),
     ) -> CurrentPrincipal:
-        from app.application.authorization import assert_allowed
 
         await assert_allowed(session, principal.user, resource, action)
         return principal

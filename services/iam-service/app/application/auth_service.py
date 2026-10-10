@@ -231,3 +231,26 @@ class AuthService:
             },
         )
         return access, refresh, session_row
+
+
+async def load_principal(session: AsyncSession, user_id: uuid.UUID, session_id: uuid.UUID) -> tuple[User, Session]:
+    """按访问令牌里的用户和会话编号加载登录主体；账号不可用、会话失效或与用户不匹配一律视为未登录。"""
+    user = await user_repo.get_user_by_id(session, user_id)
+    session_row = await session_repo.get_session(session, session_id)
+    if user is None or session_row is None:
+        raise UnauthenticatedError()
+    if user.status != UserStatus.ACTIVE:
+        raise UnauthenticatedError("账号不可用")
+    if not session_repo.session_is_usable(session_row):
+        raise UnauthenticatedError()
+    if session_row.user_id != user.id:
+        raise UnauthenticatedError()
+    return user, session_row
+
+
+async def role_summary(session: AsyncSession, user_id: uuid.UUID) -> tuple[bool, list[str]]:
+    """是否内置超级管理员，以及角色名称列表（「我的信息」用）。"""
+    return (
+        await user_repo.user_has_builtin_superadmin(session, user_id),
+        await user_repo.list_user_role_names(session, user_id),
+    )
