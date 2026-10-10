@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# 推送前跑完整质量门。没有 CI，这是代码进入 GitLab 前唯一一道自动检查。
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+make check
+make test-unit

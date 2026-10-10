@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# 提交信息格式：type(scope): 中文描述，scope 可省（见 CLAUDE.md「Git 提交信息」）。
+set -euo pipefail
+
+subject="$(head -n 1 "$1")"
+case "$subject" in
+  Merge\ *|Revert\ *|fixup!\ *|squash!\ *) exit 0 ;;
+esac
+
+if ! python3 - "$subject" <<'EOF'
+import re
+import sys
+
+subject = sys.argv[1]
+head = re.match(r"^(feat|fix|perf|refactor|style|test|docs|chore)(\([a-z0-9][a-z0-9-]*(,[a-z0-9][a-z0-9-]*)*\))?: (?P<text>.+)$", subject)
+sys.exit(0 if head and re.search(r"[\u4e00-\u9fff]", head.group("text")) else 1)
+EOF
+then
+  echo "提交信息不符合格式：type(scope): 中文描述" >&2
+  echo "  type 取 feat / fix / perf / refactor / style / test / docs / chore；scope 可省，多个用逗号分隔" >&2
+  echo "  当前：$subject" >&2
+  exit 1
+fi

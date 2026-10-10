@@ -58,21 +58,32 @@ async function confirmCreateWithoutRole(): Promise<boolean> {
   }
 }
 
+function validateCreate(): Promise<boolean> {
+  return createValidation.validate({
+    username: createForm.username.trim() ? '' : '请填写用户名',
+    display_name: createForm.display_name.trim() ? '' : '请填写显示名',
+  })
+}
+
+function createPayload() {
+  return {
+    username: createForm.username,
+    display_name: createForm.display_name,
+    phone: createForm.phone.trim() || undefined,
+    email: createForm.email.trim() || undefined,
+    role_ids: props.canGrant && createRoles.value.length ? createRoles.value : undefined,
+  }
+}
+
 async function onCreate() {
   if (creating.value) return
   createError.value = ''
-  if (!await createValidation.validate({ username: createForm.username.trim() ? '' : '请填写用户名', display_name: createForm.display_name.trim() ? '' : '请填写显示名' })) return
+  if (!await validateCreate()) return
   // 不预先挂警告，只在真要创建一个「登录后什么都看不到」的账号时确认一次。
   if (props.canGrant && !createRoles.value.length && !await confirmCreateWithoutRole()) return
   creating.value = true
   try {
-    const result = await createUser({
-      username: createForm.username,
-      display_name: createForm.display_name,
-      phone: createForm.phone.trim() || undefined,
-      email: createForm.email.trim() || undefined,
-      role_ids: props.canGrant && createRoles.value.length ? createRoles.value : undefined,
-    })
+    const result = await createUser(createPayload())
     ElMessage.success(createRoles.value.length ? '用户已创建' : '用户已创建，已放进「待分配角色」')
     visible.value = false
     resetCreateForm()

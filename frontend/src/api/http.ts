@@ -80,37 +80,16 @@ http.interceptors.response.use(
     return body.data as never
   },
   async (error: AxiosError<ApiResponseBody<unknown>>) => {
-    if (error.response?.data instanceof Blob) {
-      const text = await error.response.data.text()
-      try {
-        error.response.data = JSON.parse(text) as ApiResponseBody<unknown>
-      } catch {
-        error.response.data = {
-          code: 'UNKNOWN_ERROR',
-          message: '请求失败',
-          data: null,
-          request_id: null,
-        }
-      }
-    }
+    await parseBlobErrorBody(error)
     const config = error.config as RetryConfig | undefined
     const status = error.response?.status
-    if (
-      status === 401 &&
-      config &&
-      !config._retried &&
-      !isAuthPublicPath(config.url)
-    ) {
+    if (status === 401 && config && !config._retried && !isAuthPublicPath(config.url)) {
       config._retried = true
       try {
         await refreshSession()
         return http(config)
       } catch {
-        if (!signingOut) {
-          signingOut = true
-          setAccessToken('')
-          unauthorizedHandler?.()
-        }
+        signOutOnce()
       }
     }
     const apiError = toApiError(error)
@@ -123,6 +102,25 @@ http.interceptors.response.use(
     return Promise.reject(apiError)
   },
 )
+
+/** 下载接口按 blob 收响应，出错时错误体也是 blob，先还原成 JSON 才能取到中文提示。 */
+async function parseBlobErrorBody(error: AxiosError<ApiResponseBody<unknown>>): Promise<void> {
+  if (!(error.response?.data instanceof Blob)) return
+  const text = await error.response.data.text()
+  try {
+    error.response.data = JSON.parse(text) as ApiResponseBody<unknown>
+  } catch {
+    error.response.data = { code: 'UNKNOWN_ERROR', message: '请求失败', data: null, request_id: null }
+  }
+}
+
+/** 续期失败时并发的多个请求只触发一次退出登录。 */
+function signOutOnce(): void {
+  if (signingOut) return
+  signingOut = true
+  setAccessToken('')
+  unauthorizedHandler?.()
+}
 
 let unauthorizedHandler: (() => void) | null = null
 let forbiddenHandler: (() => void) | null = null

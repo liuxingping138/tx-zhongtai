@@ -78,15 +78,19 @@ export function useRecordEditor<Row extends object>(options: RecordEditorOptions
     visible.value = true
   }
 
+  /** 必填和跨字段规则都过了才返回 true；不过时提示已经落在对应字段上。 */
+  async function validate(): Promise<boolean> {
+    if (!await fields.value?.validate()) return false
+    const problem = options.check?.(form)
+    if (!problem) return true
+    await fields.value?.setError(problem.key, problem.message)
+    return false
+  }
+
   async function save() {
     if (saving.value) return
     saveError.value = ''
-    if (!await fields.value?.validate()) return
-    const problem = options.check?.(form)
-    if (problem) {
-      await fields.value?.setError(problem.key, problem.message)
-      return
-    }
+    if (!await validate()) return
     saving.value = true
     try {
       const payload = { ...form }

@@ -14,8 +14,7 @@ import { useAuthStore } from '@/stores/auth'
 import App from './App.vue'
 import router from './router'
 
-// typescript-eslint 没有 Vue 语言服务，读不出 .vue 根组件的类型；App 的类型由 vue-tsc 检查。
-// eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+// eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- typescript-eslint 读不出 .vue 根组件的类型，App 由 vue-tsc 检查
 const app = createApp(App)
 const pinia = createPinia()
 

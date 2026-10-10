@@ -43,28 +43,32 @@ watch(visible, (open) => {
   void validation.validate({})
 }, { flush: 'sync' })
 
+/** 按模式调对应接口：编辑带版本号，复制带源角色，新建可指定编码。 */
+function submitRole(name: string, description: string): Promise<RoleItem> {
+  const role = props.role
+  if (props.mode === 'edit' && role) return updateRole(role.id, { name, description, version: role.version })
+  if (props.mode === 'copy' && role) return copyRole(role.id, { name, description })
+  return createRole({ name, description, code: form.code.trim() || undefined })
+}
+
+function saveErrorText(error: unknown): string {
+  if (isApiError(error) && error.status === 409 && props.mode === 'edit') {
+    return '角色已被他人修改，请关闭后重新打开最新内容再编辑。'
+  }
+  return errorMessage(error, '保存失败，请检查后重试')
+}
+
 async function onSubmit() {
   if (saving.value) return
   submitError.value = ''
   if (!await validation.validate({ name: form.name.trim() ? '' : '请填写角色名称' })) return
   saving.value = true
   try {
-    const name = form.name.trim()
-    const description = form.description.trim()
-    let saved: RoleItem
-    if (props.mode === 'edit' && props.role) {
-      saved = await updateRole(props.role.id, { name, description, version: props.role.version })
-    } else if (props.mode === 'copy' && props.role) {
-      saved = await copyRole(props.role.id, { name, description })
-    } else {
-      saved = await createRole({ name, description, code: form.code.trim() || undefined })
-    }
+    const saved = await submitRole(form.name.trim(), form.description.trim())
     visible.value = false
     emit('saved', saved, props.mode)
   } catch (error) {
-    submitError.value = isApiError(error) && error.status === 409 && props.mode === 'edit'
-      ? '角色已被他人修改，请关闭后重新打开最新内容再编辑。'
-      : errorMessage(error, '保存失败，请检查后重试')
+    submitError.value = saveErrorText(error)
   } finally {
     saving.value = false
   }

@@ -48,26 +48,36 @@ const listQuery = useListQuery(query, load, ['actor_name'])
 
 let loadSequence = 0
 
+type AuditQuery = typeof query
+
+function hasFilters(params: AuditQuery): boolean {
+  return Object.entries(params).some(([key, value]) =>
+    !['page', 'page_size'].includes(key) && (Array.isArray(value) ? value.length > 0 : Boolean(value)),
+  )
+}
+
+function toRequestParams(params: AuditQuery) {
+  return {
+    page: params.page,
+    page_size: params.page_size,
+    actor_name: params.actor_name || undefined,
+    module_code: params.module_code || undefined,
+    action_code: params.action_code || undefined,
+    outcome: params.outcome || undefined,
+    occurred_from: toBeijingIso(params.range?.[0]) || undefined,
+    occurred_to: toBeijingIso(params.range?.[1]) || undefined,
+  }
+}
+
 async function load() {
   const params = listQuery.requested()
   void listQuery.commitPage()
   const sequence = ++loadSequence
   loading.value = true
   loadError.value = ''
-  const filtered = Object.entries(params).some(([key, value]) =>
-    !['page', 'page_size'].includes(key) && (Array.isArray(value) ? value.length > 0 : Boolean(value)),
-  )
+  const filtered = hasFilters(params)
   try {
-    const page = await listAuditEvents({
-      page: params.page,
-      page_size: params.page_size,
-      actor_name: params.actor_name || undefined,
-      module_code: params.module_code || undefined,
-      action_code: params.action_code || undefined,
-      outcome: params.outcome || undefined,
-      occurred_from: toBeijingIso(params.range?.[0]) || undefined,
-      occurred_to: toBeijingIso(params.range?.[1]) || undefined,
-    })
+    const page = await listAuditEvents(toRequestParams(params))
     if (sequence !== loadSequence) return
     events.value = page.items
     total.value = page.total

@@ -106,6 +106,23 @@ watch(() => [visible.value, props.userId] as const, ([open]) => {
   }
 }, { flush: 'sync' })
 
+async function saveInfo(current: UserItem): Promise<UserItem> {
+  if (!infoDirty.value || !props.canEdit) return current
+  const saved = await updateUser(current.id, {
+    display_name: form.display_name.trim(),
+    phone: form.phone.trim(),
+    email: form.email.trim(),
+    version: current.version,
+  })
+  return { ...current, ...saved }
+}
+
+async function saveRoles(current: UserItem): Promise<UserItem> {
+  if (!rolesDirty.value || !props.canGrant) return current
+  const saved = await replaceUserRoles(current.id, { role_ids: draft.value, version: current.version })
+  return { ...current, ...saved }
+}
+
 /** 先存基本信息再存角色：两个接口各自带版本号，第二次用第一次返回的新版本。 */
 async function onSave() {
   if (!user.value || saving.value) return
@@ -120,20 +137,7 @@ async function onSave() {
   }
   saving.value = true
   try {
-    let current = user.value
-    if (infoDirty.value && props.canEdit) {
-      const saved = await updateUser(current.id, {
-        display_name: form.display_name.trim(),
-        phone: form.phone.trim(),
-        email: form.email.trim(),
-        version: current.version,
-      })
-      current = { ...current, ...saved }
-    }
-    if (rolesDirty.value && props.canGrant) {
-      const saved = await replaceUserRoles(current.id, { role_ids: draft.value, version: current.version })
-      current = { ...current, ...saved }
-    }
+    const current = await saveRoles(await saveInfo(user.value))
     fill(current)
     guard.markSaved()
     emit('changed', current)

@@ -18,10 +18,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 当前运行环境是 `https://1.119.196.77`（8091 HTTP 自动跳转）。在 Mac 上改代码并推送到 GitLab，再用 `scripts/sync-to-server.sh` 同步到服务器构建。不要在服务器 `git pull`，不要在本机 `make dev-up`。步骤见 `docs/guides/部署与维护.md`。
 
 ```bash
-make check            # 质量门：Python ruff+mypy，前端 type-check+build+lint，范围与密钥扫描
+make check            # 质量门：Python ruff+mypy，前端 type-check+build+lint，范围与密钥扫描，文件行数与忽略注释原因
 make test-unit        # 后端 pytest + 前端 vitest（不需要本机 Docker）
 make export-openapi   # 从本地 FastAPI 应用导出 OpenAPI
+make hooks            # 启用 .githooks：提交前代码规则 + ruff、提交信息格式、推送前跑 check + test-unit
 ```
+
+没有 CI，git 钩子是唯一的自动关卡。新克隆的仓库先 `make hooks`（`make bootstrap` 已包含）。
 
 服务器上的迁移、种子、爬虫同步和冒烟用该文档里的 `docker-compose` 命令，不用下面这些依赖本机 Compose 的 Make 目标。
 
@@ -262,9 +265,10 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
 格式固定为 `type(scope): 中文描述`（英文前缀 + 冒号 + 空格 + 中文正文），前缀不能省。
 早期仓库有一批纯英文句子式提交（如 `Add policy sources...`），那是更早的写法，不要模仿。
 
-- `type` 用 `feat` / `fix` / `perf` / `refactor` / `test` / `docs` / `chore`；
+- `type` 用 `feat` / `fix` / `perf` / `refactor` / `style` / `test` / `docs` / `chore`；
   `scope` 是服务名或关注点（`iam`、`export`、`migrations`、`concurrency`、`authz`、`a11y`、`e2e`、`excel`、`gateway`…），
-  跨模块或没有明确单一归属时可以省略 `(scope)`，直接 `type: 中文描述`
+  涉及两三个模块时用逗号分隔（`refactor(iam,audit): …`），没有明确归属时省略 `(scope)`，直接 `type: 中文描述`。
+  格式由 `.githooks/commit-msg` 检查
 - 中文正文聚焦改动会导致的问题/价值，不要写成文件改动清单，也不要写"更新 xx”“修改 xx”这类空洞描述
 - 正文（标题下空一行的部分）可省；要写就先说原来哪里有问题，再说改完好在哪，一两句为宜。
   不要用分号串起一排「做了 A；做了 B；做了 C」的功能罗列——那仍是改动清单，只是换成了功能名

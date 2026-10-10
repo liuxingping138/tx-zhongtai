@@ -12,6 +12,15 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text-summary'],
+      // 单测管 TS 逻辑；.vue 页面由 e2e 覆盖，main.ts 只做挂载。
+      include: ['src/**/*.ts'],
+      exclude: ['src/**/*.test.ts', 'src/**/*.d.ts', 'src/main.ts'],
+      // 下限与后端一样只升不降，补了测试就调高（工程规范第 5 节）。
+      thresholds: { statements: 82, branches: 79, functions: 69, lines: 82 },
+    },
   },
   resolve: {
     alias: {

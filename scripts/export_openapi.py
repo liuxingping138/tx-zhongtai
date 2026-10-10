@@ -29,7 +29,7 @@ def _prepare_env() -> None:
 
 
 def _dump(app: object, dest: Path) -> None:
-    payload = app.openapi()  # type: ignore[attr-defined]
+    payload = app.openapi()  # type: ignore[attr-defined]  # 各服务的 app 按名字动态导入，这里只有 object 类型
     dest.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
     print(f"wrote {dest} paths={len(payload.get('paths', {}))}")
 

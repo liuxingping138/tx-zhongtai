@@ -22,11 +22,12 @@ JWT_P6_DIR := deploy/secrets/jwt-p6
         seed-area-codes crawler-sync crawler-backfill \
         provision-policy-db \
         outbox-replay audit-cleanup iam-session-cleanup p6-env p6-up p6-down p6-migrate p6-seed p6-admin \
-        p6-backup p6-restore p6-fixtures export-openapi scan-scope
+        p6-backup p6-restore p6-fixtures export-openapi scan-scope hooks
 
 help:
 	@echo "可用命令："
-	@echo "  make bootstrap        检查环境、安装依赖（不覆盖已有 .env）"
+	@echo "  make bootstrap        检查环境、安装依赖、启用 git 钩子（不覆盖已有 .env）"
+	@echo "  make hooks            启用 .githooks（提交前代码规则 + ruff，提交信息格式，推送前完整质量门）"
 	@echo "  make dev-up           启动本地开发环境（Compose）"
 	@echo "  make dev-down         停止本地开发环境（保留数据卷）"
 	@echo "  make migrate          对已运行的四个服务执行数据库迁移"
@@ -73,7 +74,12 @@ bootstrap:
 	@echo "== 同步前端依赖（pnpm） =="
 	@(cd frontend && pnpm install)
 	@$(MAKE) jwt-keys
+	@$(MAKE) hooks
 	@echo "bootstrap 完成。"
+
+hooks:
+	@git config core.hooksPath .githooks
+	@echo "已启用 .githooks；紧急情况可用 --no-verify 跳过，事后补跑 make check / make test-unit。"
 
 jwt-keys:
 	@mkdir -p $(JWT_KEYS_DIR)
@@ -171,6 +177,9 @@ check:
 	@echo "== 范围与密钥扫描 =="
 	@python3 scripts/scan_scope.py
 	@python3 scripts/test_scan_scope.py
+	@echo "== 文件行数与忽略注释原因 =="
+	@python3 scripts/check_code_rules.py
+	@python3 scripts/test_check_code_rules.py
 	@bash scripts/test_migrate_check.sh
 	@echo "== OpenAPI 与应用对象一致 =="
 	@bash scripts/check_openapi.sh
@@ -182,6 +191,7 @@ test-unit:
 	done
 	@(cd frontend && pnpm test)
 	@python3 scripts/test_scan_scope.py
+	@python3 scripts/test_check_code_rules.py
 	@bash scripts/test_migrate_check.sh
 
 p6-env:

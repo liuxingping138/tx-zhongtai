@@ -39,6 +39,17 @@ export default defineConfig(
       'vue/multi-word-component-names': 'off',
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-floating-promises': 'error',
+      // 与 Python 侧门槛一致（工程规范决策 D）。
+      complexity: ['error', 10],
+      'max-params': ['error', 6],
+      'max-depth': ['error', 3],
+    },
+  },
+  {
+    // 测试按场景平铺用例，长度不代表职责过多。
+    ignores: ['**/*.test.ts'],
+    rules: {
+      'max-lines': ['error', { max: 400 }],
     },
   },
   {

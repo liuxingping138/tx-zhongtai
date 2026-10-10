@@ -64,18 +64,23 @@ function onFormSaved(saved: RoleItem, mode: RoleFormMode) {
   void refreshRole()
 }
 
+function confirmStatusChange(current: RoleItem, disabling: boolean): Promise<boolean> {
+  const verb = disabling ? '停用' : '启用'
+  const message = disabling
+    ? `停用后，${current.member_count ?? 0} 位成员会立即失去这个角色带来的权限（其他角色不受影响），可随时重新启用。`
+    : '启用后，成员会重新获得这个角色的权限。'
+  return ElMessageBox.confirm(message, `${verb}「${current.name}」`, {
+    type: 'warning',
+    confirmButtonText: verb,
+    cancelButtonText: '取消',
+  }).then(() => true, () => false)
+}
+
 async function onToggleStatus() {
   const current = role.value
   if (!current || current.is_builtin) return
   const next = current.status === 'active' ? 'disabled' : 'active'
-  const confirmed = await ElMessageBox.confirm(
-    next === 'disabled'
-      ? `停用后，${current.member_count ?? 0} 位成员会立即失去这个角色带来的权限（其他角色不受影响），可随时重新启用。`
-      : '启用后，成员会重新获得这个角色的权限。',
-    `${next === 'disabled' ? '停用' : '启用'}「${current.name}」`,
-    { type: 'warning', confirmButtonText: next === 'disabled' ? '停用' : '启用', cancelButtonText: '取消' },
-  ).then(() => true, () => false)
-  if (!confirmed) return
+  if (!await confirmStatusChange(current, next === 'disabled')) return
   try {
     const saved = await updateRole(current.id, { status: next, version: current.version })
     role.value = { ...current, ...saved }

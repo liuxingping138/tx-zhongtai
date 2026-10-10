@@ -28,24 +28,28 @@ function checkCapsLock(event: KeyboardEvent) {
   capsLock.value = event.getModifierState('CapsLock')
 }
 
-async function onSubmit() {
-  if (loading.value) return
+/** 校验必填并把焦点放到第一个出错的输入框。 */
+function validate(): boolean {
   errors.username = form.username.trim() ? '' : '请输入用户名'
   errors.password = form.password ? '' : '请输入密码'
-  if (errors.username || errors.password) {
-    if (errors.username) usernameInput.value?.focus()
-    else passwordInput.value?.focus()
-    return
-  }
+  if (errors.username) usernameInput.value?.focus()
+  else if (errors.password) passwordInput.value?.focus()
+  return !errors.username && !errors.password
+}
+
+/** 只接受站内路径；`//host` 会被浏览器当成外站地址。 */
+function redirectTarget(): string {
+  const target = route.query.redirect
+  return typeof target === 'string' && target.startsWith('/') && !target.startsWith('//') ? target : '/'
+}
+
+async function onSubmit() {
+  if (loading.value || !validate()) return
   submitError.value = ''
   loading.value = true
   try {
     await auth.signIn(form.username.trim(), form.password)
-    const target = route.query.redirect
-    const redirect = typeof target === 'string' && target.startsWith('/') && !target.startsWith('//')
-      ? target
-      : '/'
-    await router.replace(auth.mustChangePassword ? { name: 'change-password' } : redirect)
+    await router.replace(auth.mustChangePassword ? { name: 'change-password' } : redirectTarget())
   } catch (error) {
     submitError.value = errorMessage(error, '登录失败，请稍后重试')
   } finally {

@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import scan_scope  # noqa: E402
+import scan_scope  # noqa: E402  先把脚本目录加进 sys.path 才能导入
 
 
 def test_tracked_files_include_unicode_names() -> None:

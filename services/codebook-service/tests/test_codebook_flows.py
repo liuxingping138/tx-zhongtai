@@ -192,8 +192,11 @@ class TestScenarios:
             "get_by_hash",
             AsyncMock(side_effect=lambda _s, digest: object() if digest == known else None),
         )
+
         # 其他字段缺省时按空串参与哈希，和页面新增保持一致。
-        full = lambda **kw: {field: kw.get(field, "") for field in scenarios.SCENARIO_FIELDS}  # noqa: E731
+        def full(**kw: str) -> dict[str, str]:
+            return {field: kw.get(field, "") for field in scenarios.SCENARIO_FIELDS}
+
         known = content_hash(full(industry_scenario_code="A01", scenario_tag="旧"), scenarios.SCENARIO_FIELDS)
         captured = _parsed(
             monkeypatch,

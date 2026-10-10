@@ -1,8 +1,23 @@
 import { reactive, watch } from 'vue'
-import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
+import { useRoute, useRouter, type LocationQueryRaw, type LocationQueryValueRaw } from 'vue-router'
 
 type Value = string | number | string[] | null
 const PAGING_KEYS = ['page', 'page_size']
+const PAGE_SIZES = [10, 20, 50, 100]
+
+/** 地址栏里的值按默认值的类型还原；不合法时返回 undefined，沿用默认值。 */
+function parseQueryValue(key: string, fallback: Value, raw: LocationQueryValueRaw | LocationQueryValueRaw[]): Value | undefined {
+  if (typeof fallback === 'number') {
+    const number = Number(raw)
+    const validSize = key !== 'page_size' || PAGE_SIZES.includes(number)
+    return Number.isSafeInteger(number) && number > 0 && validSize ? number : undefined
+  }
+  if (Array.isArray(fallback) || fallback === null) {
+    return (Array.isArray(raw) ? raw : [raw]).filter((v): v is string => typeof v === 'string')
+  }
+  return typeof raw === 'string' ? raw : undefined
+}
+
 /** Commit on a query request, not each keystroke. No credentials or record data are stored. */
 export function useListQuery<T extends Record<string, Value>>(query: T, reload: () => Promise<void>, privateKeys: string[] = []) {
   const route = useRoute()
@@ -16,12 +31,8 @@ export function useListQuery<T extends Record<string, Value>>(query: T, reload: 
       if (privateKeys.includes(key)) continue
       const raw = route.query[key]
       if (raw === undefined) continue
-      if (typeof defaults[key] === 'number') {
-        const number = Number(raw)
-        if (Number.isSafeInteger(number) && number > 0 && (key !== 'page_size' || [10, 20, 50, 100].includes(number))) next[key] = number
-      } else if (Array.isArray(defaults[key]) || defaults[key] === null) {
-        next[key] = (Array.isArray(raw) ? raw : [raw]).filter((v): v is string => typeof v === 'string')
-      } else if (typeof raw === 'string') next[key] = raw
+      const value = parseQueryValue(key, defaults[key] as Value, raw)
+      if (value !== undefined) next[key] = value
     }
     for (const key of privateKeys) next[key] = query[key] ?? defaults[key] ?? ''
     Object.assign(query, next)

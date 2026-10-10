@@ -23,7 +23,7 @@ from app.domain.models import Session, User
 
 def classified(security_class: SecurityClass) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        func.__security_class__ = security_class  # type: ignore[attr-defined]
+        func.__security_class__ = security_class  # type: ignore[attr-defined]  # 函数对象上挂自定义标记，mypy 不认识这个属性
         return func
 
     return decorator
