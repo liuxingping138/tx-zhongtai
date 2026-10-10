@@ -17,7 +17,7 @@ PY_PACKAGES := packages/platform-common services/iam-service services/audit-serv
 JWT_KEYS_DIR := deploy/secrets/jwt
 JWT_P6_DIR := deploy/secrets/jwt-p6
 
-.PHONY: help bootstrap jwt-keys jwt-keys-p6 dev-up dev-down migrate migrate-check seed admin-create check \
+.PHONY: p6-logs help bootstrap jwt-keys jwt-keys-p6 dev-up dev-down migrate migrate-check seed admin-create check \
         test-unit test-integration test-e2e smoke provision-audit-cleanup provision-codebook-db \
         seed-area-codes crawler-sync crawler-backfill crawler-v2-sync crawler-v2-backfill \
         provision-policy-db \
@@ -217,6 +217,11 @@ p6-up: p6-env jwt-keys-p6
 
 p6-down:
 	$(P6_COMPOSE) down -v
+
+# 验收失败时看现场：各服务状态与最近日志。
+p6-logs:
+	-$(P6_COMPOSE) ps
+	-$(P6_COMPOSE) logs --tail 40 iam-service gateway
 
 p6-migrate:
 	$(P6_COMPOSE) exec -T iam-service .venv/bin/alembic upgrade head

@@ -23,6 +23,7 @@ printf '%s\n' "$sudo_pass" | ssh -i "$HOME/.ssh/tx-zhongtai-deploy" -o Identitie
    sudo -A install -d -o \$(id -u) -g \$(id -g) deploy/secrets/jwt-p6 && \
    opts='P6_SERVER=1' && \
    rc=0; make \$opts $targets || rc=\$?; \
+   [ \$rc -eq 0 ] || make --no-print-directory \$opts p6-logs 2>&1 | tail -120; \
    make \$opts p6-down >/dev/null 2>&1 || echo 'p6-down 失败，请手动清理 tx-zhongtai-p6'; \
    rm -rf deploy/compose/.p6.runtime frontend/e2e/.admin-password; \
    exit \$rc"

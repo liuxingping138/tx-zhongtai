@@ -85,14 +85,18 @@ def compose_exec(compose: list[str], *args: str) -> str:
 
 def wait_gateway(base: str, timeout: float = 60) -> None:
     deadline = time.time() + timeout
+    last = "无响应"
     while time.time() < deadline:
         try:
             status, _ = Api(base).call("GET", "/api/v1/auth/csrf")
             if status == 200:
                 return
-        except Exception:
-            time.sleep(1)
-    raise Failed("gateway not ready")
+            last = f"HTTP {status}"
+        except Exception as exc:
+            last = repr(exc)
+        # 每次重试都间隔，避免服务重启期间对网关连续发请求；失败时带上最后一次的结果便于排查。
+        time.sleep(1)
+    raise Failed(f"gateway not ready（{timeout:.0f} 秒内最后一次：{last}）")
 
 
 def change_password(api: Api, old: str, new: str) -> None:
