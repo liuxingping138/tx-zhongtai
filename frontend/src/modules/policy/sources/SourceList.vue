@@ -13,13 +13,14 @@ import {
   updateSource,
   type SourceItem,
 } from '@/api/policy'
-import { downloadFile } from '@/api/download'
 import { errorMessage, isApiError } from '@/api/errors'
 import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import { useFilterOptions } from '@/composables/useFilterOptions'
+import { useExcelExport } from '@/composables/useExcelExport'
+import { useListLoader } from '@/composables/useListLoader'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
@@ -36,11 +37,6 @@ const canPurge = computed(() => auth.canFull('policy.sources') && auth.isSuperad
 const canAudit = computed(() => auth.canRead('system.audit'))
 const clearing = ref(false)
 
-const loading = ref(false)
-const loadError = ref('')
-const resultFiltered = ref(false)
-const items = ref<SourceItem[]>([])
-const total = ref(0)
 const query = reactive({
   site_name: [] as string[],
   province_name: [] as string[],
@@ -92,21 +88,12 @@ const cityBinding = computed(() => filters.bindCity('city_name', query.province_
 
 
 
-const listQuery = useListQuery(query, load)
+const listQuery = useListQuery(query, (): Promise<void> => load())
 
-let loadSequence = 0
-
-async function load() {
-  const params = listQuery.requested()
-  void listQuery.commitPage()
-  const sequence = ++loadSequence
-  loading.value = true
-  loadError.value = ''
-  const filtered = Object.entries(params).some(([key, value]) =>
-    !['page', 'page_size'].includes(key) && (Array.isArray(value) ? value.length > 0 : Boolean(value)),
-  )
-  try {
-    const page = await listSources({
+const { items, total, loading, loadError, resultFiltered, load } = useListLoader({
+  requested: () => listQuery.requested(),
+  commitPage: () => listQuery.commitPage(),
+  fetch: (params) => listSources({
       site_name: params.site_name || undefined,
       province_name: params.province_name || undefined,
       city_name: params.city_name || undefined,
@@ -114,18 +101,9 @@ async function load() {
       crawl_priority: params.crawl_priority || undefined,
       page: params.page,
       page_size: params.page_size,
-    })
-    if (sequence !== loadSequence) return
-    items.value = page.items
-    total.value = page.total
-    resultFiltered.value = filtered
-  } catch (error) {
-    if (sequence !== loadSequence) return
-    loadError.value = errorMessage(error, '加载信源失败')
-  } finally {
-    if (sequence === loadSequence) loading.value = false
-  }
-}
+  }),
+  errorText: '加载信源失败',
+})
 
 function onResetFilters() {
   query.site_name = []
@@ -213,20 +191,11 @@ async function onImport(file: File) {
   return false
 }
 
-const exporting = ref(false)
-
-async function onExport() {
-  if (exporting.value) return
-  exporting.value = true
-  try {
-    await downloadFile('/policy/sources/export', '信源管理.xlsx', filtersForExport(listQuery.applied))
-    ElMessage.success('下载已开始，请查看浏览器下载列表')
-  } catch (error) {
-    ElMessage.error(errorMessage(error, '下载失败，请重试'))
-  } finally {
-    exporting.value = false
-  }
-}
+const { exporting, onExport } = useExcelExport({
+  path: '/policy/sources/export',
+  filename: '信源管理.xlsx',
+  filters: () => filtersForExport(listQuery.applied),
+})
 
 async function onClear() {
   try {

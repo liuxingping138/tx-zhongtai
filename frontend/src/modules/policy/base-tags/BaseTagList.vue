@@ -12,13 +12,14 @@ import {
   updateBaseTag,
   type BaseTagItem,
 } from '@/api/policy'
-import { downloadFile } from '@/api/download'
 import { errorMessage, isApiError } from '@/api/errors'
 import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import { useFilterOptions } from '@/composables/useFilterOptions'
+import { useExcelExport } from '@/composables/useExcelExport'
+import { useListLoader } from '@/composables/useListLoader'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
@@ -33,11 +34,6 @@ const router = useRouter()
 const canWrite = computed(() => auth.canFull('policy.base_tags'))
 const canAudit = computed(() => auth.canRead('system.audit'))
 
-const loading = ref(false)
-const loadError = ref('')
-const resultFiltered = ref(false)
-const items = ref<BaseTagItem[]>([])
-const total = ref(0)
 const query = reactive({
   policy_name: [] as string[],
   province_name: [] as string[],
@@ -98,21 +94,12 @@ const tableColumns = [
 
 
 
-const listQuery = useListQuery(query, load)
+const listQuery = useListQuery(query, (): Promise<void> => load())
 
-let loadSequence = 0
-
-async function load() {
-  const params = listQuery.requested()
-  void listQuery.commitPage()
-  const sequence = ++loadSequence
-  loading.value = true
-  loadError.value = ''
-  const filtered = Object.entries(params).some(([key, value]) =>
-    !['page', 'page_size'].includes(key) && (Array.isArray(value) ? value.length > 0 : Boolean(value)),
-  )
-  try {
-    const page = await listBaseTags({
+const { items, total, loading, loadError, resultFiltered, load } = useListLoader({
+  requested: () => listQuery.requested(),
+  commitPage: () => listQuery.commitPage(),
+  fetch: (params) => listBaseTags({
       policy_name: params.policy_name || undefined,
       province_name: params.province_name || undefined,
       policy_types: params.policy_types || undefined,
@@ -120,18 +107,9 @@ async function load() {
       need_interpret: params.need_interpret || undefined,
       page: params.page,
       page_size: params.page_size,
-    })
-    if (sequence !== loadSequence) return
-    items.value = page.items
-    total.value = page.total
-    resultFiltered.value = filtered
-  } catch (error) {
-    if (sequence !== loadSequence) return
-    loadError.value = errorMessage(error, '加载政策基础标签失败')
-  } finally {
-    if (sequence === loadSequence) loading.value = false
-  }
-}
+  }),
+  errorText: '加载政策基础标签失败',
+})
 
 function onResetFilters() {
   query.policy_name = []
@@ -213,20 +191,11 @@ async function onImport(file: File) {
   return false
 }
 
-const exporting = ref(false)
-
-async function onExport() {
-  if (exporting.value) return
-  exporting.value = true
-  try {
-    await downloadFile('/policy/base-tags/export', '政策基础标签表.xlsx', filtersForExport(listQuery.applied))
-    ElMessage.success('下载已开始，请查看浏览器下载列表')
-  } catch (error) {
-    ElMessage.error(errorMessage(error, '下载失败，请重试'))
-  } finally {
-    exporting.value = false
-  }
-}
+const { exporting, onExport } = useExcelExport({
+  path: '/policy/base-tags/export',
+  filename: '政策基础标签表.xlsx',
+  filters: () => filtersForExport(listQuery.applied),
+})
 
 function openLogs() {
   void router.push({ name: 'system-audit', query: { module_code: 'policy.base_tags' } })

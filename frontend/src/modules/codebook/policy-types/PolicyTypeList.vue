@@ -11,13 +11,14 @@ import {
   updatePolicyType,
   type PolicyTypeItem,
 } from '@/api/codebook'
-import { downloadFile } from '@/api/download'
 import { errorMessage, isApiError } from '@/api/errors'
 import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import { useFilterOptions } from '@/composables/useFilterOptions'
+import { useExcelExport } from '@/composables/useExcelExport'
+import { useListLoader } from '@/composables/useListLoader'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
@@ -32,11 +33,6 @@ const router = useRouter()
 const canWrite = computed(() => auth.canFull('codebook.policy_types'))
 const canAudit = computed(() => auth.canRead('system.audit'))
 
-const loading = ref(false)
-const loadError = ref('')
-const resultFiltered = ref(false)
-const items = ref<PolicyTypeItem[]>([])
-const total = ref(0)
 const query = reactive({ keyword: [] as string[], page: 1, page_size: 20 })
 const filters = useFilterOptions('/codebook/policy-types')
 const visible = ref(false)
@@ -46,36 +42,18 @@ const editing = ref<PolicyTypeItem | null>(null)
 const form = reactive({ seq_no: '', type_name: '', definition: '' })
 
 
-const listQuery = useListQuery(query, load)
+const listQuery = useListQuery(query, (): Promise<void> => load())
 
-let loadSequence = 0
-
-async function load() {
-  const params = listQuery.requested()
-  void listQuery.commitPage()
-  const sequence = ++loadSequence
-  loading.value = true
-  loadError.value = ''
-  const filtered = Object.entries(params).some(([key, value]) =>
-    !['page', 'page_size'].includes(key) && (Array.isArray(value) ? value.length > 0 : Boolean(value)),
-  )
-  try {
-    const page = await listPolicyTypes({
+const { items, total, loading, loadError, resultFiltered, load } = useListLoader({
+  requested: () => listQuery.requested(),
+  commitPage: () => listQuery.commitPage(),
+  fetch: (params) => listPolicyTypes({
       keyword: params.keyword || undefined,
       page: params.page,
       page_size: params.page_size,
-    })
-    if (sequence !== loadSequence) return
-    items.value = page.items
-    total.value = page.total
-    resultFiltered.value = filtered
-  } catch (error) {
-    if (sequence !== loadSequence) return
-    loadError.value = errorMessage(error, '加载政策类型失败')
-  } finally {
-    if (sequence === loadSequence) loading.value = false
-  }
-}
+  }),
+  errorText: '加载政策类型失败',
+})
 
 function onResetFilters() {
   query.keyword = []
@@ -147,20 +125,11 @@ async function onImport(file: File) {
   return false
 }
 
-const exporting = ref(false)
-
-async function onExport() {
-  if (exporting.value) return
-  exporting.value = true
-  try {
-    await downloadFile('/codebook/policy-types/export', '政策类型码表.xlsx', filtersForExport(listQuery.applied))
-    ElMessage.success('下载已开始，请查看浏览器下载列表')
-  } catch (error) {
-    ElMessage.error(errorMessage(error, '下载失败，请重试'))
-  } finally {
-    exporting.value = false
-  }
-}
+const { exporting, onExport } = useExcelExport({
+  path: '/codebook/policy-types/export',
+  filename: '政策类型码表.xlsx',
+  filters: () => filtersForExport(listQuery.applied),
+})
 
 function openLogs() {
   void router.push({ name: 'system-audit', query: { module_code: 'codebook.policy_types' } })

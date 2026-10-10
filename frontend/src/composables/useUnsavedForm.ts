@@ -1,19 +1,20 @@
-import { computed, onBeforeUnmount, onMounted, watch, type Ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 
 /** Keep a per-opening baseline so editing another row never inherits a stale dirty state. */
 export function useUnsavedForm(visible: Ref<boolean>, value: () => unknown, saving: Ref<boolean>) {
-  let baseline = ''
+  // 基线必须是响应式的：markSaved 后 dirty 要重新计算，否则保存成功后「未保存」提示还挂着。
+  const baseline = ref('')
   let confirming: Promise<boolean> | undefined
   watch(visible, (open) => {
-    if (open) baseline = JSON.stringify(value())
+    if (open) baseline.value = JSON.stringify(value())
   }, { flush: 'sync' })
-  const dirty = computed(() => visible.value && JSON.stringify(value()) !== baseline)
+  const dirty = computed(() => visible.value && JSON.stringify(value()) !== baseline.value)
 
   /** Call after an asynchronous form load or a successful save establishes a new clean value. */
   function markSaved() {
-    baseline = JSON.stringify(value())
+    baseline.value = JSON.stringify(value())
   }
 
   async function canLeave(): Promise<boolean> {

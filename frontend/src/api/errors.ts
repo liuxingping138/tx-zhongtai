@@ -26,7 +26,7 @@ export function errorMessage(error: unknown, fallback = '请求失败'): string 
     return error.message || fallback
   }
   if (error instanceof Error) {
-    return error.message
+    return error.message || fallback
   }
   return fallback
 }
