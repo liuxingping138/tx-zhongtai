@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -162,3 +163,29 @@ async def history(session: AsyncSession, code: str, page: int, page_size: int) -
         data["result"] = await sync_result(session, row)
         items.append(data)
     return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+async def claim_next_run(session: AsyncSession, now: datetime) -> tuple[uuid.UUID, str, uuid.UUID] | None:
+    """把到点的计划入队，再领取一条可执行的任务置为 running；没有可执行的返回 None。"""
+
+    await repo.schedule_due(session, now)
+    await session.commit()
+    candidate = await session.scalar(
+        select(ScheduledRun.job_code)
+        .where(ScheduledRun.status.in_(("queued", "retrying")), ScheduledRun.available_at <= now)
+        .order_by(ScheduledRun.available_at, ScheduledRun.created_at)
+        .limit(1)
+    )
+    if candidate is None:
+        return None
+    # 与页面停用/入队使用相同的锁顺序：job -> run。
+    await repo.get_job(session, candidate, lock=True)
+    row = await repo.active_run(session, candidate)
+    if row is None or row.status not in {"queued", "retrying"} or row.available_at > now:
+        return None
+    row.status = "running"
+    row.started_at = row.started_at or now
+    row.attempts += 1
+    row.sync_run_id = uuid.uuid4()
+    await session.commit()
+    return row.id, row.job_code, row.sync_run_id

@@ -13,11 +13,18 @@ from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from app.application.scheduler import abandon_running_sync, claim_failure, latest_watermark, sync_result
+from app.application.crawler_sync import run as run_v1
+from app.application.crawler_sync_v2 import run as run_v2
+from app.application.scheduler import (
+    abandon_running_sync,
+    claim_failure,
+    claim_next_run,
+    latest_watermark,
+    sync_result,
+)
 from app.core.database import SessionLocal, engine
 from app.domain.scheduler_models import ScheduledRun, SchedulerHeartbeat
 from app.domain.scheduling import LEADER_LOCK, MAX_ATTEMPTS, retry_delay
-from app.repositories import scheduler as repo
 
 logger = logging.getLogger("policy.scheduler")
 POLL_SECONDS = 5
@@ -52,29 +59,8 @@ async def recover_interrupted() -> None:
 
 
 async def claim_next() -> tuple[uuid.UUID, str, uuid.UUID] | None:
-    now = datetime.now(UTC)
     async with SessionLocal() as session:
-        await repo.schedule_due(session, now)
-        await session.commit()
-        candidate = await session.scalar(
-            select(ScheduledRun.job_code)
-            .where(ScheduledRun.status.in_(("queued", "retrying")), ScheduledRun.available_at <= now)
-            .order_by(ScheduledRun.available_at, ScheduledRun.created_at)
-            .limit(1)
-        )
-        if candidate is None:
-            return None
-        # 与页面停用/入队使用相同的锁顺序：job -> run。
-        await repo.get_job(session, candidate, lock=True)
-        row = await repo.active_run(session, candidate)
-        if row is None or row.status not in {"queued", "retrying"} or row.available_at > now:
-            return None
-        row.status = "running"
-        row.started_at = row.started_at or now
-        row.attempts += 1
-        row.sync_run_id = uuid.uuid4()
-        await session.commit()
-        return row.id, row.job_code, row.sync_run_id
+        return await claim_next_run(session, datetime.now(UTC))
 
 
 async def execute_sync(code: str, sync_id: uuid.UUID) -> None:
@@ -83,12 +69,8 @@ async def execute_sync(code: str, sync_id: uuid.UUID) -> None:
         if await latest_watermark(session, code) is None:
             raise RuntimeError("尚未建立同步水位，请先完成首次历史回填，再执行增量同步")
     if code == "crawler-v1":
-        from app.cli.sync_crawler import run
-
-        await run(days=7, tasks_only=False, run_id=sync_id)
+        await run_v1(days=7, tasks_only=False, run_id=sync_id)
     elif code == "crawler-v2":
-        from app.cli.sync_crawler_v2 import run as run_v2
-
         await run_v2(mode="incremental", run_id=sync_id)
     else:
         raise RuntimeError("未知任务，拒绝执行")

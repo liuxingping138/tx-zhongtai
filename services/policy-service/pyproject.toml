@@ -53,9 +53,6 @@ extend = "../../ruff.toml"
 "app/application/crawler.py" = ["PLC0415"]
 "app/application/interpretations.py" = ["PLR0913"]
 "app/application/sources.py" = ["C901", "PLR0912", "PLR0913", "PLR0915"]
-"app/cli/sync_crawler.py" = ["PLR0913", "PLR0917"]
-"app/cli/sync_crawler_v2.py" = ["PLR0913"]
-"app/worker/scheduler.py" = ["PLC0415"]
 "tests/crawler_database_acceptance.py" = ["PLR0915"]
 "tests/crawler_query_benchmark.py" = ["C901"]
 
@@ -72,11 +69,6 @@ layers = [
     "app.repositories",
     "app.domain",
 ]
-# 存量基线（2026-10-09）：按 docs/guides/工程规范.md 第 8 节整改，修完删除，不许新增。
-ignore_imports = [
-    "app.worker.scheduler -> app.cli.sync_crawler",
-    "app.worker.scheduler -> app.cli.sync_crawler_v2",
-]
 
 [[tool.importlinter.contracts]]
 name = "core 是基础设施，不依赖业务层"
@@ -91,11 +83,6 @@ source_modules = ["app.api", "app.cli", "app.worker"]
 forbidden_modules = ["app.repositories"]
 # 只管直接导入；经 application 间接用到仓储是正常链路。
 allow_indirect_imports = true
-# 存量基线（2026-10-09）：按 docs/guides/工程规范.md 第 8 节整改，修完删除，不许新增。
-ignore_imports = [
-    "app.cli.sync_crawler_v2 -> app.repositories.crawler_v2",
-    "app.worker.scheduler -> app.repositories.scheduler",
-]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

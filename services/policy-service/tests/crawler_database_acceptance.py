@@ -19,7 +19,7 @@ from platform_common.clock import BEIJING
 from sqlalchemy import text
 
 from app.application import crawler as service
-from app.cli import sync_crawler as sync
+from app.application import crawler_sync as sync
 from app.core.database import SessionLocal, engine
 from app.domain.crawler_identity import site_key
 from app.repositories import crawler as repo

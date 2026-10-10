@@ -17,7 +17,7 @@ os.environ.setdefault("POLICY_AUDIT_INGEST_SECRET", "unit-test")
 
 import pytest
 
-from app.cli import sync_crawler
+from app.application import crawler_sync as sync_crawler
 
 TODAY = date(2026, 9, 22)
 

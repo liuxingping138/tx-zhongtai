@@ -12,8 +12,9 @@ os.environ.setdefault("POLICY_DATABASE_URL", "postgresql+asyncpg://policy_app:te
 
 import pytest
 
+from app.application import crawler_sync_v2 as sync
 from app.application import crawler_v2 as service
-from app.cli import sync_crawler_v2 as sync
+from app.cli import sync_crawler_v2 as sync_cli
 from app.repositories import crawler_v2 as repo
 
 TODAY = date(2026, 9, 23)
@@ -68,7 +69,11 @@ def test_different_cities_with_same_site_name_stay_separate() -> None:
 async def test_incremental_without_watermark_requires_backfill(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sync, "_last_watermark", AsyncMock(return_value=None))
     with pytest.raises(RuntimeError, match="回填"):
-        await sync.plan(MagicMock(), mode=sync.MODE_INCREMENTAL, today=TODAY, days=7, since=None, skip_existing=False)
+        await sync.plan(
+            MagicMock(),
+            sync.SyncWindow(mode=sync.MODE_INCREMENTAL, days=7, since=None, skip_existing=False),
+            today=TODAY,
+        )
 
 
 @pytest.mark.asyncio
@@ -79,7 +84,7 @@ async def test_incremental_recomputes_touched_days_and_today(monkeypatch: pytest
     monkeypatch.setattr(sync, "_last_watermark", AsyncMock(return_value=mark))
     monkeypatch.setattr(sync, "fetch_affected_days", fetch)
     targets, new_mark = await sync.plan(
-        MagicMock(), mode=sync.MODE_INCREMENTAL, today=TODAY, days=7, since=None, skip_existing=False
+        MagicMock(), sync.SyncWindow(mode=sync.MODE_INCREMENTAL, days=7, since=None, skip_existing=False), today=TODAY
     )
     assert targets == [TODAY, date(2026, 9, 21), date(2026, 9, 1)]
     assert new_mark == newer
@@ -92,7 +97,7 @@ async def test_incremental_keeps_watermark_when_nothing_new(monkeypatch: pytest.
     monkeypatch.setattr(sync, "_last_watermark", AsyncMock(return_value=mark))
     monkeypatch.setattr(sync, "fetch_affected_days", MagicMock(return_value=(set(), None)))
     targets, new_mark = await sync.plan(
-        MagicMock(), mode=sync.MODE_INCREMENTAL, today=TODAY, days=7, since=None, skip_existing=False
+        MagicMock(), sync.SyncWindow(mode=sync.MODE_INCREMENTAL, days=7, since=None, skip_existing=False), today=TODAY
     )
     assert targets == [TODAY]
     assert new_mark == mark
@@ -101,7 +106,7 @@ async def test_incremental_keeps_watermark_when_nothing_new(monkeypatch: pytest.
 @pytest.mark.asyncio
 async def test_repair_uses_fixed_window_and_never_moves_watermark() -> None:
     targets, mark = await sync.plan(
-        MagicMock(), mode=sync.MODE_REPAIR, today=TODAY, days=3, since=None, skip_existing=False
+        MagicMock(), sync.SyncWindow(mode=sync.MODE_REPAIR, days=3, since=None, skip_existing=False), today=TODAY
     )
     assert targets == [TODAY, date(2026, 9, 22), date(2026, 9, 21)]
     assert mark is None
@@ -112,7 +117,7 @@ async def test_backfill_starts_from_source_first_day(monkeypatch: pytest.MonkeyP
     source_mark = datetime(2026, 9, 23, 0, tzinfo=UTC)
     monkeypatch.setattr(sync, "fetch_source_bounds", MagicMock(return_value=(date(2026, 9, 20), source_mark)))
     targets, mark = await sync.plan(
-        MagicMock(), mode=sync.MODE_BACKFILL, today=TODAY, days=7, since=None, skip_existing=False
+        MagicMock(), sync.SyncWindow(mode=sync.MODE_BACKFILL, days=7, since=None, skip_existing=False), today=TODAY
     )
     assert targets == [TODAY, date(2026, 9, 22), date(2026, 9, 21), date(2026, 9, 20)]
     assert mark == source_mark
@@ -133,7 +138,7 @@ async def test_resumed_backfill_keeps_earlier_watermark_and_skips_done_days(monk
         AsyncMock(return_value={TODAY, date(2026, 9, 22), date(2026, 9, 21), date(2026, 9, 20)}),
     )
     targets, mark = await sync.plan(
-        MagicMock(), mode=sync.MODE_BACKFILL, today=TODAY, days=7, since=None, skip_existing=True
+        MagicMock(), sync.SyncWindow(mode=sync.MODE_BACKFILL, days=7, since=None, skip_existing=True), today=TODAY
     )
     # 当天和昨天总是重算；已完成的更早日期跳过。
     assert targets == [TODAY, date(2026, 9, 22), date(2026, 9, 19)]
@@ -209,9 +214,9 @@ async def test_running_batch_holding_lock_stays_running(monkeypatch: pytest.Monk
 )
 def test_cli_rejects_ambiguous_arguments(monkeypatch: pytest.MonkeyPatch, argv: list[str]) -> None:
     monkeypatch.setattr("sys.argv", ["sync_crawler_v2", *argv])
-    monkeypatch.setattr(sync, "run", MagicMock())
+    monkeypatch.setattr(sync_cli, "run", MagicMock())
     with pytest.raises(SystemExit):
-        sync.main()
+        sync_cli.main()
 
 
 def test_status_filter_is_exact_and_unknown_field_rejected() -> None:

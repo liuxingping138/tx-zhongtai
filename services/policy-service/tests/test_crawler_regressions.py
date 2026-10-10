@@ -12,7 +12,8 @@ os.environ.setdefault("POLICY_DATABASE_URL", "postgresql+asyncpg://policy_app:te
 import pytest
 
 from app.application import crawler as service
-from app.cli import sync_crawler as sync
+from app.application import crawler_sync as sync
+from app.cli import sync_crawler as sync_cli
 from app.domain.crawler_identity import site_key
 from app.repositories import crawler as repo
 
@@ -27,7 +28,7 @@ async def test_source_failure_leaves_failed_run(monkeypatch: pytest.MonkeyPatch)
     session = SimpleNamespace(add=MagicMock(), commit=AsyncMock(), rollback=AsyncMock())
     monkeypatch.setattr(sync, "_days_to_sync", AsyncMock(side_effect=OSError("source offline")))
     with pytest.raises(OSError):
-        await sync._run_sync(session, days=7, tasks_only=False)
+        await sync._run_sync(session, sync.SyncRequest(days=7, tasks_only=False))
     run = session.add.call_args_list[0].args[0]
     assert run.status == "failed"
     assert run.error_message == "source offline"
@@ -42,7 +43,7 @@ async def test_tasks_only_does_not_probe_data_or_move_watermark(monkeypatch: pyt
     monkeypatch.setattr(sync, "_fetch_rules", lambda: [])
     monkeypatch.setattr(sync, "_upsert_tasks", AsyncMock(return_value=0))
     monkeypatch.setattr(sync, "recompute_health", AsyncMock(return_value=0))
-    await sync._run_sync(session, days=7, tasks_only=True)
+    await sync._run_sync(session, sync.SyncRequest(days=7, tasks_only=True))
     probe.assert_not_awaited()
     run = session.add.call_args.args[0]
     assert run.status == "success"
@@ -53,9 +54,9 @@ def test_explicit_days_uses_fixed_window(monkeypatch: pytest.MonkeyPatch) -> Non
     import sys
 
     run = AsyncMock()
-    monkeypatch.setattr(sync, "run", run)
+    monkeypatch.setattr(sync_cli, "run", run)
     monkeypatch.setattr(sys, "argv", ["sync", "--days", "30"])
-    sync.main()
+    sync_cli.main()
     assert run.call_args.kwargs["days"] == 30
     assert run.call_args.kwargs["use_watermark"] is False
 
