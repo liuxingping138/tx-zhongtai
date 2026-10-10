@@ -10,7 +10,7 @@ import '@/styles/workspace.css'
 const { groups } = useWorkspace()
 const route = useRoute()
 const router = useRouter()
-const activePath = computed(() => String(route.meta.menuPath || route.path))
+const activePath = computed(() => (typeof route.meta.menuPath === 'string' && route.meta.menuPath) || route.path)
 const activeGroup = computed(() => groups.value.find(group => group.entries.some(entry => entry.path === activePath.value)))
 // 403 不在任何菜单下。侧栏继续显示这个角色能进的菜单，避免只剩「个人设置」。
 const sidebarGroup = computed(() => activeGroup.value ?? (route.name === 'forbidden' ? groups.value[0] : undefined))

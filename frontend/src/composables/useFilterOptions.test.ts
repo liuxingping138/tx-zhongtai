@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useFilterOptions } from './useFilterOptions'
 
-const fetchMock = vi.fn()
-const searchMock = vi.fn()
+const fetchMock = vi.fn<(...args: unknown[]) => unknown>()
+const searchMock = vi.fn<(...args: unknown[]) => unknown>()
 
 vi.mock('@/api/filterOptions', () => ({
   fetchFilterOptions: (...args: unknown[]) => fetchMock(...args),

@@ -2,6 +2,7 @@ import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
 
 import { getAccessToken, getCsrfToken, isAuthPublicPath, onAccessTokenChange, onRemoteLogout, refreshSession, setAccessToken } from './session'
+import { ApiRequestError } from './errors'
 import type { ApiError, ApiResponse } from './types'
 
 interface RetryConfig extends InternalAxiosRequestConfig {
@@ -35,21 +36,22 @@ http.interceptors.request.use((config) => {
   return config
 })
 
-function toApiError(error: AxiosError<ApiResponseBody<unknown>>): ApiError {
+function toApiError(error: AxiosError<ApiResponseBody<unknown>>): ApiRequestError {
   if (error.response) {
     const body = error.response.data
-    return {
+    const retryAfter: unknown = error.response.headers['retry-after']
+    return new ApiRequestError({
       status: error.response.status,
       code: body?.code ?? 'UNKNOWN_ERROR',
       message: body?.message ?? '请求失败',
       requestId: body?.request_id ?? null,
-      retryAfter: error.response.headers['retry-after'] ?? null,
-    }
+      retryAfter: typeof retryAfter === 'string' ? retryAfter : null,
+    })
   }
   if (error.code === 'ECONNABORTED') {
-    return { status: 0, code: 'TIMEOUT', message: '请求超时，请稍后重试', requestId: null }
+    return new ApiRequestError({ status: 0, code: 'TIMEOUT', message: '请求超时，请稍后重试', requestId: null })
   }
-  return { status: 0, code: 'NETWORK_ERROR', message: '网络异常，请检查网络连接', requestId: null }
+  return new ApiRequestError({ status: 0, code: 'NETWORK_ERROR', message: '网络异常，请检查网络连接', requestId: null })
 }
 
 function notifyByStatus(error: ApiError): void {

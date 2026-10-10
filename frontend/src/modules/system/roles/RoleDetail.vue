@@ -150,7 +150,7 @@ function openForm(mode: RoleFormMode) {
   formVisible.value = true
 }
 
-async function onFormSaved(saved: RoleItem, mode: RoleFormMode) {
+function onFormSaved(saved: RoleItem, mode: RoleFormMode) {
   if (mode === 'copy') {
     emit('changed')
     void router.push({ name: 'system-role-detail', params: { roleId: saved.id }, query: { created: 'copy' } })

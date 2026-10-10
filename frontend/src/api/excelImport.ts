@@ -33,12 +33,12 @@ export const importUi = reactive({
   visible: false,
   fileName: '',
   percent: 0,
-  stage: 'upload' as ImportStage,
+  stage: 'upload',
 })
 
 function headerValue(headers: AxiosResponse['headers'], name: string): string {
-  const value = headers[name] ?? headers[name.toLowerCase()]
-  return value == null ? '' : String(value)
+  const value: unknown = headers[name] ?? headers[name.toLowerCase()]
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? String(value) : ''
 }
 
 function filenameFromDisposition(value: string, fallback: string): string {
@@ -58,7 +58,7 @@ export async function postExcelImport(
 ): Promise<ImportResult> {
   const form = new FormData()
   form.append('file', file)
-  const response = (await http.post(url, form, {
+  const response = await http.post<Blob>(url, form, {
     timeout,
     responseType: 'blob',
     onUploadProgress(event) {
@@ -73,7 +73,7 @@ export async function postExcelImport(
       }
       onProgress?.(Math.min(percent, 99), 'upload')
     },
-  })) as AxiosResponse<Blob>
+  })
   const contentType = headerValue(response.headers, 'content-type')
   if (contentType.includes('spreadsheetml') || contentType.includes('octet-stream')) {
     const filename = filenameFromDisposition(headerValue(response.headers, 'content-disposition'), '上传校验.xlsx')

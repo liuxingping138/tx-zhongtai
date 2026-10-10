@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, type Mock, vi } from 'vitest'
 import { effectScope, nextTick, reactive } from 'vue'
-const state = vi.hoisted(() => ({ route: null as unknown, replace: vi.fn() }))
+const state = vi.hoisted((): { route: unknown; replace: Mock } => ({ route: null, replace: vi.fn() }))
 vi.mock('vue-router', () => ({ useRoute: () => state.route, useRouter: () => ({ replace: state.replace }) }))
 import { useListQuery } from './useListQuery'
 const scopes: ReturnType<typeof effectScope>[] = []

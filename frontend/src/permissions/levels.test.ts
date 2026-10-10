@@ -23,7 +23,7 @@ describe('permission helpers', () => {
   })
 
   it('父节点批量只更新已发布叶子', () => {
-    const next = applyParentLevel(tree[0], 'READ', {})
+    const next = applyParentLevel(tree[0]!, 'READ', {})
     expect(next['system.users']).toBe('READ')
     expect(next['system.roles']).toBe('READ')
     expect(next['policy.sources']).toBeUndefined()

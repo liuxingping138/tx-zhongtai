@@ -57,8 +57,9 @@ async function load() {
 
 /** 进入页面没指定角色时，默认打开第一个，右边不留空白。 */
 function selectDefault() {
-  if (selectedId.value || !visibleRoles.value.length) return
-  void router.replace({ name: 'system-role-detail', params: { roleId: visibleRoles.value[0].id } })
+  const first = visibleRoles.value[0]
+  if (selectedId.value || !first) return
+  void router.replace({ name: 'system-role-detail', params: { roleId: first.id } })
 }
 
 function select(role: RoleItem) {

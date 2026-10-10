@@ -11,7 +11,8 @@ export function useFieldValidation<T extends Record<string, string>>(values: T, 
     Object.assign(errors, Object.fromEntries(Object.entries(messages).filter(([, message]) => message)))
     if (!Object.keys(errors).length) return true
     await nextTick()
-    const element = form.value?.$el.querySelector('[aria-invalid="true"]') as HTMLElement | undefined
+    const root: unknown = form.value?.$el
+    const element = root instanceof HTMLElement ? root.querySelector<HTMLElement>('[aria-invalid="true"]') : null
     element?.focus()
     element?.scrollIntoView({ block: 'nearest' })
     return false

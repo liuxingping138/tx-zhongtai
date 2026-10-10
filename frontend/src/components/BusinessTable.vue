@@ -34,7 +34,11 @@ onMounted(() => {
   resizeObserver.observe(root.value)
 })
 onBeforeUnmount(() => resizeObserver?.disconnect())
-function value(row: T, key: string) { return String((row as Record<string, unknown>)[key] ?? '') }
+// 单元格只展示标量；对象和数组不应该出现在业务列里，显示为空而不是「[object Object]」。
+function cellText(raw: unknown): string {
+  return typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean' ? String(raw) : ''
+}
+function value(row: T, key: string) { return cellText((row as Record<string, unknown>)[key]) }
 function text(row: T, col: DataColumn) { const val = value(row, col.prop); return val ? col.time ? formatTime(val) : val : '—' }
 function link(row: T, col: DataColumn) {
   const val = value(row, col.prop).trim()

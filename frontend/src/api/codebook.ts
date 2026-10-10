@@ -1,4 +1,3 @@
-import type { AxiosResponse } from 'axios'
 
 import { isApiError } from './errors'
 import { postExcelImport, type ImportResult, type ImportStage } from './excelImport'
@@ -164,14 +163,14 @@ export async function resolveAreaCodes(
   body.append('file', file)
   onProgress?.(10, 'upload')
   try {
-    const response = (await http.post('/codebook/area-codes/resolve', body, {
+    const response = await http.post<Blob>('/codebook/area-codes/resolve', body, {
       responseType: 'blob',
       timeout: 600_000,
       onUploadProgress(event) {
         if (!event.total) return
         onProgress?.(Math.min(70, Math.round((event.loaded / event.total) * 70)), 'upload')
       },
-    })) as AxiosResponse<Blob>
+    })
     onProgress?.(80, 'parse')
     const matched = Number(response.headers['x-matched-count'] || 0)
     const unmatched = Number(response.headers['x-unmatched-count'] || 0)

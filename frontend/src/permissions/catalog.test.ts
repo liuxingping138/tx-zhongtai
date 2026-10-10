@@ -44,13 +44,17 @@ const tree: ResourceNode[] = [
   }),
 ]
 
-const [sources, crawler, users] = moduleGroups(tree)[0].modules
+// 用例数据固定，这三项一定存在；取不到时让测试直接报错。
+const modules = moduleGroups(tree)[0]!.modules
+const sources = modules[0]!
+const crawler = modules[1]!
+const users = modules[2]!
 
 describe('moduleGroups', () => {
   it('只保留已发布模块，未开发的目录整组不出现', () => {
     const groups = moduleGroups(tree)
     expect(groups.map(group => group.name)).toEqual(['政策'])
-    expect(groups[0].modules.map(module => module.name)).toEqual(['信源管理', '爬虫监测 v2', '用户管理'])
+    expect(groups[0]!.modules.map(module => module.name)).toEqual(['信源管理', '爬虫监测 v2', '用户管理'])
   })
 
   it('按模块实际动作给档位：没有导出就没有「导出」，没有写操作就没有「管理」', () => {
@@ -113,7 +117,7 @@ describe('capabilityModules', () => {
         ],
       }),
     ]
-    expect(moduleGroups(withGrant)[0].modules.map(module => module.name)).toEqual(['用户管理'])
+    expect(moduleGroups(withGrant)[0]!.modules.map(module => module.name)).toEqual(['用户管理'])
     expect(capabilityModules(withGrant).map(module => module.name)).toEqual(['分配角色'])
   })
 })

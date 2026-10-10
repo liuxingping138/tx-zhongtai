@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-import type { TokenPayload } from './types'
+import type { ApiResponse, TokenPayload } from './types'
 
 const CSRF_COOKIE = 'csrf_token'
 const LOCK_NAME = 'tx-zhongtai-refresh'
@@ -104,8 +104,8 @@ export async function ensureCsrfToken(): Promise<string> {
     csrfToken = fromCookie
     return fromCookie
   }
-  const response = await axios.get('/api/v1/auth/csrf', { withCredentials: true })
-  const token = (response.data?.data?.csrf_token as string | undefined) ?? readCsrfCookie()
+  const response = await axios.get<ApiResponse<{ csrf_token?: string }>>('/api/v1/auth/csrf', { withCredentials: true })
+  const token = response.data?.data?.csrf_token ?? readCsrfCookie()
   csrfToken = token || ''
   return csrfToken
 }
@@ -116,7 +116,7 @@ export function broadcastLogout(): void {
 
 async function postRefresh(): Promise<TokenPayload> {
   await ensureCsrfToken()
-  const response = await axios.post(
+  const response = await axios.post<ApiResponse<TokenPayload>>(
     '/api/v1/auth/refresh',
     {},
     {
@@ -124,7 +124,10 @@ async function postRefresh(): Promise<TokenPayload> {
       headers: { 'X-CSRF-Token': csrfToken || readCsrfCookie() },
     },
   )
-  const payload = response.data?.data as TokenPayload
+  const payload = response.data.data
+  if (!payload) {
+    throw new Error('刷新会话的响应里没有令牌')
+  }
   setAccessToken(payload.access_token)
   armAccessRefresh(payload.expires_in)
   const cookieCsrf = readCsrfCookie()

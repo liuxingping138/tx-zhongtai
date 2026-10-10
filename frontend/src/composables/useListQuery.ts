@@ -26,7 +26,7 @@ export function useListQuery<T extends Record<string, Value>>(query: T, reload: 
     for (const key of privateKeys) next[key] = query[key] ?? defaults[key] ?? ''
     Object.assign(query, next)
   }
-  function signature(source: Record<string, unknown> = route.query as Record<string, unknown>) {
+  function signature(source: Record<string, unknown> = route.query) {
     return JSON.stringify(source, Object.keys(source).sort())
   }
   const applied = reactive(JSON.parse(JSON.stringify(query)) as T)
@@ -46,7 +46,8 @@ export function useListQuery<T extends Record<string, Value>>(query: T, reload: 
     const live = query as Record<string, Value>
     const record = next as Record<string, Value>
     for (const key of PAGING_KEYS) {
-      if (key in live) record[key] = live[key]
+      const value = live[key]
+      if (value !== undefined) record[key] = value
     }
     return next
   }
@@ -62,7 +63,7 @@ export function useListQuery<T extends Record<string, Value>>(query: T, reload: 
     }
     committing = true
     try {
-      if (signature() !== signature(next as Record<string, unknown>)) await router.replace({ path, query: next })
+      if (signature() !== signature(next)) await router.replace({ path, query: next })
       committed = signature()
     } finally {
       committing = false
@@ -70,7 +71,7 @@ export function useListQuery<T extends Record<string, Value>>(query: T, reload: 
   }
   /** 显式把当前草稿写入地址栏。列表刷新不要用它，否则没点查询的条件会生效。 */
   async function commit() {
-    await writeUrl(query as T)
+    await writeUrl(query)
   }
   /**
    * 翻页、重试、保存后刷新：地址栏和请求只用已生效的筛选，加上当前页码。
@@ -81,7 +82,8 @@ export function useListQuery<T extends Record<string, Value>>(query: T, reload: 
     const live = query as Record<string, Value>
     const stored = applied as Record<string, Value>
     for (const key of PAGING_KEYS) {
-      if (key in live) stored[key] = live[key]
+      const value = live[key]
+      if (value !== undefined) stored[key] = value
     }
     await writeUrl(source)
   }

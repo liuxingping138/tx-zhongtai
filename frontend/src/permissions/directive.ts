@@ -8,7 +8,7 @@ function apply(el: HTMLElement, binding: DirectiveBinding<string>) {
   const raw = binding.value || ''
   const [resource, level] = raw.split(':')
   const required = (level as GrantLevel) || 'READ'
-  const allowed = levelSatisfies(auth.resourceLevel(resource), required)
+  const allowed = levelSatisfies(auth.resourceLevel(resource ?? ''), required)
   el.style.display = allowed ? '' : 'none'
 }
 
