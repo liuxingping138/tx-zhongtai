@@ -259,6 +259,7 @@ test-integration: p6-up
 	P6_COMPOSE="$(P6_COMPOSE)" \
 	P6_RUNTIME_FILE=deploy/compose/.p6.runtime \
 	python3 tests/p6/accept.py
+	@P6_COMPOSE="$(P6_COMPOSE)" DOCKER="$(P6_DOCKER)" P6_SERVER="$(P6_SERVER)" bash scripts/scheduler-integration.sh
 
 p6-fixtures:
 	$(P6_COMPOSE) exec -T policy-service .venv/bin/python < tests/p6/seed_crawler.py
