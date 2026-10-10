@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 
 import { changePassword, fetchMe, fetchPermissions, login, logout, logoutAll } from '@/api/auth'
-import { errorMessage } from '@/api/errors'
 import {
   armAccessRefresh,
   broadcastLogout,
@@ -119,10 +118,8 @@ export const useAuthStore = defineStore('auth', {
       try {
         await ensureCsrfToken()
         await logout()
-      } catch (error) {
-        if (errorMessage(error) && getAccessToken()) {
-          // 本地仍清理；服务端失败不阻塞退出。
-        }
+      } catch {
+        // 服务端失败不阻塞退出，本地照常清理。
       } finally {
         this.clearSession()
       }
