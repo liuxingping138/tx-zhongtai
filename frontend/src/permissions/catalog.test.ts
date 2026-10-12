@@ -31,7 +31,7 @@ const tree: ResourceNode[] = [
         // 故意打乱顺序：后端按编码字母序返回，页面要按「先增后改」展示。
         actions: [action('purge', 'FULL'), action('export', 'EXPORT'), action('import', 'FULL'), action('list', 'READ'), action('update', 'FULL'), action('create', 'FULL'), action('read', 'READ')],
       }),
-      node({ code: 'policy.crawler_monitoring_v2', name: '爬虫监测', actions: [action('list', 'READ'), action('export', 'EXPORT')] }),
+      node({ code: 'policy.crawler_monitoring', name: '爬虫监测', actions: [action('list', 'READ'), action('export', 'EXPORT')] }),
       node({ code: 'system.users', name: '用户管理', actions: [action('list', 'READ'), action('create', 'FULL')] }),
     ],
   }),

@@ -118,7 +118,7 @@ async def test_health_reports_long_stale_threshold(monkeypatch: pytest.MonkeyPat
 
 
 def _trend_client(monkeypatch: pytest.MonkeyPatch, route_name: str = "trend") -> tuple[TestClient, AsyncMock]:
-    route = next(item for item in iter_api_routes(app) if item.path.endswith(f"/crawler-monitoring-v2/{route_name}"))
+    route = next(item for item in iter_api_routes(app) if item.path.endswith(f"/crawler-monitoring/{route_name}"))
     app.dependency_overrides[get_db_session] = _db
     for dep in route.dependant.dependencies:
         if dep.name == "_":
@@ -140,14 +140,14 @@ def test_trend_route_accepts_query_string_days(monkeypatch: pytest.MonkeyPatch) 
     """查询串里的天数是字符串，曾因 Literal 不做转换导致页面每次请求都 422。"""
 
     client, trend = _trend_client(monkeypatch)
-    response = client.get("/api/v1/policy/crawler-monitoring-v2/trend", params={"days": "30"})
+    response = client.get("/api/v1/policy/crawler-monitoring/trend", params={"days": "30"})
     assert response.status_code == 200
     assert trend.await_args is not None and trend.await_args.args[1] == 30
 
 
 def test_trend_route_rejects_unsupported_range(monkeypatch: pytest.MonkeyPatch) -> None:
     client, trend = _trend_client(monkeypatch)
-    response = client.get("/api/v1/policy/crawler-monitoring-v2/trend", params={"days": "14"})
+    response = client.get("/api/v1/policy/crawler-monitoring/trend", params={"days": "14"})
     assert response.status_code == 422
     assert "7、30、90、365" in response.json()["message"]
     trend.assert_not_awaited()
@@ -157,7 +157,7 @@ def test_site_trend_route_passes_raw_identity_and_validates_days(monkeypatch: py
     client, _ = _trend_client(monkeypatch, "site-trend")
     site_trend = AsyncMock(return_value={"date_from": "", "date_to": "", "items": []})
     monkeypatch.setattr(status_history, "site_trend", site_trend)
-    url = "/api/v1/policy/crawler-monitoring-v2/site-trend"
+    url = "/api/v1/policy/crawler-monitoring/site-trend"
     response = client.get(url, params={"site_name": "市财政局", "province_name": "新疆", "days": "90"})
     assert response.status_code == 200
     assert site_trend.await_args is not None

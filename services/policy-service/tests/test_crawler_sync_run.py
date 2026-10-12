@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.crawler.application import crawler_sync_v2 as sync
+from app.crawler.application import crawler_sync as sync
 
 TODAY = date(2026, 10, 10)
 

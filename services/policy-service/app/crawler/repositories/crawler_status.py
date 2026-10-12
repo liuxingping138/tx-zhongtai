@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crawler.domain.models import CrawlerSiteDaily, CrawlerStatusDaily
 
-# 某天的状态 = 那天回看每个网站最后一次入库的日期，口径与 crawler_sync_v2._REBUILD_SITES 一致：
+# 某天的状态 = 那天回看每个网站最后一次入库的日期，口径与 crawler_sync._REBUILD_SITES 一致：
 # 入库日期取 last_created_at 的北京时间日期，没有时用采集日。按网站把入库日期排成区间，一次算出整段日期。
 _BACKFILL = text(
     """

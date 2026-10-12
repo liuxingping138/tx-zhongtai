@@ -71,7 +71,7 @@ class TestExecuteClaim:
         db = _Db({row.id: row})
         monkeypatch.setattr(worker, "SessionLocal", db)
         monkeypatch.setattr(worker, "execute_sync", AsyncMock())
-        await worker.execute_claim((row.id, "crawler-v2", uuid.uuid4()))
+        await worker.execute_claim((row.id, "crawler", uuid.uuid4()))
         assert row.status == "success" and row.finished_at is not None and row.error_message is None
         db.commit.assert_awaited_once()
 
@@ -81,7 +81,7 @@ class TestExecuteClaim:
         row = _row(attempts=1)
         monkeypatch.setattr(worker, "SessionLocal", _Db({row.id: row}))
         monkeypatch.setattr(worker, "execute_sync", AsyncMock(side_effect=ValueError("mysql://user:secret@host")))
-        await worker.execute_claim((row.id, "crawler-v2", uuid.uuid4()))
+        await worker.execute_claim((row.id, "crawler", uuid.uuid4()))
         assert row.status == "retrying"
         assert "secret" not in row.error_message and "ValueError" in row.error_message
         assert patched.abandoned and "secret" not in patched.abandoned[0]
@@ -92,7 +92,7 @@ class TestExecuteClaim:
         row = _row(attempts=3)
         monkeypatch.setattr(worker, "SessionLocal", _Db({row.id: row}))
         monkeypatch.setattr(worker, "execute_sync", AsyncMock(side_effect=RuntimeError("已有爬虫同步正在运行")))
-        await worker.execute_claim((row.id, "crawler-v2", uuid.uuid4()))
+        await worker.execute_claim((row.id, "crawler", uuid.uuid4()))
         assert row.status == "failed" and row.error_message == "已有爬虫同步正在运行"
 
     async def test_a_batch_that_never_reached_success_is_not_reported_as_success(
@@ -102,7 +102,7 @@ class TestExecuteClaim:
         row = _row(attempts=1)
         monkeypatch.setattr(worker, "SessionLocal", _Db({row.id: row}))
         monkeypatch.setattr(worker, "execute_sync", AsyncMock())
-        await worker.execute_claim((row.id, "crawler-v2", uuid.uuid4()))
+        await worker.execute_claim((row.id, "crawler", uuid.uuid4()))
         assert row.status == "retrying" and row.error_message == "同步批次未成功完成"
 
     async def test_timeout_is_reported_in_plain_words(
@@ -116,7 +116,7 @@ class TestExecuteClaim:
             await asyncio.sleep(1)
 
         monkeypatch.setattr(worker, "execute_sync", slow)
-        await worker.execute_claim((row.id, "crawler-v2", uuid.uuid4()))
+        await worker.execute_claim((row.id, "crawler", uuid.uuid4()))
         assert "30 分钟" in row.error_message
 
     async def test_missing_run_record_is_an_error(
@@ -125,7 +125,7 @@ class TestExecuteClaim:
         monkeypatch.setattr(worker, "SessionLocal", _Db())
         monkeypatch.setattr(worker, "execute_sync", AsyncMock())
         with pytest.raises(RuntimeError, match="执行记录丢失"):
-            await worker.execute_claim((uuid.uuid4(), "crawler-v2", uuid.uuid4()))
+            await worker.execute_claim((uuid.uuid4(), "crawler", uuid.uuid4()))
 
 
 class TestExecuteSync:
@@ -135,18 +135,18 @@ class TestExecuteSync:
         monkeypatch.setattr(worker, "SessionLocal", _Db())
         monkeypatch.setattr(worker, "latest_watermark", AsyncMock(return_value=None))
         run = AsyncMock()
-        monkeypatch.setattr(worker, "run_v2", run)
+        monkeypatch.setattr(worker, "run_crawler_sync", run)
         with pytest.raises(RuntimeError, match="首次历史回填"):
-            await worker.execute_sync("crawler-v2", uuid.uuid4())
+            await worker.execute_sync("crawler", uuid.uuid4())
         run.assert_not_awaited()
 
     async def test_known_job_runs_incrementally_and_unknown_is_refused(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(worker, "SessionLocal", _Db())
         monkeypatch.setattr(worker, "latest_watermark", AsyncMock(return_value=datetime.now(UTC)))
         run = AsyncMock()
-        monkeypatch.setattr(worker, "run_v2", run)
+        monkeypatch.setattr(worker, "run_crawler_sync", run)
         sync_id = uuid.uuid4()
-        await worker.execute_sync("crawler-v2", sync_id)
+        await worker.execute_sync("crawler", sync_id)
         run.assert_awaited_once_with(mode="incremental", run_id=sync_id)
         with pytest.raises(RuntimeError, match="未知任务"):
             await worker.execute_sync("no-such-job", sync_id)

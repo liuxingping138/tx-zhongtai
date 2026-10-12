@@ -123,17 +123,17 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/` �
 ### 爬虫监测是只读统计，数据靠同步进来
 
 数据源是外部爬虫库（MySQL `crawler2021`，前面挂 ShardingSphere 代理），**页面永远不查它**。
-`app/crawler/application/crawler_sync_v2.py`（入口 `python -m app.cli.sync_crawler_v2`，`make crawler-sync`）
+`app/crawler/application/crawler_sync.py`（入口 `python -m app.cli.sync_crawler`，`make crawler-sync`）
 只读采集总表 `csys_policy_info_source_all`，按天聚合后写本服务的三张表：
 `policy_crawler_site_daily`（网站×采集日，按天整体替换）、`policy_crawler_sites`（页面唯一读取的快照）、
-`policy_crawler_v2_sync_runs`（水位与状态）。资源编码、路由、表名里保留 `v2` 字样是历史原因，页面和菜单叫「爬虫监测」。
+`policy_crawler_sync_runs`（水位与状态）。
 
 - 监测单位是「网站名称 + 省份 + 地市」的**原始值**（用户确认不做别名归一），停更天数按最新入库日期算
 - 核心指标是「停更天数」不是「今天有没有出数」：政策网站本来就不是天天更新
 - 首次必须回填到爬虫库最早的采集日期；没有成功回填过时日常同步直接报错，不用短窗口算出偏小的总量
 - 聚合按 `collect_date`（采集日）分桶，日常按入库时间水位找到受影响日期，再加当天重算，不固定每天全量。
   `--days` / `--since` 是人工指定范围，适用于初始化、口径升级或数据修复
-- 同步持有 advisory lock（键见 `app/crawler/repositories/crawler_v2.py`），概览据 `pg_locks` 把停在 running 的批次识别为中断
+- 同步持有 advisory lock（键见 `app/crawler/repositories/crawler_sites.py`），概览据 `pg_locks` 把停在 running 的批次识别为中断
 - ShardingSphere 不支持 `REGEXP` 和多列 `COUNT(DISTINCT)`，写源库 SQL 时用 `LIKE`、单列聚合
 - 页面图表只读本地表：采集趋势按日期范围读 `policy_crawler_site_daily`（主键以采集日开头，一年约 26ms），健康结构和省份分布读快照。
  省份图按「省份」字段的分类排，单独占一整行、左右两列：32 个省级行政区以及香港、澳门、全国、国央企都在列（`province_categories`），没有数据的补 0。
@@ -176,7 +176,7 @@ policy / codebook 走公共 Outbox，默认 5 分钟。审计服务按 `event_id
 系统管理的任务调度页面 `/system/scheduler` 使用政策服务接口 `/api/v1/policy/scheduled-jobs`，
 资源 `system.scheduler` 归属 `policy-service`；READ 可查看，FULL 可设置计划和手动执行。
 `policy-worker` 独立容器持 PostgreSQL 全局会话锁，按北京时间每日调度任务。目前只有一项：爬虫监测增量同步
-（任务编码 `crawler-v2`，默认 10:10，时刻可在页面改）。
+（任务编码 `crawler`，默认 10:10，时刻可在页面改）。
 配置、执行队列、重试状态持久化在政策库；重启错过多天只合并一次增量。
 初始化无成功水位时拒绝自动同步，需要先完成历史回填，不能自动退回短窗口。
 worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 internal data 网络会无法连接源库。

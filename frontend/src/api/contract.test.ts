@@ -21,7 +21,7 @@ vi.mock('./excelImport', () => ({
 import * as audit from './audit'
 import * as auth from './auth'
 import * as codebook from './codebook'
-import * as crawler from './crawlerMonitoringV2'
+import * as crawler from './crawlerMonitoring'
 import * as policy from './policy'
 import * as scheduler from './scheduler'
 import * as system from './system'

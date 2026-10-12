@@ -1,4 +1,4 @@
-import type { SiteStatus } from '@/api/crawlerMonitoringV2'
+import type { SiteStatus } from '@/api/crawlerMonitoring'
 import { filterList } from '@/composables/useListQuery'
 
 export const STATUS_BY_LABEL: Record<string, SiteStatus> = { 正常: 'normal', 关注: 'watch', 停更: 'stale' }

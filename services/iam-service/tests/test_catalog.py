@@ -23,8 +23,8 @@ def test_codebook_resources_are_published() -> None:
     assert by_code["policy.sources"].published is True
     assert by_code["policy.base_tags"].published is True
     assert by_code["policy.interpretations"].published is True
-    assert by_code["policy.crawler_monitoring_v2"].published is True
-    assert by_code["policy.crawler_monitoring_v2"].name == "爬虫监测"
+    assert by_code["policy.crawler_monitoring"].published is True
+    assert by_code["policy.crawler_monitoring"].name == "爬虫监测"
     assert by_code["system.roles"].name == "角色与权限"
 
 
@@ -36,7 +36,6 @@ def test_user_delete_is_a_full_action() -> None:
 def test_retired_resources_are_not_in_the_catalog() -> None:
     """下线的资源如果又出现在清单里，同步时会被建回来，又立刻被退役步骤删掉。"""
 
-    assert "policy.crawler_monitoring" in RETIRED_RESOURCE_CODES
     codes = {spec.code for spec in RESOURCE_SPECS}
     assert not codes & set(RETIRED_RESOURCE_CODES)
     assert not {spec.resource_code for spec in ACTION_SPECS} & set(RETIRED_RESOURCE_CODES)

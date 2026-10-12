@@ -7,7 +7,7 @@ from sqlalchemy import ColumnElement, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
-from app.crawler.domain.models import CrawlerSite, CrawlerV2SyncRun
+from app.crawler.domain.models import CrawlerSite, CrawlerSyncRun
 
 STATUSES = ("normal", "watch", "stale")
 # 同步进程持有的会话级 advisory lock。取 2^31 以内，pg_locks 里 classid=0、objid 就是它。
@@ -88,18 +88,18 @@ async def totals(session: AsyncSession) -> dict[str, int]:
     return {"sites": sites, "normal": normal, "watch": watch, "stale": stale, "total_rows": int(rows)}
 
 
-async def last_run(session: AsyncSession) -> CrawlerV2SyncRun | None:
-    run: CrawlerV2SyncRun | None = await session.scalar(
-        select(CrawlerV2SyncRun).order_by(CrawlerV2SyncRun.started_at.desc()).limit(1)
+async def last_run(session: AsyncSession) -> CrawlerSyncRun | None:
+    run: CrawlerSyncRun | None = await session.scalar(
+        select(CrawlerSyncRun).order_by(CrawlerSyncRun.started_at.desc()).limit(1)
     )
     return run
 
 
-async def last_successful_run(session: AsyncSession) -> CrawlerV2SyncRun | None:
-    run: CrawlerV2SyncRun | None = await session.scalar(
-        select(CrawlerV2SyncRun)
-        .where(CrawlerV2SyncRun.status == "success")
-        .order_by(CrawlerV2SyncRun.started_at.desc())
+async def last_successful_run(session: AsyncSession) -> CrawlerSyncRun | None:
+    run: CrawlerSyncRun | None = await session.scalar(
+        select(CrawlerSyncRun)
+        .where(CrawlerSyncRun.status == "success")
+        .order_by(CrawlerSyncRun.started_at.desc())
         .limit(1)
     )
     return run

@@ -19,14 +19,14 @@ ACTOR = SimpleNamespace(id="u1", name="管理员")
 
 
 def _job(**overrides: Any) -> SimpleNamespace:
-    base = {"code": "crawler-v2", "enabled": True, "daily_time": "10:10", "next_run_at": NOW, "version": 1}
+    base = {"code": "crawler", "enabled": True, "daily_time": "10:10", "next_run_at": NOW, "version": 1}
     return SimpleNamespace(**(base | overrides))
 
 
 def _run(**overrides: Any) -> SimpleNamespace:
     base = {
         "id": uuid.uuid4(),
-        "job_code": "crawler-v2",
+        "job_code": "crawler",
         "status": "queued",
         "attempts": 0,
         "started_at": None,
@@ -66,7 +66,7 @@ class TestRepository:
 
     async def test_uninitialised_job_asks_for_a_migration(self) -> None:
         with pytest.raises(NotFoundError, match="数据库迁移"):
-            await repo.get_job(_Session(scalar_values=[None]), "crawler-v2")  # type: ignore[arg-type]
+            await repo.get_job(_Session(scalar_values=[None]), "crawler")  # type: ignore[arg-type]
 
     async def test_enqueue_refuses_a_second_active_run(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(repo, "active_run", AsyncMock(return_value=_run()))
@@ -99,7 +99,7 @@ class TestRepository:
         assert overdue.next_run_at > NOW and busy.next_run_at > NOW
 
     async def test_history_returns_rows_and_total(self) -> None:
-        rows, total = await repo.history(_Session(scalar_values=[7], scalars=[[_run()]]), "crawler-v2", 1, 20)  # type: ignore[arg-type]
+        rows, total = await repo.history(_Session(scalar_values=[7], scalars=[[_run()]]), "crawler", 1, 20)  # type: ignore[arg-type]
         assert total == 7 and len(rows) == 1
 
 
@@ -116,25 +116,25 @@ class TestUpdateJob:
 
     async def test_stale_version_is_rejected(self, env: SimpleNamespace) -> None:
         with pytest.raises(VersionConflictError):
-            await jobs.update_job(object(), "crawler-v2", ACTOR, enabled=True, daily_time="10:10", version=9)  # type: ignore[arg-type,arg-type]
+            await jobs.update_job(object(), "crawler", ACTOR, enabled=True, daily_time="10:10", version=9)  # type: ignore[arg-type,arg-type]
 
     async def test_disabling_cancels_a_waiting_run_but_not_a_running_one(self, env: SimpleNamespace) -> None:
         env.active = _run(status="retrying")
-        await jobs.update_job(object(), "crawler-v2", ACTOR, enabled=False, daily_time="10:10", version=1)  # type: ignore[arg-type]
+        await jobs.update_job(object(), "crawler", ACTOR, enabled=False, daily_time="10:10", version=1)  # type: ignore[arg-type]
         assert env.active.status == "cancelled" and env.active.finished_at is not None
         env.job, env.active = _job(), _run(status="running")
-        await jobs.update_job(object(), "crawler-v2", ACTOR, enabled=False, daily_time="10:10", version=1)  # type: ignore[arg-type]
+        await jobs.update_job(object(), "crawler", ACTOR, enabled=False, daily_time="10:10", version=1)  # type: ignore[arg-type]
         assert env.active.status == "running"
 
     async def test_changing_the_clock_moves_the_next_run_and_bumps_the_version(self, env: SimpleNamespace) -> None:
         before = env.job.next_run_at
-        await jobs.update_job(object(), "crawler-v2", ACTOR, enabled=True, daily_time="11:30", version=1)  # type: ignore[arg-type]
+        await jobs.update_job(object(), "crawler", ACTOR, enabled=True, daily_time="11:30", version=1)  # type: ignore[arg-type]
         assert env.job.daily_time == "11:30" and env.job.version == 2 and env.job.next_run_at != before
         assert env.events == ["scheduler.updated"]
 
     async def test_unchanged_plan_keeps_the_next_run(self, env: SimpleNamespace) -> None:
         before = env.job.next_run_at
-        await jobs.update_job(object(), "crawler-v2", ACTOR, enabled=True, daily_time="10:10", version=1)  # type: ignore[arg-type]
+        await jobs.update_job(object(), "crawler", ACTOR, enabled=True, daily_time="10:10", version=1)  # type: ignore[arg-type]
         assert env.job.next_run_at == before
 
 
@@ -146,7 +146,7 @@ class TestTriggerAndQueries:
         audit = AsyncMock()
         monkeypatch.setattr(jobs, "enqueue_event", audit)
         monkeypatch.setattr(jobs, "run_data", lambda row: {"id": row.id})
-        assert await jobs.trigger_job(object(), "crawler-v2", ACTOR) == {"id": run.id}  # type: ignore[arg-type]
+        assert await jobs.trigger_job(object(), "crawler", ACTOR) == {"id": run.id}  # type: ignore[arg-type]
         assert audit.await_args.kwargs["extra"] == {"run_id": str(run.id)}
 
     async def test_worker_is_online_only_with_a_fresh_heartbeat(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -173,7 +173,7 @@ class TestTriggerAndQueries:
         monkeypatch.setattr(jobs.repo, "history", AsyncMock(return_value=([_run()], 1)))
         monkeypatch.setattr(jobs, "sync_result", AsyncMock(return_value={"status": "success"}))
         monkeypatch.setattr(jobs, "run_data", lambda row: {"id": row.id})
-        result = await jobs.history(object(), "crawler-v2", 1, 20)  # type: ignore[arg-type]
+        result = await jobs.history(object(), "crawler", 1, 20)  # type: ignore[arg-type]
         assert result["items"][0]["result"] == {"status": "success"} and result["total"] == 1
 
 
@@ -189,9 +189,9 @@ class TestClaim:
         monkeypatch.setattr(jobs.repo, "schedule_due", AsyncMock())
         monkeypatch.setattr(jobs.repo, "get_job", AsyncMock())
         monkeypatch.setattr(jobs.repo, "active_run", AsyncMock(return_value=row))
-        session = _Session(scalar_values=["crawler-v2"])
+        session = _Session(scalar_values=["crawler"])
         claimed = await jobs.claim_next_run(session, NOW)  # type: ignore[arg-type]
-        assert claimed == (row.id, "crawler-v2", row.sync_run_id)
+        assert claimed == (row.id, "crawler", row.sync_run_id)
         assert row.status == "running" and row.attempts == 2 and row.started_at == NOW
 
     async def test_a_run_changed_by_someone_else_in_between_is_not_claimed(
@@ -200,4 +200,4 @@ class TestClaim:
         monkeypatch.setattr(jobs.repo, "schedule_due", AsyncMock())
         monkeypatch.setattr(jobs.repo, "get_job", AsyncMock())
         monkeypatch.setattr(jobs.repo, "active_run", AsyncMock(return_value=_run(status="cancelled")))
-        assert await jobs.claim_next_run(_Session(scalar_values=["crawler-v2"]), NOW) is None  # type: ignore[arg-type]
+        assert await jobs.claim_next_run(_Session(scalar_values=["crawler"]), NOW) is None  # type: ignore[arg-type]

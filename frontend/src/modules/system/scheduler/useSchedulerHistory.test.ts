@@ -6,7 +6,7 @@ vi.mock('@/api/scheduler', () => api)
 import type { ScheduledJob } from '@/api/scheduler'
 import { useSchedulerHistory } from './useSchedulerHistory'
 
-const job = { code: 'crawler-v2', name: '爬虫监测增量同步' } as ScheduledJob
+const job = { code: 'crawler', name: '爬虫监测增量同步' } as ScheduledJob
 const pageOf = (ids: string[], total = ids.length) => ({ items: ids.map(id => ({ id })), total, page: 1, page_size: 20 })
 
 describe('useSchedulerHistory', () => {
@@ -21,7 +21,7 @@ describe('useSchedulerHistory', () => {
     expect(history.visible.value).toBe(true)
     expect(history.records.value).toEqual([])
     await vi.waitFor(() => expect(history.loading.value).toBe(false))
-    expect(api.listRuns).toHaveBeenCalledWith('crawler-v2', 1)
+    expect(api.listRuns).toHaveBeenCalledWith('crawler', 1)
     expect(history.total.value).toBe(42)
     expect(history.records.value).toHaveLength(2)
   })

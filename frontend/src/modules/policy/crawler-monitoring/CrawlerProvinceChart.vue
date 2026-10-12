@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
-import type { CrawlerProvince } from '@/api/crawlerMonitoringV2'
+import type { CrawlerProvince } from '@/api/crawlerMonitoring'
 import BaseChart from '@/components/charts/BaseChart.vue'
 import { chartPalette } from '@/components/charts/echarts'
 import { percent, provinceAxisMax, provinceColumns, provinceOption, sortProvinces, type ProvinceSort } from './charts'

@@ -6,7 +6,7 @@ from platform_common.clock import utcnow
 from sqlalchemy import delete
 
 from app.core.database import SessionLocal, engine
-from app.crawler.domain.models import CrawlerSite, CrawlerSiteDaily, CrawlerV2SyncRun
+from app.crawler.domain.models import CrawlerSite, CrawlerSiteDaily, CrawlerSyncRun
 
 
 async def main():
@@ -14,7 +14,7 @@ async def main():
     now = utcnow()
     today = now.date()
     async with SessionLocal() as session:
-        for model in (CrawlerSiteDaily, CrawlerSite, CrawlerV2SyncRun):
+        for model in (CrawlerSiteDaily, CrawlerSite, CrawlerSyncRun):
             await session.execute(delete(model))
         for i in range(60):
             name=f'P6验收网站{i:03d}'
@@ -27,7 +27,7 @@ async def main():
             session.add(CrawlerSiteDaily(collect_date=last,site_name=name,province_name=province,
                 city_name='验收地市',row_count=10,last_created_at=now-timedelta(days=stale),
                 last_published_date=last,synced_at=now))
-        session.add(CrawlerV2SyncRun(mode='backfill',started_at=now,finished_at=now,date_from=today-timedelta(days=90),
+        session.add(CrawlerSyncRun(mode='backfill',started_at=now,finished_at=now,date_from=today-timedelta(days=90),
             date_to=today,days_synced=90,site_rows=60,status='success',watermark=now))
         await session.commit()
     await engine.dispose()

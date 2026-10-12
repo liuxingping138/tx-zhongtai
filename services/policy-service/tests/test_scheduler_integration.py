@@ -17,7 +17,7 @@ from sqlalchemy import delete, text
 
 from app.common.security import get_authz_client
 from app.core.database import SessionLocal, engine
-from app.crawler.domain.models import CrawlerV2SyncRun
+from app.crawler.domain.models import CrawlerSyncRun
 from app.main import app
 from app.scheduler.application import jobs as service
 from app.scheduler.domain.models import ScheduledRun
@@ -34,7 +34,7 @@ async def isolated():
     assert engine.url.database == "scheduler_test", "拒绝在业务数据库执行破坏性测试"
     async with SessionLocal() as session:
         await session.execute(delete(ScheduledRun))
-        await session.execute(delete(CrawlerV2SyncRun))
+        await session.execute(delete(CrawlerSyncRun))
         await session.execute(
             text(
                 "UPDATE policy_scheduled_jobs SET enabled=true, daily_time='10:00', "
@@ -47,7 +47,7 @@ async def isolated():
     await engine.dispose()
 
 
-async def trigger(code="crawler-v2"):
+async def trigger(code="crawler"):
     async with SessionLocal() as session:
         row = await service.trigger_job(session, code, ACTOR)
         await session.commit()
@@ -59,13 +59,13 @@ async def test_parallel_manual_requests_coalesce():
     assert sum(isinstance(x, dict) for x in results) == 1
     assert sum(isinstance(x, VersionConflictError) for x in results) == 1
     async with SessionLocal() as session:
-        assert len((await repo.history(session, "crawler-v2", 1, 20))[0]) == 1
+        assert len((await repo.history(session, "crawler", 1, 20))[0]) == 1
 
 
 async def test_missed_days_catch_up_once_and_manual_race():
     now = datetime.now(UTC)
     async with SessionLocal() as session:
-        job = await repo.get_job(session, "crawler-v2", lock=True)
+        job = await repo.get_job(session, "crawler", lock=True)
         job.next_run_at = now - timedelta(days=4)
         await session.commit()
 
@@ -78,20 +78,20 @@ async def test_missed_days_catch_up_once_and_manual_race():
     assert all(x is None or isinstance(x, (dict, VersionConflictError)) for x in results)
     await schedule()
     async with SessionLocal() as session:
-        rows, total = await repo.history(session, "crawler-v2", 1, 20)
+        rows, total = await repo.history(session, "crawler", 1, 20)
         assert total == 1 and rows[0].status == "queued"
-        assert (await repo.get_job(session, "crawler-v2")).next_run_at > now
+        assert (await repo.get_job(session, "crawler")).next_run_at > now
 
 
 async def test_pause_cancels_pending_and_version_conflict():
     await trigger()
     async with SessionLocal() as session:
-        await service.update_job(session, "crawler-v2", ACTOR, enabled=False, daily_time="11:00", version=1)
+        await service.update_job(session, "crawler", ACTOR, enabled=False, daily_time="11:00", version=1)
         await session.commit()
-        assert (await repo.history(session, "crawler-v2", 1, 20))[0][0].status == "cancelled"
+        assert (await repo.history(session, "crawler", 1, 20))[0][0].status == "cancelled"
     async with SessionLocal() as session:
         with pytest.raises(VersionConflictError):
-            await service.update_job(session, "crawler-v2", ACTOR, enabled=True, daily_time="12:00", version=1)
+            await service.update_job(session, "crawler", ACTOR, enabled=True, daily_time="12:00", version=1)
     # 停用计划后仍允许一次手动执行。
     assert (await trigger())["status"] == "queued"
 
@@ -113,7 +113,7 @@ async def test_failure_retry_success_and_saved_result(monkeypatch):
     async def success(code, sync_id):
         async with SessionLocal() as session:
             session.add(
-                CrawlerV2SyncRun(
+                CrawlerSyncRun(
                     id=sync_id,
                     mode="incremental",
                     started_at=datetime.now(UTC),
@@ -138,7 +138,7 @@ async def test_recovery_does_not_repeat_completed_sync():
     claim = await worker.claim_next()
     async with SessionLocal() as session:
         session.add(
-            CrawlerV2SyncRun(
+            CrawlerSyncRun(
                 id=claim[2],
                 mode="incremental",
                 started_at=datetime.now(UTC),
@@ -163,7 +163,7 @@ async def test_timeout_closes_running_sync_batch(monkeypatch):
     # 先持久化已运行批次，再测试超时清理；不能假设远端 DB 在 50ms 内提交。
     async with SessionLocal() as session:
         session.add(
-            CrawlerV2SyncRun(
+            CrawlerSyncRun(
                 id=claim[2],
                 mode="incremental",
                 started_at=datetime.now(UTC),
@@ -183,7 +183,7 @@ async def test_timeout_closes_running_sync_batch(monkeypatch):
     await worker.execute_claim(claim)
     async with SessionLocal() as session:
         scheduled = await session.get(ScheduledRun, claim[0])
-        sync = await session.get(CrawlerV2SyncRun, claim[2])
+        sync = await session.get(CrawlerSyncRun, claim[2])
         assert scheduled is not None and scheduled.status == "retrying"
         assert sync is not None and sync.status == "failed"
         assert sync.error_message
@@ -205,7 +205,7 @@ async def test_recovery_retries_interrupted_run_and_global_lock():
 
 async def test_empty_database_refuses_automatic_backfill():
     with pytest.raises(RuntimeError, match="首次历史回填"):
-        await worker.execute_sync("crawler-v2", uuid.uuid4())
+        await worker.execute_sync("crawler", uuid.uuid4())
 
 
 async def test_api_authorization_validation_and_queue():
@@ -222,19 +222,19 @@ async def test_api_authorization_validation_and_queue():
         assert (await client.get(base)).status_code == 401
         headers = {"Authorization": "Bearer readonly"}
         assert (await client.get(base, headers=headers)).status_code == 200
-        assert (await client.post(base + "/crawler-v2/runs", headers=headers)).status_code == 403
+        assert (await client.post(base + "/crawler/runs", headers=headers)).status_code == 403
         assert (
             await client.patch(
-                base + "/crawler-v2", headers=headers, json={"enabled": False, "daily_time": "10:00", "version": 1}
+                base + "/crawler", headers=headers, json={"enabled": False, "daily_time": "10:00", "version": 1}
             )
         ).status_code == 403
         headers = {"Authorization": "Bearer admin"}
         assert (
             await client.patch(
-                base + "/crawler-v2", headers=headers, json={"enabled": True, "daily_time": "25:00", "version": 1}
+                base + "/crawler", headers=headers, json={"enabled": True, "daily_time": "25:00", "version": 1}
             )
         ).status_code == 422
         assert (await client.post(base + "/arbitrary/runs", headers=headers)).status_code == 404
-        assert (await client.post(base + "/crawler-v2/runs", headers=headers)).status_code == 202
-        assert (await client.post(base + "/crawler-v2/runs", headers=headers)).status_code == 409
-        assert (await client.get(base + "/crawler-v2/runs", headers=headers)).json()["data"]["total"] == 1
+        assert (await client.post(base + "/crawler/runs", headers=headers)).status_code == 202
+        assert (await client.post(base + "/crawler/runs", headers=headers)).status_code == 409
+        assert (await client.get(base + "/crawler/runs", headers=headers)).json()["data"]["total"] == 1

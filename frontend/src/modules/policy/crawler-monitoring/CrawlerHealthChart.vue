@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import type { CrawlerV2Overview, SiteStatus } from '@/api/crawlerMonitoringV2'
+import type { CrawlerOverviewData, SiteStatus } from '@/api/crawlerMonitoring'
 import BaseChart from '@/components/charts/BaseChart.vue'
 import { chartPalette } from '@/components/charts/echarts'
 import { healthOption, healthSlices, percent, rateDelta } from './charts'
 
-const props = defineProps<{ overview: CrawlerV2Overview; selected: SiteStatus[] }>()
+const props = defineProps<{ overview: CrawlerOverviewData; selected: SiteStatus[] }>()
 const emit = defineEmits<{ pick: [status: SiteStatus] }>()
 
 const palette = chartPalette(getComputedStyle(document.documentElement))

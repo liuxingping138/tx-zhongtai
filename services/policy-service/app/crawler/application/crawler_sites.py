@@ -19,7 +19,7 @@ from app.crawler.application import crawler_stats as stats
 from app.crawler.application import crawler_status as status_history
 from app.crawler.domain.fields import CRAWLER_SITE_COLUMNS, CRAWLER_SITE_STATUS_LABELS
 from app.crawler.domain.models import CrawlerSite
-from app.crawler.repositories import crawler_v2 as repo
+from app.crawler.repositories import crawler_sites as repo
 
 # 日常同步每天一次，超过这个时长没有成功同步，页面提示数据可能过期。
 _STALE_SYNC_AFTER = timedelta(hours=36)
@@ -99,7 +99,7 @@ async def export_sites(session: AsyncSession, actor: Actor, filters: Filters) ->
     rows = [_to_out(row) for row in await repo.list_filtered(session, filters)]
     await enqueue_event(
         session,
-        event_type="policy.crawler_monitoring_v2.exported",
+        event_type="policy.crawler_monitoring.exported",
         actor=actor,
         extra={"count": len(rows)},
     )

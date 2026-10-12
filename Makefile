@@ -152,11 +152,11 @@ seed-area-codes:
 
 # 爬虫监测：只读采集总表，按「网站名称 + 省份 + 地市」统计。首次必须先回填建立水位。
 crawler-sync:
-	$(COMPOSE) exec -T policy-service .venv/bin/python -m app.cli.sync_crawler_v2
+	$(COMPOSE) exec -T policy-service .venv/bin/python -m app.cli.sync_crawler
 
 # 回填中断后用 ARGS=--skip-existing 续跑。
 crawler-backfill:
-	$(COMPOSE) exec -T policy-service .venv/bin/python -m app.cli.sync_crawler_v2 --backfill $(ARGS)
+	$(COMPOSE) exec -T policy-service .venv/bin/python -m app.cli.sync_crawler --backfill $(ARGS)
 
 admin-create:
 	@if [ -z "$$ADMIN_PASSWORD" ]; then echo "请通过环境变量 ADMIN_PASSWORD 传入初始密码，不要写在命令行参数里。"; exit 2; fi

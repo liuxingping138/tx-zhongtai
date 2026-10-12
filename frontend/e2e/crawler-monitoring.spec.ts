@@ -19,7 +19,7 @@ function trackProblems(page: Page) {
 }
 
 const sitesResponse = (predicate: (url: URL) => boolean) => (response: Response) => {
-  if (!response.url().includes('/crawler-monitoring-v2/sites?') || !response.ok()) return false
+  if (!response.url().includes('/crawler-monitoring/sites?') || !response.ok()) return false
   return predicate(new URL(response.url()))
 }
 
@@ -27,7 +27,7 @@ test('爬虫监测：卡片、筛选联动与导出', async ({ page }) => {
   test.skip(!currentAdminPassword(), '缺少 ADMIN_PASSWORD')
   const problems = trackProblems(page)
 
-  await loginAdmin(page, '/policy/crawler-monitoring-v2')
+  await loginAdmin(page, '/policy/crawler-monitoring')
 
   await expect(page.getByRole('heading', { name: '爬虫监测', exact: true })).toBeVisible({ timeout: 20_000 })
   await expect(page.getByRole('navigation', { name: '子模块导航' }).getByRole('link', { name: '爬虫监测', exact: true })).toBeVisible()
@@ -46,7 +46,7 @@ test('爬虫监测：卡片、筛选联动与导出', async ({ page }) => {
   await expect(page.getByRole('cell', { name: '停更', exact: true }).first()).toBeVisible()
 
   const exportResponse = page.waitForResponse(
-    (response) => response.url().includes('/crawler-monitoring-v2/sites/export') && response.ok(),
+    (response) => response.url().includes('/crawler-monitoring/sites/export') && response.ok(),
   )
   await page.getByRole('button', { name: '下载 Excel', exact: true }).click()
   expect(new URL((await exportResponse).url()).searchParams.get('status')).toBe('stale')
@@ -78,9 +78,9 @@ test('爬虫监测：趋势切换范围，健康结构点分类筛选明细', as
   const problems = trackProblems(page)
 
   const firstTrend = page.waitForResponse(
-    (response) => response.url().includes('/crawler-monitoring-v2/trend?days=30') && response.ok(),
+    (response) => response.url().includes('/crawler-monitoring/trend?days=30') && response.ok(),
   )
-  await loginAdmin(page, '/policy/crawler-monitoring-v2')
+  await loginAdmin(page, '/policy/crawler-monitoring')
   await firstTrend
   for (const name of ['采集趋势', '健康结构', '省份分布']) {
     await expect(page.getByRole('heading', { name, exact: true })).toBeVisible({ timeout: 20_000 })
@@ -90,7 +90,7 @@ test('爬虫监测：趋势切换范围，健康结构点分类筛选明细', as
   await expect(page.getByRole('img', { name: /^省份分布：/ }).first().locator('canvas')).toBeVisible()
 
   const weekly = page.waitForResponse(
-    (response) => response.url().includes('/crawler-monitoring-v2/trend?days=7') && response.ok(),
+    (response) => response.url().includes('/crawler-monitoring/trend?days=7') && response.ok(),
   )
   await page.getByRole('radiogroup', { name: '趋势时间范围' }).getByText('7 天', { exact: true }).click()
   expect((await (await weekly).json()).data.items).toHaveLength(7)
@@ -110,7 +110,7 @@ test('爬虫监测：同一字段多选按「或」查询，导出带同样的�
   const problems = trackProblems(page)
   const provinces = ['海南省', '甘肃省']
 
-  await loginAdmin(page, '/policy/crawler-monitoring-v2')
+  await loginAdmin(page, '/policy/crawler-monitoring')
   await expect(page.getByRole('heading', { name: '爬虫监测', exact: true })).toBeVisible({ timeout: 20_000 })
 
   const field = page.locator('.filter-bar .el-form-item').filter({ hasText: '省份' }).first()
@@ -134,7 +134,7 @@ test('爬虫监测：同一字段多选按「或」查询，导出带同样的�
   await expect(page.getByText('已筛选 1 项', { exact: true })).toBeVisible()
 
   const exportResponse = page.waitForResponse(
-    (response) => response.url().includes('/crawler-monitoring-v2/sites/export') && response.ok(),
+    (response) => response.url().includes('/crawler-monitoring/sites/export') && response.ok(),
   )
   await page.getByRole('button', { name: '下载 Excel', exact: true }).click()
   expect(new URL((await exportResponse).url()).searchParams.getAll('province_name').sort()).toEqual([...provinces].sort())

@@ -2,7 +2,7 @@
 import { ArrowDown, ArrowUp, Refresh } from '@element-plus/icons-vue'
 import { computed, ref } from 'vue'
 
-import { getCrawlerV2Overview, type CrawlerV2Overview, type SiteStatus } from '@/api/crawlerMonitoringV2'
+import { getCrawlerOverview, type CrawlerOverviewData, type SiteStatus } from '@/api/crawlerMonitoring'
 import { errorMessage } from '@/api/errors'
 import { changeText, headline, weekDelta } from './charts'
 import CrawlerHealthChart from './CrawlerHealthChart.vue'
@@ -18,7 +18,7 @@ const emit = defineEmits<{
 }>()
 
 const OVERVIEW_ERROR = '暂时无法获取采集概况，请稍后重试。'
-const overview = ref<CrawlerV2Overview | null>(null)
+const overview = ref<CrawlerOverviewData | null>(null)
 const loading = ref(false)
 const error = ref('')
 const expanded = ref(true)
@@ -60,7 +60,7 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const result = await getCrawlerV2Overview()
+    const result = await getCrawlerOverview()
     if (current === sequence) overview.value = result
   } catch (cause) {
     if (current !== sequence) return
@@ -100,7 +100,7 @@ defineExpose({ reload })
         :icon="expanded ? ArrowUp : ArrowDown"
         text
         :aria-expanded="expanded"
-        aria-controls="crawler-v2-overview"
+        aria-controls="crawler-overview"
         @click="expanded = !expanded"
       >
         {{ expanded ? '收起概览' : '展开概览' }}
@@ -117,7 +117,7 @@ defineExpose({ reload })
   />
   <section
     v-show="expanded"
-    id="crawler-v2-overview"
+    id="crawler-overview"
     v-loading="loading && !overview"
     class="overview"
   >

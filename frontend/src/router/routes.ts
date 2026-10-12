@@ -100,10 +100,10 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '信源管理', resource: 'policy.sources' },
       },
       {
-        path: 'policy/crawler-monitoring-v2',
-        name: 'policy-crawler-monitoring-v2',
-        component: () => import('@/modules/policy/crawler-monitoring-v2/CrawlerMonitoringV2.vue'),
-        meta: { title: '爬虫监测', resource: 'policy.crawler_monitoring_v2' },
+        path: 'policy/crawler-monitoring',
+        name: 'policy-crawler-monitoring',
+        component: () => import('@/modules/policy/crawler-monitoring/CrawlerMonitoring.vue'),
+        meta: { title: '爬虫监测', resource: 'policy.crawler_monitoring' },
       },
       {
         path: 'policy/base-tags',

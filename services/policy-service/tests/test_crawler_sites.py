@@ -9,10 +9,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.cli import sync_crawler_v2 as sync_cli
-from app.crawler.application import crawler_sync_v2 as sync
-from app.crawler.application import crawler_v2 as service
-from app.crawler.repositories import crawler_v2 as repo
+from app.cli import sync_crawler as sync_cli
+from app.crawler.application import crawler_sites as service
+from app.crawler.application import crawler_sync as sync
+from app.crawler.repositories import crawler_sites as repo
 
 TODAY = date(2026, 9, 23)
 
@@ -162,7 +162,7 @@ async def test_resume_mark_excludes_the_current_run() -> None:
     session = _RunHistory([("failed", earlier)])
     mark = await sync._unfinished_backfill_mark(session, exclude_run_id=uuid.uuid4())  # type: ignore[arg-type]
     assert mark == earlier
-    assert "policy_crawler_v2_sync_runs.id !=" in session.sql
+    assert "policy_crawler_sync_runs.id !=" in session.sql
 
 
 @pytest.mark.asyncio
@@ -210,7 +210,7 @@ async def test_running_batch_holding_lock_stays_running(monkeypatch: pytest.Monk
     ],
 )
 def test_cli_rejects_ambiguous_arguments(monkeypatch: pytest.MonkeyPatch, argv: list[str]) -> None:
-    monkeypatch.setattr("sys.argv", ["sync_crawler_v2", *argv])
+    monkeypatch.setattr("sys.argv", ["sync_crawler", *argv])
     monkeypatch.setattr(sync_cli, "run", MagicMock())
     with pytest.raises(SystemExit):
         sync_cli.main()

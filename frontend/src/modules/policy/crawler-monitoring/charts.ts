@@ -1,11 +1,11 @@
 import type {
-  CrawlerV2Overview,
+  CrawlerOverviewData,
   CrawlerHealth,
   CrawlerProvince,
   CrawlerTrendDays,
   CrawlerTrendPoint,
   SiteStatus,
-} from '@/api/crawlerMonitoringV2'
+} from '@/api/crawlerMonitoring'
 import type { ChartOption, ChartPalette } from '@/components/charts/echarts'
 import { compactCount } from './filters'
 
@@ -229,7 +229,7 @@ export interface HeadlinePart {
 }
 
 /** 概览顶部的一句话结论：领导不必自己从六张卡片里拼出「整体怎样、变好变坏、该看哪里」。 */
-export function headline(overview: CrawlerV2Overview): HeadlinePart[][] {
+export function headline(overview: CrawlerOverviewData): HeadlinePart[][] {
   const { cards, recent, week_base: base } = overview
   const health: HeadlinePart[] = [
     { text: '共监测 ' },

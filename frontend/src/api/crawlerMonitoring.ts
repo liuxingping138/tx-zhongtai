@@ -45,7 +45,7 @@ export interface CrawlerTrendPoint {
 
 export type CrawlerTrendDays = 7 | 30 | 90 | 365
 
-export interface CrawlerV2Overview {
+export interface CrawlerOverviewData {
   cards: { sites: number; normal: number; watch: number; stale: number; total_rows: number }
   /** 截至昨日的近 N 天采集条数和再往前 N 天的条数。 */
   recent: { days: number; rows: number; previous_rows: number }
@@ -76,27 +76,27 @@ export interface CrawlerSiteFilters {
   status?: SiteStatus[]
 }
 
-export const CRAWLER_V2_BASE = '/policy/crawler-monitoring-v2'
+export const CRAWLER_BASE = '/policy/crawler-monitoring'
 
-export function getCrawlerV2Overview(): Promise<CrawlerV2Overview> {
-  return request(http.get(`${CRAWLER_V2_BASE}/overview`))
+export function getCrawlerOverview(): Promise<CrawlerOverviewData> {
+  return request(http.get(`${CRAWLER_BASE}/overview`))
 }
 
 export function getCrawlerTrend(
   days: CrawlerTrendDays,
 ): Promise<{ date_from: string; date_to: string; items: CrawlerTrendPoint[] }> {
-  return request(http.get(`${CRAWLER_V2_BASE}/trend`, { params: { days } }))
+  return request(http.get(`${CRAWLER_BASE}/trend`, { params: { days } }))
 }
 
 export function getCrawlerSiteTrend(
   site: CrawlerSiteRef,
   days: CrawlerTrendDays,
 ): Promise<{ date_from: string; date_to: string; items: CrawlerTrendPoint[] }> {
-  return request(http.get(`${CRAWLER_V2_BASE}/site-trend`, { params: { ...site, days } }))
+  return request(http.get(`${CRAWLER_BASE}/site-trend`, { params: { ...site, days } }))
 }
 
 export function listCrawlerSites(
   params: CrawlerSiteFilters & { page?: number; page_size?: number },
 ): Promise<Page<CrawlerSiteItem>> {
-  return request(http.get(`${CRAWLER_V2_BASE}/sites`, { params }))
+  return request(http.get(`${CRAWLER_BASE}/sites`, { params }))
 }

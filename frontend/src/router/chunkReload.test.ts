@@ -23,10 +23,10 @@ describe('发布后旧分包失效时自动刷新', () => {
   it('同一目标只刷新一次，避免服务真挂时无限刷新', () => {
     const storage = memoryStorage()
     const assign = vi.fn()
-    expect(reloadForNewVersion('/policy/crawler-monitoring-v2', storage, assign)).toBe(true)
-    expect(reloadForNewVersion('/policy/crawler-monitoring-v2', storage, assign)).toBe(false)
+    expect(reloadForNewVersion('/policy/crawler-monitoring', storage, assign)).toBe(true)
+    expect(reloadForNewVersion('/policy/crawler-monitoring', storage, assign)).toBe(false)
     expect(assign).toHaveBeenCalledTimes(1)
-    expect(assign).toHaveBeenCalledWith('/policy/crawler-monitoring-v2')
+    expect(assign).toHaveBeenCalledWith('/policy/crawler-monitoring')
   })
 
   it('成功进入页面后清掉标记，下次发布还能再刷新', () => {

@@ -2,11 +2,11 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import {
-  CRAWLER_V2_BASE,
+  CRAWLER_BASE,
   listCrawlerSites,
   type CrawlerSiteItem,
   type SiteStatus,
-} from '@/api/crawlerMonitoringV2'
+} from '@/api/crawlerMonitoring'
 import { errorMessage } from '@/api/errors'
 import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
@@ -41,11 +41,11 @@ const query = reactive({
   page: 1,
   page_size: 20,
 })
-const filters = useFilterOptions(`${CRAWLER_V2_BASE}/sites`)
+const filters = useFilterOptions(`${CRAWLER_BASE}/sites`)
 const statusLabels = Object.fromEntries(Object.keys(STATUS_BY_LABEL).map(label => [label, label]))
 const listQuery = useListQuery(query, load)
 const { exporting, onExport } = useExcelExport({
-  path: `${CRAWLER_V2_BASE}/sites/export`,
+  path: `${CRAWLER_BASE}/sites/export`,
   filename: '爬虫监测.xlsx',
   filters: () => filtersForExport(siteFilters(listQuery.applied)),
 })
@@ -128,7 +128,7 @@ onMounted(() => { void reloadData() })
     >
       <template #actions>
         <ExportButton
-          :allowed="auth.canExport('policy.crawler_monitoring_v2')"
+          :allowed="auth.canExport('policy.crawler_monitoring')"
           :loading="exporting"
           :disabled="loading || !!loadError || total === 0"
           hint="按当前已生效的筛选条件导出网站明细。"

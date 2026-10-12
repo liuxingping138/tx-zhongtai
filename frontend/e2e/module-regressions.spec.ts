@@ -63,7 +63,7 @@ const sourcesTree = [{
   id: 'g', code: 'policy', name: '政策', node_type: 'directory', published: true, children: [
     { id: 'r', code: 'policy.sources', name: '信源管理', node_type: 'resource', published: true, children: [],
       actions: [{ action_code: 'list', required_level: 'READ' }, { action_code: 'export', required_level: 'EXPORT' }, { action_code: 'create', required_level: 'FULL' }] },
-    { id: 'c', code: 'policy.crawler_monitoring_v2', name: '爬虫监测', node_type: 'resource', published: true, children: [],
+    { id: 'c', code: 'policy.crawler_monitoring', name: '爬虫监测', node_type: 'resource', published: true, children: [],
       actions: [{ action_code: 'list', required_level: 'READ' }, { action_code: 'export', required_level: 'EXPORT' }] },
   ],
 }, { id: 'u', code: 'customer', name: '客户', node_type: 'directory', published: false, children: [] }]

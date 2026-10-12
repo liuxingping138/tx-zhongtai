@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
-import { getCrawlerSiteTrend, type CrawlerSiteRef, type CrawlerTrendPoint } from '@/api/crawlerMonitoringV2'
+import { getCrawlerSiteTrend, type CrawlerSiteRef, type CrawlerTrendPoint } from '@/api/crawlerMonitoring'
 import { errorMessage } from '@/api/errors'
 import BaseChart from '@/components/charts/BaseChart.vue'
 import { chartPalette } from '@/components/charts/echarts'

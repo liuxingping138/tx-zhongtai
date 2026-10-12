@@ -14,12 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.security import classified, require_policy_permission
 from app.core.database import get_db_session
+from app.crawler.application import crawler_sites as service
 from app.crawler.application import crawler_stats as stats
 from app.crawler.application import crawler_status as status_history
-from app.crawler.application import crawler_v2 as service
 
-router = APIRouter(prefix="/api/v1/policy/crawler-monitoring-v2", tags=["policy-crawler-monitoring-v2"])
-RESOURCE = "policy.crawler_monitoring_v2"
+router = APIRouter(prefix="/api/v1/policy/crawler-monitoring", tags=["policy-crawler-monitoring"])
+RESOURCE = "policy.crawler_monitoring"
 
 SiteStatus = Literal["normal", "watch", "stale"]
 

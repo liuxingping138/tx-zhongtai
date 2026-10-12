@@ -8,7 +8,7 @@ export interface WorkspaceGroup { key: string; title: string; entries: Workspace
 
 const descriptions: Record<string, string> = {
   '/policy/sources': '维护采集网站与信源信息',
-  '/policy/crawler-monitoring-v2': '按网站查看采集健康状况',
+  '/policy/crawler-monitoring': '按网站查看采集健康状况',
   '/policy/interpretations': '整理政策内容与业务解读',
   '/policy/base-tags': '维护政策分类与基础标签',
   '/codebook/policy-types': '统一政策分类口径',
@@ -23,7 +23,7 @@ const descriptions: Record<string, string> = {
 // 图标按子模块用途配置，不继承一级模块图标；同一入口在导航和查找中保持一致。
 const entryIcons: Record<string, Component> = {
   '/policy/sources': Link,
-  '/policy/crawler-monitoring-v2': Monitor,
+  '/policy/crawler-monitoring': Monitor,
   '/policy/interpretations': Reading,
   '/policy/base-tags': PriceTag,
   '/codebook/policy-types': Collection,

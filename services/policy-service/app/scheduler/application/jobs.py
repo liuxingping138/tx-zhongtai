@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.audit_emit import enqueue_event
-from app.crawler.domain.models import CrawlerV2SyncRun
+from app.crawler.domain.models import CrawlerSyncRun
 from app.scheduler.domain.models import ScheduledJob, ScheduledRun, SchedulerHeartbeat
 from app.scheduler.domain.scheduling import JOBS, next_daily
 from app.scheduler.repositories import jobs as repo
@@ -22,9 +22,9 @@ def run_data(row: ScheduledRun) -> dict[str, Any]:
 
 async def latest_watermark(session: AsyncSession, code: str) -> datetime | None:
     watermark: datetime | None = await session.scalar(
-        select(CrawlerV2SyncRun.watermark)
-        .where(CrawlerV2SyncRun.status == "success", CrawlerV2SyncRun.watermark.is_not(None))
-        .order_by(CrawlerV2SyncRun.started_at.desc())
+        select(CrawlerSyncRun.watermark)
+        .where(CrawlerSyncRun.status == "success", CrawlerSyncRun.watermark.is_not(None))
+        .order_by(CrawlerSyncRun.started_at.desc())
         .limit(1)
     )
     return watermark
@@ -49,7 +49,7 @@ async def abandon_running_sync(session: AsyncSession, row: ScheduledRun, message
 
     if row.sync_run_id is None:
         return
-    sync = await session.get(CrawlerV2SyncRun, row.sync_run_id)
+    sync = await session.get(CrawlerSyncRun, row.sync_run_id)
     if sync is None or sync.status != "running":
         return
     sync.status = "failed"
@@ -58,7 +58,7 @@ async def abandon_running_sync(session: AsyncSession, row: ScheduledRun, message
 
 
 async def sync_result(session: AsyncSession, row: ScheduledRun) -> dict[str, Any] | None:
-    sync = await session.get(CrawlerV2SyncRun, row.sync_run_id) if row.sync_run_id else None
+    sync = await session.get(CrawlerSyncRun, row.sync_run_id) if row.sync_run_id else None
     if sync is None:
         return row.result
     fields = ["date_from", "date_to", "watermark", "status", "days_synced", "site_rows"]

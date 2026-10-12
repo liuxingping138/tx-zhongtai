@@ -81,10 +81,10 @@ class CrawlerStatusDaily(Base):
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="计算时间")
 
 
-class CrawlerV2SyncRun(Base):
+class CrawlerSyncRun(Base):
     """爬虫监测同步批次，水位和中断识别都以它为准。"""
 
-    __tablename__ = "policy_crawler_v2_sync_runs"
+    __tablename__ = "policy_crawler_sync_runs"
     __table_args__ = {"comment": "爬虫监测同步批次"}
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid, comment="主键")

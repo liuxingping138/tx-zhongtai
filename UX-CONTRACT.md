@@ -92,7 +92,7 @@ Element Plus 弹层负责层级、Escape、焦点约束和焦点返回；不使�
 - 明细默认按停更天数从少到多、再按数据总量从大到小排序：按「停更」筛选时刚停更的网站在最前，停更多年的老站在最后。
 - 明细沿用 `ListPage`/`FilterBar`/`BusinessTable`/`ColumnPicker`；下载 Excel 按已生效条件导出，不提供单独的异常清单按钮（按状态筛选后下载即可）。
 - 同步失败、意外中断（批次停在运行中但同步锁已释放）、运行中、首次未同步、超过 36 小时未更新分别持久提示；接口不返回失败原文。
-- 来源定义见 `services/policy-service/app/crawler/application/crawler_sync_v2.py`、`crawler_v2.py`。
+- 来源定义见 `services/policy-service/app/crawler/application/crawler_sync.py`、`crawler_sites.py`。
 
 ## 系统管理
 

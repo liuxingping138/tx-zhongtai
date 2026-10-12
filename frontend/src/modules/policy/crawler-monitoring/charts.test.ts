@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { CrawlerProvince, CrawlerTrendPoint } from '@/api/crawlerMonitoringV2'
+import type { CrawlerProvince, CrawlerTrendPoint } from '@/api/crawlerMonitoring'
 import { chartPalette } from '@/components/charts/echarts'
 import {
   changeText,

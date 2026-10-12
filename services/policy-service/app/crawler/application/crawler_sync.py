@@ -5,9 +5,9 @@
 让累计量偏掉），再由它汇总出页面读的 `policy_crawler_sites`。
 
 三种方式：
-    python -m app.cli.sync_crawler_v2                 # 日常：按入库时间水位找出被动过的采集日重算
-    python -m app.cli.sync_crawler_v2 --backfill      # 首次：从总表最早采集日回填到今天，并建立水位
-    python -m app.cli.sync_crawler_v2 --days 30       # 修复：固定重算最近 30 天，不动水位
+    python -m app.cli.sync_crawler                 # 日常：按入库时间水位找出被动过的采集日重算
+    python -m app.cli.sync_crawler --backfill      # 首次：从总表最早采集日回填到今天，并建立水位
+    python -m app.cli.sync_crawler --days 30       # 修复：固定重算最近 30 天，不动水位
 
 回填中断后加 --skip-existing 续跑，已入库的采集日不再重查（当天和昨天仍重算）。
 
@@ -32,11 +32,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.database import SessionLocal, engine
 from app.crawler.application import crawler_status as status_history
-from app.crawler.domain.models import CrawlerSiteDaily, CrawlerV2SyncRun
-from app.crawler.repositories.crawler_v2 import SYNC_LOCK_KEY
+from app.crawler.domain.models import CrawlerSiteDaily, CrawlerSyncRun
+from app.crawler.repositories.crawler_sites import SYNC_LOCK_KEY
 from app.crawler.repositories.source import mysql_connect, retry_mysql_read
 
-logger = logging.getLogger("policy.cli.sync_crawler_v2")
+logger = logging.getLogger("policy.cli.sync_crawler")
 
 # 入库时间由爬虫库时钟写入，长事务可能让稍早的时间戳晚于水位才可见，回退一段再查。
 _WATERMARK_OVERLAP = timedelta(hours=2)
@@ -213,9 +213,9 @@ async def rebuild_sites(session: AsyncSession) -> int:
 
 async def _last_watermark(session: AsyncSession) -> datetime | None:
     return await session.scalar(
-        select(CrawlerV2SyncRun.watermark)
-        .where(CrawlerV2SyncRun.status == "success", CrawlerV2SyncRun.watermark.is_not(None))
-        .order_by(CrawlerV2SyncRun.started_at.desc())
+        select(CrawlerSyncRun.watermark)
+        .where(CrawlerSyncRun.status == "success", CrawlerSyncRun.watermark.is_not(None))
+        .order_by(CrawlerSyncRun.started_at.desc())
         .limit(1)
     )
 
@@ -228,12 +228,12 @@ async def _unfinished_backfill_mark(session: AsyncSession, *, exclude_run_id: uu
     """
 
     stmt = (
-        select(CrawlerV2SyncRun.status, CrawlerV2SyncRun.watermark)
-        .where(CrawlerV2SyncRun.mode == MODE_BACKFILL)
-        .order_by(CrawlerV2SyncRun.started_at.desc())
+        select(CrawlerSyncRun.status, CrawlerSyncRun.watermark)
+        .where(CrawlerSyncRun.mode == MODE_BACKFILL)
+        .order_by(CrawlerSyncRun.started_at.desc())
     )
     if exclude_run_id is not None:
-        stmt = stmt.where(CrawlerV2SyncRun.id != exclude_run_id)
+        stmt = stmt.where(CrawlerSyncRun.id != exclude_run_id)
     for status, watermark in (await session.execute(stmt)).all():
         if status == "success":
             return None
@@ -290,7 +290,7 @@ async def plan(
 async def _sync(session: AsyncSession, window: SyncWindow, *, run_id: uuid.UUID | None = None) -> None:
     mode = window.mode
     today = datetime.now(BEIJING).date()
-    run_row = CrawlerV2SyncRun(
+    run_row = CrawlerSyncRun(
         id=run_id or uuid.uuid4(), mode=mode, started_at=datetime.now(UTC), status="running", days_synced=0, site_rows=0
     )
     session.add(run_row)

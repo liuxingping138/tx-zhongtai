@@ -6,7 +6,7 @@ from app.common.models import OutboxEvent
 from app.crawler.domain.models import (
     CrawlerSite,
     CrawlerSiteDaily,
-    CrawlerV2SyncRun,
+    CrawlerSyncRun,
 )
 from app.policy.domain.models import BaseTag, Interpretation, Source
 from app.scheduler.domain.models import ScheduledJob, ScheduledRun, SchedulerHeartbeat
@@ -15,7 +15,7 @@ __all__ = [
     "BaseTag",
     "CrawlerSite",
     "CrawlerSiteDaily",
-    "CrawlerV2SyncRun",
+    "CrawlerSyncRun",
     "Interpretation",
     "OutboxEvent",
     "ScheduledJob",
