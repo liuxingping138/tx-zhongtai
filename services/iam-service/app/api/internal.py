@@ -43,7 +43,7 @@ async def jwks(settings: Settings = Depends(get_settings)) -> JSONResponse:
 async def authorize(
     body: AuthorizeRequest,
     request: Request,
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     settings: Settings = Depends(get_settings),
 ) -> JSONResponse:
     require_internal_caller(request, settings)
@@ -56,7 +56,7 @@ async def authorize(
 @classified(SecurityClass.INTERNAL)
 async def outbox_metrics(
     request: Request,
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     settings: Settings = Depends(get_settings),
 ) -> JSONResponse:
     require_internal_caller(request, settings)

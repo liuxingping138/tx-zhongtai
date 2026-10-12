@@ -151,7 +151,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             loc = ".".join(str(p) for p in first.get("loc", []) if p != "body")
             detail = f"参数校验失败：{loc} {first.get('msg', '')}".strip()
         return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content=_error_body(ErrorCode.VALIDATION_ERROR, detail, get_request_id()),
         )
 

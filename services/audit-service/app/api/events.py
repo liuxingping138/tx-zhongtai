@@ -43,7 +43,7 @@ def event_filters(
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def list_audit_events(
     _auth: None = Depends(require_audit_permission("list")),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     filters: EventFilters = Depends(event_filters),
@@ -62,7 +62,7 @@ async def list_audit_events(
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def list_filter_options(
     _auth: None = Depends(require_audit_permission("list")),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
 ) -> JSONResponse:
     return success_json(await query_app.list_options(session))
 
@@ -73,7 +73,7 @@ async def search_filter_options(
     field: str = Query(..., min_length=1, max_length=64),
     q: str | None = Query(default=None, max_length=200),
     _auth: None = Depends(require_audit_permission("list")),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
 ) -> JSONResponse:
     """筛选项的服务端搜索。候选值过多的字段由前端按关键词调用。"""
 
@@ -89,7 +89,7 @@ async def search_filter_options(
 async def get_audit_event(
     event_id: uuid.UUID,
     _auth: None = Depends(require_audit_permission("read")),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
 ) -> JSONResponse:
     item = await query_app.get_one(session, event_id)
     if item is None:

@@ -40,7 +40,7 @@ def _app() -> FastAPI:
     async def flush_not_null() -> None:
         raise _integrity("23502")
 
-    @app.post("/commit-unique", dependencies=[Depends(_commit_on_exit)])
+    @app.post("/commit-unique", dependencies=[Depends(_commit_on_exit, scope="function")])
     async def commit_unique() -> dict[str, bool]:
         return {"ok": True}
 

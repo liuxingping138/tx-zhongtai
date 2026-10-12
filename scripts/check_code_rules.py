@@ -1,4 +1,5 @@
-"""工程规范里 ruff / ESLint 管不到的两条：Python 源文件不超过 400 行；忽略注释必须写原因。"""
+"""工程规范里 ruff / ESLint 管不到的几条：Python 源文件不超过 400 行；忽略注释必须写原因；
+数据库会话依赖必须是 function 作用域。"""
 
 from __future__ import annotations
 
@@ -21,6 +22,8 @@ NOQA = re.compile(r"#\s*noqa(?P<codes>:\s*[A-Z]+[0-9]+(?:\s*,\s*[A-Z]+[0-9]+)*)?
 TYPE_IGNORE = re.compile(r"#\s*type:\s*ignore(?P<codes>\[[^\]]*\])?(?P<rest>.*)")
 ESLINT_DISABLE = re.compile(r"eslint-disable(?:-next-line|-line)?\b(?P<rest>[^*]*)")
 TS_DIRECTIVE = re.compile(r"@ts-(?P<kind>ignore|nocheck|expect-error)\b(?P<rest>.*)")
+# 默认 request 作用域在响应发出后才提交事务，提交失败时客户端已收到成功响应。
+SESSION_DEPENDS = re.compile(r"Depends\(\s*get_db_session\s*\)")
 
 
 def _is_python_test(rel: str) -> bool:
@@ -59,6 +62,14 @@ def python_comment_errors(rel: str, source: str) -> list[str]:
     return errors
 
 
+def session_scope_errors(rel: str, source: str) -> list[str]:
+    return [
+        f'{rel}:{number}: 写成 Depends(get_db_session, scope="function")，否则提交失败也会返回成功'
+        for number, line in enumerate(source.splitlines(), start=1)
+        if SESSION_DEPENDS.search(line)
+    ]
+
+
 def frontend_comment_errors(rel: str, source: str) -> list[str]:
     errors: list[str] = []
     for number, line in enumerate(source.splitlines(), start=1):
@@ -95,6 +106,8 @@ def check(files: list[str], root: Path) -> list[str]:
         source = path.read_text(encoding="utf-8")
         if is_python:
             errors += python_comment_errors(rel, source)
+            if not _is_python_test(rel):
+                errors += session_scope_errors(rel, source)
             if PY_SOURCE.match(rel) and not _is_python_test(rel):
                 errors += line_count_errors(rel, source)
         else:

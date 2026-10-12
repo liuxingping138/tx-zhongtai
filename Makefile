@@ -22,7 +22,7 @@ JWT_P6_DIR := deploy/secrets/jwt-p6
         seed-area-codes crawler-sync crawler-backfill \
         provision-policy-db \
         outbox-replay audit-cleanup iam-session-cleanup p6-env p6-up p6-down p6-migrate p6-seed p6-admin \
-        p6-backup p6-restore p6-fixtures export-openapi scan-scope hooks
+        p6-backup p6-restore p6-fixtures export-openapi scan-scope hooks audit-deps
 
 help:
 	@echo "可用命令："
@@ -49,6 +49,7 @@ help:
 	@echo "  make p6-up / p6-down  启动/销毁隔离验收栈（down 删除隔离卷）"
 	@echo "  make export-openapi   从本地 FastAPI 应用导出 OpenAPI"
 	@echo "  make scan-scope       检查业务目录占位与仓库密钥扫描"
+	@echo "  make audit-deps       依赖漏洞扫描（pip-audit + pnpm audit，需要外网）"
 	@echo "  make p6-backup / p6-restore  隔离库备份恢复"
 
 bootstrap:
@@ -257,6 +258,9 @@ export-openapi:
 
 scan-scope:
 	python3 scripts/scan_scope.py
+
+audit-deps:
+	@bash scripts/audit_deps.sh
 
 test-integration: p6-up
 	@set -a && . ./$(P6_ENV) && set +a && \

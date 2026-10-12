@@ -16,6 +16,9 @@ SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSe
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+    """路由里必须写 `Depends(get_db_session, scope="function")`：默认的 request 作用域在响应发出后才提交，
+    提交失败（如并发撞唯一约束）时客户端已经收到成功响应。"""
+
     async with SessionLocal() as session:
         try:
             yield session

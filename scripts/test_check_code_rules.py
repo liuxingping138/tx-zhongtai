@@ -40,6 +40,11 @@ def test_frontend_suppressions_need_reason() -> None:
     assert not rules.frontend_comment_errors(rel, "// @ts-expect-error 第三方类型缺字段\n")
 
 
+def test_session_dependency_must_be_function_scoped() -> None:
+    assert rules.session_scope_errors(APP, "s: AsyncSession = Depends(get_db_session),\n")
+    assert not rules.session_scope_errors(APP, 's: AsyncSession = Depends(get_db_session, scope="function"),\n')
+
+
 def test_long_python_source_is_reported_unless_registered() -> None:
     long_source = "x = 1\n" * (rules.MAX_LINES + 1)
     with tempfile.TemporaryDirectory() as raw:
@@ -60,5 +65,6 @@ if __name__ == "__main__":
     test_python_suppressions_need_reason()
     test_strings_and_test_type_ignores_are_not_reported()
     test_frontend_suppressions_need_reason()
+    test_session_dependency_must_be_function_scoped()
     test_long_python_source_is_reported_unless_registered()
     print("code_rules_selftest_ok")

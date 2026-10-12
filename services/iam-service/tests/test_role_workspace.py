@@ -8,7 +8,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from fastapi.routing import APIRoute
+from fastapi.routing import RouteContext
+from platform_common.route_audit import iter_api_routes
 
 from app.api.schemas import RoleCreateRequest, UserCreateRequest
 from app.application import role_admin, user_admin
@@ -146,9 +147,9 @@ def test_user_create_accepts_roles_and_defaults_to_none() -> None:
     assert UserCreateRequest(username="zhangsan", display_name="张三").role_ids == []
 
 
-def _route(path: str, method: str) -> APIRoute:
-    for route in app.routes:
-        if isinstance(route, APIRoute) and route.path == path and method in route.methods:
+def _route(path: str, method: str) -> RouteContext:
+    for route in iter_api_routes(app):
+        if route.path == path and method in route.methods:
             return route
     raise AssertionError(f"未找到 {method} {path}")
 

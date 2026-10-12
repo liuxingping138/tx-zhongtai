@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from fastapi.routing import APIRoute
-from platform_common.route_audit import audit_routes, permission_map
+from platform_common.route_audit import audit_routes, iter_api_routes, permission_map
 
 from app.main import app
 
@@ -9,8 +8,8 @@ from app.main import app
 def _api_route_keys() -> list[str]:
     return [
         f"{method} {route.path}"
-        for route in app.routes
-        if isinstance(route, APIRoute) and route.path.startswith("/api/")
+        for route in iter_api_routes(app)
+        if route.path.startswith("/api/")
         for method in sorted(route.methods or [])
     ]
 

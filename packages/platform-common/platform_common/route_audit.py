@@ -20,7 +20,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any, cast
 
-from fastapi.routing import APIRoute
+from fastapi.routing import APIRoute, RouteContext, iter_route_contexts
 
 RESOURCE_AUTHORIZED_VALUE = "resource_authorized"
 
@@ -42,7 +42,29 @@ class RouteIssue:
         return f"{self.methods} {self.path}: {self.reason}"
 
 
-def _security_class_value(route: APIRoute) -> str | None:
+def iter_api_routes(app: Any) -> Iterator[RouteContext]:
+    """展开 include_router 后的全部 API 路由，带完整路径和路由器级依赖。
+
+    `app.routes` 里是未展开的 `_IncludedRouter`，直接遍历只看得到 /docs 这几个路由。
+    """
+
+    for context in iter_route_contexts(app.routes):
+        if isinstance(context.original_route, APIRoute):
+            yield context
+
+
+def _covered_routes(
+    app: Any, covered_prefixes: tuple[str, ...], exempt_prefixes: tuple[str, ...]
+) -> Iterator[tuple[RouteContext, str]]:
+    for route in iter_api_routes(app):
+        path = route.path or ""
+        if any(path.startswith(prefix) for prefix in exempt_prefixes):
+            continue
+        if any(path.startswith(prefix) for prefix in covered_prefixes):
+            yield route, path
+
+
+def _security_class_value(route: RouteContext) -> str | None:
     declared = getattr(route.endpoint, "__security_class__", None)
     if declared is None:
         return None
@@ -55,7 +77,13 @@ def _walk_dependants(dependant: Any) -> Iterator[Any]:
         yield from _walk_dependants(sub)
 
 
-def _permission_marker(route: APIRoute) -> tuple[str, str] | None:
+def query_param_names(route: RouteContext) -> set[str]:
+    """路由连同全部依赖声明的查询参数名；筛选参数写在共用依赖里，只看路由函数本身拿不全。"""
+
+    return {param.name for dependant in _walk_dependants(route.dependant) for param in dependant.query_params}
+
+
+def _permission_marker(route: RouteContext) -> tuple[str, str] | None:
     for dependant in _walk_dependants(route.dependant):
         marker = getattr(dependant.call, "__authz_permission__", None)
         if marker is not None:
@@ -72,14 +100,10 @@ def audit_routes(
     """返回所有违反不变量的路由。返回空列表表示体检通过。"""
 
     issues: list[RouteIssue] = []
-    for route in app.routes:
-        if not isinstance(route, APIRoute):
-            continue
-        path = route.path
-        if any(path.startswith(prefix) for prefix in exempt_prefixes):
-            continue
-        if not any(path.startswith(prefix) for prefix in covered_prefixes):
-            continue
+    covered = list(_covered_routes(app, covered_prefixes, exempt_prefixes))
+    if not covered:
+        return [RouteIssue("-", ",".join(covered_prefixes), "没有扫描到任何路由，体检等于没跑")]
+    for route, path in covered:
         methods = ",".join(sorted(route.methods or []))
         declared = _security_class_value(route)
         marker = _permission_marker(route)
@@ -107,14 +131,7 @@ def permission_map(
     """导出「方法 + 路径 -> (资源码, 动作码)」，便于用例核对权限矩阵。"""
 
     mapping: dict[str, tuple[str, str]] = {}
-    for route in app.routes:
-        if not isinstance(route, APIRoute):
-            continue
-        path = route.path
-        if any(path.startswith(prefix) for prefix in exempt_prefixes):
-            continue
-        if not any(path.startswith(prefix) for prefix in covered_prefixes):
-            continue
+    for route, path in _covered_routes(app, covered_prefixes, exempt_prefixes):
         marker = _permission_marker(route)
         if marker is None:
             continue

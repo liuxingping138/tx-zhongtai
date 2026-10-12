@@ -66,7 +66,7 @@ async def issue_csrf(settings: Settings = Depends(get_settings)) -> JSONResponse
 async def login(
     body: LoginRequest,
     request: Request,
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     settings: Settings = Depends(get_settings),
 ) -> JSONResponse:
     limiter = LoginRateLimiter(redis_client, settings)
@@ -102,7 +102,7 @@ async def login(
 @classified(SecurityClass.PUBLIC_AUTH)
 async def refresh(
     request: Request,
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     settings: Settings = Depends(get_settings),
 ) -> JSONResponse:
     check_origin(request, settings)
@@ -127,7 +127,7 @@ async def refresh(
 async def logout(
     request: Request,
     principal: CurrentPrincipal = Depends(require_restricted_or_authenticated),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     settings: Settings = Depends(get_settings),
 ) -> Response:
     check_origin(request, settings)
@@ -144,7 +144,7 @@ async def logout(
 async def logout_all(
     request: Request,
     principal: CurrentPrincipal = Depends(require_authenticated),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     settings: Settings = Depends(get_settings),
 ) -> JSONResponse:
     check_origin(request, settings)
@@ -160,7 +160,7 @@ async def logout_all(
 @classified(SecurityClass.RESTRICTED_SESSION)
 async def me(
     principal: CurrentPrincipal = Depends(require_restricted_or_authenticated),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
 ) -> JSONResponse:
     user = principal.user
     is_superadmin, roles = await auth_service.role_summary(session, user.id)
@@ -180,7 +180,7 @@ async def me(
 @classified(SecurityClass.AUTHENTICATED)
 async def permissions(
     principal: CurrentPrincipal = Depends(require_authenticated),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
 ) -> JSONResponse:
 
     return success_json(await visible_permissions(session, principal.user.id))
@@ -191,7 +191,7 @@ async def permissions(
 async def change_password(
     body: PasswordChangeRequest,
     principal: CurrentPrincipal = Depends(require_restricted_or_authenticated),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     settings: Settings = Depends(get_settings),
 ) -> JSONResponse:
     service = AuthService(session, settings)

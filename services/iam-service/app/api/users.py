@@ -39,7 +39,7 @@ def user_filters(
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def list_users(
     _principal: CurrentPrincipal = Depends(require_permission("system.users", "list")),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     filters: UserFilters = Depends(user_filters),
@@ -56,7 +56,7 @@ XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def export_users(
     _principal: CurrentPrincipal = Depends(require_permission("system.users", "export")),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     filters: UserFilters = Depends(user_filters),
 ) -> Response:
     # 与列表同一套筛选，所见即所导。
@@ -73,7 +73,7 @@ async def export_users(
 async def import_users(
     request: Request,
     principal: CurrentPrincipal = Depends(require_permission("system.users", "import")),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     settings: Settings = Depends(get_settings),
 ) -> Response:
     """批量建账号。结果文件里有每个人的初始密码，只返回这一次。"""
@@ -106,7 +106,7 @@ async def import_users(
 async def get_user(
     user_id: uuid.UUID,
     _principal: CurrentPrincipal = Depends(require_permission("system.users", "read")),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
 ) -> JSONResponse:
     return success_json(await user_admin.get_user(session, user_id))
 
@@ -116,7 +116,7 @@ async def get_user(
 async def get_user_permissions(
     user_id: uuid.UUID,
     _principal: CurrentPrincipal = Depends(require_permission("system.users", "read")),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
 ) -> JSONResponse:
     """多个角色叠加后，这个人在每个模块上最终能做什么，以及来自哪个角色。"""
 
@@ -128,7 +128,7 @@ async def get_user_permissions(
 async def create_user(
     body: UserCreateRequest,
     principal: CurrentPrincipal = Depends(require_permission("system.users", "create")),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
 ) -> JSONResponse:
     if body.role_ids:
         # 分配角色即授权，与单独「分配角色」接口同一门槛，不因合并到建账号而放宽。
@@ -154,7 +154,7 @@ async def update_user(
     user_id: uuid.UUID,
     body: UserUpdateRequest,
     principal: CurrentPrincipal = Depends(require_permission("system.users", "update")),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
 ) -> JSONResponse:
     return success_json(
         await user_admin.update_user(
@@ -177,7 +177,7 @@ async def update_user(
 async def delete_user(
     user_id: uuid.UUID,
     principal: CurrentPrincipal = Depends(require_permission("system.users", "delete")),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
 ) -> JSONResponse:
     await user_admin.delete_user(session, principal.user, user_id)
     return success_json({"deleted": True})
@@ -188,7 +188,7 @@ async def delete_user(
 async def reset_password(
     user_id: uuid.UUID,
     principal: CurrentPrincipal = Depends(require_permission("system.users", "reset_password")),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
 ) -> JSONResponse:
     temporary = await user_admin.reset_password(session, principal.user, user_id)
     return success_json({"temporary_password": temporary})
@@ -199,7 +199,7 @@ async def reset_password(
 async def revoke_sessions(
     user_id: uuid.UUID,
     principal: CurrentPrincipal = Depends(require_permission("system.users", "revoke_sessions")),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
 ) -> JSONResponse:
     count = await user_admin.revoke_sessions(session, principal.user, user_id)
     return success_json({"revoked": count})
@@ -211,7 +211,7 @@ async def replace_user_roles(
     user_id: uuid.UUID,
     body: UserRolesReplaceRequest,
     principal: CurrentPrincipal = Depends(require_permission("system.permissions", "grant")),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
 ) -> JSONResponse:
     return success_json(
         await user_admin.replace_roles(session, principal.user, user_id, body.role_ids, version=body.version)

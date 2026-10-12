@@ -82,10 +82,11 @@ bash scripts/sync-to-server.sh
 | `make check` | 质量门：Python ruff + mypy + 分层契约，前端类型检查、构建、lint，文件行数与忽略注释、密钥扫描、OpenAPI 一致性 |
 | `make test-unit` | 后端 pytest + 前端 vitest，带覆盖率下限 |
 | `make hooks` | 启用 git 钩子（`make bootstrap` 已包含） |
+| `make audit-deps` | 依赖漏洞扫描（需要外网） |
 | `bash scripts/p6-on-server.sh` | 在服务器上跑隔离的集成测试和 e2e，结束自动销毁 |
 | `make export-openapi` | 从 FastAPI 应用导出 OpenAPI |
 
-git 钩子会在提交前检查代码规则和提交信息格式，推送前跑完整的 `make check` + `make test-unit`。
+git 钩子会在提交前检查代码规则和提交信息格式，推送前跑完整的 `make check` + `make test-unit` 和依赖漏洞扫描。
 
 单个测试怎么跑、提交信息格式、数据库表必须写中文注释等约定，见 [`CLAUDE.md`](CLAUDE.md)。
 

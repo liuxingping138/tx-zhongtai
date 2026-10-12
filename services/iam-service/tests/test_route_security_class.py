@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 # 不要依赖同目录其他用例先设好环境变量，否则单独跑这个文件会在导入 app 时就失败。
-from fastapi.routing import APIRoute
-from platform_common.route_audit import audit_routes, permission_map
+from platform_common.route_audit import audit_routes, iter_api_routes, permission_map
 
 from app.main import app
 
@@ -24,8 +23,8 @@ def test_system_routes_all_carry_a_permission_dependency() -> None:
 
     system_routes = [
         f"{method} {route.path}"
-        for route in app.routes
-        if isinstance(route, APIRoute) and route.path.startswith("/api/v1/system/")
+        for route in iter_api_routes(app)
+        if route.path.startswith("/api/v1/system/")
         for method in sorted(route.methods or [])
     ]
     mapping = permission_map(app, covered_prefixes=COVERED)
@@ -40,8 +39,8 @@ def test_only_auth_routes_skip_rbac() -> None:
     mapping = permission_map(app, covered_prefixes=COVERED)
     unguarded = [
         f"{method} {route.path}"
-        for route in app.routes
-        if isinstance(route, APIRoute) and route.path.startswith("/api/")
+        for route in iter_api_routes(app)
+        if route.path.startswith("/api/")
         for method in sorted(route.methods or [])
         if f"{method} {route.path}" not in mapping and not route.path.startswith(NON_RBAC_PREFIXES)
     ]

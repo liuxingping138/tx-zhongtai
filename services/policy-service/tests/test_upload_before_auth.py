@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 from platform_common.errors import UnauthenticatedError
+from platform_common.route_audit import iter_api_routes
 from starlette.datastructures import Headers, UploadFile
 
 from app.core.database import get_db_session
@@ -22,7 +23,7 @@ def teardown_function() -> None:
 
 
 def test_unauthenticated_import_does_not_write_upload() -> None:
-    route = next(item for item in app.routes if getattr(item, "path", None) == "/api/v1/policy/interpretations/import")
+    route = next(item for item in iter_api_routes(app) if item.path == "/api/v1/policy/interpretations/import")
     state = {"written": 0}
 
     async def deny():  # type: ignore[no-untyped-def]

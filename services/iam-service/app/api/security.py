@@ -83,7 +83,7 @@ async def principal_from_access_token(
 
 async def get_principal(
     request: Request,
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     settings: Settings = Depends(get_settings),
 ) -> CurrentPrincipal:
     return await principal_from_access_token(_bearer_token(request), session, settings)
@@ -104,7 +104,7 @@ async def require_restricted_or_authenticated(
 def require_permission(resource: str, action: str) -> Callable[..., Any]:
     async def dependency(
         principal: CurrentPrincipal = Depends(require_authenticated),
-        session: AsyncSession = Depends(get_db_session),
+        session: AsyncSession = Depends(get_db_session, scope="function"),
     ) -> CurrentPrincipal:
 
         await assert_allowed(session, principal.user, resource, action)

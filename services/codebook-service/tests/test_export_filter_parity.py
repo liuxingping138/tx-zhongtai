@@ -7,8 +7,7 @@
 from __future__ import annotations
 
 import pytest
-from fastapi.dependencies.utils import get_flat_dependant
-from fastapi.routing import APIRoute
+from platform_common.route_audit import iter_api_routes, query_param_names
 
 from app.main import app
 from app.repositories import area_codes, policy_types, scenarios
@@ -24,10 +23,9 @@ TABLES = [
 
 
 def _query_params(path: str) -> set[str]:
-    for route in app.routes:
-        if isinstance(route, APIRoute) and route.path == path and "GET" in route.methods:
-            # 筛选参数写在共用的依赖里，要展开依赖树才能拿全。
-            return {p.name for p in get_flat_dependant(route.dependant).query_params}
+    for route in iter_api_routes(app):
+        if route.path == path and "GET" in route.methods:
+            return query_param_names(route)
     raise AssertionError(f"未找到路由 {path}")
 
 

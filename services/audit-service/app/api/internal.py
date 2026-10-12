@@ -20,7 +20,7 @@ router = APIRouter(prefix="/internal/v1", tags=["internal"])
 async def ingest_audit_event(
     body: IngestRequest,
     request: Request,
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     settings: Settings = Depends(get_settings),
 ) -> JSONResponse:
     source_service = require_internal_caller(request, settings)

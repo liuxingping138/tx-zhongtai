@@ -6,6 +6,7 @@ import uuid
 
 from fastapi.testclient import TestClient
 from platform_common.actors import Actor
+from platform_common.route_audit import iter_api_routes
 
 from app.api import area_codes as area_codes_api
 from app.api import policy_types as policy_types_api
@@ -34,7 +35,7 @@ def _client_for(
         captured["data"] = data
         return {"id": str(item_id), "version": 2}
 
-    route = next(item for item in app.routes if getattr(item, "path", None) == route_path and "PATCH" in item.methods)
+    route = next(item for item in iter_api_routes(app) if item.path == route_path and "PATCH" in item.methods)
     app.dependency_overrides[get_db_session] = _db
     for dep in route.dependant.dependencies:
         if dep.name == "actor":

@@ -5,3 +5,4 @@ cd "$(git rev-parse --show-toplevel)"
 
 make check
 make test-unit
+make audit-deps

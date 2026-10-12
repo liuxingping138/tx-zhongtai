@@ -26,7 +26,7 @@ async def list_items(
     keyword: list[str] | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     _: Actor = Depends(require_codebook_permission(RESOURCE, "list")),
 ) -> JSONResponse:
     return success_json(await service.list_policy_types(session, keyword=keyword, page=page, page_size=page_size))
@@ -35,7 +35,7 @@ async def list_items(
 @router.get("/options")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def list_filter_options(
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     _: Actor = Depends(require_codebook_permission(RESOURCE, "list")),
 ) -> JSONResponse:
     return success_json(await service.list_policy_type_options(session))
@@ -46,7 +46,7 @@ async def list_filter_options(
 async def search_filter_options(
     field: str = Query(..., min_length=1, max_length=64),
     q: str | None = Query(default=None, max_length=200),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     _: Actor = Depends(require_codebook_permission(RESOURCE, "list")),
 ) -> JSONResponse:
     """筛选项的服务端搜索。候选值过多的字段由前端按关键词调用。"""
@@ -62,7 +62,7 @@ async def search_filter_options(
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def export_items(
     keyword: list[str] | None = Query(default=None),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     actor: Actor = Depends(require_codebook_permission(RESOURCE, "export")),
 ) -> Response:
     # 导出复用列表的筛选条件，保证「所见即所导」。
@@ -84,7 +84,7 @@ async def export_items(
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def import_items(
     request: Request,
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     actor: Actor = Depends(require_codebook_permission(RESOURCE, "import")),
     settings: Settings = Depends(get_settings),
 ) -> Response:
@@ -98,7 +98,7 @@ async def import_items(
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def create_item(
     body: PolicyTypeWrite,
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     actor: Actor = Depends(require_codebook_permission(RESOURCE, "create")),
 ) -> JSONResponse:
     return success_json(await service.create_policy_type(session, actor, body.model_dump()), status_code=201)
@@ -109,7 +109,7 @@ async def create_item(
 async def update_item(
     item_id: uuid.UUID,
     body: PolicyTypePatch,
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     actor: Actor = Depends(require_codebook_permission(RESOURCE, "update")),
 ) -> JSONResponse:
     return success_json(await service.update_policy_type(session, actor, item_id, body.model_dump(exclude_unset=True)))

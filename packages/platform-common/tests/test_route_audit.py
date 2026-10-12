@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from fastapi import Depends, FastAPI
+from fastapi import APIRouter, Depends, FastAPI
 
 from platform_common.authz import AuthzClient
 from platform_common.enums import SecurityClass
-from platform_common.route_audit import audit_routes, permission_map
+from platform_common.route_audit import audit_routes, iter_api_routes, permission_map
 from platform_common.service_authz import build_permission_dependency, classified
 
 
@@ -80,6 +80,33 @@ def test_permission_map_reports_resource_and_action() -> None:
     mapping = permission_map(_build_app())
     assert mapping["GET /api/v1/probe/guarded"] == ("probe.items", "list")
     assert "POST /api/v1/probe/forgot-dependency" not in mapping
+
+
+def test_routes_from_included_routers_are_audited() -> None:
+    """各服务的路由都经 include_router 挂载，体检必须展开它们，路由器级依赖也要算数。"""
+
+    router = APIRouter()
+
+    @router.get("/items")
+    @classified(SecurityClass.RESOURCE_AUTHORIZED)
+    async def items() -> dict[str, str]:
+        return {}
+
+    @router.get("/forgot")
+    async def forgot() -> dict[str, str]:
+        return {}
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1/nested", dependencies=[Depends(require_permission("nested", "list"))])
+    assert [route.path for route in iter_api_routes(app)] == ["/api/v1/nested/items", "/api/v1/nested/forgot"]
+    assert permission_map(app)["GET /api/v1/nested/items"] == ("nested", "list")
+    assert {(issue.path, issue.reason) for issue in audit_routes(app)} == {
+        ("/api/v1/nested/forgot", "未声明安全分级"),
+    }
+
+
+def test_audit_fails_when_no_route_is_found() -> None:
+    assert audit_routes(FastAPI())
 
 
 def test_permission_dependency_does_not_leak_into_query_parameters() -> None:

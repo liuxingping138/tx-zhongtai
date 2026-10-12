@@ -34,7 +34,7 @@ def site_filters(
 @router.get("/overview")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def get_overview(
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
 ) -> JSONResponse:
     return success_json(await service.overview(session))
@@ -46,7 +46,7 @@ async def list_sites(
     filters: Filters = Depends(site_filters),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
 ) -> JSONResponse:
     return success_json(await service.list_sites(session, filters=filters, page=page, page_size=page_size))
@@ -55,7 +55,7 @@ async def list_sites(
 @router.get("/sites/options")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def list_filter_options(
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
 ) -> JSONResponse:
     return success_json(await service.list_options(session))
@@ -66,7 +66,7 @@ async def list_filter_options(
 async def search_filter_options(
     field: str = Query(..., min_length=1, max_length=64),
     q: str | None = Query(default=None, max_length=200),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
 ) -> JSONResponse:
     try:
@@ -80,7 +80,7 @@ async def search_filter_options(
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def export_sites(
     filters: Filters = Depends(site_filters),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     actor: Actor = Depends(require_policy_permission(RESOURCE, "export")),
 ) -> Response:
     payload = await service.export_sites(session, actor, filters)

@@ -35,7 +35,7 @@ async def list_items(
     filters: Filters = Depends(area_code_filters),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     _: Actor = Depends(require_codebook_permission(RESOURCE, "list")),
 ) -> JSONResponse:
     return success_json(
@@ -51,7 +51,7 @@ async def list_items(
 @router.get("/options")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def list_filter_options(
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     _: Actor = Depends(require_codebook_permission(RESOURCE, "list")),
 ) -> JSONResponse:
     return success_json(await service.list_area_code_options(session))
@@ -62,7 +62,7 @@ async def list_filter_options(
 async def search_filter_options(
     field: str = Query(..., min_length=1, max_length=64),
     q: str | None = Query(default=None, max_length=200),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     _: Actor = Depends(require_codebook_permission(RESOURCE, "list")),
 ) -> JSONResponse:
     """筛选项的服务端搜索。候选值过多的字段由前端按关键词调用。"""
@@ -78,7 +78,7 @@ async def search_filter_options(
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def export_items(
     filters: Filters = Depends(area_code_filters),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     actor: Actor = Depends(require_codebook_permission(RESOURCE, "export")),
 ) -> Response:
     # 导出复用列表的筛选条件，保证「所见即所导」。
@@ -98,7 +98,7 @@ async def export_items(
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def resolve_items(
     request: Request,
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     actor: Actor = Depends(require_codebook_permission(RESOURCE, "resolve")),
     settings: Settings = Depends(get_settings),
 ) -> Response:
@@ -120,7 +120,7 @@ async def resolve_items(
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def import_items(
     request: Request,
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     actor: Actor = Depends(require_codebook_permission(RESOURCE, "import")),
     settings: Settings = Depends(get_settings),
 ) -> Response:
@@ -132,7 +132,7 @@ async def import_items(
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def create_item(
     body: AreaCodeWrite,
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     actor: Actor = Depends(require_codebook_permission(RESOURCE, "create")),
 ) -> JSONResponse:
     return success_json(
@@ -145,7 +145,7 @@ async def create_item(
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def get_item(
     item_id: uuid.UUID,
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     _: Actor = Depends(require_codebook_permission(RESOURCE, "read")),
 ) -> JSONResponse:
     return success_json(await service.get_area_code(session, item_id))
@@ -156,7 +156,7 @@ async def get_item(
 async def update_item(
     item_id: uuid.UUID,
     body: AreaCodePatch,
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     actor: Actor = Depends(require_codebook_permission(RESOURCE, "update")),
 ) -> JSONResponse:
     return success_json(await service.update_area_code(session, actor, item_id, body.model_dump(exclude_unset=True)))

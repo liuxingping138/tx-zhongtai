@@ -25,7 +25,8 @@ class JobUpdate(BaseModel):
 @router.get("")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def list_jobs(
-    session: AsyncSession = Depends(get_db_session), _: Actor = Depends(require_policy_permission(RESOURCE, "list"))
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
 ) -> JSONResponse:
     return success_json(jsonable_encoder(await service.list_jobs(session)))
 
@@ -35,7 +36,7 @@ async def list_jobs(
 async def update_job(
     code: str,
     payload: JobUpdate,
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     actor: Actor = Depends(require_policy_permission(RESOURCE, "update")),
 ) -> JSONResponse:
     await service.update_job(session, code, actor, **payload.model_dump())
@@ -46,7 +47,7 @@ async def update_job(
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def trigger_job(
     code: str,
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     actor: Actor = Depends(require_policy_permission(RESOURCE, "execute")),
 ) -> JSONResponse:
     return success_json(jsonable_encoder(await service.trigger_job(session, code, actor)), status_code=202)
@@ -58,7 +59,7 @@ async def history(
     code: str,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
 ) -> JSONResponse:
     return success_json(jsonable_encoder(await service.history(session, code, page, page_size)))

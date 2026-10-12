@@ -21,7 +21,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 make check            # 质量门：Python ruff+mypy，前端 type-check+build+lint，范围与密钥扫描，文件行数与忽略注释原因
 make test-unit        # 后端 pytest + 前端 vitest（不需要本机 Docker）
 make export-openapi   # 从本地 FastAPI 应用导出 OpenAPI
-make hooks            # 启用 .githooks：提交前代码规则 + ruff、提交信息格式、推送前跑 check + test-unit
+make hooks            # 启用 .githooks：提交前代码规则 + ruff、提交信息格式、推送前跑 check + test-unit + audit-deps
+make audit-deps       # 依赖漏洞扫描（pip-audit + pnpm audit，需要外网）
 ```
 
 没有 CI，git 钩子是唯一的自动关卡。新克隆的仓库先 `make hooks`（`make bootstrap` 已包含）。
@@ -116,7 +117,8 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/` �
 路由必须带 `@classified(SecurityClass.*)`，`tests/test_route_security_class.py` 经
 `platform_common.route_audit.audit_routes` 强制检查：声明为 `resource_authorized` 的路由必须真的挂了
 权限依赖，挂了依赖的也不能错标成别的分级。新写的 `require_*_permission` 工厂要调 `mark_permission_dependency`，
-否则体检认不出来。
+否则体检认不出来。测试里要遍历路由用 `route_audit.iter_api_routes(app)`：`app.routes` 里是未展开的
+`include_router` 对象，直接遍历什么都找不到，检查会空跑通过。
 
 ### 爬虫监测是只读统计，数据靠同步进来
 
@@ -206,6 +208,12 @@ class Source(Base):
     site_name: Mapped[str] = mapped_column(String(255), nullable=False, comment="网站名称")
     site_code: Mapped[str] = mapped_column(String(16), nullable=False, comment="网站编码")
 ```
+
+### 数据库会话依赖必须是 function 作用域
+
+路由里一律写 `Depends(get_db_session, scope="function")`。`get_db_session` 在 yield 之后提交事务，
+FastAPI 默认的 request 作用域要等响应发出后才执行这一步，提交失败（如并发撞唯一约束）时客户端已经拿到成功响应、
+数据却没落库。`scripts/check_code_rules.py` 会拦住不带 scope 的写法。
 
 ### Excel 必须放线程池，上传必须边读边限流
 
