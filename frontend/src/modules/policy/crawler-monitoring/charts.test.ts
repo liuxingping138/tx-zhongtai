@@ -10,7 +10,8 @@ import {
   healthSlices,
   isWeekend,
   percent,
-  provinceOption,
+  provinceSelected,
+  provinceTile,
   rateDelta,
   siteTrendOption,
   siteTrendSummary,
@@ -194,15 +195,25 @@ describe('省份分布', () => {
     expect(sortProvinces([...items, small], 'rate').map(item => item.name)).toEqual(['国央企', '西藏自治区', '甘肃省', '广东省', '天津市'])
   })
 
-  it('条形图把第一名画在最上面，提示里列出合并前的写法', () => {
-    const merged = province('新疆维吾尔自治区', 1, 0, 76, ['新疆', '新疆维吾尔族自治区'])
-    const option = provinceOption([merged, items[0]!], palette) as {
-      yAxis: { data: string[] }
-      tooltip: { formatter: (params: { dataIndex: number }[]) => string }
-    }
-    expect(option.yAxis.data).toEqual(['广东省', '新疆维吾尔自治区'])
-    expect(option.tooltip.formatter([{ dataIndex: 1 }])).toContain('含写法：新疆、新疆维吾尔族自治区')
-    expect(option.tooltip.formatter([{ dataIndex: 9 }])).toBe('')
+  it('卡片写网站数和停更率，色条按三种状态占比，提示里列出合并前的写法', () => {
+    const tile = provinceTile(province('新疆维吾尔自治区', 20, 5, 75, ['新疆', '新疆维吾尔族自治区']))
+    expect(tile.caption).toBe('共 100 个 · 停更 75.0%')
+    expect(tile.shares).toEqual({ normal: 20, watch: 5, stale: 75 })
+    expect(tile.hint).toBe('正常 20　关注 5　停更 75\n含写法：新疆、新疆维吾尔族自治区')
+  })
+
+  it('没有网站的分类写「暂无网站」，色条为空', () => {
+    const tile = provinceTile(province('澳门特别行政区', 0, 0, 0))
+    expect(tile.caption).toBe('暂无网站')
+    expect(tile.shares).toEqual({ normal: 0, watch: 0, stale: 0 })
+    expect(tile.hint).toBe('正常 0　关注 0　停更 0')
+  })
+
+  it('明细按该分类全部写法筛选时卡片选中，写法顺序不影响', () => {
+    const merged = province('新疆维吾尔自治区', 1, 0, 1, ['新疆', '新疆维吾尔自治区'])
+    expect(provinceSelected(merged, ['新疆维吾尔自治区', '新疆'])).toBe(true)
+    expect(provinceSelected(merged, ['新疆'])).toBe(false)
+    expect(provinceSelected(merged, [])).toBe(false)
   })
 })
 

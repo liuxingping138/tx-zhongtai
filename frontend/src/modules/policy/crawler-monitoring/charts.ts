@@ -263,68 +263,30 @@ export function sortProvinces(items: CrawlerProvince[], by: ProvinceSort, limit?
   return limit ? sorted.slice(0, limit) : sorted
 }
 
-/** 左右各半，两列共用同一个横坐标最大值，条长才能对比。 */
-export function provinceColumns(items: CrawlerProvince[]): CrawlerProvince[][] {
-  if (!items.length) return []
-  const mid = Math.ceil(items.length / 2)
-  return [items.slice(0, mid), items.slice(mid)].filter(column => column.length > 0)
+export interface ProvinceTile {
+  item: CrawlerProvince
+  /** 「共 466 个 · 停更 89%」；没有网站时写「暂无网站」 */
+  caption: string
+  /** 比例条三段宽度（百分比），没有网站时全为 0 */
+  shares: { normal: number; watch: number; stale: number }
+  /** 悬停提示：各状态数量和合并前的写法 */
+  hint: string
 }
 
-export function provinceAxisMax(items: CrawlerProvince[]): number {
-  return Math.max(1, ...items.map(item => item.sites))
-}
-
-export function provinceOption(items: CrawlerProvince[], palette: ChartPalette, axisMax = provinceAxisMax(items)): ChartOption {
-  // 横向条形图的类目轴从下往上画，倒过来让排第一的在最上面。
-  const rows = [...items].reverse()
-  const stack = (name: string, color: string, pick: (item: CrawlerProvince) => number, labeled = false) => ({
-    name,
-    type: 'bar',
-    stack: 'sites',
-    barMaxWidth: 16,
-    itemStyle: { color },
-    data: rows.map(pick),
-    label: labeled ? {
-      show: true,
-      position: 'right',
-      color: palette.inkMuted,
-      fontSize: 11,
-      formatter: (params: { dataIndex: number }) => {
-        const stale = rows[params.dataIndex]?.stale ?? 0
-        return stale ? String(stale) : ''
-      },
-    } : { show: false },
-  })
+export function provinceTile(item: CrawlerProvince): ProvinceTile {
+  const share = (value: number) => (item.sites ? (value / item.sites) * 100 : 0)
   return {
-    grid: { left: 4, right: 40, top: 8, bottom: 4, containLabel: true },
-    legend: { show: false },
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow' },
-      formatter: (params: { dataIndex: number }[]) => {
-        const item = rows[params[0]?.dataIndex ?? -1]
-        if (!item) return ''
-        return [
-          `<b>${item.name}</b>（共 ${item.sites} 个）`,
-          `正常 ${item.normal}　关注 ${item.watch}　停更 ${item.stale}`,
-          `停更率 ${percent(item.stale, item.sites)}`,
-          item.raw_names.length > 1 ? `含写法：${item.raw_names.map(name => name || '空').join('、')}` : '',
-          '点击按该分类筛选下方列表',
-        ].filter(Boolean).join('<br/>')
-      },
-    },
-    xAxis: {
-      type: 'value',
-      max: axisMax,
-      axisLabel: { show: false },
-      axisLine: { show: false },
-      splitLine: { show: false },
-    },
-    yAxis: { type: 'category', data: rows.map(item => item.name), ...axisStyle(palette) },
-    series: [
-      stack('正常', palette.success, item => item.normal),
-      stack('关注', palette.warning, item => item.watch),
-      stack('停更', palette.danger, item => item.stale, true),
-    ],
+    item,
+    caption: item.sites ? `共 ${item.sites.toLocaleString()} 个 · 停更 ${percent(item.stale, item.sites)}` : '暂无网站',
+    shares: { normal: share(item.normal), watch: share(item.watch), stale: share(item.stale) },
+    hint: [
+      `正常 ${item.normal}　关注 ${item.watch}　停更 ${item.stale}`,
+      item.raw_names.length > 1 ? `含写法：${item.raw_names.map(name => name || '空').join('、')}` : '',
+    ].filter(Boolean).join('\n'),
   }
+}
+
+/** 下方明细已按这个分类的全部原始写法筛选时，卡片显示为选中。 */
+export function provinceSelected(item: CrawlerProvince, applied: string[]): boolean {
+  return applied.length > 0 && [...applied].sort().join('|') === [...item.raw_names].sort().join('|')
 }

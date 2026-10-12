@@ -99,7 +99,7 @@ function pickStatus(status: SiteStatus) {
   void load()
 }
 
-/** 点省份条形：按该省份所有原始写法筛选，再点同一省份取消。 */
+/** 点省份卡片：按该分类所有原始写法筛选，再点同一张取消。 */
 function pickProvince(rawNames: string[]) {
   const current = [...listQuery.applied.province_name].sort().join('|')
   listQuery.replaceApplied('province_name', current === [...rawNames].sort().join('|') ? [] : rawNames)
@@ -140,6 +140,7 @@ onMounted(() => { void reloadData() })
         <CrawlerOverview
           ref="overviewPanel"
           :selected-statuses="appliedStatuses"
+          :selected-provinces="listQuery.applied.province_name"
           @pick-status="pickStatus"
           @pick-province="pickProvince"
           @retry="reloadData"

@@ -10,7 +10,7 @@ import CrawlerProvinceChart from './CrawlerProvinceChart.vue'
 import CrawlerTrendChart from './CrawlerTrendChart.vue'
 import { compactCount } from './filters'
 
-defineProps<{ selectedStatuses: SiteStatus[] }>()
+defineProps<{ selectedStatuses: SiteStatus[]; selectedProvinces: string[] }>()
 const emit = defineEmits<{
   pickStatus: [status: SiteStatus]
   pickProvince: [rawNames: string[]]
@@ -207,6 +207,7 @@ defineExpose({ reload })
       </div>
       <CrawlerProvinceChart
         :provinces="overview.provinces"
+        :selected="selectedProvinces"
         @pick="names => emit('pickProvince', names)"
       />
     </template>
