@@ -202,17 +202,15 @@ defineExpose({ reload })
         </div>
       </div>
       <CrawlerTrendChart ref="trend" />
-      <div class="chart-row">
-        <CrawlerHealthChart
-          :overview="overview"
-          :selected="selectedStatuses"
-          @pick="status => emit('pickStatus', status)"
-        />
-        <CrawlerProvinceChart
-          :provinces="overview.provinces"
-          @pick="names => emit('pickProvince', names)"
-        />
-      </div>
+      <CrawlerHealthChart
+        :overview="overview"
+        :selected="selectedStatuses"
+        @pick="status => emit('pickStatus', status)"
+      />
+      <CrawlerProvinceChart
+        :provinces="overview.provinces"
+        @pick="names => emit('pickProvince', names)"
+      />
       <CrawlerAttention
         ref="attention"
         @locate="site => emit('locateSite', site)"
@@ -263,12 +261,10 @@ defineExpose({ reload })
 .trend-up { color: var(--el-color-success); }
 .trend-down { color: var(--el-color-danger); }
 .dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
-.card-normal .dot { background: var(--el-color-success); }
-.card-watch .dot { background: var(--el-color-warning); }
-.card-stale .dot { background: var(--el-color-danger); }
-.card-stale .card-value { color: var(--el-color-danger); }
-
-.chart-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: var(--zt-space-3); }
+.card-normal .dot { background: var(--chart-normal); }
+.card-watch .dot { background: var(--chart-watch); }
+.card-stale .dot { background: var(--chart-stale); }
+.card-stale .card-value { color: var(--chart-stale); }
 .chart-panel { padding: var(--zt-space-3) var(--zt-space-4); min-width: 0; }
 .chart-panel :deep(.chart-head) {
   display: flex; justify-content: space-between; align-items: flex-start; gap: var(--zt-space-3);
@@ -280,7 +276,6 @@ defineExpose({ reload })
 
 @media (max-width: 1280px) {
   .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .chart-row { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 767px) {
   .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }

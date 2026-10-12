@@ -54,11 +54,6 @@ function onSelect(params: { dataIndex: number }) {
         >
           <strong>{{ healthRate }}</strong>
           <span>健康率</span>
-          <span
-            v-if="rateChange?.text"
-            class="rate-change"
-            :class="`delta-${rateChange.tone}`"
-          >{{ rateChange.text.replace('较上周 ', '') }}</span>
         </div>
       </div>
       <ul class="legend">
@@ -97,9 +92,6 @@ function onSelect(params: { dataIndex: number }) {
 }
 .donut-center strong { font-size: 26px; color: var(--zt-ink-900); font-variant-numeric: tabular-nums; }
 .donut-center span { font-size: 12px; color: var(--zt-ink-500); }
-.donut-center .rate-change { margin-top: 2px; font-size: 11px; font-variant-numeric: tabular-nums; }
-.delta-good { color: var(--el-color-success); }
-.delta-bad { color: var(--el-color-danger); }
 .legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .legend button {
   display: grid; grid-template-columns: 10px 1fr auto 52px; align-items: center; gap: 8px; width: 100%;

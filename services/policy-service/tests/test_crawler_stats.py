@@ -13,7 +13,7 @@ from platform_common.route_audit import iter_api_routes
 from app.core.database import get_db_session
 from app.crawler.application import crawler_stats as stats
 from app.crawler.application import crawler_status as status_history
-from app.crawler.domain.provinces import EMPTY_PROVINCE, chart_province
+from app.crawler.domain.provinces import EMPTY_PROVINCE, PROVINCES, chart_province
 from app.crawler.repositories import crawler_stats as repo
 from app.main import app
 
@@ -40,6 +40,26 @@ YESTERDAY = date(2026, 10, 11)
 )
 def test_chart_province_merges_spellings_and_keeps_non_provinces(raw: str, expected: str) -> None:
     assert chart_province(raw) == expected
+
+
+def test_province_categories_keep_every_value_of_the_province_field() -> None:
+    items = stats.province_categories(
+        [
+            ("广东省", 1, 0, 2),
+            ("全国", 0, 0, 3),
+            ("香港", 0, 1, 0),
+            ("新疆", 0, 0, 4),
+            ("国央企", 2, 0, 0),
+            ("", 0, 0, 1),
+        ]
+    )
+    names = [item["name"] for item in items]
+    assert names[: len(PROVINCES)] == list(PROVINCES)
+    assert {"全国", "国央企", EMPTY_PROVINCE, "香港特别行政区", "澳门特别行政区"} <= set(names)
+    assert next(item for item in items if item["name"] == "新疆维吾尔自治区")["stale"] == 4
+    assert next(item for item in items if item["name"] == "香港特别行政区")["watch"] == 1
+    assert next(item for item in items if item["name"] == "全国")["stale"] == 3
+    assert next(item for item in items if item["name"] == "天津市")["sites"] == 0
 
 
 def test_provinces_merge_counts_and_keep_raw_names_for_filtering() -> None:

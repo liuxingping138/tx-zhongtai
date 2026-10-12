@@ -5,7 +5,7 @@ import { getCrawlerTrend, type CrawlerTrendDays, type CrawlerTrendPoint } from '
 import { errorMessage } from '@/api/errors'
 import BaseChart from '@/components/charts/BaseChart.vue'
 import { chartPalette } from '@/components/charts/echarts'
-import { trendOption, trendSummary } from './charts'
+import { trendCapped, trendOption, trendSummary } from './charts'
 
 const TREND_ERROR = '暂时无法获取采集趋势，请稍后重试。'
 const RANGES: { value: CrawlerTrendDays; label: string }[] = [
@@ -24,6 +24,7 @@ let sequence = 0
 
 const option = computed(() => trendOption(points.value, days.value, palette))
 const summary = computed(() => trendSummary(points.value, days.value))
+const capped = computed(() => trendCapped(points.value, days.value))
 
 async function load() {
   const current = ++sequence
@@ -56,6 +57,8 @@ defineExpose({ load })
         <p class="chart-note">
           {{ summary }}<template v-if="dateTo">
             （截至 {{ dateTo }}，当天仍在采集不计入；浅色柱为周末）
+          </template><template v-if="capped">
+            。远高于平时的日期画到坐标顶，柱顶是实际条数
           </template>
         </p>
       </div>

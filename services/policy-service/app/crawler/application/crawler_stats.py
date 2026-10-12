@@ -9,7 +9,7 @@ from typing import Any
 from platform_common.clock import BEIJING, utcnow
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.crawler.domain.provinces import chart_province
+from app.crawler.domain.provinces import FIELD_CATEGORIES, PROVINCES, chart_province
 from app.crawler.repositories import crawler_stats as repo
 
 # 超过这么多天没有新数据，多半是网站下线或改版，与近期停更分开统计。
@@ -59,8 +59,24 @@ def merge_provinces(rows: list[tuple[str, int, int, int]]) -> list[dict[str, Any
     return sorted(items, key=lambda item: (-item["stale"], -item["sites"], item["name"]))
 
 
+def _empty_province(name: str) -> dict[str, Any]:
+    return {"name": name, "raw_names": [name], "normal": 0, "watch": 0, "stale": 0, "sites": 0}
+
+
+def province_categories(rows: list[tuple[str, int, int, int]]) -> list[dict[str, Any]]:
+    """按「省份」字段的分类出图：32 个省级行政区、香港、澳门，以及全国、国央企，没有数据的补 0。
+
+    字段里还有别的写法（如未填省份）也排进来，不单列、不丢掉。
+    """
+
+    merged = {item["name"]: item for item in merge_provinces(rows)}
+    known = set(PROVINCES) | set(FIELD_CATEGORIES)
+    extras = [*FIELD_CATEGORIES, *sorted(name for name in merged if name not in known)]
+    return [merged.get(name, _empty_province(name)) for name in (*PROVINCES, *extras)]
+
+
 async def provinces(session: AsyncSession) -> list[dict[str, Any]]:
-    return merge_provinces(await repo.province_status(session))
+    return province_categories(await repo.province_status(session))
 
 
 def fill_series(start: date, end: date, rows: list[tuple[date, int, int]]) -> list[dict[str, Any]]:

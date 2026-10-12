@@ -237,6 +237,7 @@ button:disabled { cursor: not-allowed; }
 .workspace-shell {
   --workspace-rail-width: 216px; --workspace-header-height: 76px;
   --zt-blue-600: #3558de; --zt-ink-900: #162638; --zt-ink-700: #435269; --zt-ink-500: #5f6c7b;
+  --chart-normal: #3d8c6e; --chart-watch: #c4842a; --chart-stale: #d25b4a; --chart-long: #8a7368;
   --zt-panel: #fff; --zt-soft: #f4f6f8; --zt-border: #dfe5eb; --zt-radius: 6px;
   --el-color-primary: #3558de; --el-color-primary-light-3: #6b85e7; --el-color-primary-light-5: #9aacee;
   --el-color-primary-light-7: #c2ccf5; --el-color-primary-light-8: #d7def9; --el-color-primary-light-9: #eef1fc; --el-color-primary-dark-2: #2948bb;

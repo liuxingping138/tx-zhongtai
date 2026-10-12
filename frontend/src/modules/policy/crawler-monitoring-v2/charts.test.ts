@@ -74,6 +74,22 @@ describe('采集趋势', () => {
     expect(option.tooltip.formatter([{ dataIndex: 0, seriesName: '每周采集量', value: 3, marker: '' }])).toBe('<b>2026-10-05 起一周</b><br/>每周采集量　3 条<br/>日均出数网站　5 个')
   })
 
+  it('个别回填日不把坐标轴拉满，提示框仍是实际条数', () => {
+    const points = [
+      ...Array.from({ length: 12 }, (_, index) => point(`2026-09-${String(index + 1).padStart(2, '0')}`, 1000)),
+      point('2026-09-13', 80_000),
+    ]
+    const option = trendOption(points, 30, palette) as {
+      yAxis: { max?: number }
+      series: { data: { value: number }[]; markPoint?: { data: { name: string }[] } }[]
+      tooltip: Tooltip
+    }
+    expect(option.yAxis.max).toBe(20_000)
+    expect(option.series[0]?.data.at(-1)?.value).toBe(20_000)
+    expect(option.series[0]?.markPoint?.data[0]?.name).toBe('8.0 万条')
+    expect(option.tooltip.formatter([{ dataIndex: 12, seriesName: '每日采集量', value: 20_000, marker: '' }])).toContain('80,000 条')
+  })
+
   it('文字说明给出总量、日均和最近 7 天日均，不报峰值', () => {
     const points = Array.from({ length: 10 }, (_, index) => point(`2026-10-${String(index + 1).padStart(2, '0')}`, index < 3 ? 100_000 : 700))
     expect(trendSummary(points, 30)).toBe('近 30 天共采集 30.5 万条，日均 30,490 条；最近 7 天日均 700 条')
@@ -198,9 +214,9 @@ describe('省份分布', () => {
     expect(sortProvinces(items, 'sites').map(item => item.name)).toEqual(['广东省', '甘肃省', '天津市', '西藏自治区'])
   })
 
-  it('按停更率排序时，网站太少的省份不参与', () => {
-    const small = province('澳门特别行政区', 0, 0, 3)
-    expect(sortProvinces([...items, small], 'rate').map(item => item.name)).toEqual(['西藏自治区', '甘肃省', '广东省', '天津市'])
+  it('按停更率排序时，网站少的分类也保留', () => {
+    const small = province('国央企', 0, 0, 3)
+    expect(sortProvinces([...items, small], 'rate').map(item => item.name)).toEqual(['国央企', '西藏自治区', '甘肃省', '广东省', '天津市'])
   })
 
   it('条形图把第一名画在最上面，提示里列出合并前的写法', () => {
@@ -220,6 +236,6 @@ describe('图表配色', () => {
     const style = { getPropertyValue: (name: string) => (name === '--zt-blue-600' ? ' #123456 ' : '') }
     const colors = chartPalette(style)
     expect(colors.primary).toBe('#123456')
-    expect(colors.danger).toBe('#f56c6c')
+    expect(colors.danger).toBe('#d25b4a')
   })
 })

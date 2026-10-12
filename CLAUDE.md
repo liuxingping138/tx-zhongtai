@@ -136,7 +136,8 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/` �
 - 同步持有 advisory lock（键见 `app/crawler/repositories/crawler_v2.py`），概览据 `pg_locks` 把停在 running 的批次识别为中断
 - ShardingSphere 不支持 `REGEXP` 和多列 `COUNT(DISTINCT)`，写源库 SQL 时用 `LIKE`、单列聚合
 - 页面图表只读本地表：采集趋势按日期范围读 `policy_crawler_site_daily`（主键以采集日开头，一年约 26ms），健康结构和省份分布读快照。
- 省份不同写法只在图表里合并（`app/crawler/domain/provinces.py`），网站身份、表格和筛选仍用原始值
+ 省份图按「省份」字段的分类排，单独占一整行、左右两列：32 个省级行政区以及香港、澳门、全国、国央企都在列（`province_categories`），没有数据的补 0。
+ 同一分类的不同写法只在图表里合并（`app/crawler/domain/provinces.py`），网站身份、表格和筛选仍用原始值
 - 卡片「较上周」读 `policy_crawler_status_daily`（每日状态分布）。同步重建快照后按快照写当天一行；最近 90 天缺的日期
  由同步用按天统计推算补齐（口径同快照：每个网站最后入库日期），推算一次约 10 秒，所以只在缺数时跑、页面不能现算
 - 整表 `GROUP BY` 在代理后跑十分钟都出不来，带 `collect_date` 的单天聚合只要 1.4 秒：全量统计按天循环，别写一条大 SQL

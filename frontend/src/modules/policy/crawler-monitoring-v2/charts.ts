@@ -10,9 +10,6 @@ import type { ChartOption, ChartPalette } from '@/components/charts/echarts'
 import { compactCount } from './filters'
 
 const MOVING_WINDOW = 7
-/** 按停更率排序时，网站太少的省份一两个停更就是 100%，排在最前没有意义。 */
-export const RATE_MIN_SITES = 20
-export const PROVINCE_LIMIT = 15
 
 function parseDay(value: string): Date {
   const [year = 0, month = 1, day = 1] = value.split('-').map(Number)
@@ -100,41 +97,93 @@ function trendTooltip(points: CrawlerTrendPoint[], weekly: boolean) {
     if (!point) return ''
     const lines = params
       .filter(item => typeof item.value === 'number')
-      .map(item => `${item.marker}${item.seriesName}　${(item.value as number).toLocaleString()} 条`)
+      .map(item => {
+        // 采集量柱子可能被压到坐标顶，提示框仍用当天的实际条数。
+        const value = item.seriesName.includes('均值') ? (item.value as number) : point.rows
+        return `${item.marker}${item.seriesName}　${value.toLocaleString()} 条`
+      })
     const sites = weekly ? `日均出数网站　${point.sites.toLocaleString()} 个` : `出数网站　${point.sites.toLocaleString()} 个`
     const title = weekly ? `${point.date} 起一周` : `${point.date}${isWeekend(point.date) ? '（周末）' : ''}`
     return [`<b>${title}</b>`, ...lines, sites].join('<br/>')
   }
 }
 
+function quantile(sorted: number[], ratio: number): number {
+  if (!sorted.length) return 0
+  const index = (sorted.length - 1) * ratio
+  const low = Math.floor(index)
+  const high = Math.ceil(index)
+  const lowValue = sorted[low] ?? 0
+  const highValue = sorted[high] ?? lowValue
+  return lowValue + (highValue - lowValue) * (index - low)
+}
+
+function niceCeil(value: number): number {
+  const power = 10 ** Math.floor(Math.log10(Math.max(value, 1)))
+  return Math.ceil(value / power) * power
+}
+
+/** 回填日会把坐标轴拉到好几万，平时的柱子就剩一条线。峰值明显高于第 90 分位时，坐标顶到平时的高度。 */
+export function trendAxisMax(values: number[]): number | null {
+  const positive = values.filter(value => value > 0).sort((a, b) => a - b)
+  if (positive.length < 8) return null
+  const peak = positive[positive.length - 1] ?? 0
+  const typical = quantile(positive, 0.9)
+  if (peak <= typical * 2) return null
+  const averagePeak = Math.max(0, ...movingAverage(values).filter((value): value is number => value !== null))
+  return niceCeil(Math.max(typical * 1.25, averagePeak))
+}
+
 export function trendOption(raw: CrawlerTrendPoint[], days: CrawlerTrendDays, palette: ChartPalette): ChartOption {
   const weekly = days === 365
   const points = weekly ? weeklyPoints(raw) : raw
+  const axisMax = trendAxisMax(points.map(point => point.rows))
   const bars = points.map(point => ({
-    value: point.rows,
+    value: axisMax && point.rows > axisMax ? axisMax : point.rows,
     itemStyle: { color: !weekly && isWeekend(point.date) ? palette.primaryLight : palette.primary },
   }))
+  const outliers = points
+    .map((point, index) => ({ point, index }))
+    .filter(({ point }) => axisMax !== null && point.rows > axisMax)
+    .sort((a, b) => b.point.rows - a.point.rows)
+    .slice(0, 3)
   // 出数网站数只放进提示框：画成第二条线会随周末大起大落，抢走采集量趋势的注意力。
-  const series: Record<string, unknown>[] = [{ name: weekly ? '每周采集量' : '每日采集量', type: 'bar', data: bars, barMaxWidth: 16 }]
+  const series: Record<string, unknown>[] = [{
+    name: weekly ? '每周采集量' : '每日采集量',
+    type: 'bar',
+    data: bars,
+    barMaxWidth: 16,
+    markPoint: outliers.length ? {
+      symbol: 'circle',
+      symbolSize: 0,
+      label: { show: true, color: palette.ink, fontSize: 11, formatter: '{b}' },
+      data: outliers.map(({ point, index }) => ({ coord: [index, axisMax], name: countText(point.rows) })),
+    } : undefined,
+  }]
   if (!weekly) {
     series.push({
       name: '7 日均值',
       type: 'line',
       data: movingAverage(points.map(point => point.rows)),
-      smooth: true,
+      smooth: false,
       showSymbol: false,
-      lineStyle: { width: 2.5, color: palette.ink },
+      lineStyle: { width: 2, color: palette.ink },
       itemStyle: { color: palette.ink },
     })
   }
   return {
-    grid: { left: 8, right: 8, top: 32, bottom: 4, containLabel: true },
+    grid: { left: 8, right: 8, top: 36, bottom: 4, containLabel: true },
     legend: { top: 0, right: 0, itemWidth: 14, itemHeight: 8, textStyle: { color: palette.inkMuted } },
     tooltip: { trigger: 'axis', formatter: trendTooltip(points, weekly) },
     xAxis: { type: 'category', data: points.map(point => (weekly ? `${point.date.slice(5)} 周` : point.date.slice(5))), ...axisStyle(palette) },
-    yAxis: valueAxis('条数', palette, true),
+    yAxis: { ...valueAxis('条数', palette, true), ...(axisMax ? { max: axisMax } : {}) },
     series,
   }
+}
+
+export function trendCapped(raw: CrawlerTrendPoint[], days: CrawlerTrendDays): boolean {
+  const points = days === 365 ? weeklyPoints(raw) : raw
+  return trendAxisMax(points.map(point => point.rows)) !== null
 }
 
 export interface HealthSlice {
@@ -161,7 +210,7 @@ export function healthOption(slices: HealthSlice[]): ChartOption {
     tooltip: { trigger: 'item', formatter: '{b}：{c} 个（{d}%）' },
     series: [{
       type: 'pie',
-      radius: ['62%', '88%'],
+      radius: ['54%', '90%'],
       avoidLabelOverlap: false,
       label: { show: false },
       itemStyle: { borderColor: '#fff', borderWidth: 2 },
@@ -269,21 +318,48 @@ function staleRate(item: CrawlerProvince): number {
   return item.sites ? item.stale / item.sites : 0
 }
 
-export function sortProvinces(items: CrawlerProvince[], by: ProvinceSort, limit = PROVINCE_LIMIT): CrawlerProvince[] {
-  const pool = by === 'rate' ? items.filter(item => item.sites >= RATE_MIN_SITES) : [...items]
+/** 全部分类都参与排序，网站少的也不剔除：全国、国央企、港澳和 32 个省是同一套「省份」字段分类。 */
+export function sortProvinces(items: CrawlerProvince[], by: ProvinceSort, limit?: number): CrawlerProvince[] {
   const key: Record<ProvinceSort, (item: CrawlerProvince) => number> = { stale: item => item.stale, rate: staleRate, sites: item => item.sites }
-  return pool.sort((a, b) => key[by](b) - key[by](a) || b.sites - a.sites).slice(0, limit)
+  const sorted = [...items].sort((a, b) => key[by](b) - key[by](a) || b.sites - a.sites || a.name.localeCompare(b.name, 'zh'))
+  return limit ? sorted.slice(0, limit) : sorted
 }
 
-export function provinceOption(items: CrawlerProvince[], palette: ChartPalette): ChartOption {
+/** 左右各半，两列共用同一个横坐标最大值，条长才能对比。 */
+export function provinceColumns(items: CrawlerProvince[]): CrawlerProvince[][] {
+  if (!items.length) return []
+  const mid = Math.ceil(items.length / 2)
+  return [items.slice(0, mid), items.slice(mid)].filter(column => column.length > 0)
+}
+
+export function provinceAxisMax(items: CrawlerProvince[]): number {
+  return Math.max(1, ...items.map(item => item.sites))
+}
+
+export function provinceOption(items: CrawlerProvince[], palette: ChartPalette, axisMax = provinceAxisMax(items)): ChartOption {
   // 横向条形图的类目轴从下往上画，倒过来让排第一的在最上面。
   const rows = [...items].reverse()
-  const stack = (name: string, color: string, pick: (item: CrawlerProvince) => number) => ({
-    name, type: 'bar', stack: 'sites', barMaxWidth: 14, itemStyle: { color }, data: rows.map(pick),
+  const stack = (name: string, color: string, pick: (item: CrawlerProvince) => number, labeled = false) => ({
+    name,
+    type: 'bar',
+    stack: 'sites',
+    barMaxWidth: 16,
+    itemStyle: { color },
+    data: rows.map(pick),
+    label: labeled ? {
+      show: true,
+      position: 'right',
+      color: palette.inkMuted,
+      fontSize: 11,
+      formatter: (params: { dataIndex: number }) => {
+        const stale = rows[params.dataIndex]?.stale ?? 0
+        return stale ? String(stale) : ''
+      },
+    } : { show: false },
   })
   return {
-    grid: { left: 8, right: 16, top: 32, bottom: 4, containLabel: true },
-    legend: { top: 0, right: 0, itemWidth: 14, itemHeight: 8, textStyle: { color: palette.inkMuted } },
+    grid: { left: 4, right: 40, top: 8, bottom: 4, containLabel: true },
+    legend: { show: false },
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
@@ -295,16 +371,22 @@ export function provinceOption(items: CrawlerProvince[], palette: ChartPalette):
           `正常 ${item.normal}　关注 ${item.watch}　停更 ${item.stale}`,
           `停更率 ${percent(item.stale, item.sites)}`,
           item.raw_names.length > 1 ? `含写法：${item.raw_names.map(name => name || '空').join('、')}` : '',
-          '点击按该省份筛选下方列表',
+          '点击按该分类筛选下方列表',
         ].filter(Boolean).join('<br/>')
       },
     },
-    xAxis: { type: 'value', axisLabel: { color: palette.inkMuted }, splitLine: { lineStyle: { color: palette.border, type: 'dashed' } } },
+    xAxis: {
+      type: 'value',
+      max: axisMax,
+      axisLabel: { show: false },
+      axisLine: { show: false },
+      splitLine: { show: false },
+    },
     yAxis: { type: 'category', data: rows.map(item => item.name), ...axisStyle(palette) },
     series: [
       stack('正常', palette.success, item => item.normal),
       stack('关注', palette.warning, item => item.watch),
-      stack('停更', palette.danger, item => item.stale),
+      stack('停更', palette.danger, item => item.stale, true),
     ],
   }
 }

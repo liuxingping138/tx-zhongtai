@@ -39,6 +39,9 @@ PROVINCES = (
     "澳门特别行政区",
 )
 # 「内蒙古」「黑龙江」要三个字才不歧义，其余取前两个字已能唯一区分（山西/山东、广东/广西等都不同）。
+# 图表按「省份」字段的分类展示，不是一份只含行政区的名单：上面 34 个（32 个省级行政区 + 香港、澳门）都在列，
+# 「全国」「国央企」等字段里的其他分类原样保留，同样进图。
+FIELD_CATEGORIES = ("全国", "国央企")
 _PREFIXES = tuple((name[:3] if name.startswith(("内蒙古", "黑龙江")) else name[:2], name) for name in PROVINCES)
 EMPTY_PROVINCE = "未填省份"
 
