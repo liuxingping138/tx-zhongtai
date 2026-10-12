@@ -97,68 +97,27 @@ function trendTooltip(points: CrawlerTrendPoint[], weekly: boolean) {
     if (!point) return ''
     const lines = params
       .filter(item => typeof item.value === 'number')
-      .map(item => {
-        // 采集量柱子可能被压到坐标顶，提示框仍用当天的实际条数。
-        const value = item.seriesName.includes('均值') ? (item.value as number) : point.rows
-        return `${item.marker}${item.seriesName}　${value.toLocaleString()} 条`
-      })
+      .map(item => `${item.marker}${item.seriesName}　${(item.value as number).toLocaleString()} 条`)
     const sites = weekly ? `日均出数网站　${point.sites.toLocaleString()} 个` : `出数网站　${point.sites.toLocaleString()} 个`
     const title = weekly ? `${point.date} 起一周` : `${point.date}${isWeekend(point.date) ? '（周末）' : ''}`
     return [`<b>${title}</b>`, ...lines, sites].join('<br/>')
   }
 }
 
-function quantile(sorted: number[], ratio: number): number {
-  if (!sorted.length) return 0
-  const index = (sorted.length - 1) * ratio
-  const low = Math.floor(index)
-  const high = Math.ceil(index)
-  const lowValue = sorted[low] ?? 0
-  const highValue = sorted[high] ?? lowValue
-  return lowValue + (highValue - lowValue) * (index - low)
-}
-
-function niceCeil(value: number): number {
-  const power = 10 ** Math.floor(Math.log10(Math.max(value, 1)))
-  return Math.ceil(value / power) * power
-}
-
-/** 回填日会把坐标轴拉到好几万，平时的柱子就剩一条线。峰值明显高于第 90 分位时，坐标顶到平时的高度。 */
-export function trendAxisMax(values: number[]): number | null {
-  const positive = values.filter(value => value > 0).sort((a, b) => a - b)
-  if (positive.length < 8) return null
-  const peak = positive[positive.length - 1] ?? 0
-  const typical = quantile(positive, 0.9)
-  if (peak <= typical * 2) return null
-  const averagePeak = Math.max(0, ...movingAverage(values).filter((value): value is number => value !== null))
-  return niceCeil(Math.max(typical * 1.25, averagePeak))
-}
-
 export function trendOption(raw: CrawlerTrendPoint[], days: CrawlerTrendDays, palette: ChartPalette): ChartOption {
   const weekly = days === 365
   const points = weekly ? weeklyPoints(raw) : raw
-  const axisMax = trendAxisMax(points.map(point => point.rows))
+  // 柱高就是当天条数。不能把高出坐标的日子截成一样高，否则 7 万和 2 万看起来没有差别。
   const bars = points.map(point => ({
-    value: axisMax && point.rows > axisMax ? axisMax : point.rows,
+    value: point.rows,
     itemStyle: { color: !weekly && isWeekend(point.date) ? palette.primaryLight : palette.primary },
   }))
-  const outliers = points
-    .map((point, index) => ({ point, index }))
-    .filter(({ point }) => axisMax !== null && point.rows > axisMax)
-    .sort((a, b) => b.point.rows - a.point.rows)
-    .slice(0, 3)
   // 出数网站数只放进提示框：画成第二条线会随周末大起大落，抢走采集量趋势的注意力。
   const series: Record<string, unknown>[] = [{
     name: weekly ? '每周采集量' : '每日采集量',
     type: 'bar',
     data: bars,
     barMaxWidth: 16,
-    markPoint: outliers.length ? {
-      symbol: 'circle',
-      symbolSize: 0,
-      label: { show: true, color: palette.ink, fontSize: 11, formatter: '{b}' },
-      data: outliers.map(({ point, index }) => ({ coord: [index, axisMax], name: countText(point.rows) })),
-    } : undefined,
   }]
   if (!weekly) {
     series.push({
@@ -176,14 +135,9 @@ export function trendOption(raw: CrawlerTrendPoint[], days: CrawlerTrendDays, pa
     legend: { top: 0, right: 0, itemWidth: 14, itemHeight: 8, textStyle: { color: palette.inkMuted } },
     tooltip: { trigger: 'axis', formatter: trendTooltip(points, weekly) },
     xAxis: { type: 'category', data: points.map(point => (weekly ? `${point.date.slice(5)} 周` : point.date.slice(5))), ...axisStyle(palette) },
-    yAxis: { ...valueAxis('条数', palette, true), ...(axisMax ? { max: axisMax } : {}) },
+    yAxis: valueAxis('条数', palette, true),
     series,
   }
-}
-
-export function trendCapped(raw: CrawlerTrendPoint[], days: CrawlerTrendDays): boolean {
-  const points = days === 365 ? weeklyPoints(raw) : raw
-  return trendAxisMax(points.map(point => point.rows)) !== null
 }
 
 export interface HealthSlice {

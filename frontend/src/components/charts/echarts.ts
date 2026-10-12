@@ -1,10 +1,10 @@
 import { BarChart, LineChart, PieChart } from 'echarts/charts'
-import { GridComponent, LegendComponent, MarkPointComponent, TooltipComponent } from 'echarts/components'
+import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
 import * as echarts from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 
 // 只注册用到的图表和组件，体积约为整包的三分之一。新图表类型在这里补注册。
-echarts.use([BarChart, LineChart, PieChart, GridComponent, LegendComponent, MarkPointComponent, TooltipComponent, CanvasRenderer])
+echarts.use([BarChart, LineChart, PieChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer])
 
 export { echarts }
 export type ChartOption = echarts.EChartsCoreOption

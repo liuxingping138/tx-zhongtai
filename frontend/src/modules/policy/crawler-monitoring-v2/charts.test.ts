@@ -74,20 +74,14 @@ describe('采集趋势', () => {
     expect(option.tooltip.formatter([{ dataIndex: 0, seriesName: '每周采集量', value: 3, marker: '' }])).toBe('<b>2026-10-05 起一周</b><br/>每周采集量　3 条<br/>日均出数网站　5 个')
   })
 
-  it('个别回填日不把坐标轴拉满，提示框仍是实际条数', () => {
-    const points = [
-      ...Array.from({ length: 12 }, (_, index) => point(`2026-09-${String(index + 1).padStart(2, '0')}`, 1000)),
-      point('2026-09-13', 80_000),
-    ]
-    const option = trendOption(points, 30, palette) as {
+  it('柱高就是当天条数，高峰日不会被画成一样高', () => {
+    const option = trendOption([point('2026-07-16', 72_000), point('2026-07-17', 18_000)], 30, palette) as {
       yAxis: { max?: number }
-      series: { data: { value: number }[]; markPoint?: { data: { name: string }[] } }[]
-      tooltip: Tooltip
+      series: { data: { value: number }[]; markPoint?: unknown }[]
     }
-    expect(option.yAxis.max).toBe(20_000)
-    expect(option.series[0]?.data.at(-1)?.value).toBe(20_000)
-    expect(option.series[0]?.markPoint?.data[0]?.name).toBe('8.0 万条')
-    expect(option.tooltip.formatter([{ dataIndex: 12, seriesName: '每日采集量', value: 20_000, marker: '' }])).toContain('80,000 条')
+    expect(option.yAxis.max).toBeUndefined()
+    expect(option.series[0]?.markPoint).toBeUndefined()
+    expect(option.series[0]?.data.map(bar => bar.value)).toEqual([72_000, 18_000])
   })
 
   it('文字说明给出总量、日均和最近 7 天日均，不报峰值', () => {
