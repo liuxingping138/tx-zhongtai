@@ -4,7 +4,7 @@ import { computed, ref } from 'vue'
 
 import { getCrawlerV2Overview, type CrawlerSiteRef, type CrawlerV2Overview, type SiteStatus } from '@/api/crawlerMonitoringV2'
 import { errorMessage } from '@/api/errors'
-import { changeText, weekDelta } from './charts'
+import { changeText, headline, weekDelta } from './charts'
 import CrawlerAttention from './CrawlerAttention.vue'
 import CrawlerHealthChart from './CrawlerHealthChart.vue'
 import CrawlerProvinceChart from './CrawlerProvinceChart.vue'
@@ -26,6 +26,8 @@ const error = ref('')
 const expanded = ref(true)
 const trend = ref<InstanceType<typeof CrawlerTrendChart>>()
 const attention = ref<InstanceType<typeof CrawlerAttention>>()
+const attentionTotals = ref<{ newStale: number; dropped: number } | null>(null)
+const sentences = computed(() => (overview.value ? headline(overview.value, attentionTotals.value) : []))
 let sequence = 0
 
 const syncNotice = computed(() => {
@@ -138,6 +140,20 @@ defineExpose({ reload })
       </el-button>
     </div>
     <template v-else-if="overview">
+      <p
+        class="headline"
+        aria-live="polite"
+      >
+        <span
+          v-for="(sentence, index) in sentences"
+          :key="index"
+          class="headline-sentence"
+        ><span
+          v-for="(part, partIndex) in sentence"
+          :key="partIndex"
+          :class="[part.strong && 'headline-strong', part.tone && `delta-${part.tone}`]"
+        >{{ part.text }}</span>{{ index < sentences.length - 1 ? '；' : '。' }}</span>
+      </p>
       <div class="cards">
         <div class="card">
           <span class="card-label">网站总数</span>
@@ -200,6 +216,7 @@ defineExpose({ reload })
       <CrawlerAttention
         ref="attention"
         @locate="site => emit('locateSite', site)"
+        @loaded="data => attentionTotals = { newStale: data.new_stale.total, dropped: data.dropped.total }"
       />
     </template>
   </section>
@@ -216,6 +233,12 @@ defineExpose({ reload })
 .sync-notice { margin-bottom: 12px; }
 .overview { display: flex; flex-direction: column; gap: var(--zt-space-3); margin-bottom: var(--zt-space-4); min-height: 110px; }
 .overview-error { color: var(--zt-ink-700); font-size: 13px; }
+.headline {
+  margin: 0; padding: var(--zt-space-3) var(--zt-space-4);
+  background: var(--el-color-primary-light-9); border-left: 3px solid var(--zt-blue-600); border-radius: var(--zt-radius);
+  font-size: 14px; line-height: 1.9; color: var(--zt-ink-700);
+}
+.headline-strong { font-size: 16px; font-weight: 600; color: var(--zt-ink-900); font-variant-numeric: tabular-nums; }
 
 .cards { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--zt-space-3); }
 .card, .chart-panel {

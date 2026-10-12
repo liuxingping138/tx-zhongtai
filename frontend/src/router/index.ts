@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory, type RouteLocationNormalized, type RouteLocationRaw } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
+import { clearReloadMark, isChunkLoadError, reloadForNewVersion } from './chunkReload'
 import { routes } from './routes'
 import { useWorkspace } from '@/layouts/workspace'
 
@@ -57,7 +58,15 @@ router.beforeEach(async (to) => {
   return to.name === 'home' ? homeTarget(to) : true
 })
 
-router.afterEach((to) => { document.title = `${to.meta.title || '页面'} · 业务数据运营平台` })
+router.afterEach((to) => {
+  document.title = `${to.meta.title || '页面'} · 业务数据运营平台`
+  // 路由守卫的单测在 node 里跑，没有 sessionStorage。
+  if (typeof sessionStorage !== 'undefined') clearReloadMark(sessionStorage)
+})
+
+router.onError((error, to) => {
+  if (isChunkLoadError(error)) reloadForNewVersion(to.fullPath, sessionStorage, url => window.location.assign(url))
+})
 
 declare module 'vue-router' {
   interface RouteMeta {

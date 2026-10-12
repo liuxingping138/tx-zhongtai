@@ -9,9 +9,10 @@ import {
   type CrawlerSiteRef,
 } from '@/api/crawlerMonitoringV2'
 import { errorMessage } from '@/api/errors'
+import { dropText } from './charts'
 import CrawlerSiteTrend from './CrawlerSiteTrend.vue'
 
-const emit = defineEmits<{ locate: [site: CrawlerSiteRef] }>()
+const emit = defineEmits<{ locate: [site: CrawlerSiteRef]; loaded: [data: CrawlerAttention] }>()
 
 const ATTENTION_ERROR = '暂时无法获取需关注的网站，请稍后重试。'
 const data = ref<CrawlerAttention | null>(null)
@@ -32,7 +33,7 @@ const groups = computed(() => {
       hint: `停更 ${rules.new_stale_from}–${rules.new_stale_to} 天，刚越过停更线，最值得马上排查`,
       empty: '本周没有新停更的网站',
       total: value.new_stale.total,
-      items: value.new_stale.items.map(site => ({ site, metric: `停更 ${site.stale_days ?? '-'} 天` })),
+      items: value.new_stale.items.map(site => ({ site, metric: `停更 ${site.stale_days ?? '-'} 天`, detail: `最新入库 ${site.last_created_at || '-'}` })),
     },
     {
       key: 'dropped',
@@ -42,7 +43,8 @@ const groups = computed(() => {
       total: value.dropped.total,
       items: value.dropped.items.map((site: CrawlerDroppedSite) => ({
         site,
-        metric: `${site.recent_rows.toLocaleString()} 条 / 周均 ${site.weekly_avg.toLocaleString()}`,
+        metric: dropText(site.recent_rows, site.drop_rate),
+        detail: `近 7 天 ${site.recent_rows.toLocaleString()} 条，前 ${rules.drop_base_weeks} 周周均 ${site.weekly_avg.toLocaleString()} 条`,
       })),
     },
   ]
@@ -70,7 +72,9 @@ async function load() {
   error.value = ''
   try {
     const result = await getCrawlerAttention()
-    if (current === sequence) data.value = result
+    if (current !== sequence) return
+    data.value = result
+    emit('loaded', result)
   } catch (cause) {
     if (current === sequence) error.value = errorMessage(cause, ATTENTION_ERROR)
   } finally {
@@ -132,12 +136,12 @@ defineExpose({ load })
         </p>
         <ul v-else>
           <li
-            v-for="{ site, metric } in group.items"
+            v-for="{ site, metric, detail } in group.items"
             :key="`${site.site_name}|${site.province_name}|${site.city_name}`"
           >
             <button
               type="button"
-              :title="`${site.site_name}（${place(site)}）`"
+              :title="`${site.site_name}（${place(site)}）\n${detail}`"
               @click="open(site)"
             >
               <span class="attention-name">{{ site.site_name }}</span>

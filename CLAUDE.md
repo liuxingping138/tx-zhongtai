@@ -261,6 +261,7 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
 - Excel 下载：经 `useExcelExport({ path, filename, filters: () => filtersForExport(listQuery.applied) })`，
   底层是 `downloadFile`。**不要用裸 fetch**——会绕开 401 自动续期和统一中文错误提示
 - 导出传 `applied` 而非 `query`：`query` 是用户还没点查询的输入
+- 重新部署后，开着的旧页面切路由会因旧分包文件不存在而失败；`router/chunkReload.ts` 在 `router.onError` 里整页刷新到目标地址一次（会话存储防循环），不要删
 - 修改共享组件或约定，同步更新 DESIGN.md / UX-CONTRACT.md / UI开发规范.md
 
 ### 已确认的产品规则（不要自行推翻）

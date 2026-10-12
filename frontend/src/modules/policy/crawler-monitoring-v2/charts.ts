@@ -1,4 +1,5 @@
 import type {
+  CrawlerV2Overview,
   CrawlerHealth,
   CrawlerProvince,
   CrawlerTrendDays,
@@ -6,6 +7,7 @@ import type {
   SiteStatus,
 } from '@/api/crawlerMonitoringV2'
 import type { ChartOption, ChartPalette } from '@/components/charts/echarts'
+import { compactCount } from './filters'
 
 const MOVING_WINDOW = 7
 /** 按停更率排序时，网站太少的省份一两个停更就是 100%，排在最前没有意义。 */
@@ -49,12 +51,29 @@ export function weeklyPoints(points: CrawlerTrendPoint[]): CrawlerTrendPoint[] {
   return [...weeks].map(([date, week]) => ({ date, rows: week.rows, sites: Math.round(week.sites / week.days) }))
 }
 
+/** 「3.0 万条」「700 条」：带万、亿时单位紧跟，不留空格。 */
+export function countText(value: number, unit = '条'): string {
+  const compact = compactCount(value)
+  return /[万亿]$/.test(compact) ? `${compact}${unit}` : `${compact} ${unit}`
+}
+
+/** 骤降清单的指标：近 7 天一条都没有时直接说「无数据」，比「↓ 100%」好懂。 */
+export function dropText(recentRows: number, dropRate: number): string {
+  return recentRows ? `↓ ${Math.round(dropRate * 100)}%` : '近 7 天无数据'
+}
+
+function sumRows(points: CrawlerTrendPoint[]): number {
+  return points.reduce((sum, point) => sum + point.rows, 0)
+}
+
+/** 领导关心「平时多少、最近怎样」，不报峰值：峰值多半是某天集中补采，没有代表性。 */
 export function trendSummary(points: CrawlerTrendPoint[], days: CrawlerTrendDays): string {
   if (!points.length) return '所选时间范围内没有采集数据'
-  const total = points.reduce((sum, point) => sum + point.rows, 0)
-  const peak = points.reduce((best, point) => (point.rows > best.rows ? point : best))
-  const unit = days === 365 ? '周' : '天'
-  return `近 ${days} 天共采集 ${total.toLocaleString()} 条，最高的一${unit}是 ${peak.date}，${peak.rows.toLocaleString()} 条`
+  const range = days === 365 ? '近 1 年' : `近 ${days} 天`
+  const average = Math.round(sumRows(points) / points.length)
+  const recent = points.slice(-7)
+  const recentAverage = Math.round(sumRows(recent) / recent.length)
+  return `${range}共采集 ${countText(sumRows(points))}，日均 ${average.toLocaleString()} 条；最近 7 天日均 ${recentAverage.toLocaleString()} 条`
 }
 
 function axisStyle(palette: ChartPalette) {
@@ -75,6 +94,19 @@ function valueAxis(name: string, palette: ChartPalette, showGrid: boolean) {
   }
 }
 
+function trendTooltip(points: CrawlerTrendPoint[], weekly: boolean) {
+  return (params: { dataIndex: number; seriesName: string; value: unknown; marker: string }[]) => {
+    const point = points[params[0]?.dataIndex ?? -1]
+    if (!point) return ''
+    const lines = params
+      .filter(item => typeof item.value === 'number')
+      .map(item => `${item.marker}${item.seriesName}　${(item.value as number).toLocaleString()} 条`)
+    const sites = weekly ? `日均出数网站　${point.sites.toLocaleString()} 个` : `出数网站　${point.sites.toLocaleString()} 个`
+    const title = weekly ? `${point.date} 起一周` : `${point.date}${isWeekend(point.date) ? '（周末）' : ''}`
+    return [`<b>${title}</b>`, ...lines, sites].join('<br/>')
+  }
+}
+
 export function trendOption(raw: CrawlerTrendPoint[], days: CrawlerTrendDays, palette: ChartPalette): ChartOption {
   const weekly = days === 365
   const points = weekly ? weeklyPoints(raw) : raw
@@ -82,35 +114,25 @@ export function trendOption(raw: CrawlerTrendPoint[], days: CrawlerTrendDays, pa
     value: point.rows,
     itemStyle: { color: !weekly && isWeekend(point.date) ? palette.primaryLight : palette.primary },
   }))
-  const series: Record<string, unknown>[] = [
-    { name: weekly ? '每周采集量' : '每日采集量', type: 'bar', data: bars, barMaxWidth: 16 },
-    {
-      name: weekly ? '日均出数网站' : '出数网站',
-      type: 'line',
-      yAxisIndex: 1,
-      data: points.map(point => point.sites),
-      showSymbol: false,
-      lineStyle: { type: 'dashed', width: 1.5, color: palette.success },
-      itemStyle: { color: palette.success },
-    },
-  ]
+  // 出数网站数只放进提示框：画成第二条线会随周末大起大落，抢走采集量趋势的注意力。
+  const series: Record<string, unknown>[] = [{ name: weekly ? '每周采集量' : '每日采集量', type: 'bar', data: bars, barMaxWidth: 16 }]
   if (!weekly) {
-    series.splice(1, 0, {
+    series.push({
       name: '7 日均值',
       type: 'line',
       data: movingAverage(points.map(point => point.rows)),
       smooth: true,
       showSymbol: false,
-      lineStyle: { width: 2, color: palette.ink },
+      lineStyle: { width: 2.5, color: palette.ink },
       itemStyle: { color: palette.ink },
     })
   }
   return {
-    grid: { left: 8, right: 8, top: 40, bottom: 4, containLabel: true },
+    grid: { left: 8, right: 8, top: 32, bottom: 4, containLabel: true },
     legend: { top: 0, right: 0, itemWidth: 14, itemHeight: 8, textStyle: { color: palette.inkMuted } },
-    tooltip: { trigger: 'axis', valueFormatter: (value: unknown) => (typeof value === 'number' ? value.toLocaleString() : '-') },
+    tooltip: { trigger: 'axis', formatter: trendTooltip(points, weekly) },
     xAxis: { type: 'category', data: points.map(point => (weekly ? `${point.date.slice(5)} 周` : point.date.slice(5))), ...axisStyle(palette) },
-    yAxis: [valueAxis('条数', palette, true), valueAxis('网站数', palette, false)],
+    yAxis: valueAxis('条数', palette, true),
     series,
   }
 }
@@ -202,6 +224,43 @@ export function siteTrendOption(points: CrawlerTrendPoint[], palette: ChartPalet
       })),
     }],
   }
+}
+
+export interface HeadlinePart {
+  text: string
+  strong?: boolean
+  tone?: DeltaTone
+}
+
+/** 概览顶部的一句话结论：领导不必自己从六张卡片里拼出「整体怎样、变好变坏、该看哪里」。 */
+export function headline(overview: CrawlerV2Overview, attention: { newStale: number; dropped: number } | null): HeadlinePart[][] {
+  const { cards, recent, week_base: base } = overview
+  const health: HeadlinePart[] = [
+    { text: '共监测 ' },
+    { text: cards.sites.toLocaleString(), strong: true },
+    { text: ' 个网站，健康率 ' },
+    { text: percent(cards.normal, cards.sites), strong: true },
+  ]
+  const change = base ? rateDelta(cards.normal, cards.sites, base.normal, base.sites) : null
+  if (change?.text) health.push({ text: `（${change.text}）`, tone: change.tone })
+  const sentences = [health]
+  if (attention) {
+    sentences.push([
+      { text: '本周新停更 ' },
+      { text: attention.newStale.toLocaleString(), strong: true, tone: attention.newStale ? 'bad' : 'flat' },
+      { text: ' 个、采集量骤降 ' },
+      { text: attention.dropped.toLocaleString(), strong: true, tone: attention.dropped ? 'bad' : 'flat' },
+      { text: ' 个，名单见下方「需要关注」' },
+    ])
+  }
+  const volume = changeText(recent.rows, recent.previous_rows)
+  sentences.push([
+    { text: `近 ${recent.days} 天采集 ` },
+    { text: countText(recent.rows), strong: true },
+    { text: `，较前 ${recent.days} 天 ` },
+    { text: volume.text, tone: volume.trend === 'up' ? 'good' : volume.trend === 'down' ? 'bad' : 'flat' },
+  ])
+  return sentences
 }
 
 export type ProvinceSort = 'stale' | 'rate' | 'sites'
