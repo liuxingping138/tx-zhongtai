@@ -263,7 +263,30 @@ export function sortProvinces(items: CrawlerProvince[], by: ProvinceSort, limit?
   return limit ? sorted.slice(0, limit) : sorted
 }
 
-/** 下方明细已按这个分类的全部原始写法筛选时，柱子显示为选中。 */
+export interface ProvinceTile {
+  item: CrawlerProvince
+  /** 「共 466 个 · 停更 89%」；没有网站时写「暂无网站」 */
+  caption: string
+  /** 比例条三段宽度（百分比），没有网站时全为 0 */
+  shares: { normal: number; watch: number; stale: number }
+  /** 悬停提示：各状态数量和合并前的写法 */
+  hint: string
+}
+
+export function provinceTile(item: CrawlerProvince): ProvinceTile {
+  const share = (value: number) => (item.sites ? (value / item.sites) * 100 : 0)
+  return {
+    item,
+    caption: item.sites ? `共 ${item.sites.toLocaleString()} 个 · 停更 ${percent(item.stale, item.sites)}` : '暂无网站',
+    shares: { normal: share(item.normal), watch: share(item.watch), stale: share(item.stale) },
+    hint: [
+      `正常 ${item.normal}　关注 ${item.watch}　停更 ${item.stale}`,
+      item.raw_names.length > 1 ? `含写法：${item.raw_names.map(name => name || '空').join('、')}` : '',
+    ].filter(Boolean).join('\n'),
+  }
+}
+
+/** 下方明细已按这个分类的全部原始写法筛选时，柱子和卡片显示为选中。 */
 export function provinceSelected(item: CrawlerProvince, applied: string[]): boolean {
   return applied.length > 0 && [...applied].sort().join('|') === [...item.raw_names].sort().join('|')
 }

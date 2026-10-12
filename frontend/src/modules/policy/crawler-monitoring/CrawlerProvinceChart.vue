@@ -5,6 +5,7 @@ import type { CrawlerProvince } from '@/api/crawlerMonitoring'
 import BaseChart from '@/components/charts/BaseChart.vue'
 import { chartPalette } from '@/components/charts/echarts'
 import { percent, provinceOption, sortProvinces, type ProvinceSort } from './charts'
+import CrawlerProvinceTiles from './CrawlerProvinceTiles.vue'
 
 const props = defineProps<{ provinces: CrawlerProvince[]; selected: string[] }>()
 const emit = defineEmits<{ pick: [rawNames: string[]] }>()
@@ -20,7 +21,13 @@ const LEGEND = [
   { label: '停更', color: 'var(--chart-stale)' },
 ]
 
+const VIEWS = [
+  { value: 'bar', label: '柱状图' },
+  { value: 'tiles', label: '卡片' },
+] as const
+
 const palette = chartPalette(getComputedStyle(document.documentElement))
+const view = ref<(typeof VIEWS)[number]['value']>('bar')
 const sort = ref<ProvinceSort>('stale')
 const rows = computed(() => sortProvinces(props.provinces, sort.value))
 const option = computed(() => provinceOption(rows.value, palette, props.selected))
@@ -40,10 +47,27 @@ function onSelect(params: { dataIndex: number }) {
       <div>
         <h3>省份分布</h3>
         <p class="chart-note">
-          按省份字段的分类排列，32 个省级行政区以及香港、澳门、全国、国央企都在其中；红色停更段在底部，柱高是网站总数，柱顶数字是停更数。点击柱子筛选下方列表
+          按省份字段的分类排列，32 个省级行政区以及香港、澳门、全国、国央企都在其中。<template v-if="view === 'bar'">
+            红色停更段在底部，柱高是网站总数，柱顶数字是停更数。点击柱子筛选下方列表
+          </template><template v-else>
+            大数字是停更网站数，色条是正常、关注、停更的占比。点击卡片筛选下方列表
+          </template>
         </p>
       </div>
       <div class="chart-tools">
+        <el-radio-group
+          v-model="view"
+          size="small"
+          aria-label="省份展示方式"
+        >
+          <el-radio-button
+            v-for="item in VIEWS"
+            :key="item.value"
+            :value="item.value"
+          >
+            {{ item.label }}
+          </el-radio-button>
+        </el-radio-group>
         <ul
           class="province-legend"
           aria-hidden="true"
@@ -74,10 +98,17 @@ function onSelect(params: { dataIndex: number }) {
       </div>
     </header>
     <BaseChart
+      v-if="view === 'bar'"
       :option="option"
       :label="label"
       height="340px"
       @select="onSelect"
+    />
+    <CrawlerProvinceTiles
+      v-else
+      :rows="rows"
+      :selected="selected"
+      @pick="names => emit('pick', names)"
     />
   </section>
 </template>

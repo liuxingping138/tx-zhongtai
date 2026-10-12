@@ -89,6 +89,21 @@ test('爬虫监测：趋势切换范围，健康结构点分类筛选明细', as
   await expect(page.getByRole('img', { name: /^采集趋势图：/ }).locator('canvas')).toBeVisible()
   await expect(page.getByRole('img', { name: /^省份分布：/ }).locator('canvas')).toBeVisible()
 
+  // 切到卡片：点停更最多的那张，明细只剩该省、卡片显示选中；再点取消。
+  await page.getByRole('radiogroup', { name: '省份展示方式' }).getByText('卡片', { exact: true }).click()
+  const topProvince = page
+    .getByRole('list', { name: '省份分布' })
+    .getByRole('button')
+    .filter({ hasNotText: '未填省份' })
+    .first()
+  const byProvince = page.waitForResponse(sitesResponse((url) => url.searchParams.getAll('province_name').length > 0))
+  await topProvince.click()
+  expect((await (await byProvince).json()).data.total).toBeGreaterThan(0)
+  await expect(topProvince).toHaveAttribute('aria-pressed', 'true')
+  const clearedProvince = page.waitForResponse(sitesResponse((url) => !url.searchParams.has('province_name')))
+  await topProvince.click()
+  await clearedProvince
+
   const weekly = page.waitForResponse(
     (response) => response.url().includes('/crawler-monitoring/trend?days=7') && response.ok(),
   )
