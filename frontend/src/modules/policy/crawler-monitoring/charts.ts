@@ -263,30 +263,70 @@ export function sortProvinces(items: CrawlerProvince[], by: ProvinceSort, limit?
   return limit ? sorted.slice(0, limit) : sorted
 }
 
-export interface ProvinceTile {
-  item: CrawlerProvince
-  /** 「共 466 个 · 停更 89%」；没有网站时写「暂无网站」 */
-  caption: string
-  /** 比例条三段宽度（百分比），没有网站时全为 0 */
-  shares: { normal: number; watch: number; stale: number }
-  /** 悬停提示：各状态数量和合并前的写法 */
-  hint: string
-}
-
-export function provinceTile(item: CrawlerProvince): ProvinceTile {
-  const share = (value: number) => (item.sites ? (value / item.sites) * 100 : 0)
-  return {
-    item,
-    caption: item.sites ? `共 ${item.sites.toLocaleString()} 个 · 停更 ${percent(item.stale, item.sites)}` : '暂无网站',
-    shares: { normal: share(item.normal), watch: share(item.watch), stale: share(item.stale) },
-    hint: [
-      `正常 ${item.normal}　关注 ${item.watch}　停更 ${item.stale}`,
-      item.raw_names.length > 1 ? `含写法：${item.raw_names.map(name => name || '空').join('、')}` : '',
-    ].filter(Boolean).join('\n'),
-  }
-}
-
-/** 下方明细已按这个分类的全部原始写法筛选时，卡片显示为选中。 */
+/** 下方明细已按这个分类的全部原始写法筛选时，柱子显示为选中。 */
 export function provinceSelected(item: CrawlerProvince, applied: string[]): boolean {
   return applied.length > 0 && [...applied].sort().join('|') === [...item.raw_names].sort().join('|')
+}
+
+/** 横轴放不下「新疆维吾尔自治区」，用简称；全国、国央企等原样。完整名称在提示框里。 */
+export function provinceShortName(name: string): string {
+  return name.replace(/(壮族|回族|维吾尔)?自治区$|特别行政区$|[省市]$/, '') || name
+}
+
+export function provinceOption(items: CrawlerProvince[], palette: ChartPalette, selected: string[] = []): ChartOption {
+  const picked = items.findIndex(item => provinceSelected(item, selected))
+  // 选中一个分类时其余变淡，和卡片、健康图的选中态一样明确。
+  const bar = (name: string, color: string, pick: (item: CrawlerProvince) => number, top = false) => ({
+    name,
+    type: 'bar',
+    stack: 'sites',
+    barMaxWidth: 22,
+    data: items.map((item, index) => ({
+      value: pick(item),
+      itemStyle: { color, opacity: picked < 0 || picked === index ? 1 : 0.3 },
+    })),
+    label: top ? {
+      show: true,
+      position: 'top',
+      color: palette.ink,
+      fontSize: 11,
+      formatter: (params: { dataIndex: number }) => {
+        const stale = items[params.dataIndex]?.stale ?? 0
+        return stale ? String(stale) : ''
+      },
+    } : { show: false },
+  })
+  return {
+    grid: { left: 8, right: 8, top: 24, bottom: 4, containLabel: true },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (params: { dataIndex: number }[]) => {
+        const item = items[params[0]?.dataIndex ?? -1]
+        if (!item) return ''
+        if (!item.sites) return `<b>${item.name}</b><br/>暂无网站`
+        return [
+          `<b>${item.name}</b>（共 ${item.sites} 个）`,
+          `正常 ${item.normal}　关注 ${item.watch}　停更 ${item.stale}`,
+          `停更率 ${percent(item.stale, item.sites)}`,
+          item.raw_names.length > 1 ? `含写法：${item.raw_names.map(name => name || '空').join('、')}` : '',
+          '点击筛选下方列表',
+        ].filter(Boolean).join('<br/>')
+      },
+    },
+    xAxis: {
+      type: 'category',
+      data: items.map(item => provinceShortName(item.name)),
+      ...axisStyle(palette),
+      // 中文竖排，38 个分类挤在一行也不会重叠。
+      axisLabel: { color: palette.inkMuted, interval: 0, lineHeight: 13, formatter: (name: string) => name.split('').join('\n') },
+    },
+    yAxis: valueAxis('网站数', palette, true),
+    // 停更段垫在最下面：按停更数排序时红色部分从左到右递减，和排序对得上；柱高仍是网站总数。
+    series: [
+      bar('停更', palette.danger, item => item.stale),
+      bar('关注', palette.warning, item => item.watch),
+      bar('正常', palette.success, item => item.normal, true),
+    ],
+  }
 }

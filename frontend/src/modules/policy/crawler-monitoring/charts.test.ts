@@ -10,8 +10,9 @@ import {
   healthSlices,
   isWeekend,
   percent,
+  provinceOption,
   provinceSelected,
-  provinceTile,
+  provinceShortName,
   rateDelta,
   siteTrendOption,
   siteTrendSummary,
@@ -195,18 +196,37 @@ describe('省份分布', () => {
     expect(sortProvinces([...items, small], 'rate').map(item => item.name)).toEqual(['国央企', '西藏自治区', '甘肃省', '广东省', '天津市'])
   })
 
-  it('卡片写网站数和停更率，色条按三种状态占比，提示里列出合并前的写法', () => {
-    const tile = provinceTile(province('新疆维吾尔自治区', 20, 5, 75, ['新疆', '新疆维吾尔族自治区']))
-    expect(tile.caption).toBe('共 100 个 · 停更 75.0%')
-    expect(tile.shares).toEqual({ normal: 20, watch: 5, stale: 75 })
-    expect(tile.hint).toBe('正常 20　关注 5　停更 75\n含写法：新疆、新疆维吾尔族自治区')
+  it('横轴用简称，全国、国央企等原样', () => {
+    expect(['新疆维吾尔自治区', '广西壮族自治区', '宁夏回族自治区', '西藏自治区', '内蒙古自治区', '香港特别行政区', '黑龙江省', '北京市', '全国', '国央企', '未填省份'].map(provinceShortName))
+      .toEqual(['新疆', '广西', '宁夏', '西藏', '内蒙古', '香港', '黑龙江', '北京', '全国', '国央企', '未填省份'])
   })
 
-  it('没有网站的分类写「暂无网站」，色条为空', () => {
-    const tile = provinceTile(province('澳门特别行政区', 0, 0, 0))
-    expect(tile.caption).toBe('暂无网站')
-    expect(tile.shares).toEqual({ normal: 0, watch: 0, stale: 0 })
-    expect(tile.hint).toBe('正常 0　关注 0　停更 0')
+  type ProvinceChart = {
+    xAxis: { data: string[]; axisLabel: { formatter: (name: string) => string } }
+    series: { name: string; data: { value: number; itemStyle: { opacity: number } }[]; label: { show: boolean; formatter?: (params: { dataIndex: number }) => string } }[]
+    tooltip: { formatter: (params: { dataIndex: number }[]) => string }
+  }
+
+  it('停更段垫底、柱顶标停更数，提示里写全称和合并前的写法', () => {
+    const merged = province('新疆维吾尔自治区', 20, 5, 75, ['新疆', '新疆维吾尔族自治区'])
+    const empty = province('澳门特别行政区', 0, 0, 0)
+    const option = provinceOption([merged, empty], palette) as ProvinceChart
+    expect(option.series.map(series => series.name)).toEqual(['停更', '关注', '正常'])
+    expect(option.series[0]?.data.map(bar => bar.value)).toEqual([75, 0])
+    expect(option.xAxis.data).toEqual(['新疆', '澳门'])
+    expect(option.xAxis.axisLabel.formatter('内蒙古')).toBe('内\n蒙\n古')
+    const top = option.series[2]?.label.formatter
+    expect([top?.({ dataIndex: 0 }), top?.({ dataIndex: 1 })]).toEqual(['75', ''])
+    expect(option.tooltip.formatter([{ dataIndex: 0 }])).toContain('含写法：新疆、新疆维吾尔族自治区')
+    expect(option.tooltip.formatter([{ dataIndex: 1 }])).toBe('<b>澳门特别行政区</b><br/>暂无网站')
+    expect(option.tooltip.formatter([{ dataIndex: 9 }])).toBe('')
+  })
+
+  it('选中一个分类时其余柱子变淡', () => {
+    const items = [province('广东省', 1, 0, 1), province('甘肃省', 1, 0, 1)]
+    const opacity = (selected: string[]) => (provinceOption(items, palette, selected) as ProvinceChart).series[0]?.data.map(bar => bar.itemStyle.opacity)
+    expect(opacity([])).toEqual([1, 1])
+    expect(opacity(['甘肃省'])).toEqual([0.3, 1])
   })
 
   it('明细按该分类全部写法筛选时卡片选中，写法顺序不影响', () => {
