@@ -5,22 +5,20 @@ import { chartPalette } from '@/components/charts/echarts'
 import {
   changeText,
   countText,
-  dropText,
   headline,
   healthOption,
   healthSlices,
   isWeekend,
-  movingAverage,
   percent,
   provinceOption,
   rateDelta,
   siteTrendOption,
   siteTrendSummary,
   sortProvinces,
+  trendBuckets,
   trendOption,
   trendSummary,
   weekDelta,
-  weeklyPoints,
 } from './charts'
 
 const palette = chartPalette()
@@ -40,54 +38,42 @@ describe('采集趋势', () => {
     expect([isWeekend('2026-10-10'), isWeekend('2026-10-11'), isWeekend('2026-10-12')]).toEqual([true, true, false])
   })
 
-  it('移动平均凑满窗口才出值', () => {
-    expect(movingAverage([1, 2, 3, 4], 3)).toEqual([null, null, 2, 3])
-  })
+  type Tooltip = { formatter: (params: { dataIndex: number }[]) => string }
+  type TrendChart = { series: Series[]; xAxis: { data: string[] }; yAxis: { name: string; max?: number }; tooltip: Tooltip }
 
-  it('按周汇总以周一为起点，条数求和、网站数取日均', () => {
-    const points = [point('2026-10-04', 1, 10), point('2026-10-05', 2, 4), point('2026-10-06', 3, 6)]
-    expect(weeklyPoints(points)).toEqual([
-      { date: '2026-09-28', rows: 1, sites: 10 },
-      { date: '2026-10-05', rows: 5, sites: 5 },
-    ])
-  })
-
-  type Tooltip = { formatter: (params: { dataIndex: number; seriesName: string; value: unknown; marker: string }[]) => string }
-
-  it('按天只画采集量和 7 日均值，周末柱子用浅色，出数网站数放在提示框里', () => {
-    const option = trendOption([point('2026-10-09', 10, 120), point('2026-10-10', 2, 30)], 30, palette) as { series: Series[]; tooltip: Tooltip }
-    expect(option.series.map(series => series.name)).toEqual(['每日采集量', '7 日均值'])
-    const bars = option.series[0]?.data as { itemStyle: { color: string } }[]
-    expect(bars.map(bar => bar.itemStyle.color)).toEqual([palette.primary, palette.primaryLight])
-    const tip = option.tooltip.formatter([
-      { dataIndex: 1, seriesName: '每日采集量', value: 2, marker: '' },
-      { dataIndex: 1, seriesName: '7 日均值', value: null, marker: '' },
-    ])
-    expect(tip).toBe('<b>2026-10-10（周末）</b><br/>每日采集量　2 条<br/>出数网站　30 个')
-    expect(option.tooltip.formatter([{ dataIndex: 9, seriesName: '', value: 1, marker: '' }])).toBe('')
-  })
-
-  it('一年按周画，不画 7 日均值，提示框写日均出数网站', () => {
-    const option = trendOption([point('2026-10-05', 1, 4), point('2026-10-06', 2, 6)], 365, palette) as { series: Series[]; xAxis: { data: string[] }; tooltip: Tooltip }
-    expect(option.series.map(series => series.name)).toEqual(['每周采集量'])
-    expect(option.xAxis.data).toEqual(['10-05 周'])
-    expect(option.tooltip.formatter([{ dataIndex: 0, seriesName: '每周采集量', value: 3, marker: '' }])).toBe('<b>2026-10-05 起一周</b><br/>每周采集量　3 条<br/>日均出数网站　5 个')
-  })
-
-  it('柱高就是当天条数，高峰日不会被画成一样高', () => {
-    const option = trendOption([point('2026-07-16', 72_000), point('2026-07-17', 18_000)], 30, palette) as {
-      yAxis: { max?: number }
-      series: { data: { value: number }[]; markPoint?: unknown }[]
-    }
+  it('7 天和 1 个月按天画，柱高就是当天条数，高峰日不会被画成一样高', () => {
+    const option = trendOption([point('2026-07-16', 72_000), point('2026-07-17', 18_000)], 30, palette) as TrendChart
+    expect(option.series.map(series => series.name)).toEqual(['每日采集量'])
+    expect(option.series[0]?.data).toEqual([72_000, 18_000])
     expect(option.yAxis.max).toBeUndefined()
-    expect(option.series[0]?.markPoint).toBeUndefined()
-    expect(option.series[0]?.data.map(bar => bar.value)).toEqual([72_000, 18_000])
+    expect(option.xAxis.data).toEqual(['7/16', '7/17'])
+    expect(option.tooltip.formatter([{ dataIndex: 1 }])).toBe('<b>2026-07-17</b><br/>采集 18,000 条')
+    expect(option.tooltip.formatter([{ dataIndex: 9 }])).toBe('')
   })
 
-  it('文字说明给出总量、日均和最近 7 天日均，不报峰值', () => {
+  it('1 个季度按周画日均，首尾不满一周按实际天数平均', () => {
+    const points = [point('2026-10-04', 70), point('2026-10-05', 20), point('2026-10-06', 40)]
+    expect(trendBuckets(points, 90)).toEqual([
+      { start: '2026-09-28', label: '9/28', rows: 70, days: 1, average: 70 },
+      { start: '2026-10-05', label: '10/5', rows: 60, days: 2, average: 30 },
+    ])
+    const option = trendOption(points, 90, palette) as TrendChart
+    expect(option.series[0]?.name).toBe('每周日均采集量')
+    expect(option.yAxis.name).toBe('日均条数')
+    expect(option.tooltip.formatter([{ dataIndex: 1 }])).toBe('<b>2026-10-05 起一周</b><br/>日均 30 条<br/>共 60 条（2 天）')
+  })
+
+  it('1 年按月画日均', () => {
+    const option = trendOption([point('2026-09-30', 10), point('2026-10-01', 4), point('2026-10-02', 8)], 365, palette) as TrendChart
+    expect(option.xAxis.data).toEqual(['9月', '10月'])
+    expect(option.series[0]?.data).toEqual([10, 6])
+    expect(option.tooltip.formatter([{ dataIndex: 1 }])).toBe('<b>2026-10</b><br/>日均 6 条<br/>共 12 条（2 天）')
+  })
+
+  it('文字说明给出总量和日均，不报峰值', () => {
     const points = Array.from({ length: 10 }, (_, index) => point(`2026-10-${String(index + 1).padStart(2, '0')}`, index < 3 ? 100_000 : 700))
-    expect(trendSummary(points, 30)).toBe('近 30 天共采集 30.5 万条，日均 30,490 条；最近 7 天日均 700 条')
-    expect(trendSummary([point('2026-10-01', 7)], 365)).toBe('近 1 年共采集 7 条，日均 7 条；最近 7 天日均 7 条')
+    expect(trendSummary(points, 30)).toBe('近 1 个月共采集 30.5 万条，日均 30,490 条')
+    expect(trendSummary([point('2026-10-01', 7)], 7)).toBe('近 7 天共采集 7 条，日均 7 条')
     expect(trendSummary([], 90)).toBe('所选时间范围内没有采集数据')
   })
 })
@@ -137,20 +123,18 @@ describe('一句话结论', () => {
   }
   const plain = (sentences: { text: string }[][]) => sentences.map(parts => parts.map(part => part.text).join(''))
 
-  it('依次说整体健康、需关注数量和采集量变化', () => {
-    expect(plain(headline(overview, { newStale: 9, dropped: 0 }))).toEqual([
+  it('依次说整体健康和采集量变化', () => {
+    expect(plain(headline(overview))).toEqual([
       '共监测 1,000 个网站，健康率 40.0%（较上周 ↓ 5.0 个百分点）',
-      '本周新停更 9 个、采集量骤降 0 个，名单见下方「需要关注」',
       '近 7 天采集 3.0 万条，较前 7 天 ↑ 20.0%',
     ])
-    const [health, attention, volume] = headline(overview, { newStale: 9, dropped: 0 })
+    const [health, volume] = headline(overview)
     expect(health?.at(-1)?.tone).toBe('bad')
-    expect(attention?.filter(part => part.strong).map(part => part.tone)).toEqual(['bad', 'flat'])
     expect(volume?.at(-1)?.tone).toBe('good')
   })
 
-  it('需关注还没加载、一周前没有记录时，相应部分不出现', () => {
-    expect(plain(headline({ ...overview, week_base: null, recent: { days: 7, rows: 10, previous_rows: 20 } }, null))).toEqual([
+  it('一周前没有记录时，不出现较上周', () => {
+    expect(plain(headline({ ...overview, week_base: null, recent: { days: 7, rows: 10, previous_rows: 20 } }))).toEqual([
       '共监测 1,000 个网站，健康率 40.0%',
       '近 7 天采集 10 条，较前 7 天 ↓ 50.0%',
     ])
@@ -162,9 +146,6 @@ describe('数量文字', () => {
     expect([countText(30_000), countText(700), countText(250_000_000, '条')]).toEqual(['3.0 万条', '700 条', '2.50 亿条'])
   })
 
-  it('骤降一条不剩时写「近 7 天无数据」', () => {
-    expect([dropText(29, 0.928), dropText(0, 1)]).toEqual(['↓ 93%', '近 7 天无数据'])
-  })
 })
 
 describe('较上周', () => {

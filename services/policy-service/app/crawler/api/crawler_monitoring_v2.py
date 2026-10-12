@@ -36,7 +36,7 @@ def site_filters(
 def _check_days(days: int) -> None:
     # 不用 Literal[30, 90, 365]：Pydantic 对 Literal 不做类型转换，查询串里的 "90" 会被当成非法值。
     if days not in stats.TREND_DAYS:
-        raise ApiError("趋势范围只支持 30、90、365 天", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+        raise ApiError("趋势范围只支持 7、30、90、365 天", code=ErrorCode.VALIDATION_ERROR, http_status=422)
 
 
 @router.get("/overview")
@@ -57,15 +57,6 @@ async def get_trend(
 ) -> JSONResponse:
     _check_days(days)
     return success_json(await stats.trend(session, days))
-
-
-@router.get("/attention")
-@classified(SecurityClass.RESOURCE_AUTHORIZED)
-async def get_attention(
-    session: AsyncSession = Depends(get_db_session, scope="function"),
-    _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
-) -> JSONResponse:
-    return success_json(await status_history.attention(session))
 
 
 @router.get("/site-trend")

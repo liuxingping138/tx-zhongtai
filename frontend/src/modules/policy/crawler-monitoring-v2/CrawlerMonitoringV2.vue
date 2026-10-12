@@ -5,7 +5,6 @@ import {
   CRAWLER_V2_BASE,
   listCrawlerSites,
   type CrawlerSiteItem,
-  type CrawlerSiteRef,
   type SiteStatus,
 } from '@/api/crawlerMonitoringV2'
 import { errorMessage } from '@/api/errors'
@@ -107,15 +106,6 @@ function pickProvince(rawNames: string[]) {
   void load()
 }
 
-/** 需关注清单里点「在下方列表中查看」：按该网站的原始名称、省份、地市精确定位。 */
-function locateSite(site: CrawlerSiteRef) {
-  listQuery.replaceApplied('site_name', [site.site_name])
-  listQuery.replaceApplied('province_name', site.province_name ? [site.province_name] : [])
-  listQuery.replaceApplied('city_name', site.city_name ? [site.city_name] : [])
-  listQuery.replaceApplied('status', [])
-  void load()
-}
-
 async function reloadData() {
   await Promise.all([load(), overviewPanel.value?.reload(), filters.load()])
 }
@@ -152,7 +142,6 @@ onMounted(() => { void reloadData() })
           :selected-statuses="appliedStatuses"
           @pick-status="pickStatus"
           @pick-province="pickProvince"
-          @locate-site="locateSite"
           @retry="reloadData"
         />
       </template>

@@ -5,17 +5,14 @@ import { getCrawlerTrend, type CrawlerTrendDays, type CrawlerTrendPoint } from '
 import { errorMessage } from '@/api/errors'
 import BaseChart from '@/components/charts/BaseChart.vue'
 import { chartPalette } from '@/components/charts/echarts'
-import { trendOption, trendSummary } from './charts'
+import { TREND_RANGES, trendOption, trendSummary } from './charts'
 
 const TREND_ERROR = '暂时无法获取采集趋势，请稍后重试。'
-const RANGES: { value: CrawlerTrendDays; label: string }[] = [
-  { value: 30, label: '近 30 天' },
-  { value: 90, label: '近 90 天' },
-  { value: 365, label: '近 1 年' },
-]
+const UNIT_NOTE = { day: '按天', week: '按周，柱高为日均', month: '按月，柱高为日均' } as const
 
 const palette = chartPalette(getComputedStyle(document.documentElement))
-const days = ref<CrawlerTrendDays>(90)
+const days = ref<CrawlerTrendDays>(30)
+const unitNote = computed(() => UNIT_NOTE[TREND_RANGES.find(item => item.value === days.value)?.unit ?? 'day'])
 const points = ref<CrawlerTrendPoint[]>([])
 const dateTo = ref('')
 const loading = ref(false)
@@ -55,7 +52,7 @@ defineExpose({ load })
         <h3>采集趋势</h3>
         <p class="chart-note">
           {{ summary }}<template v-if="dateTo">
-            （截至 {{ dateTo }}，当天仍在采集不计入；柱高是当天采集条数，浅色为周末）
+            （{{ unitNote }}，截至 {{ dateTo }}）
           </template>
         </p>
       </div>
@@ -66,7 +63,7 @@ defineExpose({ load })
         @change="load"
       >
         <el-radio-button
-          v-for="range in RANGES"
+          v-for="range in TREND_RANGES"
           :key="range.value"
           :value="range.value"
         >

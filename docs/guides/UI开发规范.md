@@ -156,7 +156,7 @@ ColumnPicker 按用户ID和route.path保存字段键（存储键 `zt:columns:v2:
 
 ## 带概览的监测列表
 
-参照 `frontend/src/modules/policy/crawler-monitoring-v2/CrawlerMonitoringV2.vue`（爬虫监测）。概览放在 `ListPage` 的 `summary` 插槽，整块是 `CrawlerOverview.vue`：一行六张同尺寸卡片（网站总数、正常、关注、停更、数据总量、近 7 天采集），1280px 及以下折成两行三张；卡片下是整行的趋势图，然后是整行的健康结构，省份分布再单独占一整行（左右两列）。卡片保持正常尺寸，不能靠压缩卡片适应一屏。
+参照 `frontend/src/modules/policy/crawler-monitoring-v2/CrawlerMonitoringV2.vue`（爬虫监测）。概览放在 `ListPage` 的 `summary` 插槽，整块是 `CrawlerOverview.vue`：一行六张同尺寸卡片（网站总数、正常、关注、停更、数据总量、近 7 天采集），1280px 及以下折成两行三张；卡片下一行左趋势图、右健康结构（3:2，1280px 及以下上下排），省份分布再单独占一整行（左右两列）。卡片保持正常尺寸，不能靠压缩卡片适应一屏。
 
 - 图表一律用 `components/charts/BaseChart.vue`（传 `option`、中文 `label`、`height`，点击图形发 `select`）。option 由纯函数生成并写单测（参照同目录 `charts.ts`），配色用 `chartPalette()`；新图表类型先在 `components/charts/echarts.ts` 注册。
 

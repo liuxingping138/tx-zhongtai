@@ -78,21 +78,22 @@ test('爬虫监测：趋势切换范围，健康结构点分类筛选明细', as
   const problems = trackProblems(page)
 
   const firstTrend = page.waitForResponse(
-    (response) => response.url().includes('/crawler-monitoring-v2/trend?days=90') && response.ok(),
+    (response) => response.url().includes('/crawler-monitoring-v2/trend?days=30') && response.ok(),
   )
   await loginAdmin(page, '/policy/crawler-monitoring-v2')
   await firstTrend
-  for (const name of ['采集趋势', '健康结构', '省份分布', '需要关注']) {
+  for (const name of ['采集趋势', '健康结构', '省份分布']) {
     await expect(page.getByRole('heading', { name, exact: true })).toBeVisible({ timeout: 20_000 })
   }
+  await expect(page.getByRole('heading', { name: '需要关注', exact: true })).toHaveCount(0)
   await expect(page.getByRole('img', { name: /^采集趋势图：/ }).locator('canvas')).toBeVisible()
-  await expect(page.getByRole('img', { name: /^省份分布：/ }).locator('canvas')).toBeVisible()
+  await expect(page.getByRole('img', { name: /^省份分布：/ }).first().locator('canvas')).toBeVisible()
 
-  const monthly = page.waitForResponse(
-    (response) => response.url().includes('/crawler-monitoring-v2/trend?days=30') && response.ok(),
+  const weekly = page.waitForResponse(
+    (response) => response.url().includes('/crawler-monitoring-v2/trend?days=7') && response.ok(),
   )
-  await page.getByRole('radiogroup', { name: '趋势时间范围' }).getByText('近 30 天', { exact: true }).click()
-  expect((await (await monthly).json()).data.items).toHaveLength(30)
+  await page.getByRole('radiogroup', { name: '趋势时间范围' }).getByText('7 天', { exact: true }).click()
+  expect((await (await weekly).json()).data.items).toHaveLength(7)
 
   const stale = page.waitForResponse(sitesResponse((url) => url.searchParams.get('status') === 'stale'))
   await page.locator('.legend button').filter({ hasText: '近期停更' }).click()

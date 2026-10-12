@@ -1,14 +1,13 @@
-"""爬虫监测状态历史与需关注清单。都只读写本服务的表，不连爬虫库。"""
+"""爬虫监测状态历史与单站曲线。都只读写本服务的表，不连爬虫库。"""
 
 from __future__ import annotations
 
 from datetime import date, timedelta
-from typing import Any
 
-from sqlalchemy import func, select, text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.crawler.domain.models import CrawlerSite, CrawlerSiteDaily, CrawlerStatusDaily
+from app.crawler.domain.models import CrawlerSiteDaily, CrawlerStatusDaily
 
 # 某天的状态 = 那天回看每个网站最后一次入库的日期，口径与 crawler_sync_v2._REBUILD_SITES 一致：
 # 入库日期取 last_created_at 的北京时间日期，没有时用采集日。按网站把入库日期排成区间，一次算出整段日期。
@@ -91,58 +90,6 @@ async def latest_and_base(
         return None, None
     base = await session.get(CrawlerStatusDaily, latest.snapshot_date - timedelta(days=days_back))
     return latest, base
-
-
-def _site_columns() -> list[Any]:
-    return [
-        CrawlerSite.site_name,
-        CrawlerSite.province_name,
-        CrawlerSite.city_name,
-        CrawlerSite.total_rows,
-        CrawlerSite.last_created_at,
-        CrawlerSite.stale_days,
-        CrawlerSite.status,
-    ]
-
-
-async def new_stale(session: AsyncSession, *, watch_days: int, within_days: int, limit: int) -> tuple[list[Any], int]:
-    """刚越过停更阈值的网站：停更天数在 (watch_days, watch_days + within_days] 内，数据量大的在前。"""
-
-    cond = (CrawlerSite.status == "stale") & (CrawlerSite.stale_days <= watch_days + within_days)
-    total = int(await session.scalar(select(func.count()).select_from(CrawlerSite).where(cond)) or 0)
-    result = await session.execute(
-        select(*_site_columns()).where(cond).order_by(CrawlerSite.total_rows.desc(), CrawlerSite.site_name).limit(limit)
-    )
-    return list(result.all()), total
-
-
-async def window_rows(session: AsyncSession, *, base_start: date, recent_start: date, end: date) -> list[Any]:
-    """每个未停更网站在近期窗口和基准窗口的采集条数，骤降判定在业务层做。"""
-
-    daily = CrawlerSiteDaily
-    windows = (
-        select(
-            daily.site_name,
-            daily.province_name,
-            daily.city_name,
-            func.coalesce(func.sum(daily.row_count).filter(daily.collect_date >= recent_start), 0).label("recent"),
-            func.coalesce(func.sum(daily.row_count).filter(daily.collect_date < recent_start), 0).label("base"),
-        )
-        .where(daily.collect_date.between(base_start, end))
-        .group_by(daily.site_name, daily.province_name, daily.city_name)
-        .subquery()
-    )
-    result = await session.execute(
-        select(*_site_columns(), windows.c.recent, windows.c.base)
-        .join(
-            windows,
-            (windows.c.site_name == CrawlerSite.site_name)
-            & (windows.c.province_name == CrawlerSite.province_name)
-            & (windows.c.city_name == CrawlerSite.city_name),
-        )
-        .where(CrawlerSite.status != "stale")
-    )
-    return list(result.all())
 
 
 async def site_series(

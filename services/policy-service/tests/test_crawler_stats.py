@@ -147,9 +147,9 @@ def test_trend_route_accepts_query_string_days(monkeypatch: pytest.MonkeyPatch) 
 
 def test_trend_route_rejects_unsupported_range(monkeypatch: pytest.MonkeyPatch) -> None:
     client, trend = _trend_client(monkeypatch)
-    response = client.get("/api/v1/policy/crawler-monitoring-v2/trend", params={"days": "7"})
+    response = client.get("/api/v1/policy/crawler-monitoring-v2/trend", params={"days": "14"})
     assert response.status_code == 422
-    assert "30、90、365" in response.json()["message"]
+    assert "7、30、90、365" in response.json()["message"]
     trend.assert_not_awaited()
 
 

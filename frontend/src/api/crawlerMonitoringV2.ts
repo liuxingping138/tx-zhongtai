@@ -43,7 +43,7 @@ export interface CrawlerTrendPoint {
   sites: number
 }
 
-export type CrawlerTrendDays = 30 | 90 | 365
+export type CrawlerTrendDays = 7 | 30 | 90 | 365
 
 export interface CrawlerV2Overview {
   cards: { sites: number; normal: number; watch: number; stale: number; total_rows: number }
@@ -69,26 +69,6 @@ export interface CrawlerSiteRef {
   city_name: string
 }
 
-export interface CrawlerAttentionSite extends CrawlerSiteRef {
-  total_rows: number
-  last_created_at: string
-  stale_days: number | null
-  status: SiteStatus
-}
-
-export interface CrawlerDroppedSite extends CrawlerAttentionSite {
-  recent_rows: number
-  weekly_avg: number
-  drop_rate: number
-}
-
-export interface CrawlerAttention {
-  new_stale: { total: number; items: CrawlerAttentionSite[] }
-  /** overall_ratio：全网近 7 天相对前 4 周周均的比例，单站降幅按它折算。 */
-  dropped: { total: number; items: CrawlerDroppedSite[]; overall_ratio: number }
-  rules: { new_stale_from: number; new_stale_to: number; drop_percent: number; drop_base_weeks: number; date_to: string }
-}
-
 export interface CrawlerSiteFilters {
   province_name?: FilterParam
   city_name?: FilterParam
@@ -106,10 +86,6 @@ export function getCrawlerTrend(
   days: CrawlerTrendDays,
 ): Promise<{ date_from: string; date_to: string; items: CrawlerTrendPoint[] }> {
   return request(http.get(`${CRAWLER_V2_BASE}/trend`, { params: { days } }))
-}
-
-export function getCrawlerAttention(): Promise<CrawlerAttention> {
-  return request(http.get(`${CRAWLER_V2_BASE}/attention`))
 }
 
 export function getCrawlerSiteTrend(

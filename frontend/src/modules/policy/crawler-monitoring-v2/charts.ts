@@ -9,8 +9,6 @@ import type {
 import type { ChartOption, ChartPalette } from '@/components/charts/echarts'
 import { compactCount } from './filters'
 
-const MOVING_WINDOW = 7
-
 function parseDay(value: string): Date {
   const [year = 0, month = 1, day = 1] = value.split('-').map(Number)
   return new Date(year, month - 1, day)
@@ -26,37 +24,54 @@ export function isWeekend(value: string): boolean {
   return day === 0 || day === 6
 }
 
-/** 前 window-1 天凑不满一个窗口，返回 null，图上那一段不画线。 */
-export function movingAverage(values: number[], window = MOVING_WINDOW): (number | null)[] {
-  return values.map((_, index) => {
-    if (index < window - 1) return null
-    const slice = values.slice(index - window + 1, index + 1)
-    return Math.round(slice.reduce((sum, value) => sum + value, 0) / window)
-  })
+export type TrendUnit = 'day' | 'week' | 'month'
+
+export const TREND_RANGES: { value: CrawlerTrendDays; label: string; unit: TrendUnit }[] = [
+  { value: 7, label: '7 天', unit: 'day' },
+  { value: 30, label: '1 个月', unit: 'day' },
+  { value: 90, label: '1 个季度', unit: 'week' },
+  { value: 365, label: '1 年', unit: 'month' },
+]
+
+function trendUnit(days: CrawlerTrendDays): TrendUnit {
+  return TREND_RANGES.find(item => item.value === days)?.unit ?? 'day'
 }
 
-/** 一年按天画太密，按周（周一为起点）汇总：条数求和，网站数取日均。 */
-export function weeklyPoints(points: CrawlerTrendPoint[]): CrawlerTrendPoint[] {
-  const weeks = new Map<string, { rows: number; sites: number; days: number }>()
+export interface TrendBucket {
+  /** 当天、周一或当月 1 日 */
+  start: string
+  label: string
+  rows: number
+  days: number
+  /** 日均条数：首尾不满一周、一个月的段按天平均，才不会看着像骤降。 */
+  average: number
+}
+
+/** 7 天、1 个月按天，1 个季度按周（周一为起点），1 年按月。 */
+export function trendBuckets(points: CrawlerTrendPoint[], days: CrawlerTrendDays): TrendBucket[] {
+  const unit = trendUnit(days)
+  const buckets = new Map<string, { rows: number; days: number }>()
   for (const point of points) {
     const date = parseDay(point.date)
-    date.setDate(date.getDate() - ((date.getDay() + 6) % 7))
+    if (unit === 'month') date.setDate(1)
+    if (unit === 'week') date.setDate(date.getDate() - ((date.getDay() + 6) % 7))
     const key = formatDay(date)
-    const week = weeks.get(key) ?? { rows: 0, sites: 0, days: 0 }
-    weeks.set(key, { rows: week.rows + point.rows, sites: week.sites + point.sites, days: week.days + 1 })
+    const bucket = buckets.get(key) ?? { rows: 0, days: 0 }
+    buckets.set(key, { rows: bucket.rows + point.rows, days: bucket.days + 1 })
   }
-  return [...weeks].map(([date, week]) => ({ date, rows: week.rows, sites: Math.round(week.sites / week.days) }))
+  return [...buckets].map(([start, bucket]) => ({
+    start,
+    label: unit === 'month' ? `${Number(start.slice(5, 7))}月` : `${Number(start.slice(5, 7))}/${Number(start.slice(8))}`,
+    rows: bucket.rows,
+    days: bucket.days,
+    average: Math.round(bucket.rows / bucket.days),
+  }))
 }
 
 /** 「3.0 万条」「700 条」：带万、亿时单位紧跟，不留空格。 */
 export function countText(value: number, unit = '条'): string {
   const compact = compactCount(value)
   return /[万亿]$/.test(compact) ? `${compact}${unit}` : `${compact} ${unit}`
-}
-
-/** 骤降清单的指标：近 7 天一条都没有时直接说「无数据」，比「↓ 100%」好懂。 */
-export function dropText(recentRows: number, dropRate: number): string {
-  return recentRows ? `↓ ${Math.round(dropRate * 100)}%` : '近 7 天无数据'
 }
 
 function sumRows(points: CrawlerTrendPoint[]): number {
@@ -66,11 +81,9 @@ function sumRows(points: CrawlerTrendPoint[]): number {
 /** 领导关心「平时多少、最近怎样」，不报峰值：峰值多半是某天集中补采，没有代表性。 */
 export function trendSummary(points: CrawlerTrendPoint[], days: CrawlerTrendDays): string {
   if (!points.length) return '所选时间范围内没有采集数据'
-  const range = days === 365 ? '近 1 年' : `近 ${days} 天`
+  const range = `近 ${TREND_RANGES.find(item => item.value === days)?.label ?? `${days} 天`}`
   const average = Math.round(sumRows(points) / points.length)
-  const recent = points.slice(-7)
-  const recentAverage = Math.round(sumRows(recent) / recent.length)
-  return `${range}共采集 ${countText(sumRows(points))}，日均 ${average.toLocaleString()} 条；最近 7 天日均 ${recentAverage.toLocaleString()} 条`
+  return `${range}共采集 ${countText(sumRows(points))}，日均 ${average.toLocaleString()} 条`
 }
 
 function axisStyle(palette: ChartPalette) {
@@ -91,52 +104,32 @@ function valueAxis(name: string, palette: ChartPalette, showGrid: boolean) {
   }
 }
 
-function trendTooltip(points: CrawlerTrendPoint[], weekly: boolean) {
-  return (params: { dataIndex: number; seriesName: string; value: unknown; marker: string }[]) => {
-    const point = points[params[0]?.dataIndex ?? -1]
-    if (!point) return ''
-    const lines = params
-      .filter(item => typeof item.value === 'number')
-      .map(item => `${item.marker}${item.seriesName}　${(item.value as number).toLocaleString()} 条`)
-    const sites = weekly ? `日均出数网站　${point.sites.toLocaleString()} 个` : `出数网站　${point.sites.toLocaleString()} 个`
-    const title = weekly ? `${point.date} 起一周` : `${point.date}${isWeekend(point.date) ? '（周末）' : ''}`
-    return [`<b>${title}</b>`, ...lines, sites].join('<br/>')
-  }
-}
-
 export function trendOption(raw: CrawlerTrendPoint[], days: CrawlerTrendDays, palette: ChartPalette): ChartOption {
-  const weekly = days === 365
-  const points = weekly ? weeklyPoints(raw) : raw
-  // 柱高就是当天条数。不能把高出坐标的日子截成一样高，否则 7 万和 2 万看起来没有差别。
-  const bars = points.map(point => ({
-    value: point.rows,
-    itemStyle: { color: !weekly && isWeekend(point.date) ? palette.primaryLight : palette.primary },
-  }))
-  // 出数网站数只放进提示框：画成第二条线会随周末大起大落，抢走采集量趋势的注意力。
-  const series: Record<string, unknown>[] = [{
-    name: weekly ? '每周采集量' : '每日采集量',
-    type: 'bar',
-    data: bars,
-    barMaxWidth: 16,
-  }]
-  if (!weekly) {
-    series.push({
-      name: '7 日均值',
-      type: 'line',
-      data: movingAverage(points.map(point => point.rows)),
-      smooth: false,
-      showSymbol: false,
-      lineStyle: { width: 2, color: palette.ink },
-      itemStyle: { color: palette.ink },
-    })
-  }
+  const buckets = trendBuckets(raw, days)
+  const unit = trendUnit(days)
+  const daily = unit === 'day'
   return {
-    grid: { left: 8, right: 8, top: 36, bottom: 4, containLabel: true },
-    legend: { top: 0, right: 0, itemWidth: 14, itemHeight: 8, textStyle: { color: palette.inkMuted } },
-    tooltip: { trigger: 'axis', formatter: trendTooltip(points, weekly) },
-    xAxis: { type: 'category', data: points.map(point => (weekly ? `${point.date.slice(5)} 周` : point.date.slice(5))), ...axisStyle(palette) },
-    yAxis: valueAxis('条数', palette, true),
-    series,
+    grid: { left: 8, right: 8, top: 28, bottom: 4, containLabel: true },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (params: { dataIndex: number }[]) => {
+        const bucket = buckets[params[0]?.dataIndex ?? -1]
+        if (!bucket) return ''
+        if (daily) return `<b>${bucket.start}${isWeekend(bucket.start) ? '（周末）' : ''}</b><br/>采集 ${bucket.rows.toLocaleString()} 条`
+        const title = unit === 'month' ? bucket.start.slice(0, 7) : `${bucket.start} 起一周`
+        return [`<b>${title}</b>`, `日均 ${bucket.average.toLocaleString()} 条`, `共 ${bucket.rows.toLocaleString()} 条（${bucket.days} 天）`].join('<br/>')
+      },
+    },
+    xAxis: { type: 'category', data: buckets.map(bucket => bucket.label), ...axisStyle(palette) },
+    yAxis: valueAxis(daily ? '条数' : '日均条数', palette, true),
+    series: [{
+      name: daily ? '每日采集量' : `每${unit === 'month' ? '月' : '周'}日均采集量`,
+      type: 'bar',
+      data: buckets.map(bucket => bucket.average),
+      barMaxWidth: 28,
+      itemStyle: { color: palette.primary, borderRadius: [2, 2, 0, 0] },
+    }],
   }
 }
 
@@ -236,7 +229,7 @@ export interface HeadlinePart {
 }
 
 /** 概览顶部的一句话结论：领导不必自己从六张卡片里拼出「整体怎样、变好变坏、该看哪里」。 */
-export function headline(overview: CrawlerV2Overview, attention: { newStale: number; dropped: number } | null): HeadlinePart[][] {
+export function headline(overview: CrawlerV2Overview): HeadlinePart[][] {
   const { cards, recent, week_base: base } = overview
   const health: HeadlinePart[] = [
     { text: '共监测 ' },
@@ -247,15 +240,6 @@ export function headline(overview: CrawlerV2Overview, attention: { newStale: num
   const change = base ? rateDelta(cards.normal, cards.sites, base.normal, base.sites) : null
   if (change?.text) health.push({ text: `（${change.text}）`, tone: change.tone })
   const sentences = [health]
-  if (attention) {
-    sentences.push([
-      { text: '本周新停更 ' },
-      { text: attention.newStale.toLocaleString(), strong: true, tone: attention.newStale ? 'bad' : 'flat' },
-      { text: ' 个、采集量骤降 ' },
-      { text: attention.dropped.toLocaleString(), strong: true, tone: attention.dropped ? 'bad' : 'flat' },
-      { text: ' 个，名单见下方「需要关注」' },
-    ])
-  }
   const volume = changeText(recent.rows, recent.previous_rows)
   sentences.push([
     { text: `近 ${recent.days} 天采集 ` },

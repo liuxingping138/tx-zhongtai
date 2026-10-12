@@ -16,7 +16,7 @@ from app.crawler.repositories import crawler_stats as repo
 LONG_STALE_DAYS = 90
 # 采集量有明显的周末和节假日波动，比「昨日」要按整周比。
 RECENT_DAYS = 7
-TREND_DAYS = (30, 90, 365)
+TREND_DAYS = (7, 30, 90, 365)
 
 
 def yesterday() -> date:

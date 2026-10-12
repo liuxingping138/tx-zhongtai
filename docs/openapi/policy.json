@@ -1394,25 +1394,6 @@
         }
       }
     },
-    "/api/v1/policy/crawler-monitoring-v2/attention": {
-      "get": {
-        "tags": [
-          "policy-crawler-monitoring-v2"
-        ],
-        "summary": "Get Attention",
-        "operationId": "get_attention_api_v1_policy_crawler_monitoring_v2_attention_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/policy/crawler-monitoring-v2/site-trend": {
       "get": {
         "tags": [

@@ -2,10 +2,9 @@
 import { ArrowDown, ArrowUp, Refresh } from '@element-plus/icons-vue'
 import { computed, ref } from 'vue'
 
-import { getCrawlerV2Overview, type CrawlerSiteRef, type CrawlerV2Overview, type SiteStatus } from '@/api/crawlerMonitoringV2'
+import { getCrawlerV2Overview, type CrawlerV2Overview, type SiteStatus } from '@/api/crawlerMonitoringV2'
 import { errorMessage } from '@/api/errors'
 import { changeText, headline, weekDelta } from './charts'
-import CrawlerAttention from './CrawlerAttention.vue'
 import CrawlerHealthChart from './CrawlerHealthChart.vue'
 import CrawlerProvinceChart from './CrawlerProvinceChart.vue'
 import CrawlerTrendChart from './CrawlerTrendChart.vue'
@@ -15,7 +14,6 @@ defineProps<{ selectedStatuses: SiteStatus[] }>()
 const emit = defineEmits<{
   pickStatus: [status: SiteStatus]
   pickProvince: [rawNames: string[]]
-  locateSite: [site: CrawlerSiteRef]
   retry: []
 }>()
 
@@ -25,9 +23,7 @@ const loading = ref(false)
 const error = ref('')
 const expanded = ref(true)
 const trend = ref<InstanceType<typeof CrawlerTrendChart>>()
-const attention = ref<InstanceType<typeof CrawlerAttention>>()
-const attentionTotals = ref<{ newStale: number; dropped: number } | null>(null)
-const sentences = computed(() => (overview.value ? headline(overview.value, attentionTotals.value) : []))
+const sentences = computed(() => (overview.value ? headline(overview.value) : []))
 let sequence = 0
 
 const syncNotice = computed(() => {
@@ -76,7 +72,7 @@ async function load() {
 }
 
 async function reload() {
-  await Promise.all([load(), trend.value?.load(), attention.value?.load()])
+  await Promise.all([load(), trend.value?.load()])
 }
 
 defineExpose({ reload })
@@ -201,20 +197,17 @@ defineExpose({ reload })
           >较前 {{ overview.recent.days }} 天 {{ recentChange?.text }}</span>
         </div>
       </div>
-      <CrawlerTrendChart ref="trend" />
-      <CrawlerHealthChart
-        :overview="overview"
-        :selected="selectedStatuses"
-        @pick="status => emit('pickStatus', status)"
-      />
+      <div class="chart-row">
+        <CrawlerTrendChart ref="trend" />
+        <CrawlerHealthChart
+          :overview="overview"
+          :selected="selectedStatuses"
+          @pick="status => emit('pickStatus', status)"
+        />
+      </div>
       <CrawlerProvinceChart
         :provinces="overview.provinces"
         @pick="names => emit('pickProvince', names)"
-      />
-      <CrawlerAttention
-        ref="attention"
-        @locate="site => emit('locateSite', site)"
-        @loaded="data => attentionTotals = { newStale: data.new_stale.total, dropped: data.dropped.total }"
       />
     </template>
   </section>
@@ -265,6 +258,8 @@ defineExpose({ reload })
 .card-watch .dot { background: var(--chart-watch); }
 .card-stale .dot { background: var(--chart-stale); }
 .card-stale .card-value { color: var(--chart-stale); }
+
+.chart-row { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--zt-space-3); }
 .chart-panel { padding: var(--zt-space-3) var(--zt-space-4); min-width: 0; }
 .chart-panel :deep(.chart-head) {
   display: flex; justify-content: space-between; align-items: flex-start; gap: var(--zt-space-3);
@@ -276,6 +271,7 @@ defineExpose({ reload })
 
 @media (max-width: 1280px) {
   .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .chart-row { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 767px) {
   .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
