@@ -208,16 +208,20 @@ describe('省份分布', () => {
     tooltip: { formatter: (params: { dataIndex: number }[]) => string }
   }
 
-  it('停更段垫底、柱顶标停更数，提示里写全称和合并前的写法', () => {
+  it('柱子只画当前排序的指标，柱高和柱顶数字一致，提示里写全称和明细', () => {
     const merged = province('新疆维吾尔自治区', 20, 5, 75, ['新疆', '新疆维吾尔族自治区'])
     const empty = province('澳门特别行政区', 0, 0, 0)
-    const option = provinceOption([merged, empty], palette) as ProvinceChart
-    expect(option.series.map(series => series.name)).toEqual(['停更', '关注', '正常'])
-    expect(option.series[0]?.data.map(bar => bar.value)).toEqual([75, 0])
+    const items = [merged, empty]
+    const chart = (by: 'stale' | 'rate' | 'sites') => provinceOption(items, palette, [], by) as ProvinceChart & { yAxis: { name: string } }
+    const values = (by: 'stale' | 'rate' | 'sites') => chart(by).series[0]?.data.map(bar => bar.value)
+    const labels = (by: 'stale' | 'rate' | 'sites') => [0, 1].map(dataIndex => chart(by).series[0]?.label.formatter?.({ dataIndex }))
+    expect(chart('stale').series).toHaveLength(1)
+    expect([values('stale'), labels('stale'), chart('stale').yAxis.name]).toEqual([[75, 0], ['75', ''], '停更网站数'])
+    expect([values('rate'), labels('rate'), chart('rate').yAxis.name]).toEqual([[75, 0], ['75.0%', ''], '停更率（%）'])
+    expect([values('sites'), labels('sites'), chart('sites').yAxis.name]).toEqual([[100, 0], ['100', ''], '网站数'])
+    const option = chart('stale')
     expect(option.xAxis.data).toEqual(['新疆', '澳门'])
     expect(option.xAxis.axisLabel.formatter('内蒙古')).toBe('内\n蒙\n古')
-    const top = option.series[2]?.label.formatter
-    expect([top?.({ dataIndex: 0 }), top?.({ dataIndex: 1 })]).toEqual(['75', ''])
     expect(option.tooltip.formatter([{ dataIndex: 0 }])).toContain('含写法：新疆、新疆维吾尔族自治区')
     expect(option.tooltip.formatter([{ dataIndex: 1 }])).toBe('<b>澳门特别行政区</b><br/>暂无网站')
     expect(option.tooltip.formatter([{ dataIndex: 9 }])).toBe('')

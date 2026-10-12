@@ -30,7 +30,8 @@ const palette = chartPalette(getComputedStyle(document.documentElement))
 const view = ref<(typeof VIEWS)[number]['value']>('bar')
 const sort = ref<ProvinceSort>('stale')
 const rows = computed(() => sortProvinces(props.provinces, sort.value))
-const option = computed(() => provinceOption(rows.value, palette, props.selected))
+const option = computed(() => provinceOption(rows.value, palette, props.selected, sort.value))
+const metricName = computed(() => SORTS.find(item => item.value === sort.value)?.label ?? '')
 const label = computed(() =>
   `省份分布：${rows.value.slice(0, 5).map(item => `${item.name} ${item.sites} 个，停更 ${item.stale} 个（${percent(item.stale, item.sites)}）`).join('；')}`,
 )
@@ -48,7 +49,7 @@ function onSelect(params: { dataIndex: number }) {
         <h3>省份分布</h3>
         <p class="chart-note">
           按省份字段的分类排列，32 个省级行政区以及香港、澳门、全国、国央企都在其中。<template v-if="view === 'bar'">
-            红色停更段在底部，柱高是网站总数，柱顶数字是停更数。点击柱子筛选下方列表
+            柱高和柱顶数字都是{{ metricName }}，切换排序即换指标；悬停看正常、关注、停更明细。点击柱子筛选下方列表
           </template><template v-else>
             大数字是停更网站数，色条是正常、关注、停更的占比。点击卡片筛选下方列表
           </template>
@@ -69,6 +70,7 @@ function onSelect(params: { dataIndex: number }) {
           </el-radio-button>
         </el-radio-group>
         <ul
+          v-if="view === 'tiles'"
           class="province-legend"
           aria-hidden="true"
         >

@@ -296,29 +296,17 @@ export function provinceShortName(name: string): string {
   return name.replace(/(壮族|回族|维吾尔)?自治区$|特别行政区$|[省市]$/, '') || name
 }
 
-export function provinceOption(items: CrawlerProvince[], palette: ChartPalette, selected: string[] = []): ChartOption {
+/** 柱子只画当前排序的那个指标，柱高和柱顶数字说的是同一件事。 */
+export const PROVINCE_METRICS: Record<ProvinceSort, { name: string; axis: string; value: (item: CrawlerProvince) => number; text: (item: CrawlerProvince) => string }> = {
+  stale: { name: '停更网站数', axis: '停更网站数', value: item => item.stale, text: item => String(item.stale) },
+  rate: { name: '停更率', axis: '停更率（%）', value: item => (item.sites ? Math.round((item.stale / item.sites) * 1000) / 10 : 0), text: item => percent(item.stale, item.sites) },
+  sites: { name: '网站数', axis: '网站数', value: item => item.sites, text: item => String(item.sites) },
+}
+
+export function provinceOption(items: CrawlerProvince[], palette: ChartPalette, selected: string[] = [], by: ProvinceSort = 'stale'): ChartOption {
   const picked = items.findIndex(item => provinceSelected(item, selected))
-  // 选中一个分类时其余变淡，和卡片、健康图的选中态一样明确。
-  const bar = (name: string, color: string, pick: (item: CrawlerProvince) => number, top = false) => ({
-    name,
-    type: 'bar',
-    stack: 'sites',
-    barMaxWidth: 22,
-    data: items.map((item, index) => ({
-      value: pick(item),
-      itemStyle: { color, opacity: picked < 0 || picked === index ? 1 : 0.3 },
-    })),
-    label: top ? {
-      show: true,
-      position: 'top',
-      color: palette.ink,
-      fontSize: 11,
-      formatter: (params: { dataIndex: number }) => {
-        const stale = items[params.dataIndex]?.stale ?? 0
-        return stale ? String(stale) : ''
-      },
-    } : { show: false },
-  })
+  const metric = PROVINCE_METRICS[by]
+  const color = by === 'sites' ? palette.primary : palette.danger
   return {
     grid: { left: 8, right: 8, top: 24, bottom: 4, containLabel: true },
     tooltip: {
@@ -344,12 +332,26 @@ export function provinceOption(items: CrawlerProvince[], palette: ChartPalette, 
       // 中文竖排，38 个分类挤在一行也不会重叠。
       axisLabel: { color: palette.inkMuted, interval: 0, lineHeight: 13, formatter: (name: string) => name.split('').join('\n') },
     },
-    yAxis: valueAxis('网站数', palette, true),
-    // 停更段垫在最下面：按停更数排序时红色部分从左到右递减，和排序对得上；柱高仍是网站总数。
-    series: [
-      bar('停更', palette.danger, item => item.stale),
-      bar('关注', palette.warning, item => item.watch),
-      bar('正常', palette.success, item => item.normal, true),
-    ],
+    yAxis: valueAxis(metric.axis, palette, true),
+    series: [{
+      name: metric.name,
+      type: 'bar',
+      barMaxWidth: 22,
+      // 选中一个分类时其余变淡，和卡片、健康图的选中态一样明确。
+      data: items.map((item, index) => ({
+        value: metric.value(item),
+        itemStyle: { color, opacity: picked < 0 || picked === index ? 1 : 0.3, borderRadius: [2, 2, 0, 0] },
+      })),
+      label: {
+        show: true,
+        position: 'top',
+        color: palette.ink,
+        fontSize: 11,
+        formatter: (params: { dataIndex: number }) => {
+          const item = items[params.dataIndex]
+          return item?.sites ? metric.text(item) : ''
+        },
+      },
+    }],
   }
 }
