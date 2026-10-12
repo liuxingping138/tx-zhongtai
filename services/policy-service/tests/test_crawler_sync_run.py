@@ -44,6 +44,8 @@ def env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     monkeypatch.setattr(sync, "fetch_day", MagicMock(return_value=[{"site_name": "甲"}]))
     monkeypatch.setattr(sync, "replace_day", replace_day)
     monkeypatch.setattr(sync, "rebuild_sites", AsyncMock(return_value=42))
+    state.refresh_history = AsyncMock()
+    monkeypatch.setattr(sync.status_history, "refresh_history", state.refresh_history)
     return state
 
 
@@ -84,6 +86,12 @@ class TestSync:
         session = _Session()
         await sync._sync(session, sync.SyncWindow(mode=sync.MODE_INCREMENTAL))  # type: ignore[arg-type]
         assert session.run_row.date_from is None and session.run_row.status == "success"
+
+    async def test_success_records_todays_status_for_week_comparison(self, env: SimpleNamespace) -> None:
+        session = _Session()
+        await sync._sync(session, sync.SyncWindow(mode=sync.MODE_INCREMENTAL))  # type: ignore[arg-type]
+        env.refresh_history.assert_awaited_once()
+        assert env.refresh_history.await_args.args[1] == datetime.now(sync.BEIJING).date()
 
 
 class TestReplaceDay:

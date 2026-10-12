@@ -19,12 +19,12 @@ RECENT_DAYS = 7
 TREND_DAYS = (30, 90, 365)
 
 
-def _yesterday() -> date:
+def yesterday() -> date:
     return utcnow().astimezone(BEIJING).date() - timedelta(days=1)
 
 
 async def recent_rows(session: AsyncSession) -> dict[str, int]:
-    end = _yesterday()
+    end = yesterday()
     window = timedelta(days=RECENT_DAYS)
     return {
         "days": RECENT_DAYS,
@@ -77,7 +77,7 @@ def fill_series(start: date, end: date, rows: list[tuple[date, int, int]]) -> li
 
 
 async def trend(session: AsyncSession, days: int) -> dict[str, Any]:
-    end = _yesterday()
+    end = yesterday()
     start = end - timedelta(days=days - 1)
     rows = await repo.daily_series(session, start, end)
     return {"date_from": start.isoformat(), "date_to": end.isoformat(), "items": fill_series(start, end, rows)}

@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 
-import { CRAWLER_V2_BASE, listCrawlerSites, type CrawlerSiteItem, type SiteStatus } from '@/api/crawlerMonitoringV2'
+import {
+  CRAWLER_V2_BASE,
+  listCrawlerSites,
+  type CrawlerSiteItem,
+  type CrawlerSiteRef,
+  type SiteStatus,
+} from '@/api/crawlerMonitoringV2'
 import { errorMessage } from '@/api/errors'
 import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
@@ -14,6 +20,7 @@ import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useAuthStore } from '@/stores/auth'
 import { filtersForExport, toggleValue, useListQuery } from '@/composables/useListQuery'
 import CrawlerOverview from './CrawlerOverview.vue'
+import CrawlerSiteTrend from './CrawlerSiteTrend.vue'
 import { siteFilters, STATUS_BY_LABEL, statusValues } from './filters'
 
 const LIST_ERROR = '暂时无法获取网站列表，请稍后重新加载。'
@@ -100,6 +107,15 @@ function pickProvince(rawNames: string[]) {
   void load()
 }
 
+/** 需关注清单里点「在下方列表中查看」：按该网站的原始名称、省份、地市精确定位。 */
+function locateSite(site: CrawlerSiteRef) {
+  listQuery.replaceApplied('site_name', [site.site_name])
+  listQuery.replaceApplied('province_name', site.province_name ? [site.province_name] : [])
+  listQuery.replaceApplied('city_name', site.city_name ? [site.city_name] : [])
+  listQuery.replaceApplied('status', [])
+  void load()
+}
+
 async function reloadData() {
   await Promise.all([load(), overviewPanel.value?.reload(), filters.load()])
 }
@@ -136,6 +152,7 @@ onMounted(() => { void reloadData() })
           :selected-statuses="appliedStatuses"
           @pick-status="pickStatus"
           @pick-province="pickProvince"
+          @locate-site="locateSite"
           @retry="reloadData"
         />
       </template>
@@ -197,7 +214,11 @@ onMounted(() => { void reloadData() })
         :loading="loading"
         :filtered="resultFiltered"
         @reset="listQuery.resetFilters"
-      />
+      >
+        <template #detail-extra="{ row }">
+          <CrawlerSiteTrend :site="row" />
+        </template>
+      </BusinessTable>
     </ListPage>
   </div>
 </template>

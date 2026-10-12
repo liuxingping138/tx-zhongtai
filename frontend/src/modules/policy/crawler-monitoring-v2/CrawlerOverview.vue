@@ -2,16 +2,22 @@
 import { ArrowDown, ArrowUp, Refresh } from '@element-plus/icons-vue'
 import { computed, ref } from 'vue'
 
-import { getCrawlerV2Overview, type CrawlerV2Overview, type SiteStatus } from '@/api/crawlerMonitoringV2'
+import { getCrawlerV2Overview, type CrawlerSiteRef, type CrawlerV2Overview, type SiteStatus } from '@/api/crawlerMonitoringV2'
 import { errorMessage } from '@/api/errors'
-import { changeText } from './charts'
+import { changeText, weekDelta } from './charts'
+import CrawlerAttention from './CrawlerAttention.vue'
 import CrawlerHealthChart from './CrawlerHealthChart.vue'
 import CrawlerProvinceChart from './CrawlerProvinceChart.vue'
 import CrawlerTrendChart from './CrawlerTrendChart.vue'
 import { compactCount } from './filters'
 
 defineProps<{ selectedStatuses: SiteStatus[] }>()
-const emit = defineEmits<{ pickStatus: [status: SiteStatus]; pickProvince: [rawNames: string[]]; retry: [] }>()
+const emit = defineEmits<{
+  pickStatus: [status: SiteStatus]
+  pickProvince: [rawNames: string[]]
+  locateSite: [site: CrawlerSiteRef]
+  retry: []
+}>()
 
 const OVERVIEW_ERROR = '暂时无法获取采集概况，请稍后重试。'
 const overview = ref<CrawlerV2Overview | null>(null)
@@ -19,6 +25,7 @@ const loading = ref(false)
 const error = ref('')
 const expanded = ref(true)
 const trend = ref<InstanceType<typeof CrawlerTrendChart>>()
+const attention = ref<InstanceType<typeof CrawlerAttention>>()
 let sequence = 0
 
 const syncNotice = computed(() => {
@@ -41,10 +48,12 @@ const statusCards = computed(() => {
   const data = overview.value
   if (!data) return []
   const { normal_days: normalDays, watch_days: watchDays } = data.thresholds
+  const base = data.week_base
+  const delta = (status: SiteStatus) => (base ? weekDelta(data.cards[status], base[status], status === 'normal') : null)
   return [
-    { status: 'normal' as const, label: '正常', value: data.cards.normal, foot: `${normalDays} 天内有新数据入库` },
-    { status: 'watch' as const, label: '关注', value: data.cards.watch, foot: `${normalDays + 1}–${watchDays} 天无新数据` },
-    { status: 'stale' as const, label: '停更', value: data.cards.stale, foot: `超过 ${watchDays} 天无新数据` },
+    { status: 'normal' as const, label: '正常', value: data.cards.normal, foot: `${normalDays} 天内有新数据入库`, delta: delta('normal') },
+    { status: 'watch' as const, label: '关注', value: data.cards.watch, foot: `${normalDays + 1}–${watchDays} 天无新数据`, delta: delta('watch') },
+    { status: 'stale' as const, label: '停更', value: data.cards.stale, foot: `超过 ${watchDays} 天无新数据`, delta: delta('stale') },
   ]
 })
 
@@ -65,7 +74,7 @@ async function load() {
 }
 
 async function reload() {
-  await Promise.all([load(), trend.value?.load()])
+  await Promise.all([load(), trend.value?.load(), attention.value?.load()])
 }
 
 defineExpose({ reload })
@@ -148,6 +157,12 @@ defineExpose({ reload })
           <span class="card-label"><span class="dot" />{{ card.label }}</span>
           <strong class="card-value">{{ card.value.toLocaleString() }}</strong>
           <span class="card-foot">{{ card.foot }}</span>
+          <span
+            v-if="card.delta"
+            class="card-delta"
+            :class="`delta-${card.delta.tone}`"
+            :title="`与 ${overview.week_base?.date} 相比`"
+          >{{ card.delta.text }}</span>
         </button>
         <div class="card">
           <span class="card-label">数据总量</span>
@@ -182,6 +197,10 @@ defineExpose({ reload })
           @pick="names => emit('pickProvince', names)"
         />
       </div>
+      <CrawlerAttention
+        ref="attention"
+        @locate="site => emit('locateSite', site)"
+      />
     </template>
   </section>
 </template>
@@ -214,6 +233,10 @@ defineExpose({ reload })
 .card-label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--zt-ink-700); }
 .card-value { font-size: 28px; line-height: 1.2; color: var(--zt-ink-900); font-variant-numeric: tabular-nums; }
 .card-foot { font-size: 12px; color: var(--zt-ink-500); }
+.card-delta { font-size: 12px; font-variant-numeric: tabular-nums; }
+.delta-good { color: var(--el-color-success); }
+.delta-bad { color: var(--el-color-danger); }
+.delta-flat { color: var(--zt-ink-500); }
 .trend-up { color: var(--el-color-success); }
 .trend-down { color: var(--el-color-danger); }
 .dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }

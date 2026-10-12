@@ -1394,6 +1394,100 @@
         }
       }
     },
+    "/api/v1/policy/crawler-monitoring-v2/attention": {
+      "get": {
+        "tags": [
+          "policy-crawler-monitoring-v2"
+        ],
+        "summary": "Get Attention",
+        "operationId": "get_attention_api_v1_policy_crawler_monitoring_v2_attention_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/crawler-monitoring-v2/site-trend": {
+      "get": {
+        "tags": [
+          "policy-crawler-monitoring-v2"
+        ],
+        "summary": "Get Site Trend",
+        "description": "按「网站名称 + 省份 + 地市」原始值查，不用快照 id：快照每次同步重建，id 会变。",
+        "operationId": "get_site_trend_api_v1_policy_crawler_monitoring_v2_site_trend_get",
+        "parameters": [
+          {
+            "name": "site_name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255,
+              "title": "Site Name"
+            }
+          },
+          {
+            "name": "province_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "default": "",
+              "title": "Province Name"
+            }
+          },
+          {
+            "name": "city_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "default": "",
+              "title": "City Name"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 90,
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/policy/crawler-monitoring-v2/sites": {
       "get": {
         "tags": [

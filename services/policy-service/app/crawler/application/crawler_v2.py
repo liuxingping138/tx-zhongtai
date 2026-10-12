@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.audit_emit import enqueue_event
 from app.core.config import get_settings
 from app.crawler.application import crawler_stats as stats
+from app.crawler.application import crawler_status as status_history
 from app.crawler.domain.fields import CRAWLER_SITE_COLUMNS, CRAWLER_SITE_STATUS_LABELS
 from app.crawler.domain.models import CrawlerSite
 from app.crawler.repositories import crawler_v2 as repo
@@ -65,6 +66,7 @@ async def overview(session: AsyncSession) -> dict[str, Any]:
     return {
         "cards": await repo.totals(session),
         "recent": await stats.recent_rows(session),
+        "week_base": await status_history.week_base(session),
         "health": await stats.health(session),
         "provinces": await stats.provinces(session),
         "sync": await _sync_status(session),

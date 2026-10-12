@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.security import classified, require_policy_permission
 from app.core.database import get_db_session
 from app.crawler.application import crawler_stats as stats
+from app.crawler.application import crawler_status as status_history
 from app.crawler.application import crawler_v2 as service
 
 router = APIRouter(prefix="/api/v1/policy/crawler-monitoring-v2", tags=["policy-crawler-monitoring-v2"])
@@ -30,6 +31,12 @@ def site_filters(
     status: list[SiteStatus] | None = Query(default=None),
 ) -> Filters:
     return {"province_name": province_name, "city_name": city_name, "site_name": site_name, "status": status}
+
+
+def _check_days(days: int) -> None:
+    # 不用 Literal[30, 90, 365]：Pydantic 对 Literal 不做类型转换，查询串里的 "90" 会被当成非法值。
+    if days not in stats.TREND_DAYS:
+        raise ApiError("趋势范围只支持 30、90、365 天", code=ErrorCode.VALIDATION_ERROR, http_status=422)
 
 
 @router.get("/overview")
@@ -48,10 +55,36 @@ async def get_trend(
     session: AsyncSession = Depends(get_db_session, scope="function"),
     _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
 ) -> JSONResponse:
-    # 不用 Literal[30, 90, 365]：Pydantic 对 Literal 不做类型转换，查询串里的 "90" 会被当成非法值。
-    if days not in stats.TREND_DAYS:
-        raise ApiError("趋势范围只支持 30、90、365 天", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    _check_days(days)
     return success_json(await stats.trend(session, days))
+
+
+@router.get("/attention")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def get_attention(
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
+) -> JSONResponse:
+    return success_json(await status_history.attention(session))
+
+
+@router.get("/site-trend")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def get_site_trend(
+    site_name: str = Query(..., min_length=1, max_length=255),
+    province_name: str = Query(default="", max_length=64),
+    city_name: str = Query(default="", max_length=64),
+    days: int = Query(default=90),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
+) -> JSONResponse:
+    """按「网站名称 + 省份 + 地市」原始值查，不用快照 id：快照每次同步重建，id 会变。"""
+    _check_days(days)
+    return success_json(
+        await status_history.site_trend(
+            session, site_name=site_name, province_name=province_name, city_name=city_name, days=days
+        )
+    )
 
 
 @router.get("/sites")

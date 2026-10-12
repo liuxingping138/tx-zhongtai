@@ -160,6 +160,50 @@ export function changeText(current: number, previous: number): { text: string; t
   return { text: `${rate > 0 ? '↑' : '↓'} ${Math.abs(rate).toFixed(1)}%`, trend: rate > 0 ? 'up' : 'down' }
 }
 
+export type DeltaTone = 'good' | 'bad' | 'flat'
+
+/** 「较上周 +12」。正常变多是好事，关注和停更变多是坏事，颜色按含义而不是按涨跌。 */
+export function weekDelta(current: number, base: number, higherIsBetter: boolean): { text: string; tone: DeltaTone } {
+  const diff = current - base
+  if (diff === 0) return { text: '与上周持平', tone: 'flat' }
+  const good = diff > 0 === higherIsBetter
+  return { text: `较上周 ${diff > 0 ? '+' : '−'}${Math.abs(diff).toLocaleString()}`, tone: good ? 'good' : 'bad' }
+}
+
+/** 健康率的变化用百分点表达，避免「36% 涨了 2%」这种歧义。 */
+export function rateDelta(normal: number, sites: number, baseNormal: number, baseSites: number): { text: string; tone: DeltaTone } {
+  if (!sites || !baseSites) return { text: '', tone: 'flat' }
+  const points = ((normal / sites) - (baseNormal / baseSites)) * 100
+  if (Math.abs(points) < 0.05) return { text: '与上周持平', tone: 'flat' }
+  return { text: `较上周 ${points > 0 ? '↑' : '↓'} ${Math.abs(points).toFixed(1)} 个百分点`, tone: points > 0 ? 'good' : 'bad' }
+}
+
+export function siteTrendSummary(points: CrawlerTrendPoint[]): string {
+  const total = points.reduce((sum, point) => sum + point.rows, 0)
+  const activeDays = points.filter(point => point.rows > 0).length
+  const last = [...points].reverse().find(point => point.rows > 0)
+  if (!last) return `近 ${points.length} 天没有采集到数据`
+  return `近 ${points.length} 天共 ${total.toLocaleString()} 条，有数据 ${activeDays} 天，最近一次是 ${last.date}`
+}
+
+export function siteTrendOption(points: CrawlerTrendPoint[], palette: ChartPalette): ChartOption {
+  return {
+    grid: { left: 8, right: 8, top: 12, bottom: 4, containLabel: true },
+    tooltip: { trigger: 'axis', valueFormatter: (value: unknown) => (typeof value === 'number' ? `${value.toLocaleString()} 条` : '-') },
+    xAxis: { type: 'category', data: points.map(point => point.date.slice(5)), ...axisStyle(palette) },
+    yAxis: valueAxis('', palette, true),
+    series: [{
+      name: '采集量',
+      type: 'bar',
+      barMaxWidth: 8,
+      data: points.map(point => ({
+        value: point.rows,
+        itemStyle: { color: isWeekend(point.date) ? palette.primaryLight : palette.primary },
+      })),
+    }],
+  }
+}
+
 export type ProvinceSort = 'stale' | 'rate' | 'sites'
 
 function staleRate(item: CrawlerProvince): number {

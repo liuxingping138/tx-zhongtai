@@ -61,9 +61,11 @@ test('爬虫监测：卡片、筛选联动与导出', async ({ page }) => {
   expect(tableHeight).toBeGreaterThanOrEqual(440)
 
   await page.locator('.business-table__desktop .record-title').first().click()
-  const drawer = page.locator('.el-drawer')
+  const drawer = page.getByRole('dialog', { name: '网站详情' })
   await expect(drawer.getByRole('heading', { name: '网站详情' })).toBeVisible()
   await expect(drawer.getByText('最新入库时间')).toBeVisible()
+  await expect(drawer.getByRole('heading', { name: '近 90 天采集量' })).toBeVisible()
+  await expect(drawer.getByRole('img', { name: /^该网站采集曲线：/ }).locator('canvas')).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(drawer).toBeHidden()
 
@@ -80,7 +82,7 @@ test('爬虫监测：趋势切换范围，健康结构点分类筛选明细', as
   )
   await loginAdmin(page, '/policy/crawler-monitoring-v2')
   await firstTrend
-  for (const name of ['采集趋势', '健康结构', '省份分布']) {
+  for (const name of ['采集趋势', '健康结构', '省份分布', '需要关注']) {
     await expect(page.getByRole('heading', { name, exact: true })).toBeVisible({ timeout: 20_000 })
   }
   await expect(page.getByRole('img', { name: /^采集趋势图：/ }).locator('canvas')).toBeVisible()

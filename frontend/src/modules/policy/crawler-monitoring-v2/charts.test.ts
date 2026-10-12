@@ -10,9 +10,13 @@ import {
   movingAverage,
   percent,
   provinceOption,
+  rateDelta,
+  siteTrendOption,
+  siteTrendSummary,
   sortProvinces,
   trendOption,
   trendSummary,
+  weekDelta,
   weeklyPoints,
 } from './charts'
 
@@ -94,6 +98,39 @@ describe('环比', () => {
     expect(changeText(50, 100)).toEqual({ text: '↓ 50.0%', trend: 'down' })
     expect(changeText(100, 100)).toEqual({ text: '与前一周期持平', trend: 'flat' })
     expect(changeText(100, 0)).toEqual({ text: '前一周期无数据', trend: 'flat' })
+  })
+})
+
+describe('较上周', () => {
+  it('颜色按含义：正常变多是好事，停更变多是坏事', () => {
+    expect(weekDelta(2172, 2100, true)).toEqual({ text: '较上周 +72', tone: 'good' })
+    expect(weekDelta(2166, 2120, false)).toEqual({ text: '较上周 +46', tone: 'bad' })
+    expect(weekDelta(1654, 1700, false)).toEqual({ text: '较上周 −46', tone: 'good' })
+    expect(weekDelta(10, 10, true)).toEqual({ text: '与上周持平', tone: 'flat' })
+  })
+
+  it('健康率变化用百分点表达，缺数据时不显示', () => {
+    expect(rateDelta(40, 100, 36, 100)).toEqual({ text: '较上周 ↑ 4.0 个百分点', tone: 'good' })
+    expect(rateDelta(30, 100, 36, 100)).toEqual({ text: '较上周 ↓ 6.0 个百分点', tone: 'bad' })
+    expect(rateDelta(36, 100, 360, 1000)).toEqual({ text: '与上周持平', tone: 'flat' })
+    expect(rateDelta(1, 0, 1, 10)).toEqual({ text: '', tone: 'flat' })
+  })
+})
+
+describe('单个网站的采集曲线', () => {
+  it('说明总量、有数据的天数和最近一次', () => {
+    const points = [point('2026-10-09', 3), point('2026-10-10', 0), point('2026-10-11', 0)]
+    expect(siteTrendSummary(points)).toBe('近 3 天共 3 条，有数据 1 天，最近一次是 2026-10-09')
+    expect(siteTrendSummary([point('2026-10-11', 0)])).toBe('近 1 天没有采集到数据')
+  })
+
+  it('每天一根柱子，周末浅色', () => {
+    const option = siteTrendOption([point('2026-10-09', 3), point('2026-10-10', 1)], palette) as {
+      series: { data: { value: number; itemStyle: { color: string } }[] }[]
+      tooltip: { valueFormatter: (value: unknown) => string }
+    }
+    expect(option.series[0]?.data.map(bar => [bar.value, bar.itemStyle.color])).toEqual([[3, palette.primary], [1, palette.primaryLight]])
+    expect([option.tooltip.valueFormatter(1200), option.tooltip.valueFormatter(null)]).toEqual(['1,200 条', '-'])
   })
 })
 

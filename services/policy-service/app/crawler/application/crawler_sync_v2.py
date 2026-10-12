@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import SessionLocal, engine
+from app.crawler.application import crawler_status as status_history
 from app.crawler.domain.models import CrawlerSiteDaily, CrawlerV2SyncRun
 from app.crawler.repositories.crawler_v2 import SYNC_LOCK_KEY
 from app.crawler.repositories.source import mysql_connect, retry_mysql_read
@@ -315,6 +316,7 @@ async def _sync(session: AsyncSession, window: SyncWindow, *, run_id: uuid.UUID 
             logger.info("day_synced date=%s sites=%s progress=%s/%s", day, len(rows), index, len(targets))
 
         run_row.site_rows = await rebuild_sites(session)
+        await status_history.refresh_history(session, today)
         run_row.watermark = mark if mode != MODE_REPAIR else None
         run_row.status = "success"
         run_row.finished_at = datetime.now(UTC)

@@ -12,6 +12,7 @@ from platform_common.route_audit import iter_api_routes
 
 from app.core.database import get_db_session
 from app.crawler.application import crawler_stats as stats
+from app.crawler.application import crawler_status as status_history
 from app.crawler.domain.provinces import EMPTY_PROVINCE, chart_province
 from app.crawler.repositories import crawler_stats as repo
 from app.main import app
@@ -75,7 +76,7 @@ def test_fill_series_keeps_gap_days_as_zero() -> None:
 
 
 async def test_recent_rows_compares_two_full_weeks_ending_yesterday(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(stats, "_yesterday", lambda: YESTERDAY)
+    monkeypatch.setattr(stats, "yesterday", lambda: YESTERDAY)
     range_rows = AsyncMock(side_effect=[700, 500])
     monkeypatch.setattr(repo, "range_rows", range_rows)
     assert await stats.recent_rows(AsyncMock()) == {"days": 7, "rows": 700, "previous_rows": 500}
@@ -84,7 +85,7 @@ async def test_recent_rows_compares_two_full_weeks_ending_yesterday(monkeypatch:
 
 
 async def test_trend_ends_yesterday_and_spans_requested_days(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(stats, "_yesterday", lambda: YESTERDAY)
+    monkeypatch.setattr(stats, "yesterday", lambda: YESTERDAY)
     monkeypatch.setattr(repo, "daily_series", AsyncMock(return_value=[]))
     result = await stats.trend(AsyncMock(), 30)
     assert (result["date_from"], result["date_to"], len(result["items"])) == ("2026-09-12", "2026-10-11", 30)
@@ -96,8 +97,8 @@ async def test_health_reports_long_stale_threshold(monkeypatch: pytest.MonkeyPat
     assert await stats.health(AsyncMock()) == {**buckets, "long_stale_days": stats.LONG_STALE_DAYS}
 
 
-def _trend_client(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, AsyncMock]:
-    route = next(item for item in iter_api_routes(app) if item.path.endswith("/crawler-monitoring-v2/trend"))
+def _trend_client(monkeypatch: pytest.MonkeyPatch, route_name: str = "trend") -> tuple[TestClient, AsyncMock]:
+    route = next(item for item in iter_api_routes(app) if item.path.endswith(f"/crawler-monitoring-v2/{route_name}"))
     app.dependency_overrides[get_db_session] = _db
     for dep in route.dependant.dependencies:
         if dep.name == "_":
@@ -130,3 +131,21 @@ def test_trend_route_rejects_unsupported_range(monkeypatch: pytest.MonkeyPatch) 
     assert response.status_code == 422
     assert "30、90、365" in response.json()["message"]
     trend.assert_not_awaited()
+
+
+def test_site_trend_route_passes_raw_identity_and_validates_days(monkeypatch: pytest.MonkeyPatch) -> None:
+    client, _ = _trend_client(monkeypatch, "site-trend")
+    site_trend = AsyncMock(return_value={"date_from": "", "date_to": "", "items": []})
+    monkeypatch.setattr(status_history, "site_trend", site_trend)
+    url = "/api/v1/policy/crawler-monitoring-v2/site-trend"
+    response = client.get(url, params={"site_name": "市财政局", "province_name": "新疆", "days": "90"})
+    assert response.status_code == 200
+    assert site_trend.await_args is not None
+    assert site_trend.await_args.kwargs == {
+        "site_name": "市财政局",
+        "province_name": "新疆",
+        "city_name": "",
+        "days": 90,
+    }
+    assert client.get(url, params={"site_name": "市财政局", "days": "14"}).status_code == 422
+    assert client.get(url, params={"days": "90"}).status_code == 422

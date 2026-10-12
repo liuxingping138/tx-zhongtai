@@ -64,6 +64,23 @@ class CrawlerSite(Base):
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="快照计算时间")
 
 
+class CrawlerStatusDaily(Base):
+    """爬虫监测每日状态分布，供「较上周」对比。
+
+    每次同步后按当天快照写一行；缺的历史日期由同步从按天统计推算补齐（推算一次约 10 秒，页面不能现算）。
+    """
+
+    __tablename__ = "policy_crawler_status_daily"
+    __table_args__ = {"comment": "爬虫监测每日状态分布"}
+
+    snapshot_date: Mapped[date] = mapped_column(Date, primary_key=True, comment="统计日期")
+    sites: Mapped[int] = mapped_column(Integer, nullable=False, comment="网站总数")
+    normal: Mapped[int] = mapped_column(Integer, nullable=False, comment="正常网站数")
+    watch: Mapped[int] = mapped_column(Integer, nullable=False, comment="关注网站数")
+    stale: Mapped[int] = mapped_column(Integer, nullable=False, comment="停更网站数")
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="计算时间")
+
+
 class CrawlerV2SyncRun(Base):
     """爬虫监测同步批次，水位和中断识别都以它为准。"""
 
