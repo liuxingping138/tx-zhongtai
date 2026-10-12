@@ -16,8 +16,41 @@ export interface CrawlerSiteItem {
   status_label: string
 }
 
+export interface CrawlerHealth {
+  normal: number
+  watch: number
+  /** 停更但未超过 long_stale_days，多半是爬虫或网站近期出了问题。 */
+  stale_recent: number
+  /** 超过 long_stale_days 没有新数据，多半是网站下线或改版。 */
+  stale_long: number
+  long_stale_days: number
+}
+
+export interface CrawlerProvince {
+  /** 图表里合并后的省份名。 */
+  name: string
+  /** 合并前的原始写法，点击后按它们筛选表格。 */
+  raw_names: string[]
+  normal: number
+  watch: number
+  stale: number
+  sites: number
+}
+
+export interface CrawlerTrendPoint {
+  date: string
+  rows: number
+  sites: number
+}
+
+export type CrawlerTrendDays = 30 | 90 | 365
+
 export interface CrawlerV2Overview {
-  cards: { sites: number; normal: number; watch: number; stale: number; total_rows: number; yesterday_rows: number }
+  cards: { sites: number; normal: number; watch: number; stale: number; total_rows: number }
+  /** 截至昨日的近 N 天采集条数和再往前 N 天的条数。 */
+  recent: { days: number; rows: number; previous_rows: number }
+  health: CrawlerHealth
+  provinces: CrawlerProvince[]
   sync: {
     status: '' | 'running' | 'success' | 'failed' | 'interrupted'
     started_at: string
@@ -38,6 +71,12 @@ export const CRAWLER_V2_BASE = '/policy/crawler-monitoring-v2'
 
 export function getCrawlerV2Overview(): Promise<CrawlerV2Overview> {
   return request(http.get(`${CRAWLER_V2_BASE}/overview`))
+}
+
+export function getCrawlerTrend(
+  days: CrawlerTrendDays,
+): Promise<{ date_from: string; date_to: string; items: CrawlerTrendPoint[] }> {
+  return request(http.get(`${CRAWLER_V2_BASE}/trend`, { params: { days } }))
 }
 
 export function listCrawlerSites(

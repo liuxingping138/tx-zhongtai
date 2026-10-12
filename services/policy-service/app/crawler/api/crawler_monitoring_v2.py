@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.security import classified, require_policy_permission
 from app.core.database import get_db_session
+from app.crawler.application import crawler_stats as stats
 from app.crawler.application import crawler_v2 as service
 
 router = APIRouter(prefix="/api/v1/policy/crawler-monitoring-v2", tags=["policy-crawler-monitoring-v2"])
@@ -38,6 +39,19 @@ async def get_overview(
     _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
 ) -> JSONResponse:
     return success_json(await service.overview(session))
+
+
+@router.get("/trend")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def get_trend(
+    days: int = Query(default=90),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
+) -> JSONResponse:
+    # 不用 Literal[30, 90, 365]：Pydantic 对 Literal 不做类型转换，查询串里的 "90" 会被当成非法值。
+    if days not in stats.TREND_DAYS:
+        raise ApiError("趋势范围只支持 30、90、365 天", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    return success_json(await stats.trend(session, days))
 
 
 @router.get("/sites")

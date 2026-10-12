@@ -1353,6 +1353,47 @@
         }
       }
     },
+    "/api/v1/policy/crawler-monitoring-v2/trend": {
+      "get": {
+        "tags": [
+          "policy-crawler-monitoring-v2"
+        ],
+        "summary": "Get Trend",
+        "operationId": "get_trend_api_v1_policy_crawler_monitoring_v2_trend_get",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 90,
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/policy/crawler-monitoring-v2/sites": {
       "get": {
         "tags": [

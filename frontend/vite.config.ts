@@ -45,6 +45,8 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes('node_modules')) return
           if (id.includes('element-plus') || id.includes('@element-plus')) return 'element-plus'
+          // 只有图表页用，单独成块才能跟着页面懒加载；并进 vendor 会让每个页面都多下 500KB。
+          if (id.includes('/echarts/') || id.includes('/zrender/')) return 'echarts'
           if (id.includes('/vue/') || id.includes('vue-router') || id.includes('pinia') || id.includes('@vue/')) {
             return 'vue'
           }

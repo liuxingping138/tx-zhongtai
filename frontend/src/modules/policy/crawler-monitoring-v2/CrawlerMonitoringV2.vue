@@ -1,15 +1,7 @@
 <script setup lang="ts">
-import { ArrowDown, ArrowUp, Refresh } from '@element-plus/icons-vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 
-import {
-  CRAWLER_V2_BASE,
-  getCrawlerV2Overview,
-  listCrawlerSites,
-  type CrawlerSiteItem,
-  type CrawlerV2Overview,
-  type SiteStatus,
-} from '@/api/crawlerMonitoringV2'
+import { CRAWLER_V2_BASE, listCrawlerSites, type CrawlerSiteItem, type SiteStatus } from '@/api/crawlerMonitoringV2'
 import { errorMessage } from '@/api/errors'
 import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
@@ -21,11 +13,11 @@ import { useExcelExport } from '@/composables/useExcelExport'
 import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useAuthStore } from '@/stores/auth'
 import { filtersForExport, toggleValue, useListQuery } from '@/composables/useListQuery'
-import { compactCount, siteFilters, STATUS_BY_LABEL, statusValues } from './filters'
+import CrawlerOverview from './CrawlerOverview.vue'
+import { siteFilters, STATUS_BY_LABEL, statusValues } from './filters'
 
 const LIST_ERROR = '暂时无法获取网站列表，请稍后重新加载。'
 const auth = useAuthStore()
-const OVERVIEW_ERROR = '暂时无法获取采集概况，请稍后重试。'
 
 const loading = ref(false)
 const loadError = ref('')
@@ -33,10 +25,7 @@ const resultFiltered = ref(false)
 const items = ref<CrawlerSiteItem[]>([])
 const total = ref(0)
 
-const overview = ref<CrawlerV2Overview | null>(null)
-const overviewLoading = ref(false)
-const overviewError = ref('')
-const overviewExpanded = ref(true)
+const overviewPanel = ref<InstanceType<typeof CrawlerOverview>>()
 
 const query = reactive({
   site_name: [] as string[],
@@ -71,28 +60,6 @@ const selectedColumns = ref<string[]>([...defaultColumns])
 
 const appliedStatuses = computed(() => statusValues(listQuery.applied.status))
 
-const syncNotice = computed(() => {
-  const sync = overview.value?.sync
-  if (!sync) return ''
-  if (sync.status === 'failed') return '最近一次同步失败，统计可能不是最新。请联系管理员检查同步任务。'
-  if (sync.status === 'interrupted') return '最近一次同步意外中断，统计可能不完整。请重新执行同步。'
-  if (sync.status === 'running') return '数据正在同步，完成后点「刷新统计」即可看到最新结果。'
-  if (!sync.last_success_at) return '尚未完成首次同步。完成回填后，这里将显示采集概况。'
-  if (sync.outdated) return '统计已超过 36 小时未更新，请检查同步任务。'
-  return ''
-})
-
-const statusCards = computed(() => {
-  const data = overview.value
-  if (!data) return []
-  const { normal_days: normalDays, watch_days: watchDays } = data.thresholds
-  return [
-    { status: 'normal' as const, label: '正常', value: data.cards.normal, foot: `${normalDays} 天内有新数据入库` },
-    { status: 'watch' as const, label: '关注', value: data.cards.watch, foot: `${normalDays + 1}–${watchDays} 天无新数据` },
-    { status: 'stale' as const, label: '停更', value: data.cards.stale, foot: `超过 ${watchDays} 天无新数据` },
-  ]
-})
-
 let loadSequence = 0
 
 async function load() {
@@ -119,23 +86,6 @@ async function load() {
   }
 }
 
-let overviewSequence = 0
-async function loadOverview() {
-  const sequence = ++overviewSequence
-  overviewLoading.value = true
-  overviewError.value = ''
-  try {
-    const result = await getCrawlerV2Overview()
-    if (sequence === overviewSequence) overview.value = result
-  } catch (error) {
-    if (sequence !== overviewSequence) return
-    const message = errorMessage(error, OVERVIEW_ERROR)
-    overviewError.value = message === '请求失败' ? OVERVIEW_ERROR : message
-  } finally {
-    if (sequence === overviewSequence) overviewLoading.value = false
-  }
-}
-
 /** 点卡片把该状态加入多选，再次点击移出。以已生效条件为准，未提交的草稿不参与。 */
 function pickStatus(status: SiteStatus) {
   const label = Object.entries(STATUS_BY_LABEL).find(([, value]) => value === status)?.[0] ?? ''
@@ -143,8 +93,15 @@ function pickStatus(status: SiteStatus) {
   void load()
 }
 
+/** 点省份条形：按该省份所有原始写法筛选，再点同一省份取消。 */
+function pickProvince(rawNames: string[]) {
+  const current = [...listQuery.applied.province_name].sort().join('|')
+  listQuery.replaceApplied('province_name', current === [...rawNames].sort().join('|') ? [] : rawNames)
+  void load()
+}
+
 async function reloadData() {
-  await Promise.all([load(), loadOverview(), filters.load()])
+  await Promise.all([load(), overviewPanel.value?.reload(), filters.load()])
 }
 
 onMounted(() => { void reloadData() })
@@ -174,99 +131,13 @@ onMounted(() => { void reloadData() })
       </template>
 
       <template #summary>
-        <div class="overview-heading">
-          <div class="overview-caption">
-            <h2>采集概况</h2>
-            <span
-              v-if="overview?.sync.last_success_at"
-              class="sync-time"
-            >更新于 {{ overview.sync.last_success_at }}</span>
-          </div>
-          <div class="overview-actions">
-            <el-button
-              :icon="Refresh"
-              text
-              :loading="overviewLoading"
-              @click="loadOverview"
-            >
-              刷新统计
-            </el-button>
-            <el-button
-              :icon="overviewExpanded ? ArrowUp : ArrowDown"
-              text
-              :aria-expanded="overviewExpanded"
-              aria-controls="crawler-v2-overview"
-              @click="overviewExpanded = !overviewExpanded"
-            >
-              {{ overviewExpanded ? '收起概览' : '展开概览' }}
-            </el-button>
-          </div>
-        </div>
-        <el-alert
-          v-if="syncNotice"
-          :title="syncNotice"
-          :type="['failed', 'interrupted'].includes(overview?.sync.status ?? '') ? 'error' : 'warning'"
-          :closable="false"
-          show-icon
-          class="sync-notice"
+        <CrawlerOverview
+          ref="overviewPanel"
+          :selected-statuses="appliedStatuses"
+          @pick-status="pickStatus"
+          @pick-province="pickProvince"
+          @retry="reloadData"
         />
-        <section
-          v-show="overviewExpanded"
-          id="crawler-v2-overview"
-          v-loading="overviewLoading"
-          class="overview"
-        >
-          <div
-            v-if="overviewError"
-            class="overview-error"
-            role="alert"
-          >
-            {{ overviewError }}
-            <el-button
-              link
-              type="primary"
-              @click="reloadData"
-            >
-              重试
-            </el-button>
-          </div>
-          <template v-else-if="overview">
-            <div class="cards">
-              <div class="card">
-                <span class="card-label">网站总数</span>
-                <strong class="card-value">{{ overview.cards.sites.toLocaleString() }}</strong>
-                <span class="card-foot">名称 + 省份 + 地市</span>
-              </div>
-              <button
-                v-for="card in statusCards"
-                :key="card.status"
-                type="button"
-                class="card card-status"
-                :class="[`card-${card.status}`, { selected: appliedStatuses.includes(card.status) }]"
-                :aria-pressed="appliedStatuses.includes(card.status)"
-                :title="appliedStatuses.includes(card.status) ? '再次点击取消筛选' : `筛选${card.label}网站`"
-                @click="pickStatus(card.status)"
-              >
-                <span class="card-label"><span class="dot" />{{ card.label }}</span>
-                <strong class="card-value">{{ card.value.toLocaleString() }}</strong>
-                <span class="card-foot">{{ card.foot }}</span>
-              </button>
-              <div class="card">
-                <span class="card-label">数据总量</span>
-                <strong
-                  class="card-value"
-                  :title="`${overview.cards.total_rows.toLocaleString()} 条`"
-                >{{ compactCount(overview.cards.total_rows) }}</strong>
-                <span class="card-foot">不含已删除数据</span>
-              </div>
-              <div class="card">
-                <span class="card-label">昨日采集</span>
-                <strong class="card-value">{{ overview.cards.yesterday_rows.toLocaleString() }}</strong>
-                <span class="card-foot">按采集日期统计的条数</span>
-              </div>
-            </div>
-          </template>
-        </section>
       </template>
 
       <template #filters>
@@ -330,44 +201,3 @@ onMounted(() => { void reloadData() })
     </ListPage>
   </div>
 </template>
-
-<style scoped>
-.overview-heading, .overview-caption, .overview-actions { display: flex; align-items: center; gap: 12px; }
-.overview-heading { justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px; }
-.overview-caption { flex-wrap: wrap; gap: 8px 16px; }
-.overview-caption h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--zt-ink-900); }
-.sync-time { color: var(--zt-ink-500); font-size: 12px; font-variant-numeric: tabular-nums; }
-.overview-actions { gap: 0; }
-.overview-actions .el-button { margin: 0; }
-.sync-notice { margin-bottom: 12px; }
-.overview { display: flex; flex-direction: column; gap: var(--zt-space-4); margin-bottom: var(--zt-space-4); }
-.overview-error { color: var(--zt-ink-700); font-size: 13px; }
-
-.cards { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--zt-space-3); }
-.card {
-  display: flex; flex-direction: column; gap: 6px; min-height: 110px;
-  padding: var(--zt-space-3) var(--zt-space-4);
-  background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: var(--zt-radius);
-  font: inherit; text-align: left; color: inherit;
-}
-.card-status { cursor: pointer; transition: background-color 160ms ease, border-color 160ms ease; }
-.card-status:hover { background: var(--zt-soft); }
-.card-status:focus-visible { outline: 2px solid var(--zt-blue-600); outline-offset: 2px; }
-.card-status.selected { background: var(--el-color-primary-light-9); border-color: var(--el-color-primary-light-5); }
-.card-label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--zt-ink-700); }
-.card-value { font-size: 28px; line-height: 1.2; color: var(--zt-ink-900); font-variant-numeric: tabular-nums; }
-.card-foot { font-size: 12px; color: var(--zt-ink-500); }
-.dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
-.card-normal .dot { background: var(--el-color-success); }
-.card-watch .dot { background: var(--el-color-warning); }
-.card-stale .dot { background: var(--el-color-danger); }
-.card-stale .card-value { color: var(--el-color-danger); }
-
-
-@media (max-width: 1280px) {
-  .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-@media (max-width: 767px) {
-  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-</style>

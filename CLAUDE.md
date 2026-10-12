@@ -135,6 +135,8 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/` �
   `--days` / `--since` 是人工指定范围，适用于初始化、口径升级或数据修复
 - 同步持有 advisory lock（键见 `app/crawler/repositories/crawler_v2.py`），概览据 `pg_locks` 把停在 running 的批次识别为中断
 - ShardingSphere 不支持 `REGEXP` 和多列 `COUNT(DISTINCT)`，写源库 SQL 时用 `LIKE`、单列聚合
+- 页面图表只读本地表：采集趋势按日期范围读 `policy_crawler_site_daily`（主键以采集日开头，一年约 26ms），健康结构和省份分布读快照。
+ 省份不同写法只在图表里合并（`app/crawler/domain/provinces.py`），网站身份、表格和筛选仍用原始值
 - 整表 `GROUP BY` 在代理后跑十分钟都出不来，带 `collect_date` 的单天聚合只要 1.4 秒：全量统计按天循环，别写一条大 SQL
 
 ### 系统管理：给人分配角色即授权
@@ -240,7 +242,7 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
 改页面前读 `DESIGN.md`、`UX-CONTRACT.md`、`docs/guides/UI开发规范.md`。优先复用：
 
 `ListPage` / `FilterBar` / `FilterSelect` / `ScrollPort` / `BusinessTable` / `ColumnPicker` /
-`GroupedFields` / `UserAccountMenu`，基础视觉用 `theme.css`。
+`GroupedFields` / `UserAccountMenu`，图表用 `BaseChart`（ECharts 按需注册在 `components/charts/echarts.ts`），基础视觉用 `theme.css`。
 
 新增业务列表页 = 一份 `fields.ts`（`TABLE_COLUMNS` / `SUMMARY_KEYS` / `EDITOR_GROUPS`）+ 页面，照 `modules/policy/base-tags/BaseTagList.vue` 组装：
 

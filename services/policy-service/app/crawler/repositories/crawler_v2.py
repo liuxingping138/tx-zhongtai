@@ -1,15 +1,13 @@
-"""爬虫监测查询。页面只读网站快照表，昨日采集量读按天统计，都不连爬虫库。"""
+"""爬虫监测查询。页面只读网站快照表和同步批次，都不连爬虫库；图表查询在 crawler_stats。"""
 
 from __future__ import annotations
-
-from datetime import date
 
 from platform_common.filters import Filters, ilike_any, in_any
 from sqlalchemy import ColumnElement, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
-from app.crawler.domain.models import CrawlerSite, CrawlerSiteDaily, CrawlerV2SyncRun
+from app.crawler.domain.models import CrawlerSite, CrawlerV2SyncRun
 
 STATUSES = ("normal", "watch", "stale")
 # 同步进程持有的会话级 advisory lock。取 2^31 以内，pg_locks 里 classid=0、objid 就是它。
@@ -88,15 +86,6 @@ async def totals(session: AsyncSession) -> dict[str, int]:
     )
     sites, normal, watch, stale, rows = result.one()
     return {"sites": sites, "normal": normal, "watch": watch, "stale": stale, "total_rows": int(rows)}
-
-
-async def day_rows(session: AsyncSession, day: date) -> int:
-    return int(
-        await session.scalar(
-            select(func.coalesce(func.sum(CrawlerSiteDaily.row_count), 0)).where(CrawlerSiteDaily.collect_date == day)
-        )
-        or 0
-    )
 
 
 async def last_run(session: AsyncSession) -> CrawlerV2SyncRun | None:

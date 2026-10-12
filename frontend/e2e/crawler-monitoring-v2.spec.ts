@@ -31,7 +31,7 @@ test('爬虫监测：卡片、筛选联动与导出', async ({ page }) => {
 
   await expect(page.getByRole('heading', { name: '爬虫监测', exact: true })).toBeVisible({ timeout: 20_000 })
   await expect(page.getByRole('navigation', { name: '子模块导航' }).getByRole('link', { name: '爬虫监测', exact: true })).toBeVisible()
-  for (const label of ['网站总数', '数据总量', '昨日采集']) {
+  for (const label of ['网站总数', '数据总量', '近 7 天采集']) {
     await expect(page.locator('.card-label').filter({ hasText: label })).toBeVisible()
   }
   await expect(page.getByText(/更新于/)).toBeVisible()
@@ -66,6 +66,37 @@ test('爬虫监测：卡片、筛选联动与导出', async ({ page }) => {
   await expect(drawer.getByText('最新入库时间')).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(drawer).toBeHidden()
+
+  expect(problems.pageErrors).toEqual([])
+  expect(problems.httpErrors).toEqual([])
+})
+
+test('爬虫监测：趋势切换范围，健康结构点分类筛选明细', async ({ page }) => {
+  test.skip(!currentAdminPassword(), '缺少 ADMIN_PASSWORD')
+  const problems = trackProblems(page)
+
+  const firstTrend = page.waitForResponse(
+    (response) => response.url().includes('/crawler-monitoring-v2/trend?days=90') && response.ok(),
+  )
+  await loginAdmin(page, '/policy/crawler-monitoring-v2')
+  await firstTrend
+  for (const name of ['采集趋势', '健康结构', '省份分布']) {
+    await expect(page.getByRole('heading', { name, exact: true })).toBeVisible({ timeout: 20_000 })
+  }
+  await expect(page.getByRole('img', { name: /^采集趋势图：/ }).locator('canvas')).toBeVisible()
+  await expect(page.getByRole('img', { name: /^省份分布：/ }).locator('canvas')).toBeVisible()
+
+  const monthly = page.waitForResponse(
+    (response) => response.url().includes('/crawler-monitoring-v2/trend?days=30') && response.ok(),
+  )
+  await page.getByRole('radiogroup', { name: '趋势时间范围' }).getByText('近 30 天', { exact: true }).click()
+  expect((await (await monthly).json()).data.items).toHaveLength(30)
+
+  const stale = page.waitForResponse(sitesResponse((url) => url.searchParams.get('status') === 'stale'))
+  await page.locator('.legend button').filter({ hasText: '近期停更' }).click()
+  await stale
+  await expect(page.locator('.legend button').filter({ hasText: '近期停更' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.card-status').filter({ hasText: '停更' })).toHaveAttribute('aria-pressed', 'true')
 
   expect(problems.pageErrors).toEqual([])
   expect(problems.httpErrors).toEqual([])

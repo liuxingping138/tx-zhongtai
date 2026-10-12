@@ -6,7 +6,7 @@ from datetime import timedelta
 from typing import Any
 
 from platform_common.actors import Actor
-from platform_common.clock import BEIJING, format_beijing, utcnow
+from platform_common.clock import format_beijing, utcnow
 from platform_common.errors import ApiError, ErrorCode
 from platform_common.excel import build_workbook_async
 from platform_common.filters import Filters
@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.audit_emit import enqueue_event
 from app.core.config import get_settings
+from app.crawler.application import crawler_stats as stats
 from app.crawler.domain.fields import CRAWLER_SITE_COLUMNS, CRAWLER_SITE_STATUS_LABELS
 from app.crawler.domain.models import CrawlerSite
 from app.crawler.repositories import crawler_v2 as repo
@@ -59,12 +60,13 @@ async def _sync_status(session: AsyncSession) -> dict[str, Any]:
 
 
 async def overview(session: AsyncSession) -> dict[str, Any]:
-    """卡片和同步状态一次返回，避免前端串行发多个请求。"""
+    """卡片、健康结构、省份分布和同步状态一次返回，避免前端串行发多个请求。趋势按时间范围单独取。"""
 
-    today = utcnow().astimezone(BEIJING).date()
-    totals = await repo.totals(session)
     return {
-        "cards": {**totals, "yesterday_rows": await repo.day_rows(session, today - timedelta(days=1))},
+        "cards": await repo.totals(session),
+        "recent": await stats.recent_rows(session),
+        "health": await stats.health(session),
+        "provinces": await stats.provinces(session),
         "sync": await _sync_status(session),
         "thresholds": {
             "normal_days": get_settings().crawler_health_normal_days,
