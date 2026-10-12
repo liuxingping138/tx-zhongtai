@@ -20,7 +20,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 make check            # 质量门：Python ruff+mypy，前端 type-check+build+lint，范围与密钥扫描，文件行数与忽略注释原因
 make test-unit        # 后端 pytest + 前端 vitest（不需要本机 Docker）
-make export-openapi   # 从本地 FastAPI 应用导出 OpenAPI
+make export-openapi   # 从本地 FastAPI 应用导出 OpenAPI；前端 src/api/contract.test.ts 拿它核对每个接口封装的方法和路径
 make hooks            # 启用 .githooks：提交前代码规则 + ruff、提交信息格式、推送前跑 check + test-unit + audit-deps
 make audit-deps       # 依赖漏洞扫描（pip-audit + pnpm audit，需要外网）
 ```

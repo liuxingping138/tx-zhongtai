@@ -19,7 +19,7 @@ export default defineConfig({
       include: ['src/**/*.ts'],
       exclude: ['src/**/*.test.ts', 'src/**/*.d.ts', 'src/main.ts'],
       // 下限与后端一样只升不降，补了测试就调高（工程规范第 5 节）。
-      thresholds: { statements: 82, branches: 79, functions: 69, lines: 82 },
+      thresholds: { statements: 92, branches: 83, functions: 91, lines: 93 },
     },
   },
   resolve: {
