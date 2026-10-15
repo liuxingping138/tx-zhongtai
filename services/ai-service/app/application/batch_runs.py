@@ -34,6 +34,7 @@ PAGE_SIZE_MAX = 100
 STALE_MESSAGE = "执行进程重启或中断，任务未完成；已跑完的部分可下载原始返回"
 _KILO = Decimal(1000)
 _PERCENT = 100
+_NO_SNAPSHOT = "任务没有 Excel 快照（旧系统迁移的任务），无法重跑"
 
 
 def _kilo_tokens(run: BatchRun) -> float:
@@ -48,6 +49,18 @@ def _percent(run: BatchRun) -> int:
 
 def _files(run: BatchRun) -> dict[str, bool]:
     return {kind: storage.run_file(run.id, kind).is_file() for kind in storage.RUN_FILES}
+
+
+def pending_rows(run: BatchRun) -> int:
+    """重跑要问的行：失败的 + 没跑到的（停止、中断时剩下的）。"""
+
+    return max(run.total_count - run.done_count, 0) + run.failed_count
+
+
+def _can_retry(run: BatchRun) -> bool:
+    # 旧系统迁来的任务没有 Excel 快照，无法重跑。
+    excel = storage.run_dir(run.id) / storage.PROMPT_FILES["excel"]
+    return run.status not in ACTIVE_STATUSES and run.total_count > 0 and pending_rows(run) > 0 and excel.is_file()
 
 
 def to_dict(run: BatchRun) -> dict[str, Any]:
@@ -67,6 +80,9 @@ def to_dict(run: BatchRun) -> dict[str, Any]:
         "total_count": run.total_count,
         "done_count": run.done_count,
         "failed_count": run.failed_count,
+        "format_failed_count": run.format_failed_count,
+        "pending_count": 0 if active else pending_rows(run),
+        "can_retry": _can_retry(run),
         "percent": _percent(run),
         "total_tokens_kilo": _kilo_tokens(run),
         "inference_cost": float(run.inference_cost),
@@ -156,7 +172,9 @@ async def start_run(session: AsyncSession, actor: Actor, values: dict[str, Any])
         thinking=bool(values.get("thinking")) and model.supports_thinking,
         row_limit=max(int(values.get("limit") or 0), 0),
         status=RUN_QUEUED,
-        **dict.fromkeys(("total_count", "done_count", "failed_count", "input_tokens", "output_tokens"), 0),
+        **dict.fromkeys(
+            ("total_count", "done_count", "failed_count", "format_failed_count", "input_tokens", "output_tokens"), 0
+        ),
         search_calls=0,
         inference_cost=Decimal(0),
         search_cost=Decimal(0),
@@ -175,6 +193,29 @@ async def start_run(session: AsyncSession, actor: Actor, values: dict[str, Any])
         actor=actor,
         target_id=run.id,
         changes={"prompt_id": template.id, "model_id": model.id, "limit": run.row_limit},
+    )
+    return to_dict(run)
+
+
+async def retry_run(session: AsyncSession, actor: Actor, run_id: str) -> dict[str, Any]:
+    """把已结束的任务重新排队：worker 沿用已成功的行，只问失败和没跑到的，结果合并回本任务，费用累加。"""
+
+    await reconcile_stale(session)
+    run = await require(session, run_id, lock=True)
+    if run.status in ACTIVE_STATUSES:
+        raise ApiError("任务仍在运行，结束后才能重跑", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    if not await anyio.to_thread.run_sync(_can_retry, run):
+        reason = "没有失败或未完成的行" if run.total_count and not pending_rows(run) else _NO_SNAPSHOT
+        raise ApiError(reason, code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    resolve_model(run.model_id)
+    running = await repo.active_for_prompt(session, run.prompt_id)
+    if running is not None:
+        raise ApiError("该模板已有任务在运行，请等它结束或先停止", code=ErrorCode.VERSION_CONFLICT, http_status=409)
+    pending = pending_rows(run)
+    run.status, run.cancel_requested, run.error_message = RUN_QUEUED, False, ""
+    run.finished_at, run.heartbeat_at = None, None
+    await enqueue_event(
+        session, event_type="ai.batch_run.retried", actor=actor, target_id=run.id, changes={"rows": pending}
     )
     return to_dict(run)
 

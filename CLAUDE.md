@@ -155,6 +155,10 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/` �
 - `ai-worker` 持 Postgres 全局锁，用 `SKIP LOCKED` 认领排队任务，最多同时跑 `AI_BATCH_MAX_RUNNING` 个，每个任务
   `AI_BATCH_CONCURRENCY` 路并发。每行完成立即追加 `temp.csv`；进程被停时把已跑部分收尾成「中断」并生成结果。
   运行中超过 `AI_BATCH_STALE_SECONDS` 没心跳的任务，列表和进度接口会把它纠正为「中断」
+- 每行自动补救（`app/application/batch_execute.py` 的 `ask_row`）：限流、5xx、超时、截断按 `RETRY_DELAYS` 退避重发，
+ 400、密钥错误不重发；回答解析不出输出字段时重问一次，仍不行记为「格式不对」（error 列以 `返回格式不对` 开头，原始返回 CSV 不加列）。
+ 「重跑失败」把已结束的任务重新排队：worker 读回原始返回，已成功的行沿用，只问失败和没跑到的行，token 和费用累加。
+ 旧系统迁来的任务没有 Excel 快照，不能重跑
 - 流式接口都在 `/api/v1/ai/stream/*`：网关对这个前缀不挂压缩和请求缓冲（buffering 会把整段回答攒满才下发），
   新加流式接口必须放在这个前缀下，`test_stream_routes_live_under_the_unbuffered_prefix` 会拦
 - 模板附件和批量产物在 `ai-data` 卷（`/data/ai`），不在库里；业务备份脚本会一起打包

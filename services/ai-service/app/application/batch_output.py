@@ -17,7 +17,9 @@ from app.domain.templating import extract_fields
 
 RAW_COLUMNS = ["myid", "提问", "model_name", "content", "input_tokens", "output_tokens", "error", "search_count"]
 META_COLUMNS = ["model_name", "input_tokens", "output_tokens", "error", "search_count"]
-FAILED_COLUMNS = ["myid", "提问", "error", "耗时(秒)"]
+FAILED_COLUMNS = ["myid", "提问", "失败类型", "error", "耗时(秒)"]
+# 模型正常回答了但解析不出输出字段。写在 error 列里，原始返回 CSV 不用加列，续跑时也能从文件认出来。
+FORMAT_ERROR_PREFIX = "返回格式不对"
 
 
 @dataclass
@@ -30,6 +32,18 @@ class RowResult:
     search_calls: int
     error: str
     elapsed: float
+    retryable: bool = False
+    attempts: int = 1
+
+    @property
+    def format_error(self) -> bool:
+        return self.error.startswith(FORMAT_ERROR_PREFIX)
+
+    @property
+    def failure_kind(self) -> str:
+        if not self.error:
+            return ""
+        return "格式不对" if self.format_error else "调用失败"
 
     def raw_row(self, model_name: str) -> list[str]:
         return [
@@ -45,9 +59,44 @@ class RowResult:
 
 
 def start_raw(path: Path) -> None:
+    """已有文件（续跑）就接着追加，不清空。"""
+
+    if path.is_file():
+        return
     # utf-8-sig：Excel 直接双击打开不乱码
     with path.open("w", newline="", encoding="utf-8-sig") as handle:
         csv.writer(handle).writerow(RAW_COLUMNS)
+
+
+def read_raw(path: Path) -> dict[str, RowResult]:
+    """读回已跑的结果。同一行跑过多次（续跑）以最后一次为准。"""
+
+    if not path.is_file():
+        return {}
+    results: dict[str, RowResult] = {}
+    with path.open(encoding="utf-8-sig", newline="") as handle:
+        for row in csv.DictReader(handle):
+            myid = (row.get("myid") or "").strip()
+            if not myid:
+                continue
+            results[myid] = RowResult(
+                myid=myid,
+                prompt=row.get("提问") or "",
+                text=row.get("content") or "",
+                input_tokens=_int(row.get("input_tokens")),
+                output_tokens=_int(row.get("output_tokens")),
+                search_calls=_int(row.get("search_count")),
+                error=row.get("error") or "",
+                elapsed=0.0,
+            )
+    return results
+
+
+def _int(value: str | None) -> int:
+    try:
+        return int(float(value or 0))
+    except ValueError:
+        return 0
 
 
 def append_raw(path: Path, row: list[str]) -> None:
@@ -64,7 +113,7 @@ def write_failed(path: Path, rows: list[RowResult]) -> None:
     with path.open("w", newline="", encoding="utf-8-sig") as handle:
         writer = csv.writer(handle)
         writer.writerow(FAILED_COLUMNS)
-        writer.writerows([[row.myid, row.prompt, row.error, f"{row.elapsed:.2f}"] for row in rows])
+        writer.writerows([[row.myid, row.prompt, row.failure_kind, row.error, f"{row.elapsed:.2f}"] for row in rows])
 
 
 def _unique(name: str, taken: set[str], suffix: str) -> str:

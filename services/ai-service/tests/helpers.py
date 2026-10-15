@@ -81,6 +81,7 @@ def run(**overrides: Any) -> BatchRun:
         "total_count": 0,
         "done_count": 0,
         "failed_count": 0,
+        "format_failed_count": 0,
         "input_tokens": 0,
         "output_tokens": 0,
         "search_calls": 0,

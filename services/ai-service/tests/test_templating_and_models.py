@@ -67,3 +67,20 @@ def test_costs_use_per_thousand_token_prices_and_search_price() -> None:
     assert search == Decimal("0.012000")
     assert calc_costs("unknown", 1000, 1000, 1) == (Decimal(0), Decimal(0))
     assert model_display_name("unknown") == "unknown"
+
+
+def test_parse_fields_tolerates_wrapping_nesting_and_single_objects() -> None:
+    from app.domain.templating import parse_fields
+
+    fields = ["行业", "客群"]
+    fenced = '说明如下：\n```json\n[{"行业": "制造", "客群": "大企业"}]\n```\n以上。'
+    assert parse_fields(fenced, fields) == [{"行业": "制造", "客群": "大企业"}]
+    nested = '[{"行业": "制造", "客群": "a}]b", "依据": [{"条款": 1}]}, {"行业": "零售", "客群": null}]'
+    assert parse_fields(nested, fields) == [{"行业": "制造", "客群": "a}]b"}, {"行业": "零售", "客群": ""}]
+    assert parse_fields('结果 {"行业": "能源"}', fields) == [{"行业": "能源", "客群": ""}]
+    preferring = '示例格式 [{"字段": "值"}]，实际结果 [{"行业": "教育"}]'
+    assert parse_fields(preferring, fields) == [{"行业": "教育", "客群": ""}]
+    assert parse_fields('[{"行业": "C:\\path\\x"}]', ["行业"]) == [{"行业": "C:\\path\\x"}]
+    for unusable in ("", "没有 JSON", '[{"别的": 1}]', "[1, 2]", "[{坏的"):
+        assert parse_fields(unusable, fields) is None
+    assert parse_fields('[{"行业": 1}]', []) is None

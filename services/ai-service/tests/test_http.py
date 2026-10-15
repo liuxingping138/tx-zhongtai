@@ -99,6 +99,7 @@ def test_batch_routes_delegate_to_application(client: TestClient, monkeypatch: p
     stub("start_run", {"id": RUN_ID})
     stub("get_run", {"id": RUN_ID})
     stub("stop_run", {"id": RUN_ID})
+    stub("retry_run", {"id": RUN_ID})
     stub("delete_run", None)
     _returns(prompt_repo, "list_all", [], monkeypatch)
     assert client.get("/api/v1/ai/batch-runs?page=2").status_code == 200
@@ -113,8 +114,18 @@ def test_batch_routes_delegate_to_application(client: TestClient, monkeypatch: p
     assert client.post("/api/v1/ai/batch-runs", json={"prompt_id": PROMPT_ID, "limit": -1}).status_code == 422
     assert client.get(f"/api/v1/ai/batch-runs/{RUN_ID}").status_code == 200
     assert client.post(f"/api/v1/ai/batch-runs/{RUN_ID}/stop").status_code == 200
+    assert client.post(f"/api/v1/ai/batch-runs/{RUN_ID}/retry").status_code == 200
     assert client.delete(f"/api/v1/ai/batch-runs/{RUN_ID}").status_code == 200
-    assert calls == ["list_runs", "list_runs", "filter_options", "start_run", "get_run", "stop_run", "delete_run"]
+    assert calls == [
+        "list_runs",
+        "list_runs",
+        "filter_options",
+        "start_run",
+        "get_run",
+        "stop_run",
+        "retry_run",
+        "delete_run",
+    ]
     assert len(client.get("/api/v1/ai/chat/models").json()["data"]) == 4
 
 

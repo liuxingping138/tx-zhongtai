@@ -73,6 +73,9 @@ class BatchRun(Base):
     total_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="总条数")
     done_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="已处理条数")
     failed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="失败条数")
+    format_failed_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0", comment="格式不对条数"
+    )
     input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="输入token")
     output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="输出token")
     search_calls: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="联网次数")

@@ -62,7 +62,14 @@ async def test_http_error_becomes_readable_message_without_raising() -> None:
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(429, json={"error": {"message": "rate limited"}})
 
-    assert await _collect(handler) == [{"error": "模型接口返回 HTTP 429：rate limited"}]
+    assert await _collect(handler) == [{"error": "模型接口返回 HTTP 429：rate limited", "retryable": True}]
+
+
+async def test_client_errors_are_not_retried() -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, json={"error": {"message": "bad model"}})
+
+    assert await _collect(handler) == [{"error": "模型接口返回 HTTP 400：bad model", "retryable": False}]
 
 
 async def test_network_failures_are_reported() -> None:
@@ -72,7 +79,7 @@ async def test_network_failures_are_reported() -> None:
     def refused(_: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("nope")
 
-    assert await _collect(timeout) == [{"error": "模型接口响应超时，请稍后重试"}]
+    assert await _collect(timeout) == [{"error": "模型接口响应超时，请稍后重试", "retryable": True}]
     assert (await _collect(refused))[0]["error"].startswith("无法连接模型接口（ConnectError）")
 
 
@@ -87,7 +94,7 @@ async def test_stream_without_completion_reports_truncation(events: list[dict[st
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(200, content=_sse(*events))
 
-    assert (await _collect(handler))[-1] == {"error": tail}
+    assert (await _collect(handler))[-1] == {"error": tail, "retryable": True}
 
 
 def test_failed_events_and_incomplete_status_report_errors_without_response_id() -> None:

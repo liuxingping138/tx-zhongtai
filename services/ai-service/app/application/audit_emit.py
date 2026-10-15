@@ -21,6 +21,7 @@ _EVENT_META = {
     "ai.prompt.file_exported": ("ai.prompts", "export", "prompt_template", "下载模板文件"),
     "ai.batch_run.started": ("ai.batch_runs", "run", "batch_run", "发起批量提问"),
     "ai.batch_run.stopped": ("ai.batch_runs", "stop", "batch_run", "停止批量提问"),
+    "ai.batch_run.retried": ("ai.batch_runs", "run", "batch_run", "重跑批量提问失败行"),
     "ai.batch_run.deleted": ("ai.batch_runs", "delete", "batch_run", "删除批量提问记录"),
     "ai.batch_run.exported": ("ai.batch_runs", "export", "batch_run", "下载批量提问结果"),
 }

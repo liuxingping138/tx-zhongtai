@@ -60,6 +60,11 @@ export interface BatchRun {
   total_count: number
   done_count: number
   failed_count: number
+  /** 失败里「模型回答了但解析不出输出字段」的条数 */
+  format_failed_count: number
+  /** 重跑时要问的行：失败的 + 没跑到的 */
+  pending_count: number
+  can_retry: boolean
   percent: number
   total_tokens_kilo: number
   inference_cost: number
@@ -137,6 +142,11 @@ export function startBatchRun(payload: { prompt_id: string; model_id: string; th
 
 export function getBatchRun(id: string): Promise<BatchRun> {
   return request(http.get(`${BASE}/batch-runs/${id}`))
+}
+
+/** 重跑失败和没跑到的行，已成功的沿用，结果合并回原任务。 */
+export function retryBatchRun(id: string): Promise<BatchRun> {
+  return request(http.post(`${BASE}/batch-runs/${id}/retry`))
 }
 
 export function stopBatchRun(id: string): Promise<BatchRun> {

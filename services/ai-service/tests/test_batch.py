@@ -244,3 +244,129 @@ async def test_list_passes_filters_and_reports_run_mode(monkeypatch: pytest.Monk
     assert [item["run_mode"] for item in data["items"]] == ["test", "all"]
     _returns(repo, "distinct_values", ["甲"], monkeypatch)
     assert await service.filter_options(FakeSession()) == {"prompt_title": ["甲"], "created_by_name": ["甲"]}  # type: ignore[arg-type]
+
+
+def _model() -> Any:
+    from app.domain.llm_models import find_model
+
+    model = find_model("baidu-deepseek-v3.2")
+    assert model is not None
+    return model
+
+
+def _sequence(monkeypatch: pytest.MonkeyPatch, answers: list[list[dict[str, Any]]]) -> list[int]:
+    calls: list[int] = []
+
+    async def stream(*_: Any, **__: Any) -> Any:
+        calls.append(1)
+        for event in answers[min(len(calls), len(answers)) - 1]:
+            yield event
+
+    monkeypatch.setattr(batch_execute, "stream_responses", stream)
+    monkeypatch.setattr(batch_execute, "RETRY_DELAYS", (0.0, 0.0))
+    return calls
+
+
+USAGE = {"usage": {"input_tokens": 100, "output_tokens": 10}}
+
+
+async def test_ask_row_backs_off_on_retryable_errors_and_sums_spent_tokens(monkeypatch: pytest.MonkeyPatch) -> None:
+    limited = [{"error": "HTTP 429", "retryable": True}]
+    calls = _sequence(monkeypatch, [limited, [USAGE, *limited], [{"text": '[{"行业":"制造"}]'}, USAGE]])
+    result = await batch_execute.ask_row(_model(), "问", False, ["行业"], None)  # type: ignore[arg-type]
+    assert (result.error, result.attempts, result.input_tokens, len(calls)) == ("", 3, 200, 3)
+    calls = _sequence(monkeypatch, [limited])
+    result = await batch_execute.ask_row(_model(), "问", False, ["行业"], None)  # type: ignore[arg-type]
+    assert (result.error, result.failure_kind, len(calls)) == ("HTTP 429", "调用失败", 3)
+    calls = _sequence(monkeypatch, [[{"error": "HTTP 400", "retryable": False}]])
+    result = await batch_execute.ask_row(_model(), "问", False, ["行业"], None)  # type: ignore[arg-type]
+    assert (result.error, len(calls)) == ("HTTP 400", 1)
+
+
+async def test_ask_row_reasks_once_when_answer_has_no_output_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _sequence(monkeypatch, [[{"text": "我觉得是制造业"}, USAGE], [{"text": '[{"行业":"制造"}]'}, USAGE]])
+    result = await batch_execute.ask_row(_model(), "问", False, ["行业"], None)  # type: ignore[arg-type]
+    assert (result.error, result.attempts, result.output_tokens, len(calls)) == ("", 2, 20, 2)
+    calls = _sequence(monkeypatch, [[{"text": "我觉得是制造业"}]])
+    result = await batch_execute.ask_row(_model(), "问", False, ["行业"], None)  # type: ignore[arg-type]
+    assert result.format_error and "行业" in result.error and len(calls) == 2
+    calls = _sequence(monkeypatch, [[{"text": "随便答"}]])
+    result = await batch_execute.ask_row(_model(), "问", False, [], None)  # type: ignore[arg-type]
+    assert (result.error, len(calls)) == ("", 1)
+
+
+async def test_execute_resumes_and_only_asks_unfinished_rows(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.application.batch_output import FORMAT_ERROR_PREFIX, RowResult, append_raw, start_raw
+
+    recorder = _Recorder()
+    previous = run(status="queued", total_count=3, done_count=2, failed_count=1, input_tokens=500, output_tokens=50)
+    _prepare_execution(monkeypatch, recorder, previous)
+    raw = storage.run_file(RUN_ID, "raw")
+    start_raw(raw)
+    for myid, text, error in (("a1000001", '[{"行业":"旧答"}]', ""), ("a1000002", "", f"{FORMAT_ERROR_PREFIX}：x")):
+        append_raw(raw, RowResult(myid, "问", text, 0, 0, 0, error, 0.0).raw_row("模型"))
+    storage.write_atomic(storage.run_file(RUN_ID, "failed"), b"old")
+    calls = _sequence(monkeypatch, [[{"text": '[{"行业":"新答"}]'}, USAGE]])
+    await batch_execute.execute(RUN_ID)
+    final = recorder.updates[-1]
+    assert len(calls) == 2
+    assert (final["status"], final["done_count"], final["failed_count"], final["format_failed_count"]) == (
+        "done",
+        3,
+        0,
+        0,
+    )
+    assert (final["input_tokens"], final["output_tokens"]) == (700, 70)
+    assert not storage.run_file(RUN_ID, "failed").exists()
+    sheet = load_workbook(storage.run_file(RUN_ID, "result")).active
+    assert sheet is not None
+    assert [row[3] for row in sheet.iter_rows(min_row=2, values_only=True)] == ["旧答", "新答", "新答"]
+    assert "续跑 2 条（共 3 条，已成功 1 条）" in storage.run_file(RUN_ID, "log").read_text(encoding="utf-8")
+
+
+async def test_execute_keeps_old_failures_for_rows_not_reached_after_stop(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.application.batch_output import RowResult, append_raw, start_raw
+
+    recorder = _Recorder(cancel_after=0)
+    _prepare_execution(monkeypatch, recorder, run(total_count=3, done_count=3, failed_count=3))
+    monkeypatch.setattr(batch_execute, "PROGRESS_SECONDS", 0)
+    raw = storage.run_file(RUN_ID, "raw")
+    start_raw(raw)
+    for index in range(1, 4):
+        append_raw(raw, RowResult(f"a100000{index}", "问", "", 0, 0, 0, "超时", 0.0).raw_row("模型"))
+
+    async def slow(*_: Any, **__: Any) -> Any:
+        await asyncio.sleep(0.05)
+        yield {"text": '[{"行业":"制造"}]'}
+
+    monkeypatch.setattr(batch_execute, "stream_responses", slow)
+    await batch_execute.execute(RUN_ID)
+    final = recorder.updates[-1]
+    assert final["status"] == "cancelled" and final["done_count"] == 3
+    assert 1 <= final["failed_count"] < 3
+
+
+async def test_retry_requeues_finished_run_with_pending_rows(monkeypatch: pytest.MonkeyPatch) -> None:
+    storage.write_atomic(storage.run_dir(RUN_ID) / "source.xlsx", xlsx([["名称"], ["甲"]]))
+    _returns(repo, "active_for_prompt", None, monkeypatch)
+    finished = run(status="interrupted", total_count=10, done_count=7, failed_count=2, error_message="中断")
+    _returns(repo, "get", finished, monkeypatch)
+    listed = service.to_dict(finished)
+    assert (listed["pending_count"], listed["can_retry"]) == (5, True)
+    data = await service.retry_run(FakeSession(), ACTOR, RUN_ID)  # type: ignore[arg-type]
+    assert (data["status"], data["error_message"], data["can_retry"], data["pending_count"]) == ("queued", "", False, 0)
+
+    _returns(repo, "get", run(status="running", total_count=3), monkeypatch)
+    with pytest.raises(ApiError, match="仍在运行"):
+        await service.retry_run(FakeSession(), ACTOR, RUN_ID)  # type: ignore[arg-type]
+    _returns(repo, "get", run(status="done", total_count=3, done_count=3), monkeypatch)
+    with pytest.raises(ApiError, match="没有失败"):
+        await service.retry_run(FakeSession(), ACTOR, RUN_ID)  # type: ignore[arg-type]
+    _returns(repo, "get", run(status="done", total_count=3, done_count=3, failed_count=1), monkeypatch)
+    _returns(repo, "active_for_prompt", run(status="running"), monkeypatch)
+    with pytest.raises(ApiError) as conflict:
+        await service.retry_run(FakeSession(), ACTOR, RUN_ID)  # type: ignore[arg-type]
+    assert conflict.value.http_status == 409
+    storage.remove_tree(storage.run_dir(RUN_ID))
+    with pytest.raises(ApiError, match="快照"):
+        await service.retry_run(FakeSession(), ACTOR, RUN_ID)  # type: ignore[arg-type]

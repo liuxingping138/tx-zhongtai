@@ -84,6 +84,16 @@ async def get_run(
     return success_json(await service.get_run(session, run_id))
 
 
+@router.post("/{run_id}/retry")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def retry_run(
+    run_id: str,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    actor: Actor = Depends(require_ai_permission(RESOURCE, "run")),
+) -> JSONResponse:
+    return success_json(await service.retry_run(session, actor, run_id))
+
+
 @router.post("/{run_id}/stop")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def stop_run(

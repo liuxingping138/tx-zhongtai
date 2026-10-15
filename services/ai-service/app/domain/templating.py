@@ -11,7 +11,7 @@ import re
 
 CODE_TABLE_FIELD = "上传码表"
 _VAR_RE = re.compile(r"@【([^】]+)】")
-_JSON_RE = re.compile(r"\[\s*\{.*?\}\s*\]", re.DOTALL)
+_JSON_START = re.compile(r"[\[{]")
 _MYID_BASE = 1_000_000
 
 
@@ -49,22 +49,50 @@ def _clean_json(group: str) -> str:
     return re.sub(r'(?<!\\)\\(?!["\\/bfnrtu])', r"\\\\", group)
 
 
+def _json_candidates(text: str) -> list[object]:
+    """从任意位置起逐段尝试解码 JSON，模型在前后加说明、代码块围栏或思考过程都不影响。"""
+
+    decoder = json.JSONDecoder()
+    found: list[object] = []
+    for source in (text, _clean_json(text)):
+        position = 0
+        while match := _JSON_START.search(source, position):
+            try:
+                value, end = decoder.raw_decode(source, match.start())
+            except json.JSONDecodeError:
+                position = match.start() + 1
+                continue
+            found.append(value)
+            position = end
+        if found:
+            break
+    return found
+
+
+def _entries(value: object) -> list[dict[str, object]]:
+    if isinstance(value, dict):
+        return [value]
+    return [entry for entry in value if isinstance(entry, dict)] if isinstance(value, list) else []
+
+
+def parse_fields(text: str, fields: list[str]) -> list[dict[str, str]] | None:
+    """解析不出任何一个输出字段时返回 None，由调用方判定为「返回格式不对」。
+
+    优先取第一段含输出字段的 [{...}]；模型只回了单个 {...} 也接受，当作一条。
+    """
+
+    if not text or not fields:
+        return None
+    for value in _json_candidates(text):
+        entries = [entry for entry in _entries(value) if any(name in entry for name in fields)]
+        if entries:
+            return [
+                {name: "" if entry.get(name) is None else str(entry.get(name)) for name in fields} for entry in entries
+            ]
+    return None
+
+
 def extract_fields(text: str, fields: list[str]) -> list[dict[str, str]]:
     """解析不到时返回一条全空的结果，保证这一行仍出现在结果表里。"""
 
-    empty = dict.fromkeys(fields, "")
-    if not text or not fields:
-        return [empty]
-    match = _JSON_RE.search(text)
-    if not match:
-        return [empty]
-    try:
-        data = json.loads(_clean_json(match.group()))
-    except json.JSONDecodeError:
-        return [empty]
-    rows = [
-        {name: "" if entry.get(name) is None else str(entry.get(name)) for name in fields}
-        for entry in (data if isinstance(data, list) else [])
-        if isinstance(entry, dict)
-    ]
-    return rows or [empty]
+    return parse_fields(text, fields) or [dict.fromkeys(fields, "")]

@@ -11,10 +11,12 @@ from openpyxl import Workbook, load_workbook
 from platform_common.errors import ApiError
 
 from app.application.batch_output import (
+    FORMAT_ERROR_PREFIX,
     RowResult,
     append_log,
     append_raw,
     build_result,
+    read_raw,
     result_columns,
     start_raw,
     write_failed,
@@ -100,4 +102,24 @@ def test_raw_log_and_failed_files(tmp_path: Path) -> None:
     failed = tmp_path / "failed.csv"
     write_failed(failed, [_result("a2", "", "坏了")])
     with failed.open(encoding="utf-8-sig") as handle:
-        assert list(csv.reader(handle)) == [["myid", "提问", "error", "耗时(秒)"], ["a2", "问 a2", "坏了", "1.50"]]
+        assert list(csv.reader(handle)) == [
+            ["myid", "提问", "失败类型", "error", "耗时(秒)"],
+            ["a2", "问 a2", "调用失败", "坏了", "1.50"],
+        ]
+
+
+def test_raw_file_is_resumed_and_read_back_with_last_attempt_winning(tmp_path: Path) -> None:
+    raw = tmp_path / "temp.csv"
+    start_raw(raw)
+    append_raw(raw, _result("a1", "", "超时").raw_row("模型A"))
+    start_raw(raw)
+    append_raw(raw, _result("a1", "答").raw_row("模型A"))
+    append_raw(raw, _result("a2", "", f"{FORMAT_ERROR_PREFIX}：没有字段").raw_row("模型A"))
+    with raw.open("a", encoding="utf-8-sig", newline="") as handle:
+        csv.writer(handle).writerow(["", "空行号", "", "", "x", "", "", ""])
+    results = read_raw(raw)
+    assert list(results) == ["a1", "a2"]
+    assert (results["a1"].text, results["a1"].error, results["a1"].input_tokens) == ("答", "", 10)
+    assert results["a2"].format_error and results["a2"].failure_kind == "格式不对"
+    assert results["a1"].failure_kind == ""
+    assert read_raw(tmp_path / "missing.csv") == {}

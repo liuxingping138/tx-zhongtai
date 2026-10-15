@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
 
-import { deleteBatchRun, stopBatchRun, type BatchRun, type RunFileKind } from '@/api/ai'
+import { deleteBatchRun, retryBatchRun, stopBatchRun, type BatchRun, type RunFileKind } from '@/api/ai'
 import { errorMessage } from '@/api/errors'
 import { RUN_MODE_TEXT, RUN_STATUS_TEXT, formatYuan, isActive, runStatusType } from '../shared/aiText'
 import { downloadBatchFile } from '../shared/downloads'
@@ -55,8 +55,28 @@ async function remove(run: BatchRun): Promise<void> {
   }
 }
 
+async function retry(run: BatchRun): Promise<void> {
+  const parts = [
+    run.failed_count ? `失败 ${run.failed_count} 条` : '',
+    run.total_count > run.done_count ? `没跑到 ${run.total_count - run.done_count} 条` : '',
+  ].filter(Boolean).join('、')
+  const message = `将用「${run.model_name}」重新提问 ${run.pending_count} 条（${parts}），会产生模型费用。已成功的行保留，结果合并回这条记录。`
+  const ok = await ElMessageBox.confirm(message, '重跑失败的行？', {
+    type: 'warning', confirmButtonText: '开始重跑', cancelButtonText: '取消',
+  }).then(() => true, () => false)
+  if (!ok) return
+  try {
+    await retryBatchRun(run.id)
+    ElMessage.success(`已加入队列，重跑 ${run.pending_count} 条`)
+    emit('changed')
+  } catch (error) {
+    ElMessage.error(errorMessage(error, '重跑失败，请重试'))
+  }
+}
+
 function progressText(run: BatchRun): string {
-  const failed = run.failed_count ? `，失败 ${run.failed_count}` : ''
+  const formats = run.format_failed_count ? `（格式不对 ${run.format_failed_count}）` : ''
+  const failed = run.failed_count ? `，失败 ${run.failed_count}${formats}` : ''
   return `${run.done_count}/${run.total_count || '?'}${failed}`
 }
 </script>
@@ -104,7 +124,7 @@ function progressText(run: BatchRun): string {
       </el-table-column>
       <el-table-column
         label="状态"
-        width="180"
+        width="220"
       >
         <template #default="{ row }">
           <div class="history__status">
@@ -166,7 +186,7 @@ function progressText(run: BatchRun): string {
       />
       <el-table-column
         label="操作"
-        width="210"
+        width="250"
         fixed="right"
       >
         <template #default="{ row }">
@@ -211,6 +231,15 @@ function progressText(run: BatchRun): string {
               @click="stop(row)"
             >
               停止
+            </el-button>
+            <el-button
+              v-if="canRun && row.can_retry"
+              link
+              type="primary"
+              :title="`重新提问失败和没跑到的 ${row.pending_count} 条`"
+              @click="retry(row)"
+            >
+              重跑失败
             </el-button>
             <el-button
               v-if="canRun && row.can_delete"

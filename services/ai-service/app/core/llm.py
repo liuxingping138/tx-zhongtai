@@ -5,6 +5,7 @@
     {"tool_event": {...}}   联网搜索进度
     {"usage": {...}}        token 用量，联网次数在 usage["web_search"]
     {"error": 中文说明}     {"response_id": id}  只在正常完成时给，供多轮对话接续
+错误事件可能带 "retryable": True：限流、5xx、超时、断连、被截断，换个时间重发大概率能成功。
 """
 
 from __future__ import annotations
@@ -18,6 +19,8 @@ import httpx
 
 _CONNECT_TIMEOUT = 10.0
 _ERROR_BODY_LIMIT = 300
+_RATE_LIMITED = 429
+_SERVER_ERROR = 500
 _COMPLETED = ("response.completed", "response.done")
 _FAILED = ("response.failed", "response.incomplete", "response.error", "error")
 _OK_STATUSES = ("completed", "succeeded", "success")
@@ -133,8 +136,8 @@ class _StreamState:
         if self.completed:
             return []
         if self.emitted_text:
-            return [{"error": "回答被提前截断，未收到完成事件，请稍后重试"}]
-        return [{"error": "模型未返回任何内容，请稍后重试"}]
+            return [{"error": "回答被提前截断，未收到完成事件，请稍后重试", "retryable": True}]
+        return [{"error": "模型未返回任何内容，请稍后重试", "retryable": True}]
 
 
 def parse_sse_line(line: str) -> dict[str, Any] | None:
@@ -177,7 +180,8 @@ async def stream_responses(
     try:
         async with http.stream("POST", url, json=request.body, headers=headers, timeout=timeout) as response:
             if response.status_code // 100 != 2:  # noqa: PLR2004  2xx 判断
-                yield {"error": await _http_error(response)}
+                retryable = response.status_code == _RATE_LIMITED or response.status_code >= _SERVER_ERROR
+                yield {"error": await _http_error(response), "retryable": retryable}
                 return
             async for line in response.aiter_lines():
                 event = parse_sse_line(line)
@@ -188,9 +192,9 @@ async def stream_responses(
         for item in state.finish():
             yield item
     except httpx.TimeoutException:
-        yield {"error": "模型接口响应超时，请稍后重试"}
+        yield {"error": "模型接口响应超时，请稍后重试", "retryable": True}
     except httpx.HTTPError as exc:
-        yield {"error": f"无法连接模型接口（{type(exc).__name__}），请稍后重试"}
+        yield {"error": f"无法连接模型接口（{type(exc).__name__}），请稍后重试", "retryable": True}
     finally:
         if owned:
             await http.aclose()
