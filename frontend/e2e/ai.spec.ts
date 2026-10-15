@@ -49,7 +49,8 @@ test('AI 打表：新建模板、上传 Excel、@ 插入列名，批量和对话
   await expect(page.getByRole('heading', { name: '批量提问历史' })).toBeVisible()
 
   await page.goto('/ai/chat')
-  await page.getByRole('combobox', { name: '模型' }).click()
+  // Element Plus 的输入框被选中项那层盖住，要点外层包裹元素才能展开。
+  await page.locator('.model-picker .el-select__wrapper').click()
   await expect(page.getByRole('option').filter({ hasText: '未配置密钥' }).first()).toBeVisible()
   await expect(page.getByRole('button', { name: '发送' })).toBeDisabled()
 
