@@ -29,6 +29,8 @@ const saving = ref(false)
 const thinking = ref(false)
 const form = reactive({ title: '', content: '', output_fields: '', model_id: '' })
 const unsaved = useUnsavedForm(ref(true), () => ({ ...form }), saving)
+// 编辑区一直打开，useUnsavedForm 只在打开时记基线；不先记一次，空表单也算「未保存」。
+unsaved.markSaved()
 const answer = useAnswerStream()
 
 const visibleTemplates = computed(() => {
