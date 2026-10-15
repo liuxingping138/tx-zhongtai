@@ -5,10 +5,10 @@ import { ArrowDown } from '@element-plus/icons-vue'
 
 import { deleteBatchRun, stopBatchRun, type BatchRun, type RunFileKind } from '@/api/ai'
 import { errorMessage } from '@/api/errors'
-import { RUN_STATUS_TEXT, formatYuan, isActive, runStatusType } from '../shared/aiText'
+import { RUN_MODE_TEXT, RUN_STATUS_TEXT, formatYuan, isActive, runStatusType } from '../shared/aiText'
 import { downloadBatchFile } from '../shared/downloads'
 
-defineProps<{ items: BatchRun[]; total: number; loading: boolean; canRun: boolean; canExport: boolean }>()
+defineProps<{ items: BatchRun[]; total: number; loading: boolean; canRun: boolean; canExport: boolean; filtered: boolean }>()
 const page = defineModel<number>('page', { required: true })
 const emit = defineEmits<{ changed: [] }>()
 const viewing = ref<BatchRun | null>(null)
@@ -68,7 +68,7 @@ function progressText(run: BatchRun): string {
       :data="items"
       row-key="id"
       class="history__table"
-      empty-text="还没有批量提问记录"
+      :empty-text="filtered ? '没有符合条件的记录' : '还没有批量提问记录'"
       height="100%"
     >
       <el-table-column
@@ -88,6 +88,20 @@ function progressText(run: BatchRun): string {
         min-width="150"
         show-overflow-tooltip
       />
+      <el-table-column
+        label="运行方式"
+        width="100"
+      >
+        <template #default="{ row }">
+          <el-tag
+            :type="row.run_mode === 'test' ? 'info' : 'primary'"
+            effect="plain"
+            size="small"
+          >
+            {{ row.run_mode === 'test' ? `测试 ${row.row_limit} 条` : RUN_MODE_TEXT.all }}
+          </el-tag>
+        </template>
+      </el-table-column>
       <el-table-column
         label="状态"
         width="180"

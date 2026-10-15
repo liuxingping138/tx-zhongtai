@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
 
-import { batchOptions, listBatchRuns, startBatchRun, type AiModel, type BatchRun, type PromptTemplate } from '@/api/ai'
+import { batchOptions, batchRunFilterOptions, listBatchRuns, startBatchRun, type AiModel, type BatchRun, type BatchRunFilters, type PromptTemplate } from '@/api/ai'
 import { errorMessage } from '@/api/errors'
+import FilterBar from '@/components/FilterBar.vue'
+import FilterSelect from '@/components/FilterSelect.vue'
 import { useAuthStore } from '@/stores/auth'
 import ModelPicker from '../shared/ModelPicker.vue'
-import { isActive } from '../shared/aiText'
+import { RUN_MODE_TEXT, RUN_STATUS_TEXT, isActive } from '../shared/aiText'
 import BatchHistory from './BatchHistory.vue'
 import '../shared/ai.css'
 
@@ -29,6 +31,16 @@ const page = ref(1)
 const loadingRuns = ref(false)
 const loadError = ref('')
 let timer: number | undefined
+
+type HistoryFilters = Required<BatchRunFilters>
+const emptyFilters = (): HistoryFilters => ({ prompt_title: [], created_by_name: [], run_mode: [], status: [] })
+/** query 是正在填的条件，applied 是点「查询」后生效的条件；翻页和轮询都只用 applied。 */
+const query = reactive<HistoryFilters>(emptyFilters())
+const applied = ref<HistoryFilters>(emptyFilters())
+const filterOptions = ref<{ prompt_title: string[]; created_by_name: string[] }>({ prompt_title: [], created_by_name: [] })
+const RUN_MODE_OPTIONS = Object.keys(RUN_MODE_TEXT)
+const STATUS_OPTIONS = Object.keys(RUN_STATUS_TEXT)
+const filtered = computed(() => Object.values(applied.value).some(values => values.length > 0))
 
 const selected = computed(() => templates.value.find(item => item.id === selectedId.value) ?? null)
 const visibleTemplates = computed(() => {
@@ -59,10 +71,34 @@ async function loadOptions(): Promise<void> {
   }
 }
 
+async function loadFilterOptions(): Promise<void> {
+  try {
+    filterOptions.value = await batchRunFilterOptions()
+  } catch {
+    // 候选值拿不到时下拉为空，仍可手动输入后回车
+  }
+}
+
+function search(): void {
+  applied.value = { prompt_title: [...query.prompt_title], created_by_name: [...query.created_by_name], run_mode: [...query.run_mode], status: [...query.status] }
+  void reloadFromFirstPage()
+}
+
+/** 已在第一页就直接重新加载，否则改页码交给 watch(page) 加载，避免同一次刷新请求两遍。 */
+async function reloadFromFirstPage(): Promise<void> {
+  if (page.value === 1) await loadRuns()
+  else page.value = 1
+}
+
+function resetFilters(): void {
+  Object.assign(query, emptyFilters())
+  search()
+}
+
 async function loadRuns(quiet = false): Promise<void> {
   loadingRuns.value = !quiet
   try {
-    const data = await listBatchRuns(page.value)
+    const data = await listBatchRuns(page.value, undefined, applied.value)
     runs.value = data.items
     total.value = data.total
   } catch (error) {
@@ -82,6 +118,7 @@ function schedule(): void {
 watch(page, () => void loadRuns())
 onMounted(() => {
   void loadOptions()
+  void loadFilterOptions()
   void loadRuns()
 })
 onBeforeUnmount(() => window.clearTimeout(timer))
@@ -101,8 +138,8 @@ async function start(limit: number): Promise<void> {
     const useThinking = thinking.value && Boolean(runModel.value?.supports_thinking)
     await startBatchRun({ prompt_id: template.id, model_id: runModelId.value, thinking: useThinking, limit })
     ElMessage.success(`已加入队列，共 ${rows} 条`)
-    page.value = 1
-    await loadRuns()
+    void loadFilterOptions()
+    await reloadFromFirstPage()
   } catch (error) {
     ElMessage.error(errorMessage(error, '发起失败，请重试'))
   } finally {
@@ -246,8 +283,50 @@ async function start(limit: number): Promise<void> {
           刷新
         </el-button>
       </div>
+      <FilterBar
+        class="batch__filters"
+        :query="query"
+        :applied="applied"
+        @search="search"
+        @reset="resetFilters"
+      >
+        <el-form-item label="模板名称">
+          <FilterSelect
+            v-model="query.prompt_title"
+            :options="filterOptions.prompt_title"
+            placeholder="输入或选择模板"
+          />
+        </el-form-item>
+        <el-form-item label="运行方式">
+          <FilterSelect
+            v-model="query.run_mode"
+            :options="RUN_MODE_OPTIONS"
+            :labels="RUN_MODE_TEXT"
+            placeholder="全部"
+            size="short"
+          />
+        </el-form-item>
+        <el-form-item label="发起人">
+          <FilterSelect
+            v-model="query.created_by_name"
+            :options="filterOptions.created_by_name"
+            placeholder="输入或选择发起人"
+            size="short"
+          />
+        </el-form-item>
+        <el-form-item label="状态">
+          <FilterSelect
+            v-model="query.status"
+            :options="STATUS_OPTIONS"
+            :labels="RUN_STATUS_TEXT"
+            placeholder="全部"
+            size="short"
+          />
+        </el-form-item>
+      </FilterBar>
       <BatchHistory
         v-model:page="page"
+        :filtered="filtered"
         :items="runs"
         :total="total"
         :loading="loadingRuns"
@@ -278,6 +357,7 @@ async function start(limit: number): Promise<void> {
 .batch__blocker { color: var(--el-color-warning-dark-2); }
 .batch__actions { display: flex; gap: 8px; margin-left: auto; }
 .batch__actions .el-button { margin: 0; }
+.batch__filters { padding: 12px 16px; border-bottom: 1px solid var(--zt-border); }
 .batch__history { display: flex; flex-direction: column; height: clamp(480px, calc(100dvh - var(--workspace-header-height) - 48px), 820px); }
 @media (max-width: 1100px) {
   .batch__top { grid-template-columns: minmax(0, 1fr); height: auto; }

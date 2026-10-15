@@ -64,6 +64,8 @@ export function formatYuan(value: number): string {
   return `¥${value.toFixed(4)}`
 }
 
+export const RUN_MODE_TEXT: Record<'test' | 'all', string> = { test: '测试 10 条', all: '运行全部' }
+
 export const RUN_STATUS_TEXT: Record<RunStatus, string> = {
   queued: '排队中',
   running: '运行中',

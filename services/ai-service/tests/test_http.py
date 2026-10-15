@@ -95,19 +95,26 @@ def test_batch_routes_delegate_to_application(client: TestClient, monkeypatch: p
         monkeypatch.setattr(batch_runs, name, fake)
 
     stub("list_runs", {"items": [], "total": 0})
+    stub("filter_options", {"prompt_title": [], "created_by_name": []})
     stub("start_run", {"id": RUN_ID})
     stub("get_run", {"id": RUN_ID})
     stub("stop_run", {"id": RUN_ID})
     stub("delete_run", None)
     _returns(prompt_repo, "list_all", [], monkeypatch)
     assert client.get("/api/v1/ai/batch-runs?page=2").status_code == 200
+    filtered = client.get(
+        "/api/v1/ai/batch-runs", params=[("run_mode", "test"), ("prompt_title", "甲"), ("prompt_title", "乙")]
+    )
+    assert filtered.status_code == 200
+    assert client.get("/api/v1/ai/batch-runs", params={"run_mode": "half"}).status_code == 422
     assert client.get("/api/v1/ai/batch-runs/options").json()["data"]["templates"] == []
+    assert client.get("/api/v1/ai/batch-runs/filter-options").status_code == 200
     assert client.post("/api/v1/ai/batch-runs", json={"prompt_id": PROMPT_ID, "limit": 10}).status_code == 201
     assert client.post("/api/v1/ai/batch-runs", json={"prompt_id": PROMPT_ID, "limit": -1}).status_code == 422
     assert client.get(f"/api/v1/ai/batch-runs/{RUN_ID}").status_code == 200
     assert client.post(f"/api/v1/ai/batch-runs/{RUN_ID}/stop").status_code == 200
     assert client.delete(f"/api/v1/ai/batch-runs/{RUN_ID}").status_code == 200
-    assert calls == ["list_runs", "start_run", "get_run", "stop_run", "delete_run"]
+    assert calls == ["list_runs", "list_runs", "filter_options", "start_run", "get_run", "stop_run", "delete_run"]
     assert len(client.get("/api/v1/ai/chat/models").json()["data"]) == 4
 
 

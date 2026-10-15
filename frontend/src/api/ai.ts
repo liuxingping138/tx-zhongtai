@@ -54,6 +54,8 @@ export interface BatchRun {
   model_name: string
   thinking: boolean
   row_limit: number
+  /** test：运行 N 条测试；all：运行全部 */
+  run_mode: 'test' | 'all'
   status: RunStatus
   total_count: number
   done_count: number
@@ -110,8 +112,19 @@ export function deletePromptFile(id: string, kind: PromptFileKind): Promise<Prom
   return request(http.delete(`${BASE}/prompts/${id}/files/${kind}`))
 }
 
-export function listBatchRuns(page = 1, pageSize = 15): Promise<BatchRunPage> {
-  return request(http.get(`${BASE}/batch-runs`, { params: { page, page_size: pageSize } }))
+export interface BatchRunFilters {
+  prompt_title?: string[]
+  created_by_name?: string[]
+  run_mode?: string[]
+  status?: string[]
+}
+
+export function listBatchRuns(page = 1, pageSize = 15, filters: BatchRunFilters = {}): Promise<BatchRunPage> {
+  return request(http.get(`${BASE}/batch-runs`, { params: { ...filters, page, page_size: pageSize } }))
+}
+
+export function batchRunFilterOptions(): Promise<{ prompt_title: string[]; created_by_name: string[] }> {
+  return request(http.get(`${BASE}/batch-runs/filter-options`))
 }
 
 export function batchOptions(): Promise<{ templates: PromptTemplate[]; models: AiModel[] }> {

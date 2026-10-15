@@ -3,7 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func, or_, select, update
+from platform_common.filters import Filters, filter_values, in_any
+from sqlalchemy import ColumnElement, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import (
@@ -18,12 +19,48 @@ from app.domain.models import (
 _RUNNING = (RUN_RUNNING, RUN_STOPPING)
 
 
-async def page(session: AsyncSession, *, offset: int, limit: int) -> tuple[list[BatchRun], int]:
-    total = int(await session.scalar(select(func.count()).select_from(BatchRun)) or 0)
+RUN_MODES = ("test", "all")
+
+
+def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
+    """同一字段多个值是「或」，不同字段之间是「且」。运行方式：测试是只跑前 N 行，全部是不限行数。"""
+
+    conditions = [
+        cond
+        for cond in (
+            in_any(BatchRun.prompt_title, filters.get("prompt_title")),
+            in_any(BatchRun.created_by_name, filters.get("created_by_name")),
+            in_any(BatchRun.status, filters.get("status")),
+        )
+        if cond is not None
+    ]
+    modes = set(filter_values(filters.get("run_mode"))) & set(RUN_MODES)
+    if modes == {"test"}:
+        conditions.append(BatchRun.row_limit > 0)
+    elif modes == {"all"}:
+        conditions.append(BatchRun.row_limit == 0)
+    return conditions
+
+
+async def page(
+    session: AsyncSession, *, offset: int, limit: int, filters: Filters | None = None
+) -> tuple[list[BatchRun], int]:
+    conditions = _conditions(filters or {})
+    total = int(await session.scalar(select(func.count()).select_from(BatchRun).where(*conditions)) or 0)
     rows = await session.scalars(
-        select(BatchRun).order_by(BatchRun.created_at.desc(), BatchRun.id).offset(offset).limit(limit)
+        select(BatchRun)
+        .where(*conditions)
+        .order_by(BatchRun.created_at.desc(), BatchRun.id)
+        .offset(offset)
+        .limit(limit)
     )
     return list(rows), total
+
+
+async def distinct_values(session: AsyncSession, column: str) -> list[str]:
+    field = {"prompt_title": BatchRun.prompt_title, "created_by_name": BatchRun.created_by_name}[column]
+    rows = await session.scalars(select(field).where(field != "").distinct().order_by(field))
+    return list(rows)
 
 
 async def get(session: AsyncSession, run_id: str, *, lock: bool = False) -> BatchRun | None:

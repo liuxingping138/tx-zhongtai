@@ -121,3 +121,19 @@ async def test_stop_running_run_sets_flag_and_queued_run_cancels() -> None:
     assert (stopped["status"], stopped["cancel_requested"]) == ("stopping", True)
     async with SessionLocal() as session:
         assert await repo.cancel_flag(session, running["id"]) is True
+
+
+async def test_history_filters_on_real_rows() -> None:
+    prompt_id = await _template_with_excel()
+    async with SessionLocal() as session:
+        await batch_runs.start_run(session, ACTOR, {"prompt_id": prompt_id, "limit": 10})
+        await session.commit()
+    async with SessionLocal() as session:
+        tests = await batch_runs.list_runs(session, page=1, page_size=15, filters={"run_mode": ["test"]})
+        full = await batch_runs.list_runs(session, page=1, page_size=15, filters={"run_mode": ["all"]})
+        by_title = await batch_runs.list_runs(session, page=1, page_size=15, filters={"prompt_title": ["集成"]})
+        by_other = await batch_runs.list_runs(session, page=1, page_size=15, filters={"created_by_name": ["别人"]})
+        options = await batch_runs.filter_options(session)
+    assert (tests["total"], full["total"], by_title["total"], by_other["total"]) == (1, 0, 1, 0)
+    assert tests["items"][0]["run_mode"] == "test"
+    assert options == {"prompt_title": ["集成"], "created_by_name": [ACTOR.name]}

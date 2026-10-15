@@ -213,3 +213,34 @@ async def test_worker_consumes_until_stopped(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(runner, "recover_orphans", recover)
     await asyncio.wait_for(runner.consume(stop), timeout=5)
     assert executed == [RUN_ID]
+
+
+def test_history_filters_combine_fields_and_map_run_mode() -> None:
+    def sql(filters: dict[str, Any]) -> list[str]:
+        return [str(cond.compile(compile_kwargs={"literal_binds": True})) for cond in repo._conditions(filters)]
+
+    assert sql({}) == []
+    assert sql({"run_mode": ["test"]}) == ["ai_batch_runs.row_limit > 0"]
+    assert sql({"run_mode": ["all"]}) == ["ai_batch_runs.row_limit = 0"]
+    assert sql({"run_mode": ["test", "all"], "status": []}) == []
+    combined = sql({"prompt_title": ["政策解读", "政策市场机会"], "created_by_name": ["张三"], "status": ["done"]})
+    assert combined == [
+        "ai_batch_runs.prompt_title IN ('政策解读', '政策市场机会')",
+        "ai_batch_runs.created_by_name IN ('张三')",
+        "ai_batch_runs.status IN ('done')",
+    ]
+
+
+async def test_list_passes_filters_and_reports_run_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, Any] = {}
+
+    async def page(*_: Any, **kwargs: Any) -> Any:
+        seen.update(kwargs)
+        return [run(row_limit=10), run(row_limit=0)], 2
+
+    monkeypatch.setattr(repo, "page", page)
+    data = await service.list_runs(FakeSession(), page=1, page_size=15, filters={"run_mode": ["test"]})  # type: ignore[arg-type]
+    assert seen["filters"] == {"run_mode": ["test"]}
+    assert [item["run_mode"] for item in data["items"]] == ["test", "all"]
+    _returns(repo, "distinct_values", ["甲"], monkeypatch)
+    assert await service.filter_options(FakeSession()) == {"prompt_title": ["甲"], "created_by_name": ["甲"]}  # type: ignore[arg-type]

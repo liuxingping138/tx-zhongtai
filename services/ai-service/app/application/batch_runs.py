@@ -11,6 +11,7 @@ import anyio
 from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
 from platform_common.errors import ApiError, ErrorCode, NotFoundError
+from platform_common.filters import Filters
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.asking import resolve_model
@@ -61,6 +62,7 @@ def to_dict(run: BatchRun) -> dict[str, Any]:
         "model_name": run.model_name,
         "thinking": run.thinking,
         "row_limit": run.row_limit,
+        "run_mode": "test" if run.row_limit > 0 else "all",
         "status": run.status,
         "total_count": run.total_count,
         "done_count": run.done_count,
@@ -89,11 +91,22 @@ async def reconcile_stale(session: AsyncSession) -> None:
     await repo.mark_stale_interrupted(session, cutoff=cutoff, message=STALE_MESSAGE)
 
 
-async def list_runs(session: AsyncSession, *, page: int, page_size: int) -> dict[str, Any]:
+async def list_runs(
+    session: AsyncSession, *, page: int, page_size: int, filters: Filters | None = None
+) -> dict[str, Any]:
     await reconcile_stale(session)
     size = min(max(page_size, 1), PAGE_SIZE_MAX)
-    rows, total = await repo.page(session, offset=(max(page, 1) - 1) * size, limit=size)
+    rows, total = await repo.page(session, offset=(max(page, 1) - 1) * size, limit=size, filters=filters)
     return {"items": [to_dict(run) for run in rows], "total": total, "page": max(page, 1), "page_size": size}
+
+
+async def filter_options(session: AsyncSession) -> dict[str, list[str]]:
+    """历史里实际出现过的模板名称和操作人；模板删了、改名了，旧名字仍能筛出当时的记录。"""
+
+    return {
+        "prompt_title": await repo.distinct_values(session, "prompt_title"),
+        "created_by_name": await repo.distinct_values(session, "created_by_name"),
+    }
 
 
 async def require(session: AsyncSession, run_id: str, *, lock: bool = False) -> BatchRun:
