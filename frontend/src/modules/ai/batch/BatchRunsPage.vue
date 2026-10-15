@@ -193,7 +193,7 @@ async function start(limit: number): Promise<void> {
             :models="models"
           />
           <p
-            v-else-if="runModel"
+            v-else-if="selected && runModel"
             class="ai-panel__hint"
           >
             使用模板配置的模型：{{ runModel.name }}
