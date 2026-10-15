@@ -1,5 +1,5 @@
 #!/bin/sh
-# 在 postgres 容器内执行：为已有数据卷补建 AI 打表库和账号。
+# 在 postgres 容器内执行：为已有数据卷补建 AI提问库和账号。
 set -eu
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres \

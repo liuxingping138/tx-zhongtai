@@ -1,4 +1,4 @@
-"""AI 打表的表结构。主键沿用旧系统的 32 位十六进制 ID，迁移过来的模板和历史保持原 ID。"""
+"""AI提问的表结构。主键沿用旧系统的 32 位十六进制 ID，迁移过来的模板和历史保持原 ID。"""
 
 from __future__ import annotations
 
@@ -104,7 +104,7 @@ class WorkerHeartbeat(Base):
 
 class OutboxEvent(Base):
     __tablename__ = "ai_outbox"
-    __table_args__ = {"comment": "AI 打表服务出站事件"}
+    __table_args__ = {"comment": "AI提问服务出站事件"}
 
     event_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid, comment="事件ID")
     event_type: Mapped[str] = mapped_column(String(128), nullable=False, comment="事件类型")

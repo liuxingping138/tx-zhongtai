@@ -116,7 +116,7 @@ async function start(limit: number): Promise<void> {
     <h1 class="ai-sr-only">
       批量提问
     </h1>
-    <div class="batch__left">
+    <div class="batch__top">
       <div class="ai-panel batch__templates">
         <div class="ai-panel__head">
           <h2>选择模板</h2>
@@ -166,8 +166,14 @@ async function start(limit: number): Promise<void> {
         <div class="ai-panel__head">
           <h2>{{ selected?.title ?? '运行' }}</h2>
         </div>
+        <p
+          v-if="!selected"
+          class="ai-panel__hint batch__placeholder"
+        >
+          在左侧选择一个模板，这里显示它的 Excel、码表、输出字段和提示词，确认后再运行。
+        </p>
         <dl
-          v-if="selected"
+          v-else
           class="batch__facts"
         >
           <div><dt>Excel</dt><dd>{{ selected.excel_name ? `${selected.excel_name}（${selected.excel_rows} 行）` : '未上传' }}</dd></div>
@@ -254,25 +260,28 @@ async function start(limit: number): Promise<void> {
 </template>
 
 <style scoped>
-.batch { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 16px; height: calc(100dvh - var(--workspace-header-height) - 48px); min-height: 560px; }
-.batch__left { display: flex; flex-direction: column; gap: 16px; min-height: 0; overflow: auto; }
-.batch__templates { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 180px; max-height: 45%; }
+.batch { display: flex; flex-direction: column; gap: 16px; }
+/* 上面是选模板和看详情，并排占满整行；历史在下面，整页纵向滚动。 */
+.batch__top { display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); gap: 16px; height: clamp(440px, 56vh, 600px); }
+.batch__templates, .batch__detail { display: flex; flex-direction: column; min-height: 0; }
+.batch__templates .ai-template-list { flex: 1; min-height: 0; }
 .batch__search { padding: 10px 12px 0; }
 .batch__empty { padding: 16px 8px; }
-.batch__detail { flex: 1 0 auto; }
-.batch__facts { display: grid; gap: 8px; margin: 0; padding: 14px 16px 0; font-size: 13px; }
-.batch__facts div { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; }
+.batch__placeholder { flex: 1; display: grid; place-items: center; padding: 24px; text-align: center; }
+.batch__facts { flex: 1; min-height: 0; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); gap: 10px; margin: 0; padding: 14px 16px 0; font-size: 13px; }
+.batch__facts div { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 8px; min-height: 0; }
 .batch__facts dt { color: var(--zt-ink-500); }
 .batch__facts dd { margin: 0; color: var(--zt-ink-900); word-break: break-word; }
-.batch__content { max-height: 140px; overflow: auto; white-space: pre-wrap; padding: 6px 8px; border-radius: 4px; background: var(--zt-soft); line-height: 1.6; }
-.batch__run { display: grid; gap: 10px; padding: 14px 16px 16px; }
+.batch__content { min-height: 0; overflow: auto; white-space: pre-wrap; padding: 8px 10px; border-radius: 4px; background: var(--zt-soft); line-height: 1.7; }
+.batch__run { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; padding: 14px 16px 16px; border-top: 1px solid var(--zt-border); margin-top: 14px; }
 .batch__thinking { margin-left: 10px; }
 .batch__blocker { color: var(--el-color-warning-dark-2); }
-.batch__actions { display: flex; gap: 8px; }
+.batch__actions { display: flex; gap: 8px; margin-left: auto; }
 .batch__actions .el-button { margin: 0; }
-.batch__history { display: flex; flex-direction: column; min-height: 0; }
-@media (max-width: 1200px) {
-  .batch { grid-template-columns: minmax(0, 1fr); height: auto; }
-  .batch__history { min-height: 520px; }
+.batch__history { display: flex; flex-direction: column; height: clamp(480px, calc(100dvh - var(--workspace-header-height) - 48px), 820px); }
+@media (max-width: 1100px) {
+  .batch__top { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .batch__templates { height: 320px; }
+  .batch__detail { min-height: 420px; }
 }
 </style>

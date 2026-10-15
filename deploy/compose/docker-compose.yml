@@ -17,7 +17,7 @@ networks:
 volumes:
   postgres-data:
   redis-data:
-  # AI 打表的模板 Excel、码表和批量结果
+  # AI提问的模板 Excel、码表和批量结果
   ai-data:
 
 services:

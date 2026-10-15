@@ -169,7 +169,7 @@ ColumnPicker 按用户ID和route.path保存字段键（存储键 `zt:columns:v2:
 
 `frontend/src/modules/system/scheduler/`：`SchedulerList.vue` 是系统配置型短列表，复用 ListPage（隐藏分页）、ColumnPicker、useUnsavedForm，设置计划用 480px 对话框；`SchedulerHistoryDrawer.vue` 是可分页的执行记录抽屉，状态与请求逻辑在 `useSchedulerHistory.ts`，状态文案和标签颜色在 `runStatus.ts`。列表和打开中的记录抽屉每 5 秒静默刷新，页面隐藏时暂停，后台轮询不反复显示加载遮罩。`/system/scheduler` 是页面路径，`/api/v1/policy/scheduled-jobs` 是服务接口，权限归属由资源目录决定，不按前端 URL 推断。配置表单必须携带版本号；失败保留填写值；执行成功指“已入队”，不把请求成功当成同步已完成。
 
-## 工作台页面（AI 打表）
+## 工作台页面（AI提问）
 
 `frontend/src/modules/ai/`：提问配置、批量提问、多轮对话不是字段列表，不套 `ListPage`。页面占满内容区高度（`calc(100dvh - var(--workspace-header-height) - 48px)`），由白底细边框面板（`shared/ai.css` 的 `.ai-panel`）左右分栏，1200px 及以下改为上下排、整页滚动；页面标题只给读屏（`.ai-sr-only`）。
 

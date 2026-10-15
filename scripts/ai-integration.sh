@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 在 P6 的 Postgres 里建专用临时库 ai_test，跑 AI 打表集成测试
+# 在 P6 的 Postgres 里建专用临时库 ai_test，跑 AI提问集成测试
 # （services/ai-service/tests/test_integration.py：并发认领、同模板并发发起、心跳超时、完整执行）。
 # 由 make test-integration 调用，需要 P6 已经起来。测试自己会拒绝 ai_test 以外的库名。
 #

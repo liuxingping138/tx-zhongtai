@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Compose 启动 postgres 容器时执行一次：为 IAM、审计、码表、政策、AI 打表各建立独立数据库和账号。
+# Compose 启动 postgres 容器时执行一次：为 IAM、审计、码表、政策、AI提问各建立独立数据库和账号。
 # 依赖的环境变量由 docker-compose.yml 传入本容器：
 # IAM_DB_NAME / IAM_DB_USER / IAM_DB_PASSWORD、AUDIT_DB_NAME / AUDIT_DB_USER / AUDIT_DB_PASSWORD、
 # AUDIT_CLEANUP_DB_USER / AUDIT_CLEANUP_DB_PASSWORD。

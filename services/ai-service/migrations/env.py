@@ -1,4 +1,4 @@
-"""AI 打表数据库 Alembic 迁移环境。连接串从 `AI_DATABASE_URL` 读取。"""
+"""AI提问数据库 Alembic 迁移环境。连接串从 `AI_DATABASE_URL` 读取。"""
 
 from __future__ import annotations
 

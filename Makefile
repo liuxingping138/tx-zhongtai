@@ -130,7 +130,7 @@ provision-policy-db:
 	$(COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-policy-db.sh
 
 provision-ai-db:
-	@echo "== 补建 AI 打表库和账号（已有数据卷不会重跑 init） =="
+	@echo "== 补建 AI提问库和账号（已有数据卷不会重跑 init） =="
 	$(COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-ai-db.sh
 
 # iam、policy、codebook、ai 各有一张 Outbox 表，逐个重放。只重放某一个：make outbox-replay OUTBOX_SERVICES=policy-service

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 业务库只读备份：五个服务库 + AI 打表的附件卷，完整成功后原子发布；恢复仍须通过隔离库白名单。
+# 业务库只读备份：五个服务库 + AI提问的附件卷，完整成功后原子发布；恢复仍须通过隔离库白名单。
 set -euo pipefail
 umask 077
 if [ "${CONFIRM_BUSINESS_BACKUP:-}" != yes ]; then
@@ -35,7 +35,7 @@ done
 # 模板 Excel、码表和批量结果不在库里，在 ai-service 的持久卷上，一起打包。
 $BACKUP_COMPOSE exec -T ai-service tar -C /data/ai -cf - . > "$TMP/ai-files.tar"
 tar -tf "$TMP/ai-files.tar" > /dev/null
-echo "已打包 AI 打表附件"
+echo "已打包 AI提问附件"
 (cd "$TMP" && sha256sum ./*.dump ./*.dbname ./ai-files.tar > SHA256SUMS)
 printf 'format=tx-zhongtai-business-v2\ncompleted_utc=%s\n' "$STAMP" > "$TMP/COMPLETE"
 mv "$TMP" "$OUT"

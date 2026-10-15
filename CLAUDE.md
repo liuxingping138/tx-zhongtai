@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目定位
 
-一体化业务数据平台，最终包含：客户、招投标、政策、场景、爬虫监测、码表管理、AI 打表、系统管理。
-主要业务数据围绕「客群」串联；爬虫监测、AI 打表是独立模块，与客群无直接关联。
+一体化业务数据平台，最终包含：客户、招投标、政策、场景、爬虫监测、码表管理、AI提问、系统管理。
+主要业务数据围绕「客群」串联；爬虫监测、AI提问是独立模块，与客群无直接关联。
 
 当前进度：公共框架已到 P6（账号/会话/RBAC、Outbox、审计、隔离验收、备份恢复、OpenAPI），
 政策三张表（信源、基础标签、解读）与码表三张表（政策类型、行业场景、省市区编码）已接入，
 爬虫监测已接入（只读统计页，数据来自外部爬虫库采集总表的按天聚合，按网站统计），
-AI 打表已接入（独立的 ai-service：提示词模板、按 Excel 逐行批量提问、多轮对话，从旧 Django 项目 difyapi/chat_web 迁来）。
+AI提问已接入（独立的 ai-service：提示词模板、按 Excel 逐行批量提问、多轮对话，从旧 Django 项目 difyapi/chat_web 迁来）。
 **客户、招投标仅有占位目录**，未开发——不要为它们提前暴露无功能入口或做过度抽象。
 其余文档按 设计决策 / 操作手册 分类，索引见 `docs/README.md`。文档只写与现有代码一致的现状，过时内容直接删除，历史留在 git 里。
 
@@ -72,7 +72,7 @@ services/
   audit-service/       审计写入、查询、到期清理
   policy-service/      政策：信源、基础标签、解读、爬虫监测
   codebook-service/    码表：政策类型、行业场景、省市区编码
-  ai-service/          AI 打表：提示词模板、批量提问、多轮对话；Compose 里 ai-worker 共用此镜像执行批量任务
+  ai-service/          AI提问：提示词模板、批量提问、多轮对话；Compose 里 ai-worker 共用此镜像执行批量任务
   customer-service/    占位，仅 .gitkeep
   tender-service/      占位，仅 .gitkeep
 packages/platform-common/   跨服务公共包（见下）
@@ -144,7 +144,7 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/` �
  由同步用按天统计推算补齐（口径同快照：每个网站最后入库日期），推算一次约 10 秒，所以只在缺数时跑、页面不能现算
 - 整表 `GROUP BY` 在代理后跑十分钟都出不来，带 `collect_date` 的单天聚合只要 1.4 秒：全量统计按天循环，别写一条大 SQL
 
-### AI 打表：模型调用走统一客户端，批量在 worker 里跑
+### AI提问：模型调用走统一客户端，批量在 worker 里跑
 
 - 字节方舟、百度千帆都用 Responses 流式接口，`app/core/llm.py` 一个 httpx 异步客户端归一事件（文本、思考、联网进度、
   用量、错误、response_id）；可选模型、请求参数和单价只在 `app/domain/llm_models.py` 一处。密钥 `AI_ARK_API_KEY` /

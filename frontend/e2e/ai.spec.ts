@@ -8,12 +8,12 @@ test.use({ viewport: { width: 1440, height: 900 } })
 // P6 不配大模型密钥：这里只验收模板、附件、变量插入、权限入口和「未配置密钥」的提示，不真的产生调用费用。
 const workbook = path.join(import.meta.dirname, 'fixtures', 'ai-template.xlsx')
 
-test('AI 打表：新建模板、上传 Excel、@ 插入列名，批量和对话页说明密钥未配置', async ({ page }) => {
+test('AI提问：新建模板、上传 Excel、@ 插入列名，批量和对话页说明密钥未配置', async ({ page }) => {
   test.skip(!currentAdminPassword(), '缺少 ADMIN_PASSWORD')
-  const title = `e2e 打表 ${Date.now()}`
+  const title = `e2e 提问 ${Date.now()}`
   await loginAdmin(page, '/ai/prompts')
 
-  await expect(page.getByRole('navigation', { name: '一级模块' }).getByText('AI 打表')).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('navigation', { name: '一级模块' }).getByText('AI提问')).toBeVisible({ timeout: 20_000 })
   await page.getByRole('button', { name: '新建' }).click()
   await page.getByRole('textbox', { name: '提示词标题' }).fill(title)
   const content = page.getByRole('textbox', { name: '提示词内容' })

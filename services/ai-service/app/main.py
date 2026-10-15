@@ -1,4 +1,4 @@
-"""ai-service 入口：AI 打表（提示词模板、批量提问、多轮对话）。批量执行在单独的 ai-worker 进程。"""
+"""ai-service 入口：AI提问（提示词模板、批量提问、多轮对话）。批量执行在单独的 ai-worker 进程。"""
 
 from __future__ import annotations
 

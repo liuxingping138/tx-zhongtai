@@ -1,4 +1,4 @@
-/* AI 打表三个页面共用：白底细边框面板、仅供读屏的页面标题。 */
+/* AI提问三个页面共用：白底细边框面板、仅供读屏的页面标题。 */
 .ai-panel { min-width: 0; border: 1px solid var(--zt-border); border-radius: 7px; background: var(--zt-panel); }
 .ai-panel__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--zt-border); }
 .ai-panel__head h2 { margin: 0; color: var(--zt-ink-900); font-size: 15px; font-weight: 650; }
