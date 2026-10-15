@@ -1,5 +1,5 @@
 import { computed, type Component } from 'vue'
-import { Timer, Collection, Connection, Key, Link, MapLocation, Menu, Monitor, PriceTag, Reading, Tickets, User } from '@element-plus/icons-vue'
+import { ChatDotRound, Collection, Connection, EditPen, Files, Key, Link, MapLocation, Menu, Monitor, PriceTag, Reading, Tickets, Timer, User } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { pathForRouteName } from '@/router/menu'
 
@@ -18,6 +18,9 @@ const descriptions: Record<string, string> = {
   '/system/roles': '配置模块和操作权限',
   '/system/scheduler': '配置每日同步与查看执行记录',
   '/system/audit': '追溯操作与权限变更',
+  '/ai/prompts': '编写提示词模板并试发',
+  '/ai/batch-runs': '按 Excel 逐行批量提问',
+  '/ai/chat': '与大模型连续对话',
 }
 
 // 图标按子模块用途配置，不继承一级模块图标；同一入口在导航和查找中保持一致。
@@ -33,6 +36,9 @@ const entryIcons: Record<string, Component> = {
   '/system/roles': Key,
   '/system/audit': Tickets,
   '/system/scheduler': Timer,
+  '/ai/prompts': EditPen,
+  '/ai/batch-runs': Files,
+  '/ai/chat': ChatDotRound,
 }
 
 export function useWorkspace() {

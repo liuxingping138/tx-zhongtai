@@ -18,6 +18,7 @@ vi.mock('./excelImport', () => ({
   },
 }))
 
+import * as ai from './ai'
 import * as audit from './audit'
 import * as auth from './auth'
 import * as codebook from './codebook'
@@ -40,7 +41,7 @@ const operations = Object.values(specs).flatMap((spec) =>
   ),
 )
 
-const modules = { audit, auth, codebook, crawler, policy, scheduler, system }
+const modules = { ai, audit, auth, codebook, crawler, policy, scheduler, system }
 
 const wrappers = Object.entries(modules).flatMap(([module, exports]) =>
   Object.entries(exports)
@@ -49,8 +50,8 @@ const wrappers = Object.entries(modules).flatMap(([module, exports]) =>
 )
 
 describe('前端接口封装与后端 OpenAPI 一致', () => {
-  it('读到了全部四份 OpenAPI', () => {
-    expect(Object.keys(specs)).toHaveLength(4)
+  it('读到了全部五份 OpenAPI', () => {
+    expect(Object.keys(specs)).toHaveLength(5)
   })
 
   it.each(wrappers)('$label 调用的方法和路径在后端存在', async ({ fn }) => {

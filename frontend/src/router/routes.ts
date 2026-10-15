@@ -118,6 +118,24 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '政策解读列表', resource: 'policy.interpretations' },
       },
       {
+        path: 'ai/prompts',
+        name: 'ai-prompts',
+        component: () => import('@/modules/ai/prompts/PromptWorkbench.vue'),
+        meta: { title: '提问配置', resource: 'ai.prompts' },
+      },
+      {
+        path: 'ai/batch-runs',
+        name: 'ai-batch-runs',
+        component: () => import('@/modules/ai/batch/BatchRunsPage.vue'),
+        meta: { title: '批量提问', resource: 'ai.batch_runs' },
+      },
+      {
+        path: 'ai/chat',
+        name: 'ai-chat',
+        component: () => import('@/modules/ai/chat/ChatPage.vue'),
+        meta: { title: '多轮对话', resource: 'ai.chat' },
+      },
+      {
         path: 'forbidden',
         name: 'forbidden',
         component: () => import('@/views/ForbiddenView.vue'),

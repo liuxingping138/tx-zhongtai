@@ -17,7 +17,10 @@ const WRITE_ACTIONS: [code: string, text: string][] = [
   ['execute', '立即执行任务'],
   ['create', '新增'],
   ['update', '编辑'],
-  ['delete', '删除账号'],
+  ['delete', '删除'],
+  ['ask', '试发提问'],
+  ['run', '运行批量任务'],
+  ['stop', '停止任务'],
   ['import', '导入 Excel'],
   ['reset_password', '重置密码'],
   ['revoke_sessions', '强制下线'],
@@ -27,6 +30,8 @@ const WRITE_ACTIONS: [code: string, text: string][] = [
 ]
 const WRITE_ORDER = new Map(WRITE_ACTIONS.map(([code], index) => [code, index]))
 const WRITE_LABEL = new Map(WRITE_ACTIONS)
+/** 同一个动作码在个别模块里说法不同。 */
+const WRITE_LABEL_BY_RESOURCE: Record<string, Record<string, string>> = { 'system.users': { delete: '删除账号' } }
 
 /** 只能授予超级管理员角色的资源：用它能给别人（包括自己）加权限，后端也拒绝授给其他角色。 */
 export const SUPERADMIN_ONLY = new Set(['system.permissions'])
@@ -62,7 +67,7 @@ function toEntry(node: ResourceNode): ModuleEntry {
   const writes = actions
     .filter(action => action.required_level === 'FULL')
     .sort((a, b) => (WRITE_ORDER.get(a.action_code) ?? 99) - (WRITE_ORDER.get(b.action_code) ?? 99))
-    .map(action => WRITE_LABEL.get(action.action_code) ?? action.action_code)
+    .map(action => WRITE_LABEL_BY_RESOURCE[node.code]?.[action.action_code] ?? WRITE_LABEL.get(action.action_code) ?? action.action_code)
   const levels: GrantLevel[] = ['NONE', 'READ']
   if (hasExport) levels.push('EXPORT')
   if (writes.length) levels.push('FULL')

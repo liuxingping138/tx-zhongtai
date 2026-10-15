@@ -26,6 +26,10 @@ def _prepare_env() -> None:
     os.environ.setdefault("POLICY_ENVIRONMENT", "test")
     os.environ.setdefault("POLICY_IAM_SERVICE_SECRET", "export-only")
     os.environ.setdefault("POLICY_AUDIT_INGEST_SECRET", "export-only")
+    os.environ.setdefault("AI_DATABASE_URL", "postgresql+asyncpg://ai_app:test@localhost:5432/ai_db")
+    os.environ.setdefault("AI_ENVIRONMENT", "test")
+    os.environ.setdefault("AI_IAM_SERVICE_SECRET", "export-only")
+    os.environ.setdefault("AI_AUDIT_INGEST_SECRET", "export-only")
 
 
 def _dump(app: object, dest: Path) -> None:
@@ -39,6 +43,7 @@ SERVICES = {
     "audit": "services/audit-service",
     "codebook": "services/codebook-service",
     "policy": "services/policy-service",
+    "ai": "services/ai-service",
 }
 
 

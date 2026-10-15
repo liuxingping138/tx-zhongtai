@@ -21,5 +21,9 @@ export OPENAPI_OUT="$tmp"
   cd "$root/services/policy-service"
   uv run python ../../scripts/export_openapi.py policy
 )
+(
+  cd "$root/services/ai-service"
+  uv run python ../../scripts/export_openapi.py ai
+)
 diff -ru "$root/docs/openapi" "$tmp"
 echo "openapi_matches_apps"

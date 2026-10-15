@@ -21,6 +21,7 @@ PUBLIC_FIELDS: dict[str, tuple[str, ...]] = {
     ),
     "audit": ("environment", "retention_days"),
     "codebook": ("environment", "import_max_bytes", "export_max_rows"),
+    "ai": ("environment", "upload_max_bytes", "batch_concurrency", "batch_max_running", "batch_stale_seconds"),
     "policy": (
         "environment",
         "import_max_bytes",

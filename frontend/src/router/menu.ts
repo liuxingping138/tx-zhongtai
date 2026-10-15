@@ -11,6 +11,9 @@ export const ROUTE_BY_NAME: Record<string, string> = {
   'policy-crawler-monitoring': '/policy/crawler-monitoring',
   'policy-base-tags': '/policy/base-tags',
   'policy-interpretations': '/policy/interpretations',
+  'ai-prompts': '/ai/prompts',
+  'ai-batch-runs': '/ai/batch-runs',
+  'ai-chat': '/ai/chat',
 }
 
 export function pathForRouteName(routeName: string | null): string | null {

@@ -1,4 +1,4 @@
-"""隔离恢复后，用四个应用账号执行真实 Alembic 升/降级，证明对象所有权可用。"""
+"""隔离恢复后，用各服务的应用账号执行真实 Alembic 升/降级，证明对象所有权可用。"""
 from __future__ import annotations
 
 import os
@@ -7,11 +7,11 @@ import subprocess
 
 
 def main() -> None:
-    for name in ('IAM', 'AUDIT', 'POLICY', 'CODEBOOK'):
+    for name in ('IAM', 'AUDIT', 'POLICY', 'CODEBOOK', 'AI'):
         if not os.environ[f'{name}_DB_NAME'].endswith('_p6_db'):
             raise SystemExit('仅允许 P6 隔离库')
     compose = shlex.split(os.environ['P6_COMPOSE'])
-    for service in ('iam-service', 'audit-service', 'codebook-service', 'policy-service'):
+    for service in ('iam-service', 'audit-service', 'codebook-service', 'policy-service', 'ai-service'):
         prefix = [*compose, 'exec', '-T', service]
         subprocess.run([*prefix, '.venv/bin/alembic', 'upgrade', 'head'], check=True)
         code = '''from pathlib import Path

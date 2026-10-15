@@ -63,6 +63,10 @@ RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("codebook.policy_types", "政策类型码表", "codebook-service", NodeType.RESOURCE, True, 51, "codebook"),
     ResourceSpec("codebook.scenarios", "行业场景码表", "codebook-service", NodeType.RESOURCE, True, 52, "codebook"),
     ResourceSpec("codebook.area_codes", "省市区编码表", "codebook-service", NodeType.RESOURCE, True, 53, "codebook"),
+    ResourceSpec("ai", "AI 打表", "ai-service", NodeType.DIRECTORY, True, 60),
+    ResourceSpec("ai.prompts", "提问配置", "ai-service", NodeType.RESOURCE, True, 61, "ai"),
+    ResourceSpec("ai.batch_runs", "批量提问", "ai-service", NodeType.RESOURCE, True, 62, "ai"),
+    ResourceSpec("ai.chat", "多轮对话", "ai-service", NodeType.RESOURCE, True, 63, "ai"),
 )
 
 ACTION_SPECS: tuple[ActionSpec, ...] = (
@@ -126,6 +130,19 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ActionSpec("policy.interpretations", "create", GrantLevel.FULL),
     ActionSpec("policy.interpretations", "update", GrantLevel.FULL),
     ActionSpec("policy.interpretations", "import", GrantLevel.FULL),
+    # 试发、批量运行和对话会调用大模型产生费用：试发和批量要「管理」档；多轮对话页本身就是对话，「仅查看」即可使用。
+    ActionSpec("ai.prompts", "list", GrantLevel.READ),
+    ActionSpec("ai.prompts", "export", GrantLevel.EXPORT),
+    ActionSpec("ai.prompts", "create", GrantLevel.FULL),
+    ActionSpec("ai.prompts", "update", GrantLevel.FULL),
+    ActionSpec("ai.prompts", "delete", GrantLevel.FULL),
+    ActionSpec("ai.prompts", "ask", GrantLevel.FULL),
+    ActionSpec("ai.batch_runs", "list", GrantLevel.READ),
+    ActionSpec("ai.batch_runs", "export", GrantLevel.EXPORT),
+    ActionSpec("ai.batch_runs", "run", GrantLevel.FULL),
+    ActionSpec("ai.batch_runs", "stop", GrantLevel.FULL),
+    ActionSpec("ai.batch_runs", "delete", GrantLevel.FULL),
+    ActionSpec("ai.chat", "chat", GrantLevel.READ),
 )
 
 MENU_SPECS: tuple[MenuSpec, ...] = (
@@ -203,6 +220,10 @@ MENU_SPECS: tuple[MenuSpec, ...] = (
         "menu.codebook",
         enabled=True,
     ),
+    MenuSpec("menu.ai", "AI 打表", 60, enabled=True),
+    MenuSpec("menu.ai.prompts", "提问配置", 61, "ai-prompts", "ai.prompts", "menu.ai", enabled=True),
+    MenuSpec("menu.ai.batch_runs", "批量提问", 62, "ai-batch-runs", "ai.batch_runs", "menu.ai", enabled=True),
+    MenuSpec("menu.ai.chat", "多轮对话", 63, "ai-chat", "ai.chat", "menu.ai", enabled=True),
 )
 
 SUPERADMIN_ROLE_CODE = "superadmin"

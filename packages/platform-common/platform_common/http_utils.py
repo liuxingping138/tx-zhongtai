@@ -90,9 +90,18 @@ async def read_import_upload(request: Request, max_bytes: int) -> bytes:
     也按实际读到的字节计数。
     """
 
+    content, _ = await read_named_upload(request, max_bytes)
+    return content
+
+
+async def read_named_upload(
+    request: Request, max_bytes: int, *, missing: str = "请上传 Excel 文件"
+) -> tuple[bytes, str]:
+    """同 ``read_import_upload``，另外返回上传时的文件名（只用于展示和校验后缀，不能拼进路径）。"""
+
     content_type = request.headers.get("content-type", "")
     if "multipart/form-data" not in content_type.lower():
-        raise ApiError("请上传 Excel 文件", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+        raise ApiError(missing, code=ErrorCode.VALIDATION_ERROR, http_status=422)
     received = 0
     limit = max_bytes + MULTIPART_OVERHEAD_BYTES
 
@@ -115,10 +124,10 @@ async def read_import_upload(request: Request, max_bytes: int) -> bytes:
         form = await parser.parse()
         upload = form.get("file")
         if upload is None or isinstance(upload, str):
-            raise ApiError("请上传 Excel 文件", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+            raise ApiError(missing, code=ErrorCode.VALIDATION_ERROR, http_status=422)
         if upload.size is not None and upload.size > max_bytes:
             raise ApiError("导入文件过大", code=ErrorCode.VALIDATION_ERROR, http_status=413)
-        return await read_upload_within_limit(upload, max_bytes)
+        return await read_upload_within_limit(upload, max_bytes), upload.filename or ""
     except MultiPartException as exc:
         raise ApiError("上传表单无效或超过限制", code=ErrorCode.VALIDATION_ERROR, http_status=413) from exc
     finally:

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 四库只读备份：完整成功后原子发布；恢复仍须通过隔离库白名单。
+# 业务库只读备份：五个服务库 + AI 打表的附件卷，完整成功后原子发布；恢复仍须通过隔离库白名单。
 set -euo pipefail
 umask 077
 if [ "${CONFIRM_BUSINESS_BACKUP:-}" != yes ]; then
@@ -24,7 +24,7 @@ OUT="$BASE/$STAMP"
 [ ! -e "$OUT" ] || { echo '备份目录已存在' >&2; exit 2; }
 TMP="$(mktemp -d "$BASE/.incomplete.XXXXXXXX")"
 trap 'rm -rf -- "$TMP"' EXIT
-for pair in "iam:$IAM_DB_NAME" "audit:$AUDIT_DB_NAME" "policy:$POLICY_DB_NAME" "codebook:$CODEBOOK_DB_NAME"; do
+for pair in "iam:$IAM_DB_NAME" "audit:$AUDIT_DB_NAME" "policy:$POLICY_DB_NAME" "codebook:$CODEBOOK_DB_NAME" "ai:$AI_DB_NAME"; do
   svc="${pair%%:*}"; db="${pair#*:}"
   [ "$db" = "${svc}_db" ] || { echo "拒绝非业务库 $db" >&2; exit 2; }
   $BACKUP_COMPOSE exec -T postgres pg_dump -U "${POSTGRES_SUPERUSER:-postgres}" -d "$db" --no-owner --format=custom > "$TMP/$svc.dump"
@@ -32,8 +32,12 @@ for pair in "iam:$IAM_DB_NAME" "audit:$AUDIT_DB_NAME" "policy:$POLICY_DB_NAME" "
   printf '%s\n' "$db" > "$TMP/$svc.dbname"
   echo "已导出 $svc"
 done
-(cd "$TMP" && sha256sum ./*.dump ./*.dbname > SHA256SUMS)
-printf 'format=tx-zhongtai-four-db-v1\ncompleted_utc=%s\n' "$STAMP" > "$TMP/COMPLETE"
+# 模板 Excel、码表和批量结果不在库里，在 ai-service 的持久卷上，一起打包。
+$BACKUP_COMPOSE exec -T ai-service tar -C /data/ai -cf - . > "$TMP/ai-files.tar"
+tar -tf "$TMP/ai-files.tar" > /dev/null
+echo "已打包 AI 打表附件"
+(cd "$TMP" && sha256sum ./*.dump ./*.dbname ./ai-files.tar > SHA256SUMS)
+printf 'format=tx-zhongtai-business-v2\ncompleted_utc=%s\n' "$STAMP" > "$TMP/COMPLETE"
 mv "$TMP" "$OUT"
 # 异机目标必须由运维提供；失败退出非零并保留本地备份，不能伪报异机备份成功。
 if [ -n "${BACKUP_OFFSITE:-}" ]; then
@@ -47,7 +51,7 @@ base=pathlib.Path(sys.argv[1]); cutoff=datetime.datetime.now(datetime.timezone.u
 for p in base.iterdir():
     if p.is_symlink() or not p.is_dir() or not re.fullmatch(r'\d{8}T\d{6}Z',p.name): continue
     marker=p/'COMPLETE'
-    if not marker.is_file() or not marker.read_text().startswith('format=tx-zhongtai-four-db-v1\n'): continue
+    if not marker.is_file() or not marker.read_text().startswith(('format=tx-zhongtai-four-db-v1\n','format=tx-zhongtai-business-v2\n')): continue
     stamp=datetime.datetime.strptime(p.name,'%Y%m%dT%H%M%SZ').replace(tzinfo=datetime.timezone.utc)
     if stamp<cutoff: shutil.rmtree(p)
 PY

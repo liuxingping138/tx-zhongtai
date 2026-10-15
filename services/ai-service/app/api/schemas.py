@@ -1,0 +1,69 @@
+from __future__ import annotations
+
+from collections.abc import AsyncIterator
+from typing import Literal
+from urllib.parse import quote
+
+from fastapi.responses import Response, StreamingResponse
+from pydantic import BaseModel, ConfigDict, Field
+
+FileKind = Literal["excel", "code"]
+RunFileKind = Literal["result", "raw", "log", "failed"]
+
+
+class _Body(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+_MEDIA_TYPES = {
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".csv": "text/csv; charset=utf-8",
+}
+
+
+class PromptBody(_Body):
+    title: str = Field(max_length=255)
+    content: str = Field(max_length=200_000)
+    output_fields: str = Field(default="", max_length=2000)
+    model_id: str = Field(default="", max_length=100)
+    version: int | None = None
+
+
+class AskBody(_Body):
+    content: str = Field(max_length=200_000)
+    model_id: str = Field(max_length=100)
+    thinking: bool = False
+    prompt_id: str | None = Field(default=None, max_length=32)
+
+
+class ChatBody(_Body):
+    message: str = Field(max_length=200_000)
+    model_id: str = Field(max_length=100)
+    thinking: bool = False
+    previous_response_id: str | None = Field(default=None, max_length=200)
+
+
+class RunBody(_Body):
+    prompt_id: str = Field(max_length=32)
+    model_id: str = Field(default="", max_length=100)
+    thinking: bool = False
+    # 0 表示跑全部，「运行 10 条测试」传 10
+    limit: int = Field(default=0, ge=0, le=100_000)
+
+
+def file_response(content: bytes, filename: str) -> Response:
+    suffix = filename[filename.rfind(".") :].lower() if "." in filename else ""
+    return Response(
+        content=content,
+        media_type=_MEDIA_TYPES.get(suffix, "application/octet-stream"),
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+    )
+
+
+def sse_response(stream: AsyncIterator[str]) -> StreamingResponse:
+    # X-Accel-Buffering：前面若有 nginx 也不要缓冲，否则用户要等整段回答生成完才看到字。
+    return StreamingResponse(
+        stream,
+        media_type="text/event-stream; charset=utf-8",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

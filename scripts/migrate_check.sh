@@ -10,7 +10,7 @@ else
   compose=(docker compose -f "$root/deploy/compose/docker-compose.yml" --env-file "$root/.env")
 fi
 
-services=(iam-service audit-service codebook-service policy-service)
+services=(iam-service audit-service codebook-service policy-service ai-service)
 for name in "${services[@]}"; do
   printf '%-20s ' "$name"
   "${compose[@]}" exec -T "$name" .venv/bin/alembic check

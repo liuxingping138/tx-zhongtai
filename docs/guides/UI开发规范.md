@@ -168,3 +168,13 @@ ColumnPicker 按用户ID和route.path保存字段键（存储键 `zt:columns:v2:
 ## 任务调度复用示例
 
 `frontend/src/modules/system/scheduler/`：`SchedulerList.vue` 是系统配置型短列表，复用 ListPage（隐藏分页）、ColumnPicker、useUnsavedForm，设置计划用 480px 对话框；`SchedulerHistoryDrawer.vue` 是可分页的执行记录抽屉，状态与请求逻辑在 `useSchedulerHistory.ts`，状态文案和标签颜色在 `runStatus.ts`。列表和打开中的记录抽屉每 5 秒静默刷新，页面隐藏时暂停，后台轮询不反复显示加载遮罩。`/system/scheduler` 是页面路径，`/api/v1/policy/scheduled-jobs` 是服务接口，权限归属由资源目录决定，不按前端 URL 推断。配置表单必须携带版本号；失败保留填写值；执行成功指“已入队”，不把请求成功当成同步已完成。
+
+## 工作台页面（AI 打表）
+
+`frontend/src/modules/ai/`：提问配置、批量提问、多轮对话不是字段列表，不套 `ListPage`。页面占满内容区高度（`calc(100dvh - var(--workspace-header-height) - 48px)`），由白底细边框面板（`shared/ai.css` 的 `.ai-panel`）左右分栏，1200px 及以下改为上下排、整页滚动；页面标题只给读屏（`.ai-sr-only`）。
+
+- 流式回答统一用 `shared/useAnswerStream.ts`（底层 `api/eventStream.ts`：带令牌和 CSRF、401 续期重试一次、错误还原成中文提示），消息列表 `AnswerTranscript.vue`，用量和费用 `StreamStatsBar.vue`，模型选择 `ModelPicker.vue`（未配密钥的模型可见但不可选）。事件处理是 `shared/streamEvents.ts` 里的纯函数，加新事件先改它和单测。
+- 下载走 `shared/downloads.ts`（底层 `downloadFile`），不放在 `api/ai.ts`：契约测试会逐个调用 api 目录导出的函数。
+- 模板编辑用 `useUnsavedForm`：切换模板、新建、离开页面前提示未保存的修改。附件上传、删除不动表单草稿。
+- 批量历史有任务在排队或运行时每 2 秒刷新，全部结束后停止轮询。
+

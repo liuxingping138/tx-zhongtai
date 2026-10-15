@@ -6,7 +6,7 @@ cd "$(git rev-parse --show-toplevel)"
 python3 scripts/check_code_rules.py
 
 staged="$(git diff --cached --name-only --diff-filter=ACMR)"
-for pkg in packages/platform-common services/iam-service services/audit-service services/codebook-service services/policy-service; do
+for pkg in packages/platform-common services/iam-service services/audit-service services/codebook-service services/policy-service services/ai-service; do
   if grep -q "^$pkg/.*\.py$" <<<"$staged"; then
     (cd "$pkg" && uv run --quiet ruff format --check . && uv run --quiet ruff check .) || {
       echo "pre-commit: $pkg 的 ruff 检查未通过" >&2

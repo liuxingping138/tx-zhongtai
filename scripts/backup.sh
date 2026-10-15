@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 备份四个服务库。默认只允许隔离库名（*_p6_db / *_itest / *_test）。
+# 备份全部服务库。默认只允许隔离库名（*_p6_db / *_itest / *_test）。
 set -euo pipefail
 umask 077
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -16,8 +16,8 @@ set -a
 source "$ENV_FILE"
 set +a
 
-# 每个服务一套独立库，四个都要备。只备 iam+audit 会丢掉全部业务数据。
-SERVICES="iam audit policy codebook"
+# 每个服务一套独立库，全部都要备。只备 iam+audit 会丢掉全部业务数据。
+SERVICES="iam audit policy codebook ai"
 for svc in $SERVICES; do
   eval "db=\${$(echo "$svc" | tr '[:lower:]' '[:upper:]')_DB_NAME:-}"
   guard_db_name "$db" "$svc"

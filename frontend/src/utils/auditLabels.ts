@@ -18,6 +18,10 @@ export const MODULE_LABELS: Record<string, string> = {
   'codebook.area_codes': '省市区编码表',
   customer: '客户',
   tender: '招投标',
+  ai: 'AI 打表',
+  'ai.prompts': '提问配置',
+  'ai.batch_runs': '批量提问',
+  'ai.chat': '多轮对话',
 }
 
 export const ACTION_LABELS: Record<string, string> = {
@@ -44,6 +48,8 @@ export const ACTION_LABELS: Record<string, string> = {
   cleanup: '清理',
   execute: '执行任务',
   purge: '清空',
+  run: '运行',
+  stop: '停止',
   resolve: '补码',
 }
 

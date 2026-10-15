@@ -49,6 +49,20 @@ http:
       middlewares: ["compress", "request-limit"]
       priority: 100
       tls: {}
+    ai:
+      rule: "PathPrefix(`/api/v1/ai`)"
+      entryPoints: ["websecure"]
+      service: ai-service
+      middlewares: ["compress", "request-limit"]
+      priority: 100
+      tls: {}
+    # 流式回答：不挂压缩和请求缓冲（buffering 会把整个响应攒满才下发），请求体上限由服务自己限制。
+    ai-stream:
+      rule: "PathPrefix(`/api/v1/ai/stream`)"
+      entryPoints: ["websecure"]
+      service: ai-service
+      priority: 110
+      tls: {}
     api-fallback:
       rule: "PathPrefix(`/api/v1`)"
       entryPoints: ["websecure"]
@@ -94,6 +108,10 @@ http:
       loadBalancer:
         servers:
           - url: "http://policy-service:8004"
+    ai-service:
+      loadBalancer:
+        servers:
+          - url: "http://ai-service:8005"
     api-fallback:
       loadBalancer:
         servers:

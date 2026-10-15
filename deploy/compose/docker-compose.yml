@@ -1,5 +1,6 @@
 # 本地开发环境 Compose。生产部署需另行准备（本期不执行）。
-# 运行单元：frontend、gateway、iam-service、iam-worker、audit-service、codebook-service、policy-service、postgres、redis。
+# 运行单元：frontend、gateway、iam-service、iam-worker、audit-service、codebook-service、policy-service、policy-worker、
+# ai-service、ai-worker、postgres、redis。
 #
 # 使用方式：在仓库根目录执行 `docker compose -f deploy/compose/docker-compose.yml --env-file .env up`
 # 或通过根目录 Makefile 的 `make dev-up` / `make dev-down`。
@@ -16,6 +17,8 @@ networks:
 volumes:
   postgres-data:
   redis-data:
+  # AI 打表的模板 Excel、码表和批量结果
+  ai-data:
 
 services:
   postgres:
@@ -38,6 +41,9 @@ services:
       POLICY_DB_NAME: ${POLICY_DB_NAME:?POLICY_DB_NAME 未设置}
       POLICY_DB_USER: ${POLICY_DB_USER:?POLICY_DB_USER 未设置}
       POLICY_DB_PASSWORD: ${POLICY_DB_PASSWORD:?POLICY_DB_PASSWORD 未设置}
+      AI_DB_NAME: ${AI_DB_NAME:?AI_DB_NAME 未设置}
+      AI_DB_USER: ${AI_DB_USER:?AI_DB_USER 未设置}
+      AI_DB_PASSWORD: ${AI_DB_PASSWORD:?AI_DB_PASSWORD 未设置}
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
@@ -246,6 +252,80 @@ services:
       timeout: 5s
       retries: 5
 
+  ai-service:
+    build:
+      context: ../..
+      dockerfile: services/ai-service/Dockerfile
+    restart: unless-stopped
+    environment:
+      AI_ENVIRONMENT: ${AI_ENVIRONMENT:-${ENVIRONMENT:-development}}
+      AI_SERVICE_NAME: ai-service
+      AI_LOG_LEVEL: ${AI_LOG_LEVEL:-INFO}
+      AI_DATABASE_URL: postgresql+asyncpg://${AI_DB_USER}:${AI_DB_PASSWORD}@postgres:5432/${AI_DB_NAME}
+      AI_CORS_ALLOW_ORIGINS: ${AI_CORS_ALLOW_ORIGINS:-[]}
+      AI_IAM_BASE_URL: http://iam-service:8001
+      AI_IAM_SERVICE_SECRET: ${AI_IAM_SERVICE_SECRET:-dev-only-change-me-internal}
+      AI_AUDIT_INGEST_URL: http://audit-service:8002
+      AI_AUDIT_INGEST_SECRET: ${AI_AUDIT_INGEST_SECRET:-dev-only-change-me-ingest}
+      AI_UPLOAD_MAX_BYTES: ${AI_UPLOAD_MAX_BYTES:-20971520}
+      AI_ARK_API_KEY: ${AI_ARK_API_KEY:-}
+      AI_BAIDU_API_KEY: ${AI_BAIDU_API_KEY:-}
+      AI_BATCH_CONCURRENCY: ${AI_BATCH_CONCURRENCY:-20}
+      AI_BATCH_MAX_RUNNING: ${AI_BATCH_MAX_RUNNING:-3}
+      AI_BATCH_STALE_SECONDS: ${AI_BATCH_STALE_SECONDS:-90}
+    volumes:
+      - ai-data:/data/ai
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - data
+      - gateway  # 调用字节方舟、百度千帆需要出站网络
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8005/health/live')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ai-worker:
+    build:
+      context: ../..
+      dockerfile: services/ai-service/Dockerfile
+    command: [".venv/bin/python", "-m", "app.worker"]
+    init: true
+    # 停止时把在跑的批量任务收尾成「中断」并生成已完成部分的结果，要留够时间。
+    stop_grace_period: 45s
+    restart: unless-stopped
+    environment:
+      AI_ENVIRONMENT: ${AI_ENVIRONMENT:-${ENVIRONMENT:-development}}
+      AI_SERVICE_NAME: ai-worker
+      AI_LOG_LEVEL: ${AI_LOG_LEVEL:-INFO}
+      AI_DATABASE_URL: postgresql+asyncpg://${AI_DB_USER}:${AI_DB_PASSWORD}@postgres:5432/${AI_DB_NAME}
+      AI_CORS_ALLOW_ORIGINS: ${AI_CORS_ALLOW_ORIGINS:-[]}
+      AI_IAM_BASE_URL: http://iam-service:8001
+      AI_IAM_SERVICE_SECRET: ${AI_IAM_SERVICE_SECRET:-dev-only-change-me-internal}
+      AI_AUDIT_INGEST_URL: http://audit-service:8002
+      AI_AUDIT_INGEST_SECRET: ${AI_AUDIT_INGEST_SECRET:-dev-only-change-me-ingest}
+      AI_UPLOAD_MAX_BYTES: ${AI_UPLOAD_MAX_BYTES:-20971520}
+      AI_ARK_API_KEY: ${AI_ARK_API_KEY:-}
+      AI_BAIDU_API_KEY: ${AI_BAIDU_API_KEY:-}
+      AI_BATCH_CONCURRENCY: ${AI_BATCH_CONCURRENCY:-20}
+      AI_BATCH_MAX_RUNNING: ${AI_BATCH_MAX_RUNNING:-3}
+      AI_BATCH_STALE_SECONDS: ${AI_BATCH_STALE_SECONDS:-90}
+    volumes:
+      - ai-data:/data/ai
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - data
+      - gateway  # 调用大模型接口需要出站网络；不发布任何端口
+    healthcheck:
+      test: ["CMD", ".venv/bin/python", "-m", "app.worker.health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   iam-worker:
     build:
       context: ../..
@@ -306,5 +386,6 @@ services:
       - audit-service
       - codebook-service
       - policy-service
+      - ai-service
       - frontend
       - api-fallback

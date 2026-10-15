@@ -14,6 +14,8 @@ volumes:
     name: tx-zhongtai-p6-postgres-data
   redis-data:
     name: tx-zhongtai-p6-redis-data
+  ai-data:
+    name: tx-zhongtai-p6-ai-data
 
 services:
   iam-service:
@@ -23,19 +25,19 @@ services:
       IAM_ENVIRONMENT: test
       IAM_REFRESH_REUSE_GRACE_SECONDS: "0"
       IAM_CSRF_ALLOWED_ORIGINS: '["http://localhost:8090","http://127.0.0.1:8090"]'
-      IAM_INTERNAL_CALLER_SECRETS: '{"audit-service":"p6-only-change-me-internal","codebook-service":"p6-only-change-me-internal","policy-service":"p6-only-change-me-internal"}'
+      IAM_INTERNAL_CALLER_SECRETS: '{"audit-service":"p6-only-change-me-internal","codebook-service":"p6-only-change-me-internal","policy-service":"p6-only-change-me-internal","ai-service":"p6-only-change-me-internal"}'
       IAM_AUDIT_INGEST_SECRET: p6-only-change-me-ingest
   iam-worker:
     volumes:
       - ../secrets/jwt-p6:/secrets/jwt
     environment:
       IAM_ENVIRONMENT: test
-      IAM_INTERNAL_CALLER_SECRETS: '{"audit-service":"p6-only-change-me-internal","codebook-service":"p6-only-change-me-internal","policy-service":"p6-only-change-me-internal"}'
+      IAM_INTERNAL_CALLER_SECRETS: '{"audit-service":"p6-only-change-me-internal","codebook-service":"p6-only-change-me-internal","policy-service":"p6-only-change-me-internal","ai-service":"p6-only-change-me-internal"}'
       IAM_AUDIT_INGEST_SECRET: p6-only-change-me-ingest
   audit-service:
     environment:
       AUDIT_ENVIRONMENT: test
-      AUDIT_INTERNAL_CALLER_SECRETS: '{"iam-service":"p6-only-change-me-ingest","codebook-service":"p6-only-change-me-ingest","policy-service":"p6-only-change-me-ingest"}'
+      AUDIT_INTERNAL_CALLER_SECRETS: '{"iam-service":"p6-only-change-me-ingest","codebook-service":"p6-only-change-me-ingest","policy-service":"p6-only-change-me-ingest","ai-service":"p6-only-change-me-ingest"}'
       AUDIT_IAM_SERVICE_SECRET: p6-only-change-me-internal
   codebook-service:
     environment:
@@ -55,3 +57,18 @@ services:
       POLICY_CRAWLER_MYSQL_HOST: ""
       POLICY_CRAWLER_MYSQL_USER: ""
       POLICY_CRAWLER_MYSQL_PASSWORD: ""
+  # 不配模型密钥：验收只测模板、上传、权限和队列，不真的调用大模型（会产生费用）。
+  ai-service:
+    environment:
+      AI_ENVIRONMENT: test
+      AI_IAM_SERVICE_SECRET: p6-only-change-me-internal
+      AI_AUDIT_INGEST_SECRET: p6-only-change-me-ingest
+      AI_ARK_API_KEY: ""
+      AI_BAIDU_API_KEY: ""
+  ai-worker:
+    environment:
+      AI_ENVIRONMENT: test
+      AI_IAM_SERVICE_SECRET: p6-only-change-me-internal
+      AI_AUDIT_INGEST_SECRET: p6-only-change-me-ingest
+      AI_ARK_API_KEY: ""
+      AI_BAIDU_API_KEY: ""
