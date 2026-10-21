@@ -198,8 +198,8 @@ describe('省份分布', () => {
   })
 
   it('横轴用简称，全国、国央企等原样', () => {
-    expect(['新疆维吾尔自治区', '广西壮族自治区', '宁夏回族自治区', '西藏自治区', '内蒙古自治区', '香港特别行政区', '黑龙江省', '北京市', '全国', '国央企', '未填省份'].map(provinceShortName))
-      .toEqual(['新疆', '广西', '宁夏', '西藏', '内蒙古', '香港', '黑龙江', '北京', '全国', '国央企', '未填省份'])
+    expect(['新疆维吾尔自治区', '广西壮族自治区', '宁夏回族自治区', '西藏自治区', '内蒙古自治区', '黑龙江省', '北京市', '全国', '国央企'].map(provinceShortName))
+      .toEqual(['新疆', '广西', '宁夏', '西藏', '内蒙古', '黑龙江', '北京', '全国', '国央企'])
   })
 
   type ProvinceChart = {
@@ -210,7 +210,7 @@ describe('省份分布', () => {
 
   it('柱子只画当前排序的指标，柱高和柱顶数字一致，提示里写全称和明细', () => {
     const merged = province('新疆维吾尔自治区', 20, 5, 75, ['新疆', '新疆维吾尔族自治区'])
-    const empty = province('澳门特别行政区', 0, 0, 0)
+    const empty = province('青海省', 0, 0, 0)
     const items = [merged, empty]
     const chart = (by: 'stale' | 'rate' | 'sites') => provinceOption(items, palette, [], by) as ProvinceChart & { yAxis: { name: string } }
     const values = (by: 'stale' | 'rate' | 'sites') => chart(by).series[0]?.data.map(bar => bar.value)
@@ -220,10 +220,10 @@ describe('省份分布', () => {
     expect([values('rate'), labels('rate'), chart('rate').yAxis.name]).toEqual([[75, 0], ['75.0%', ''], '停更率（%）'])
     expect([values('sites'), labels('sites'), chart('sites').yAxis.name]).toEqual([[100, 0], ['100', ''], '网站数'])
     const option = chart('stale')
-    expect(option.xAxis.data).toEqual(['新疆', '澳门'])
+    expect(option.xAxis.data).toEqual(['新疆', '青海'])
     expect(option.xAxis.axisLabel.formatter('内蒙古')).toBe('内\n蒙\n古')
     expect(option.tooltip.formatter([{ dataIndex: 0 }])).toContain('含写法：新疆、新疆维吾尔族自治区')
-    expect(option.tooltip.formatter([{ dataIndex: 1 }])).toBe('<b>澳门特别行政区</b><br/>暂无网站')
+    expect(option.tooltip.formatter([{ dataIndex: 1 }])).toBe('<b>青海省</b><br/>暂无网站')
     expect(option.tooltip.formatter([{ dataIndex: 9 }])).toBe('')
   })
 
@@ -235,7 +235,7 @@ describe('省份分布', () => {
   })
 
   it('没有网站的卡片写「暂无网站」，色条为空', () => {
-    const tile = provinceTile(province('澳门特别行政区', 0, 0, 0))
+    const tile = provinceTile(province('青海省', 0, 0, 0))
     expect(tile.caption).toBe('暂无网站')
     expect(tile.shares).toEqual({ normal: 0, watch: 0, stale: 0 })
   })

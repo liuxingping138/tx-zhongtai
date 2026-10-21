@@ -256,7 +256,7 @@ function staleRate(item: CrawlerProvince): number {
   return item.sites ? item.stale / item.sites : 0
 }
 
-/** 全部分类都参与排序，网站少的也不剔除：全国、国央企、港澳和 32 个省是同一套「省份」字段分类。 */
+/** 全部分类都参与排序，网站少的也不剔除：全国、国央企和 31 个省是同一套「省份」字段分类。 */
 export function sortProvinces(items: CrawlerProvince[], by: ProvinceSort, limit?: number): CrawlerProvince[] {
   const key: Record<ProvinceSort, (item: CrawlerProvince) => number> = { stale: item => item.stale, rate: staleRate, sites: item => item.sites }
   const sorted = [...items].sort((a, b) => key[by](b) - key[by](a) || b.sites - a.sites || a.name.localeCompare(b.name, 'zh'))

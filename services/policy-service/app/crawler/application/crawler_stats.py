@@ -9,7 +9,7 @@ from typing import Any
 from platform_common.clock import BEIJING, utcnow
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.crawler.domain.provinces import FIELD_CATEGORIES, PROVINCES, chart_province
+from app.crawler.domain.provinces import EMPTY_PROVINCE, FIELD_CATEGORIES, PROVINCES, chart_province
 from app.crawler.repositories import crawler_stats as repo
 
 # 超过这么多天没有新数据，多半是网站下线或改版，与近期停更分开统计。
@@ -43,7 +43,7 @@ def merge_provinces(rows: list[tuple[str, int, int, int]]) -> list[dict[str, Any
     merged: dict[str, dict[str, Any]] = defaultdict(lambda: {"raw_names": [], "normal": 0, "watch": 0, "stale": 0})
     for raw, normal, watch, stale in rows:
         item = merged[chart_province(raw)]
-        item["raw_names"].append(raw)
+        item["raw_names"].append(raw if raw.strip() else EMPTY_PROVINCE)
         item["normal"] += normal
         item["watch"] += watch
         item["stale"] += stale
@@ -64,9 +64,9 @@ def _empty_province(name: str) -> dict[str, Any]:
 
 
 def province_categories(rows: list[tuple[str, int, int, int]]) -> list[dict[str, Any]]:
-    """按「省份」字段的分类出图：32 个省级行政区、香港、澳门，以及全国、国央企，没有数据的补 0。
+    """按「省份」字段的分类出图：31 个省级行政区，以及全国、国央企，没有数据的补 0。
 
-    字段里还有别的写法（如未填省份）也排进来，不单列、不丢掉。
+    字段里还有别的写法也排进来，不单列、不丢掉。
     """
 
     merged = {item["name"]: item for item in merge_provinces(rows)}
