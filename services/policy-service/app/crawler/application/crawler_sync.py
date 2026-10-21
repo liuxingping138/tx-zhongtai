@@ -33,6 +33,7 @@ from app.core.config import get_settings
 from app.core.database import SessionLocal, engine
 from app.crawler.application import crawler_status as status_history
 from app.crawler.domain.models import CrawlerSiteDaily, CrawlerSyncRun
+from app.crawler.domain.provinces import EMPTY_PROVINCE_CATEGORY
 from app.crawler.repositories.crawler_sites import SYNC_LOCK_KEY
 from app.crawler.repositories.source import mysql_connect, retry_mysql_read
 
@@ -93,13 +94,16 @@ def _published(value: Any) -> date | None:
 
 
 def merge_day_rows(day: date, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """按本地主键合并。MySQL 的排序规则可能与截断后的本地键不一致，合并后才能安全写入。"""
+    """按本地主键合并。MySQL 的排序规则可能与截断后的本地键不一致，合并后才能安全写入。
+
+    省份为空的网站记作国央企，与同名同地市的国央企网站合为一个。
+    """
 
     merged: dict[tuple[str, str, str], dict[str, Any]] = {}
     for row in rows:
         key = (
             str(row["site_name"] or "")[:255],
-            str(row["province_name"] or "")[:64],
+            str(row["province_name"] or EMPTY_PROVINCE_CATEGORY)[:64],
             str(row["city_name"] or "")[:64],
         )
         created = _source_time(row["last_created"]) if row["last_created"] else None

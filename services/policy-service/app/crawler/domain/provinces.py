@@ -40,12 +40,12 @@ PROVINCES = (
 # 「全国」「国央企」等字段里的其他分类原样保留，同样进图。
 FIELD_CATEGORIES = ("全国", "国央企")
 _PREFIXES = tuple((name[:3] if name.startswith(("内蒙古", "黑龙江")) else name[:2], name) for name in PROVINCES)
-# 爬虫库里省份为空的网站都是国央企（2026-10-21 用户确认）：图和筛选都把它们算作「国央企」，表格仍显示原始空值。
+# 爬虫库里省份为空的网站都是国央企（2026-10-21 用户确认）：同步时就写成「国央企」，表格、筛选、图表一致。
 EMPTY_PROVINCE_CATEGORY = "国央企"
 
 
 def chart_province(raw: str) -> str:
-    """「新疆维吾尔族自治区」「新疆」都归到「新疆维吾尔自治区」；「全国」「国央企」这类非省份值原样保留，空值归国央企。"""
+    """「新疆维吾尔族自治区」「新疆」都归到「新疆维吾尔自治区」；「全国」「国央企」这类非省份值原样保留。"""
 
     value = raw.strip()
     if not value:

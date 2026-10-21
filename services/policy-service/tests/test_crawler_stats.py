@@ -48,8 +48,7 @@ def test_province_categories_keep_every_value_of_the_province_field() -> None:
             ("广东省", 1, 0, 2),
             ("全国", 0, 0, 3),
             ("新疆", 0, 0, 4),
-            ("国央企", 2, 0, 0),
-            ("", 0, 0, 1),
+            ("国央企", 2, 0, 1),
         ]
     )
     names = [item["name"] for item in items]

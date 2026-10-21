@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from platform_common.filters import Filters, FilterValue, filter_values, ilike_any, in_any
-from sqlalchemy import ColumnElement, func, or_, select, text
+from platform_common.filters import Filters, ilike_any, in_any
+from sqlalchemy import ColumnElement, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
 from app.crawler.domain.models import CrawlerSite, CrawlerSyncRun
-from app.crawler.domain.provinces import EMPTY_PROVINCE_CATEGORY
 
 STATUSES = ("normal", "watch", "stale")
 # 同步进程持有的会话级 advisory lock。取 2^31 以内，pg_locks 里 classid=0、objid 就是它。
@@ -24,23 +23,11 @@ FILTER_COLUMNS: dict[str, InstrumentedAttribute[str]] = {
 EXACT_FILTERS = ("status",)
 
 
-def _province_condition(value: FilterValue) -> ColumnElement[bool] | None:
-    """省份模糊匹配；空省份算作国央企，凡是能模糊命中「国央企」的条件也带上省份为空的网站。"""
-
-    values = filter_values(value)
-    named = ilike_any(CrawlerSite.province_name, values)
-    if named is None or not any(item.lower() in EMPTY_PROVINCE_CATEGORY for item in values):
-        return named
-    return or_(named, CrawlerSite.province_name == "")
-
-
 def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
     conds: list[ColumnElement[bool]] = []
     for key, value in filters.items():
         if key in EXACT_FILTERS:
             cond = in_any(CrawlerSite.status, value)
-        elif key == "province_name":
-            cond = _province_condition(value)
         else:
             column = FILTER_COLUMNS[key]  # 未知字段直接 KeyError，API 层转 422
             cond = ilike_any(column, value)
