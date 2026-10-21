@@ -9,7 +9,7 @@ from typing import Any
 from platform_common.clock import BEIJING, utcnow
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.crawler.domain.provinces import EMPTY_PROVINCE, FIELD_CATEGORIES, PROVINCES, chart_province
+from app.crawler.domain.provinces import EMPTY_PROVINCE_CATEGORY, FIELD_CATEGORIES, PROVINCES, chart_province
 from app.crawler.repositories import crawler_stats as repo
 
 # 超过这么多天没有新数据，多半是网站下线或改版，与近期停更分开统计。
@@ -43,7 +43,9 @@ def merge_provinces(rows: list[tuple[str, int, int, int]]) -> list[dict[str, Any
     merged: dict[str, dict[str, Any]] = defaultdict(lambda: {"raw_names": [], "normal": 0, "watch": 0, "stale": 0})
     for raw, normal, watch, stale in rows:
         item = merged[chart_province(raw)]
-        item["raw_names"].append(raw if raw.strip() else EMPTY_PROVINCE)
+        name = raw if raw.strip() else EMPTY_PROVINCE_CATEGORY  # 筛「国央企」会带上空省份
+        if name not in item["raw_names"]:
+            item["raw_names"].append(name)
         item["normal"] += normal
         item["watch"] += watch
         item["stale"] += stale

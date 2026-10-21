@@ -222,16 +222,15 @@ def test_status_filter_is_exact_and_unknown_field_rejected() -> None:
         repo._conditions({"tag": "x"})
 
 
-def test_empty_province_code_matches_blank_province() -> None:
-    """图上点国央企带着「未填省份」代号，要命中省份为空的网站；直接传空串会被筛选去掉、变成查全表。"""
+def test_central_enterprise_filter_includes_blank_province() -> None:
+    """空省份在图上算国央企，筛选也要一致：选「国央企」带上省份为空的网站，别的省份不带。"""
 
     def sql(value: list[str]) -> str:
         (cond,) = repo._conditions({"province_name": value})
         return str(cond.compile(compile_kwargs={"literal_binds": True}))
 
-    assert sql(["未填省份"]) == "policy_crawler_sites.province_name = ''"
-    both = sql(["国央企", "未填省份"])
-    assert "%国央企%" in both
-    assert " OR " in both
-    assert "province_name = ''" in both
-    assert "未填省份" not in both
+    central = sql(["国央企"])
+    assert "%国央企%" in central
+    assert "province_name = ''" in central
+    assert "province_name = ''" in sql(["广东省", "央企"])
+    assert "province_name = ''" not in sql(["广东省"])

@@ -52,7 +52,7 @@ export interface CrawlerOverviewData {
   /** 一周前的状态分布，用于「较上周」；还没有那天的记录时为 null。 */
   week_base: { date: string; sites: number; normal: number; watch: number; stale: number } | null
   health: CrawlerHealth
-  /** 「省份」字段的全部分类：31 个省级行政区、全国、国央企（含省份为空的网站，原始值记作「未填省份」）。 */
+  /** 「省份」字段的全部分类：31 个省级行政区、全国、国央企（含省份为空的网站）。 */
   provinces: CrawlerProvince[]
   sync: {
     status: '' | 'running' | 'success' | 'failed' | 'interrupted'

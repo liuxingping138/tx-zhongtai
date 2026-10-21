@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
 from app.crawler.domain.models import CrawlerSite, CrawlerSyncRun
-from app.crawler.domain.provinces import EMPTY_PROVINCE
+from app.crawler.domain.provinces import EMPTY_PROVINCE_CATEGORY
 
 STATUSES = ("normal", "watch", "stale")
 # 同步进程持有的会话级 advisory lock。取 2^31 以内，pg_locks 里 classid=0、objid 就是它。
@@ -25,14 +25,13 @@ EXACT_FILTERS = ("status",)
 
 
 def _province_condition(value: FilterValue) -> ColumnElement[bool] | None:
-    """省份模糊匹配，另认「未填省份」代号表示省份为空（图上点国央企会带上它）。"""
+    """省份模糊匹配；空省份算作国央企，凡是能模糊命中「国央企」的条件也带上省份为空的网站。"""
 
     values = filter_values(value)
-    named = ilike_any(CrawlerSite.province_name, [item for item in values if item != EMPTY_PROVINCE])
-    if EMPTY_PROVINCE not in values:
+    named = ilike_any(CrawlerSite.province_name, values)
+    if named is None or not any(item.lower() in EMPTY_PROVINCE_CATEGORY for item in values):
         return named
-    empty = CrawlerSite.province_name == ""
-    return empty if named is None else or_(named, empty)
+    return or_(named, CrawlerSite.province_name == "")
 
 
 def _conditions(filters: Filters) -> list[ColumnElement[bool]]:

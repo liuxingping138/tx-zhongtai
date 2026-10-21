@@ -13,7 +13,7 @@ from platform_common.route_audit import iter_api_routes
 from app.core.database import get_db_session
 from app.crawler.application import crawler_stats as stats
 from app.crawler.application import crawler_status as status_history
-from app.crawler.domain.provinces import EMPTY_PROVINCE, PROVINCES, chart_province
+from app.crawler.domain.provinces import PROVINCES, chart_province
 from app.crawler.repositories import crawler_stats as repo
 from app.main import app
 
@@ -54,10 +54,10 @@ def test_province_categories_keep_every_value_of_the_province_field() -> None:
     )
     names = [item["name"] for item in items]
     assert names == [*PROVINCES, "全国", "国央企"]
-    assert not {"台湾省", "香港特别行政区", "澳门特别行政区", EMPTY_PROVINCE} & set(names)
+    assert not {"台湾省", "香港特别行政区", "澳门特别行政区", "未填省份"} & set(names)
     assert next(item for item in items if item["name"] == "新疆维吾尔自治区")["stale"] == 4
     central = next(item for item in items if item["name"] == "国央企")
-    assert (central["normal"], central["stale"], central["raw_names"]) == (2, 1, ["国央企", EMPTY_PROVINCE])
+    assert (central["normal"], central["stale"], central["raw_names"]) == (2, 1, ["国央企"])
     assert next(item for item in items if item["name"] == "全国")["stale"] == 3
     assert next(item for item in items if item["name"] == "天津市")["sites"] == 0
 

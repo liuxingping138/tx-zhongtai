@@ -40,10 +40,8 @@ PROVINCES = (
 # 「全国」「国央企」等字段里的其他分类原样保留，同样进图。
 FIELD_CATEGORIES = ("全国", "国央企")
 _PREFIXES = tuple((name[:3] if name.startswith(("内蒙古", "黑龙江")) else name[:2], name) for name in PROVINCES)
-# 爬虫库里省份为空的网站都是国央企（2026-10-21 用户确认），图里并入「国央企」。
+# 爬虫库里省份为空的网站都是国央企（2026-10-21 用户确认）：图和筛选都把它们算作「国央企」，表格仍显示原始空值。
 EMPTY_PROVINCE_CATEGORY = "国央企"
-# 空省份在筛选里的代号：筛选值会去掉空串，直接传 "" 等于没有条件。仓储遇到它按「省份为空」精确匹配。
-EMPTY_PROVINCE = "未填省份"
 
 
 def chart_province(raw: str) -> str:
