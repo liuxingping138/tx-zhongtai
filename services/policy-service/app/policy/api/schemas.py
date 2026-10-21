@@ -20,6 +20,9 @@ class SourceWrite(BaseModel):
     district_name: str = ""
     district_code: str = ""
     site_name: str
+    site_type: str = ""
+    crawler_status: str = ""
+    online_date: str = ""
     crawl_priority: str = ""
     url: str = ""
     tag: str = ""

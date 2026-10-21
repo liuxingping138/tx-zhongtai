@@ -17,6 +17,8 @@ SOURCE_OPTION_COLUMNS: OptionColumns = {
     "city_name": Source.city_name,
     "tag": Source.tag,
     "crawl_priority": Source.crawl_priority,
+    "site_type": Source.site_type,
+    "crawler_status": Source.crawler_status,
 }
 
 BASE_TAG_OPTION_COLUMNS: OptionColumns = {

@@ -13,6 +13,9 @@ export interface SourceItem {
   district_name: string
   district_code: string
   site_name: string
+  site_type: string
+  crawler_status: string
+  online_date: string
   crawl_priority: string
   url: string
   tag: string
@@ -92,6 +95,8 @@ export function listSources(params: {
   tag?: FilterParam
   site_code?: FilterParam
   crawl_priority?: FilterParam
+  site_type?: FilterParam
+  crawler_status?: FilterParam
   page?: number
   page_size?: number
 }): Promise<Page<SourceItem>> {

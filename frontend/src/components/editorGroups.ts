@@ -9,6 +9,8 @@ export interface EditorField {
   placeholder?: string
   /** 取值固定的字段用下拉单选，不给自由输入。 */
   choices?: string[]
+  /** 日期字段用日期选择器，值是 YYYY-MM-DD 字符串。 */
+  date?: boolean
 }
 
 export interface EditorGroup {

@@ -37,6 +37,8 @@ const query = reactive({
   city_name: [] as string[],
   tag: [] as string[],
   crawl_priority: [] as string[],
+  site_type: [] as string[],
+  crawler_status: [] as string[],
   page: 1,
   page_size: 20,
 })
@@ -196,6 +198,19 @@ onMounted(() => {
             />
           </el-form-item>
           <template #advanced>
+            <el-form-item label="网站类型">
+              <FilterSelect
+                v-model="query.site_type"
+                v-bind="filters.bind('site_type')"
+              />
+            </el-form-item>
+            <el-form-item label="爬虫状态">
+              <FilterSelect
+                v-model="query.crawler_status"
+                v-bind="filters.bind('crawler_status')"
+                size="short"
+              />
+            </el-form-item>
             <el-form-item label="标签">
               <FilterSelect
                 v-model="query.tag"

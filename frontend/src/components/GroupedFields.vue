@@ -83,6 +83,16 @@ defineExpose({ validate, setError })
               :value="choice"
             />
           </el-select>
+          <el-date-picker
+            v-else-if="field.date"
+            :id="`${prefix}-${field.key}`"
+            v-model="model[field.key]"
+            type="date"
+            value-format="YYYY-MM-DD"
+            :aria-invalid="Boolean(errors[field.key])"
+            :placeholder="field.placeholder || '选填'"
+            :aria-describedby="[errors[field.key] ? `${prefix}-error-${field.key}` : '', field.hint ? `${prefix}-help-${field.key}` : ''].filter(Boolean).join(' ') || undefined"
+          />
           <el-input
             v-else
             :id="`${prefix}-${field.key}`"
@@ -133,6 +143,7 @@ defineExpose({ validate, setError })
 .editor-section :deep(.el-form-item__label) { font-size: 13px; color: var(--zt-ink-700); }
 .editor-section :deep(.el-form-item__content) { align-content: flex-start; }
 .editor-field--wide { grid-column: 1 / -1; }
+.editor-section :deep(.el-date-editor.el-input) { width: 100%; }
 .field-help { margin: 6px 0 0; color: var(--zt-ink-500); font-size: 12px; line-height: 1.6; }
 @media (max-width: 540px) {
   .editor-section { padding: 16px; }

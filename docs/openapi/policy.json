@@ -363,6 +363,44 @@
               ],
               "title": "Crawl Priority"
             }
+          },
+          {
+            "name": "site_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Site Type"
+            }
+          },
+          {
+            "name": "crawler_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Crawler Status"
+            }
           }
         ],
         "responses": {
@@ -623,6 +661,44 @@
                 }
               ],
               "title": "Crawl Priority"
+            }
+          },
+          {
+            "name": "site_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Site Type"
+            }
+          },
+          {
+            "name": "crawler_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Crawler Status"
             }
           }
         ],
@@ -3015,6 +3091,21 @@
             "title": "Site Name",
             "default": ""
           },
+          "site_type": {
+            "type": "string",
+            "title": "Site Type",
+            "default": ""
+          },
+          "crawler_status": {
+            "type": "string",
+            "title": "Crawler Status",
+            "default": ""
+          },
+          "online_date": {
+            "type": "string",
+            "title": "Online Date",
+            "default": ""
+          },
           "crawl_priority": {
             "type": "string",
             "title": "Crawl Priority",
@@ -3095,6 +3186,21 @@
           "site_name": {
             "type": "string",
             "title": "Site Name"
+          },
+          "site_type": {
+            "type": "string",
+            "title": "Site Type",
+            "default": ""
+          },
+          "crawler_status": {
+            "type": "string",
+            "title": "Crawler Status",
+            "default": ""
+          },
+          "online_date": {
+            "type": "string",
+            "title": "Online Date",
+            "default": ""
           },
           "crawl_priority": {
             "type": "string",

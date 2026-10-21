@@ -3,6 +3,9 @@ import type { EditorGroup } from '@/components/editorGroups'
 
 export const TABLE_COLUMNS: DataColumn[] = [
   { prop: 'site_name', label: '网站名称', minWidth: 240, grow: 2 },
+  { prop: 'site_type', label: '网站类型', width: 120 },
+  { prop: 'crawler_status', label: '爬虫状态', width: 110 },
+  { prop: 'online_date', label: '上线时间', width: 110 },
   { prop: 'province_name', label: '省份', width: 100 },
   { prop: 'city_name', label: '地市', width: 110 },
   { prop: 'district_name', label: '区县', width: 120 },
@@ -31,6 +34,9 @@ export const EDITOR_GROUPS: EditorGroup[] = [
     hint: '填写信源网站与所属部门，便于识别和维护。',
     fields: [
       { key: 'site_name', label: '网站名称', required: true, maxLength: 255 },
+      { key: 'site_type', label: '网站类型', maxLength: 255 },
+      { key: 'crawler_status', label: '爬虫状态', maxLength: 64 },
+      { key: 'online_date', label: '上线时间', date: true },
       { key: 'department', label: '所属部门', maxLength: 255 },
       { key: 'url', label: '网站链接', long: true, placeholder: 'https://', hint: '建议填写完整的网址，便于直接访问。' },
     ],

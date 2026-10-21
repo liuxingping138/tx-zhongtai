@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import re
 import uuid
 from collections import Counter
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 
 from platform_common.actors import Actor
@@ -35,6 +37,23 @@ from app.policy.repositories import sources as repo
 
 # 与 policy_sources.site_code 的 String(16) 一致。
 SITE_CODE_MAX_LENGTH = 16
+ONLINE_DATE_ERROR = "上线时间格式不对，应为 YYYY-MM-DD"
+# Excel 日期单元格读出来是「2024-01-02 00:00:00」，手填常见「2024/1/2」「2024年1月2日」。
+_ONLINE_DATE = re.compile(r"(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})日?(?:[ T]00:00(?::00)?)?")
+
+
+def normalize_online_date(text: str) -> str | None:
+    """上线时间统一成 YYYY-MM-DD；空值原样返回空串，认不出的日期返回 None。"""
+
+    if not text:
+        return ""
+    match = _ONLINE_DATE.fullmatch(text)
+    if match is None:
+        return None
+    try:
+        return date(*(int(part) for part in match.groups())).isoformat()
+    except ValueError:  # 2024-02-30 这类不存在的日期
+        return None
 
 
 def _to_out(row: Source) -> dict[str, Any]:
@@ -49,6 +68,9 @@ def _to_out(row: Source) -> dict[str, Any]:
         "district_name": row.district_name,
         "district_code": row.district_code,
         "site_name": row.site_name,
+        "site_type": row.site_type,
+        "crawler_status": row.crawler_status,
+        "online_date": row.online_date,
         "crawl_priority": row.crawl_priority,
         "url": row.url,
         "tag": row.tag,
@@ -70,7 +92,18 @@ def _normalized_values(data: dict[str, str]) -> dict[str, str]:
     values["province_code"] = province_code
     values["city_code"] = city_code
     values["district_code"] = district_code
+    # 不合法的日期已在前面拦下（_require_valid / _check_rows），这里只做格式统一。
+    values["online_date"] = normalize_online_date(values["online_date"]) or values["online_date"]
     return values
+
+
+def _require_valid(values: dict[str, str]) -> None:
+    if not values["site_name"]:
+        raise ApiError("网站名称不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    if not _has_any_area_code(values):
+        raise ApiError("省市区编码不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    if normalize_online_date(values["online_date"]) is None:
+        raise ApiError(ONLINE_DATE_ERROR, code=ErrorCode.VALIDATION_ERROR, http_status=422)
 
 
 def _has_any_area_code(item: dict[str, str]) -> bool:
@@ -122,10 +155,7 @@ async def get_source(session: AsyncSession, item_id: uuid.UUID) -> dict[str, Any
 
 async def create_source(session: AsyncSession, actor: Actor, data: dict[str, str]) -> dict[str, Any]:
     raw = {field: (data.get(field) or "").strip() for field in SOURCE_FIELDS}
-    if not raw["site_name"]:
-        raise ApiError("网站名称不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    if not _has_any_area_code(raw):
-        raise ApiError("省市区编码不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    _require_valid(raw)
     values = _normalized_values(raw)
     internal_id = make_internal_id(values["site_name"], values["province_name"], values["city_name"], values["tag"])
     if await repo.get_by_internal_id(session, internal_id):
@@ -169,10 +199,7 @@ async def update_source(
     if data.get("version") != row.version:
         raise VersionConflictError()
     raw = {field: str(data.get(field, getattr(row, field) or "")).strip() for field in SOURCE_FIELDS}
-    if not raw["site_name"]:
-        raise ApiError("网站名称不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    if not _has_any_area_code(raw):
-        raise ApiError("省市区编码不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    _require_valid(raw)
     values = _normalized_values(raw)
     internal_id = make_internal_id(values["site_name"], values["province_name"], values["city_name"], values["tag"])
     existing = await repo.get_by_internal_id(session, internal_id)
@@ -246,6 +273,8 @@ def _check_rows(staged: list[_StagedSource], db_internal: set[str], db_site: set
             reasons.append(missing_area_reason(row.carried_reason))
         if not row.values["site_name"]:
             reasons.append("网站名称为空")
+        if normalize_online_date(row.values["online_date"]) is None:
+            reasons.append(ONLINE_DATE_ERROR)
         if row.internal_id in db_internal:
             reasons.append("内部唯一id已存在")
         if file_internal[row.internal_id] > 1:

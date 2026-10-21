@@ -28,6 +28,8 @@ def source_filters(
     tag: list[str] | None = Query(default=None),
     site_code: list[str] | None = Query(default=None),
     crawl_priority: list[str] | None = Query(default=None),
+    site_type: list[str] | None = Query(default=None),
+    crawler_status: list[str] | None = Query(default=None),
 ) -> Filters:
     return {
         "site_name": site_name,
@@ -36,6 +38,8 @@ def source_filters(
         "tag": tag,
         "site_code": site_code,
         "crawl_priority": crawl_priority,
+        "site_type": site_type,
+        "crawler_status": crawler_status,
     }
 
 

@@ -43,6 +43,16 @@ class Source(Base):
     district_name: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="区县")
     district_code: Mapped[str] = mapped_column(String(8), nullable=False, default="", index=True, comment="区县编码")
     site_name: Mapped[str] = mapped_column(String(255), nullable=False, default="", index=True, comment="网站名称")
+    site_type: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="", server_default="", comment="网站类型"
+    )
+    crawler_status: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="", server_default="", comment="爬虫状态"
+    )
+    # 统一存成 YYYY-MM-DD 文本，没填为空串；和其他字段一样按文本导入导出。
+    online_date: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="", server_default="", comment="上线时间"
+    )
     crawl_priority: Mapped[str] = mapped_column(
         String(255), nullable=False, default="", comment="网站梳理和抓取的优先级"
     )
@@ -151,6 +161,9 @@ SOURCE_FIELDS = (
     "district_name",
     "district_code",
     "site_name",
+    "site_type",
+    "crawler_status",
+    "online_date",
     "crawl_priority",
     "url",
     "tag",

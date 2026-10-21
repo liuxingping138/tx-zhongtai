@@ -80,6 +80,18 @@ class TestImportSources:
         assert _reasons(source_env)[0] == "通过"
         assert "网站名称为空" in _reasons(source_env)[1]
 
+    async def test_online_date_from_excel_is_normalized(self, source_env: dict[str, Any]) -> None:
+        # Excel 日期单元格读出来带 00:00:00。
+        source_env["rows"] = [_source(site_name="甲", district_code="110101", online_date="2024-03-05 00:00:00")]
+        session = _Session()
+        await sources.import_sources(session, ACTOR, b"")  # type: ignore[arg-type]
+        assert session.added[0].online_date == "2024-03-05"
+
+        source_env["rows"] = [_source(site_name="乙", district_code="110101", online_date="去年")]
+        result = await sources.import_sources(_Session(), ACTOR, b"")  # type: ignore[arg-type]
+        assert result["rejected"] is True
+        assert "上线时间格式不对" in _reasons(source_env)[0]
+
     async def test_missing_area_code_prefers_the_reason_carried_in_the_file(self, source_env: dict[str, Any]) -> None:
         source_env["rows"] = [_source(site_name="甲", skip_reason="区县不标准"), _source(site_name="乙")]
         await sources.import_sources(_Session(), ACTOR, b"")  # type: ignore[arg-type]

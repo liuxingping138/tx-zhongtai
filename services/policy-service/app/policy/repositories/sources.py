@@ -63,6 +63,8 @@ FILTER_COLUMNS: dict[str, InstrumentedAttribute[str]] = {
     "tag": Source.tag,
     "site_code": Source.site_code,
     "crawl_priority": Source.crawl_priority,
+    "site_type": Source.site_type,
+    "crawler_status": Source.crawler_status,
 }
 
 
