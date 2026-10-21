@@ -72,6 +72,7 @@ defineExpose({ validate, setError })
             v-if="field.choices"
             :id="`${prefix}-${field.key}`"
             v-model="model[field.key]"
+            :disabled="field.disabled"
             :aria-invalid="Boolean(errors[field.key])"
             :placeholder="field.placeholder || `请选择${field.label}`"
             :aria-describedby="[errors[field.key] ? `${prefix}-error-${field.key}` : '', field.hint ? `${prefix}-help-${field.key}` : ''].filter(Boolean).join(' ') || undefined"
@@ -97,6 +98,7 @@ defineExpose({ validate, setError })
             v-else
             :id="`${prefix}-${field.key}`"
             v-model="model[field.key]"
+            :disabled="field.disabled"
             :aria-invalid="Boolean(errors[field.key])"
             resize="none"
             :maxlength="field.maxLength"

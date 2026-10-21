@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
 
-from app.domain.llm_models import build_body, calc_costs, find_model, model_display_name
+import pytest
+
+from app.application.model_configs import to_model
+from app.domain.llm_models import build_body, calc_costs, in_peak
 from app.domain.templating import (
     CODE_TABLE_FIELD,
     build_myid,
@@ -11,6 +15,7 @@ from app.domain.templating import (
     split_fields,
     template_variables,
 )
+from tests.helpers import NOW, ai_model, sample_models
 
 
 def test_fill_template_replaces_columns_and_code_table_and_keeps_unknown() -> None:
@@ -51,22 +56,64 @@ def test_extract_fields_returns_one_empty_row_when_unparseable() -> None:
 
 
 def test_build_body_controls_thinking_only_where_supported() -> None:
-    baidu = find_model("baidu-deepseek-v3.2")
-    ark = find_model("deepseek-v4-flash")
-    assert baidu is not None and ark is not None
+    ark, baidu = (to_model(row) for row in sample_models())
     assert build_body(baidu, "hi", thinking=False)["thinking"] == {"type": "disabled"}
     assert build_body(baidu, "hi", thinking=True, previous_response_id="resp_1")["previous_response_id"] == "resp_1"
+    assert "service_tier" not in build_body(baidu, "hi") and "reasoning" not in build_body(baidu, "hi")
     ark_body = build_body(ark, "hi", thinking=False)
     assert ark_body["thinking"] == {"type": "enabled"} and ark_body["tools"][0]["type"] == "web_search"
-    assert ark_body["model"].startswith("ep-") and ark_body["stream"] is True
+    assert ark_body["service_tier"] == "flex" and ark_body["reasoning"] == {"effort": "low"}
+    assert ark_body["model"] == "ep-flash" and ark_body["stream"] is True
 
 
-def test_costs_use_per_thousand_token_prices_and_search_price() -> None:
-    inference, search = calc_costs("deepseek-v4-flash", 2000, 1000, 3)
-    assert inference == Decimal("0.007500")
+def test_flex_tier_bills_at_flex_prices() -> None:
+    flash = to_model(ai_model())
+    inference, search = calc_costs(flash, 2000, 1000, 3, NOW)
+    assert inference == Decimal("0.007500")  # 2×0.0015 + 1×0.0045
     assert search == Decimal("0.012000")
-    assert calc_costs("unknown", 1000, 1000, 1) == (Decimal(0), Decimal(0))
-    assert model_display_name("unknown") == "unknown"
+    regular = to_model(ai_model(service_tier="auto"))
+    assert calc_costs(regular, 2000, 1000, 0, NOW)[0] == Decimal("0.015000")
+
+
+# 2026-10-21 是周三，2026-10-24 是周六；时间都是北京时间。
+_BEIJING = timezone(timedelta(hours=8))
+
+
+@pytest.mark.parametrize(
+    ("moment", "peak"),
+    [
+        (datetime(2026, 10, 21, 9, 0, tzinfo=_BEIJING), True),
+        (datetime(2026, 10, 21, 11, 59, tzinfo=_BEIJING), True),
+        (datetime(2026, 10, 21, 12, 0, tzinfo=_BEIJING), False),
+        (datetime(2026, 10, 21, 13, 30, tzinfo=_BEIJING), False),
+        (datetime(2026, 10, 21, 17, 59, tzinfo=_BEIJING), True),
+        (datetime(2026, 10, 21, 20, 0, tzinfo=_BEIJING), False),
+        (datetime(2026, 10, 24, 10, 0, tzinfo=_BEIJING), False),
+        (datetime(2026, 10, 21, 2, 0, tzinfo=UTC), True),  # 北京 10:00
+    ],
+)
+def test_peak_hours_follow_beijing_weekdays(moment: datetime, peak: bool) -> None:
+    assert in_peak(moment, "09:00-12:00,14:00-18:00") is peak
+
+
+def test_time_of_day_prices_switch_between_peak_and_idle() -> None:
+    economy = to_model(
+        ai_model(
+            service_tier="",
+            input_price=Decimal("0.0008"),
+            output_price=Decimal("0.0032"),
+            flex_input_price=None,
+            flex_output_price=None,
+            peak_input_price=Decimal("0.0016"),
+            peak_output_price=Decimal("0.0064"),
+            peak_hours="09:00-12:00,14:00-18:00",
+        )
+    )
+    busy = datetime(2026, 10, 21, 10, 0, tzinfo=_BEIJING)
+    idle = datetime(2026, 10, 21, 22, 0, tzinfo=_BEIJING)
+    assert economy.prices_at(busy) == (Decimal("0.0016"), Decimal("0.0064"))
+    assert economy.prices_at(idle) == (Decimal("0.0008"), Decimal("0.0032"))
+    assert calc_costs(economy, 1000, 1000, 0, busy)[0] == 2 * calc_costs(economy, 1000, 1000, 0, idle)[0]
 
 
 def test_parse_fields_tolerates_wrapping_nesting_and_single_objects() -> None:

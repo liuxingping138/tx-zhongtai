@@ -35,11 +35,12 @@ async def ask(
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def chat(
     body: ChatBody,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
     _: Actor = Depends(require_ai_permission("ai.chat", "chat")),
 ) -> StreamingResponse:
     """多轮对话：上下文由模型服务端按 previous_response_id 保存，本服务不存对话内容。"""
 
-    model, message = asking.prepare_chat(body.model_id, body.message)
+    model, message = await asking.prepare_chat(session, body.model_id, body.message)
     return sse_response(
         asking.stream_answer(model, message, thinking=body.thinking, previous_response_id=body.previous_response_id)
     )
@@ -47,5 +48,8 @@ async def chat(
 
 @router.get("/chat/models")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
-async def chat_models(_: Actor = Depends(require_ai_permission("ai.chat", "chat"))) -> JSONResponse:
-    return success_json(asking.available_models())
+async def chat_models(
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    _: Actor = Depends(require_ai_permission("ai.chat", "chat")),
+) -> JSONResponse:
+    return success_json(await asking.available_models(session))

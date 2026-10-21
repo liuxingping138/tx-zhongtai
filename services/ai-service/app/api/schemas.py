@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import quote
 
 from fastapi.responses import Response, StreamingResponse
@@ -26,6 +26,35 @@ class PromptBody(_Body):
     content: str = Field(max_length=200_000)
     output_fields: str = Field(default="", max_length=2000)
     model_id: str = Field(default="", max_length=100)
+    version: int | None = None
+
+
+def _price() -> Any:
+    return Field(default="", max_length=20)
+
+
+class ModelBody(_Body):
+    """单价按文本收，由应用层统一校验成小数：空串表示没配这一档。"""
+
+    id: str = Field(default="", max_length=64)
+    name: str = Field(max_length=100)
+    provider: str = Field(max_length=16)
+    endpoint: str = Field(max_length=128)
+    web_search: bool = False
+    thinking: str = Field(default="", max_length=16)
+    reasoning_effort: str = Field(default="", max_length=16)
+    service_tier: str = Field(default="", max_length=16)
+    input_price: str = _price()
+    output_price: str = _price()
+    flex_input_price: str = _price()
+    flex_output_price: str = _price()
+    peak_input_price: str = _price()
+    peak_output_price: str = _price()
+    peak_hours: str = Field(default="", max_length=100)
+    search_price: str = _price()
+    rate_limit: str = Field(default="", max_length=500)
+    enabled: bool = True
+    sort_order: int = Field(default=0, ge=0, le=100_000)
     version: int | None = None
 
 

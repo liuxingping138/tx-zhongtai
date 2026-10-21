@@ -160,3 +160,46 @@ export function deleteBatchRun(id: string): Promise<null> {
 export function chatModels(): Promise<AiModel[]> {
   return request(http.get(`${BASE}/chat/models`))
 }
+
+/** 「模型配置」页的一行。单价是文本，没配的档位为空串；枚举字段是代码值，页面显示前换成中文。 */
+export interface ModelConfig {
+  id: string
+  name: string
+  provider: string
+  provider_name: string
+  endpoint: string
+  web_search: boolean
+  thinking: string
+  reasoning_effort: string
+  service_tier: string
+  input_price: string
+  output_price: string
+  flex_input_price: string
+  flex_output_price: string
+  peak_input_price: string
+  peak_output_price: string
+  peak_hours: string
+  search_price: string
+  rate_limit: string
+  enabled: boolean
+  sort_order: number
+  version: number
+  created_at: string
+  created_by_name: string
+  updated_at: string
+  updated_by_name: string
+}
+
+export type ModelConfigBody = Omit<ModelConfig, 'provider_name' | 'version' | 'created_at' | 'created_by_name' | 'updated_at' | 'updated_by_name'>
+
+export function listModelConfigs(): Promise<ModelConfig[]> {
+  return request(http.get(`${BASE}/models`))
+}
+
+export function createModelConfig(body: ModelConfigBody): Promise<ModelConfig> {
+  return request(http.post(`${BASE}/models`, body))
+}
+
+export function updateModelConfig(id: string, body: ModelConfigBody & { version: number }): Promise<ModelConfig> {
+  return request(http.put(`${BASE}/models/${encodeURIComponent(id)}`, body))
+}

@@ -38,7 +38,7 @@
 | 显示列与浏览器记忆 | `frontend/src/components/ColumnPicker.vue` | 与表格共享 selected；完整columns与defaults |
 | 字段列类型 | `frontend/src/components/dataColumns.ts` | prop与API字段对应；label简明、fullLabel保留原名；可选width/minWidth/grow/wrap/time/link |
 | 列顺序与宽度计算 | `frontend/src/components/dataColumnLayout.ts` | layoutDataColumns固定短字段、让长字段吸收余量；不按首列特殊处理 |
-| 分组业务表单 | `frontend/src/components/GroupedFields.vue` | 完整字段groups、表单model、submitError，保存前validate；字段可设 `choices`（下拉单选）或 `date`（日期选择器，值为 YYYY-MM-DD） |
+| 分组业务表单 | `frontend/src/components/GroupedFields.vue` | 完整字段groups、表单model、submitError，保存前validate；字段可设 `choices`（下拉单选）、`date`（日期选择器，值为 YYYY-MM-DD）或 `disabled`（只读，如编辑时不能改的编号） |
 | 业务记录新增/编辑 | `frontend/src/components/RecordEditorDrawer.vue` + `composables/useRecordEditor.ts` | `useRecordEditor({ noun, groups, defaults?, create, update, check?, refresh })`，`update` 自己带上 `version`；列表行 `@edit="editor.openEdit"`、新增按钮 `editor.openCreate`。抽屉内置分组表单、必填与跨字段校验（`check`）、409 冲突保留草稿并提示、未保存离开确认，页面不自己拼抽屉 |
 | 表格列 + 编辑字段合成完整列 | `frontend/src/composables/useDetailColumns.ts` | `useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)` 返回 `columns/defaults/selected`：编辑表单里有、表格里没有的字段追加到列设置和详情，ColumnPicker 与 BusinessTable 共用这一份 |
 | 列表加载 | `frontend/src/composables/useListLoader.ts` | 传 `requested/commitPage`（来自 useListQuery）、`fetch`、`errorText`；返回 items/total/loading/loadError/resultFiltered/load。只采用最后一次请求的结果，不要在页面里再写请求序号 |

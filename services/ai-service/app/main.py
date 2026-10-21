@@ -16,6 +16,7 @@ from platform_common.request_context import RequestIdMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
 from app.api.batch_runs import router as batch_runs_router
+from app.api.model_configs import router as model_configs_router
 from app.api.prompts import router as prompts_router
 from app.api.security import get_authz_client
 from app.api.stream import router as stream_router
@@ -63,6 +64,7 @@ def create_app() -> FastAPI:
     app.include_router(build_health_router({"database": check_database_ready}))
     app.include_router(prompts_router)
     app.include_router(batch_runs_router)
+    app.include_router(model_configs_router)
     app.include_router(stream_router)
     return app
 

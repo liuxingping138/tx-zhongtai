@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from decimal import Decimal
 from io import BytesIO
 from typing import Any
 
 from openpyxl import Workbook
 from platform_common.actors import Actor
 
-from app.domain.models import BatchRun, PromptTemplate
+from app.domain.models import AiModel, BatchRun, PromptTemplate
 
 ACTOR = Actor(id="u1", name="测试员")
 NOW = datetime(2026, 10, 15, 3, 0, tzinfo=UTC)
@@ -41,6 +42,61 @@ class FakeSession:
 
     async def __aexit__(self, *_: object) -> None:
         return None
+
+
+def ai_model(**overrides: Any) -> AiModel:
+    values: dict[str, Any] = {
+        "id": "deepseek-v4-flash",
+        "name": "字节-DeepSeek-V4-Flash（联网）",
+        "provider": "ark",
+        "endpoint": "ep-flash",
+        "web_search": True,
+        "thinking": "enabled",
+        "reasoning_effort": "low",
+        "service_tier": "flex",
+        "input_price": Decimal("0.003"),
+        "output_price": Decimal("0.009"),
+        "flex_input_price": Decimal("0.0015"),
+        "flex_output_price": Decimal("0.0045"),
+        "peak_input_price": None,
+        "peak_output_price": None,
+        "peak_hours": "",
+        "search_price": Decimal("0.004"),
+        "rate_limit": "",
+        "enabled": True,
+        "sort_order": 10,
+        "version": 1,
+        "created_at": NOW,
+        "created_by_name": "系统",
+        "updated_at": NOW,
+        "updated_by_name": "系统",
+    }
+    values.update(overrides)
+    return AiModel(**values)
+
+
+def sample_models() -> list[AiModel]:
+    """单测里库中的模型：方舟 Flash（联网、低优）和千帆 V3.2（思考可选）。"""
+
+    return [
+        ai_model(),
+        ai_model(
+            id="baidu-deepseek-v3.2",
+            name="百度-DeepSeek-V3.2",
+            provider="baidu",
+            endpoint="deepseek-v3.2",
+            web_search=False,
+            thinking="switch",
+            reasoning_effort="",
+            service_tier="",
+            input_price=Decimal("0.001"),
+            output_price=Decimal("0.005"),
+            flex_input_price=None,
+            flex_output_price=None,
+            search_price=Decimal(0),
+            sort_order=20,
+        ),
+    ]
 
 
 def template(**overrides: Any) -> PromptTemplate:

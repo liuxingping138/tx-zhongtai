@@ -22,6 +22,7 @@ export const MODULE_LABELS: Record<string, string> = {
   'ai.prompts': '提问配置',
   'ai.batch_runs': '批量提问',
   'ai.chat': '多轮对话',
+  'ai.models': '模型配置',
 }
 
 export const ACTION_LABELS: Record<string, string> = {

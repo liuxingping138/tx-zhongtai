@@ -135,21 +135,21 @@ async def test_trial_fills_variables_from_first_row_and_code_table(monkeypatch: 
 
 async def test_models_require_configured_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     _with_keys(monkeypatch, ark="k")
-    available = {item["id"]: item["available"] for item in asking.available_models()}
+    available = {item["id"]: item["available"] for item in await asking.available_models(FakeSession())}  # type: ignore[arg-type]
     assert available["deepseek-v4-flash"] is True and available["baidu-deepseek-v3.2"] is False
     with pytest.raises(ApiError) as missing:
-        asking.prepare_chat("baidu-deepseek-v3.2", "hi")
+        await asking.prepare_chat(FakeSession(), "baidu-deepseek-v3.2", "hi")
     assert missing.value.http_status == 503
     with pytest.raises(ApiError, match="未知模型"):
-        asking.prepare_chat("nope", "hi")
+        await asking.prepare_chat(FakeSession(), "nope", "hi")
     with pytest.raises(ApiError, match="不能为空"):
-        asking.prepare_chat("deepseek-v4-flash", "  ")
+        await asking.prepare_chat(FakeSession(), "deepseek-v4-flash", "  ")
 
 
 async def test_stream_answer_echoes_prompt_then_model_events_then_done(monkeypatch: pytest.MonkeyPatch) -> None:
     _with_keys(monkeypatch, ark="k")
     monkeypatch.setattr(asking, "stream_responses", fake_stream([{"text": "答"}, {"response_id": "r1"}]))
-    model, message = asking.prepare_chat("deepseek-v4-flash", "问")
+    model, message = await asking.prepare_chat(FakeSession(), "deepseek-v4-flash", "问")
     chunks = [chunk async for chunk in asking.stream_answer(model, message, thinking=False, echo_prompt=True)]
     assert chunks[0] == 'data: {"prompt": "问"}\n\n'
     assert chunks[1].startswith('data: {"model": {"id": "deepseek-v4-flash"')

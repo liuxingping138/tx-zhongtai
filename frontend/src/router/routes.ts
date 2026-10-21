@@ -136,6 +136,12 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '多轮对话', resource: 'ai.chat' },
       },
       {
+        path: 'ai/models',
+        name: 'ai-models',
+        component: () => import('@/modules/ai/models/ModelList.vue'),
+        meta: { title: '模型配置', resource: 'ai.models' },
+      },
+      {
         path: 'forbidden',
         name: 'forbidden',
         component: () => import('@/views/ForbiddenView.vue'),

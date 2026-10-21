@@ -12,16 +12,18 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 import anyio
+from platform_common.clock import utcnow
 from platform_common.errors import ApiError, ErrorCode
 from platform_common.excel import run_excel_parse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application import model_configs
 from app.application.prompts import require
 from app.application.sheets import read_sheet
 from app.core import storage
 from app.core.config import get_settings
 from app.core.llm import LlmRequest, stream_responses
-from app.domain.llm_models import MODELS, LlmModel, build_body, find_model
+from app.domain.llm_models import LlmModel, build_body
 from app.domain.templating import CODE_TABLE_FIELD, fill_template, template_variables
 
 MESSAGE_MAX = 200_000
@@ -38,6 +40,9 @@ def api_key_for(model: LlmModel) -> str:
 
 
 def model_info(model: LlmModel) -> dict[str, Any]:
+    """单价按此刻算：分时计价的模型，前端据此估算这次对话的费用。"""
+
+    input_price, output_price = model.prices_at(utcnow())
     return {
         "id": model.id,
         "name": model.name,
@@ -45,20 +50,25 @@ def model_info(model: LlmModel) -> dict[str, Any]:
         "web_search": model.web_search,
         "supports_thinking": model.supports_thinking,
         "available": bool(api_key_for(model)),
-        "input_price": str(model.input_price),
-        "output_price": str(model.output_price),
+        "input_price": str(input_price),
+        "output_price": str(output_price),
         "search_price": str(model.search_price),
     }
 
 
-def available_models() -> list[dict[str, Any]]:
-    return [model_info(model) for model in MODELS]
+async def available_models(session: AsyncSession) -> list[dict[str, Any]]:
+    """页面下拉里的模型：只列启用的。"""
+
+    return [model_info(model) for model in await model_configs.enabled_models(session)]
 
 
-def resolve_model(model_id: str) -> LlmModel:
-    model = find_model(model_id)
-    if model is None:
+async def resolve_model(session: AsyncSession, model_id: str) -> LlmModel:
+    row = await model_configs.find(session, model_id)
+    if row is None:
         raise ApiError(f"未知模型：{model_id or '（未选择）'}", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    if not row.enabled:
+        raise ApiError(f"模型「{row.name}」已停用，请换一个模型", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    model = model_configs.to_model(row)
     if not api_key_for(model):
         raise ApiError(
             f"{model.provider_name}的接口密钥未配置，暂不能使用该模型",
@@ -103,7 +113,7 @@ async def prepare_trial(
 ) -> tuple[LlmModel, str]:
     """在开始推流前做完全部校验和取数：一旦开始推流就没法再返回 4xx 了。"""
 
-    model = resolve_model(model_id)
+    model = await resolve_model(session, model_id)
     text = _check_message(content)
     if prompt_id and template_variables(text):
         values = await _first_row_values(session, prompt_id)
@@ -128,5 +138,5 @@ async def stream_answer(
     yield _sse("[DONE]")
 
 
-def prepare_chat(model_id: str, message: str) -> tuple[LlmModel, str]:
-    return resolve_model(model_id), _check_message(message)
+async def prepare_chat(session: AsyncSession, model_id: str, message: str) -> tuple[LlmModel, str]:
+    return await resolve_model(session, model_id), _check_message(message)

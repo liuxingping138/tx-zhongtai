@@ -168,12 +168,12 @@ async def test_execute_marks_failure_when_snapshot_missing(monkeypatch: pytest.M
 
 
 async def test_call_counts_search_events_when_usage_has_none(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.domain.llm_models import find_model
+    from app.application.model_configs import to_model
+    from tests.helpers import ai_model
 
     events = [{"tool_event": {"stage": "web_search_in_progress"}}] * 2 + [{"text": "x"}]
     monkeypatch.setattr(batch_execute, "stream_responses", fake_stream(events))
-    model = find_model("deepseek-v4-flash")
-    assert model is not None
+    model = to_model(ai_model())
     result = await batch_execute.call_model_once(model, "问", False, None)  # type: ignore[arg-type]
     assert (result.text, result.search_calls, result.error) == ("x", 2, "")
 
@@ -247,11 +247,10 @@ async def test_list_passes_filters_and_reports_run_mode(monkeypatch: pytest.Monk
 
 
 def _model() -> Any:
-    from app.domain.llm_models import find_model
+    from app.application.model_configs import to_model
+    from tests.helpers import sample_models
 
-    model = find_model("baidu-deepseek-v3.2")
-    assert model is not None
-    return model
+    return to_model(sample_models()[1])
 
 
 def _sequence(monkeypatch: pytest.MonkeyPatch, answers: list[list[dict[str, Any]]]) -> list[int]:

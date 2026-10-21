@@ -42,20 +42,23 @@ def test_retired_resources_are_not_in_the_catalog() -> None:
     assert not {spec.resource_code for spec in MENU_SPECS if spec.resource_code} & set(RETIRED_RESOURCE_CODES)
 
 
-def test_ai_module_is_a_top_level_directory_with_three_pages() -> None:
+def test_ai_module_is_a_top_level_directory_with_four_pages() -> None:
     by_code = {spec.code: spec for spec in RESOURCE_SPECS}
     assert by_code["ai"].node_type == "directory" and by_code["ai"].parent_code is None
     assert [code for code, spec in by_code.items() if spec.parent_code == "ai"] == [
         "ai.prompts",
         "ai.batch_runs",
         "ai.chat",
+        "ai.models",
     ]
     routes = {spec.route_name for spec in MENU_SPECS if spec.parent_code == "menu.ai"}
-    assert routes == {"ai-prompts", "ai-batch-runs", "ai-chat"}
+    assert routes == {"ai-prompts", "ai-batch-runs", "ai-chat", "ai-models"}
 
 
 def test_ai_actions_that_spend_money_need_the_right_tier() -> None:
     levels = {(spec.resource_code, spec.action_code): spec.required_level for spec in ACTION_SPECS}
     assert levels[("ai.prompts", "ask")] == "FULL"
     assert levels[("ai.batch_runs", "run")] == "FULL"
+    # 模型配置决定单价和调用参数，改它等于改所有人的花费口径。
+    assert levels[("ai.models", "update")] == "FULL"
     assert levels[("ai.chat", "chat")] == "READ"

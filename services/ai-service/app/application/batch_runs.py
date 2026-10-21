@@ -149,7 +149,7 @@ def _snapshot_files(prompt_id: str, run_id: str) -> None:
 async def start_run(session: AsyncSession, actor: Actor, values: dict[str, Any]) -> dict[str, Any]:
     template = await require_prompt(session, str(values.get("prompt_id") or ""), lock=True)
     # 以模板配置的模型为准；模板没配时用发起时页面上选的模型。
-    model = resolve_model(template.model_id or str(values.get("model_id") or ""))
+    model = await resolve_model(session, template.model_id or str(values.get("model_id") or ""))
     if not template.excel_name or not storage.prompt_file(template.id, "excel").is_file():
         raise ApiError("该模板未上传 Excel，无法批量提问", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     # 同一模板同时只跑一个任务。模板行已加锁，两个人同时点运行只有一个能建出任务。
@@ -207,7 +207,7 @@ async def retry_run(session: AsyncSession, actor: Actor, run_id: str) -> dict[st
     if not await anyio.to_thread.run_sync(_can_retry, run):
         reason = "没有失败或未完成的行" if run.total_count and not pending_rows(run) else _NO_SNAPSHOT
         raise ApiError(reason, code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    resolve_model(run.model_id)
+    await resolve_model(session, run.model_id)
     running = await repo.active_for_prompt(session, run.prompt_id)
     if running is not None:
         raise ApiError("该模板已有任务在运行，请等它结束或先停止", code=ErrorCode.VERSION_CONFLICT, http_status=409)

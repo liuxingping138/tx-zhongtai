@@ -23,7 +23,7 @@ async def list_prompts(
     session: AsyncSession = Depends(get_db_session, scope="function"),
     _: Actor = Depends(require_ai_permission(RESOURCE, "list")),
 ) -> JSONResponse:
-    return success_json({"items": await service.list_prompts(session), "models": available_models()})
+    return success_json({"items": await service.list_prompts(session), "models": await available_models(session)})
 
 
 @router.post("")

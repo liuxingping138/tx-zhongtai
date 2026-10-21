@@ -5,6 +5,7 @@ N 个协程从同一个队列取行并发提问；每完成一行立即追加到
 
 每行自动补救：限流、超时这类可重试的错误退避后重发；回答解析不出输出字段时重问一次，仍不行记为「格式不对」。
 任务目录里已有原始返回时是续跑：已成功的行直接沿用，只问失败和没跑到的行，结果合并回同一个任务。
+费用每行完成时按当时的单价累加：分时计价的模型跨高峰、空闲时段跑，也按各行实际时段算。
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ import random
 import time
 from collections import deque
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Any
 
 import anyio
@@ -23,6 +25,7 @@ import httpx
 from platform_common.clock import utcnow
 from platform_common.excel import run_excel_parse
 
+from app.application import model_configs
 from app.application.asking import llm_request
 from app.application.batch_output import (
     FORMAT_ERROR_PREFIX,
@@ -39,7 +42,7 @@ from app.core import storage
 from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.core.llm import stream_responses
-from app.domain.llm_models import LlmModel, build_body, calc_costs, find_model
+from app.domain.llm_models import LlmModel, build_body, calc_costs
 from app.domain.models import RUN_CANCELLED, RUN_DONE, RUN_FAILED, RUN_INTERRUPTED, BatchRun
 from app.domain.templating import build_myid, fill_template, parse_fields, split_fields
 from app.repositories import batch_runs as repo
@@ -67,6 +70,8 @@ class Job:
     input_tokens: int = 0
     output_tokens: int = 0
     search_calls: int = 0
+    inference_cost: Decimal = Decimal(0)
+    search_cost: Decimal = Decimal(0)
 
     def path(self, kind: str) -> Any:
         return storage.run_file(self.run.id, kind)
@@ -146,6 +151,9 @@ async def _record(job: Job, result: RowResult) -> None:
     job.input_tokens += result.input_tokens
     job.output_tokens += result.output_tokens
     job.search_calls += result.search_calls
+    inference, search = calc_costs(job.model, result.input_tokens, result.output_tokens, result.search_calls, utcnow())
+    job.inference_cost += inference
+    job.search_cost += search
     head = f"[{len(job.results)}/{len(job.rows)}] {result.myid}"
     tries = f" 尝试={result.attempts}次" if result.attempts > 1 else ""
     if result.error:
@@ -176,6 +184,8 @@ def _progress(job: Job, *, final: bool = False) -> dict[str, Any]:
         "input_tokens": job.input_tokens,
         "output_tokens": job.output_tokens,
         "search_calls": job.search_calls,
+        "inference_cost": job.inference_cost,
+        "search_cost": job.search_cost,
         "heartbeat_at": utcnow(),
     }
 
@@ -193,9 +203,12 @@ async def _watch(job: Job) -> None:
 
 
 async def _load(run: BatchRun) -> Job:
-    model = find_model(run.model_id)
-    if model is None:
+    # 停用的模型也照跑：任务是停用前排进来的。
+    async with SessionLocal() as session:
+        config = await model_configs.find(session, run.model_id)
+    if config is None:
         raise RuntimeError(f"未知模型：{run.model_id}")
+    model = model_configs.to_model(config)
     excel = storage.run_dir(run.id) / storage.PROMPT_FILES["excel"]
     if not await anyio.Path(excel).is_file():
         raise RuntimeError("任务的 Excel 快照不存在")
@@ -229,6 +242,8 @@ async def _load(run: BatchRun) -> Job:
         input_tokens=run.input_tokens,
         output_tokens=run.output_tokens,
         search_calls=run.search_calls,
+        inference_cost=run.inference_cost,
+        search_cost=run.search_cost,
     )
 
 
@@ -244,7 +259,6 @@ async def _finish(job: Job, status: str, message: str = "") -> None:
         await anyio.to_thread.run_sync(write_failed, failed_file, failed)
     elif await anyio.Path(failed_file).is_file():
         await anyio.Path(failed_file).unlink()
-    inference, search = calc_costs(job.model.id, job.input_tokens, job.output_tokens, job.search_calls)
     formats = sum(1 for item in failed if item.format_error)
     summary = f"结束：{status}｜完成 {len(merged)}/{len(job.rows)}｜失败 {len(failed)}（格式不对 {formats}）"
     await anyio.to_thread.run_sync(_log, job, summary)
@@ -253,8 +267,6 @@ async def _finish(job: Job, status: str, message: str = "") -> None:
         "status": status,
         "finished_at": utcnow(),
         "error_message": message,
-        "inference_cost": inference,
-        "search_cost": search,
         "cancel_requested": False,
     }
     async with SessionLocal() as session:

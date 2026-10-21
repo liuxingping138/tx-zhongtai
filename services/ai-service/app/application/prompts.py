@@ -12,10 +12,10 @@ from platform_common.errors import ApiError, ErrorCode, NotFoundError
 from platform_common.excel import run_excel_parse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application import model_configs
 from app.application.audit_emit import enqueue_event
 from app.application.sheets import decode_code_table, sheet_summary
 from app.core import storage
-from app.domain.llm_models import model_display_name
 from app.domain.models import PromptTemplate, new_id
 from app.domain.templating import split_fields
 from app.repositories import prompts as repo
@@ -25,7 +25,7 @@ CODE_SUFFIX = ".txt"
 TITLE_MAX = 255
 
 
-def to_dict(template: PromptTemplate) -> dict[str, Any]:
+def to_dict(template: PromptTemplate, model_names: dict[str, str]) -> dict[str, Any]:
     return {
         "id": template.id,
         "title": template.title,
@@ -33,7 +33,7 @@ def to_dict(template: PromptTemplate) -> dict[str, Any]:
         "output_fields": template.output_fields,
         "fields": split_fields(template.output_fields),
         "model_id": template.model_id,
-        "model_name": model_display_name(template.model_id) if template.model_id else "",
+        "model_name": model_names.get(template.model_id, template.model_id),
         "excel_name": template.excel_name,
         "excel_rows": template.excel_rows,
         "excel_headers": list(template.excel_headers or []),
@@ -64,7 +64,8 @@ def _validated(values: dict[str, Any]) -> dict[str, str]:
 
 
 async def list_prompts(session: AsyncSession) -> list[dict[str, Any]]:
-    return [to_dict(item) for item in await repo.list_all(session)]
+    names = await model_configs.names(session)
+    return [to_dict(item, names) for item in await repo.list_all(session)]
 
 
 async def require(session: AsyncSession, prompt_id: str, *, lock: bool = False) -> PromptTemplate:
@@ -89,7 +90,7 @@ async def create_prompt(session: AsyncSession, actor: Actor, values: dict[str, A
     repo.add(session, template)
     await session.flush()
     await enqueue_event(session, event_type="ai.prompt.created", actor=actor, target_id=template.id)
-    return to_dict(template)
+    return to_dict(template, await model_configs.names(session))
 
 
 def _touch(template: PromptTemplate, actor: Actor) -> None:
@@ -110,7 +111,7 @@ async def update_prompt(session: AsyncSession, actor: Actor, prompt_id: str, val
     await enqueue_event(
         session, event_type="ai.prompt.updated", actor=actor, target_id=template.id, changes={"fields": sorted(changes)}
     )
-    return to_dict(template)
+    return to_dict(template, await model_configs.names(session))
 
 
 async def delete_prompt(session: AsyncSession, actor: Actor, prompt_id: str) -> None:
@@ -149,7 +150,7 @@ async def upload_file(
     )
     await session.flush()
     await anyio.to_thread.run_sync(storage.write_atomic, storage.prompt_file(prompt_id, kind), payload)
-    return to_dict(template)
+    return to_dict(template, await model_configs.names(session))
 
 
 async def delete_file(session: AsyncSession, actor: Actor, prompt_id: str, kind: str) -> dict[str, Any]:
@@ -164,7 +165,7 @@ async def delete_file(session: AsyncSession, actor: Actor, prompt_id: str, kind:
     )
     await session.flush()
     await anyio.Path(storage.prompt_file(prompt_id, kind)).unlink(missing_ok=True)
-    return to_dict(template)
+    return to_dict(template, await model_configs.names(session))
 
 
 async def download_file(session: AsyncSession, actor: Actor, prompt_id: str, kind: str) -> tuple[bytes, str]:

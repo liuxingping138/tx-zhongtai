@@ -1,6 +1,6 @@
 import { expect, test, type Route } from '@playwright/test'
 
-const resources = ['policy.sources', 'policy.base_tags', 'policy.interpretations', 'codebook.policy_types', 'codebook.scenarios', 'codebook.area_codes', 'system.users', 'system.roles', 'system.permissions', 'system.audit']
+const resources = ['ai.models', 'policy.sources', 'policy.base_tags', 'policy.interpretations', 'codebook.policy_types', 'codebook.scenarios', 'codebook.area_codes', 'system.users', 'system.roles', 'system.permissions', 'system.audit']
 const respond = (route: Route, data: unknown) => route.fulfill({ json: { code: 'OK', data } })
 
 test.beforeEach(async ({ page }) => {
@@ -11,6 +11,7 @@ test.beforeEach(async ({ page }) => {
     if (path.endsWith('/auth/me')) return respond(route, { id: 'admin', username: 'admin', display_name: '测试管理员', status: 'active', roles: ['超级管理员'] })
     if (path.endsWith('/auth/permissions')) return respond(route, { resources: resources.map(code => ({ code, level: 'FULL' })), menus: [{ id: 'sources', parent_id: null, title: '信源管理', route_name: 'policy-sources', resource_code: 'policy.sources', sort_order: 1 }] })
     if (path.endsWith('/options')) return respond(route, {})
+    if (path.endsWith('/ai/models')) return respond(route, [])
     return respond(route, { items: [], total: 0, page: 1, page_size: 20 })
   })
 })
@@ -31,8 +32,8 @@ test('column picker defaults to all fields and can restore the full set', async 
 })
 
 for (const [path, count] of [
-  ['policy/sources', 12], ['policy/base-tags', 16], ['policy/interpretations', 21],
-  ['codebook/policy-types', 3], ['codebook/scenarios', 31], ['codebook/area-codes', 11],
+  ['policy/sources', 15], ['policy/base-tags', 16], ['policy/interpretations', 21],
+  ['codebook/policy-types', 3], ['codebook/scenarios', 31], ['codebook/area-codes', 11], ['ai/models', 19],
 ] as const) {
   test(`${path}: all database business fields remain editable in grouped forms`, async ({ page }) => {
     await page.goto(`/${path}`)

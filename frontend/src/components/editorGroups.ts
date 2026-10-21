@@ -11,6 +11,8 @@ export interface EditorField {
   choices?: string[]
   /** 日期字段用日期选择器，值是 YYYY-MM-DD 字符串。 */
   date?: boolean
+  /** 只读，如建好后不能再改的编号。 */
+  disabled?: boolean
 }
 
 export interface EditorGroup {

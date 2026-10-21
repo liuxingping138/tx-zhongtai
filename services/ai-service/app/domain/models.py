@@ -54,6 +54,49 @@ class PromptTemplate(Base):
     updated_by_name: Mapped[str] = mapped_column(String(128), nullable=False, default="", comment="更新人")
 
 
+class AiModel(Base):
+    """可选的大模型，在「模型配置」页维护。模板和任务按 id 引用，所以不删只停用。
+
+    参数含义和计费规则见 app.domain.llm_models；密钥不在这里，按厂商放在服务环境变量里。
+    """
+
+    __tablename__ = "ai_models"
+    __table_args__ = {"comment": "大模型配置"}
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, comment="模型ID")
+    name: Mapped[str] = mapped_column(String(100), nullable=False, comment="显示名称")
+    provider: Mapped[str] = mapped_column(String(16), nullable=False, comment="厂商")
+    endpoint: Mapped[str] = mapped_column(String(128), nullable=False, comment="接入点")
+    web_search: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, comment="联网搜索")
+    thinking: Mapped[str] = mapped_column(String(16), nullable=False, default="", comment="深度思考")
+    reasoning_effort: Mapped[str] = mapped_column(String(16), nullable=False, default="", comment="思考强度")
+    service_tier: Mapped[str] = mapped_column(String(16), nullable=False, default="", comment="服务档位")
+    input_price: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False, comment="常规输入单价(元/千token)")
+    output_price: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False, comment="常规输出单价(元/千token)")
+    flex_input_price: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 6), nullable=True, comment="低优输入单价(元/千token)"
+    )
+    flex_output_price: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 6), nullable=True, comment="低优输出单价(元/千token)"
+    )
+    peak_input_price: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 6), nullable=True, comment="高峰输入单价(元/千token)"
+    )
+    peak_output_price: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 6), nullable=True, comment="高峰输出单价(元/千token)"
+    )
+    peak_hours: Mapped[str] = mapped_column(String(100), nullable=False, default="", comment="高峰时段")
+    search_price: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False, comment="联网单价(元/次)")
+    rate_limit: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="限流说明")
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, comment="是否启用")
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="排序")
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, comment="版本号")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="创建时间")
+    created_by_name: Mapped[str] = mapped_column(String(128), nullable=False, default="", comment="创建人")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="更新时间")
+    updated_by_name: Mapped[str] = mapped_column(String(128), nullable=False, default="", comment="更新人")
+
+
 class BatchRun(Base):
     """模板内容、输出字段在发起时冻结成快照：之后改模板不影响历史，模板删了也能追溯。"""
 

@@ -14,6 +14,7 @@ export const ROUTE_BY_NAME: Record<string, string> = {
   'ai-prompts': '/ai/prompts',
   'ai-batch-runs': '/ai/batch-runs',
   'ai-chat': '/ai/chat',
+  'ai-models': '/ai/models',
 }
 
 export function pathForRouteName(routeName: string | null): string | null {

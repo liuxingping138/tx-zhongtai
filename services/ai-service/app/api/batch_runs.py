@@ -61,7 +61,7 @@ async def options(
 ) -> JSONResponse:
     """批量页选模板用：只有批量权限、没有提问配置权限的人也要能选模板运行。"""
 
-    return success_json({"templates": await prompts.list_prompts(session), "models": available_models()})
+    return success_json({"templates": await prompts.list_prompts(session), "models": await available_models(session)})
 
 
 @router.post("")

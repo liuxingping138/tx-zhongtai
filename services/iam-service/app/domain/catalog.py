@@ -67,6 +67,7 @@ RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("ai.prompts", "提问配置", "ai-service", NodeType.RESOURCE, True, 61, "ai"),
     ResourceSpec("ai.batch_runs", "批量提问", "ai-service", NodeType.RESOURCE, True, 62, "ai"),
     ResourceSpec("ai.chat", "多轮对话", "ai-service", NodeType.RESOURCE, True, 63, "ai"),
+    ResourceSpec("ai.models", "模型配置", "ai-service", NodeType.RESOURCE, True, 64, "ai"),
 )
 
 ACTION_SPECS: tuple[ActionSpec, ...] = (
@@ -143,6 +144,9 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ActionSpec("ai.batch_runs", "stop", GrantLevel.FULL),
     ActionSpec("ai.batch_runs", "delete", GrantLevel.FULL),
     ActionSpec("ai.chat", "chat", GrantLevel.READ),
+    ActionSpec("ai.models", "list", GrantLevel.READ),
+    ActionSpec("ai.models", "create", GrantLevel.FULL),
+    ActionSpec("ai.models", "update", GrantLevel.FULL),
 )
 
 MENU_SPECS: tuple[MenuSpec, ...] = (
@@ -224,6 +228,7 @@ MENU_SPECS: tuple[MenuSpec, ...] = (
     MenuSpec("menu.ai.prompts", "提问配置", 61, "ai-prompts", "ai.prompts", "menu.ai", enabled=True),
     MenuSpec("menu.ai.batch_runs", "批量提问", 62, "ai-batch-runs", "ai.batch_runs", "menu.ai", enabled=True),
     MenuSpec("menu.ai.chat", "多轮对话", 63, "ai-chat", "ai.chat", "menu.ai", enabled=True),
+    MenuSpec("menu.ai.models", "模型配置", 64, "ai-models", "ai.models", "menu.ai", enabled=True),
 )
 
 SUPERADMIN_ROLE_CODE = "superadmin"

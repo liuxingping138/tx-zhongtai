@@ -12,7 +12,7 @@ from app.core.config import get_settings
 from app.core.database import get_db_session
 from app.main import app
 from app.repositories import prompts as prompt_repo
-from tests.helpers import ACTOR, PROMPT_ID, RUN_ID, FakeSession, fake_stream, noop, template, xlsx
+from tests.helpers import ACTOR, PROMPT_ID, RUN_ID, FakeSession, fake_stream, noop, sample_models, template, xlsx
 
 
 async def _db() -> Any:
@@ -126,7 +126,7 @@ def test_batch_routes_delegate_to_application(client: TestClient, monkeypatch: p
         "retry_run",
         "delete_run",
     ]
-    assert len(client.get("/api/v1/ai/chat/models").json()["data"]) == 4
+    assert len(client.get("/api/v1/ai/chat/models").json()["data"]) == len(sample_models())
 
 
 def test_prompt_write_routes(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
