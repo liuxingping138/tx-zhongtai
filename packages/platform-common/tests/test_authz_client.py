@@ -93,3 +93,26 @@ async def test_authz_client_expired_user_token_is_401() -> None:
     with pytest.raises(UnauthenticatedError):
         await client.authorize(access_token="expired", resource="system.users", action="list")
     await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_resource_levels_skips_denied_but_never_swallows_outage() -> None:
+    """按分类收窄可见范围：没授权的分类不出现；鉴权服务不可用仍是 503，不能当成「没有任何分类」。"""
+
+    from starlette.requests import Request
+
+    from platform_common.service_authz import resource_levels
+
+    client = AuthzClient(
+        base_url="http://iam",
+        service_name="ai-service",
+        service_secret="secret",
+        transport=httpx.MockTransport(_handler),
+    )
+    request = Request({"type": "http", "headers": [(b"authorization", b"Bearer t")]})
+    assert await resource_levels(request, client, ["ai.category.policy", "deny"], "list") == {
+        "ai.category.policy": "READ"
+    }
+    with pytest.raises(DependencyUnavailableError):
+        await resource_levels(request, client, ["ai.category.policy", "down"], "list")
+    await client.aclose()

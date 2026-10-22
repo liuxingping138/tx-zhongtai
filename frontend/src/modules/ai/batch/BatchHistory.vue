@@ -8,7 +8,17 @@ import { errorMessage } from '@/api/errors'
 import { RUN_MODE_TEXT, RUN_STATUS_TEXT, formatYuan, isActive, runStatusType } from '../shared/aiText'
 import { downloadBatchFile } from '../shared/downloads'
 
-defineProps<{ items: BatchRun[]; total: number; loading: boolean; canRun: boolean; canExport: boolean; filtered: boolean }>()
+const props = defineProps<{
+  items: BatchRun[]
+  total: number
+  loading: boolean
+  canRun: boolean
+  canExport: boolean
+  filtered: boolean
+  /** 能编辑的模板类型：停止、重跑、删除都按任务所属类型判断 */
+  editableCategories: string[]
+}>()
+const canManage = (run: BatchRun) => props.canRun && props.editableCategories.includes(run.prompt_category)
 const page = defineModel<number>('page', { required: true })
 const emit = defineEmits<{ changed: [] }>()
 const viewing = ref<BatchRun | null>(null)
@@ -95,6 +105,11 @@ function progressText(run: BatchRun): string {
         prop="created_at"
         label="发起时间"
         width="160"
+      />
+      <el-table-column
+        prop="prompt_category_name"
+        label="类型"
+        width="80"
       />
       <el-table-column
         prop="prompt_title"
@@ -224,7 +239,7 @@ function progressText(run: BatchRun): string {
               </template>
             </el-dropdown>
             <el-button
-              v-if="canRun && row.can_stop"
+              v-if="canManage(row) && row.can_stop"
               link
               type="warning"
               :disabled="row.status === 'stopping'"
@@ -233,7 +248,7 @@ function progressText(run: BatchRun): string {
               停止
             </el-button>
             <el-button
-              v-if="canRun && row.can_retry"
+              v-if="canManage(row) && row.can_retry"
               link
               type="primary"
               :title="`重新提问失败和没跑到的 ${row.pending_count} 条`"
@@ -242,7 +257,7 @@ function progressText(run: BatchRun): string {
               重跑失败
             </el-button>
             <el-button
-              v-if="canRun && row.can_delete"
+              v-if="canManage(row) && row.can_delete"
               link
               type="danger"
               @click="remove(row)"

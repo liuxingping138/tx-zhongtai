@@ -18,6 +18,7 @@ from app.application import batch_execute, batch_queue, batch_runs, prompts
 from app.core import storage
 from app.core.config import get_settings
 from app.core.database import SessionLocal, engine
+from app.domain.categories import FULL_ACCESS, CategoryAccess
 from app.domain.models import BatchRun, OutboxEvent, PromptTemplate
 from app.repositories import batch_runs as repo
 from tests.helpers import ACTOR, fake_stream, xlsx
@@ -42,19 +43,26 @@ async def _template_with_excel(rows: int = 3) -> str:
         data = await prompts.create_prompt(
             session,
             ACTOR,
-            {"title": "集成", "content": "企业：@【名称】", "output_fields": "行业", "model_id": "baidu-deepseek-v3.2"},
+            FULL_ACCESS,
+            {
+                "title": "集成",
+                "category": "policy",
+                "content": "企业：@【名称】",
+                "output_fields": "行业",
+                "model_id": "baidu-deepseek-v3.2",
+            },
         )
         await session.commit()
     async with SessionLocal() as session:
         content = xlsx([["名称"], *[[f"企业{index}"] for index in range(rows)]])
-        await prompts.upload_file(session, ACTOR, data["id"], "excel", "企业.xlsx", content)
+        await prompts.upload_file(session, ACTOR, FULL_ACCESS, data["id"], "excel", ("企业.xlsx", content))
         await session.commit()
     return str(data["id"])
 
 
 async def _start(prompt_id: str) -> dict[str, Any]:
     async with SessionLocal() as session:
-        run = await batch_runs.start_run(session, ACTOR, {"prompt_id": prompt_id})
+        run = await batch_runs.start_run(session, ACTOR, FULL_ACCESS, {"prompt_id": prompt_id})
         await session.commit()
         return run
 
@@ -81,7 +89,7 @@ async def test_stale_running_runs_become_interrupted() -> None:
         await repo.update_fields(session, run["id"], {"heartbeat_at": utcnow() - timedelta(minutes=10)})
         await session.commit()
     async with SessionLocal() as session:
-        listed = await batch_runs.list_runs(session, page=1, page_size=15)
+        listed = await batch_runs.list_runs(session, FULL_ACCESS, page=1, page_size=15)
         await session.commit()
     assert listed["items"][0]["status"] == "interrupted"
 
@@ -96,14 +104,14 @@ async def test_full_flow_builds_result_from_real_tables(monkeypatch: pytest.Monk
     assert await batch_queue.claim_next() == run["id"]
     await batch_execute.execute(run["id"])
     async with SessionLocal() as session:
-        done = await batch_runs.get_run(session, run["id"])
+        done = await batch_runs.get_run(session, FULL_ACCESS, run["id"])
     assert (done["status"], done["done_count"], done["total_count"], done["failed_count"]) == ("done", 3, 3, 0)
     assert done["files"]["result"] and done["files"]["raw"] and not done["files"]["failed"]
     sheet = load_workbook(storage.run_file(run["id"], "result")).active
     assert sheet is not None
     assert [row[2] for row in sheet.iter_rows(min_row=2, values_only=True)] == ["制造"] * 3
     async with SessionLocal() as session:
-        await batch_runs.delete_run(session, ACTOR, run["id"])
+        await batch_runs.delete_run(session, ACTOR, FULL_ACCESS, run["id"])
         await session.commit()
     assert not storage.run_dir(run["id"]).exists()
 
@@ -111,12 +119,12 @@ async def test_full_flow_builds_result_from_real_tables(monkeypatch: pytest.Monk
 async def test_stop_running_run_sets_flag_and_queued_run_cancels() -> None:
     queued = await _start(await _template_with_excel())
     async with SessionLocal() as session:
-        assert (await batch_runs.stop_run(session, ACTOR, queued["id"]))["status"] == "cancelled"
+        assert (await batch_runs.stop_run(session, ACTOR, FULL_ACCESS, queued["id"]))["status"] == "cancelled"
         await session.commit()
     running = await _start(await _template_with_excel())
     await batch_queue.claim_next()
     async with SessionLocal() as session:
-        stopped = await batch_runs.stop_run(session, ACTOR, running["id"])
+        stopped = await batch_runs.stop_run(session, ACTOR, FULL_ACCESS, running["id"])
         await session.commit()
     assert (stopped["status"], stopped["cancel_requested"]) == ("stopping", True)
     async with SessionLocal() as session:
@@ -126,14 +134,26 @@ async def test_stop_running_run_sets_flag_and_queued_run_cancels() -> None:
 async def test_history_filters_on_real_rows() -> None:
     prompt_id = await _template_with_excel()
     async with SessionLocal() as session:
-        await batch_runs.start_run(session, ACTOR, {"prompt_id": prompt_id, "limit": 10})
+        await batch_runs.start_run(session, ACTOR, FULL_ACCESS, {"prompt_id": prompt_id, "limit": 10})
         await session.commit()
     async with SessionLocal() as session:
-        tests = await batch_runs.list_runs(session, page=1, page_size=15, filters={"run_mode": ["test"]})
-        full = await batch_runs.list_runs(session, page=1, page_size=15, filters={"run_mode": ["all"]})
-        by_title = await batch_runs.list_runs(session, page=1, page_size=15, filters={"prompt_title": ["集成"]})
-        by_other = await batch_runs.list_runs(session, page=1, page_size=15, filters={"created_by_name": ["别人"]})
-        options = await batch_runs.filter_options(session)
+        tests = await batch_runs.list_runs(session, FULL_ACCESS, page=1, page_size=15, filters={"run_mode": ["test"]})
+        full = await batch_runs.list_runs(session, FULL_ACCESS, page=1, page_size=15, filters={"run_mode": ["all"]})
+        by_title = await batch_runs.list_runs(
+            session, FULL_ACCESS, page=1, page_size=15, filters={"prompt_title": ["集成"]}
+        )
+        by_other = await batch_runs.list_runs(
+            session, FULL_ACCESS, page=1, page_size=15, filters={"created_by_name": ["别人"]}
+        )
+        by_category = await batch_runs.list_runs(
+            session, FULL_ACCESS, page=1, page_size=15, filters={"prompt_category": ["tender"]}
+        )
+        hidden = await batch_runs.list_runs(
+            session, CategoryAccess(frozenset({"tender"}), frozenset()), page=1, page_size=15
+        )
+        options = await batch_runs.filter_options(session, FULL_ACCESS)
     assert (tests["total"], full["total"], by_title["total"], by_other["total"]) == (1, 0, 1, 0)
+    # 政策类的任务：按招投标筛不到；只能看招投标类的人整页都看不到。
+    assert (by_category["total"], hidden["total"]) == (0, 0)
     assert tests["items"][0]["run_mode"] == "test"
     assert options == {"prompt_title": ["集成"], "created_by_name": [ACTOR.name]}

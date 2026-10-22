@@ -9,7 +9,7 @@ from platform_common.http_utils import success_json
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import AskBody, ChatBody, sse_response
-from app.api.security import SecurityClass, classified, require_ai_permission
+from app.api.security import CategoryAccess, SecurityClass, classified, get_category_access, require_ai_permission
 from app.application import asking
 from app.core.database import get_db_session
 
@@ -21,12 +21,13 @@ router = APIRouter(prefix="/api/v1/ai", tags=["ai-stream"])
 async def ask(
     body: AskBody,
     session: AsyncSession = Depends(get_db_session, scope="function"),
+    access: CategoryAccess = Depends(get_category_access),
     _: Actor = Depends(require_ai_permission("ai.prompts", "ask")),
 ) -> StreamingResponse:
     """试发：@【列名】替换成模板 Excel 第一行的值后提问。替换和校验都在推流前完成，出错照常返回 4xx。"""
 
     model, prompt = await asking.prepare_trial(
-        session, content=body.content, model_id=body.model_id, prompt_id=body.prompt_id
+        session, access, content=body.content, model_id=body.model_id, prompt_id=body.prompt_id
     )
     return sse_response(asking.stream_answer(model, prompt, thinking=body.thinking, echo_prompt=True))
 

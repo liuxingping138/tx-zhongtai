@@ -12,6 +12,8 @@ from sqlalchemy import Boolean, DateTime, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.domain.categories import DEFAULT_CATEGORY
+
 
 def new_id() -> str:
     return uuid.uuid4().hex
@@ -38,6 +40,9 @@ class PromptTemplate(Base):
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id, comment="模板ID")
     title: Mapped[str] = mapped_column(String(255), nullable=False, comment="提示词标题")
+    category: Mapped[str] = mapped_column(
+        String(16), nullable=False, default=DEFAULT_CATEGORY, server_default=DEFAULT_CATEGORY, comment="模板类型"
+    )
     content: Mapped[str] = mapped_column(Text, nullable=False, comment="提示词内容")
     output_fields: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="新增输出字段")
     model_id: Mapped[str] = mapped_column(String(100), nullable=False, default="", comment="模型ID")
@@ -106,6 +111,9 @@ class BatchRun(Base):
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id, comment="任务ID")
     prompt_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True, comment="模板ID")
     prompt_title: Mapped[str] = mapped_column(String(255), nullable=False, comment="提问标题")
+    prompt_category: Mapped[str] = mapped_column(
+        String(16), nullable=False, default=DEFAULT_CATEGORY, server_default=DEFAULT_CATEGORY, comment="模板类型"
+    )
     prompt_content: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="提问模板内容")
     output_fields: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="解析字段快照")
     model_id: Mapped[str] = mapped_column(String(100), nullable=False, comment="模型ID")

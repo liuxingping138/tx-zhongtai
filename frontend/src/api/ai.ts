@@ -13,9 +13,21 @@ export interface AiModel {
   search_price: string
 }
 
+/** 模板类型（政策、客户、招投标），也是授权单位：只返回当前用户能看到的类型。 */
+export interface TemplateCategory {
+  code: string
+  name: string
+  /** 能否在这个类型下新建、修改、试发、运行 */
+  editable: boolean
+}
+
 export interface PromptTemplate {
   id: string
   title: string
+  category: string
+  category_name: string
+  /** 当前用户对这个模板所属类型有没有编辑权 */
+  editable: boolean
   content: string
   output_fields: string
   fields: string[]
@@ -34,6 +46,7 @@ export interface PromptTemplate {
 
 export interface PromptPayload {
   title: string
+  category: string
   content: string
   output_fields: string
   model_id: string
@@ -48,6 +61,8 @@ export interface BatchRun {
   id: string
   prompt_id: string
   prompt_title: string
+  prompt_category: string
+  prompt_category_name: string
   prompt_content: string
   output_fields: string
   model_id: string
@@ -91,7 +106,7 @@ export interface BatchRunPage {
 export const AI_BASE = '/ai'
 const BASE = AI_BASE
 
-export function listPrompts(): Promise<{ items: PromptTemplate[]; models: AiModel[] }> {
+export function listPrompts(): Promise<{ items: PromptTemplate[]; models: AiModel[]; categories: TemplateCategory[] }> {
   return request(http.get(`${BASE}/prompts`))
 }
 
@@ -119,6 +134,7 @@ export function deletePromptFile(id: string, kind: PromptFileKind): Promise<Prom
 
 export interface BatchRunFilters {
   prompt_title?: string[]
+  prompt_category?: string[]
   created_by_name?: string[]
   run_mode?: string[]
   status?: string[]
@@ -132,7 +148,7 @@ export function batchRunFilterOptions(): Promise<{ prompt_title: string[]; creat
   return request(http.get(`${BASE}/batch-runs/filter-options`))
 }
 
-export function batchOptions(): Promise<{ templates: PromptTemplate[]; models: AiModel[] }> {
+export function batchOptions(): Promise<{ templates: PromptTemplate[]; models: AiModel[]; categories: TemplateCategory[] }> {
   return request(http.get(`${BASE}/batch-runs/options`))
 }
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Collection
 from datetime import datetime
 from typing import Any
 
@@ -29,6 +30,7 @@ def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
         cond
         for cond in (
             in_any(BatchRun.prompt_title, filters.get("prompt_title")),
+            in_any(BatchRun.prompt_category, filters.get("prompt_category")),
             in_any(BatchRun.created_by_name, filters.get("created_by_name")),
             in_any(BatchRun.status, filters.get("status")),
         )
@@ -43,9 +45,9 @@ def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
 
 
 async def page(
-    session: AsyncSession, *, offset: int, limit: int, filters: Filters | None = None
+    session: AsyncSession, *, offset: int, limit: int, categories: Collection[str], filters: Filters | None = None
 ) -> tuple[list[BatchRun], int]:
-    conditions = _conditions(filters or {})
+    conditions = [*_conditions(filters or {}), BatchRun.prompt_category.in_(list(categories))]
     total = int(await session.scalar(select(func.count()).select_from(BatchRun).where(*conditions)) or 0)
     rows = await session.scalars(
         select(BatchRun)
@@ -57,9 +59,11 @@ async def page(
     return list(rows), total
 
 
-async def distinct_values(session: AsyncSession, column: str) -> list[str]:
+async def distinct_values(session: AsyncSession, column: str, *, categories: Collection[str]) -> list[str]:
     field = {"prompt_title": BatchRun.prompt_title, "created_by_name": BatchRun.created_by_name}[column]
-    rows = await session.scalars(select(field).where(field != "").distinct().order_by(field))
+    rows = await session.scalars(
+        select(field).where(field != "", BatchRun.prompt_category.in_(list(categories))).distinct().order_by(field)
+    )
     return list(rows)
 
 

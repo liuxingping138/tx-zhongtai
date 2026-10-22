@@ -23,6 +23,7 @@ _MEDIA_TYPES = {
 
 class PromptBody(_Body):
     title: str = Field(max_length=255)
+    category: str = Field(max_length=16)
     content: str = Field(max_length=200_000)
     output_fields: str = Field(default="", max_length=2000)
     model_id: str = Field(default="", max_length=100)

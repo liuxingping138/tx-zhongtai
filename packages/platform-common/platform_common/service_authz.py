@@ -8,6 +8,7 @@ policy / codebook 等业务服务的鉴权逻辑完全一致，只有服务名�
 
 from __future__ import annotations
 
+import asyncio
 import functools
 from collections.abc import Callable
 from typing import Any
@@ -17,7 +18,7 @@ from fastapi import Depends, Request
 from platform_common.actors import Actor
 from platform_common.authz import AuthzClient
 from platform_common.enums import SecurityClass
-from platform_common.errors import UnauthenticatedError
+from platform_common.errors import PermissionDeniedError, UnauthenticatedError
 from platform_common.route_audit import mark_permission_dependency
 
 
@@ -50,6 +51,25 @@ def cached_authz_client(
         service_secret=service_secret,
         timeout_seconds=timeout_seconds,
     )
+
+
+async def resource_levels(request: Request, client: AuthzClient, resources: list[str], action: str) -> dict[str, str]:
+    """当前用户在几个资源上的授权档位，没授权的不在结果里。用于按数据分类收窄可见范围，不是路由的准入检查。
+
+    被拒绝只说明没有这个分类；鉴权服务不可用等其他错误照常抛出（503），绝不当作放行。
+    """
+
+    token = _bearer_token(request)
+
+    async def level(resource: str) -> str | None:
+        try:
+            result = await client.authorize(access_token=token, resource=resource, action=action)
+        except PermissionDeniedError:
+            return None
+        return result.level or None
+
+    levels = await asyncio.gather(*(level(resource) for resource in resources))
+    return {resource: value for resource, value in zip(resources, levels, strict=True) if value}
 
 
 def build_permission_dependency(get_client: Callable[..., AuthzClient]) -> Callable[[str, str], Callable[..., Any]]:

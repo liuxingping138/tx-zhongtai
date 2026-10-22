@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search } from '@element-plus/icons-vue'
+import { Plus } from '@element-plus/icons-vue'
 
-import { createPrompt, deletePrompt, listPrompts, updatePrompt, type AiModel, type PromptTemplate } from '@/api/ai'
+import { createPrompt, deletePrompt, listPrompts, updatePrompt, type AiModel, type PromptTemplate, type TemplateCategory } from '@/api/ai'
 import { errorMessage } from '@/api/errors'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import { useAuthStore } from '@/stores/auth'
@@ -11,31 +11,39 @@ import AnswerTranscript from '../shared/AnswerTranscript.vue'
 import ModelPicker from '../shared/ModelPicker.vue'
 import StreamStatsBar from '../shared/StreamStatsBar.vue'
 import { appendBlock, outputFormatBlock, splitFields } from '../shared/aiText'
+import TemplatePicker from '../shared/TemplatePicker.vue'
+import { ALL_CATEGORIES, defaultCategory } from '../shared/categories'
 import { useAnswerStream } from '../shared/useAnswerStream'
 import MentionTextarea from './MentionTextarea.vue'
 import PromptFiles from './PromptFiles.vue'
 import '../shared/ai.css'
 
 const auth = useAuthStore()
-const canEdit = computed(() => auth.canFull('ai.prompts'))
+const canEditPage = computed(() => auth.canFull('ai.prompts'))
 const canExport = computed(() => auth.canExport('ai.prompts'))
 const templates = ref<PromptTemplate[]>([])
 const models = ref<AiModel[]>([])
+const categories = ref<TemplateCategory[]>([])
+const editableCategories = computed(() => categories.value.filter(item => item.editable))
 const selected = ref<PromptTemplate | null>(null)
-const keyword = ref('')
+const categoryFilter = ref(ALL_CATEGORIES)
+// 能不能改看两层：页面本身的编辑权，加这个模板所属类型的编辑权；新模板只要有一个能编辑的类型就行。
+const canCreate = computed(() => canEditPage.value && editableCategories.value.length > 0)
+const canEdit = computed(() => canEditPage.value && (selected.value ? selected.value.editable : canCreate.value))
 const loading = ref(false)
 const loadError = ref('')
 const saving = ref(false)
 const thinking = ref(false)
-const form = reactive({ title: '', content: '', output_fields: '', model_id: '' })
+const form = reactive({ title: '', category: '', content: '', output_fields: '', model_id: '' })
 const unsaved = useUnsavedForm(ref(true), () => ({ ...form }), saving)
 // 编辑区一直打开，useUnsavedForm 只在打开时记基线；不先记一次，空表单也算「未保存」。
 unsaved.markSaved()
 const answer = useAnswerStream()
 
-const visibleTemplates = computed(() => {
-  const needle = keyword.value.trim()
-  return needle ? templates.value.filter(item => item.title.includes(needle)) : templates.value
+/** 编辑区的类型下拉：能编辑的类型；只读模板也要显示它自己的类型。 */
+const categoryOptions = computed(() => {
+  const own = categories.value.find(item => item.code === selected.value?.category)
+  return own && !own.editable ? [own, ...editableCategories.value] : editableCategories.value
 })
 const trialModelId = computed(() => form.model_id || models.value.find(item => item.available)?.id || '')
 const trialModel = computed(() => models.value.find(item => item.id === trialModelId.value))
@@ -46,6 +54,11 @@ async function load(): Promise<void> {
     const data = await listPrompts()
     templates.value = data.items
     models.value = data.models
+    categories.value = data.categories
+    if (!selected.value) {
+      form.category = defaultCategory(editableCategories.value, categoryFilter.value)
+      unsaved.markSaved()
+    }
     loadError.value = ''
   } catch (error) {
     loadError.value = errorMessage(error, '模板加载失败，请刷新重试')
@@ -58,10 +71,9 @@ onBeforeUnmount(answer.stop)
 
 function fill(template: PromptTemplate | null): void {
   selected.value = template
-  form.title = template?.title ?? ''
-  form.content = template?.content ?? ''
-  form.output_fields = template?.output_fields ?? ''
-  form.model_id = template?.model_id ?? ''
+  const { title, category, content, output_fields, model_id } = template
+    ?? { title: '', category: defaultCategory(editableCategories.value, categoryFilter.value), content: '', output_fields: '', model_id: '' }
+  Object.assign(form, { title, category, content, output_fields, model_id })
   unsaved.markSaved()
 }
 
@@ -94,6 +106,10 @@ function appendFields(): void {
 async function save(): Promise<void> {
   if (!form.title.trim() || !form.content.trim()) {
     ElMessage.warning('请填写提示词标题和内容')
+    return
+  }
+  if (!form.category) {
+    ElMessage.warning('请选择模板类型')
     return
   }
   saving.value = true
@@ -153,7 +169,7 @@ async function trial(): Promise<void> {
         <div class="ai-panel__head">
           <h2>提示词模板</h2>
           <el-button
-            v-if="canEdit"
+            v-if="canCreate"
             size="small"
             :icon="Plus"
             @click="choose(null)"
@@ -161,46 +177,20 @@ async function trial(): Promise<void> {
             新建
           </el-button>
         </div>
-        <div class="workbench__search">
-          <el-input
-            v-model="keyword"
-            :prefix-icon="Search"
-            clearable
-            placeholder="按标题查找"
-            aria-label="按标题查找模板"
-          />
-        </div>
-        <el-alert
-          v-if="loadError"
-          :title="loadError"
-          type="error"
-          :closable="false"
-          show-icon
-        />
-        <ul
-          v-loading="loading"
-          class="ai-template-list"
-          aria-label="提示词模板"
+        <TemplatePicker
+          v-model:category="categoryFilter"
+          :templates="templates"
+          :categories="categories"
+          :selected-id="selected?.id"
+          :loading="loading"
+          :error="loadError"
+          empty-text="还没有模板，点「新建」开始"
+          @select="choose"
         >
-          <li v-if="!loading && !visibleTemplates.length">
-            <p class="ai-panel__hint workbench__empty">
-              {{ templates.length ? '没有匹配的模板' : '还没有模板，点「新建」开始' }}
-            </p>
-          </li>
-          <li
-            v-for="item in visibleTemplates"
-            :key="item.id"
-          >
-            <button
-              type="button"
-              :aria-current="item.id === selected?.id"
-              @click="choose(item)"
-            >
-              <strong>{{ item.title }}</strong>
-              <span>{{ item.excel_name ? `${item.excel_rows} 行` : '未上传 Excel' }} · {{ item.updated_at }}</span>
-            </button>
-          </li>
-        </ul>
+          <template #meta="{ item }">
+            {{ item.excel_name ? `${item.excel_rows} 行` : '未上传 Excel' }} · {{ item.updated_at }}
+          </template>
+        </TemplatePicker>
       </div>
 
       <form
@@ -226,6 +216,21 @@ async function trial(): Promise<void> {
             placeholder="提示词标题"
             :disabled="!canEdit"
           />
+          <span class="workbench__label">类型</span>
+          <el-select
+            v-model="form.category"
+            aria-label="模板类型"
+            placeholder="选择模板类型"
+            :disabled="!canEdit"
+          >
+            <el-option
+              v-for="item in categoryOptions"
+              :key="item.code"
+              :label="item.name"
+              :value="item.code"
+              :disabled="!item.editable"
+            />
+          </el-select>
           <span class="workbench__label">内容</span>
           <MentionTextarea
             v-model="form.content"
@@ -329,8 +334,6 @@ async function trial(): Promise<void> {
 .workbench { display: grid; grid-template-columns: minmax(420px, 1fr) minmax(340px, 1fr); gap: 16px; height: calc(100dvh - var(--workspace-header-height) - 48px); min-height: 560px; }
 .workbench__left { display: flex; flex-direction: column; gap: 16px; min-height: 0; overflow: auto; }
 .workbench__templates { display: flex; flex-direction: column; flex: 0 0 auto; max-height: 300px; }
-.workbench__search { padding: 10px 12px 0; }
-.workbench__empty { padding: 16px 8px; }
 .workbench__editor { display: flex; flex-direction: column; }
 .workbench__fields { display: grid; grid-template-columns: 92px minmax(0, 1fr); align-items: start; gap: 12px 12px; padding: 16px; }
 .workbench__label { padding-top: 7px; color: var(--zt-ink-700); font-size: 13px; }

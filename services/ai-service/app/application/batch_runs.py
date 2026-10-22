@@ -16,9 +16,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.asking import resolve_model
 from app.application.audit_emit import enqueue_event
-from app.application.prompts import require as require_prompt
+from app.application.prompts import require_editable as require_editable_prompt
 from app.core import storage
 from app.core.config import get_settings
+from app.domain.categories import CategoryAccess, category_name
 from app.domain.models import (
     ACTIVE_STATUSES,
     RUN_CANCELLED,
@@ -69,6 +70,8 @@ def to_dict(run: BatchRun) -> dict[str, Any]:
         "id": run.id,
         "prompt_id": run.prompt_id,
         "prompt_title": run.prompt_title,
+        "prompt_category": run.prompt_category,
+        "prompt_category_name": category_name(run.prompt_category),
         "prompt_content": run.prompt_content,
         "output_fields": run.output_fields,
         "model_id": run.model_id,
@@ -108,20 +111,22 @@ async def reconcile_stale(session: AsyncSession) -> None:
 
 
 async def list_runs(
-    session: AsyncSession, *, page: int, page_size: int, filters: Filters | None = None
+    session: AsyncSession, access: CategoryAccess, *, page: int, page_size: int, filters: Filters | None = None
 ) -> dict[str, Any]:
     await reconcile_stale(session)
     size = min(max(page_size, 1), PAGE_SIZE_MAX)
-    rows, total = await repo.page(session, offset=(max(page, 1) - 1) * size, limit=size, filters=filters)
+    rows, total = await repo.page(
+        session, offset=(max(page, 1) - 1) * size, limit=size, filters=filters, categories=access.readable
+    )
     return {"items": [to_dict(run) for run in rows], "total": total, "page": max(page, 1), "page_size": size}
 
 
-async def filter_options(session: AsyncSession) -> dict[str, list[str]]:
-    """历史里实际出现过的模板名称和操作人；模板删了、改名了，旧名字仍能筛出当时的记录。"""
+async def filter_options(session: AsyncSession, access: CategoryAccess) -> dict[str, list[str]]:
+    """历史里实际出现过的模板名称和操作人；模板删了、改名了，旧名字仍能筛出当时的记录。只取能看到的类型。"""
 
     return {
-        "prompt_title": await repo.distinct_values(session, "prompt_title"),
-        "created_by_name": await repo.distinct_values(session, "created_by_name"),
+        "prompt_title": await repo.distinct_values(session, "prompt_title", categories=access.readable),
+        "created_by_name": await repo.distinct_values(session, "created_by_name", categories=access.readable),
     }
 
 
@@ -132,9 +137,19 @@ async def require(session: AsyncSession, run_id: str, *, lock: bool = False) -> 
     return run
 
 
-async def get_run(session: AsyncSession, run_id: str) -> dict[str, Any]:
+async def require_editable(
+    session: AsyncSession, access: CategoryAccess, run_id: str, *, lock: bool = False
+) -> BatchRun:
+    run = await require(session, run_id, lock=lock)
+    access.require_edit(run.prompt_category)
+    return run
+
+
+async def get_run(session: AsyncSession, access: CategoryAccess, run_id: str) -> dict[str, Any]:
     await reconcile_stale(session)
-    return to_dict(await require(session, run_id))
+    run = await require(session, run_id)
+    access.require_read(run.prompt_category)
+    return to_dict(run)
 
 
 def _snapshot_files(prompt_id: str, run_id: str) -> None:
@@ -146,8 +161,10 @@ def _snapshot_files(prompt_id: str, run_id: str) -> None:
             shutil.copyfile(source, target / storage.PROMPT_FILES[kind])
 
 
-async def start_run(session: AsyncSession, actor: Actor, values: dict[str, Any]) -> dict[str, Any]:
-    template = await require_prompt(session, str(values.get("prompt_id") or ""), lock=True)
+async def start_run(
+    session: AsyncSession, actor: Actor, access: CategoryAccess, values: dict[str, Any]
+) -> dict[str, Any]:
+    template = await require_editable_prompt(session, access, str(values.get("prompt_id") or ""), lock=True)
     # 以模板配置的模型为准；模板没配时用发起时页面上选的模型。
     model = await resolve_model(session, template.model_id or str(values.get("model_id") or ""))
     if not template.excel_name or not storage.prompt_file(template.id, "excel").is_file():
@@ -165,6 +182,7 @@ async def start_run(session: AsyncSession, actor: Actor, values: dict[str, Any])
         id=new_id(),
         prompt_id=template.id,
         prompt_title=template.title,
+        prompt_category=template.category,
         prompt_content=template.content,
         output_fields=template.output_fields,
         model_id=model.id,
@@ -197,11 +215,11 @@ async def start_run(session: AsyncSession, actor: Actor, values: dict[str, Any])
     return to_dict(run)
 
 
-async def retry_run(session: AsyncSession, actor: Actor, run_id: str) -> dict[str, Any]:
+async def retry_run(session: AsyncSession, actor: Actor, access: CategoryAccess, run_id: str) -> dict[str, Any]:
     """把已结束的任务重新排队：worker 沿用已成功的行，只问失败和没跑到的，结果合并回本任务，费用累加。"""
 
     await reconcile_stale(session)
-    run = await require(session, run_id, lock=True)
+    run = await require_editable(session, access, run_id, lock=True)
     if run.status in ACTIVE_STATUSES:
         raise ApiError("任务仍在运行，结束后才能重跑", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     if not await anyio.to_thread.run_sync(_can_retry, run):
@@ -220,10 +238,10 @@ async def retry_run(session: AsyncSession, actor: Actor, run_id: str) -> dict[st
     return to_dict(run)
 
 
-async def stop_run(session: AsyncSession, actor: Actor, run_id: str) -> dict[str, Any]:
+async def stop_run(session: AsyncSession, actor: Actor, access: CategoryAccess, run_id: str) -> dict[str, Any]:
     """排队中的直接取消；运行中的只置停止标志，worker 停止提交新请求、等在途请求返回后收尾。"""
 
-    run = await require(session, run_id, lock=True)
+    run = await require_editable(session, access, run_id, lock=True)
     if run.status not in ACTIVE_STATUSES:
         raise ApiError("任务已结束，无需停止", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     if run.status == RUN_QUEUED:
@@ -234,11 +252,11 @@ async def stop_run(session: AsyncSession, actor: Actor, run_id: str) -> dict[str
     return to_dict(run)
 
 
-async def delete_run(session: AsyncSession, actor: Actor, run_id: str) -> None:
+async def delete_run(session: AsyncSession, actor: Actor, access: CategoryAccess, run_id: str) -> None:
     """运行中不能删：worker 还在写这个目录和这条记录。"""
 
     await reconcile_stale(session)
-    run = await require(session, run_id, lock=True)
+    run = await require_editable(session, access, run_id, lock=True)
     if run.status in ACTIVE_STATUSES:
         raise ApiError("任务仍在运行，请先停止或等它结束再删除", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     await repo.delete(session, run)
@@ -247,8 +265,11 @@ async def delete_run(session: AsyncSession, actor: Actor, run_id: str) -> None:
     await anyio.to_thread.run_sync(storage.remove_tree, storage.run_dir(run_id))
 
 
-async def download(session: AsyncSession, actor: Actor, run_id: str, kind: str) -> tuple[bytes, str]:
+async def download(
+    session: AsyncSession, actor: Actor, access: CategoryAccess, run_id: str, kind: str
+) -> tuple[bytes, str]:
     run = await require(session, run_id)
+    access.require_read(run.prompt_category)
     path = storage.run_file(run.id, kind)
     if not await anyio.Path(path).is_file():
         raise NotFoundError("文件不存在或尚未生成")

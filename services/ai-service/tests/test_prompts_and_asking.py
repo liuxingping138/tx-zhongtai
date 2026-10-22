@@ -3,12 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from platform_common.errors import ApiError, NotFoundError
+from platform_common.errors import ApiError, NotFoundError, PermissionDeniedError
 
 from app.application import asking
 from app.application import prompts as service
 from app.core import storage
 from app.core.config import get_settings
+from app.domain.categories import FULL_ACCESS, CategoryAccess
 from app.repositories import prompts as repo
 from tests.helpers import ACTOR, PROMPT_ID, FakeSession, fake_stream, noop, template, xlsx
 
@@ -36,15 +37,16 @@ async def test_create_validates_and_normalizes_fields(_quiet_audit: list[dict[st
     data = await service.create_prompt(
         session,
         ACTOR,
-        {"title": " 标题 ", "content": "内容", "output_fields": "行业| |场景", "model_id": "x"},  # type: ignore[arg-type]
+        FULL_ACCESS,
+        {"title": " 标题 ", "category": "policy", "content": "内容", "output_fields": "行业| |场景", "model_id": "x"},  # type: ignore[arg-type]
     )
     assert (data["title"], data["output_fields"], data["fields"]) == ("标题", "行业|场景", ["行业", "场景"])
     assert data["created_by_name"] == "测试员" and len(data["id"]) == 32
     assert _quiet_audit[0]["event_type"] == "ai.prompt.created"
     with pytest.raises(ApiError, match="标题不能为空"):
-        await service.create_prompt(session, ACTOR, {"title": "", "content": "x"})  # type: ignore[arg-type]
+        await service.create_prompt(session, ACTOR, FULL_ACCESS, {"title": "", "category": "policy", "content": "x"})  # type: ignore[arg-type]
     with pytest.raises(ApiError, match="内容不能为空"):
-        await service.create_prompt(session, ACTOR, {"title": "t", "content": " "})  # type: ignore[arg-type]
+        await service.create_prompt(session, ACTOR, FULL_ACCESS, {"title": "t", "category": "policy", "content": " "})  # type: ignore[arg-type]
 
 
 async def test_update_rejects_stale_version_and_records_changed_fields(
@@ -53,13 +55,20 @@ async def test_update_rejects_stale_version_and_records_changed_fields(
     item = template()
     _use(monkeypatch, item)
     with pytest.raises(ApiError) as conflict:
-        await service.update_prompt(FakeSession(), ACTOR, PROMPT_ID, {"title": "新", "content": "c", "version": 9})  # type: ignore[arg-type]
+        await service.update_prompt(
+            FakeSession(),
+            ACTOR,
+            FULL_ACCESS,
+            PROMPT_ID,
+            {"title": "新", "category": "policy", "content": "c", "version": 9},
+        )  # type: ignore[arg-type]
     assert conflict.value.http_status == 409
     data = await service.update_prompt(
         FakeSession(),
         ACTOR,
+        FULL_ACCESS,
         PROMPT_ID,
-        {"title": "新标题", "content": item.content, "version": 1},  # type: ignore[arg-type]
+        {"title": "新标题", "category": "policy", "content": item.content, "version": 1},  # type: ignore[arg-type]
     )
     assert data["version"] == 2 and data["title"] == "新标题"
     assert _quiet_audit[-1]["changes"] == {"fields": ["model_id", "output_fields", "title"]}
@@ -79,39 +88,87 @@ async def test_excel_and_code_uploads_are_stored_and_summarized(monkeypatch: pyt
     data = await service.upload_file(
         FakeSession(),
         ACTOR,
+        FULL_ACCESS,
         PROMPT_ID,
         "excel",
-        "C:\\fakepath\\企业.xlsx",
-        xlsx([["名称"], ["甲"], ["乙"]]),  # type: ignore[arg-type]
+        ("C:\\fakepath\\企业.xlsx", xlsx([["名称"], ["甲"], ["乙"]])),  # type: ignore[arg-type]
     )
     assert (data["excel_name"], data["excel_rows"], data["excel_headers"]) == ("企业.xlsx", 2, ["名称"])
     assert storage.prompt_file(PROMPT_ID, "excel").is_file()
-    data = await service.upload_file(FakeSession(), ACTOR, PROMPT_ID, "code", "码表.txt", "编码".encode("gbk"))  # type: ignore[arg-type]
+    data = await service.upload_file(
+        FakeSession(),  # type: ignore[arg-type]
+        ACTOR,
+        FULL_ACCESS,
+        PROMPT_ID,
+        "code",
+        ("码表.txt", "编码".encode("gbk")),
+    )
     assert storage.prompt_file(PROMPT_ID, "code").read_text(encoding="utf-8") == "编码"
-    content, name = await service.download_file(FakeSession(), ACTOR, PROMPT_ID, "code")  # type: ignore[arg-type]
+    content, name = await service.download_file(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID, "code")  # type: ignore[arg-type]
     assert (content.decode(), name) == ("编码", "码表.txt")
     with pytest.raises(ApiError, match=r"只支持 \.xlsx"):
-        await service.upload_file(FakeSession(), ACTOR, PROMPT_ID, "excel", "a.xls", b"x")  # type: ignore[arg-type]
-    data = await service.delete_file(FakeSession(), ACTOR, PROMPT_ID, "code")  # type: ignore[arg-type]
+        await service.upload_file(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID, "excel", ("a.xls", b"x"))  # type: ignore[arg-type]
+    data = await service.delete_file(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID, "code")  # type: ignore[arg-type]
     assert data["code_name"] == "" and not storage.prompt_file(PROMPT_ID, "code").exists()
     with pytest.raises(NotFoundError):
-        await service.download_file(FakeSession(), ACTOR, PROMPT_ID, "code")  # type: ignore[arg-type]
+        await service.download_file(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID, "code")  # type: ignore[arg-type]
 
 
 async def test_delete_removes_template_files(monkeypatch: pytest.MonkeyPatch) -> None:
     _use(monkeypatch, template())
     monkeypatch.setattr(repo, "delete", noop)
     storage.write_atomic(storage.prompt_file(PROMPT_ID, "code"), b"x")
-    await service.delete_prompt(FakeSession(), ACTOR, PROMPT_ID)  # type: ignore[arg-type]
+    await service.delete_prompt(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID)  # type: ignore[arg-type]
     assert not storage.prompt_dir(PROMPT_ID).exists()
 
 
-async def test_list_returns_templates(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def items(*_: Any) -> list[Any]:
+async def test_list_only_queries_readable_categories_and_marks_editable(monkeypatch: pytest.MonkeyPatch) -> None:
+    asked: list[set[str]] = []
+
+    async def items(*_: Any, categories: frozenset[str]) -> list[Any]:
+        asked.append(set(categories))
         return [template()]
 
     monkeypatch.setattr(repo, "list_all", items)
-    assert [item["title"] for item in await service.list_prompts(FakeSession())] == ["企业行业"]  # type: ignore[arg-type]
+    reader = CategoryAccess(readable=frozenset({"policy", "tender"}), editable=frozenset({"tender"}))
+    data = await service.list_prompts(FakeSession(), reader)  # type: ignore[arg-type]
+    assert asked == [{"policy", "tender"}]
+    assert [(item["title"], item["category_name"], item["editable"]) for item in data] == [("企业行业", "政策", False)]
+
+
+def test_category_access_follows_grant_levels() -> None:
+    access = CategoryAccess.from_levels({"ai.category.policy": "READ", "ai.category.tender": "FULL"})
+    assert (access.readable, access.editable) == (frozenset({"policy", "tender"}), frozenset({"tender"}))
+    assert access.options() == [
+        {"code": "policy", "name": "政策", "editable": False},
+        {"code": "tender", "name": "招投标", "editable": True},
+    ]
+    with pytest.raises(PermissionDeniedError, match="客户"):
+        access.require_read("customer")
+
+
+async def test_category_permission_guards_every_template_change(
+    monkeypatch: pytest.MonkeyPatch, _quiet_audit: list[dict[str, Any]]
+) -> None:
+    """只读的类型不能新建、修改、上传、删除、试发；改类型时新旧两个类型都要有编辑权。"""
+
+    _use(monkeypatch, template())
+    reader = CategoryAccess(readable=frozenset({"policy"}), editable=frozenset({"tender"}))
+    body = {"title": "t", "category": "policy", "content": "c", "version": 1}
+    with pytest.raises(PermissionDeniedError):
+        await service.create_prompt(FakeSession(), ACTOR, reader, body)  # type: ignore[arg-type]
+    with pytest.raises(PermissionDeniedError):
+        await service.update_prompt(FakeSession(), ACTOR, reader, PROMPT_ID, {**body, "category": "tender"})  # type: ignore[arg-type]
+    with pytest.raises(PermissionDeniedError):
+        await service.delete_prompt(FakeSession(), ACTOR, reader, PROMPT_ID)  # type: ignore[arg-type]
+    with pytest.raises(PermissionDeniedError):
+        await asking.prepare_trial(FakeSession(), reader, content="c", model_id="x", prompt_id=PROMPT_ID)  # type: ignore[arg-type]
+    nobody = CategoryAccess(readable=frozenset(), editable=frozenset())
+    with pytest.raises(PermissionDeniedError):
+        await asking.prepare_trial(FakeSession(), nobody, content="c", model_id="x", prompt_id=None)  # type: ignore[arg-type]
+    with pytest.raises(ApiError, match="模板类型"):
+        await service.create_prompt(FakeSession(), ACTOR, FULL_ACCESS, {**body, "category": "其他"})  # type: ignore[arg-type]
+    assert _quiet_audit == []
 
 
 def _with_keys(monkeypatch: pytest.MonkeyPatch, ark: str = "", baidu: str = "") -> None:
@@ -126,6 +183,7 @@ async def test_trial_fills_variables_from_first_row_and_code_table(monkeypatch: 
     storage.write_atomic(storage.prompt_file(PROMPT_ID, "code"), b"A\tB")
     model, prompt = await asking.prepare_trial(
         FakeSession(),
+        FULL_ACCESS,
         content="@【名称】/@【上传码表】",
         model_id="baidu-deepseek-v3.2",
         prompt_id=PROMPT_ID,  # type: ignore[arg-type]

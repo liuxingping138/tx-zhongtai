@@ -42,7 +42,7 @@ def test_retired_resources_are_not_in_the_catalog() -> None:
     assert not {spec.resource_code for spec in MENU_SPECS if spec.resource_code} & set(RETIRED_RESOURCE_CODES)
 
 
-def test_ai_module_is_a_top_level_directory_with_four_pages() -> None:
+def test_ai_module_is_a_top_level_directory_with_four_pages_and_three_template_categories() -> None:
     by_code = {spec.code: spec for spec in RESOURCE_SPECS}
     assert by_code["ai"].node_type == "directory" and by_code["ai"].parent_code is None
     assert [code for code, spec in by_code.items() if spec.parent_code == "ai"] == [
@@ -50,9 +50,22 @@ def test_ai_module_is_a_top_level_directory_with_four_pages() -> None:
         "ai.batch_runs",
         "ai.chat",
         "ai.models",
+        "ai.category.policy",
+        "ai.category.customer",
+        "ai.category.tender",
     ]
     routes = {spec.route_name for spec in MENU_SPECS if spec.parent_code == "menu.ai"}
     assert routes == {"ai-prompts", "ai-batch-runs", "ai-chat", "ai-models"}
+
+
+def test_template_category_needs_full_to_edit_and_has_no_menu() -> None:
+    """模板类型是数据范围不是页面：查看档只能看，改模板、试发、运行都要完整档；ai-service 按 list 动作取档位。"""
+
+    levels = {(spec.resource_code, spec.action_code): spec.required_level for spec in ACTION_SPECS}
+    menu_resources = {spec.resource_code for spec in MENU_SPECS}
+    for code in ("ai.category.policy", "ai.category.customer", "ai.category.tender"):
+        assert (levels[(code, "list")], levels[(code, "update")]) == ("READ", "FULL")
+        assert code not in menu_resources
 
 
 def test_ai_actions_that_spend_money_need_the_right_tier() -> None:

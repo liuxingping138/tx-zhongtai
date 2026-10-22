@@ -5,12 +5,13 @@ from typing import Any
 
 import pytest
 from openpyxl import load_workbook
-from platform_common.errors import ApiError
+from platform_common.errors import ApiError, PermissionDeniedError
 
 from app.application import batch_execute, batch_queue
 from app.application import batch_runs as service
 from app.core import storage
 from app.core.config import get_settings
+from app.domain.categories import FULL_ACCESS, CategoryAccess
 from app.repositories import batch_runs as repo
 from app.repositories import prompts as prompt_repo
 from app.worker import runner
@@ -39,6 +40,7 @@ async def test_start_snapshots_template_files_and_queues(monkeypatch: pytest.Mon
     data = await service.start_run(
         session,
         ACTOR,
+        FULL_ACCESS,
         {"prompt_id": PROMPT_ID, "model_id": "baidu-deepseek-v3.2", "thinking": True, "limit": 10},  # type: ignore[arg-type]
     )
     assert (data["status"], data["row_limit"], data["thinking"], data["model_id"]) == (
@@ -54,50 +56,50 @@ async def test_start_snapshots_template_files_and_queues(monkeypatch: pytest.Mon
 async def test_start_refuses_without_excel_or_when_same_template_is_running(monkeypatch: pytest.MonkeyPatch) -> None:
     _returns(prompt_repo, "get", template(), monkeypatch)
     with pytest.raises(ApiError, match="未上传 Excel"):
-        await service.start_run(FakeSession(), ACTOR, {"prompt_id": PROMPT_ID})  # type: ignore[arg-type]
+        await service.start_run(FakeSession(), ACTOR, FULL_ACCESS, {"prompt_id": PROMPT_ID})  # type: ignore[arg-type]
     _returns(prompt_repo, "get", template(excel_name="a.xlsx"), monkeypatch)
     storage.write_atomic(storage.prompt_file(PROMPT_ID, "excel"), xlsx([["名称"], ["甲"]]))
     _returns(repo, "active_for_prompt", run(status="running", done_count=3, total_count=9), monkeypatch)
     with pytest.raises(ApiError) as conflict:
-        await service.start_run(FakeSession(), ACTOR, {"prompt_id": PROMPT_ID})  # type: ignore[arg-type]
+        await service.start_run(FakeSession(), ACTOR, FULL_ACCESS, {"prompt_id": PROMPT_ID})  # type: ignore[arg-type]
     assert conflict.value.http_status == 409 and "3/9" in conflict.value.message
 
 
 async def test_stop_cancels_queued_and_flags_running(monkeypatch: pytest.MonkeyPatch) -> None:
     queued = run(status="queued")
     _returns(repo, "get", queued, monkeypatch)
-    assert (await service.stop_run(FakeSession(), ACTOR, RUN_ID))["status"] == "cancelled"  # type: ignore[arg-type]
+    assert (await service.stop_run(FakeSession(), ACTOR, FULL_ACCESS, RUN_ID))["status"] == "cancelled"  # type: ignore[arg-type]
     running = run(status="running")
     _returns(repo, "get", running, monkeypatch)
-    data = await service.stop_run(FakeSession(), ACTOR, RUN_ID)  # type: ignore[arg-type]
+    data = await service.stop_run(FakeSession(), ACTOR, FULL_ACCESS, RUN_ID)  # type: ignore[arg-type]
     assert (data["status"], data["cancel_requested"]) == ("stopping", True)
     _returns(repo, "get", run(status="done"), monkeypatch)
     with pytest.raises(ApiError, match="已结束"):
-        await service.stop_run(FakeSession(), ACTOR, RUN_ID)  # type: ignore[arg-type]
+        await service.stop_run(FakeSession(), ACTOR, FULL_ACCESS, RUN_ID)  # type: ignore[arg-type]
 
 
 async def test_delete_only_after_finish_and_removes_files(monkeypatch: pytest.MonkeyPatch) -> None:
     _returns(repo, "get", run(status="running"), monkeypatch)
     with pytest.raises(ApiError, match="仍在运行"):
-        await service.delete_run(FakeSession(), ACTOR, RUN_ID)  # type: ignore[arg-type]
+        await service.delete_run(FakeSession(), ACTOR, FULL_ACCESS, RUN_ID)  # type: ignore[arg-type]
     _returns(repo, "get", run(status="done"), monkeypatch)
     monkeypatch.setattr(repo, "delete", noop)
     storage.write_atomic(storage.run_file(RUN_ID, "log"), b"x")
-    await service.delete_run(FakeSession(), ACTOR, RUN_ID)  # type: ignore[arg-type]
+    await service.delete_run(FakeSession(), ACTOR, FULL_ACCESS, RUN_ID)  # type: ignore[arg-type]
     assert not storage.run_dir(RUN_ID).exists()
 
 
 async def test_list_and_progress_and_download(monkeypatch: pytest.MonkeyPatch) -> None:
     finished = run(status="done", total_count=4, done_count=4, input_tokens=1500, output_tokens=500)
     _returns(repo, "page", ([finished], 1), monkeypatch)
-    page = await service.list_runs(FakeSession(), page=0, page_size=500)  # type: ignore[arg-type]
+    page = await service.list_runs(FakeSession(), FULL_ACCESS, page=0, page_size=500)  # type: ignore[arg-type]
     assert (page["page"], page["page_size"], page["total"]) == (1, 100, 1)
     item = page["items"][0]
     assert (item["percent"], item["total_tokens_kilo"], item["can_delete"]) == (100, 2.0, True)
     _returns(repo, "get", run(status="running", total_count=4, done_count=1), monkeypatch)
-    assert (await service.get_run(FakeSession(), RUN_ID))["percent"] == 25  # type: ignore[arg-type]
+    assert (await service.get_run(FakeSession(), FULL_ACCESS, RUN_ID))["percent"] == 25  # type: ignore[arg-type]
     storage.write_atomic(storage.run_file(RUN_ID, "result"), b"xlsx")
-    content, name = await service.download(FakeSession(), ACTOR, RUN_ID, "result")  # type: ignore[arg-type]
+    content, name = await service.download(FakeSession(), ACTOR, FULL_ACCESS, RUN_ID, "result")  # type: ignore[arg-type]
     assert (content, name) == (b"xlsx", "企业行业-结果.xlsx")
 
 
@@ -239,11 +241,14 @@ async def test_list_passes_filters_and_reports_run_mode(monkeypatch: pytest.Monk
         return [run(row_limit=10), run(row_limit=0)], 2
 
     monkeypatch.setattr(repo, "page", page)
-    data = await service.list_runs(FakeSession(), page=1, page_size=15, filters={"run_mode": ["test"]})  # type: ignore[arg-type]
+    data = await service.list_runs(FakeSession(), FULL_ACCESS, page=1, page_size=15, filters={"run_mode": ["test"]})  # type: ignore[arg-type]
     assert seen["filters"] == {"run_mode": ["test"]}
     assert [item["run_mode"] for item in data["items"]] == ["test", "all"]
     _returns(repo, "distinct_values", ["甲"], monkeypatch)
-    assert await service.filter_options(FakeSession()) == {"prompt_title": ["甲"], "created_by_name": ["甲"]}  # type: ignore[arg-type]
+    assert await service.filter_options(FakeSession(), FULL_ACCESS) == {
+        "prompt_title": ["甲"],
+        "created_by_name": ["甲"],
+    }  # type: ignore[arg-type]
 
 
 def _model() -> Any:
@@ -352,20 +357,39 @@ async def test_retry_requeues_finished_run_with_pending_rows(monkeypatch: pytest
     _returns(repo, "get", finished, monkeypatch)
     listed = service.to_dict(finished)
     assert (listed["pending_count"], listed["can_retry"]) == (5, True)
-    data = await service.retry_run(FakeSession(), ACTOR, RUN_ID)  # type: ignore[arg-type]
+    data = await service.retry_run(FakeSession(), ACTOR, FULL_ACCESS, RUN_ID)  # type: ignore[arg-type]
     assert (data["status"], data["error_message"], data["can_retry"], data["pending_count"]) == ("queued", "", False, 0)
 
     _returns(repo, "get", run(status="running", total_count=3), monkeypatch)
     with pytest.raises(ApiError, match="仍在运行"):
-        await service.retry_run(FakeSession(), ACTOR, RUN_ID)  # type: ignore[arg-type]
+        await service.retry_run(FakeSession(), ACTOR, FULL_ACCESS, RUN_ID)  # type: ignore[arg-type]
     _returns(repo, "get", run(status="done", total_count=3, done_count=3), monkeypatch)
     with pytest.raises(ApiError, match="没有失败"):
-        await service.retry_run(FakeSession(), ACTOR, RUN_ID)  # type: ignore[arg-type]
+        await service.retry_run(FakeSession(), ACTOR, FULL_ACCESS, RUN_ID)  # type: ignore[arg-type]
     _returns(repo, "get", run(status="done", total_count=3, done_count=3, failed_count=1), monkeypatch)
     _returns(repo, "active_for_prompt", run(status="running"), monkeypatch)
     with pytest.raises(ApiError) as conflict:
-        await service.retry_run(FakeSession(), ACTOR, RUN_ID)  # type: ignore[arg-type]
+        await service.retry_run(FakeSession(), ACTOR, FULL_ACCESS, RUN_ID)  # type: ignore[arg-type]
     assert conflict.value.http_status == 409
     storage.remove_tree(storage.run_dir(RUN_ID))
     with pytest.raises(ApiError, match="快照"):
-        await service.retry_run(FakeSession(), ACTOR, RUN_ID)  # type: ignore[arg-type]
+        await service.retry_run(FakeSession(), ACTOR, FULL_ACCESS, RUN_ID)  # type: ignore[arg-type]
+
+
+async def test_read_only_category_can_view_runs_but_not_run_or_stop(monkeypatch: pytest.MonkeyPatch) -> None:
+    """只读的类型能看进度、下载结果，不能运行、重跑、停止、删除——这些都会花钱或改数据。"""
+
+    _returns(repo, "get", run(status="running", total_count=4, done_count=1), monkeypatch)
+    _returns(prompt_repo, "get", template(excel_name="a.xlsx"), monkeypatch)
+    reader = CategoryAccess(readable=frozenset({"policy"}), editable=frozenset())
+    assert (await service.get_run(FakeSession(), reader, RUN_ID))["prompt_category_name"] == "政策"  # type: ignore[arg-type]
+    for call in (
+        service.start_run(FakeSession(), ACTOR, reader, {"prompt_id": PROMPT_ID}),  # type: ignore[arg-type]
+        service.stop_run(FakeSession(), ACTOR, reader, RUN_ID),  # type: ignore[arg-type]
+        service.retry_run(FakeSession(), ACTOR, reader, RUN_ID),  # type: ignore[arg-type]
+        service.delete_run(FakeSession(), ACTOR, reader, RUN_ID),  # type: ignore[arg-type]
+    ):
+        with pytest.raises(PermissionDeniedError):
+            await call
+    with pytest.raises(PermissionDeniedError):
+        await service.get_run(FakeSession(), CategoryAccess(frozenset(), frozenset()), RUN_ID)  # type: ignore[arg-type]

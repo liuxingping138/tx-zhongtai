@@ -399,6 +399,25 @@
             }
           },
           {
+            "name": "prompt_category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prompt Category"
+            }
+          },
+          {
             "name": "created_by_name",
             "in": "query",
             "required": false,
@@ -1209,6 +1228,11 @@
             "maxLength": 255,
             "title": "Title"
           },
+          "category": {
+            "type": "string",
+            "maxLength": 16,
+            "title": "Category"
+          },
           "content": {
             "type": "string",
             "maxLength": 200000,
@@ -1242,6 +1266,7 @@
         "type": "object",
         "required": [
           "title",
+          "category",
           "content"
         ],
         "title": "PromptBody"

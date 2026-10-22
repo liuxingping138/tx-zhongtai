@@ -68,6 +68,10 @@ RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("ai.batch_runs", "批量提问", "ai-service", NodeType.RESOURCE, True, 62, "ai"),
     ResourceSpec("ai.chat", "多轮对话", "ai-service", NodeType.RESOURCE, True, 63, "ai"),
     ResourceSpec("ai.models", "模型配置", "ai-service", NodeType.RESOURCE, True, 64, "ai"),
+    # 模板类型：不是菜单，是数据范围。查看档能看到这类模板和批量历史，完整档才能新建、修改、试发、运行。
+    ResourceSpec("ai.category.policy", "政策类模板", "ai-service", NodeType.RESOURCE, True, 65, "ai"),
+    ResourceSpec("ai.category.customer", "客户类模板", "ai-service", NodeType.RESOURCE, True, 66, "ai"),
+    ResourceSpec("ai.category.tender", "招投标类模板", "ai-service", NodeType.RESOURCE, True, 67, "ai"),
 )
 
 ACTION_SPECS: tuple[ActionSpec, ...] = (
@@ -147,6 +151,12 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ActionSpec("ai.models", "list", GrantLevel.READ),
     ActionSpec("ai.models", "create", GrantLevel.FULL),
     ActionSpec("ai.models", "update", GrantLevel.FULL),
+    ActionSpec("ai.category.policy", "list", GrantLevel.READ),
+    ActionSpec("ai.category.policy", "update", GrantLevel.FULL),
+    ActionSpec("ai.category.customer", "list", GrantLevel.READ),
+    ActionSpec("ai.category.customer", "update", GrantLevel.FULL),
+    ActionSpec("ai.category.tender", "list", GrantLevel.READ),
+    ActionSpec("ai.category.tender", "update", GrantLevel.FULL),
 )
 
 MENU_SPECS: tuple[MenuSpec, ...] = (

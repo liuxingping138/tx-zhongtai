@@ -103,6 +103,7 @@ def template(**overrides: Any) -> PromptTemplate:
     values: dict[str, Any] = {
         "id": PROMPT_ID,
         "title": "企业行业",
+        "category": "policy",
         "content": "企业：@【名称】",
         "output_fields": "行业",
         "model_id": "baidu-deepseek-v3.2",
@@ -127,6 +128,7 @@ def run(**overrides: Any) -> BatchRun:
         "id": RUN_ID,
         "prompt_id": PROMPT_ID,
         "prompt_title": "企业行业",
+        "prompt_category": "policy",
         "prompt_content": "企业：@【名称】",
         "output_fields": "行业",
         "model_id": "baidu-deepseek-v3.2",

@@ -155,6 +155,9 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/` �
   批量任务每行完成时按当时单价累加费用，不在结束时按总 token 一次算
 - 模板里 `@【列名】` 引用 Excel 当前行，`@【上传码表】` 引用码表全文；返回的 `[{字段: 值}]` 按「新增输出字段」解析，
   一个提问解析出多条就展开成多行。规则在 `app/domain/templating.py`，与旧系统一致，改了会影响已有模板的结果
+- 模板分政策、客户、招投标三类（`app/domain/categories.py`），类型也是授权单位：IAM 资源 `ai.category.*` 查看档能看这类模板和批量历史，
+  完整档才能新建、修改、试发、运行、停止、删除。这一层叠在 `ai.prompts` / `ai.batch_runs` 之上，服务层逐个检查，没授任何类型时列表为空。
+  任务发起时把类型快照进 `prompt_category`，模板改类型不影响历史归属
 - 发起批量时把模板 Excel、码表复制进任务目录做快照：之后改模板、删模板都不影响排队中、运行中和已完成的任务
 - `ai-worker` 持 Postgres 全局锁，用 `SKIP LOCKED` 认领排队任务，最多同时跑 `AI_BATCH_MAX_RUNNING` 个，每个任务
   `AI_BATCH_CONCURRENCY` 路并发。每行完成立即追加 `temp.csv`；进程被停时把已跑部分收尾成「中断」并生成结果。

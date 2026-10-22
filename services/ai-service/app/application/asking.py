@@ -13,16 +13,17 @@ from typing import Any
 
 import anyio
 from platform_common.clock import utcnow
-from platform_common.errors import ApiError, ErrorCode
+from platform_common.errors import ApiError, ErrorCode, PermissionDeniedError
 from platform_common.excel import run_excel_parse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application import model_configs
-from app.application.prompts import require
+from app.application.prompts import require, require_editable
 from app.application.sheets import read_sheet
 from app.core import storage
 from app.core.config import get_settings
 from app.core.llm import LlmRequest, stream_responses
+from app.domain.categories import CategoryAccess
 from app.domain.llm_models import LlmModel, build_body
 from app.domain.templating import CODE_TABLE_FIELD, fill_template, template_variables
 
@@ -109,10 +110,17 @@ async def _first_row_values(session: AsyncSession, prompt_id: str) -> dict[str, 
 
 
 async def prepare_trial(
-    session: AsyncSession, *, content: str, model_id: str, prompt_id: str | None
+    session: AsyncSession, access: CategoryAccess, *, content: str, model_id: str, prompt_id: str | None
 ) -> tuple[LlmModel, str]:
-    """在开始推流前做完全部校验和取数：一旦开始推流就没法再返回 4xx 了。"""
+    """在开始推流前做完全部校验和取数：一旦开始推流就没法再返回 4xx 了。
 
+    试发要花钱：存过的模板按它的类型要编辑权；还没保存的新模板，至少能在某个类型下编辑。
+    """
+
+    if prompt_id:
+        await require_editable(session, access, prompt_id)
+    elif not access.editable:
+        raise PermissionDeniedError("没有编辑任何类型模板的权限，不能试发")
     model = await resolve_model(session, model_id)
     text = _check_message(content)
     if prompt_id and template_variables(text):

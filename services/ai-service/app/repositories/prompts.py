@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+from collections.abc import Collection
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import PromptTemplate
 
 
-async def list_all(session: AsyncSession) -> list[PromptTemplate]:
-    result = await session.scalars(select(PromptTemplate).order_by(PromptTemplate.updated_at.desc()))
+async def list_all(session: AsyncSession, *, categories: Collection[str]) -> list[PromptTemplate]:
+    result = await session.scalars(
+        select(PromptTemplate)
+        .where(PromptTemplate.category.in_(list(categories)))
+        .order_by(PromptTemplate.updated_at.desc())
+    )
     return list(result)
 
 
