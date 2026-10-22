@@ -37,7 +37,7 @@ from app.application.batch_output import (
     start_raw,
     write_failed,
 )
-from app.application.sheets import read_sheet
+from app.application.sheets import read_run_input
 from app.core import storage
 from app.core.config import get_settings
 from app.core.database import SessionLocal
@@ -216,11 +216,7 @@ async def _load(run: BatchRun) -> Job:
     if config is None:
         raise RuntimeError(f"未知模型：{run.model_id}")
     model = with_service_tier(model_configs.to_model(config), run.service_tier)
-    excel = storage.run_dir(run.id) / storage.PROMPT_FILES["excel"]
-    if not await anyio.Path(excel).is_file():
-        raise RuntimeError("任务的 Excel 快照不存在")
-    content = await anyio.Path(excel).read_bytes()
-    headers, rows = await run_excel_parse(read_sheet, content)
+    headers, rows = await run_excel_parse(read_run_input, storage.run_dir(run.id))
     if run.row_limit > 0:
         rows = rows[: run.row_limit]
     if not rows:

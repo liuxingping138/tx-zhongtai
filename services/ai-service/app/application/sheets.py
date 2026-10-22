@@ -5,11 +5,15 @@ openpyxl 是同步 CPU 计算，调用方一律经 run_excel_parse 放到线程�
 
 from __future__ import annotations
 
+import json
 from datetime import date, datetime
+from pathlib import Path
 from typing import Any
 
 from platform_common.errors import ApiError, ErrorCode
 from platform_common.excel import iter_workbook_rows
+
+from app.core.storage import PROMPT_FILES, ROWS_FILE
 
 CODE_ENCODINGS = ("utf-8-sig", "gbk")
 
@@ -75,3 +79,20 @@ def decode_code_table(content: bytes) -> str:
         except UnicodeDecodeError:
             continue
     raise ApiError("码表编码无法识别，请另存为 UTF-8 文本", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+
+
+def read_run_input(run_dir: Path) -> tuple[list[str], list[dict[str, str]]]:
+    """任务的输入快照：流水线任务是 rows.json（不受 Excel 单元格上限限制），页面发起的是 source.xlsx。"""
+
+    rows_file = run_dir / ROWS_FILE
+    if rows_file.is_file():
+        data = json.loads(rows_file.read_text(encoding="utf-8"))
+        return list(data["headers"]), [dict(row) for row in data["rows"]]
+    excel = run_dir / PROMPT_FILES["excel"]
+    if not excel.is_file():
+        raise RuntimeError("任务的输入快照不存在")
+    return read_sheet(excel.read_bytes())
+
+
+def has_run_input(run_dir: Path) -> bool:
+    return (run_dir / ROWS_FILE).is_file() or (run_dir / PROMPT_FILES["excel"]).is_file()

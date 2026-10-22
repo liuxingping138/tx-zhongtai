@@ -18,10 +18,13 @@ PROMPT_COLUMNS = ("政策标题", "政策正文", "省份", "地市", "出台时
 
 
 def clean_content(text: str | None, max_chars: int) -> str:
-    """正文是整页抓下来的文字：压掉连续空白和空行，再截到上限。截断处标明，免得模型以为原文就到这。"""
+    """正文是整页抓下来的文字：压掉连续空白和空行。
+
+    max_chars 为 0 时全文照传；否则截到上限，截断处标明，免得模型以为原文就到这。
+    """
 
     value = _BLANK_LINES.sub("\n", _SPACES.sub(" ", (text or "").replace("\r", "\n"))).strip()
-    if len(value) <= max_chars:
+    if max_chars <= 0 or len(value) <= max_chars:
         return value
     return value[:max_chars] + "……（正文过长，以下省略）"
 

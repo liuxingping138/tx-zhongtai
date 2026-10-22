@@ -313,6 +313,10 @@ async def test_settings_validate_ranges_and_reset_the_cursor_on_date_change(monk
     assert events[-1]["changes"]["batch_size"] == {"from": 1000, "to": 50}
     moved = await settings.update(FakeSession(), ACTOR, {**body, "cursor_date": "2026-09-01", "version": 4})  # type: ignore[arg-type]
     assert (moved["cursor_date"], moved["cursor_content_id"]) == ("2026-09-01", "")
+    full = await settings.update(FakeSession(), ACTOR, {**body, "content_max_chars": 0, "version": 5})  # type: ignore[arg-type]
+    assert full["content_max_chars"] == 0  # 0 = 全文照传
+    with pytest.raises(ApiError, match="正文截取字数"):
+        await settings.update(FakeSession(), ACTOR, {**body, "content_max_chars": 100, "version": 6})  # type: ignore[arg-type]
 
 
 async def test_overview_still_shows_settings_when_ai_service_is_down(monkeypatch: pytest.MonkeyPatch) -> None:

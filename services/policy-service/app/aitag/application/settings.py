@@ -18,7 +18,8 @@ from app.common import internal_clients
 from app.common.audit_emit import enqueue_event
 
 BATCH_SIZE_RANGE = (1, 20_000)
-CONTENT_RANGE = (500, 30_000)
+# 0 = 全文照传；要截就至少留 500 字。
+CONTENT_RANGE = (500, 200_000)
 PROMPT_FIELDS = ("type_prompt_id", "interpret_prompt_id", "opportunity_prompt_id")
 
 
@@ -76,7 +77,8 @@ async def update(session: AsyncSession, actor: Actor, values: dict[str, Any]) ->
     for field in PROMPT_FIELDS:
         setattr(config, field, str(values.get(field) or "").strip())
     config.batch_size = _in_range(int(values["batch_size"]), BATCH_SIZE_RANGE, "每批条数")
-    config.content_max_chars = _in_range(int(values["content_max_chars"]), CONTENT_RANGE, "正文截取字数")
+    content_max = int(values["content_max_chars"])
+    config.content_max_chars = 0 if content_max == 0 else _in_range(content_max, CONTENT_RANGE, "正文截取字数")
     config.daily_cost_limit = limit
     # 改了起始日期就从那天的第一条重新读；没改就保持当前进度。
     if cursor_date != config.cursor_date:

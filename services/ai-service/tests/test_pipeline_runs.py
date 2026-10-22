@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from decimal import Decimal
 from typing import Any
 
@@ -9,7 +10,8 @@ from platform_common.errors import ApiError
 from platform_common.internal_calls import internal_headers
 
 from app.application import batch_execute, pipeline_runs, prompts
-from app.application.batch_output import RowResult, append_raw, start_raw
+from app.application.batch_output import RowResult, append_raw, build_result, start_raw
+from app.application.sheets import read_run_input
 from app.core import storage
 from app.core.config import get_settings
 from app.core.database import get_db_session
@@ -70,19 +72,19 @@ def online(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
 
 
 async def test_pipeline_run_uses_the_release_flex_tier_and_cost_limit(online: list[Any]) -> None:
-    rows = [{"源ID": "p1", "政策标题": "甲", "政策正文": "=HYPERLINK(1)"}, {"源ID": "p2", "政策标题": "乙"}]
+    long_text = "字" * 120_000
+    rows = [{"源ID": "p1", "政策标题": "甲", "政策正文": long_text}, {"源ID": "p2", "政策标题": "乙"}]
     data = await pipeline_runs.create(FakeSession(), ACTOR, {"prompt_id": PROMPT_ID, "rows": rows, "cost_limit": "5"})  # type: ignore[arg-type]
     created = online[0]
     assert (created.prompt_content, created.release_no, created.source) == (_release().content, 3, "pipeline")
     assert (created.service_tier, created.cost_limit, data["status"]) == ("flex", Decimal(5), "queued")
     snapshot = storage.run_dir(created.id)
     assert (snapshot / "code.txt").read_text(encoding="utf-8").endswith("信息化建设类")
-    _, written = pipeline_runs.read_sheet((snapshot / "source.xlsx").read_bytes())
-    # 缺列补空串；= 开头的正文按文本存，不会变成公式。
-    assert written == [
-        {"源ID": "p1", "政策标题": "甲", "政策正文": "=HYPERLINK(1)"},
-        {"源ID": "p2", "政策标题": "乙", "政策正文": ""},
-    ]
+    headers, written = read_run_input(snapshot)
+    # 正文全文照存（十几万字也不截断，Excel 单元格放不下才改存 JSON）；表头按出现顺序，缺列由执行时补空。
+    assert headers == ["源ID", "政策标题", "政策正文"]
+    assert written[0]["政策正文"] == long_text and written[1] == {"源ID": "p2", "政策标题": "乙"}
+    assert not (snapshot / "source.xlsx").exists()
 
 
 async def test_pipeline_run_refuses_offline_templates_and_bad_rows(
@@ -90,10 +92,6 @@ async def test_pipeline_run_refuses_offline_templates_and_bad_rows(
 ) -> None:
     with pytest.raises(ApiError, match="源ID"):
         await pipeline_runs.create(FakeSession(), ACTOR, {"prompt_id": PROMPT_ID, "rows": [{"政策标题": "甲"}]})  # type: ignore[arg-type]
-    with pytest.raises(ApiError, match="超过"):
-        await pipeline_runs.create(
-            FakeSession(), ACTOR, {"prompt_id": PROMPT_ID, "rows": [{"源ID": "p", "正文": "字" * 32_001}]}
-        )  # type: ignore[arg-type]
 
     async def draft(*_: Any, **__: Any) -> Any:
         return template()
@@ -111,9 +109,8 @@ async def test_results_map_back_to_source_ids_with_expanded_items_and_failures(m
     monkeypatch.setattr(run_repo, "get", finished)
     directory = storage.run_dir(RUN_ID)
     storage.remove_tree(directory)
-    storage.write_atomic(
-        directory / "source.xlsx", pipeline_runs._workbook(["源ID"], [{"源ID": f"p{i}"} for i in range(3)])
-    )
+    rows = [{"源ID": f"p{i}"} for i in range(3)]
+    storage.write_atomic(directory / storage.ROWS_FILE, json.dumps({"headers": ["源ID"], "rows": rows}).encode())
     raw = storage.run_file(RUN_ID, "raw")
     start_raw(raw)
     answer = '[{"行业":"教育","场景":"智慧校园"},{"行业":"医卫","场景":"智慧医院"}]'
@@ -186,3 +183,28 @@ def test_internal_routes_reject_unknown_callers(monkeypatch: pytest.MonkeyPatch)
         assert client.get(path, headers=internal_headers("policy-service", "s3cret")).json()["data"] == []
     finally:
         app.dependency_overrides.clear()
+
+
+def test_result_excel_cuts_cells_beyond_the_excel_limit(tmp_path: Any) -> None:
+    """Excel 单元格超过 32767 字文件就打不开：结果表里截断并标明，完整内容在原始返回 CSV。"""
+
+    from openpyxl import load_workbook
+
+    path = tmp_path / "result.xlsx"
+    rows = [{"正文": "字" * 50_000, "myid": "a1000001"}]
+    answer = RowResult(
+        myid="a1000001",
+        prompt="",
+        text='[{"行业":"教育"}]',
+        error="",
+        input_tokens=1,
+        output_tokens=1,
+        search_calls=0,
+        elapsed=0.0,
+    )
+    build_result(path, ["正文"], rows, {"a1000001": answer}, ["行业"], "m")
+    sheet = load_workbook(path).active
+    assert sheet is not None
+    cell = str(sheet.cell(row=2, column=1).value)
+    assert len(cell) <= 32_000 and cell.endswith("已截断）")
+    assert sheet.cell(row=2, column=3).value == "教育"

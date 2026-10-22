@@ -13,7 +13,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 CONFIG_ID = 1
 DEFAULT_BATCH_SIZE = 1000
-DEFAULT_CONTENT_MAX_CHARS = 15_000
+# 0 表示正文全文照传，不截断。
+DEFAULT_CONTENT_MAX_CHARS = 0
 DEFAULT_DAILY_COST_LIMIT = Decimal(100)
 
 
@@ -31,7 +32,7 @@ class PolicyAiConfig(Base):
     )
     batch_size: Mapped[int] = mapped_column(Integer, nullable=False, default=DEFAULT_BATCH_SIZE, comment="每批打标条数")
     content_max_chars: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=DEFAULT_CONTENT_MAX_CHARS, comment="正文截取字数"
+        Integer, nullable=False, default=DEFAULT_CONTENT_MAX_CHARS, comment="正文截取字数（0 为全文）"
     )
     daily_cost_limit: Mapped[Decimal] = mapped_column(
         Numeric(12, 2), nullable=False, default=DEFAULT_DAILY_COST_LIMIT, comment="每日费用上限(元)"

@@ -130,6 +130,15 @@ def result_columns(headers: list[str], fields: list[str]) -> tuple[list[str], li
     return [*headers, "myid", *parsed, *meta], parsed, meta
 
 
+# Excel 单元格最多 32767 字，超了文件打不开。流水线任务的正文可能十几万字：结果表里截断并标明，完整内容在原始返回 CSV。
+CELL_MAX = 32_000
+CELL_CUT = "……（超过 Excel 单元格上限，已截断）"
+
+
+def _cell(value: str) -> str:
+    return value if len(value) <= CELL_MAX else value[: CELL_MAX - len(CELL_CUT)] + CELL_CUT
+
+
 def build_result(
     path: Path,
     headers: list[str],
@@ -150,7 +159,7 @@ def build_result(
         base = [row.get(name, "") for name in headers] + [row["myid"]]
         meta = [model_name, str(result.input_tokens), str(result.output_tokens), result.error, str(result.search_calls)]
         for parsed in extract_fields(result.text, fields):
-            append_text_row(sheet, [*base, *[parsed[name] for name in fields], *meta])
+            append_text_row(sheet, [_cell(value) for value in (*base, *[parsed[name] for name in fields], *meta)])
     temporary = path.with_name(path.name + ".tmp")
     book.save(temporary)
     temporary.replace(path)

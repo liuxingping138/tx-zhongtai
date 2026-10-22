@@ -12,6 +12,8 @@ def test_content_is_compacted_and_truncated_with_a_visible_marker() -> None:
     assert rules.clean_content(page, 100) == "第一条\n 第二条 内容 结束"
     assert rules.clean_content("甲" * 10, 4) == "甲甲甲甲……（正文过长，以下省略）"
     assert rules.clean_content(None, 10) == ""
+    # 0 = 全文照传，十几万字也不截。
+    assert rules.clean_content("甲" * 150_000, 0) == "甲" * 150_000
 
 
 def test_policy_types_accept_old_spellings_drop_duplicates_and_cap_at_five() -> None:

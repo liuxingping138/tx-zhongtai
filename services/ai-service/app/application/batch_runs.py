@@ -18,6 +18,7 @@ from app.application.asking import resolve_model
 from app.application.audit_emit import enqueue_event
 from app.application.prompts import code_text
 from app.application.prompts import require_editable as require_editable_prompt
+from app.application.sheets import has_run_input
 from app.core import storage
 from app.core.config import get_settings
 from app.domain.categories import CategoryAccess, category_name
@@ -60,9 +61,9 @@ def pending_rows(run: BatchRun) -> int:
 
 
 def _can_retry(run: BatchRun) -> bool:
-    # 旧系统迁来的任务没有 Excel 快照，无法重跑。
-    excel = storage.run_dir(run.id) / storage.PROMPT_FILES["excel"]
-    return run.status not in ACTIVE_STATUSES and run.total_count > 0 and pending_rows(run) > 0 and excel.is_file()
+    # 旧系统迁来的任务没有输入快照，无法重跑。
+    ready = run.status not in ACTIVE_STATUSES and run.total_count > 0 and pending_rows(run) > 0
+    return ready and has_run_input(storage.run_dir(run.id))
 
 
 def to_dict(run: BatchRun) -> dict[str, Any]:

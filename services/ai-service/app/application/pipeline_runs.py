@@ -1,23 +1,21 @@
 """流水线任务：政策服务定时打标时，用模板的上线版本跑一批数据，再把解析后的结果取回去写业务表。
 
 和页面上的批量提问共用同一套执行（worker、重试、计费、历史），区别只在：
-- 输入不是上传的 Excel，而是调用方传来的行；落盘成同样的 source.xlsx 快照，执行器不用区分；
+- 输入不是上传的 Excel，而是调用方传来的行，原样存成 rows.json（政策正文可能十几万字，Excel 单元格放不下）；
 - 提示词、输出字段、模型、码表都取上线版本，草稿上的改动不影响生产；
 - 按低优档跑，并带费用上限，到上限自动停。
 """
 
 from __future__ import annotations
 
+import json
 from decimal import Decimal, InvalidOperation
-from io import BytesIO
 from typing import Any
 
 import anyio
-from openpyxl import Workbook
 from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
 from platform_common.errors import ApiError, ErrorCode, NotFoundError
-from platform_common.excel import active_worksheet, append_text_row
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application import batch_runs, prompts
@@ -26,7 +24,7 @@ from app.application.audit_emit import enqueue_event
 from app.application.batch_output import read_raw
 from app.application.batch_runs import require as require_run
 from app.application.batch_runs import to_dict as run_to_dict
-from app.application.sheets import read_sheet
+from app.application.sheets import has_run_input, read_run_input
 from app.core import storage
 from app.core.codebook import fetch_code_table
 from app.domain.categories import FULL_ACCESS
@@ -39,8 +37,6 @@ from app.repositories import releases as release_repo
 # 每行带上它，结果按它对回调用方的数据，不依赖行号。
 SOURCE_ID = "源ID"
 ROWS_MAX = 20_000
-# Excel 单元格上限 32767 字，超了打开文件会被截断；调用方应先按自己的规则截断正文。
-CELL_MAX = 32_000
 PIPELINE_TIER = "flex"
 
 
@@ -59,22 +55,9 @@ def _checked_rows(rows: object) -> tuple[list[str], list[dict[str, str]]]:
         if not isinstance(row, dict) or not str(row.get(SOURCE_ID) or "").strip():
             raise _invalid(f"每行都要有「{SOURCE_ID}」")
         item = {str(key): "" if value is None else str(value) for key, value in row.items()}
-        if any(len(value) > CELL_MAX for value in item.values()):
-            raise _invalid(f"「{item[SOURCE_ID]}」有单元格超过 {CELL_MAX} 字，请先截断")
         headers.extend(key for key in item if key not in headers)
         cleaned.append(item)
     return headers, cleaned
-
-
-def _workbook(headers: list[str], rows: list[dict[str, str]]) -> bytes:
-    book = Workbook()
-    sheet = active_worksheet(book)
-    append_text_row(sheet, headers)
-    for row in rows:
-        append_text_row(sheet, [row.get(name, "") for name in headers])
-    buffer = BytesIO()
-    book.save(buffer)
-    return buffer.getvalue()
 
 
 def _cost_limit(value: object) -> Decimal | None:
@@ -106,10 +89,11 @@ async def _release_code(release: TemplateRelease) -> str | None:
     return await path.read_text(encoding="utf-8") if await path.is_file() else None
 
 
-def _write_snapshot(run_id: str, workbook: bytes, code: str | None) -> None:
+def _write_snapshot(run_id: str, headers: list[str], rows: list[dict[str, str]], code: str | None) -> None:
     target = storage.run_dir(run_id)
     target.mkdir(parents=True, exist_ok=True)
-    storage.write_atomic(target / storage.PROMPT_FILES["excel"], workbook)
+    payload = json.dumps({"headers": headers, "rows": rows}, ensure_ascii=False).encode("utf-8")
+    storage.write_atomic(target / storage.ROWS_FILE, payload)
     if code is not None:
         storage.write_atomic(target / storage.PROMPT_FILES["code"], code.encode("utf-8"))
 
@@ -149,8 +133,7 @@ async def create(session: AsyncSession, caller: Actor, values: dict[str, Any]) -
     )
     run_repo.add(session, run)
     await session.flush()
-    workbook = await anyio.to_thread.run_sync(_workbook, headers, rows)
-    await anyio.to_thread.run_sync(_write_snapshot, run.id, workbook, code)
+    await anyio.to_thread.run_sync(_write_snapshot, run.id, headers, rows, code)
     await enqueue_event(
         session,
         event_type="ai.batch_run.started",
@@ -166,8 +149,7 @@ async def status(session: AsyncSession, run_id: str) -> dict[str, Any]:
 
 
 def _parse_results(run_id: str, output_fields: str) -> list[dict[str, Any]]:
-    content = storage.run_dir(run_id).joinpath(storage.PROMPT_FILES["excel"]).read_bytes()
-    _, rows = read_sheet(content)
+    _, rows = read_run_input(storage.run_dir(run_id))
     raw = read_raw(storage.run_file(run_id, "raw"))
     fields = split_fields(output_fields)
     results: list[dict[str, Any]] = []
@@ -187,7 +169,7 @@ async def results(session: AsyncSession, run_id: str) -> dict[str, Any]:
     run = await require_run(session, run_id)
     if run.status in ACTIVE_STATUSES:
         raise ApiError("任务还在运行，结束后再取结果", code=ErrorCode.VERSION_CONFLICT, http_status=409)
-    if not storage.run_dir(run.id).joinpath(storage.PROMPT_FILES["excel"]).is_file():
+    if not has_run_input(storage.run_dir(run.id)):
         raise NotFoundError("任务的输入快照不存在")
     items = await anyio.to_thread.run_sync(_parse_results, run.id, run.output_fields)
     return {"run": run_to_dict(run), "items": items}
