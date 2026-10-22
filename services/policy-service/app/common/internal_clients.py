@@ -13,6 +13,10 @@ from platform_common.internal_calls import internal_headers
 
 from app.core.config import get_settings
 
+# 对方按服务名核对密钥。policy-worker 和 policy-service 是同一个服务的两个进程（worker 的 service_name 是
+# policy-worker），打标在 worker 里跑，所以这里固定报 policy-service，不跟进程名走。
+CALLER = "policy-service"
+
 
 async def _call(base_url: str, secret: str, method: str, path: str, **kwargs: Any) -> Any:
     settings = get_settings()
@@ -20,9 +24,7 @@ async def _call(base_url: str, secret: str, method: str, path: str, **kwargs: An
         raise DependencyUnavailableError(f"未配置调用 {base_url} 的内部密钥")
     try:
         async with httpx.AsyncClient(base_url=base_url, timeout=settings.internal_timeout_seconds) as client:
-            response = await client.request(
-                method, path, headers=internal_headers(settings.service_name, secret), **kwargs
-            )
+            response = await client.request(method, path, headers=internal_headers(CALLER, secret), **kwargs)
     except httpx.HTTPError as exc:
         raise DependencyUnavailableError(f"{base_url} 暂时不可用") from exc
     body = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}

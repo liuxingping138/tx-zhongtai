@@ -99,17 +99,24 @@ async def test_internal_client_distinguishes_rejection_from_outage(monkeypatch: 
         ]
     )
     real = httpx.AsyncClient
+    callers: list[str] = []
+
+    def reply(request: httpx.Request) -> httpx.Response:
+        callers.append(request.headers["x-internal-service"])
+        return next(replies)
+
     monkeypatch.setattr(get_settings(), "ai_service_secret", "s")
+    # worker 进程的服务名是 policy-worker，对方只认 policy-service。
+    monkeypatch.setattr(get_settings(), "service_name", "policy-worker")
     monkeypatch.setattr(
-        internal_clients.httpx,
-        "AsyncClient",
-        lambda **kw: real(transport=httpx.MockTransport(lambda _request: next(replies)), **kw),
+        internal_clients.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(reply), **kw)
     )
     assert await internal_clients.ai("POST", "/internal/v1/pipeline-runs") == {"id": "r1"}
     with pytest.raises(ApiError, match="还没有上线"):
         await internal_clients.ai("POST", "/internal/v1/pipeline-runs")
     with pytest.raises(DependencyUnavailableError, match="500"):
         await internal_clients.ai("GET", "/internal/v1/pipeline-runs/r1")
+    assert set(callers) == {"policy-service"}
 
 
 class FakeSession:

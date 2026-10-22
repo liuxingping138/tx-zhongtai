@@ -8,6 +8,9 @@ from platform_common.internal_calls import internal_headers
 
 from app.core.config import get_settings
 
+# 码表服务按服务名核对密钥；ai-worker 和 ai-service 是同一服务的两个进程，固定报 ai-service，不跟进程名走。
+CALLER = "ai-service"
+
 
 async def fetch_code_table(name: str) -> str:
     """返回制表符文本（首行表头）。取不到就报错，不能拿空码表去提问——模型会照样回答，结果全错。"""
@@ -21,7 +24,7 @@ async def fetch_code_table(name: str) -> str:
         ) as client:
             response = await client.get(
                 f"/internal/v1/code-tables/{name}",
-                headers=internal_headers(settings.service_name, settings.codebook_service_secret),
+                headers=internal_headers(CALLER, settings.codebook_service_secret),
             )
     except httpx.HTTPError as exc:
         raise DependencyUnavailableError("码表服务暂时不可用，请稍后重试") from exc
