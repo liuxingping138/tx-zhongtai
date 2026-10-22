@@ -187,14 +187,11 @@ describe('单个网站的采集曲线', () => {
 describe('省份分布', () => {
   const items = [province('广东省', 800, 21, 132), province('甘肃省', 400, 39, 413), province('西藏自治区', 0, 1, 20), province('天津市', 120, 9, 11)]
 
-  it('按停更数、网站数排序并截断', () => {
-    expect(sortProvinces(items, 'stale', 2).map(item => item.name)).toEqual(['甘肃省', '广东省'])
-    expect(sortProvinces(items, 'sites').map(item => item.name)).toEqual(['广东省', '甘肃省', '天津市', '西藏自治区'])
-  })
-
-  it('按停更率排序时，网站少的分类也保留', () => {
-    const small = province('国央企', 0, 0, 3)
-    expect(sortProvinces([...items, small], 'rate').map(item => item.name)).toEqual(['国央企', '西藏自治区', '甘肃省', '广东省', '天津市'])
+  it('按网站总数从多到少排序，同数按停更数，可截断', () => {
+    expect(sortProvinces(items).map(item => item.name)).toEqual(['广东省', '甘肃省', '天津市', '西藏自治区'])
+    expect(sortProvinces(items, 2).map(item => item.name)).toEqual(['广东省', '甘肃省'])
+    const tie = province('天津市', 800, 0, 52)
+    expect(sortProvinces([tie, items[1]!]).map(item => item.name)).toEqual(['甘肃省', '天津市'])
   })
 
   it('横轴用简称，全国、国央企等原样', () => {
@@ -208,18 +205,14 @@ describe('省份分布', () => {
     tooltip: { formatter: (params: { dataIndex: number }[]) => string }
   }
 
-  it('柱子只画当前排序的指标，柱高和柱顶数字一致，提示里写全称和明细', () => {
+  it('每个分类并排网站总数和停更网站数，图例在左上，提示里写全称和明细', () => {
     const merged = province('新疆维吾尔自治区', 20, 5, 75, ['新疆', '新疆维吾尔族自治区'])
     const empty = province('青海省', 0, 0, 0)
-    const items = [merged, empty]
-    const chart = (by: 'stale' | 'rate' | 'sites') => provinceOption(items, palette, [], by) as ProvinceChart & { yAxis: { name: string } }
-    const values = (by: 'stale' | 'rate' | 'sites') => chart(by).series[0]?.data.map(bar => bar.value)
-    const labels = (by: 'stale' | 'rate' | 'sites') => [0, 1].map(dataIndex => chart(by).series[0]?.label.formatter?.({ dataIndex }))
-    expect(chart('stale').series).toHaveLength(1)
-    expect([values('stale'), labels('stale'), chart('stale').yAxis.name]).toEqual([[75, 0], ['75', ''], '停更网站数'])
-    expect([values('rate'), labels('rate'), chart('rate').yAxis.name]).toEqual([[75, 0], ['75.0%', ''], '停更率（%）'])
-    expect([values('sites'), labels('sites'), chart('sites').yAxis.name]).toEqual([[100, 0], ['100', ''], '网站数'])
-    const option = chart('stale')
+    const option = provinceOption([merged, empty], palette) as ProvinceChart & { legend: { left: number; top: number } }
+    expect(option.series.map(series => series.name)).toEqual(['网站总数', '停更网站数'])
+    expect(option.series.map(series => series.data.map(bar => bar.value))).toEqual([[100, 0], [75, 0]])
+    expect(option.series.map(series => [0, 1].map(dataIndex => series.label.formatter?.({ dataIndex })))).toEqual([['100', ''], ['75', '']])
+    expect([option.legend.left, option.legend.top]).toEqual([0, 0])
     expect(option.xAxis.data).toEqual(['新疆', '青海'])
     expect(option.xAxis.axisLabel.formatter('内蒙古')).toBe('内\n蒙\n古')
     expect(option.tooltip.formatter([{ dataIndex: 0 }])).toContain('含写法：新疆、新疆维吾尔族自治区')
@@ -242,9 +235,9 @@ describe('省份分布', () => {
 
   it('选中一个分类时其余柱子变淡', () => {
     const items = [province('广东省', 1, 0, 1), province('甘肃省', 1, 0, 1)]
-    const opacity = (selected: string[]) => (provinceOption(items, palette, selected) as ProvinceChart).series[0]?.data.map(bar => bar.itemStyle.opacity)
-    expect(opacity([])).toEqual([1, 1])
-    expect(opacity(['甘肃省'])).toEqual([0.3, 1])
+    const opacity = (selected: string[]) => (provinceOption(items, palette, selected) as ProvinceChart).series.map(series => series.data.map(bar => bar.itemStyle.opacity))
+    expect(opacity([])).toEqual([[1, 1], [1, 1]])
+    expect(opacity(['甘肃省'])).toEqual([[0.3, 1], [0.3, 1]])
   })
 
   it('明细按该分类全部写法筛选时卡片选中，写法顺序不影响', () => {

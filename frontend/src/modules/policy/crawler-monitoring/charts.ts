@@ -250,16 +250,9 @@ export function headline(overview: CrawlerOverviewData): HeadlinePart[][] {
   return sentences
 }
 
-export type ProvinceSort = 'stale' | 'rate' | 'sites'
-
-function staleRate(item: CrawlerProvince): number {
-  return item.sites ? item.stale / item.sites : 0
-}
-
-/** 全部分类都参与排序，网站少的也不剔除：全国、国央企和 31 个省是同一套「省份」字段分类。 */
-export function sortProvinces(items: CrawlerProvince[], by: ProvinceSort, limit?: number): CrawlerProvince[] {
-  const key: Record<ProvinceSort, (item: CrawlerProvince) => number> = { stale: item => item.stale, rate: staleRate, sites: item => item.sites }
-  const sorted = [...items].sort((a, b) => key[by](b) - key[by](a) || b.sites - a.sites || a.name.localeCompare(b.name, 'zh'))
+/** 按网站总数从多到少，同数再按停更数；全部分类都保留，网站少的也不剔除：全国、国央企和 31 个省是同一套「省份」字段分类。 */
+export function sortProvinces(items: CrawlerProvince[], limit?: number): CrawlerProvince[] {
+  const sorted = [...items].sort((a, b) => b.sites - a.sites || b.stale - a.stale || a.name.localeCompare(b.name, 'zh'))
   return limit ? sorted.slice(0, limit) : sorted
 }
 
@@ -296,19 +289,17 @@ export function provinceShortName(name: string): string {
   return name.replace(/(壮族|回族|维吾尔)?自治区$|特别行政区$|[省市]$/, '') || name
 }
 
-/** 柱子只画当前排序的那个指标，柱高和柱顶数字说的是同一件事。 */
-export const PROVINCE_METRICS: Record<ProvinceSort, { name: string; axis: string; value: (item: CrawlerProvince) => number; text: (item: CrawlerProvince) => string }> = {
-  stale: { name: '停更网站数', axis: '停更网站数', value: item => item.stale, text: item => String(item.stale) },
-  rate: { name: '停更率', axis: '停更率（%）', value: item => (item.sites ? Math.round((item.stale / item.sites) * 1000) / 10 : 0), text: item => percent(item.stale, item.sites) },
-  sites: { name: '网站数', axis: '网站数', value: item => item.sites, text: item => String(item.sites) },
-}
+/** 每个分类并排两根柱：网站总数和停更网站数，一眼对比规模和停更多少。 */
+export const PROVINCE_SERIES = [
+  { name: '网站总数', value: (item: CrawlerProvince) => item.sites, color: (palette: ChartPalette) => palette.primary },
+  { name: '停更网站数', value: (item: CrawlerProvince) => item.stale, color: (palette: ChartPalette) => palette.danger },
+] as const
 
-export function provinceOption(items: CrawlerProvince[], palette: ChartPalette, selected: string[] = [], by: ProvinceSort = 'stale'): ChartOption {
+export function provinceOption(items: CrawlerProvince[], palette: ChartPalette, selected: string[] = []): ChartOption {
   const picked = items.findIndex(item => provinceSelected(item, selected))
-  const metric = PROVINCE_METRICS[by]
-  const color = by === 'sites' ? palette.primary : palette.danger
   return {
-    grid: { left: 8, right: 8, top: 24, bottom: 4, containLabel: true },
+    legend: { left: 0, top: 0, itemWidth: 12, itemHeight: 12, textStyle: { color: palette.inkMuted } },
+    grid: { left: 8, right: 8, top: 48, bottom: 4, containLabel: true },
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
@@ -332,26 +323,32 @@ export function provinceOption(items: CrawlerProvince[], palette: ChartPalette, 
       // 中文竖排，38 个分类挤在一行也不会重叠。
       axisLabel: { color: palette.inkMuted, interval: 0, lineHeight: 13, formatter: (name: string) => name.split('').join('\n') },
     },
-    yAxis: valueAxis(metric.axis, palette, true),
-    series: [{
-      name: metric.name,
+    yAxis: valueAxis('网站数', palette, true),
+    series: PROVINCE_SERIES.map(series => ({
+      name: series.name,
       type: 'bar',
-      barMaxWidth: 22,
+      color: series.color(palette),
+      barMaxWidth: 14,
+      barGap: '10%',
       // 选中一个分类时其余变淡，和卡片、健康图的选中态一样明确。
       data: items.map((item, index) => ({
-        value: metric.value(item),
-        itemStyle: { color, opacity: picked < 0 || picked === index ? 1 : 0.3, borderRadius: [2, 2, 0, 0] },
+        value: series.value(item),
+        itemStyle: { color: series.color(palette), opacity: picked < 0 || picked === index ? 1 : 0.3, borderRadius: [2, 2, 0, 0] },
       })),
+      // 38 个分类两两并排，数字竖写才不互相压住。
       label: {
         show: true,
         position: 'top',
+        rotate: 90,
+        align: 'left',
+        verticalAlign: 'middle',
         color: palette.ink,
-        fontSize: 11,
+        fontSize: 10,
         formatter: (params: { dataIndex: number }) => {
           const item = items[params.dataIndex]
-          return item?.sites ? metric.text(item) : ''
+          return item?.sites ? String(series.value(item)) : ''
         },
       },
-    }],
+    })),
   }
 }

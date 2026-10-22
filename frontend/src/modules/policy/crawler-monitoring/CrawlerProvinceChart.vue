@@ -4,17 +4,12 @@ import { computed, ref } from 'vue'
 import type { CrawlerProvince } from '@/api/crawlerMonitoring'
 import BaseChart from '@/components/charts/BaseChart.vue'
 import { chartPalette } from '@/components/charts/echarts'
-import { percent, provinceOption, sortProvinces, type ProvinceSort } from './charts'
+import { percent, provinceOption, sortProvinces } from './charts'
 import CrawlerProvinceTiles from './CrawlerProvinceTiles.vue'
 
 const props = defineProps<{ provinces: CrawlerProvince[]; selected: string[] }>()
 const emit = defineEmits<{ pick: [rawNames: string[]] }>()
 
-const SORTS: { value: ProvinceSort; label: string }[] = [
-  { value: 'stale', label: '停更数' },
-  { value: 'rate', label: '停更率' },
-  { value: 'sites', label: '网站数' },
-]
 const LEGEND = [
   { label: '正常', color: 'var(--chart-normal)' },
   { label: '关注', color: 'var(--chart-watch)' },
@@ -28,10 +23,8 @@ const VIEWS = [
 
 const palette = chartPalette(getComputedStyle(document.documentElement))
 const view = ref<(typeof VIEWS)[number]['value']>('bar')
-const sort = ref<ProvinceSort>('stale')
-const rows = computed(() => sortProvinces(props.provinces, sort.value))
-const option = computed(() => provinceOption(rows.value, palette, props.selected, sort.value))
-const metricName = computed(() => SORTS.find(item => item.value === sort.value)?.label ?? '')
+const rows = computed(() => sortProvinces(props.provinces))
+const option = computed(() => provinceOption(rows.value, palette, props.selected))
 const label = computed(() =>
   `省份分布：${rows.value.slice(0, 5).map(item => `${item.name} ${item.sites} 个，停更 ${item.stale} 个（${percent(item.stale, item.sites)}）`).join('；')}`,
 )
@@ -48,8 +41,8 @@ function onSelect(params: { dataIndex: number }) {
       <div>
         <h3>省份分布</h3>
         <p class="chart-note">
-          按省份字段的分类排列，31 个省级行政区以及全国、国央企都在其中，省份为空的网站算作国央企，「国家」算作全国。<template v-if="view === 'bar'">
-            柱高和柱顶数字都是{{ metricName }}，切换排序即换指标；悬停看正常、关注、停更明细。点击柱子筛选下方列表
+          按网站总数从多到少排列，31 个省级行政区以及全国、国央企都在其中，省份为空的网站算作国央企，「国家」算作全国。<template v-if="view === 'bar'">
+            每个分类并排网站总数和停更网站数；悬停看正常、关注、停更明细。点击柱子筛选下方列表
           </template><template v-else>
             大数字是停更网站数，色条是正常、关注、停更的占比。点击卡片筛选下方列表
           </template>
@@ -84,19 +77,6 @@ function onSelect(params: { dataIndex: number }) {
             />{{ item.label }}
           </li>
         </ul>
-        <el-radio-group
-          v-model="sort"
-          size="small"
-          aria-label="省份排序方式"
-        >
-          <el-radio-button
-            v-for="item in SORTS"
-            :key="item.value"
-            :value="item.value"
-          >
-            按{{ item.label }}
-          </el-radio-button>
-        </el-radio-group>
       </div>
     </header>
     <BaseChart
