@@ -205,13 +205,15 @@ describe('省份分布', () => {
     tooltip: { formatter: (params: { dataIndex: number }[]) => string }
   }
 
-  it('每个分类并排网站总数和停更网站数，图例在左上，提示里写全称和明细', () => {
+  it('每个分类一根柱，网站总数打底、停更数叠在前面，图例在左上，提示里写全称和明细', () => {
     const merged = province('新疆维吾尔自治区', 20, 5, 75, ['新疆', '新疆维吾尔族自治区'])
     const empty = province('青海省', 0, 0, 0)
     const option = provinceOption([merged, empty], palette) as ProvinceChart & { legend: { left: number; top: number } }
     expect(option.series.map(series => series.name)).toEqual(['网站总数', '停更网站数'])
     expect(option.series.map(series => series.data.map(bar => bar.value))).toEqual([[100, 0], [75, 0]])
-    expect(option.series.map(series => [0, 1].map(dataIndex => series.label.formatter?.({ dataIndex })))).toEqual([['100', ''], ['75', '']])
+    expect((option.series as unknown as { barGap: string }[]).map(series => series.barGap)).toEqual(['-100%', '-100%'])
+    expect(option.series.map(series => series.label.show)).toEqual([true, false])
+    expect([0, 1].map(dataIndex => option.series[0]?.label.formatter?.({ dataIndex }))).toEqual(['100', ''])
     expect([option.legend.left, option.legend.top]).toEqual([0, 0])
     expect(option.xAxis.data).toEqual(['新疆', '青海'])
     expect(option.xAxis.axisLabel.formatter('内蒙古')).toBe('内\n蒙\n古')

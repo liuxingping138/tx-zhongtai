@@ -289,7 +289,7 @@ export function provinceShortName(name: string): string {
   return name.replace(/(壮族|回族|维吾尔)?自治区$|特别行政区$|[省市]$/, '') || name
 }
 
-/** 每个分类并排两根柱：网站总数和停更网站数，一眼对比规模和停更多少。 */
+/** 每个分类一根柱：柱高是网站总数，其中停更的部分用红色叠在底部，一根柱子看清规模和停更多少。 */
 export const PROVINCE_SERIES = [
   { name: '网站总数', value: (item: CrawlerProvince) => item.sites, color: (palette: ChartPalette) => palette.primary },
   { name: '停更网站数', value: (item: CrawlerProvince) => item.stale, color: (palette: ChartPalette) => palette.danger },
@@ -328,22 +328,20 @@ export function provinceOption(items: CrawlerProvince[], palette: ChartPalette, 
       name: series.name,
       type: 'bar',
       color: series.color(palette),
-      barMaxWidth: 14,
-      barGap: '10%',
+      barMaxWidth: 22,
+      // 两个系列完全重叠：停更画在网站总数前面，看起来是一根两色的柱子。
+      barGap: '-100%',
       // 选中一个分类时其余变淡，和卡片、健康图的选中态一样明确。
       data: items.map((item, index) => ({
         value: series.value(item),
         itemStyle: { color: series.color(palette), opacity: picked < 0 || picked === index ? 1 : 0.3, borderRadius: [2, 2, 0, 0] },
       })),
-      // 38 个分类两两并排，数字竖写才不互相压住。
+      // 柱顶只写网站总数；停更数和停更率在悬停提示里。
       label: {
-        show: true,
+        show: series.name === '网站总数',
         position: 'top',
-        rotate: 90,
-        align: 'left',
-        verticalAlign: 'middle',
         color: palette.ink,
-        fontSize: 10,
+        fontSize: 11,
         formatter: (params: { dataIndex: number }) => {
           const item = items[params.dataIndex]
           return item?.sites ? String(series.value(item)) : ''
