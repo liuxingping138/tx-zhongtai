@@ -1379,6 +1379,86 @@
           }
         }
       }
+    },
+    "/internal/v1/scenarios/lookup": {
+      "post": {
+        "tags": [
+          "internal"
+        ],
+        "summary": "Lookup Scenarios",
+        "description": "政策解读给非新增场景填编码：六级名称完全对上才有编码，只查不建。",
+        "operationId": "lookup_scenarios_internal_v1_scenarios_lookup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScenarioItems"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/scenarios/sync": {
+      "post": {
+        "tags": [
+          "internal"
+        ],
+        "summary": "Sync Scenarios",
+        "description": "人工确认过的新增场景写进码表，按现有编码规则分配编码。同一场景重复同步返回原编码，不重复建。",
+        "operationId": "sync_scenarios_internal_v1_scenarios_sync_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScenarioItems"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1617,6 +1697,31 @@
           "type_name"
         ],
         "title": "PolicyTypeWrite"
+      },
+      "ScenarioItems": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "maxItems": 5000,
+            "title": "Items"
+          },
+          "caller_name": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Caller Name",
+            "default": "政策解读同步"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ScenarioItems"
       },
       "ScenarioPatch": {
         "properties": {

@@ -222,8 +222,20 @@ async function turnPage(next: number): Promise<void> {
       />
       <el-table-column
         prop="type_failed"
-        label="待人工"
+        label="类型待人工"
+        width="100"
+        align="right"
+      />
+      <el-table-column
+        prop="interpret_rows"
+        label="解读行"
         width="80"
+        align="right"
+      />
+      <el-table-column
+        prop="interpret_failed"
+        label="解读失败"
+        width="90"
         align="right"
       />
       <el-table-column

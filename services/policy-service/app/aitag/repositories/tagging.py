@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.aitag.domain.models import CONFIG_ID, PolicyAiConfig, PolicyAiRun
-from app.policy.domain.models import BaseTag
+from app.policy.domain.models import BaseTag, Interpretation
 
 
 async def config(session: AsyncSession, *, lock: bool = False) -> PolicyAiConfig:
@@ -49,3 +49,62 @@ async def base_tags_by_source(session: AsyncSession, source_ids: list[str]) -> d
 
 async def base_tag_by_hash(session: AsyncSession, digest: str) -> BaseTag | None:
     return (await session.scalars(select(BaseTag).where(BaseTag.content_hash == digest))).first()
+
+
+async def interpret_backlog(session: AsyncSession, limit: int) -> list[BaseTag]:
+    """需要解读、还没解读过的 AI 打标政策，先打标的先解读。上一批费用到上限没做完的也在里面。"""
+
+    rows = await session.scalars(
+        select(BaseTag)
+        .where(
+            BaseTag.need_interpret == "是",
+            BaseTag.source_content_id.is_not(None),
+            BaseTag.interpreted_at.is_(None),
+        )
+        .order_by(BaseTag.tagged_at, BaseTag.id)
+        .limit(limit)
+    )
+    return list(rows)
+
+
+async def opportunity_backlog(session: AsyncSession, limit: int) -> list[BaseTag]:
+    rows = await session.scalars(
+        select(BaseTag)
+        .where(BaseTag.interpreted_at.is_not(None), BaseTag.opportunity_at.is_(None))
+        .order_by(BaseTag.interpreted_at, BaseTag.id)
+        .limit(limit)
+    )
+    return list(rows)
+
+
+async def base_tags_by_ids(session: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, BaseTag]:
+    if not ids:
+        return {}
+    rows = await session.scalars(select(BaseTag).where(BaseTag.id.in_(ids)).with_for_update())
+    return {row.id: row for row in rows}
+
+
+async def ai_interpretations(session: AsyncSession, source_ids: list[str]) -> dict[str, list[Interpretation]]:
+    if not source_ids:
+        return {}
+    rows = await session.scalars(
+        select(Interpretation)
+        .where(Interpretation.source_content_id.in_(source_ids))
+        .order_by(Interpretation.created_at, Interpretation.id)
+        .with_for_update()
+    )
+    grouped: dict[str, list[Interpretation]] = {}
+    for row in rows:
+        grouped.setdefault(str(row.source_content_id), []).append(row)
+    return grouped
+
+
+async def taken_relation_keys(session: AsyncSession, keys: list[str]) -> set[str]:
+    if not keys:
+        return set()
+    return set(await session.scalars(select(Interpretation.relation_key).where(Interpretation.relation_key.in_(keys))))
+
+
+async def delete_rows(session: AsyncSession, rows: list[Interpretation]) -> None:
+    for row in rows:
+        await session.delete(row)

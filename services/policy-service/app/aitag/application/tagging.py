@@ -1,24 +1,30 @@
-"""政策 AI 打标的一批：读源政策 → 用上线模板判断政策类型 → 写基础标签 → 进度前移。
+"""政策 AI 打标的一批，由任务调度（app.worker.scheduler）调用，一次执行就是一批：
 
-由任务调度（app.worker.scheduler）调用，一次执行就是一批。
-模型调用在 ai-service 的 worker 里跑，这里只发起、等待、取结果。
-费用：发起前先看今天花了多少，剩余额度作为这一批的费用上限传给 ai-service，到上限它自己停。
+1. 类型判断：从读取进度往后读源政策 → 用上线模板判断政策类型 → 写基础标签 → 进度前移。
+2. 政策解读、3. 市场机会：按待办做（见 interpreting），上一批费用到上限没做完的接着做。
+
+模型调用在 ai-service 的 worker 里跑，这里只发起、等待、取结果。每一步按当日剩余额度设费用上限，到上限它自己停。
 """
 
 from __future__ import annotations
 
-import asyncio
-import contextlib
-import logging
 import uuid
-from datetime import UTC, date, datetime, time
-from decimal import Decimal
 from typing import Any
 
 import anyio
-from platform_common.actors import Actor
-from platform_common.clock import BEIJING, utcnow
+from platform_common.clock import utcnow
 
+from app.aitag.application import interpreting
+from app.aitag.application.pipeline import (
+    NOT_RUN,
+    ROBOT,
+    Spend,
+    ask,
+    day_start,
+    stop_quietly,
+    today,
+    update_run,
+)
 from app.aitag.domain import rules
 from app.aitag.domain.models import PolicyAiConfig, PolicyAiRun
 from app.aitag.repositories import source
@@ -29,54 +35,13 @@ from app.common.errors import UserFacingError
 from app.core.database import SessionLocal
 from app.policy.domain.models import BASE_TAG_FIELDS, BaseTag, content_hash
 
-logger = logging.getLogger("policy.aitag")
-POLL_SECONDS = 10
-FINISHED = {"done", "cancelled", "failed", "interrupted"}
-NOT_RUN = "未执行"
-ROBOT = Actor(id="policy-ai-tagging", name="政策AI打标")
-
-
-def today() -> date:
-    return datetime.now(BEIJING).date()
-
-
-def day_start(day: date) -> datetime:
-    return datetime.combine(day, time.min, tzinfo=BEIJING).astimezone(UTC)
-
-
-async def _update(run_id: uuid.UUID, **values: Any) -> None:
-    async with SessionLocal() as session:
-        run = await repo.get_run(session, run_id)
-        if run is not None:
-            for key, value in values.items():
-                setattr(run, key, value)
-            await session.commit()
+__all__ = ["abandon", "day_start", "policy_type_names", "run_batch", "run_summary", "summary", "today"]
 
 
 async def policy_type_names() -> list[str]:
     data = await internal_clients.codebook("GET", "/internal/v1/code-tables/policy_types")
     lines = str(data["text"]).split("\n")[1:]
     return [line.split("\t")[0] for line in lines if line.strip()]
-
-
-def _cost(status: dict[str, Any]) -> Decimal:
-    return Decimal(str(status.get("inference_cost") or 0)) + Decimal(str(status.get("search_cost") or 0))
-
-
-async def _wait(run_id: uuid.UUID, ai_run_id: str) -> dict[str, Any]:
-    while True:
-        status: dict[str, Any] = await internal_clients.ai("GET", f"/internal/v1/pipeline-runs/{ai_run_id}")
-        await _update(run_id, cost=_cost(status))
-        if status["status"] in FINISHED:
-            return status
-        await asyncio.sleep(POLL_SECONDS)
-
-
-async def _stop_quietly(ai_run_id: str) -> None:
-    """调度超时或进程停止时停掉 ai-service 那边的任务，别让它在后台继续花钱。停不掉也不影响收尾。"""
-
-    with contextlib.suppress(Exception):
-        await internal_clients.ai("POST", f"/internal/v1/pipeline-runs/{ai_run_id}/stop")
 
 
 def _write_base_tag(session: Any, existing: BaseTag | None, source_row: dict[str, Any], values: dict[str, str]) -> bool:
@@ -91,6 +56,8 @@ def _write_base_tag(session: Any, existing: BaseTag | None, source_row: dict[str
         existing.refresh_hash()
         existing.version += 1
         existing.tagged_at = existing.updated_at = now
+        # 类型变了，后面两步要按新类型重做。
+        existing.interpreted_at = existing.opportunity_at = None
         existing.updated_by_id, existing.updated_by_name = ROBOT.id, ROBOT.name
         return True
     session.add(
@@ -111,11 +78,8 @@ def _write_base_tag(session: Any, existing: BaseTag | None, source_row: dict[str
     return True
 
 
-async def _save(
-    run_id: uuid.UUID,
-    rows: list[dict[str, Any]],
-    results: list[dict[str, Any]],
-    known: list[str],
+async def _save_types(
+    run_id: uuid.UUID, rows: list[dict[str, Any]], results: list[dict[str, Any]], known: list[str]
 ) -> dict[str, int]:
     processed = rules.resume_point(results, NOT_RUN)
     done_rows, done_results = rows[:processed], results[:processed]
@@ -149,8 +113,44 @@ async def _save(
     return {"processed": processed, "tagged": tagged, "failed": failed}
 
 
-def _cursor_text(day: date, content_id: str) -> str:
+def _cursor_text(day: Any, content_id: str) -> str:
     return f"{day.isoformat()} {content_id}".strip()
+
+
+async def _type_step(run_id: uuid.UUID, config: PolicyAiConfig, spend: Spend) -> str:
+    rows = await anyio.to_thread.run_sync(
+        source.read_batch, config.cursor_date, config.cursor_content_id, config.batch_size, today()
+    )
+    if not rows:
+        return "类型判断：没有新的源政策"
+    contents = await anyio.to_thread.run_sync(source.read_contents, [str(row["content_id"]) for row in rows])
+    limit = config.content_max_chars
+    prompt_rows = [rules.prompt_row(row, contents.get(str(row["content_id"])), limit) for row in rows]
+    known = await policy_type_names()
+    await update_run(run_id, stage="typing", source_rows=len(rows))
+    status, results = await ask(
+        run_id,
+        spend,
+        prompt_id=config.type_prompt_id,
+        rows=prompt_rows,
+        caller="政策AI打标·类型判断",
+        run_field="type_run_id",
+    )
+    counts = await _save_types(run_id, rows, results, known)
+    last = rows[counts["processed"] - 1] if counts["processed"] else None
+    await update_run(
+        run_id,
+        tagged_rows=counts["tagged"],
+        type_failed=counts["failed"],
+        source_to=_cursor_text(last["collect_date"], str(last["content_id"])) if last else "",
+    )
+    note = (
+        f"类型判断：读取 {len(rows)} 条，写入基础标签 {counts['tagged']} 条，其中失败或没对上码表 {counts['failed']} 条"
+    )
+    if counts["processed"] < len(rows):
+        reason = status.get("error_message") or "任务提前停止"
+        note += f"；{reason}，剩余 {len(rows) - counts['processed']} 条下批接着打"
+    return note
 
 
 async def run_batch(run_id: uuid.UUID) -> None:
@@ -168,65 +168,30 @@ async def run_batch(run_id: uuid.UUID) -> None:
         )
         await session.commit()
     try:
-        note = await _run(run_id, config, spent)
-        await _update(run_id, status="success", stage="done", note=note, finished_at=utcnow())
+        note = await _run(run_id, config, Spend(limit=config.daily_cost_limit, before=spent))
+        await update_run(run_id, status="success", stage="done", note=note, finished_at=utcnow())
     except Exception as exc:
         message = str(exc) if isinstance(exc, UserFacingError) else f"执行失败（{type(exc).__name__}）"
-        await _update(run_id, status="failed", error_message=message[:2000], finished_at=utcnow())
+        await update_run(run_id, status="failed", error_message=message[:2000], finished_at=utcnow())
         raise
 
 
-async def _run(run_id: uuid.UUID, config: PolicyAiConfig, spent: Decimal) -> str:
+async def _run(run_id: uuid.UUID, config: PolicyAiConfig, spend: Spend) -> str:
     if not config.type_prompt_id:
         raise UserFacingError("还没有选「政策类型判断」用的上线模板，请先在任务调度页设置")
-    remaining = config.daily_cost_limit - spent
-    if remaining <= 0:
-        return f"今日已花 {spent:.2f} 元，达到每日上限 {config.daily_cost_limit:.2f} 元，本次未打标"
-    rows = await anyio.to_thread.run_sync(
-        source.read_batch, config.cursor_date, config.cursor_content_id, config.batch_size, today()
-    )
-    if not rows:
-        return "没有新的源政策"
-    ids = [str(row["content_id"]) for row in rows]
-    contents = await anyio.to_thread.run_sync(source.read_contents, ids)
-    prompt_rows = [
-        rules.prompt_row(row, contents.get(str(row["content_id"])), config.content_max_chars) for row in rows
-    ]
-    known = await policy_type_names()
-    await _update(run_id, stage="typing", source_rows=len(rows))
-    created = await internal_clients.ai(
-        "POST",
-        "/internal/v1/pipeline-runs",
-        json={
-            "prompt_id": config.type_prompt_id,
-            "rows": prompt_rows,
-            "cost_limit": str(remaining),
-            "caller_name": "政策AI打标·类型判断",
-        },
-    )
-    ai_run_id = str(created["id"])
-    await _update(run_id, type_run_id=ai_run_id)
-    try:
-        status = await _wait(run_id, ai_run_id)
-    except asyncio.CancelledError:
-        await asyncio.shield(_stop_quietly(ai_run_id))
-        raise
-    data = await internal_clients.ai("GET", f"/internal/v1/pipeline-runs/{ai_run_id}/results")
-    counts = await _save(run_id, rows, data["items"], known)
-    last = rows[counts["processed"] - 1] if counts["processed"] else None
-    await _update(
-        run_id,
-        tagged_rows=counts["tagged"],
-        type_failed=counts["failed"],
-        cost=_cost(status),
-        source_to=_cursor_text(last["collect_date"], str(last["content_id"])) if last else "",
-    )
-    note = f"读取 {len(rows)} 条，写入基础标签 {counts['tagged']} 条，其中判断失败或未对上码表 {counts['failed']} 条"
-    if counts["processed"] < len(rows):
-        note += (
-            f"；{status.get('error_message') or '任务提前停止'}，剩余 {len(rows) - counts['processed']} 条下次接着打"
-        )
-    return note
+    notes: list[str] = []
+    steps = [("类型判断", _type_step)]
+    if config.interpret_prompt_id:
+        steps.append(("政策解读", interpreting.interpret_step))
+    if config.opportunity_prompt_id:
+        steps.append(("市场机会", interpreting.opportunity_step))
+    for name, step in steps:
+        if spend.remaining() <= 0:
+            used = spend.before + spend.run
+            notes.append(f"{name}：今日已花 {used:.2f} 元，达到每日上限 {spend.limit:.2f} 元，留到明天")
+            continue
+        notes.append(await step(run_id, config, spend))
+    return "；".join(notes)
 
 
 async def abandon(run_id: uuid.UUID, message: str) -> None:
@@ -237,10 +202,10 @@ async def abandon(run_id: uuid.UUID, message: str) -> None:
         if run is None or run.status != "running":
             return
         run.status, run.error_message, run.finished_at = "failed", message[:2000], utcnow()
-        ai_run_id = run.type_run_id
+        ai_runs = [run.type_run_id, run.interpret_run_id, run.opportunity_run_id]
         await session.commit()
-    if ai_run_id:
-        await _stop_quietly(ai_run_id)
+    for ai_run_id in filter(None, ai_runs):
+        await stop_quietly(ai_run_id)
 
 
 async def summary(run_id: uuid.UUID | None) -> dict[str, Any] | None:

@@ -14,7 +14,7 @@ import pytest
 from platform_common.actors import Actor
 from platform_common.errors import ApiError, DependencyUnavailableError, VersionConflictError
 
-from app.aitag.application import settings, tagging
+from app.aitag.application import pipeline, settings, tagging
 from app.aitag.repositories import source
 from app.aitag.repositories import tagging as repo
 from app.common import internal_clients
@@ -155,6 +155,7 @@ def run_store(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
     session.add = add  # type: ignore[method-assign]
     monkeypatch.setattr(tagging, "SessionLocal", lambda: session)
+    monkeypatch.setattr(pipeline, "SessionLocal", lambda: session)
     monkeypatch.setattr(repo, "get_run", get_run)
     return store
 
@@ -162,6 +163,8 @@ def run_store(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 def _config(**overrides: Any) -> Any:
     values = {
         "type_prompt_id": "p" * 32,
+        "interpret_prompt_id": "",
+        "opportunity_prompt_id": "",
         "batch_size": 10,
         "content_max_chars": 1000,
         "daily_cost_limit": Decimal(10),
@@ -199,7 +202,7 @@ async def test_empty_source_is_a_successful_batch(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(source, "read_batch", lambda *_: [])
     run_id = uuid.uuid4()
     await tagging.run_batch(run_id)
-    assert (run_store[str(run_id)].status, run_store[str(run_id)].note) == ("success", "没有新的源政策")
+    assert (run_store[str(run_id)].status, run_store[str(run_id)].note) == ("success", "类型判断：没有新的源政策")
 
 
 async def test_unexpected_errors_hide_details_from_the_page(
@@ -247,7 +250,14 @@ async def test_abandon_marks_failed_and_stops_the_ai_run(
     monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]
 ) -> None:
     run_id = uuid.uuid4()
-    run_store[str(run_id)] = SimpleNamespace(status="running", type_run_id="r" * 32, error_message="", finished_at=None)
+    run_store[str(run_id)] = SimpleNamespace(
+        status="running",
+        type_run_id="r" * 32,
+        interpret_run_id="i" * 32,
+        opportunity_run_id="",
+        error_message="",
+        finished_at=None,
+    )
     stopped: list[str] = []
 
     async def ai(method: str, path: str, **_: Any) -> Any:
@@ -256,7 +266,9 @@ async def test_abandon_marks_failed_and_stops_the_ai_run(
 
     monkeypatch.setattr(internal_clients, "ai", ai)
     await tagging.abandon(run_id, "执行进程中断")
-    assert run_store[str(run_id)].status == "failed" and stopped == [f"/internal/v1/pipeline-runs/{'r' * 32}/stop"]
+    # 三步里发起过的任务都要停；没发起的（空 ID）跳过。
+    assert run_store[str(run_id)].status == "failed"
+    assert stopped == [f"/internal/v1/pipeline-runs/{'r' * 32}/stop", f"/internal/v1/pipeline-runs/{'i' * 32}/stop"]
     await tagging.abandon(uuid.uuid4(), "不存在的批次不报错")
 
 

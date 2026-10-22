@@ -16,6 +16,7 @@ from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
 from app.policy.api.schemas import InterpretationPatch, InterpretationWrite
 from app.policy.application import interpretations as service
+from app.policy.application import scenario_sync
 
 router = APIRouter(prefix="/api/v1/policy/interpretations", tags=["policy-interpretations"])
 RESOURCE = "policy.interpretations"
@@ -135,6 +136,28 @@ async def create_item(
         await service.create_interpretation(session, actor, body.model_dump(exclude={"version"})),
         status_code=201,
     )
+
+
+@router.get("/new-scenarios")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def new_scenarios(
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
+) -> JSONResponse:
+    """人工验证过、还没同步进码表的新增场景条数，按钮上显示。"""
+
+    return success_json(await scenario_sync.pending(session))
+
+
+@router.post("/new-scenarios/sync")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def sync_new_scenarios(
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    actor: Actor = Depends(require_policy_permission(RESOURCE, "sync_scenarios")),
+) -> JSONResponse:
+    """把人工验证过的新增场景写进行业场景码表，编码回填到解读行。"""
+
+    return success_json(await scenario_sync.sync(session, actor))
 
 
 @router.get("/{item_id}")

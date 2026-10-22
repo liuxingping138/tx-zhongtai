@@ -228,6 +228,11 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
   政策服务轮询到结束再取解析结果。调度超时或进程中断会停掉 ai-service 那边的任务
 - 类型判断结果用系统政策类型码表核对（缺「类」字的旧写法补上能对上就算），写进基础标签：按 `source_content_id` 更新，
   人工在打标后改过的行不覆盖；失败和没对上码表的写进备注。含「信息化建设类」的标「是否解读 = 是」
+- 第 2、3 步按待办做：基础标签「是否解读 = 是」且 `interpreted_at` 为空的政策做解读，一条展开成多行写解读表（「政策概览」写进「政策要文」，
+  非新增场景到码表查编码，名称对不上的写备注）；解读过、`opportunity_at` 为空的做市场机会，按一级行业 + 一级场景回填。
+  费用到上限没轮到的不记时间，下批接着做；AI 行只要人工验证过或改过就不再覆盖（`app/aitag/application/interpreting.py`）
+- 解读列表「同步新增场景」：是否新增场景 = 是、人工验证、未同步的行，经 codebook `/internal/v1/scenarios/sync` 按编码规则
+  （`app/domain/scenario_codes.py`：各级号全局最大 + 1，已有上级沿用，行业只查不建）写进场景码表并回填编码；动作 `policy.interpretations:sync_scenarios`
 - 内部调用密钥：`AI_POLICY_CALLER_SECRET`（政策→AI）、`CODEBOOK_POLICY_CALLER_SECRET`（政策→码表），compose 把同一个值传给两边
 
 ### 网关

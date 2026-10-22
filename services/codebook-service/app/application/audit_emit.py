@@ -18,6 +18,7 @@ _EVENT_META = {
     "codebook.scenario.updated": ("codebook.scenarios", "update", "scenario", "编辑行业场景码表"),
     "codebook.scenario.imported": ("codebook.scenarios", "import", "scenario", "导入行业场景码表"),
     "codebook.scenario.exported": ("codebook.scenarios", "export", "scenario", "导出行业场景码表"),
+    "codebook.scenario.synced": ("codebook.scenarios", "import", "scenario", "政策解读新增场景同步进码表"),
     "codebook.area_code.created": ("codebook.area_codes", "create", "area_code", "新增省市区编码"),
     "codebook.area_code.updated": ("codebook.area_codes", "update", "area_code", "编辑省市区编码"),
     "codebook.area_code.imported": ("codebook.area_codes", "import", "area_code", "导入省市区编码表"),

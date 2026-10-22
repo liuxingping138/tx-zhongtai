@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Plus } from '@element-plus/icons-vue'
-import { computed, onMounted, reactive } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import {
@@ -13,6 +13,7 @@ import {
 import { errorMessage } from '@/api/errors'
 import { reportImportResult, runExcelImport } from '@/api/excelImport'
 import AuditLogButton from '@/components/AuditLogButton.vue'
+import SyncScenariosButton from './SyncScenariosButton.vue'
 import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
 import ExportButton from '@/components/ExportButton.vue'
@@ -57,8 +58,10 @@ const { items, total, loading, loadError, resultFiltered, load } = useListLoader
 })
 const { columns, defaults, selected } = useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)
 
+// 改成「人工验证」、导入之后，同步按钮上的待同步条数要跟着变。
+const scenarioSync = ref<InstanceType<typeof SyncScenariosButton>>()
 async function refresh() {
-  await Promise.all([load(), filters.load()])
+  await Promise.all([load(), filters.load(), scenarioSync.value?.refresh()])
 }
 
 const editor = useRecordEditor<InterpretationItem>({
@@ -127,6 +130,11 @@ onMounted(() => {
           :allowed="auth.canExport(RESOURCE)"
           :loading="exporting"
           @click="onExport"
+        />
+        <SyncScenariosButton
+          v-if="canWrite"
+          ref="scenarioSync"
+          @synced="load"
         />
         <AuditLogButton :module="RESOURCE" />
       </template>

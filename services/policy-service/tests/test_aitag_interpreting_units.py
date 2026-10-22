@@ -1,0 +1,221 @@
+"""第 2、3 步用内存替身跑一遍：解读写行、查编码、失败写备注、费用到上限不记进度、市场机会回填。
+
+真实库上的行为在集成测试里。
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import timedelta
+from decimal import Decimal
+from types import SimpleNamespace
+from typing import Any
+
+import pytest
+
+from app.aitag.application import interpreting, pipeline
+from app.aitag.application.pipeline import Spend
+from app.aitag.repositories import source
+from app.aitag.repositories import tagging as repo
+from app.common import internal_clients
+from app.policy.domain.models import Interpretation
+
+
+class Session:
+    def __init__(self) -> None:
+        self.added: list[Any] = []
+
+    def add(self, item: Any) -> None:
+        self.added.append(item)
+
+    async def flush(self) -> None:
+        return None
+
+    async def commit(self) -> None:
+        return None
+
+    async def __aenter__(self) -> Session:
+        return self
+
+    async def __aexit__(self, *_: object) -> None:
+        return None
+
+
+def _tag(source_id: str) -> Any:
+    return SimpleNamespace(
+        id=uuid.uuid4(),
+        source_content_id=source_id,
+        policy_name=f"{source_id} 方案",
+        province_name="北京市",
+        city_name="北京市",
+        issued_at="2026-09-30",
+        issuing_dept="市数据局",
+        policy_level="地市级",
+        remark="",
+        interpreted_at=None,
+        opportunity_at=None,
+    )
+
+
+def _answer(scene_l1: str, scene_l2: str, new: str) -> dict[str, str]:
+    return {"一级行业": "党政行业", "一级场景": scene_l1, "二级场景": scene_l2, "机会类型": "TO_G", "是否新增场景": new}
+
+
+ANSWERS = {
+    "政策解读": {
+        "c1": [
+            _answer("数字政府", "一网统管", "否"),
+            _answer("数字政府", "鸿蒙政务", "否"),
+            _answer("城市大脑", "", "是"),
+        ],
+    },
+    "市场机会": {"c1": [{"行业": "党政行业", "场景": "数字政府", "市场机会": "机会A"}]},
+}
+
+
+class FakeAi:
+    """c2 回答失败，c3 没轮到（费用到上限），其余按 ANSWERS。"""
+
+    def __init__(self) -> None:
+        self.created: list[dict[str, Any]] = []
+
+    def _row(self, source_id: str, stage: str) -> dict[str, Any]:
+        if source_id == "c2":
+            return {"source_id": "c2", "items": [], "error": "限流"}
+        if source_id == "c3":
+            return {"source_id": "c3", "items": [], "error": "未执行（任务停止或中断）"}
+        return {"source_id": source_id, "items": ANSWERS[stage][source_id], "error": ""}
+
+    async def __call__(self, method: str, path: str, **kwargs: Any) -> Any:
+        if method == "POST":
+            self.created.append(kwargs["json"])
+            return {"id": f"{len(self.created):032d}"}
+        if path.endswith("/results"):
+            body = self.created[-1]
+            stage = next(name for name in ANSWERS if name in body["caller_name"])
+            return {"items": [self._row(row["源ID"], stage) for row in body["rows"]]}
+        return {"status": "done", "inference_cost": "0.2", "search_cost": "0", "error_message": "达到本批费用上限"}
+
+
+async def fake_codebook(_method: str, _path: str, **kwargs: Any) -> list[dict[str, str]]:
+    """只有「数字政府/一网统管」在码表里。"""
+
+    return [
+        {**item, "industry_scenario_code": "0102", "industry_code": "01", "scenario_code": "02"}
+        if item["scenario_l2_name"] == "一网统管"
+        else {**item, "industry_scenario_code": "", "industry_code": "", "scenario_code": ""}
+        for item in kwargs["json"]["items"]
+    ]
+
+
+@pytest.fixture
+def world(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
+    session = Session()
+    run = SimpleNamespace(cost=Decimal(0), interpret_rows=0, interpret_failed=0)
+    ai = FakeAi()
+    state = SimpleNamespace(session=session, run=run, created=ai.created, events=[], deleted=[], tags=[], rows={})
+
+    async def backlog(*_: Any) -> list[Any]:
+        return state.tags
+
+    async def by_ids(_session: Any, ids: list[Any]) -> dict[Any, Any]:
+        return {tag.id: tag for tag in state.tags if tag.id in ids}
+
+    async def grouped(*_: Any) -> dict[str, list[Any]]:
+        return state.rows
+
+    async def none(*_: Any) -> set[str]:
+        return set()
+
+    async def delete(_session: Any, rows: list[Any]) -> None:
+        state.deleted.extend(rows)
+
+    async def get_run(*_: Any) -> Any:
+        return run
+
+    async def record(_session: Any, **kwargs: Any) -> None:
+        state.events.append(kwargs)
+
+    for module in (interpreting, pipeline):
+        monkeypatch.setattr(module, "SessionLocal", lambda: session)
+    monkeypatch.setattr(pipeline, "POLL_SECONDS", 0)
+    monkeypatch.setattr(internal_clients, "ai", ai)
+    monkeypatch.setattr(internal_clients, "codebook", fake_codebook)
+    monkeypatch.setattr(source, "read_contents", lambda ids: dict.fromkeys(ids, "正文"))
+    monkeypatch.setattr(repo, "interpret_backlog", backlog)
+    monkeypatch.setattr(repo, "opportunity_backlog", backlog)
+    monkeypatch.setattr(repo, "base_tags_by_ids", by_ids)
+    monkeypatch.setattr(repo, "ai_interpretations", grouped)
+    monkeypatch.setattr(repo, "taken_relation_keys", none)
+    monkeypatch.setattr(repo, "delete_rows", delete)
+    monkeypatch.setattr(repo, "get_run", get_run)
+    monkeypatch.setattr(interpreting, "enqueue_event", record)
+    return state
+
+
+CONFIG = SimpleNamespace(
+    batch_size=10, content_max_chars=1000, interpret_prompt_id="i" * 32, opportunity_prompt_id="o" * 32
+)
+
+
+async def test_interpretation_writes_rows_codes_and_remarks(world: SimpleNamespace) -> None:
+    world.tags = [_tag("c1"), _tag("c2"), _tag("c3")]
+    spend = Spend(limit=Decimal(10), before=Decimal(1))
+    note = await interpreting.interpret_step(uuid.uuid4(), CONFIG, spend)  # type: ignore[arg-type]
+    rows = [item for item in world.session.added if isinstance(item, Interpretation)]
+    assert [(row.scenario_l2_name, row.industry_scenario_code, row.is_new_scenario) for row in rows] == [
+        ("一网统管", "0102", "否"),
+        ("鸿蒙政务", "", "否"),
+        ("", "", "是"),
+    ]
+    assert "码表里没对上" in rows[1].remark and rows[0].remark == ""
+    c1, c2, c3 = world.tags
+    assert c1.interpreted_at and c2.interpreted_at and c3.interpreted_at is None  # c3 没轮到，下批再做
+    assert "AI 解读失败：限流" in c2.remark
+    assert (world.run.interpret_rows, world.run.interpret_failed, spend.run) == (3, 1, Decimal("0.2"))
+    assert "1 条下批接着解读" in note and world.created[0]["cost_limit"] == "9"
+
+
+async def test_reinterpretation_replaces_only_untouched_ai_rows(world: SimpleNamespace) -> None:
+    now = pipeline.datetime.now(pipeline.UTC)
+    untouched = SimpleNamespace(data_status="待验证", tagged_at=now, updated_at=now, source_content_id="c1")
+    edited = SimpleNamespace(
+        data_status="待验证", tagged_at=now, updated_at=now + timedelta(minutes=1), source_content_id="c1"
+    )
+    verified = SimpleNamespace(data_status="人工验证", tagged_at=now, updated_at=now, source_content_id="c1")
+    world.tags, world.rows = [_tag("c1")], {"c1": [untouched, edited, verified]}
+    await interpreting.interpret_step(uuid.uuid4(), CONFIG, Spend(limit=Decimal(10), before=Decimal(0)))  # type: ignore[arg-type]
+    assert world.deleted == [untouched]
+
+
+async def test_opportunities_fill_matching_untouched_rows(world: SimpleNamespace) -> None:
+    now = pipeline.datetime.now(pipeline.UTC)
+
+    def row(scene: str, status: str = "待验证") -> Any:
+        return SimpleNamespace(
+            industry_l1="党政行业",
+            scenario_l1_name=scene,
+            data_status=status,
+            tagged_at=now,
+            updated_at=now,
+            source_content_id="c1",
+            market_opportunity="",
+        )
+
+    matched, other, verified = row("数字政府"), row("城市大脑"), row("数字政府", "人工验证")
+    world.tags, world.rows = [_tag("c1")], {"c1": [matched, other, verified]}
+    note = await interpreting.opportunity_step(uuid.uuid4(), CONFIG, Spend(limit=Decimal(10), before=Decimal(0)))  # type: ignore[arg-type]
+    assert (matched.market_opportunity, other.market_opportunity, verified.market_opportunity) == ("机会A", "", "")
+    assert "党政行业/数字政府" in world.created[0]["rows"][0]["行业场景"]
+    assert world.tags[0].opportunity_at is not None and "回填 1 行" in note
+
+
+async def test_policies_without_interpretation_rows_skip_the_model(world: SimpleNamespace) -> None:
+    world.tags, world.rows = [_tag("c9")], {}
+    note = await interpreting.opportunity_step(uuid.uuid4(), CONFIG, Spend(limit=Decimal(10), before=Decimal(0)))  # type: ignore[arg-type]
+    assert note == "市场机会：没有待补的政策" and world.created == []
+    assert world.tags[0].opportunity_at is not None
+    world.tags = []
+    assert await interpreting.interpret_step(uuid.uuid4(), CONFIG, Spend(limit=Decimal(1), before=Decimal(0))) == (  # type: ignore[arg-type]
+        "政策解读：没有待解读的政策"
+    )

@@ -66,7 +66,7 @@
 |---|---|
 | `/policy/sources` | 19/19（表格列 16 + 省市区编码 3） |
 | `/policy/base-tags` | 20/20 |
-| `/policy/interpretations` | 27/27（表格列 26，含数据状态；+ 租户标识 1） |
+| `/policy/interpretations` | 31/31（表格列 30，含数据状态、场景同步时间；+ 租户标识 1） |
 | `/codebook/policy-types` | 8/8 |
 | `/codebook/scenarios` | 35/35 |
 | `/codebook/area-codes` | 15/15 |

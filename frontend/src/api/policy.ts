@@ -69,6 +69,8 @@ export interface InterpretationItem {
   scenario_l2_name: string
   scenario_l3_name: string
   target_customers: string
+  adapted_products: string
+  purchase_reason: string
   relation_key: string
   opportunity_type: string
   policy_summary: string
@@ -78,7 +80,13 @@ export interface InterpretationItem {
   info_level: string
   is_new_scenario: string
   new_scenario_level: string
+  remark: string
   data_status: string
+  /** AI 解读写入的行才有：源政策ID、解读时间 */
+  source_content_id: string
+  tagged_at: string
+  /** 新增场景同步进码表的时间，没同步为空 */
+  scenario_synced_at: string
   version: number
   created_at: string
   created_by_name: string
@@ -183,3 +191,19 @@ export function importInterpretations(
   return postExcelImport('/policy/interpretations/import', file, onProgress)
 }
 
+
+/** 人工验证过、还没同步进行业场景码表的新增场景条数 */
+export function pendingNewScenarios(): Promise<{ pending: number }> {
+  return request(http.get('/policy/interpretations/new-scenarios'))
+}
+
+export interface ScenarioSyncResult {
+  synced: number
+  /** 码表里新建的场景数；已有同名同路径的只回填编码 */
+  created: number
+  failed: { policy_title: string; reason: string }[]
+}
+
+export function syncNewScenarios(): Promise<ScenarioSyncResult> {
+  return request(http.post('/policy/interpretations/new-scenarios/sync'))
+}

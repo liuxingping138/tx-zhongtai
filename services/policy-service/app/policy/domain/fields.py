@@ -59,6 +59,8 @@ INTERPRETATION_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec("scenario_l2_name", "二级场景名称"),
     ColumnSpec("scenario_l3_name", "三级场景名称"),
     ColumnSpec("target_customers", "目标客户当前政策影响客户群"),
+    ColumnSpec("adapted_products", "适配产品"),
+    ColumnSpec("purchase_reason", "目标客户采买理由"),
     ColumnSpec("relation_key", "关联主键"),
     ColumnSpec("opportunity_type", "机会类型", searchable=True),
     ColumnSpec("policy_summary", "政策要文"),
@@ -68,6 +70,7 @@ INTERPRETATION_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec("info_level", "信息化等级"),
     ColumnSpec("is_new_scenario", "是否新增场景"),
     ColumnSpec("new_scenario_level", "新增场景级别"),
+    ColumnSpec("remark", "备注"),
     ColumnSpec("data_status", "数据状态"),
 )
 

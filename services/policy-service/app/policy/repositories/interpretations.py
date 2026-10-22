@@ -7,6 +7,7 @@ from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
+from app.policy.domain.fields import DATA_STATUS_VERIFIED
 from app.policy.domain.models import Interpretation
 
 
@@ -97,3 +98,28 @@ async def list_all(session: AsyncSession) -> list[Interpretation]:
     """全表读取（不筛选）。导出请用 list_filtered，两者排序一致。"""
 
     return await list_filtered(session, {})
+
+
+def _unsynced_new_scenarios() -> list[ColumnElement[bool]]:
+    return [
+        Interpretation.is_new_scenario == "是",
+        Interpretation.data_status == DATA_STATUS_VERIFIED,
+        Interpretation.scenario_synced_at.is_(None),
+    ]
+
+
+async def count_unsynced_new_scenarios(session: AsyncSession) -> int:
+    return int(
+        await session.scalar(select(func.count()).select_from(Interpretation).where(*_unsynced_new_scenarios())) or 0
+    )
+
+
+async def unsynced_new_scenarios(session: AsyncSession, limit: int) -> list[Interpretation]:
+    rows = await session.scalars(
+        select(Interpretation)
+        .where(*_unsynced_new_scenarios())
+        .order_by(Interpretation.updated_at, Interpretation.id)
+        .limit(limit)
+        .with_for_update(skip_locked=True)
+    )
+    return list(rows)

@@ -12,11 +12,11 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import delete, select, text
 
-from app.aitag.application import tagging
+from app.aitag.application import pipeline, tagging
 from app.aitag.domain.models import PolicyAiConfig, PolicyAiRun
 from app.common import internal_clients
 from app.core.database import SessionLocal, engine
-from app.policy.domain.models import BaseTag
+from app.policy.domain.models import BaseTag, Interpretation
 
 pytestmark = pytest.mark.skipif(os.environ.get("SCHEDULER_INTEGRATION") != "1", reason="需要独立 scheduler_test 数据库")
 PROMPT = "p" * 32
@@ -75,11 +75,13 @@ class FakeAi:
 async def isolated(monkeypatch: pytest.MonkeyPatch):
     assert engine.url.database == "scheduler_test", "拒绝在业务数据库执行破坏性测试"
     async with SessionLocal() as session:
+        await session.execute(delete(Interpretation))
         await session.execute(delete(BaseTag))
         await session.execute(delete(PolicyAiRun))
         await session.execute(
             text(
-                "UPDATE policy_ai_config SET type_prompt_id=:prompt, batch_size=3, daily_cost_limit=100,"
+                "UPDATE policy_ai_config SET type_prompt_id=:prompt, interpret_prompt_id='', opportunity_prompt_id='',"
+                " batch_size=3, daily_cost_limit=100,"
                 " cursor_date=:day, cursor_content_id='', version=1"
             ),
             {"prompt": PROMPT, "day": DAY},
@@ -91,7 +93,7 @@ async def isolated(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(internal_clients, "codebook", names)
     monkeypatch.setattr(tagging.source, "read_contents", lambda ids: {cid: f"{cid} 的正文" for cid in ids})
-    monkeypatch.setattr(tagging, "POLL_SECONDS", 0)
+    monkeypatch.setattr(pipeline, "POLL_SECONDS", 0)
     monkeypatch.setattr(tagging, "today", lambda: DAY + timedelta(days=5))
     yield
     await engine.dispose()
@@ -164,8 +166,154 @@ async def test_nothing_is_read_once_today_s_budget_is_spent(monkeypatch: pytest.
             PolicyAiRun(id=uuid.uuid4(), status="success", stage="done", cost=Decimal(2), started_at=tagging.utcnow())
         )
         await session.commit()
-    monkeypatch.setattr(tagging, "today", lambda: tagging.utcnow().astimezone(tagging.BEIJING).date())
+    monkeypatch.setattr(tagging, "today", pipeline.today)
     await tagging.run_batch(uuid.uuid4())
     _, tags, runs = await _state()
     assert calls == [] and tags == {}
     assert any("达到每日上限" in run.note for run in runs)
+
+
+class StagedAi:
+    """按步骤（看 caller_name）给每行回答：answers[步骤][源ID] = (输出条目, 错误)。"""
+
+    def __init__(self, answers: dict[str, dict[str, tuple[list[dict[str, str]], str]]]) -> None:
+        self.answers = answers
+        self.created: list[dict[str, Any]] = []
+
+    async def __call__(self, method: str, path: str, **kwargs: Any) -> Any:
+        if method == "POST" and path == "/internal/v1/pipeline-runs":
+            self.created.append(kwargs["json"])
+            return {"id": f"{len(self.created):032d}"}
+        if path.endswith("/results"):
+            body = self.created[int(path.split("/")[-2]) - 1]
+            stage = next(name for name in self.answers if name in body["caller_name"])
+            items = []
+            for row in body["rows"]:
+                found, error = self.answers[stage].get(row["源ID"], ([], "未执行（任务停止或中断）"))
+                items.append({"source_id": row["源ID"], "items": found, "error": error})
+            return {"items": items}
+        return {"status": "done", "inference_cost": "0.1", "search_cost": "0", "error_message": ""}
+
+
+def _interpretation(scene_l2: str, *, new: str, opportunity_type: str = "TO_G") -> dict[str, str]:
+    return {
+        "政策概览": f"{scene_l2}要文",
+        "一级行业": "党政行业",
+        "二级行业": "政务",
+        "一级场景": "数字政府",
+        "二级场景": scene_l2,
+        "机会类型": opportunity_type,
+        "是否新增场景": new,
+        "适配产品": "移动云",
+    }
+
+
+@pytest.fixture
+def staged(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
+    async def codebook(method: str, path: str, **kwargs: Any) -> Any:
+        if path.endswith("/code-tables/policy_types"):
+            return {"text": "政策类型名称\n信息化建设类\n资金扶持类"}
+        # 只有「数字政府/一网统管」在码表里。
+        return [
+            {**item, "industry_code": "01", "scenario_code": "02", "industry_scenario_code": "0102"}
+            if item["scenario_l2_name"] == "一网统管"
+            else {**item, "industry_code": "", "scenario_code": "", "industry_scenario_code": ""}
+            for item in kwargs["json"]["items"]
+        ]
+
+    monkeypatch.setattr(internal_clients, "codebook", codebook)
+
+    async def enable() -> None:
+        async with SessionLocal() as session:
+            await session.execute(
+                text("UPDATE policy_ai_config SET interpret_prompt_id=:p, opportunity_prompt_id=:p"), {"p": "i" * 32}
+            )
+            await session.execute(delete(Interpretation))
+            await session.commit()
+
+    return [enable]
+
+
+async def _interpretations() -> dict[str, list[Interpretation]]:
+    async with SessionLocal() as session:
+        grouped: dict[str, list[Interpretation]] = {}
+        for row in await session.scalars(select(Interpretation).order_by(Interpretation.scenario_l2_name)):
+            grouped.setdefault(str(row.source_content_id), []).append(row)
+        return grouped
+
+
+async def test_the_pipeline_interprets_informatization_policies_and_fills_opportunities(
+    monkeypatch: pytest.MonkeyPatch, staged: list[Any]
+) -> None:
+    await staged[0]()
+    ai = StagedAi(
+        {
+            "类型判断": {
+                "c1": ([{"政策类型名称": "信息化建设类"}], ""),
+                "c2": ([{"政策类型名称": "资金扶持类"}], ""),
+                "c3": ([{"政策类型名称": "信息化建设类"}], ""),
+            },
+            "政策解读": {
+                "c1": ([_interpretation("一网统管", new="否"), _interpretation("城市大脑", new="是")], ""),
+                "c3": ([], "限流"),
+            },
+            "市场机会": {"c1": ([{"行业": "党政行业", "场景": "数字政府", "市场机会": "机会A"}], "")},
+        }
+    )
+    _serve(monkeypatch, ROWS, ai)
+    await tagging.run_batch(uuid.uuid4())
+    # 只有信息化建设类（c1、c3）进解读；c3 解读失败不进市场机会。
+    assert [body["caller_name"][-4:] for body in ai.created] == ["类型判断", "政策解读", "市场机会"]
+    assert [row["源ID"] for row in ai.created[1]["rows"]] == ["c1", "c3"]
+    assert [row["源ID"] for row in ai.created[2]["rows"]] == ["c1"]
+    assert "党政行业/数字政府" in ai.created[2]["rows"][0]["行业场景"]
+    rows = (await _interpretations())["c1"]
+    assert [(row.scenario_l2_name, row.industry_scenario_code, row.is_new_scenario) for row in rows] == [
+        ("一网统管", "0102", "否"),
+        ("城市大脑", "", "是"),
+    ]
+    assert {row.market_opportunity for row in rows} == {"机会A"}
+    assert (rows[0].policy_summary, rows[0].adapted_products, rows[0].data_status) == (
+        "一网统管要文",
+        "移动云",
+        "待验证",
+    )
+    _, tags, runs = await _state()
+    assert tags["c1"].interpreted_at and tags["c1"].opportunity_at
+    assert tags["c3"].interpreted_at and "AI 解读失败：限流" in tags["c3"].remark
+    assert tags["c2"].interpreted_at is None
+    assert (runs[0].interpret_rows, runs[0].interpret_failed) == (2, 1)
+
+
+async def test_reinterpreting_keeps_rows_people_already_verified(
+    monkeypatch: pytest.MonkeyPatch, staged: list[Any]
+) -> None:
+    await staged[0]()
+    first = {
+        "类型判断": {"c1": ([{"政策类型名称": "信息化建设类"}], "")},
+        "政策解读": {"c1": ([_interpretation("一网统管", new="否"), _interpretation("城市大脑", new="是")], "")},
+        "市场机会": {},
+    }
+    _serve(monkeypatch, ROWS[:1], StagedAi(first))
+    await tagging.run_batch(uuid.uuid4())
+    async with SessionLocal() as session:
+        verified = (
+            await session.scalars(select(Interpretation).where(Interpretation.scenario_l2_name == "城市大脑"))
+        ).one()
+        verified.data_status = "人工验证"
+        await session.execute(text("UPDATE policy_base_tags SET interpreted_at = NULL, opportunity_at = NULL"))
+        await session.execute(text("UPDATE policy_ai_config SET cursor_date=:day, cursor_content_id=''"), {"day": DAY})
+        await session.commit()
+    second = {
+        "类型判断": {"c1": ([{"政策类型名称": "信息化建设类"}], "")},
+        "政策解读": {"c1": ([_interpretation("一网通办", new="是"), _interpretation("城市大脑", new="是")], "")},
+        "市场机会": {},
+    }
+    _serve(monkeypatch, ROWS[:1], StagedAi(second))
+    await tagging.run_batch(uuid.uuid4())
+    rows = (await _interpretations())["c1"]
+    # 一网统管（没人动过）被新答案替换；城市大脑已人工验证，保留原行、不重复建。
+    assert [(row.scenario_l2_name, row.data_status) for row in rows] == [
+        ("一网通办", "待验证"),
+        ("城市大脑", "人工验证"),
+    ]

@@ -2563,6 +2563,46 @@
         }
       }
     },
+    "/api/v1/policy/interpretations/new-scenarios": {
+      "get": {
+        "tags": [
+          "policy-interpretations"
+        ],
+        "summary": "New Scenarios",
+        "description": "人工验证过、还没同步进码表的新增场景条数，按钮上显示。",
+        "operationId": "new_scenarios_api_v1_policy_interpretations_new_scenarios_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/interpretations/new-scenarios/sync": {
+      "post": {
+        "tags": [
+          "policy-interpretations"
+        ],
+        "summary": "Sync New Scenarios",
+        "description": "把人工验证过的新增场景写进行业场景码表，编码回填到解读行。",
+        "operationId": "sync_new_scenarios_api_v1_policy_interpretations_new_scenarios_sync_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/policy/interpretations/{item_id}": {
       "get": {
         "tags": [

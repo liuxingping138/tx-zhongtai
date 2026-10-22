@@ -137,6 +137,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ActionSpec("policy.interpretations", "create", GrantLevel.FULL),
     ActionSpec("policy.interpretations", "update", GrantLevel.FULL),
     ActionSpec("policy.interpretations", "import", GrantLevel.FULL),
+    # 写的是码表：确认过的新增场景按编码规则建进行业场景码表。
+    ActionSpec("policy.interpretations", "sync_scenarios", GrantLevel.FULL),
     # 试发、批量运行和对话会调用大模型产生费用：试发和批量要「管理」档；多轮对话页本身就是对话，「仅查看」即可使用。
     ActionSpec("ai.prompts", "list", GrantLevel.READ),
     ActionSpec("ai.prompts", "export", GrantLevel.EXPORT),

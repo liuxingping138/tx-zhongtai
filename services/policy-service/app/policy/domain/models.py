@@ -97,6 +97,13 @@ class BaseTag(Base):
     # AI 打标写入的行带源政策 ID，重打同一条政策时按它更新，不按内容哈希新增一行。手工导入的行为空。
     source_content_id: Mapped[str | None] = mapped_column(String(200), nullable=True, comment="源政策ID")
     tagged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, comment="AI打标时间")
+    # 打标流水线的后两步按这两个时间找待办：需要解读但还没解读的、解读了还没做市场机会的。
+    interpreted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="AI解读时间"
+    )
+    opportunity_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="AI市场机会时间"
+    )
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, comment="版本号")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="入库时间")
     created_by_id: Mapped[str] = mapped_column(String(64), nullable=False, comment="入库人ID")
@@ -138,6 +145,8 @@ class Interpretation(Base):
     target_customers: Mapped[str] = mapped_column(
         Text, nullable=False, default="", comment="目标客户当前政策影响客户群"
     )
+    adapted_products: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="适配产品")
+    purchase_reason: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="目标客户采买理由")
     relation_key: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="关联主键")
     opportunity_type: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="机会类型")
     policy_summary: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="政策要文")
@@ -147,6 +156,13 @@ class Interpretation(Base):
     info_level: Mapped[str] = mapped_column(String(32), nullable=False, default="", comment="信息化等级")
     is_new_scenario: Mapped[str] = mapped_column(String(32), nullable=False, default="", comment="是否新增场景")
     new_scenario_level: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="新增场景级别")
+    remark: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="备注")
+    # AI 解读写入的行带源政策 ID；手工录入、导入的为空。重新解读同一条政策时按它清掉没人动过的旧行。
+    source_content_id: Mapped[str | None] = mapped_column(String(200), nullable=True, index=True, comment="源政策ID")
+    tagged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, comment="AI解读时间")
+    scenario_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="新增场景同步进码表的时间"
+    )
     data_status: Mapped[str] = mapped_column(
         String(16), nullable=False, default="待验证", server_default="待验证", comment="数据状态"
     )
@@ -191,6 +207,8 @@ INTERPRETATION_WRITE_FIELDS = (
     "scenario_l2_name",
     "scenario_l3_name",
     "target_customers",
+    "adapted_products",
+    "purchase_reason",
     "opportunity_type",
     "policy_summary",
     "has_subsidy",
@@ -199,5 +217,6 @@ INTERPRETATION_WRITE_FIELDS = (
     "info_level",
     "is_new_scenario",
     "new_scenario_level",
+    "remark",
     "data_status",
 )
