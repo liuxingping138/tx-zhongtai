@@ -166,6 +166,8 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/` �
 - 流式接口都在 `/api/v1/ai/stream/*`：网关对这个前缀不挂压缩和请求缓冲（buffering 会把整段回答攒满才下发），
   新加流式接口必须放在这个前缀下，`test_stream_routes_live_under_the_unbuffered_prefix` 会拦
 - 模板附件和批量产物在 `ai-data` 卷（`/data/ai`），不在库里；业务备份脚本会一起打包
+- 旧打表系统的模板和批量历史用 `python -m app.cli.import_legacy <导出目录> [--update] [--dry-run]` 导入，保留原 ID，可重复跑；
+  `--update` 用旧库最新内容覆盖：模板只覆盖导入后没在新系统里保存过的，任务除排队中、运行中的都覆盖。导出目录结构见 `app/application/legacy_import.py`
 - 对话和试发的内容不进审计，只记谁对哪个模板、哪个任务做了什么。多轮对话的上下文由模型服务端按 response_id 保存，本服务不存
 
 ### 系统管理：给人分配角色即授权
@@ -187,11 +189,11 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/` �
 
 业务写操作调 `enqueue_event(...)` 写本服务的 `*_outbox` 表（与业务同事务），
 再由 worker 投递到 audit-service。失败按指数退避重试，超上限置 dead，可用 `make outbox-replay` 重放
-（覆盖 iam/policy/codebook，`OUTBOX_SERVICES=policy-service` 只跑一个）。
+（覆盖 iam/policy/codebook/ai，`OUTBOX_SERVICES=policy-service` 只跑一个）。
 
 认领时置 delivering 并写 `lease_until`，回写只在租约没被别人重新认领时生效。进程在投递途中重启，
 租约到期后会被重新认领，不会永远卡在 delivering。IAM 默认租约 30 秒（`IAM_WORKER_LEASE_SECONDS`）；
-policy / codebook 走公共 Outbox，默认 5 分钟。审计服务按 `event_id` 去重，重投不重复入库。
+policy / codebook / ai 走公共 Outbox，默认 5 分钟。审计服务按 `event_id` 去重，重投不重复入库。
 
 `audit_events` 对审计服务的应用账号只有 SELECT/INSERT，删改权被收回；到期清理用独立的清理账号
 （`make migrate` 里 `provision-audit-cleanup` + `app.cli.grant_cleanup` 负责授权）。
@@ -212,7 +214,7 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
 
 Traefik 文件 Provider（非 Docker Provider）。路由优先级：
 具体业务前缀（100）> 未接入业务的 `/api/v1` 兜底 404（50）> 前端 SPA 兜底（1）。
-`/health/*`、`/internal/*` 未声明路由，不对外暴露。全部路由挂了 `compress` 中间件，
+`/health/*`、`/internal/*` 未声明路由，不对外暴露。除 `/api/v1/ai/stream`（优先级 110）外全部路由挂了 `compress` 中间件，
 xlsx/zip/图片在 `excludedContentTypes` 里排除。
 
 ## 硬性开发约定

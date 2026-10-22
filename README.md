@@ -7,6 +7,7 @@
 | 政策 | 信源、基础标签、解读，支持 Excel 导入导出 |
 | 码表管理 | 政策类型、行业场景、省市区编码 |
 | 爬虫监测 | 按网站统计采集情况的只读页面，数据每天从外部爬虫库同步汇总 |
+| AI提问 | 提问配置、按 Excel 逐行批量提问、多轮对话、模型配置 |
 | 系统管理 | 用户、角色与权限、操作日志、任务调度 |
 
 客户、招投标还没有开发，只有占位目录。产品名称统一为「业务数据运营平台」，仓库、包名和部署标识沿用 `tx-zhongtai`。
@@ -39,6 +40,7 @@ tx-zhongtai/
 │   ├── audit-service/         # 操作日志的写入、查询与到期清理
 │   ├── policy-service/        # 政策、爬虫监测、任务调度；policy-worker 共用此镜像
 │   ├── codebook-service/      # 码表
+│   ├── ai-service/            # AI提问；ai-worker 共用此镜像执行批量任务
 │   ├── customer-service/      # 占位
 │   └── tender-service/        # 占位
 ├── packages/platform-common/  # 跨服务公共包：响应与异常、鉴权、Outbox、审计、Excel、筛选等

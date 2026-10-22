@@ -19,7 +19,7 @@
 
 ## 导航接入
 
-顶部只展示当前账号可见的一级模块，左侧只展示当前模块的子菜单。一级模块顺序只由 iam 菜单 `sort_order` 决定（系统管理、政策、码表管理），前端不要再排序；根地址进入首个可见模块，无菜单沿用空权限页，不提供工作台。新增页面需登记路由及 `router/menu.ts`，并在 `layouts/workspace.ts` 配置用途说明和独立语义图标；统一 Element Plus Icons、17px、继承菜单颜色，禁止按父模块复用同一个图标。详情页用 `meta.menuPath` 关联所属列表。标志使用 `assets/brand/telelands-logo.svg`，不重绘或改变比例。
+顶部只展示当前账号可见的一级模块，左侧只展示当前模块的子菜单。一级模块顺序只由 iam 菜单 `sort_order` 决定（系统管理、政策、码表管理、AI提问），前端不要再排序；根地址进入首个可见模块，无菜单沿用空权限页，不提供工作台。新增页面需登记路由及 `router/menu.ts`，并在 `layouts/workspace.ts` 配置用途说明和独立语义图标；统一 Element Plus Icons、17px、继承菜单颜色，禁止按父模块复用同一个图标。详情页用 `meta.menuPath` 关联所属列表。标志使用 `assets/brand/telelands-logo.svg`，不重绘或改变比例。
 
 顶栏76px，品牌/侧栏共用216px（1100px及以下200px）。账号固定左下角。基础色与宽高 token 由 theme.css 管理；外壳/列表适配由 workspace.css 管理，不新增页面专属基础色板。不存在设计预览分支；旧预览 URL 会清理参数并进入正式界面。
 
@@ -64,13 +64,14 @@
 
 | 路由 | 默认/全部数据列数量 |
 |---|---|
-| `/policy/sources` | 16/16（表格列 13 + 省市区编码 3） |
+| `/policy/sources` | 19/19（表格列 16 + 省市区编码 3） |
 | `/policy/base-tags` | 20/20 |
-| `/policy/interpretations` | 27/27（表格列 26，含数据状态 + 租户标识） |
+| `/policy/interpretations` | 27/27（表格列 26，含数据状态；+ 租户标识 1） |
 | `/codebook/policy-types` | 7/7 |
 | `/codebook/scenarios` | 35/35 |
 | `/codebook/area-codes` | 15/15 |
 | `/policy/crawler-monitoring` | 8/8（只读，无编辑表单） |
+| `/ai/models` | 21/21 |
 
 ColumnPicker 按用户ID和route.path保存字段键（存储键 `zt:columns:v2:…`）；更早一版存储里的系统核心列默认自动迁移为全部，真实自定义选择保留。新模块无须传 legacyDefaults；六个业务表页保留该参数仅用于旧偏好迁移。
 
@@ -171,7 +172,7 @@ ColumnPicker 按用户ID和route.path保存字段键（存储键 `zt:columns:v2:
 
 ## 工作台页面（AI提问）
 
-`frontend/src/modules/ai/`：提问配置、批量提问、多轮对话不是字段列表，不套 `ListPage`。页面占满内容区高度（`calc(100dvh - var(--workspace-header-height) - 48px)`），由白底细边框面板（`shared/ai.css` 的 `.ai-panel`）左右分栏，1200px 及以下改为上下排、整页滚动；页面标题只给读屏（`.ai-sr-only`）。
+`frontend/src/modules/ai/`：提问配置、批量提问、多轮对话不是字段列表，不套 `ListPage`，内容放在白底细边框面板（`shared/ai.css` 的 `.ai-panel`）里；页面标题只给读屏（`.ai-sr-only`）。提问配置占满内容区高度（`calc(100dvh - var(--workspace-header-height) - 48px)`），左右分栏，1200px 及以下改为上下排、整页滚动；批量提问上方左模板列表、右模板详情，历史在下方，整页纵向滚动，1100px 及以下上下排；多轮对话是占满内容区高度的单个对话面板。
 
 - 流式回答统一用 `shared/useAnswerStream.ts`（底层 `api/eventStream.ts`：带令牌和 CSRF、401 续期重试一次、错误还原成中文提示），消息列表 `AnswerTranscript.vue`，用量和费用 `StreamStatsBar.vue`，模型选择 `ModelPicker.vue`（未配密钥的模型可见但不可选）。事件处理是 `shared/streamEvents.ts` 里的纯函数，加新事件先改它和单测。
 - 下载走 `shared/downloads.ts`（底层 `downloadFile`），不放在 `api/ai.ts`：契约测试会逐个调用 api 目录导出的函数。
