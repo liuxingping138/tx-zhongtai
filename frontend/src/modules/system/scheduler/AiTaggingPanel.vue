@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 
-import { aiTaggingOverview, listAiTaggingRuns, updateAiTaggingConfig, type AiTaggingOverview, type AiTaggingRun } from '@/api/aiTagging'
+import { aiTaggingOverview, listAiTaggingRuns, updateAiTaggingConfig, type AiTaggingConfig, type AiTaggingOverview, type AiTaggingRun } from '@/api/aiTagging'
 import { errorMessage } from '@/api/errors'
 import AiTaggingBilling from './AiTaggingBilling.vue'
 import { formatYuan, runStatusText, runStatusType } from './aiTagging'
@@ -48,7 +48,7 @@ async function load(quiet = false): Promise<void> {
     overview.value = data
     runs.value = history.items
     total.value = history.total
-    if (!quiet || !saving.value) Object.assign(form, { ...data.config })
+    if (!quiet || !saving.value) fillForm(data.config)
     loadError.value = ''
     // 账单页签开着时一起刷新，跑完一批能马上看到当天的费用。
     if (tab.value === 'billing') await billingView.value?.load()
@@ -57,6 +57,12 @@ async function load(quiet = false): Promise<void> {
   } finally {
     loading.value = false
   }
+}
+
+/** 只取可编辑的字段：配置里还带着读取进度、更新人等只读字段，原样提交会被后端当成多余参数拒掉。 */
+function fillForm(config: AiTaggingConfig): void {
+  const { type_prompt_id, interpret_prompt_id, opportunity_prompt_id, batch_size, content_max_chars, daily_cost_limit, cursor_date, version } = config
+  Object.assign(form, { type_prompt_id, interpret_prompt_id, opportunity_prompt_id, batch_size, content_max_chars, daily_cost_limit, cursor_date, version })
 }
 
 /** 0 = 全文；切到截取时给个常用的起点，再按需调。 */
@@ -123,10 +129,12 @@ async function turnPage(next: number): Promise<void> {
       :closable="false"
       show-icon
     />
+    <!-- novalidate：数字框的合法值是「最小值 + 步长的整数倍」（1、11、21…），浏览器会静默拦下 10、1000 这类提交；范围由后端校验并给中文提示。 -->
     <el-form
       v-if="overview"
       class="ai-tagging__form"
       label-position="top"
+      novalidate
       :disabled="!props.canManage || saving"
       @submit.prevent="save"
     >
@@ -154,7 +162,7 @@ async function turnPage(next: number): Promise<void> {
           v-model="form.batch_size"
           :min="1"
           :max="20000"
-          :step="100"
+          :step="10"
           controls-position="right"
         />
         <span class="ai-tagging__hint">一次执行读这么多条源政策；先用几十条试跑</span>
