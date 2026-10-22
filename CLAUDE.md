@@ -17,6 +17,7 @@ AI提问已接入（独立的 ai-service：提示词模板、按 Excel 逐行批
 ## 常用命令
 
 当前运行环境是 `https://1.119.196.77`（8091 HTTP 自动跳转）。在 Mac 上改代码并推送到 GitLab，再用 `scripts/sync-to-server.sh` 同步到服务器构建。不要在服务器 `git pull`，不要在本机 `make dev-up`。步骤见 `docs/guides/部署与维护.md`。
+服务器 `.env` 是 `ENVIRONMENT=production`：新增内部密钥类变量（compose 里默认 `dev-only-…`）必须先写进服务器 `.env`，否则服务拒绝启动。
 
 ```bash
 make check            # 质量门：Python ruff+mypy，前端 type-check+build+lint，范围与密钥扫描，文件行数与忽略注释原因
