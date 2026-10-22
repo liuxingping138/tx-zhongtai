@@ -91,6 +91,17 @@ async def daily(session: AsyncSession, date_from: date, date_to: date) -> dict[s
 
     since, until = _bounds(date_from, date_to)
     rows = await repo.daily(session, since, until)
+    names = await repo.model_names(session)
+    merged: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for row in rows:
+        # 同一个模型 ID 一律用模型配置里的当前名字；配置里没有的用任务上记的名字。
+        model = names.get(row["model_id"]) or row["model_name"] or row["model_id"]
+        key = (str(row["day"]), model, row["purpose"])
+        if key in merged:
+            for field in ("calls", "input_tokens", "output_tokens", "cost"):
+                merged[key][field] = (merged[key][field] or 0) + (row[field] or 0)
+        else:
+            merged[key] = {**row, "model": model}
     items = [
         {
             "day": str(row["day"]),
@@ -101,7 +112,7 @@ async def daily(session: AsyncSession, date_from: date, date_to: date) -> dict[s
             "output_tokens": int(row["output_tokens"] or 0),
             "cost": str(Decimal(row["cost"] or 0)),
         }
-        for row in rows
+        for row in merged.values()
     ]
     items.sort(key=lambda item: (item["day"], item["model"], item["purpose"]))
     return {"date_from": date_from.isoformat(), "date_to": date_to.isoformat(), "items": items}

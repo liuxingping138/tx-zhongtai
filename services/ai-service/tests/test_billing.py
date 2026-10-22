@@ -66,19 +66,26 @@ async def test_daily_checks_the_range_and_formats_rows(monkeypatch: pytest.Monke
     async def daily(_session: Any, since: datetime, until: datetime) -> list[dict[str, Any]]:
         seen.append((since, until))
         return [
-            {"day": date(2026, 10, 22), "model": "B", "purpose": "试发", "calls": 2, "input_tokens": 10,
-             "output_tokens": 5, "cost": Decimal("0.010000")},
-            {"day": date(2026, 10, 21), "model": "A", "purpose": "批量提问", "calls": 1, "input_tokens": None,
-             "output_tokens": None, "cost": None},
+            {"day": date(2026, 10, 22), "model_id": "b", "model_name": "旧名", "purpose": "试发", "calls": 2,
+             "input_tokens": 10, "output_tokens": 5, "cost": Decimal("0.010000")},
+            {"day": date(2026, 10, 22), "model_id": "b2", "model_name": "B", "purpose": "试发", "calls": 1,
+             "input_tokens": 1, "output_tokens": 1, "cost": Decimal("0.001000")},
+            {"day": date(2026, 10, 21), "model_id": "gone", "model_name": "A", "purpose": "批量提问", "calls": 1,
+             "input_tokens": None, "output_tokens": None, "cost": None},
         ]  # fmt: skip
 
     monkeypatch.setattr(billing.repo, "daily", daily)
+
+    async def names(_session: Any) -> dict[str, str]:
+        return {"b": "B"}  # 改过名的模型用当前名字；配置里没有的 gone 用任务上记的名字
+
+    monkeypatch.setattr(billing.repo, "model_names", names)
     data = await billing.daily(None, date(2026, 10, 21), date(2026, 10, 22))  # type: ignore[arg-type]
     # 北京时间 10-21 零点到 10-23 零点。
     assert seen == [(datetime(2026, 10, 20, 16, tzinfo=UTC), datetime(2026, 10, 22, 16, tzinfo=UTC))]
     assert [(item["day"], item["model"], item["cost"], item["input_tokens"]) for item in data["items"]] == [
         ("2026-10-21", "A", "0", 0),
-        ("2026-10-22", "B", "0.010000", 10),
+        ("2026-10-22", "B", "0.011000", 11),
     ]
     with pytest.raises(ApiError, match="开始日期不能晚于结束日期"):
         await billing.daily(None, date(2026, 10, 22), date(2026, 10, 21))  # type: ignore[arg-type]

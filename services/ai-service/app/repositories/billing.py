@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import case, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.models import CALL_CHAT, RUN_SOURCE_PIPELINE, BatchRun, CallUsage
+from app.domain.models import CALL_CHAT, RUN_SOURCE_PIPELINE, AiModel, BatchRun, CallUsage
 
 # 页面上「用途」的写法：手动的批量提问统称「批量提问」，定时任务发起的写发起方（如「政策AI打标·类型判断」）。
 BATCH_PURPOSE = "批量提问"
@@ -25,7 +25,11 @@ def _day(column: Any) -> Any:
 
 
 async def daily(session: AsyncSession, since: datetime, until: datetime) -> list[dict[str, Any]]:
-    """[since, until) 之间每天、每个模型、每种用途的次数、token 和费用。批量任务按发起时间算在那一天。"""
+    """[since, until) 之间每天、每个模型、每种用途的次数、token 和费用。批量任务按发起时间算在那一天。
+
+    按模型 ID 分组：任务上记的是发起当时的模型名，改过名（或旧系统导入）的同一个模型名字不一样。
+    model_name 只是模型配置里已经没有这个 ID 时的备用名字。
+    """
 
     batch_purpose = case(
         (BatchRun.source == RUN_SOURCE_PIPELINE, BatchRun.created_by_name), else_=literal(BATCH_PURPOSE)
@@ -34,7 +38,8 @@ async def daily(session: AsyncSession, since: datetime, until: datetime) -> list
     batches = (
         select(
             batch_day,
-            BatchRun.model_name.label("model"),
+            BatchRun.model_id.label("model_id"),
+            func.max(BatchRun.model_name).label("model_name"),
             batch_purpose,
             func.count().label("calls"),
             func.sum(BatchRun.input_tokens).label("input_tokens"),
@@ -42,7 +47,7 @@ async def daily(session: AsyncSession, since: datetime, until: datetime) -> list
             func.sum(BatchRun.inference_cost + BatchRun.search_cost).label("cost"),
         )
         .where(BatchRun.created_at >= since, BatchRun.created_at < until)
-        .group_by(batch_day, BatchRun.model_name, batch_purpose)
+        .group_by(batch_day, BatchRun.model_id, batch_purpose)
     )
     call_purpose = case(
         *((CallUsage.kind == kind, literal(name)) for kind, name in CALL_PURPOSES.items()),
@@ -52,7 +57,8 @@ async def daily(session: AsyncSession, since: datetime, until: datetime) -> list
     calls = (
         select(
             call_day,
-            CallUsage.model_name.label("model"),
+            CallUsage.model_id.label("model_id"),
+            func.max(CallUsage.model_name).label("model_name"),
             call_purpose,
             func.count().label("calls"),
             func.sum(CallUsage.input_tokens).label("input_tokens"),
@@ -60,9 +66,15 @@ async def daily(session: AsyncSession, since: datetime, until: datetime) -> list
             func.sum(CallUsage.inference_cost + CallUsage.search_cost).label("cost"),
         )
         .where(CallUsage.created_at >= since, CallUsage.created_at < until)
-        .group_by(call_day, CallUsage.model_name, call_purpose)
+        .group_by(call_day, CallUsage.model_id, call_purpose)
     )
     rows: list[dict[str, Any]] = []
     for statement in (batches, calls):
         rows.extend(dict(row._mapping) for row in await session.execute(statement))
     return rows
+
+
+async def model_names(session: AsyncSession) -> dict[str, str]:
+    """模型配置里的当前名字。模型只停用不删除，历史任务的模型基本都在。"""
+
+    return {row.id: row.name for row in await session.execute(select(AiModel.id, AiModel.name))}
