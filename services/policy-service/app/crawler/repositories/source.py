@@ -1,54 +1,15 @@
-"""爬虫库（MySQL，前面挂 ShardingSphere 代理）的只读连接。只有同步 CLI 使用，服务进程不连。"""
+"""爬虫监测读的采集总表在 crawler2021 库。连接和瞬时错误重试在 app.common.mysql_source。"""
 
 from __future__ import annotations
 
-import logging
-import time
-from collections.abc import Callable
-from functools import wraps
-
 import pymysql
 
+from app.common.mysql_source import mysql_connect as connect_database
+from app.common.mysql_source import retry_mysql_read
 from app.core.config import get_settings
 
-logger = logging.getLogger("policy.crawler_source")
-
-# 只重试瞬时连接错误：连不上、连接中断、读超时。认证失败和 SQL 错误重试也没用。
-_TRANSIENT_ERRORS = {2002, 2003, 2006, 2013, 2055}
-_MAX_ATTEMPTS = 3
-
-
-def retry_mysql_read[**P, R](operation: Callable[P, R]) -> Callable[P, R]:
-    """只重试瞬时连接错误；每次重新连接，认证和 SQL 错误立即失败。"""
-
-    @wraps(operation)
-    def read(*args: P.args, **kwargs: P.kwargs) -> R:
-        for attempt in range(1, _MAX_ATTEMPTS + 1):
-            try:
-                return operation(*args, **kwargs)
-            except pymysql.err.OperationalError as exc:
-                if not exc.args or exc.args[0] not in _TRANSIENT_ERRORS or attempt == _MAX_ATTEMPTS:
-                    raise
-                logger.warning("source_read_retry operation=%s attempt=%s", operation.__name__, attempt)
-                time.sleep(2 ** (attempt - 1))
-        raise AssertionError("unreachable")
-
-    return read
+__all__ = ["mysql_connect", "retry_mysql_read"]
 
 
 def mysql_connect() -> pymysql.connections.Connection:
-    settings = get_settings()
-    if not settings.crawler_mysql_host:
-        raise RuntimeError("未配置 POLICY_CRAWLER_MYSQL_HOST，无法同步爬虫数据")
-    return pymysql.connect(
-        host=settings.crawler_mysql_host,
-        port=settings.crawler_mysql_port,
-        user=settings.crawler_mysql_user,
-        password=settings.crawler_mysql_password,
-        database=settings.crawler_mysql_db,
-        charset="utf8mb4",
-        cursorclass=pymysql.cursors.DictCursor,
-        connect_timeout=30,
-        # 批量导入日单天可达数十万行，实测单日聚合最长约 7 分钟，留足余量。
-        read_timeout=1200,
-    )
+    return connect_database(get_settings().crawler_mysql_db)

@@ -17,6 +17,15 @@ async def list_all(session: AsyncSession, *, categories: Collection[str]) -> lis
     return list(result)
 
 
+async def list_online(session: AsyncSession, *, category: str) -> list[PromptTemplate]:
+    result = await session.scalars(
+        select(PromptTemplate)
+        .where(PromptTemplate.category == category, PromptTemplate.release_id.is_not(None))
+        .order_by(PromptTemplate.title)
+    )
+    return list(result)
+
+
 async def get(session: AsyncSession, prompt_id: str, *, lock: bool = False) -> PromptTemplate | None:
     statement = select(PromptTemplate).where(PromptTemplate.id == prompt_id)
     if lock:

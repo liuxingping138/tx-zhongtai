@@ -16,6 +16,7 @@ from platform_common.request_context import RequestIdMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
 from app.api.batch_runs import router as batch_runs_router
+from app.api.internal import router as internal_router
 from app.api.model_configs import router as model_configs_router
 from app.api.prompts import router as prompts_router
 from app.api.security import get_authz_client
@@ -66,6 +67,7 @@ def create_app() -> FastAPI:
     app.include_router(batch_runs_router)
     app.include_router(model_configs_router)
     app.include_router(stream_router)
+    app.include_router(internal_router)
     return app
 
 

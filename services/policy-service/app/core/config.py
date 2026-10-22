@@ -52,11 +52,21 @@ class Settings(BaseServiceSettings):
     crawler_health_normal_days: int = 7
     crawler_health_watch_days: int = 30
 
+    # 政策 AI 打标：源数据在同一 MySQL 实例的 bid_analyse 库（政策表 + 正文表），只读。
+    policy_source_db: str = "bid_analyse"
+    # 调 ai-service 用上线模板跑批、调 codebook-service 取码表，都走对方的 /internal/ 接口。
+    ai_base_url: str = "http://ai-service:8005"
+    ai_service_secret: str = ""
+    codebook_base_url: str = "http://codebook-service:8003"
+    codebook_service_secret: str = ""
+    internal_timeout_seconds: float = 30.0
+
     @model_validator(mode="after")
     def _reject_demo_secrets_in_production(self) -> Settings:
         if self.environment == Environment.PRODUCTION:
             markers = ("dev-", "example", "changeme", "test-secret", "p6-only")
-            for token in (self.iam_service_secret, self.audit_ingest_secret):
+            internal = (self.ai_service_secret, self.codebook_service_secret)
+            for token in (self.iam_service_secret, self.audit_ingest_secret, *internal):
                 if token and any(marker in token.lower() for marker in markers):
                     raise ValueError("生产环境内部调用密钥看起来是示例值，拒绝启动")
         return self

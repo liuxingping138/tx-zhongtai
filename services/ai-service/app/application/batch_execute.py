@@ -42,7 +42,7 @@ from app.core import storage
 from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.core.llm import stream_responses
-from app.domain.llm_models import LlmModel, build_body, calc_costs
+from app.domain.llm_models import LlmModel, build_body, calc_costs, with_service_tier
 from app.domain.models import RUN_CANCELLED, RUN_DONE, RUN_FAILED, RUN_INTERRUPTED, BatchRun
 from app.domain.templating import build_myid, fill_template, parse_fields, split_fields
 from app.repositories import batch_runs as repo
@@ -67,6 +67,8 @@ class Job:
     # 续跑前失败的结果：重问后被新结果替换；中途停止没轮到的行仍用它出现在结果里。
     previous: dict[str, RowResult] = field(default_factory=dict)
     stop: asyncio.Event = field(default_factory=asyncio.Event)
+    # 不是用户点停止、而是任务自己停的原因（如到了费用上限），写进任务的错误信息。
+    stop_reason: str = ""
     input_tokens: int = 0
     output_tokens: int = 0
     search_calls: int = 0
@@ -154,6 +156,11 @@ async def _record(job: Job, result: RowResult) -> None:
     inference, search = calc_costs(job.model, result.input_tokens, result.output_tokens, result.search_calls, utcnow())
     job.inference_cost += inference
     job.search_cost += search
+    limit = job.run.cost_limit
+    if limit is not None and job.inference_cost + job.search_cost >= limit and not job.stop.is_set():
+        # 在途的几行仍会返回并计费，所以实际花费会略超上限，超出部分不超过并发数那几行。
+        job.stop_reason = f"达到本批费用上限 {limit:.2f} 元，已停止提交新的提问"
+        job.stop.set()
     head = f"[{len(job.results)}/{len(job.rows)}] {result.myid}"
     tries = f" 尝试={result.attempts}次" if result.attempts > 1 else ""
     if result.error:
@@ -208,7 +215,7 @@ async def _load(run: BatchRun) -> Job:
         config = await model_configs.find(session, run.model_id)
     if config is None:
         raise RuntimeError(f"未知模型：{run.model_id}")
-    model = model_configs.to_model(config)
+    model = with_service_tier(model_configs.to_model(config), run.service_tier)
     excel = storage.run_dir(run.id) / storage.PROMPT_FILES["excel"]
     if not await anyio.Path(excel).is_file():
         raise RuntimeError("任务的 Excel 快照不存在")
@@ -328,4 +335,4 @@ async def execute(run_id: str) -> None:
         await _finish(job, RUN_FAILED, f"执行失败：{exc}"[:ERROR_MAX])
         return
     stopped_early = job.stop.is_set() and len(job.results) < len(job.rows)
-    await _finish(job, RUN_CANCELLED if stopped_early else RUN_DONE)
+    await _finish(job, RUN_CANCELLED if stopped_early else RUN_DONE, job.stop_reason if stopped_early else "")

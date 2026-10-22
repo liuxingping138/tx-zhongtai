@@ -32,6 +32,8 @@ RUN_FAILED = "failed"
 RUN_CANCELLED = "cancelled"
 RUN_INTERRUPTED = "interrupted"
 ACTIVE_STATUSES = (RUN_QUEUED, RUN_RUNNING, RUN_STOPPING)
+RUN_SOURCE_MANUAL = "manual"
+RUN_SOURCE_PIPELINE = "pipeline"
 
 
 class PromptTemplate(Base):
@@ -172,6 +174,15 @@ class BatchRun(Base):
     )
     created_by_id: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="发起人ID")
     created_by_name: Mapped[str] = mapped_column(String(128), nullable=False, default="", comment="发起人")
+    # 流水线（政策服务定时打标）发起的任务：用上线版本、按低优档跑，并带费用上限。页面上手动发起的是 manual。
+    source: Mapped[str] = mapped_column(
+        String(16), nullable=False, default=RUN_SOURCE_MANUAL, server_default=RUN_SOURCE_MANUAL, comment="发起来源"
+    )
+    release_no: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="上线版本号")
+    service_tier: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="", server_default="", comment="服务档位"
+    )
+    cost_limit: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True, comment="费用上限(元)")
 
 
 class WorkerHeartbeat(Base):

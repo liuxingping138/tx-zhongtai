@@ -15,6 +15,7 @@ from platform_common.logging_setup import get_logger, setup_logging
 from platform_common.request_context import RequestIdMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
+from app.aitag.api.ai_tagging import router as ai_tagging_router
 from app.common.audit_emit import outbox_loop
 from app.common.security import get_authz_client
 from app.core.config import get_settings
@@ -64,6 +65,7 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
     app.include_router(build_health_router({"database": check_database_ready}))
     app.include_router(scheduler_router)
+    app.include_router(ai_tagging_router)
     app.include_router(sources_router)
     app.include_router(base_tags_router)
     app.include_router(crawler_monitoring_router)

@@ -13,6 +13,8 @@ from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from app.aitag.application.tagging import run_batch as run_policy_tagging
+from app.common.errors import UserFacingError
 from app.core.database import SessionLocal, engine
 from app.crawler.application.crawler_sync import run as run_crawler_sync
 from app.scheduler.application.jobs import (
@@ -23,12 +25,11 @@ from app.scheduler.application.jobs import (
     sync_result,
 )
 from app.scheduler.domain.models import ScheduledRun, SchedulerHeartbeat
-from app.scheduler.domain.scheduling import LEADER_LOCK, MAX_ATTEMPTS, retry_delay
+from app.scheduler.domain.scheduling import LEADER_LOCK, MAX_ATTEMPTS, TIMEOUTS, retry_delay
 
 logger = logging.getLogger("policy.scheduler")
 POLL_SECONDS = 5
 HEARTBEAT_SECONDS = 10
-TIMEOUT_SECONDS = 1800
 
 
 def fail_run(row: ScheduledRun, message: str, now: datetime) -> None:
@@ -63,6 +64,9 @@ async def claim_next() -> tuple[uuid.UUID, str, uuid.UUID] | None:
 
 
 async def execute_sync(code: str, sync_id: uuid.UUID) -> None:
+    if code == "policy_ai":
+        await run_policy_tagging(sync_id)
+        return
     # 空库不自动跑短窗口、也不自动全量回填，要求已有成功水位。
     async with SessionLocal() as session:
         if await latest_watermark(session, code) is None:
@@ -73,9 +77,12 @@ async def execute_sync(code: str, sync_id: uuid.UUID) -> None:
         raise RuntimeError("未知任务，拒绝执行")
 
 
-def safe_error(exc: Exception) -> str:
+def safe_error(exc: Exception, code: str = "crawler") -> str:
     if isinstance(exc, TimeoutError):
-        return "同步超过 30 分钟，已中止本次执行，请检查源库连接和同步范围"
+        minutes = int(TIMEOUTS.get(code, 1800) // 60)
+        return f"执行超过 {minutes} 分钟，已中止本次执行，请检查源库连接和执行范围"
+    if isinstance(exc, UserFacingError):
+        return str(exc)[:300]
     # 不把连接串、SQL 参数或凭据透传到页面。
     if isinstance(exc, RuntimeError) and str(exc).startswith(("尚未建立同步水位", "已有爬虫", "未知任务")):
         return str(exc)[:300]
@@ -86,9 +93,9 @@ async def execute_claim(claim: tuple[uuid.UUID, str, uuid.UUID]) -> None:
     run_id, code, sync_id = claim
     error = None
     try:
-        await asyncio.wait_for(execute_sync(code, sync_id), timeout=TIMEOUT_SECONDS)
+        await asyncio.wait_for(execute_sync(code, sync_id), timeout=TIMEOUTS.get(code, 1800))
     except Exception as exc:  # noqa: BLE001  任何同步失败都要落到执行记录并按策略重试，不能让 worker 退出
-        error = safe_error(exc)
+        error = safe_error(exc, code)
         logger.warning("scheduled_sync_failed job=%s run=%s reason=%s", code, run_id, error)
     # CancelledError 留给进程退出后的 recover_interrupted。超时会进上面的 Exception。
     async with SessionLocal() as session:

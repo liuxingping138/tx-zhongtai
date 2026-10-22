@@ -10,6 +10,7 @@ import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import ListPage from '@/components/ListPage.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
 import type { DataColumn } from '@/components/dataColumns'
+import AiTaggingPanel from './AiTaggingPanel.vue'
 import SchedulerHistoryDrawer from './SchedulerHistoryDrawer.vue'
 import { STATUS_TEXT, statusType, type RunStatus } from './runStatus'
 import { useSchedulerHistory } from './useSchedulerHistory'
@@ -55,7 +56,10 @@ async function load(quiet = false) {
 }
 async function execute(job: ScheduledJob) {
   if (pending.value) return
-  const ok = await ElMessageBox.confirm(`按上次成功水位补齐「${job.name}」的数据，不改变每日计划。`, '立即执行增量同步？',
+  const [message, title] = job.code === 'policy_ai'
+    ? ['按下方设置从读取进度往后读一批源政策，用上线模板判断政策类型并写入基础标签，会产生模型费用（按每日上限封顶）。', '立即执行一批 AI 打标？']
+    : [`按上次成功水位补齐「${job.name}」的数据，不改变每日计划。`, '立即执行增量同步？']
+  const ok = await ElMessageBox.confirm(message, title,
     { confirmButtonText: '开始执行', cancelButtonText: '取消', type: 'info' }).then(() => true, () => false)
   if (!ok) return
   pending.value = job.code
@@ -278,6 +282,10 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
         </el-button>
       </template>
     </el-dialog>
+    <AiTaggingPanel
+      v-if="overview?.items.some(item => item.code === 'policy_ai')"
+      :can-manage="canManage"
+    />
     <SchedulerHistoryDrawer :history="history" />
   </div>
 </template>

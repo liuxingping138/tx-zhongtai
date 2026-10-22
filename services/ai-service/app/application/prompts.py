@@ -96,6 +96,10 @@ async def list_prompts(session: AsyncSession, access: CategoryAccess) -> list[di
     return [to_dict(item, names, access, releases.get(item.release_id or "")) for item in items]
 
 
+async def online(session: AsyncSession, category: str) -> list[PromptTemplate]:
+    return await repo.list_online(session, category=category)
+
+
 async def require(session: AsyncSession, prompt_id: str, *, lock: bool = False) -> PromptTemplate:
     template = await repo.get(session, prompt_id, lock=lock) if storage.ID_PATTERN.fullmatch(prompt_id) else None
     if template is None:

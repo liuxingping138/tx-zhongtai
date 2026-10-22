@@ -54,7 +54,11 @@ const { job, visible, records, loading, error, page, total, load } = props.histo
               <p v-if="row.status === 'retrying'">
                 下次重试：{{ formatTime(row.available_at) }}
               </p>
-              <template v-if="row.result">
+              <template v-if="row.result && row.job_code === 'policy_ai'">
+                <p>{{ row.result.note || '—' }}</p>
+                <p>读取进度：{{ row.result.source_from || '—' }} → {{ row.result.source_to || '—' }} · 费用 ¥{{ Number(row.result.cost ?? 0).toFixed(4) }}</p>
+              </template>
+              <template v-else-if="row.result">
                 <p>处理日期：{{ row.result.date_from || '—' }} 至 {{ row.result.date_to || '—' }}</p>
                 <p>数据更新至：{{ formatTime(row.result.watermark) }}</p>
                 <p v-if="row.result.days_synced !== undefined">

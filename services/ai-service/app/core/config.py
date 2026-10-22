@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from platform_common.config import BaseServiceSettings, Environment
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import SettingsConfigDict
 
 
@@ -28,6 +28,8 @@ class Settings(BaseServiceSettings):
     codebook_base_url: str = "http://codebook-service:8003"
     codebook_service_secret: str = ""
     codebook_timeout_seconds: float = 10.0
+    # 允许调用 /internal/ 接口的服务及其密钥，如 {"policy-service": "..."}。
+    internal_caller_secrets: dict[str, str] = Field(default_factory=dict)
     worker_poll_interval_seconds: float = 2.0
     worker_max_attempts: int = 8
 
@@ -51,7 +53,8 @@ class Settings(BaseServiceSettings):
     def _reject_demo_secrets_in_production(self) -> Settings:
         if self.environment == Environment.PRODUCTION:
             markers = ("dev-", "example", "changeme", "test-secret", "p6-only")
-            for token in (self.iam_service_secret, self.audit_ingest_secret, self.codebook_service_secret):
+            secrets = (self.iam_service_secret, self.audit_ingest_secret, self.codebook_service_secret)
+            for token in (*secrets, *self.internal_caller_secrets.values()):
                 if token and any(marker in token.lower() for marker in markers):
                     raise ValueError("生产环境内部调用密钥看起来是示例值，拒绝启动")
         return self

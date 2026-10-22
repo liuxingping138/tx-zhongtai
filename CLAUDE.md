@@ -211,12 +211,24 @@ policy / codebook / ai 走公共 Outbox，默认 5 分钟。审计服务按 `eve
 
 系统管理的任务调度页面 `/system/scheduler` 使用政策服务接口 `/api/v1/policy/scheduled-jobs`，
 资源 `system.scheduler` 归属 `policy-service`；READ 可查看，FULL 可设置计划和手动执行。
-`policy-worker` 独立容器持 PostgreSQL 全局会话锁，按北京时间每日调度任务。目前只有一项：爬虫监测增量同步
-（任务编码 `crawler`，默认 10:10，时刻可在页面改）。
+`policy-worker` 独立容器持 PostgreSQL 全局会话锁，按北京时间每日调度任务。两项：爬虫监测增量同步
+（任务编码 `crawler`，默认 10:10，时刻可在页面改）和政策 AI 打标（`policy_ai`，上线时默认停用、页面手动执行）。
+执行、结果摘要、中断收尾都按任务编码分派（`app/worker/scheduler.py`、`app/scheduler/application/jobs.py`），超时按任务分别设（`TIMEOUTS`）。
 配置、执行队列、重试状态持久化在政策库；重启错过多天只合并一次增量。
 初始化无成功水位时拒绝自动同步，需要先完成历史回填，不能自动退回短窗口。
 worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 internal data 网络会无法连接源库。
 详细规则和验收见 `docs/guides/任务调度.md`。
+
+### 政策 AI 打标：读源库 → 用上线模板跑 → 写政策表
+
+- `app/aitag/`（与 policy、crawler、scheduler 平级）。源数据是同一 MySQL 实例的 `bid_analyse.csys_policy_info` + `csys_policy_info_content`
+  （正文，按 `content_id` 一对一），只读不回写。按采集日逐天读、日内按 `content_id` 分页；读取进度（采集日 + 正文ID）存在
+  `policy_ai_config`，一批写完才前移，费用到上限没跑到的行下批重读
+- 每批调 ai-service 的 `/internal/v1/pipeline-runs`：用模板**上线版本**、低优档、以当日剩余额度为费用上限跑，worker 到上限自停；
+  政策服务轮询到结束再取解析结果。调度超时或进程中断会停掉 ai-service 那边的任务
+- 类型判断结果用系统政策类型码表核对（缺「类」字的旧写法补上能对上就算），写进基础标签：按 `source_content_id` 更新，
+  人工在打标后改过的行不覆盖；失败和没对上码表的写进备注。含「信息化建设类」的标「是否解读 = 是」
+- 内部调用密钥：`AI_POLICY_CALLER_SECRET`（政策→AI）、`CODEBOOK_POLICY_CALLER_SECRET`（政策→码表），compose 把同一个值传给两边
 
 ### 网关
 

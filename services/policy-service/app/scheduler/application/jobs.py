@@ -9,6 +9,7 @@ from platform_common.errors import VersionConflictError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.aitag.application import tagging
 from app.common.audit_emit import enqueue_event
 from app.crawler.domain.models import CrawlerSyncRun
 from app.scheduler.domain.models import ScheduledJob, ScheduledRun, SchedulerHeartbeat
@@ -21,6 +22,10 @@ def run_data(row: ScheduledRun) -> dict[str, Any]:
 
 
 async def latest_watermark(session: AsyncSession, code: str) -> datetime | None:
+    """爬虫增量的成功水位。AI 打标的读取进度在它自己的设置里，这里没有。"""
+
+    if code != "crawler":
+        return None
     watermark: datetime | None = await session.scalar(
         select(CrawlerSyncRun.watermark)
         .where(CrawlerSyncRun.status == "success", CrawlerSyncRun.watermark.is_not(None))
@@ -49,6 +54,9 @@ async def abandon_running_sync(session: AsyncSession, row: ScheduledRun, message
 
     if row.sync_run_id is None:
         return
+    if row.job_code == "policy_ai":
+        await tagging.abandon(row.sync_run_id, message)
+        return
     sync = await session.get(CrawlerSyncRun, row.sync_run_id)
     if sync is None or sync.status != "running":
         return
@@ -58,6 +66,8 @@ async def abandon_running_sync(session: AsyncSession, row: ScheduledRun, message
 
 
 async def sync_result(session: AsyncSession, row: ScheduledRun) -> dict[str, Any] | None:
+    if row.job_code == "policy_ai":
+        return await tagging.summary(row.sync_run_id) or row.result
     sync = await session.get(CrawlerSyncRun, row.sync_run_id) if row.sync_run_id else None
     if sync is None:
         return row.result

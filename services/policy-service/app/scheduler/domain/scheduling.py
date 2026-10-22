@@ -4,7 +4,9 @@ from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 BEIJING = ZoneInfo("Asia/Shanghai")
-JOBS = {"crawler": "爬虫监测增量同步"}
+JOBS = {"crawler": "爬虫监测增量同步", "policy_ai": "政策 AI 打标"}
+# 单次执行的超时：爬虫增量几分钟；AI 打标一批要等模型逐条回答，上千条要一两个小时。
+TIMEOUTS = {"crawler": 1800, "policy_ai": 6 * 3600}
 ACTIVE = ("queued", "running", "retrying")
 MAX_ATTEMPTS = 3
 LEADER_LOCK = 72120260929

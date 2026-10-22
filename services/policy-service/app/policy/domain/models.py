@@ -71,7 +71,10 @@ class Source(Base):
 
 class BaseTag(Base):
     __tablename__ = "policy_base_tags"
-    __table_args__ = {"comment": "政策基础标签表"}
+    __table_args__ = (
+        UniqueConstraint("source_content_id", name="uq_policy_base_tags_source_content_id"),
+        {"comment": "政策基础标签表"},
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid, comment="主键")
     content_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, comment="内容哈希")
@@ -91,6 +94,9 @@ class BaseTag(Base):
     penetrate_score: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="穿透词评分")
     need_interpret: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="是否解读")
     remark: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="备注")
+    # AI 打标写入的行带源政策 ID，重打同一条政策时按它更新，不按内容哈希新增一行。手工导入的行为空。
+    source_content_id: Mapped[str | None] = mapped_column(String(200), nullable=True, comment="源政策ID")
+    tagged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, comment="AI打标时间")
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, comment="版本号")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="入库时间")
     created_by_id: Mapped[str] = mapped_column(String(64), nullable=False, comment="入库人ID")

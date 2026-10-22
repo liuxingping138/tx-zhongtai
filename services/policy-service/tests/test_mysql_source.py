@@ -1,4 +1,4 @@
-"""爬虫库只读连接：只重试瞬时连接错误，且重试有上限。"""
+"""爬虫 MySQL 只读连接：只重试瞬时连接错误，且重试有上限。"""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pymysql
 import pytest
 
-from app.crawler.repositories import source as crawler_source
+from app.common import mysql_source as crawler_source
 
 
 def test_transient_source_disconnect_reconnects_with_bounded_retry(monkeypatch: pytest.MonkeyPatch) -> None:

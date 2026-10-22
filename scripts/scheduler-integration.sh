@@ -35,8 +35,8 @@ if [ "${P6_SERVER:-}" = "1" ]; then
     -v "$root/packages:/work/packages:ro" -v "$root/services/policy-service:/work/services/policy-service:ro" \
     -w /work/services/policy-service \
     tx-zhongtai-p6-policy-service:latest \
-    sh -c "uv sync --frozen --extra dev --quiet && uv run --no-sync pytest -q -p no:cacheprovider tests/test_scheduler_integration.py"
+    sh -c "uv sync --frozen --extra dev --quiet && uv run --no-sync pytest -q -p no:cacheprovider tests/test_scheduler_integration.py tests/test_aitag_integration.py"
 else
   (cd "$root/services/policy-service" && SCHEDULER_INTEGRATION=1 POLICY_DATABASE_URL="$url" \
-    uv run pytest -q -p no:cacheprovider tests/test_scheduler_integration.py)
+    uv run pytest -q -p no:cacheprovider tests/test_scheduler_integration.py tests/test_aitag_integration.py)
 fi

@@ -179,7 +179,7 @@ async def test_timeout_closes_running_sync_batch(monkeypatch):
         await asyncio.sleep(30)
 
     monkeypatch.setattr(worker, "execute_sync", hang)
-    monkeypatch.setattr(worker, "TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setitem(worker.TIMEOUTS, "crawler", 0.05)
     await worker.execute_claim(claim)
     async with SessionLocal() as session:
         scheduled = await session.get(ScheduledRun, claim[0])

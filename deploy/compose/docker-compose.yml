@@ -161,8 +161,8 @@ services:
       CODEBOOK_IAM_SERVICE_SECRET: ${CODEBOOK_IAM_SERVICE_SECRET:-dev-only-change-me-internal}
       CODEBOOK_AUDIT_INGEST_URL: http://audit-service:8002
       CODEBOOK_AUDIT_INGEST_SECRET: ${CODEBOOK_AUDIT_INGEST_SECRET:-dev-only-change-me-ingest}
-      # AI 模板引用系统码表走内部接口；和 AI_CODEBOOK_SERVICE_SECRET 读同一个变量，两边不会配岔。
-      CODEBOOK_INTERNAL_CALLER_SECRETS: '{"ai-service":"${CODEBOOK_AI_CALLER_SECRET:-dev-only-change-me-internal}"}'
+      # 内部接口的调用方：AI 模板取系统码表、政策 AI 打标取码表。每个密钥都是同一个变量传给调用方，两边不会配岔。
+      CODEBOOK_INTERNAL_CALLER_SECRETS: '{"ai-service":"${CODEBOOK_AI_CALLER_SECRET:-dev-only-change-me-internal}","policy-service":"${CODEBOOK_POLICY_CALLER_SECRET:-dev-only-change-me-internal}"}'
     depends_on:
       postgres:
         condition: service_healthy
@@ -194,6 +194,8 @@ services:
       POLICY_IAM_SERVICE_SECRET: ${POLICY_IAM_SERVICE_SECRET:-dev-only-change-me-internal}
       POLICY_AUDIT_INGEST_URL: http://audit-service:8002
       POLICY_AUDIT_INGEST_SECRET: ${POLICY_AUDIT_INGEST_SECRET:-dev-only-change-me-ingest}
+      POLICY_AI_SERVICE_SECRET: ${AI_POLICY_CALLER_SECRET:-dev-only-change-me-internal}
+      POLICY_CODEBOOK_SERVICE_SECRET: ${CODEBOOK_POLICY_CALLER_SECRET:-dev-only-change-me-internal}
       POLICY_CRAWLER_MYSQL_HOST: ${POLICY_CRAWLER_MYSQL_HOST:-}
       POLICY_CRAWLER_MYSQL_PORT: ${POLICY_CRAWLER_MYSQL_PORT:-3306}
       POLICY_CRAWLER_MYSQL_USER: ${POLICY_CRAWLER_MYSQL_USER:-}
@@ -233,6 +235,8 @@ services:
       POLICY_IAM_SERVICE_SECRET: ${POLICY_IAM_SERVICE_SECRET:-dev-only-change-me-internal}
       POLICY_AUDIT_INGEST_URL: http://audit-service:8002
       POLICY_AUDIT_INGEST_SECRET: ${POLICY_AUDIT_INGEST_SECRET:-dev-only-change-me-ingest}
+      POLICY_AI_SERVICE_SECRET: ${AI_POLICY_CALLER_SECRET:-dev-only-change-me-internal}
+      POLICY_CODEBOOK_SERVICE_SECRET: ${CODEBOOK_POLICY_CALLER_SECRET:-dev-only-change-me-internal}
       POLICY_CRAWLER_MYSQL_HOST: ${POLICY_CRAWLER_MYSQL_HOST:-}
       POLICY_CRAWLER_MYSQL_PORT: ${POLICY_CRAWLER_MYSQL_PORT:-3306}
       POLICY_CRAWLER_MYSQL_USER: ${POLICY_CRAWLER_MYSQL_USER:-}
@@ -267,6 +271,8 @@ services:
       AI_AUDIT_INGEST_SECRET: ${AI_AUDIT_INGEST_SECRET:-dev-only-change-me-ingest}
       AI_CODEBOOK_BASE_URL: http://codebook-service:8003
       AI_CODEBOOK_SERVICE_SECRET: ${CODEBOOK_AI_CALLER_SECRET:-dev-only-change-me-internal}
+      # 政策 AI 打标调 /internal/ 用上线模板跑批；和 POLICY_AI_SERVICE_SECRET 读同一个变量。
+      AI_INTERNAL_CALLER_SECRETS: '{"policy-service":"${AI_POLICY_CALLER_SECRET:-dev-only-change-me-internal}"}'
       AI_UPLOAD_MAX_BYTES: ${AI_UPLOAD_MAX_BYTES:-20971520}
       AI_ARK_API_KEY: ${AI_ARK_API_KEY:-}
       AI_BAIDU_API_KEY: ${AI_BAIDU_API_KEY:-}
@@ -308,6 +314,8 @@ services:
       AI_AUDIT_INGEST_SECRET: ${AI_AUDIT_INGEST_SECRET:-dev-only-change-me-ingest}
       AI_CODEBOOK_BASE_URL: http://codebook-service:8003
       AI_CODEBOOK_SERVICE_SECRET: ${CODEBOOK_AI_CALLER_SECRET:-dev-only-change-me-internal}
+      # 政策 AI 打标调 /internal/ 用上线模板跑批；和 POLICY_AI_SERVICE_SECRET 读同一个变量。
+      AI_INTERNAL_CALLER_SECRETS: '{"policy-service":"${AI_POLICY_CALLER_SECRET:-dev-only-change-me-internal}"}'
       AI_UPLOAD_MAX_BYTES: ${AI_UPLOAD_MAX_BYTES:-20971520}
       AI_ARK_API_KEY: ${AI_ARK_API_KEY:-}
       AI_BAIDU_API_KEY: ${AI_BAIDU_API_KEY:-}

@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, time
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
@@ -101,6 +101,17 @@ def in_peak(when: datetime, peak_hours: str) -> bool:
         ranges = parse_peak_hours(DEFAULT_PEAK_HOURS)
     moment = local.time()
     return any(start <= moment < end for start, end in ranges)
+
+
+def with_service_tier(model: LlmModel, tier: str) -> LlmModel:
+    """任务指定了档位（定时任务用低优档）时覆盖模型默认档位。
+
+    只在接入点本来就传档位参数、且配了对应单价时才换：不认这个参数的接入点传了会报错，没配低优价就算不准钱。
+    """
+
+    if tier != "flex" or not model.service_tier or model.flex_input_price is None or model.flex_output_price is None:
+        return model
+    return replace(model, service_tier=tier)
 
 
 def build_body(

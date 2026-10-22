@@ -1,0 +1,188 @@
+from __future__ import annotations
+
+from decimal import Decimal
+from typing import Any
+
+import pytest
+from fastapi.testclient import TestClient
+from platform_common.errors import ApiError
+from platform_common.internal_calls import internal_headers
+
+from app.application import batch_execute, pipeline_runs, prompts
+from app.application.batch_output import RowResult, append_raw, start_raw
+from app.core import storage
+from app.core.config import get_settings
+from app.core.database import get_db_session
+from app.domain.llm_models import with_service_tier
+from app.domain.models import TemplateRelease
+from app.main import app
+from app.repositories import batch_runs as run_repo
+from app.repositories import prompts as prompt_repo
+from app.repositories import releases as release_repo
+from tests.helpers import ACTOR, NOW, PROMPT_ID, RUN_ID, FakeSession, fake_stream, noop, run, template
+from tests.test_batch import _prepare_execution, _Recorder
+
+RELEASE_ID = "c" * 32
+
+
+def _release(**overrides: Any) -> TemplateRelease:
+    values: dict[str, Any] = {
+        "id": RELEASE_ID,
+        "prompt_id": PROMPT_ID,
+        "release_no": 3,
+        "title": "政策类型判断",
+        "category": "policy",
+        "content": "标题：@【政策标题】\n@【上传码表】",
+        "output_fields": "政策类型名称",
+        "model_id": "baidu-deepseek-v3.2",
+        "code_table": "policy_types",
+        "code_name": "",
+        "released_at": NOW,
+        "released_by_id": "u1",
+        "released_by_name": "管理员",
+    }
+    values.update(overrides)
+    return TemplateRelease(**values)
+
+
+@pytest.fixture
+def online(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
+    """模板已上线第 3 版；草稿内容不同，流水线必须用上线版本。"""
+
+    added: list[Any] = []
+
+    async def get(*_: Any, **__: Any) -> Any:
+        return template(content="草稿：还没上线的改动", release_id=RELEASE_ID)
+
+    async def by_ids(_session: Any, ids: list[str]) -> dict[str, TemplateRelease]:
+        return {RELEASE_ID: _release()} if RELEASE_ID in ids else {}
+
+    async def fetch(_name: str) -> str:
+        return "政策类型名称\n信息化建设类"
+
+    monkeypatch.setattr(prompt_repo, "get", get)
+    monkeypatch.setattr(release_repo, "by_ids", by_ids)
+    monkeypatch.setattr(pipeline_runs, "fetch_code_table", fetch)
+    monkeypatch.setattr(pipeline_runs, "enqueue_event", noop)
+    monkeypatch.setattr(run_repo, "add", lambda _session, item: added.append(item))
+    monkeypatch.setattr(get_settings(), "baidu_api_key", "k")
+    return added
+
+
+async def test_pipeline_run_uses_the_release_flex_tier_and_cost_limit(online: list[Any]) -> None:
+    rows = [{"源ID": "p1", "政策标题": "甲", "政策正文": "=HYPERLINK(1)"}, {"源ID": "p2", "政策标题": "乙"}]
+    data = await pipeline_runs.create(FakeSession(), ACTOR, {"prompt_id": PROMPT_ID, "rows": rows, "cost_limit": "5"})  # type: ignore[arg-type]
+    created = online[0]
+    assert (created.prompt_content, created.release_no, created.source) == (_release().content, 3, "pipeline")
+    assert (created.service_tier, created.cost_limit, data["status"]) == ("flex", Decimal(5), "queued")
+    snapshot = storage.run_dir(created.id)
+    assert (snapshot / "code.txt").read_text(encoding="utf-8").endswith("信息化建设类")
+    _, written = pipeline_runs.read_sheet((snapshot / "source.xlsx").read_bytes())
+    # 缺列补空串；= 开头的正文按文本存，不会变成公式。
+    assert written == [
+        {"源ID": "p1", "政策标题": "甲", "政策正文": "=HYPERLINK(1)"},
+        {"源ID": "p2", "政策标题": "乙", "政策正文": ""},
+    ]
+
+
+async def test_pipeline_run_refuses_offline_templates_and_bad_rows(
+    online: list[Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with pytest.raises(ApiError, match="源ID"):
+        await pipeline_runs.create(FakeSession(), ACTOR, {"prompt_id": PROMPT_ID, "rows": [{"政策标题": "甲"}]})  # type: ignore[arg-type]
+    with pytest.raises(ApiError, match="超过"):
+        await pipeline_runs.create(
+            FakeSession(), ACTOR, {"prompt_id": PROMPT_ID, "rows": [{"源ID": "p", "正文": "字" * 32_001}]}
+        )  # type: ignore[arg-type]
+
+    async def draft(*_: Any, **__: Any) -> Any:
+        return template()
+
+    monkeypatch.setattr(prompt_repo, "get", draft)
+    with pytest.raises(ApiError, match="还没有上线"):
+        await pipeline_runs.create(FakeSession(), ACTOR, {"prompt_id": PROMPT_ID, "rows": [{"源ID": "p"}]})  # type: ignore[arg-type]
+    assert online == []
+
+
+async def test_results_map_back_to_source_ids_with_expanded_items_and_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def finished(*_: Any, **__: Any) -> Any:
+        return run(status="done", output_fields="行业|场景")
+
+    monkeypatch.setattr(run_repo, "get", finished)
+    directory = storage.run_dir(RUN_ID)
+    storage.remove_tree(directory)
+    storage.write_atomic(
+        directory / "source.xlsx", pipeline_runs._workbook(["源ID"], [{"源ID": f"p{i}"} for i in range(3)])
+    )
+    raw = storage.run_file(RUN_ID, "raw")
+    start_raw(raw)
+    answer = '[{"行业":"教育","场景":"智慧校园"},{"行业":"医卫","场景":"智慧医院"}]'
+    blank: dict[str, Any] = {"input_tokens": 0, "output_tokens": 0, "search_calls": 0, "elapsed": 0.0}
+    append_raw(raw, RowResult(myid="a1000001", prompt="", text=answer, error="", **blank).raw_row("m"))
+    append_raw(raw, RowResult(myid="a1000002", prompt="", text="", error="限流", **blank).raw_row("m"))
+    data = await pipeline_runs.results(FakeSession(), RUN_ID)  # type: ignore[arg-type]
+    assert data["items"] == [
+        {
+            "source_id": "p0",
+            "items": [{"行业": "教育", "场景": "智慧校园"}, {"行业": "医卫", "场景": "智慧医院"}],
+            "error": "",
+        },
+        {"source_id": "p1", "items": [], "error": "限流"},
+        {"source_id": "p2", "items": [], "error": "未执行（任务停止或中断）"},
+    ]
+
+    async def running(*_: Any, **__: Any) -> Any:
+        return run(status="running")
+
+    monkeypatch.setattr(run_repo, "get", running)
+    with pytest.raises(ApiError, match="还在运行"):
+        await pipeline_runs.results(FakeSession(), RUN_ID)  # type: ignore[arg-type]
+
+
+async def test_execution_stops_itself_at_the_cost_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _Recorder()
+    _prepare_execution(monkeypatch, recorder, run(output_fields="行业", cost_limit=Decimal("0.001")))
+    monkeypatch.setattr(get_settings(), "batch_concurrency", 1)
+    events = [{"text": '[{"行业":"制造"}]'}, {"usage": {"input_tokens": 1000, "output_tokens": 1000}}]
+    monkeypatch.setattr(batch_execute, "stream_responses", fake_stream(events))
+    await batch_execute.execute(RUN_ID)
+    final = recorder.updates[-1]
+    assert (final["status"], final["done_count"]) == ("cancelled", 1)
+    assert "费用上限" in final["error_message"]
+
+
+def test_flex_tier_only_applies_where_the_endpoint_and_prices_support_it() -> None:
+    from app.application.model_configs import to_model
+    from tests.helpers import ai_model, sample_models
+
+    flexible = to_model(
+        ai_model(service_tier="auto", flex_input_price=Decimal("0.1"), flex_output_price=Decimal("0.2"))
+    )
+    assert with_service_tier(flexible, "flex").service_tier == "flex"
+    assert with_service_tier(flexible, "").service_tier == "auto"
+    no_param = to_model(ai_model(service_tier="", flex_input_price=Decimal("0.1"), flex_output_price=Decimal("0.2")))
+    no_price = to_model(ai_model(service_tier="auto", flex_input_price=None, flex_output_price=None))
+    assert with_service_tier(no_param, "flex").service_tier == ""
+    assert with_service_tier(no_price, "flex").service_tier == "auto"
+    assert sample_models()
+
+
+def test_internal_routes_reject_unknown_callers(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _db() -> Any:
+        yield FakeSession()
+
+    async def nothing(*_: Any, **__: Any) -> list[Any]:
+        return []
+
+    settings = get_settings().model_copy(update={"internal_caller_secrets": {"policy-service": "s3cret"}})
+    app.dependency_overrides[get_db_session] = _db
+    app.dependency_overrides[get_settings] = lambda: settings
+    monkeypatch.setattr(prompts, "online", nothing)
+    try:
+        client = TestClient(app)
+        path = "/internal/v1/online-templates?category=policy"
+        assert client.get(path).status_code == 401
+        assert client.get(path, headers=internal_headers("policy-service", "wrong!")).status_code == 401
+        assert client.get(path, headers=internal_headers("policy-service", "s3cret")).json()["data"] == []
+    finally:
+        app.dependency_overrides.clear()
