@@ -3,7 +3,7 @@ import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { listAiTasks, type AiTask } from '@/api/aiTagging'
-import { listJobs, triggerJob, type ScheduledJob, type SchedulerOverview } from '@/api/scheduler'
+import { listJobs, triggerJob, updateJob, type ScheduledJob, type SchedulerOverview } from '@/api/scheduler'
 import { errorMessage } from '@/api/errors'
 import { useAuthStore } from '@/stores/auth'
 import { formatTime } from '@/utils/time'
@@ -27,10 +27,10 @@ const pending = ref('')
 // 计划和下次时间、状态和结束时间各并成一列，六列在常见宽度下一屏放下。
 const columns: DataColumn[] = [
   { prop: 'name', label: '任务名称', minWidth: 160 },
-  { prop: 'plan', label: '每日计划', width: 190 },
-  { prop: 'status', label: '最近执行', width: 210 },
+  { prop: 'plan', label: '每日计划', width: 230 },
+  { prop: 'status', label: '最近执行', width: 190 },
   { prop: 'cost', label: '今日费用 / 上限', width: 150 },
-  { prop: 'watermark', label: '数据进度', width: 180 },
+  { prop: 'watermark', label: '数据进度', width: 170 },
 ]
 const defaults = columns.map(col => col.prop)
 const selected = ref([...defaults])
@@ -53,9 +53,10 @@ function short(value: string | null | undefined): string {
   const text = formatTime(value)
   return text.length >= 16 ? text.slice(5, 16) : text
 }
-/** 每日计划下面一行：启用时写下次什么时候跑。 */
-function nextRun(job: ScheduledJob): string {
-  return job.enabled && job.next_run_at ? `下次 ${short(job.next_run_at)}` : ''
+/** 每日计划开关旁边：启用写下次什么时候跑（日期带时刻），停用写原定时刻。列窄，写短。 */
+function planNote(job: ScheduledJob): string {
+  if (!job.enabled) return `已停用，原定每天 ${job.daily_time}`
+  return job.next_run_at ? `下次 ${short(job.next_run_at)}` : `每天 ${job.daily_time}`
 }
 /** 最近执行旁边一行：执行中的打标任务写模型答到第几条，结束了写结束时间。 */
 function runNote(job: ScheduledJob): string {
@@ -103,6 +104,28 @@ async function execute(job: ScheduledJob) {
     await load()
   } catch (e) { ElMessage.error(errorMessage(e, '提交失败')) }
   finally { pending.value = '' }
+}
+const toggling = ref('')
+/** 列表上直接启停每日计划。打标任务启用后每天自动花钱，先确认；停用立即生效。 */
+async function toggle(job: ScheduledJob, enabled: boolean) {
+  if (toggling.value) return
+  if (enabled && taskOfJob(job.code)) {
+    const ok = await ElMessageBox.confirm(
+      `启用后每天 ${job.daily_time}（北京时间）自动执行一批「${job.name}」，会产生模型费用，按这个任务的每日上限封顶。`,
+      `启用「${job.name}」的每日计划？`,
+      { confirmButtonText: '启用', cancelButtonText: '取消', type: 'warning' },
+    ).then(() => true, () => false)
+    if (!ok) return
+  }
+  toggling.value = job.code
+  try {
+    await updateJob(job.code, { enabled, daily_time: job.daily_time, version: job.version })
+    ElMessage.success(enabled ? `已启用，每天 ${job.daily_time} 执行` : '已停用每日计划，排队中的执行已取消')
+  } catch (e) { ElMessage.error(errorMessage(e, '切换失败，请刷新后重试')) }
+  finally {
+    toggling.value = ''
+    await load()
+  }
 }
 const settings = ref<InstanceType<typeof JobSettingsDrawer>>()
 function edit(job: ScheduledJob) {
@@ -188,13 +211,22 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
               v-if="col.prop === 'plan'"
               class="job-cell"
             >
+              <el-switch
+                v-if="canManage"
+                :model-value="row.enabled"
+                :loading="toggling === row.code"
+                :disabled="!!toggling && toggling !== row.code"
+                :aria-label="`${row.name}每日自动执行`"
+                @change="(value: string | number | boolean) => toggle(row, Boolean(value))"
+              />
               <el-tag
+                v-else
                 :type="row.enabled ? 'success' : 'info'"
                 size="small"
               >
-                {{ row.enabled ? `每天 ${row.daily_time}` : '已停用' }}
+                {{ row.enabled ? '已启用' : '已停用' }}
               </el-tag>
-              <span class="job-cell__note">{{ nextRun(row) }}</span>
+              <span class="job-cell__note">{{ planNote(row) }}</span>
             </span>
             <span
               v-else-if="col.prop === 'status'"
@@ -213,7 +245,7 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
         </el-table-column>
         <el-table-column
           label="操作"
-          width="220"
+          width="210"
           fixed="right"
         >
           <template #default="{ row }">
@@ -248,7 +280,7 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
     </ListPage>
     <p class="scheduler-note">
       政策类型判断、政策解读、政策市场机会是三个独立任务：解读只做类型判断标为「是否解读 = 是」的政策，市场机会只做解读过的，前一步没跑后一步就没有待办。
-      “数据进度”对爬虫是源数据的入库时间，对类型判断是源政策读到的采集日。失败后最多重试 2 次，分别等待 1 分钟、5 分钟；同一任务不会重复执行。
+      “数据进度”对爬虫是源数据的入库时间，对类型判断是源政策读到的采集日。失败后最多重试 2 次，分别等待 1 分钟、5 分钟；没选模板这类设置问题不重试，直接失败并写明原因。同一任务不会重复执行。
     </p>
     <JobSettingsDrawer
       ref="settings"

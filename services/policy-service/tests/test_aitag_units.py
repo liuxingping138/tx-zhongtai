@@ -12,7 +12,7 @@ from typing import Any
 import httpx
 import pytest
 from platform_common.actors import Actor
-from platform_common.errors import ApiError, DependencyUnavailableError, NotFoundError, VersionConflictError
+from platform_common.errors import ApiError, DependencyUnavailableError, VersionConflictError
 
 from app.aitag.application import pipeline, settings, tagging
 from app.aitag.repositories import source
@@ -229,6 +229,34 @@ async def test_unexpected_errors_hide_details_from_the_page(
     assert run_store[str(run_id)].error_message == "执行失败（RuntimeError）"
 
 
+async def test_ai_service_rejections_are_explained_and_outages_stay_retryable(
+    monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]
+) -> None:
+    _use_config(monkeypatch, _config())
+    monkeypatch.setattr(source, "read_batch", lambda *_: [{"content_id": "c1", "collect_date": DAY}])
+    monkeypatch.setattr(source, "read_contents", lambda ids: {})
+
+    async def names(*_: Any, **__: Any) -> dict[str, str]:
+        return {"text": "政策类型名称\n信息化建设类"}
+
+    async def rejected(*_: Any, **__: Any) -> Any:
+        raise ApiError("模板还没有上线", http_status=422)
+
+    monkeypatch.setattr(internal_clients, "codebook", names)
+    monkeypatch.setattr(internal_clients, "ai", rejected)
+    run_id = uuid.uuid4()
+    with pytest.raises(UserFacingError, match="AI 服务拒绝执行：模板还没有上线"):
+        await tagging.run_batch(run_id, "type")
+    assert run_store[str(run_id)].error_message == "AI 服务拒绝执行：模板还没有上线"
+
+    async def down(*_: Any, **__: Any) -> Any:
+        raise DependencyUnavailableError("ai-service 暂时不可用")
+
+    monkeypatch.setattr(internal_clients, "ai", down)
+    with pytest.raises(DependencyUnavailableError):
+        await tagging.run_batch(uuid.uuid4(), "type")
+
+
 async def test_cancelled_wait_stops_the_ai_run(monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]) -> None:
     """调度超时会取消这一批：ai-service 那边的任务要一起停，不然它在后台继续花钱。"""
 
@@ -393,27 +421,6 @@ async def test_running_batch_shows_how_far_the_ai_run_has_got(monkeypatch: pytes
     data = await settings._current(running)  # type: ignore[arg-type]
     assert data is not None and (data["stage_name"], data["done"], data["total"]) == ("模型判断中", 40, 100)
     assert await settings._current(None) is None
-
-
-async def test_billing_sums_each_day_and_the_period(monkeypatch: pytest.MonkeyPatch) -> None:
-    seen: list[Any] = []
-
-    async def daily(_session: Any, code: str, since: Any) -> list[dict[str, Any]]:
-        seen.append((code, since))
-        return [
-            {"day": DAY, "runs": 2, "cost": Decimal("1.5"), "policies": 4, "interpret_rows": 12},
-            {"day": DAY - timedelta(1), "runs": 1, "cost": Decimal("0.25"), "policies": None, "interpret_rows": None},
-        ]
-
-    monkeypatch.setattr(repo, "daily_billing", daily)
-    monkeypatch.setattr(settings, "today", lambda: DAY)
-    data = await settings.billing(FakeSession(), "interpret", 999)  # type: ignore[arg-type]
-    assert data["days"] == 366 and seen[0] == ("interpret", pipeline.day_start(DAY - timedelta(days=365)))
-    first, second = data["items"]
-    assert (first["day"], first["policies"], first["interpret_rows"], second["policies"]) == ("2026-10-01", 4, 12, 0)
-    assert data["total"] == "1.75"
-    with pytest.raises(NotFoundError):
-        await settings.billing(FakeSession(), "nope", 7)  # type: ignore[arg-type]
 
 
 async def test_each_stage_records_its_own_cost(monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]) -> None:

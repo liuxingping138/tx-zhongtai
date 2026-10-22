@@ -46,26 +46,7 @@ export interface OnlineTemplate {
 
 export type AiTaskBody = Pick<AiTask, 'prompt_id' | 'batch_size' | 'content_max_chars' | 'daily_cost_limit' | 'cursor_date' | 'version'>
 
-/** 某个任务一天的账单。policies 是这个任务处理的政策条数；三类写入量只有对应任务有值。 */
-export interface BillingDay {
-  day: string
-  runs: number
-  cost: string
-  policies: number
-  tagged_rows: number
-  interpret_rows: number
-  opportunity_rows: number
-}
-
-export interface AiTaskBilling {
-  days: number
-  items: BillingDay[]
-  total: string
-}
-
 const base = '/policy/ai-tagging'
 export const listAiTasks = () => request<{ items: AiTask[] }>(http.get(`${base}/tasks`))
 export const listAiTemplates = () => request<{ items: OnlineTemplate[]; error: string }>(http.get(`${base}/templates`))
 export const updateAiTask = (code: AiTaskCode, body: AiTaskBody) => request<AiTask>(http.put(`${base}/tasks/${code}`, body))
-export const aiTaskBilling = (code: AiTaskCode, days: number) =>
-  request<AiTaskBilling>(http.get(`${base}/tasks/${code}/billing`, { params: { days } }))

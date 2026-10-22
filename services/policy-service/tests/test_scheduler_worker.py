@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.common.errors import UserFacingError
 from app.worker import scheduler as worker
 
 
@@ -85,6 +86,18 @@ class TestExecuteClaim:
         assert row.status == "retrying"
         assert "secret" not in row.error_message and "ValueError" in row.error_message
         assert patched.abandoned and "secret" not in patched.abandoned[0]
+
+    async def test_setting_problems_fail_at_once_without_retrying(
+        self, monkeypatch: pytest.MonkeyPatch, patched: SimpleNamespace
+    ) -> None:
+        """没选模板这类问题重试也一样，直接失败并写明原因，让人去改设置。"""
+
+        row = _row(attempts=1)
+        monkeypatch.setattr(worker, "SessionLocal", _Db({row.id: row}))
+        reason = "还没有选「政策解读」用的上线模板，请在任务调度页这个任务的设置里选"
+        monkeypatch.setattr(worker, "execute_sync", AsyncMock(side_effect=UserFacingError(reason)))
+        await worker.execute_claim((row.id, "policy_ai_interpret", uuid.uuid4()))
+        assert (row.status, row.error_message) == ("failed", reason) and row.finished_at is not None
 
     async def test_attempt_budget_exhausted_ends_as_failed(
         self, monkeypatch: pytest.MonkeyPatch, patched: SimpleNamespace

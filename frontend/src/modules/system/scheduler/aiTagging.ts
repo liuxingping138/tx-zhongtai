@@ -1,5 +1,5 @@
 /** 政策 AI 打标三个任务在任务调度页上的文案、写入量和金额格式。 */
-import type { AiTaskCode, BillingDay } from '@/api/aiTagging'
+import type { AiTaskCode } from '@/api/aiTagging'
 import type { AiTaggingResult } from '@/api/scheduler'
 
 const PREFIX = 'policy_ai_'
@@ -18,11 +18,11 @@ export const TASK_INTRO: Record<AiTaskCode, string> = {
   opportunity: '对解读过、还没补市场机会的政策写市场机会，按一级行业 + 一级场景回填到它的解读行。',
 }
 
-/** 账单和执行记录里展示的写入量：每个任务只看自己写了什么。 */
-export const TASK_OUTPUT: Record<AiTaskCode, { key: keyof Pick<BillingDay, 'tagged_rows' | 'interpret_rows' | 'opportunity_rows'>; label: string }> = {
-  type: { key: 'tagged_rows', label: '写入基础标签' },
-  interpret: { key: 'interpret_rows', label: '写入解读行' },
-  opportunity: { key: 'opportunity_rows', label: '回填市场机会' },
+/** 费用账单里这个任务的「用途」：政策服务发起批量任务时报的发起方名字。 */
+export const TASK_PURPOSE: Record<AiTaskCode, string> = {
+  type: '政策AI打标·类型判断',
+  interpret: '政策AI打标·政策解读',
+  opportunity: '政策AI打标·市场机会',
 }
 
 /** 执行记录「结果」列：失败写原因，成功写说明和花费。 */

@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import ColumnElement, func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
@@ -30,12 +30,6 @@ async def tasks(session: AsyncSession) -> dict[str, PolicyAiTask]:
 def _cost_column(code: str) -> InstrumentedAttribute[Decimal]:
     column: InstrumentedAttribute[Decimal] = getattr(PolicyAiRun, TASK_COST[code])
     return column
-
-
-def _of_task(code: str) -> ColumnElement[bool]:
-    """属于这个任务的批次：拆分后按任务列；拆分前三步合跑的旧批次，这一步花过钱也算。"""
-
-    return or_(PolicyAiRun.task == code, _cost_column(code) > 0)
 
 
 async def spent_since(session: AsyncSession, code: str, since: datetime) -> Decimal:
@@ -128,24 +122,3 @@ async def running_runs(session: AsyncSession) -> dict[str, PolicyAiRun]:
         select(PolicyAiRun).where(PolicyAiRun.status == "running").order_by(PolicyAiRun.started_at)
     )
     return {row.task: row for row in rows}
-
-
-async def daily_billing(session: AsyncSession, code: str, since: datetime) -> list[dict[str, object]]:
-    """这个任务按北京时间的日期汇总：每天几批、花了多少、处理和写入多少。"""
-
-    day = func.date(func.timezone("Asia/Shanghai", PolicyAiRun.started_at)).label("day")
-    rows = await session.execute(
-        select(
-            day,
-            func.count().label("runs"),
-            func.sum(_cost_column(code)).label("cost"),
-            func.sum(PolicyAiRun.source_rows).filter(PolicyAiRun.task == code).label("policies"),
-            func.sum(PolicyAiRun.tagged_rows).label("tagged_rows"),
-            func.sum(PolicyAiRun.interpret_rows).label("interpret_rows"),
-            func.sum(PolicyAiRun.opportunity_rows).label("opportunity_rows"),
-        )
-        .where(PolicyAiRun.started_at >= since, _of_task(code))
-        .group_by(day)
-        .order_by(day.desc())
-    )
-    return [dict(row._mapping) for row in rows]

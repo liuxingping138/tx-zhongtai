@@ -1,8 +1,8 @@
-"""政策 AI 打标三个任务的设置、今日费用、进度和账单（任务调度页用）。"""
+"""政策 AI 打标三个任务的设置、今日费用和进度（任务调度页用）。"""
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 from typing import Any
 
@@ -148,26 +148,3 @@ async def _current(run: PolicyAiRun | None) -> dict[str, Any] | None:
         except Exception:  # noqa: BLE001, S110  进度是锦上添花，ai-service 暂时不可用时页面照常显示其余信息
             pass
     return current
-
-
-BILLING_DAYS_MAX = 366
-_BILLING_COUNTS = ("runs", "policies", "tagged_rows", "interpret_rows", "opportunity_rows")
-
-
-async def billing(session: AsyncSession, code: str, days: int) -> dict[str, Any]:
-    """这个任务最近 days 天（含今天）每天的批次、费用和处理量，以及合计。没跑的日子不出现。"""
-
-    if code not in TASKS:
-        raise NotFoundError("没有这个打标任务")
-    days = max(1, min(days, BILLING_DAYS_MAX))
-    rows = await repo.daily_billing(session, code, day_start(today() - timedelta(days=days - 1)))
-    items = [
-        {
-            "day": str(row["day"]),
-            "cost": str(row["cost"] or 0),
-            **{key: int(row.get(key) or 0) for key in _BILLING_COUNTS},  # type: ignore[call-overload]  # SUM 出来是数值或空
-        }
-        for row in rows
-    ]
-    total = str(sum((Decimal(item["cost"]) for item in items), Decimal(0)))
-    return {"days": days, "items": items, "total": total}

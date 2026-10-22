@@ -33,9 +33,11 @@ POLL_SECONDS = 5
 HEARTBEAT_SECONDS = 10
 
 
-def fail_run(row: ScheduledRun, message: str, now: datetime) -> None:
+def fail_run(row: ScheduledRun, message: str, now: datetime, *, retry: bool = True) -> None:
+    """失败后按次数退避重试。设置类问题（没选模板、AI 服务明确拒绝）重试也一样，直接失败让人去改。"""
+
     row.error_message = message
-    if row.attempts < MAX_ATTEMPTS:
+    if retry and row.attempts < MAX_ATTEMPTS:
         row.status = "retrying"
         row.available_at = now + retry_delay(row.attempts)
     else:
@@ -93,10 +95,12 @@ def safe_error(exc: Exception, code: str = "crawler") -> str:
 async def execute_claim(claim: tuple[uuid.UUID, str, uuid.UUID]) -> None:
     run_id, code, sync_id = claim
     error = None
+    retry = True
     try:
         await asyncio.wait_for(execute_sync(code, sync_id), timeout=TIMEOUTS.get(code, 1800))
     except Exception as exc:  # noqa: BLE001  任何同步失败都要落到执行记录并按策略重试，不能让 worker 退出
         error = safe_error(exc, code)
+        retry = not isinstance(exc, UserFacingError)
         logger.warning("scheduled_sync_failed job=%s run=%s reason=%s", code, run_id, error)
     # CancelledError 留给进程退出后的 recover_interrupted。超时会进上面的 Exception。
     async with SessionLocal() as session:
@@ -108,7 +112,7 @@ async def execute_claim(claim: tuple[uuid.UUID, str, uuid.UUID]) -> None:
         status = row.result.get("status") if row.result else None
         failure = claim_failure(error, status if isinstance(status, str) else None)
         if failure:
-            fail_run(row, failure, datetime.now(UTC))
+            fail_run(row, failure, datetime.now(UTC), retry=retry)
         else:
             row.status, row.finished_at, row.error_message = "success", datetime.now(UTC), None
         await session.commit()

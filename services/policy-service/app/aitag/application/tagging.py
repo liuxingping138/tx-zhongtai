@@ -9,10 +9,12 @@
 from __future__ import annotations
 
 import uuid
+from http import HTTPStatus
 from typing import Any
 
 import anyio
 from platform_common.clock import utcnow
+from platform_common.errors import ApiError
 
 from app.aitag.application import interpreting
 from app.aitag.application.pipeline import (
@@ -175,10 +177,21 @@ async def run_batch(run_id: uuid.UUID, task: str) -> None:
     try:
         note = await _run(run_id, task, config, Spend(limit=config.daily_cost_limit, before=spent))
         await update_run(run_id, status="success", stage="done", note=note, finished_at=utcnow())
+    except ApiError as exc:
+        # AI 服务、码表服务明确拒绝（4xx，如模板被下线）：照原话告诉用户，改好之前重试也没用。5xx、连不上照常重试。
+        if exc.http_status >= HTTPStatus.INTERNAL_SERVER_ERROR:
+            await _fail(run_id, f"执行失败（{type(exc).__name__}）")
+            raise
+        message = f"AI 服务拒绝执行：{exc.message}"
+        await _fail(run_id, message)
+        raise UserFacingError(message) from exc
     except Exception as exc:
-        message = str(exc) if isinstance(exc, UserFacingError) else f"执行失败（{type(exc).__name__}）"
-        await update_run(run_id, status="failed", error_message=message[:2000], finished_at=utcnow())
+        await _fail(run_id, str(exc) if isinstance(exc, UserFacingError) else f"执行失败（{type(exc).__name__}）")
         raise
+
+
+async def _fail(run_id: uuid.UUID, message: str) -> None:
+    await update_run(run_id, status="failed", error_message=message[:2000], finished_at=utcnow())
 
 
 async def _run(run_id: uuid.UUID, task: str, config: PolicyAiTask, spend: Spend) -> str:

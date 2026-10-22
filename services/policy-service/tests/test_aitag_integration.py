@@ -204,12 +204,9 @@ async def test_each_task_has_its_own_daily_budget_and_old_combined_runs_split_by
         )
         await session.commit()
         listed = {item["code"]: item for item in (await settings.list_tasks(session))["items"]}
-        bill = await settings.billing(session, "interpret", 7)
     assert list(listed) == ["type", "interpret", "opportunity"]
     assert [listed[code]["spent_today"] for code in listed] == ["0.300000", "0.200000", "0.100000"]
     assert listed["type"]["cursor_date"] == DAY.isoformat() and listed["interpret"]["cursor_date"] == ""
-    assert bill["total"] == "0.200000" and bill["items"][0]["interpret_rows"] == 24
-    assert bill["items"][0]["policies"] == 0  # 那 10 条是类型判断读的，不算解读处理的政策
 
 
 async def test_a_task_without_a_template_says_so(monkeypatch: pytest.MonkeyPatch) -> None:

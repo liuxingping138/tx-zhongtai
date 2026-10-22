@@ -1,13 +1,13 @@
-"""政策 AI 打标三个任务的设置、可选模板和账单。挂在任务调度资源下：查看档看设置和账单，完整档才能改设置。
+"""政策 AI 打标三个任务的设置和可选模板。挂在任务调度资源下：查看档看设置，完整档才能改设置。
 
-执行和执行记录走任务调度的接口（每个任务是一个调度任务，编码 policy_ai_<任务>）。
+执行和执行记录走任务调度的接口（每个任务是一个调度任务，编码 policy_ai_<任务>）；花费在 AI提问 → 费用账单 里看。
 """
 
 from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from platform_common.actors import Actor
 from platform_common.enums import SecurityClass
@@ -64,16 +64,3 @@ async def update_task(
     actor: Actor = Depends(require_policy_permission(RESOURCE, "update")),
 ) -> JSONResponse:
     return success_json(await service.update_task(session, actor, task, body.model_dump()))
-
-
-@router.get("/tasks/{task}/billing")
-@classified(SecurityClass.RESOURCE_AUTHORIZED)
-async def billing(
-    task: Task,
-    days: int = Query(30, ge=1, le=366),
-    session: AsyncSession = Depends(get_db_session, scope="function"),
-    _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
-) -> JSONResponse:
-    """这个任务按天的账单：每天几批、花了多少、处理和写入多少。"""
-
-    return success_json(await service.billing(session, task, days))
