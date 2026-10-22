@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -7,6 +9,13 @@ class SourceClearRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     confirm: str
+
+
+class SourceStatusRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+    crawler_status: str = Field(min_length=1, max_length=64)
 
 
 class SourceWrite(BaseModel):

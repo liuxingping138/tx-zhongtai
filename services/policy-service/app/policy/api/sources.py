@@ -14,7 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.security import classified, require_policy_permission
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
-from app.policy.api.schemas import SourceClearRequest, SourcePatch, SourceWrite
+from app.policy.api.schemas import SourceClearRequest, SourcePatch, SourceStatusRequest, SourceWrite
+from app.policy.application import source_status
 from app.policy.application import sources as service
 
 router = APIRouter(prefix="/api/v1/policy/sources", tags=["policy-sources"])
@@ -118,6 +119,18 @@ async def clear_items(
     if body.confirm != "清空":
         raise ApiError("请输入确认口令「清空」", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     return success_json(await service.purge_sources(session, actor))
+
+
+@router.post("/crawler-status")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def set_crawler_status(
+    body: SourceStatusRequest,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    actor: Actor = Depends(require_policy_permission(RESOURCE, "update")),
+) -> JSONResponse:
+    """勾选多条批量改爬虫状态，改成「已爬」的上线时间记为当天。"""
+
+    return success_json(await source_status.set_crawler_status(session, actor, body.ids, body.crawler_status))
 
 
 @router.post("/import", openapi_extra=IMPORT_FILE_OPENAPI)

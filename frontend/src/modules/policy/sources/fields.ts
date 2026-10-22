@@ -28,6 +28,9 @@ export const TABLE_COLUMNS: DataColumn[] = [
 /** 窄屏卡片的摘要字段，也是列设置早期「精简默认列」的识别依据。 */
 export const SUMMARY_KEYS = ['site_name', 'province_name', 'city_name', 'tag', 'crawl_priority']
 
+/** 爬虫状态的可选值。改成「已爬」时后端把上线时间记为当天，见 policy-service 的 online_date_after。 */
+export const CRAWLER_STATUSES = ['未爬', '已爬']
+
 export const EDITOR_GROUPS: EditorGroup[] = [
   {
     title: '基础信息',
@@ -35,8 +38,8 @@ export const EDITOR_GROUPS: EditorGroup[] = [
     fields: [
       { key: 'site_name', label: '网站名称', required: true, maxLength: 255 },
       { key: 'site_type', label: '网站类型', maxLength: 255 },
-      { key: 'crawler_status', label: '爬虫状态', maxLength: 64 },
-      { key: 'online_date', label: '上线时间', date: true },
+      { key: 'crawler_status', label: '爬虫状态', choices: CRAWLER_STATUSES },
+      { key: 'online_date', label: '上线时间', date: true, hint: '爬虫状态改成「已爬」时自动填今天；同时手动改了日期的以手填为准。' },
       { key: 'department', label: '所属部门', maxLength: 255 },
       { key: 'url', label: '网站链接', long: true, placeholder: 'https://', hint: '建议填写完整的网址，便于直接访问。' },
     ],

@@ -23,6 +23,7 @@ import { useListLoader } from '@/composables/useListLoader'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import { useRecordEditor, type RecordForm } from '@/composables/useRecordEditor'
 import { useAuthStore } from '@/stores/auth'
+import BatchStatusDialog from './BatchStatusDialog.vue'
 import { EDITOR_GROUPS, SUMMARY_KEYS, TABLE_COLUMNS } from './fields'
 
 const RESOURCE = 'policy.sources'
@@ -30,6 +31,9 @@ const auth = useAuthStore()
 const canWrite = computed(() => auth.canFull(RESOURCE))
 const canPurge = computed(() => auth.canFull(RESOURCE) && auth.isSuperadmin)
 const clearing = ref(false)
+const table = ref<{ clearSelection: () => void }>()
+const checked = ref<SourceItem[]>([])
+const batchOpen = ref(false)
 
 const query = reactive({
   site_name: [] as string[],
@@ -55,6 +59,12 @@ const { columns, defaults, selected } = useDetailColumns(TABLE_COLUMNS, EDITOR_G
 
 async function refresh() {
   await Promise.all([load(), filters.load()])
+}
+
+async function afterBatch() {
+  table.value?.clearSelection()
+  checked.value = []
+  await refresh()
 }
 
 /** 省市区编码只用来分配网站编码，三级至少要有一级。 */
@@ -149,6 +159,13 @@ onMounted(() => {
         >
           新增
         </el-button>
+        <el-button
+          v-if="canWrite"
+          :disabled="!checked.length"
+          @click="batchOpen = true"
+        >
+          批量改爬虫状态{{ checked.length ? `（${checked.length}）` : '' }}
+        </el-button>
         <ImportButton
           v-if="canWrite"
           hint="上传后自动补齐地区编码；存在重复或地区编码缺失时整批退回，并下载校验报告。"
@@ -235,7 +252,9 @@ onMounted(() => {
         />
       </template>
       <BusinessTable
+        ref="table"
         :items="items"
+        :selectable="canWrite"
         :columns="columns"
         :selected="selected"
         :summary-keys="SUMMARY_KEYS"
@@ -246,8 +265,14 @@ onMounted(() => {
         :filtered="resultFiltered"
         @reset="listQuery.resetFilters"
         @edit="editor.openEdit"
+        @selection-change="checked = $event"
       />
     </ListPage>
+    <BatchStatusDialog
+      v-model="batchOpen"
+      :ids="checked.map(item => item.id)"
+      @done="afterBatch"
+    />
     <RecordEditorDrawer
       :editor="editor"
       :groups="EDITOR_GROUPS"

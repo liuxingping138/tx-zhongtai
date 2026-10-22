@@ -919,6 +919,46 @@
         }
       }
     },
+    "/api/v1/policy/sources/crawler-status": {
+      "post": {
+        "tags": [
+          "policy-sources"
+        ],
+        "summary": "Set Crawler Status",
+        "description": "勾选多条批量改爬虫状态，改成「已爬」的上线时间记为当天。",
+        "operationId": "set_crawler_status_api_v1_policy_sources_crawler_status_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/policy/sources/import": {
       "post": {
         "tags": [
@@ -3390,6 +3430,33 @@
         ],
         "title": "SourcePatch",
         "description": "仅修改显式提供的字段；空字符串表示显式清空。"
+      },
+      "SourceStatusRequest": {
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Ids"
+          },
+          "crawler_status": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Crawler Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ids",
+          "crawler_status"
+        ],
+        "title": "SourceStatusRequest"
       },
       "SourceWrite": {
         "properties": {

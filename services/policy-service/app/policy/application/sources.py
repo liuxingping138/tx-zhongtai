@@ -30,6 +30,7 @@ from app.policy.application.region import (
     normalize_region,
     site_code_prefix,
 )
+from app.policy.application.source_status import beijing_today, online_date_after
 from app.policy.domain.fields import SOURCE_COLUMNS
 from app.policy.domain.models import SOURCE_FIELDS, Source
 from app.policy.repositories import options as options_repo
@@ -157,6 +158,7 @@ async def create_source(session: AsyncSession, actor: Actor, data: dict[str, str
     raw = {field: (data.get(field) or "").strip() for field in SOURCE_FIELDS}
     _require_valid(raw)
     values = _normalized_values(raw)
+    values["online_date"] = online_date_after("", values["crawler_status"], "", values["online_date"], beijing_today())
     internal_id = make_internal_id(values["site_name"], values["province_name"], values["city_name"], values["tag"])
     if await repo.get_by_internal_id(session, internal_id):
         raise ApiError("已存在相同的内部唯一 id", code=ErrorCode.VERSION_CONFLICT, http_status=409)
@@ -201,6 +203,9 @@ async def update_source(
     raw = {field: str(data.get(field, getattr(row, field) or "")).strip() for field in SOURCE_FIELDS}
     _require_valid(raw)
     values = _normalized_values(raw)
+    values["online_date"] = online_date_after(
+        row.crawler_status, values["crawler_status"], row.online_date, values["online_date"], beijing_today()
+    )
     internal_id = make_internal_id(values["site_name"], values["province_name"], values["city_name"], values["tag"])
     existing = await repo.get_by_internal_id(session, internal_id)
     if existing and existing.id != row.id:

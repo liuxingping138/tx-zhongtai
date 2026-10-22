@@ -8,8 +8,13 @@ import { formatTime } from '@/utils/time'
 const props = defineProps<{
   items: T[]; columns: readonly DataColumn[]; selected: string[]; titleKey: string; summaryKeys?: string[];
   canWrite: boolean; loading: boolean; filtered: boolean; detailTitle?: string;
+  /** 首列加勾选框，用于批量操作；只勾当前页。 */
+  selectable?: boolean;
 }>()
-const emit = defineEmits<{ edit: [row: T]; reset: [] }>()
+const emit = defineEmits<{ edit: [row: T]; reset: []; 'selection-change': [rows: T[]] }>()
+const SELECTION_WIDTH = 44
+const table = ref<{ clearSelection: () => void }>()
+defineExpose({ clearSelection: () => table.value?.clearSelection() })
 const detail: ShallowRef<T | null> = shallowRef(null)
 const detailOpen = ref(false)
 const narrow = useNarrowViewport()
@@ -21,8 +26,9 @@ const summaryColumns = computed(() => (props.summaryKeys ?? props.selected)
 const root = ref<HTMLElement>()
 const availableWidth = ref(0)
 const actionWidth = computed(() => props.canWrite ? 116 : 72)
-const laidOut = computed(() => layoutDataColumns(displayed.value, availableWidth.value - 2, actionWidth.value))
-const totalWidth = computed(() => laidOut.value.reduce((sum, col) => sum + col.width, actionWidth.value) + 2)
+const fixedWidth = computed(() => actionWidth.value + (props.selectable ? SELECTION_WIDTH : 0))
+const laidOut = computed(() => layoutDataColumns(displayed.value, availableWidth.value - 2, fixedWidth.value))
+const totalWidth = computed(() => laidOut.value.reduce((sum, col) => sum + col.width, fixedWidth.value) + 2)
 let resizeObserver: ResizeObserver | undefined
 onMounted(() => {
   if (!root.value) return
@@ -55,12 +61,14 @@ function editDetail() { if (detail.value) { emit('edit', detail.value); detailOp
   >
     <el-table
       v-if="!narrow"
+      ref="table"
       v-loading="loading"
       :data="items"
       :fit="false"
       style="width: 100%"
       row-key="id"
       class="data-table business-table__desktop"
+      @selection-change="(rows: T[]) => emit('selection-change', rows)"
     >
       <template #empty>
         <ListEmpty
@@ -69,6 +77,12 @@ function editDetail() { if (detail.value) { emit('edit', detail.value); detailOp
           @reset="emit('reset')"
         />
       </template>
+      <el-table-column
+        v-if="selectable"
+        type="selection"
+        :width="SELECTION_WIDTH"
+        class-name="table-selection"
+      />
       <el-table-column
         v-for="col in laidOut"
         :key="col.prop"
