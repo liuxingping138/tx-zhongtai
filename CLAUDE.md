@@ -178,6 +178,8 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/` �
 - 旧打表系统的模板和批量历史用 `python -m app.cli.import_legacy <导出目录> [--update] [--dry-run]` 导入，保留原 ID，可重复跑；
   `--update` 用旧库最新内容覆盖：模板只覆盖导入后没在新系统里保存过的，任务除排队中、运行中的都覆盖。导出目录结构见 `app/application/legacy_import.py`
 - 对话和试发的内容不进审计，只记谁对哪个模板、哪个任务做了什么。多轮对话的上下文由模型服务端按 response_id 保存，本服务不存
+- 费用账单（`ai.billing`，`/api/v1/ai/billing`）：批量提问和定时任务的费用在 `ai_batch_runs` 上（定时任务的「用途」就是发起方名字，如「政策AI打标·类型判断」），
+  试发和多轮对话答完时在 `ai_call_usages` 记一行（不记内容，`app/application/billing.py`）。新增调模型的入口要么走批量任务，要么也记进 `ai_call_usages`，否则账单漏钱
 
 ### 系统管理：给人分配角色即授权
 
@@ -237,8 +239,8 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
   费用到上限没轮到的不记时间，下批接着做；AI 行只要人工验证过或改过就不再覆盖（`app/aitag/application/interpreting.py`）
 - 解读列表「同步新增场景」：是否新增场景 = 是、人工验证、未同步的行，经 codebook `/internal/v1/scenarios/sync` 按编码规则
   （`app/domain/scenario_codes.py`：各级号全局最大 + 1，已有上级沿用，行业只查不建）写进场景码表并回填编码；动作 `policy.interpretations:sync_scenarios`
-- 账单：批次记 `task` 和各步费用列（`type_cost` 等），今日已花和 `/api/v1/policy/ai-tagging/tasks/{task}/billing` 都按费用列
-  （`tasks.TASK_COST`）算，拆分前三步合跑的旧批次也能各归各的任务；`/tasks` 的 `current` 给出每个任务正在跑的那批和 AI 已答条数
+- 费用：批次记 `task` 和各步费用列（`type_cost` 等），任务列表的「今日已花」按费用列（`tasks.TASK_COST`）算，拆分前三步合跑的旧批次也能各归各的任务；
+  `/tasks` 的 `current` 给出每个任务正在跑的那批和 AI 已答条数。按天账单不在政策服务里做，统一看 AI提问 → 费用账单
 - 内部调用密钥：`AI_POLICY_CALLER_SECRET`（政策→AI）、`CODEBOOK_POLICY_CALLER_SECRET`（政策→码表），compose 把同一个值传给两边
 
 ### 网关

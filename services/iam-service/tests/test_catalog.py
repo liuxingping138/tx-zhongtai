@@ -42,7 +42,7 @@ def test_retired_resources_are_not_in_the_catalog() -> None:
     assert not {spec.resource_code for spec in MENU_SPECS if spec.resource_code} & set(RETIRED_RESOURCE_CODES)
 
 
-def test_ai_module_has_four_pages_three_template_categories_and_release_control() -> None:
+def test_ai_module_has_five_pages_three_template_categories_and_release_control() -> None:
     by_code = {spec.code: spec for spec in RESOURCE_SPECS}
     assert by_code["ai"].node_type == "directory" and by_code["ai"].parent_code is None
     assert [code for code, spec in by_code.items() if spec.parent_code == "ai"] == [
@@ -54,9 +54,10 @@ def test_ai_module_has_four_pages_three_template_categories_and_release_control(
         "ai.category.customer",
         "ai.category.tender",
         "ai.releases",
+        "ai.billing",
     ]
     routes = {spec.route_name for spec in MENU_SPECS if spec.parent_code == "menu.ai"}
-    assert routes == {"ai-prompts", "ai-batch-runs", "ai-chat", "ai-models"}
+    assert routes == {"ai-prompts", "ai-batch-runs", "ai-chat", "ai-models", "ai-billing"}
 
 
 def test_template_category_needs_full_to_edit_and_has_no_menu() -> None:

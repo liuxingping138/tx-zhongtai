@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
 import anyio
@@ -18,6 +18,7 @@ from platform_common.excel import run_excel_parse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application import model_configs
+from app.application.billing import CallTally
 from app.application.prompts import code_text, require, require_editable
 from app.application.sheets import read_sheet
 from app.core import storage
@@ -136,13 +137,20 @@ async def stream_answer(
     thinking: bool,
     previous_response_id: str | None = None,
     echo_prompt: bool = False,
+    on_done: Callable[[CallTally], Awaitable[None]] | None = None,
 ) -> AsyncIterator[str]:
+    """推流回答。答完把这次的用量交给 on_done 记账；用户中途停止时模型还没给用量，这次不记。"""
+
     if echo_prompt:
         yield _sse({"prompt": message})
     yield _sse({"model": model_info(model)})
     body = build_body(model, message, previous_response_id=previous_response_id, thinking=thinking)
+    tally = CallTally()
     async for event in stream_responses(llm_request(model, body)):
+        tally.add(event)
         yield _sse(event)
+    if on_done is not None:
+        await on_done(tally)
     yield _sse("[DONE]")
 
 

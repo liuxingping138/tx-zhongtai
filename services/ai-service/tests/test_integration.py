@@ -14,14 +14,14 @@ from platform_common.clock import utcnow
 from platform_common.errors import ApiError
 from sqlalchemy import delete
 
-from app.application import batch_execute, batch_queue, batch_runs, prompts
+from app.application import batch_execute, batch_queue, batch_runs, billing, prompts
 from app.core import storage
 from app.core.config import get_settings
 from app.core.database import SessionLocal, engine
 from app.domain.categories import FULL_ACCESS, CategoryAccess
-from app.domain.models import BatchRun, OutboxEvent, PromptTemplate
+from app.domain.models import BatchRun, CallUsage, OutboxEvent, PromptTemplate
 from app.repositories import batch_runs as repo
-from tests.helpers import ACTOR, fake_stream, xlsx
+from tests.helpers import ACTOR, fake_stream, run, xlsx
 
 pytestmark = pytest.mark.skipif(os.environ.get("AI_INTEGRATION") != "1", reason="需要独立 ai_test 数据库")
 
@@ -31,7 +31,7 @@ async def isolated(monkeypatch: pytest.MonkeyPatch) -> Any:
     assert engine.url.database == "ai_test", "拒绝在业务数据库执行破坏性测试"
     monkeypatch.setattr(get_settings(), "baidu_api_key", "integration")
     async with SessionLocal() as session:
-        for model in (BatchRun, PromptTemplate, OutboxEvent):
+        for model in (BatchRun, CallUsage, PromptTemplate, OutboxEvent):
             await session.execute(delete(model))
         await session.commit()
     yield
@@ -157,3 +157,34 @@ async def test_history_filters_on_real_rows() -> None:
     assert (by_category["total"], hidden["total"]) == (0, 0)
     assert tests["items"][0]["run_mode"] == "test"
     assert options == {"prompt_title": ["集成"], "created_by_name": [ACTOR.name]}
+
+
+async def test_billing_groups_batches_pipelines_and_calls_by_beijing_day() -> None:
+    from datetime import UTC, date, datetime
+    from decimal import Decimal
+
+    late = datetime(2026, 10, 21, 17, 30, tzinfo=UTC)  # 北京时间 10-22 01:30
+    async with SessionLocal() as session:
+        session.add(run(id="1" * 32, created_at=late, inference_cost=Decimal("0.2"), search_cost=Decimal("0.05")))
+        session.add(run(id="2" * 32, created_at=late, inference_cost=Decimal("0.1"), input_tokens=7))
+        session.add(
+            run(id="3" * 32, created_at=late, source="pipeline", created_by_name="政策AI打标·政策解读",
+                inference_cost=Decimal("0.3"))
+        )  # fmt: skip
+        for index, kind in enumerate(("chat", "chat", "trial")):
+            session.add(
+                CallUsage(id=f"{index}" * 32, kind=kind, model_id="m", model_name="百度-DeepSeek-V3.2",
+                          inference_cost=Decimal("0.01"), created_at=late)
+            )  # fmt: skip
+        await session.commit()
+    async with SessionLocal() as session:
+        data = await billing.daily(session, date(2026, 10, 22), date(2026, 10, 22))
+        earlier = await billing.daily(session, date(2026, 10, 21), date(2026, 10, 21))
+    rows = {(item["purpose"], item["calls"], item["cost"], item["input_tokens"]) for item in data["items"]}
+    assert rows == {
+        ("批量提问", 2, "0.350000", 7),
+        ("政策AI打标·政策解读", 1, "0.300000", 0),
+        ("多轮对话", 2, "0.020000", 0),
+        ("试发", 1, "0.010000", 0),
+    }
+    assert {item["day"] for item in data["items"]} == {"2026-10-22"} and earlier["items"] == []

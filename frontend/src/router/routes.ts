@@ -142,6 +142,12 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '模型配置', resource: 'ai.models' },
       },
       {
+        path: 'ai/billing',
+        name: 'ai-billing',
+        component: () => import('@/modules/ai/billing/BillingPage.vue'),
+        meta: { title: '费用账单', resource: 'ai.billing' },
+      },
+      {
         path: 'forbidden',
         name: 'forbidden',
         component: () => import('@/views/ForbiddenView.vue'),

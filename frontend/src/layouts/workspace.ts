@@ -1,5 +1,5 @@
 import { computed, type Component } from 'vue'
-import { ChatDotRound, Collection, Connection, Cpu, EditPen, Files, Key, Link, MapLocation, Menu, Monitor, PriceTag, Reading, Tickets, Timer, User } from '@element-plus/icons-vue'
+import { ChatDotRound, Collection, Connection, Cpu, EditPen, Files, Key, Link, MapLocation, Menu, Money, Monitor, PriceTag, Reading, Tickets, Timer, User } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { pathForRouteName } from '@/router/menu'
 
@@ -22,6 +22,7 @@ const descriptions: Record<string, string> = {
   '/ai/batch-runs': '按 Excel 逐行批量提问',
   '/ai/chat': '与大模型连续对话',
   '/ai/models': '维护可选模型、接入点和单价',
+  '/ai/billing': '按日期、模型和用途看所有模型调用花了多少',
 }
 
 // 图标按子模块用途配置，不继承一级模块图标；同一入口在导航和查找中保持一致。
@@ -41,6 +42,7 @@ const entryIcons: Record<string, Component> = {
   '/ai/batch-runs': Files,
   '/ai/chat': ChatDotRound,
   '/ai/models': Cpu,
+  '/ai/billing': Money,
 }
 
 export function useWorkspace() {

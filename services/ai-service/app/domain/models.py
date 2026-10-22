@@ -185,6 +185,37 @@ class BatchRun(Base):
     cost_limit: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True, comment="费用上限(元)")
 
 
+# 试发、多轮对话一次调用记一行（批量提问的费用记在 BatchRun 上），费用账单把两边合起来。
+CALL_TRIAL = "trial"
+CALL_CHAT = "chat"
+
+
+class CallUsage(Base):
+    """一次试发或多轮对话的用量和费用。只记谁在什么时候用哪个模型花了多少，不记提问和回答内容。"""
+
+    __tablename__ = "ai_call_usages"
+    __table_args__ = {"comment": "试发和多轮对话用量"}
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id, comment="记录ID")
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, comment="调用类型")
+    model_id: Mapped[str] = mapped_column(String(100), nullable=False, comment="模型ID")
+    model_name: Mapped[str] = mapped_column(String(100), nullable=False, comment="模型名称")
+    input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="输入token")
+    output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="输出token")
+    search_calls: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="联网次数")
+    inference_cost: Mapped[Decimal] = mapped_column(
+        Numeric(12, 6), nullable=False, default=Decimal(0), comment="推理费用(元)"
+    )
+    search_cost: Mapped[Decimal] = mapped_column(
+        Numeric(12, 6), nullable=False, default=Decimal(0), comment="联网费用(元)"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True, comment="调用时间"
+    )
+    created_by_id: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="调用人ID")
+    created_by_name: Mapped[str] = mapped_column(String(128), nullable=False, default="", comment="调用人")
+
+
 class WorkerHeartbeat(Base):
     __tablename__ = "ai_worker_heartbeat"
     __table_args__ = {"comment": "批量执行进程心跳"}

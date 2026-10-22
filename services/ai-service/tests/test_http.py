@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from datetime import date
 from typing import Any
 
 import pytest
@@ -8,7 +9,7 @@ from fastapi.testclient import TestClient
 from platform_common.route_audit import iter_api_routes
 
 from app.api.security import get_category_access
-from app.application import asking, batch_runs, prompts
+from app.application import asking, batch_runs, billing, prompts
 from app.core.config import get_settings
 from app.core.database import get_db_session
 from app.domain.categories import FULL_ACCESS
@@ -144,3 +145,28 @@ def test_prompt_write_routes(client: TestClient, monkeypatch: pytest.MonkeyPatch
     assert client.delete(f"/api/v1/ai/prompts/{PROMPT_ID}/files/code").status_code == 200
     assert client.get(f"/api/v1/ai/prompts/{PROMPT_ID}/files/code").status_code == 404
     assert client.delete(f"/api/v1/ai/prompts/{PROMPT_ID}").status_code == 200
+
+
+def test_chat_and_trial_hand_their_usage_to_billing(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    recorded: list[tuple[str, str, dict[str, int]]] = []
+
+    async def record(kind: str, model: Any, tally: billing.CallTally, actor: Any) -> None:
+        recorded.append((kind, model.id, tally.usage))
+
+    usage = {"input_tokens": 12, "output_tokens": 3}
+    monkeypatch.setattr(billing, "record_call", record)
+    monkeypatch.setattr(asking, "stream_responses", fake_stream([{"text": "你好"}, {"usage": usage}]))
+    chat = client.post("/api/v1/ai/stream/chat", json={"message": "hi", "model_id": "baidu-deepseek-v3.2"})
+    trial = client.post("/api/v1/ai/stream/ask", json={"content": "问", "model_id": "baidu-deepseek-v3.2"})
+    assert chat.text.endswith("data: [DONE]\n\n") and trial.status_code == 200
+    assert recorded == [("chat", "baidu-deepseek-v3.2", usage), ("trial", "baidu-deepseek-v3.2", usage)]
+
+
+def test_billing_route_needs_both_dates(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def daily(_session: Any, date_from: date, date_to: date) -> dict[str, Any]:
+        return {"date_from": date_from.isoformat(), "date_to": date_to.isoformat(), "items": []}
+
+    monkeypatch.setattr(billing, "daily", daily)
+    ok = client.get("/api/v1/ai/billing", params={"date_from": "2026-10-01", "date_to": "2026-10-22"})
+    assert ok.status_code == 200 and ok.json()["data"]["date_to"] == "2026-10-22"
+    assert client.get("/api/v1/ai/billing", params={"date_from": "2026-10-01"}).status_code == 422

@@ -1017,6 +1017,62 @@
         }
       }
     },
+    "/api/v1/ai/billing": {
+      "get": {
+        "tags": [
+          "ai-billing"
+        ],
+        "summary": "Daily",
+        "description": "每天、每个模型、每种用途的次数、token 和费用；页面据此汇总和画图。",
+        "operationId": "daily_api_v1_ai_billing_get",
+        "parameters": [
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "开始日期（北京时间，含）",
+              "title": "Date From"
+            },
+            "description": "开始日期（北京时间，含）"
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "结束日期（北京时间，含）",
+              "title": "Date To"
+            },
+            "description": "结束日期（北京时间，含）"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/ai/stream/ask": {
       "post": {
         "tags": [

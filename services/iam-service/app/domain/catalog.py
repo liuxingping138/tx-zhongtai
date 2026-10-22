@@ -74,6 +74,8 @@ RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("ai.category.tender", "招投标类模板", "ai-service", NodeType.RESOURCE, True, 67, "ai"),
     # 上线后模板进定时任务、按真实数据花钱，只给管理员；业务人员能改模板但不能上线。不是菜单，按钮在提问配置页。
     ResourceSpec("ai.releases", "模板上线", "ai-service", NodeType.RESOURCE, True, 68, "ai"),
+    # 所有模型调用的花费（批量提问、定时打标、试发、多轮对话），只读。
+    ResourceSpec("ai.billing", "费用账单", "ai-service", NodeType.RESOURCE, True, 69, "ai"),
 )
 
 ACTION_SPECS: tuple[ActionSpec, ...] = (
@@ -163,6 +165,7 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ActionSpec("ai.category.tender", "update", GrantLevel.FULL),
     ActionSpec("ai.releases", "list", GrantLevel.READ),
     ActionSpec("ai.releases", "publish", GrantLevel.FULL),
+    ActionSpec("ai.billing", "list", GrantLevel.READ),
 )
 
 MENU_SPECS: tuple[MenuSpec, ...] = (
@@ -245,6 +248,7 @@ MENU_SPECS: tuple[MenuSpec, ...] = (
     MenuSpec("menu.ai.batch_runs", "批量提问", 62, "ai-batch-runs", "ai.batch_runs", "menu.ai", enabled=True),
     MenuSpec("menu.ai.chat", "多轮对话", 63, "ai-chat", "ai.chat", "menu.ai", enabled=True),
     MenuSpec("menu.ai.models", "模型配置", 64, "ai-models", "ai.models", "menu.ai", enabled=True),
+    MenuSpec("menu.ai.billing", "费用账单", 65, "ai-billing", "ai.billing", "menu.ai", enabled=True),
 )
 
 SUPERADMIN_ROLE_CODE = "superadmin"
