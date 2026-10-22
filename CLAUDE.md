@@ -160,7 +160,8 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/` �
   完整档才能新建、修改、试发、运行、停止、删除。这一层叠在 `ai.prompts` / `ai.batch_runs` 之上，服务层逐个检查，没授任何类型时列表为空。
   任务发起时把类型快照进 `prompt_category`，模板改类型不影响历史归属
 - 模板的码表可选上传文件或系统码表（`app/domain/code_tables.py`：政策类型、行业场景六级、一级行业 + 一级场景）。系统码表每次经
-  codebook-service 的 `/internal/v1/code-tables/{name}` 实时取，取不到就报 503，绝不拿空码表去问；密钥 `CODEBOOK_AI_CALLER_SECRET` 两边共用
+  codebook-service 的 `/internal/v1/code-tables/{name}` 实时取，取不到就报 503，绝不拿空码表去问；密钥 `CODEBOOK_AI_CALLER_SECRET` 两边共用。
+  只取名称列、去重（原表按客群重复，8370 行只有 3348 条路径）；六级码表按三级行业分组输出（「一级行业 > 二级行业 > 三级行业：场景；场景」，保留上级场景），约 3.8 万字，原样六列要 10.6 万字
 - 模板「上线」由 `ai.releases`（只给管理员）把提示词、输出字段、模型、码表冻结成 `ai_template_releases` 一版，模板 `release_id` 指向生效版本。
   上线后再改模板只改草稿，页面列出与上线版本不同的项；已上线的模板要先下线才能删。定时任务只用上线版本
 - 发起批量时把模板 Excel、码表复制进任务目录做快照：之后改模板、删模板都不影响排队中、运行中和已完成的任务

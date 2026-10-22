@@ -63,3 +63,30 @@ def test_code_table_rejects_unknown_callers_and_names(client: TestClient) -> Non
 def test_every_ai_code_table_is_declared() -> None:
     assert set(code_tables.CODE_TABLES) == {"policy_types", "scenarios", "scenario_l1"}
     assert isinstance(get_settings(), Settings)
+
+
+async def test_scenarios_are_grouped_by_industry_and_keep_parent_scenarios(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def scenarios(_session: Any) -> list[tuple[str, ...]]:
+        return [
+            ("交通行业", "交通运输业", "多式联运", "低空经济", "", ""),
+            ("交通行业", "交通运输业", "多式联运", "低空经济", "低空物流配送", ""),
+            ("交通行业", "交通运输业", "多式联运", "低空经济", "低空物流配送", "无人机货运"),
+            ("交通行业", "交通运输业", "多式联运", "边坡/尾矿库监测", "", ""),
+            ("互联网行业一部", "", "", "CDN与边缘云", "", ""),
+        ]
+
+    monkeypatch.setattr(code_tables.repo, "scenarios", scenarios)
+    monkeypatch.setitem(
+        code_tables.CODE_TABLES,
+        "scenarios",
+        code_tables.CodeTable("行业场景（六级）", (), scenarios, code_tables._grouped_scenarios),
+    )
+    data = await code_tables.render(object(), "scenarios")  # type: ignore[arg-type]
+    guide, *lines = data["text"].split("\n")
+    assert data["rows"] == 5 and "「一级行业 > 二级行业 > 三级行业：场景；场景；…」" in guide
+    # 行业只写一次；一级、二级场景的上级行保留，模型可以只答到一级或二级；名称里的斜杠原样保留。
+    assert lines == [
+        "交通行业 > 交通运输业 > 多式联运：低空经济；低空经济 > 低空物流配送；"
+        "低空经济 > 低空物流配送 > 无人机货运；边坡/尾矿库监测",
+        "互联网行业一部：CDN与边缘云",
+    ]
