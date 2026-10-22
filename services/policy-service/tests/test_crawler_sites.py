@@ -229,3 +229,12 @@ def test_blank_province_is_stored_as_central_enterprise() -> None:
     central = dict(_source_row("国资委", 3, None, None), province_name="国央企")
     rows = sync.merge_day_rows(TODAY, [blank, central])
     assert [(row["province_name"], row["row_count"]) for row in rows] == [("国央企", 5)]
+
+
+def test_country_province_is_stored_as_nationwide() -> None:
+    """「国家」是「全国」的另一种写法，同一网站的两种写法合成一个，不再多出一个停更网站。"""
+
+    old = dict(_source_row("国家数据局", 2, None, None), province_name="全国")
+    new = dict(_source_row("国家数据局", 3, None, None), province_name="国家")
+    rows = sync.merge_day_rows(TODAY, [old, new])
+    assert [(row["province_name"], row["row_count"]) for row in rows] == [("全国", 5)]

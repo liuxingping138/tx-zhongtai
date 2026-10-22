@@ -42,14 +42,23 @@ FIELD_CATEGORIES = ("全国", "国央企")
 _PREFIXES = tuple((name[:3] if name.startswith(("内蒙古", "黑龙江")) else name[:2], name) for name in PROVINCES)
 # 爬虫库里省份为空的网站都是国央企（2026-10-21 用户确认）：同步时就写成「国央企」，表格、筛选、图表一致。
 EMPTY_PROVINCE_CATEGORY = "国央企"
+# 「国家」是「全国」的另一种写法（国家数据局 2025-08 起改用，2026-10-22 用户确认），同步时同样改写。
+STORED_ALIASES = {"国家": "全国"}
+
+
+def stored_province(raw: str | None) -> str:
+    """同步写入本地表的省份值：空值记作国央企，「国家」记作全国，其余保留原始值。"""
+
+    value = raw or EMPTY_PROVINCE_CATEGORY
+    return STORED_ALIASES.get(value, value)
 
 
 def chart_province(raw: str) -> str:
     """「新疆维吾尔族自治区」「新疆」都归到「新疆维吾尔自治区」；「全国」「国央企」这类非省份值原样保留。"""
 
     value = raw.strip()
-    if not value:
-        return EMPTY_PROVINCE_CATEGORY
+    if not value or value in STORED_ALIASES:
+        return stored_province(value)
     for prefix, name in _PREFIXES:
         if value.startswith(prefix):
             return name
