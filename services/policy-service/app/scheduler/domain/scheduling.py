@@ -3,10 +3,13 @@
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from app.aitag.domain.tasks import TASKS, job_code
+
 BEIJING = ZoneInfo("Asia/Shanghai")
-JOBS = {"crawler": "爬虫监测增量同步", "policy_ai": "政策 AI 打标"}
+# 页面上的任务按这个顺序列出：爬虫同步，然后是政策 AI 打标的三个任务。
+JOBS = {"crawler": "爬虫监测增量同步", **{job_code(task): name for task, name in TASKS.items()}}
 # 单次执行的超时：爬虫增量几分钟；AI 打标一批要等模型逐条回答，上千条要一两个小时。
-TIMEOUTS = {"crawler": 1800, "policy_ai": 6 * 3600}
+TIMEOUTS = {"crawler": 1800, **{job_code(task): 6 * 3600 for task in TASKS}}
 ACTIVE = ("queued", "running", "retrying")
 MAX_ATTEMPTS = 3
 LEADER_LOCK = 72120260929

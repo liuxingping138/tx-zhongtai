@@ -4,40 +4,51 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
-from app.aitag.domain.models import CONFIG_ID, PolicyAiConfig, PolicyAiRun
+from app.aitag.domain.models import PolicyAiRun, PolicyAiTask
+from app.aitag.domain.tasks import TASK_COST
 from app.policy.domain.models import BaseTag, Interpretation
 
 
-async def config(session: AsyncSession, *, lock: bool = False) -> PolicyAiConfig:
-    statement = select(PolicyAiConfig).where(PolicyAiConfig.id == CONFIG_ID)
+async def task(session: AsyncSession, code: str, *, lock: bool = False) -> PolicyAiTask:
+    statement = select(PolicyAiTask).where(PolicyAiTask.code == code)
     if lock:
         statement = statement.with_for_update()
     row = (await session.scalars(statement)).first()
     if row is None:
-        raise RuntimeError("缺少政策 AI 打标配置，请先执行数据库迁移")
+        raise RuntimeError(f"缺少政策 AI 打标任务 {code} 的设置，请先执行数据库迁移")
     return row
 
 
-async def spent_since(session: AsyncSession, since: datetime) -> Decimal:
+async def tasks(session: AsyncSession) -> dict[str, PolicyAiTask]:
+    return {row.code: row for row in await session.scalars(select(PolicyAiTask))}
+
+
+def _cost_column(code: str) -> InstrumentedAttribute[Decimal]:
+    column: InstrumentedAttribute[Decimal] = getattr(PolicyAiRun, TASK_COST[code])
+    return column
+
+
+def _of_task(code: str) -> ColumnElement[bool]:
+    """属于这个任务的批次：拆分后按任务列；拆分前三步合跑的旧批次，这一步花过钱也算。"""
+
+    return or_(PolicyAiRun.task == code, _cost_column(code) > 0)
+
+
+async def spent_since(session: AsyncSession, code: str, since: datetime) -> Decimal:
+    """这个任务从 since 起已花的钱。按各步费用列算，旧批次的三步费用也能各归各的任务。"""
+
     value = await session.scalar(
-        select(func.coalesce(func.sum(PolicyAiRun.cost), 0)).where(PolicyAiRun.started_at >= since)
+        select(func.coalesce(func.sum(_cost_column(code)), 0)).where(PolicyAiRun.started_at >= since)
     )
     return Decimal(value or 0)
 
 
 async def get_run(session: AsyncSession, run_id: uuid.UUID) -> PolicyAiRun | None:
     return await session.get(PolicyAiRun, run_id)
-
-
-async def page_runs(session: AsyncSession, page: int, page_size: int) -> tuple[list[PolicyAiRun], int]:
-    total = int(await session.scalar(select(func.count()).select_from(PolicyAiRun)) or 0)
-    rows = await session.scalars(
-        select(PolicyAiRun).order_by(PolicyAiRun.started_at.desc()).offset((page - 1) * page_size).limit(page_size)
-    )
-    return list(rows), total
 
 
 async def base_tags_by_source(session: AsyncSession, source_ids: list[str]) -> dict[str, BaseTag]:
@@ -110,30 +121,30 @@ async def delete_rows(session: AsyncSession, rows: list[Interpretation]) -> None
         await session.delete(row)
 
 
-async def running_run(session: AsyncSession) -> PolicyAiRun | None:
+async def running_runs(session: AsyncSession) -> dict[str, PolicyAiRun]:
+    """每个任务正在跑的那一批（同一任务调度保证同时只有一批）。"""
+
     rows = await session.scalars(
-        select(PolicyAiRun).where(PolicyAiRun.status == "running").order_by(PolicyAiRun.started_at.desc()).limit(1)
+        select(PolicyAiRun).where(PolicyAiRun.status == "running").order_by(PolicyAiRun.started_at)
     )
-    return rows.first()
+    return {row.task: row for row in rows}
 
 
-async def daily_billing(session: AsyncSession, since: datetime) -> list[dict[str, object]]:
-    """按北京时间的日期汇总每天的批次数、费用（含三步各自）和写入行数。"""
+async def daily_billing(session: AsyncSession, code: str, since: datetime) -> list[dict[str, object]]:
+    """这个任务按北京时间的日期汇总：每天几批、花了多少、处理和写入多少。"""
 
     day = func.date(func.timezone("Asia/Shanghai", PolicyAiRun.started_at)).label("day")
     rows = await session.execute(
         select(
             day,
             func.count().label("runs"),
-            func.sum(PolicyAiRun.cost).label("cost"),
-            func.sum(PolicyAiRun.type_cost).label("type_cost"),
-            func.sum(PolicyAiRun.interpret_cost).label("interpret_cost"),
-            func.sum(PolicyAiRun.opportunity_cost).label("opportunity_cost"),
-            func.sum(PolicyAiRun.source_rows).label("source_rows"),
+            func.sum(_cost_column(code)).label("cost"),
+            func.sum(PolicyAiRun.source_rows).filter(PolicyAiRun.task == code).label("policies"),
             func.sum(PolicyAiRun.tagged_rows).label("tagged_rows"),
             func.sum(PolicyAiRun.interpret_rows).label("interpret_rows"),
+            func.sum(PolicyAiRun.opportunity_rows).label("opportunity_rows"),
         )
-        .where(PolicyAiRun.started_at >= since)
+        .where(PolicyAiRun.started_at >= since, _of_task(code))
         .group_by(day)
         .order_by(day.desc())
     )

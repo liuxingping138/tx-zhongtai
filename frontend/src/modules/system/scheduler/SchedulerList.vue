@@ -1,44 +1,72 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, reactive, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
-import { listJobs, triggerJob, updateJob, type ScheduledJob, type SchedulerOverview } from '@/api/scheduler'
+import { listAiTasks, type AiTask } from '@/api/aiTagging'
+import { listJobs, triggerJob, type ScheduledJob, type SchedulerOverview } from '@/api/scheduler'
 import { errorMessage } from '@/api/errors'
 import { useAuthStore } from '@/stores/auth'
 import { formatTime } from '@/utils/time'
-import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import ListPage from '@/components/ListPage.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
 import type { DataColumn } from '@/components/dataColumns'
-import AiTaggingPanel from './AiTaggingPanel.vue'
+import JobSettingsDrawer from './JobSettingsDrawer.vue'
 import SchedulerHistoryDrawer from './SchedulerHistoryDrawer.vue'
+import { TASK_INTRO, formatYuan, taskOfJob } from './aiTagging'
 import { STATUS_TEXT, statusType, type RunStatus } from './runStatus'
 import { useSchedulerHistory } from './useSchedulerHistory'
 
 const auth = useAuthStore()
 const canManage = computed(() => auth.canFull('system.scheduler'))
 const overview = ref<SchedulerOverview | null>(null)
+// 政策 AI 打标三个任务的设置、今天花费和进度，按调度编码对到任务行上。
+const aiTasks = ref<AiTask[]>([])
 const loading = ref(false)
 const loadError = ref('')
 const pending = ref('')
+// 计划和下次时间、状态和结束时间各并成一列，六列在常见宽度下一屏放下。
 const columns: DataColumn[] = [
-  { prop: 'name', label: '任务名称', minWidth: 230 },
-  { prop: 'enabled', label: '每日计划', width: 100 },
-  { prop: 'daily_time', label: '执行时刻', width: 110 },
-  { prop: 'status', label: '最近状态', width: 120 },
-  { prop: 'finished_at', label: '最近结束时间', width: 190 },
-  { prop: 'watermark', label: '数据更新至', width: 190 },
-  { prop: 'next_run_at', label: '下次计划时间', width: 190 },
+  { prop: 'name', label: '任务名称', minWidth: 160 },
+  { prop: 'plan', label: '每日计划', width: 190 },
+  { prop: 'status', label: '最近执行', width: 210 },
+  { prop: 'cost', label: '今日费用 / 上限', width: 150 },
+  { prop: 'watermark', label: '数据进度', width: 180 },
 ]
 const defaults = columns.map(col => col.prop)
 const selected = ref([...defaults])
 const visibleColumns = computed(() => columns.filter(col => selected.value.includes(col.prop)))
+function aiTask(job: ScheduledJob): AiTask | null {
+  return aiTasks.value.find(task => task.job_code === job.code) ?? null
+}
+/** 数据进度：爬虫是源数据入库时间；类型判断是读到的采集日；解读、市场机会按待办做，没有进度。 */
+function progress(job: ScheduledJob): string {
+  if (job.code === 'crawler') return formatTime(job.watermark)
+  const task = aiTask(job)
+  return task?.cursor_date ? `读到 ${task.cursor_date}` : '—'
+}
+function cost(job: ScheduledJob): string {
+  const task = aiTask(job)
+  return task ? `${formatYuan(task.spent_today)} / ${formatYuan(task.daily_cost_limit)}` : '—'
+}
+/** 「2026-10-22 17:01:10」只留月日时分，并在一列里放得下。 */
+function short(value: string | null | undefined): string {
+  const text = formatTime(value)
+  return text.length >= 16 ? text.slice(5, 16) : text
+}
+/** 每日计划下面一行：启用时写下次什么时候跑。 */
+function nextRun(job: ScheduledJob): string {
+  return job.enabled && job.next_run_at ? `下次 ${short(job.next_run_at)}` : ''
+}
+/** 最近执行旁边一行：执行中的打标任务写模型答到第几条，结束了写结束时间。 */
+function runNote(job: ScheduledJob): string {
+  const current = job.active_run ? aiTask(job)?.current : null
+  if (current) return current.total ? `${current.done ?? 0} / ${current.total} 条` : current.stage_name
+  return job.last_run?.finished_at ? short(job.last_run.finished_at) : ''
+}
 function cell(job: ScheduledJob, prop: string) {
   if (prop === 'name') return job.name
-  if (prop === 'daily_time') return job.daily_time
-  if (prop === 'finished_at') return formatTime(job.last_run?.finished_at)
-  if (prop === 'watermark') return formatTime(job.watermark)
-  if (prop === 'next_run_at') return formatTime(job.next_run_at)
+  if (prop === 'cost') return cost(job)
+  if (prop === 'watermark') return progress(job)
   return ''
 }
 let disposed = false
@@ -48,16 +76,22 @@ async function load(quiet = false) {
   loading.value = !quiet
   const current = ++loadSequence
   try {
-    const data = await listJobs()
-    if (!disposed && current === loadSequence) { overview.value = data; loadError.value = '' }
+    // 打标设置取不到（如 ai-service 维护）不影响看任务列表，保留上一次的数据。
+    const [data, tasks] = await Promise.all([listJobs(), listAiTasks().catch(() => null)])
+    if (!disposed && current === loadSequence) {
+      overview.value = data
+      if (tasks) aiTasks.value = tasks.items
+      loadError.value = ''
+    }
   } catch (e) {
     if (!disposed && current === loadSequence) loadError.value = errorMessage(e, '任务加载失败，请重试')
   } finally { if (current === loadSequence) loading.value = false }
 }
 async function execute(job: ScheduledJob) {
   if (pending.value) return
-  const [message, title] = job.code === 'policy_ai'
-    ? ['按下方设置从读取进度往后读一批源政策，用上线模板判断政策类型并写入基础标签，会产生模型费用（按每日上限封顶）。', '立即执行一批 AI 打标？']
+  const task = taskOfJob(job.code)
+  const [message, title] = task
+    ? [`${TASK_INTRO[task]}会产生模型费用，按这个任务的每日上限封顶。`, `立即执行一批「${job.name}」？`]
     : [`按上次成功水位补齐「${job.name}」的数据，不改变每日计划。`, '立即执行增量同步？']
   const ok = await ElMessageBox.confirm(message, title,
     { confirmButtonText: '开始执行', cancelButtonText: '取消', type: 'info' }).then(() => true, () => false)
@@ -70,31 +104,9 @@ async function execute(job: ScheduledJob) {
   } catch (e) { ElMessage.error(errorMessage(e, '提交失败')) }
   finally { pending.value = '' }
 }
-const editing = ref<ScheduledJob | null>(null)
-const dialog = ref(false)
-const saving = ref(false)
-const formError = ref('')
-const form = reactive({ enabled: true, daily_time: '10:00', version: 1 })
-const unsaved = useUnsavedForm(dialog, () => form, saving)
+const settings = ref<InstanceType<typeof JobSettingsDrawer>>()
 function edit(job: ScheduledJob) {
-  editing.value = job
-  Object.assign(form, { enabled: job.enabled, daily_time: job.daily_time, version: job.version })
-  formError.value = ''
-  dialog.value = true
-}
-async function save() {
-  if (!editing.value || saving.value) return
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(form.daily_time)) { formError.value = '请选择有效的每日执行时刻'; return }
-  saving.value = true
-  formError.value = ''
-  try {
-    await updateJob(editing.value.code, { ...form })
-    unsaved.markSaved()
-    dialog.value = false
-    ElMessage.success('每日计划已保存')
-    await load()
-  } catch (e) { formError.value = errorMessage(e, '保存失败，请重试') }
-  finally { saving.value = false }
+  settings.value?.open(job, aiTask(job))
 }
 const history = useSchedulerHistory()
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -172,26 +184,36 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
           show-overflow-tooltip
         >
           <template #default="{ row }">
-            <el-tag
-              v-if="col.prop === 'enabled'"
-              :type="row.enabled ? 'success' : 'info'"
-              size="small"
+            <span
+              v-if="col.prop === 'plan'"
+              class="job-cell"
             >
-              {{ row.enabled ? '已启用' : '已停用' }}
-            </el-tag>
-            <el-tag
+              <el-tag
+                :type="row.enabled ? 'success' : 'info'"
+                size="small"
+              >
+                {{ row.enabled ? `每天 ${row.daily_time}` : '已停用' }}
+              </el-tag>
+              <span class="job-cell__note">{{ nextRun(row) }}</span>
+            </span>
+            <span
               v-else-if="col.prop === 'status'"
-              :type="statusType(row.last_run?.status)"
-              size="small"
+              class="job-cell"
             >
-              {{ row.last_run ? STATUS_TEXT[row.last_run.status as RunStatus] : '尚未执行' }}
-            </el-tag>
+              <el-tag
+                :type="statusType(row.last_run?.status)"
+                size="small"
+              >
+                {{ row.last_run ? STATUS_TEXT[row.last_run.status as RunStatus] : '尚未执行' }}
+              </el-tag>
+              <span class="job-cell__note">{{ runNote(row) }}</span>
+            </span>
             <span v-else>{{ cell(row, col.prop) }}</span>
           </template>
         </el-table-column>
         <el-table-column
           label="操作"
-          width="250"
+          width="220"
           fixed="right"
         >
           <template #default="{ row }">
@@ -211,7 +233,7 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
               type="primary"
               @click="edit(row)"
             >
-              设置计划
+              设置
             </el-button>
             <el-button
               link
@@ -225,66 +247,12 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
       </el-table>
     </ListPage>
     <p class="scheduler-note">
-      “数据更新至”是源数据的入库时间，与任务结束时间不同。失败后最多重试 2 次，分别等待 1 分钟、5 分钟；同一任务不会重复执行。
+      政策类型判断、政策解读、政策市场机会是三个独立任务：解读只做类型判断标为「是否解读 = 是」的政策，市场机会只做解读过的，前一步没跑后一步就没有待办。
+      “数据进度”对爬虫是源数据的入库时间，对类型判断是源政策读到的采集日。失败后最多重试 2 次，分别等待 1 分钟、5 分钟；同一任务不会重复执行。
     </p>
-    <el-dialog
-      v-model="dialog"
-      :title="`设置计划 · ${editing?.name ?? ''}`"
-      width="480px"
-      :before-close="unsaved.beforeClose"
-      :close-on-click-modal="false"
-    >
-      <el-alert
-        v-if="formError"
-        :title="formError"
-        type="error"
-        :closable="false"
-        show-icon
-      />
-      <el-form
-        label-position="top"
-        :disabled="saving"
-        @submit.prevent="save"
-      >
-        <el-form-item label="每日自动执行">
-          <el-switch
-            v-model="form.enabled"
-            active-text="启用"
-            inactive-text="停用"
-          />
-        </el-form-item>
-        <el-form-item label="执行时刻（北京时间）">
-          <el-time-select
-            v-model="form.daily_time"
-            start="00:00"
-            step="00:10"
-            end="23:50"
-            :clearable="false"
-            placeholder="选择执行时刻"
-          />
-        </el-form-item>
-        <p class="scheduler-note">
-          停用会取消排队和等待重试的任务，正在执行的批次会继续完成。停用期间仍可手动执行；重新启用后从下次计划时间开始。
-        </p>
-      </el-form>
-      <template #footer>
-        <el-button
-          :disabled="saving"
-          @click="unsaved.close"
-        >
-          取消
-        </el-button><el-button
-          type="primary"
-          :loading="saving"
-          @click="save"
-        >
-          保存计划
-        </el-button>
-      </template>
-    </el-dialog>
-    <AiTaggingPanel
-      v-if="overview?.items.some(item => item.code === 'policy_ai')"
-      :can-manage="canManage"
+    <JobSettingsDrawer
+      ref="settings"
+      @saved="load()"
     />
     <SchedulerHistoryDrawer :history="history" />
   </div>
@@ -293,7 +261,10 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
 <style scoped>
 .scheduler-strip, .scheduler-strip > div { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .scheduler-strip { padding: 14px 16px; border: 1px solid var(--zt-border); background: var(--zt-panel); border-radius: var(--zt-radius); color: var(--zt-ink-500); font-size: 13px; }
+.job-cell { display: inline-flex; align-items: center; gap: 8px; }
+.job-cell__note { color: var(--zt-ink-500); font-size: 12px; font-variant-numeric: tabular-nums; }
 .scheduler-note { color: var(--zt-ink-500); font-size: 13px; line-height: 1.8; margin: 16px 0; }
 .scheduler-page :deep(.list-page) { min-height: 0; max-height: none; }
-.scheduler-page :deep(.list-page__results) { flex: none; min-height: 180px; }
+/* 任务只有四个：表格按内容撑开，不出内部滚动条。 */
+.scheduler-page :deep(.list-page__results) { flex: none; min-height: 290px; }
 </style>

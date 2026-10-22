@@ -111,7 +111,9 @@ async def fake_codebook(_method: str, _path: str, **kwargs: Any) -> list[dict[st
 @pytest.fixture
 def world(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     session = Session()
-    run = SimpleNamespace(cost=Decimal(0), interpret_rows=0, interpret_failed=0)
+    run = SimpleNamespace(
+        cost=Decimal(0), interpret_rows=0, interpret_failed=0, opportunity_rows=0, opportunity_failed=0
+    )
     ai = FakeAi()
     state = SimpleNamespace(session=session, run=run, created=ai.created, events=[], deleted=[], tags=[], rows={})
 
@@ -153,9 +155,7 @@ def world(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     return state
 
 
-CONFIG = SimpleNamespace(
-    batch_size=10, content_max_chars=1000, interpret_prompt_id="i" * 32, opportunity_prompt_id="o" * 32
-)
+CONFIG = SimpleNamespace(batch_size=10, content_max_chars=1000, prompt_id="p" * 32)
 
 
 async def test_interpretation_writes_rows_codes_and_remarks(world: SimpleNamespace) -> None:
@@ -213,9 +213,9 @@ async def test_opportunities_fill_matching_untouched_rows(world: SimpleNamespace
 async def test_policies_without_interpretation_rows_skip_the_model(world: SimpleNamespace) -> None:
     world.tags, world.rows = [_tag("c9")], {}
     note = await interpreting.opportunity_step(uuid.uuid4(), CONFIG, Spend(limit=Decimal(10), before=Decimal(0)))  # type: ignore[arg-type]
-    assert note == "市场机会：没有待补的政策" and world.created == []
+    assert note == "没有待补市场机会的政策" and world.created == []
     assert world.tags[0].opportunity_at is not None
     world.tags = []
     assert await interpreting.interpret_step(uuid.uuid4(), CONFIG, Spend(limit=Decimal(1), before=Decimal(0))) == (  # type: ignore[arg-type]
-        "政策解读：没有待解读的政策"
+        "没有待解读的政策"
     )

@@ -1,4 +1,4 @@
-"""政策 AI 打标一批的完整流程，在 P6 的 scheduler_test 库跑。源库和 ai-service、codebook-service 用替身。"""
+"""政策 AI 打标三个任务各跑一批的完整流程，在 P6 的 scheduler_test 库跑。源库和 ai-service、codebook-service 用替身。"""
 
 from __future__ import annotations
 
@@ -12,9 +12,10 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import delete, select, text
 
-from app.aitag.application import pipeline, tagging
-from app.aitag.domain.models import PolicyAiConfig, PolicyAiRun
+from app.aitag.application import pipeline, settings, tagging
+from app.aitag.domain.models import PolicyAiRun, PolicyAiTask
 from app.common import internal_clients
+from app.common.errors import UserFacingError
 from app.core.database import SessionLocal, engine
 from app.policy.domain.models import BaseTag, Interpretation
 
@@ -80,9 +81,9 @@ async def isolated(monkeypatch: pytest.MonkeyPatch):
         await session.execute(delete(PolicyAiRun))
         await session.execute(
             text(
-                "UPDATE policy_ai_config SET type_prompt_id=:prompt, interpret_prompt_id='', opportunity_prompt_id='',"
-                " batch_size=3, daily_cost_limit=100,"
-                " cursor_date=:day, cursor_content_id='', version=1"
+                "UPDATE policy_ai_tasks SET prompt_id=CASE WHEN code='type' THEN :prompt ELSE '' END,"
+                " batch_size=3, daily_cost_limit=100, version=1,"
+                " cursor_date=CASE WHEN code='type' THEN CAST(:day AS date) END, cursor_content_id=''"
             ),
             {"prompt": PROMPT, "day": DAY},
         )
@@ -111,9 +112,9 @@ def _serve(monkeypatch: pytest.MonkeyPatch, rows: list[dict[str, Any]], ai: Fake
     return calls
 
 
-async def _state() -> tuple[PolicyAiConfig, dict[str, BaseTag], list[PolicyAiRun]]:
+async def _state() -> tuple[PolicyAiTask, dict[str, BaseTag], list[PolicyAiRun]]:
     async with SessionLocal() as session:
-        config = await session.get(PolicyAiConfig, 1)
+        config = await session.get(PolicyAiTask, "type")
         tags = {str(row.source_content_id): row for row in await session.scalars(select(BaseTag))}
         runs = list(await session.scalars(select(PolicyAiRun)))
         assert config is not None
@@ -123,7 +124,7 @@ async def _state() -> tuple[PolicyAiConfig, dict[str, BaseTag], list[PolicyAiRun
 async def test_a_batch_tags_base_tags_and_moves_the_cursor(monkeypatch: pytest.MonkeyPatch) -> None:
     ai = FakeAi({"c1": "信息化建设、资金扶持类", "c2": "资金扶持类", "c3": "数字经济"})
     calls = _serve(monkeypatch, ROWS, ai)
-    await tagging.run_batch(uuid.uuid4())
+    await tagging.run_batch(uuid.uuid4(), "type")
     config, tags, runs = await _state()
     assert calls[0][:3] == (DAY, "", 3)
     sent = ai.created[0]
@@ -137,13 +138,13 @@ async def test_a_batch_tags_base_tags_and_moves_the_cursor(monkeypatch: pytest.M
 
 async def test_retagging_updates_ai_rows_but_keeps_manual_edits(monkeypatch: pytest.MonkeyPatch) -> None:
     _serve(monkeypatch, ROWS, FakeAi({"c1": "资金扶持类", "c2": "资金扶持类", "c3": "资金扶持类"}))
-    await tagging.run_batch(uuid.uuid4())
+    await tagging.run_batch(uuid.uuid4(), "type")
     async with SessionLocal() as session:
         edited = (await session.scalars(select(BaseTag).where(BaseTag.source_content_id == "c2"))).one()
         edited.remark, edited.updated_at = "人工核对过", edited.updated_at + timedelta(minutes=1)
         await session.commit()
     _serve(monkeypatch, ROWS, FakeAi({"c1": "信息化建设类", "c2": "信息化建设类", "c3": "信息化建设类"}))
-    await tagging.run_batch(uuid.uuid4())
+    await tagging.run_batch(uuid.uuid4(), "type")
     _, tags, _ = await _state()
     assert tags["c1"].policy_types == "信息化建设类" and tags["c1"].version == 2
     assert (tags["c2"].policy_types, tags["c2"].remark) == ("资金扶持类", "人工核对过")
@@ -151,7 +152,7 @@ async def test_retagging_updates_ai_rows_but_keeps_manual_edits(monkeypatch: pyt
 
 async def test_rows_not_run_before_the_cost_limit_are_read_again_next_time(monkeypatch: pytest.MonkeyPatch) -> None:
     _serve(monkeypatch, ROWS, FakeAi({"c1": "资金扶持类", "c2": None, "c3": "资金扶持类"}))
-    await tagging.run_batch(uuid.uuid4())
+    await tagging.run_batch(uuid.uuid4(), "type")
     config, tags, runs = await _state()
     # c3 虽然答了，但排在没执行的 c2 后面：进度只到 c1，下批从 c2 重读，c3 再打一次也只是更新。
     assert set(tags) == {"c1"} and (config.cursor_date, config.cursor_content_id) == (DAY, "c1")
@@ -161,16 +162,62 @@ async def test_rows_not_run_before_the_cost_limit_are_read_again_next_time(monke
 async def test_nothing_is_read_once_today_s_budget_is_spent(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _serve(monkeypatch, ROWS, FakeAi({}))
     async with SessionLocal() as session:
-        await session.execute(text("UPDATE policy_ai_config SET daily_cost_limit=1"))
+        await session.execute(text("UPDATE policy_ai_tasks SET daily_cost_limit=1"))
         session.add(
-            PolicyAiRun(id=uuid.uuid4(), status="success", stage="done", cost=Decimal(2), started_at=tagging.utcnow())
+            PolicyAiRun(
+                id=uuid.uuid4(),
+                task="type",
+                status="success",
+                stage="done",
+                cost=Decimal(2),
+                type_cost=Decimal(2),
+                started_at=tagging.utcnow(),
+            )
         )
         await session.commit()
     monkeypatch.setattr(tagging, "today", pipeline.today)
-    await tagging.run_batch(uuid.uuid4())
+    await tagging.run_batch(uuid.uuid4(), "type")
     _, tags, runs = await _state()
     assert calls == [] and tags == {}
     assert any("达到每日上限" in run.note for run in runs)
+
+
+async def test_each_task_has_its_own_daily_budget_and_old_combined_runs_split_by_step(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async with SessionLocal() as session:
+        # 拆分前的批次三步一起跑，记在类型判断名下，各步费用在各自的列里。
+        session.add(
+            PolicyAiRun(
+                id=uuid.uuid4(),
+                task="type",
+                status="success",
+                stage="done",
+                source_rows=10,
+                interpret_rows=24,
+                cost=Decimal("0.6"),
+                type_cost=Decimal("0.3"),
+                interpret_cost=Decimal("0.2"),
+                opportunity_cost=Decimal("0.1"),
+                started_at=tagging.utcnow(),
+            )
+        )
+        await session.commit()
+        listed = {item["code"]: item for item in (await settings.list_tasks(session))["items"]}
+        bill = await settings.billing(session, "interpret", 7)
+    assert list(listed) == ["type", "interpret", "opportunity"]
+    assert [listed[code]["spent_today"] for code in listed] == ["0.300000", "0.200000", "0.100000"]
+    assert listed["type"]["cursor_date"] == DAY.isoformat() and listed["interpret"]["cursor_date"] == ""
+    assert bill["total"] == "0.200000" and bill["items"][0]["interpret_rows"] == 24
+    assert bill["items"][0]["policies"] == 0  # 那 10 条是类型判断读的，不算解读处理的政策
+
+
+async def test_a_task_without_a_template_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
+    _serve(monkeypatch, ROWS, FakeAi({}))
+    with pytest.raises(UserFacingError, match="政策解读"):
+        await tagging.run_batch(uuid.uuid4(), "interpret")
+    _, _, runs = await _state()
+    assert [(run.task, run.status) for run in runs] == [("interpret", "failed")]
 
 
 class StagedAi:
@@ -226,7 +273,8 @@ def staged(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
     async def enable() -> None:
         async with SessionLocal() as session:
             await session.execute(
-                text("UPDATE policy_ai_config SET interpret_prompt_id=:p, opportunity_prompt_id=:p"), {"p": "i" * 32}
+                text("UPDATE policy_ai_tasks SET prompt_id=:p WHERE code IN ('interpret', 'opportunity')"),
+                {"p": "i" * 32},
             )
             await session.execute(delete(Interpretation))
             await session.commit()
@@ -261,8 +309,9 @@ async def test_the_pipeline_interprets_informatization_policies_and_fills_opport
         }
     )
     _serve(monkeypatch, ROWS, ai)
-    await tagging.run_batch(uuid.uuid4())
-    # 只有信息化建设类（c1、c3）进解读；c3 解读失败不进市场机会。
+    for task in ("type", "interpret", "opportunity"):
+        await tagging.run_batch(uuid.uuid4(), task)
+    # 三个任务各跑一批。只有信息化建设类（c1、c3）进解读；c3 解读失败不进市场机会。
     assert [body["caller_name"][-4:] for body in ai.created] == ["类型判断", "政策解读", "市场机会"]
     assert [row["源ID"] for row in ai.created[1]["rows"]] == ["c1", "c3"]
     assert [row["源ID"] for row in ai.created[2]["rows"]] == ["c1"]
@@ -282,7 +331,11 @@ async def test_the_pipeline_interprets_informatization_policies_and_fills_opport
     assert tags["c1"].interpreted_at and tags["c1"].opportunity_at
     assert tags["c3"].interpreted_at and "AI 解读失败：限流" in tags["c3"].remark
     assert tags["c2"].interpreted_at is None
-    assert (runs[0].interpret_rows, runs[0].interpret_failed) == (2, 1)
+    by_task = {run.task: run for run in runs}
+    assert (by_task["interpret"].source_rows, by_task["interpret"].interpret_rows) == (2, 2)
+    assert by_task["interpret"].interpret_failed == 1
+    assert (by_task["opportunity"].opportunity_rows, by_task["opportunity"].opportunity_failed) == (2, 0)
+    assert by_task["type"].interpret_cost == 0 and by_task["interpret"].type_cost == 0
 
 
 async def test_reinterpreting_keeps_rows_people_already_verified(
@@ -295,14 +348,17 @@ async def test_reinterpreting_keeps_rows_people_already_verified(
         "市场机会": {},
     }
     _serve(monkeypatch, ROWS[:1], StagedAi(first))
-    await tagging.run_batch(uuid.uuid4())
+    await tagging.run_batch(uuid.uuid4(), "type")
+    await tagging.run_batch(uuid.uuid4(), "interpret")
     async with SessionLocal() as session:
         verified = (
             await session.scalars(select(Interpretation).where(Interpretation.scenario_l2_name == "城市大脑"))
         ).one()
         verified.data_status = "人工验证"
         await session.execute(text("UPDATE policy_base_tags SET interpreted_at = NULL, opportunity_at = NULL"))
-        await session.execute(text("UPDATE policy_ai_config SET cursor_date=:day, cursor_content_id=''"), {"day": DAY})
+        await session.execute(
+            text("UPDATE policy_ai_tasks SET cursor_date=:day, cursor_content_id='' WHERE code='type'"), {"day": DAY}
+        )
         await session.commit()
     second = {
         "类型判断": {"c1": ([{"政策类型名称": "信息化建设类"}], "")},
@@ -310,7 +366,8 @@ async def test_reinterpreting_keeps_rows_people_already_verified(
         "市场机会": {},
     }
     _serve(monkeypatch, ROWS[:1], StagedAi(second))
-    await tagging.run_batch(uuid.uuid4())
+    await tagging.run_batch(uuid.uuid4(), "type")
+    await tagging.run_batch(uuid.uuid4(), "interpret")
     rows = (await _interpretations())["c1"]
     # 一网统管（没人动过）被新答案替换；城市大脑已人工验证，保留原行、不重复建。
     assert [(row.scenario_l2_name, row.data_status) for row in rows] == [

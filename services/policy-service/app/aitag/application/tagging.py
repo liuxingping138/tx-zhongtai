@@ -1,9 +1,9 @@
-"""政策 AI 打标的一批，由任务调度（app.worker.scheduler）调用，一次执行就是一批：
+"""政策 AI 打标的一批，由任务调度（app.worker.scheduler）调用。三个任务各自执行，一次执行是其中一个任务的一批：
 
-1. 类型判断：从读取进度往后读源政策 → 用上线模板判断政策类型 → 写基础标签 → 进度前移。
-2. 政策解读、3. 市场机会：按待办做（见 interpreting），上一批费用到上限没做完的接着做。
+- 类型判断：从读取进度往后读源政策 → 用上线模板判断政策类型 → 写基础标签 → 进度前移。
+- 政策解读、市场机会：按待办做（见 interpreting），上一批费用到上限没做完的接着做。
 
-模型调用在 ai-service 的 worker 里跑，这里只发起、等待、取结果。每一步按当日剩余额度设费用上限，到上限它自己停。
+模型调用在 ai-service 的 worker 里跑，这里只发起、等待、取结果。按这个任务当日剩余额度设费用上限，到上限它自己停。
 """
 
 from __future__ import annotations
@@ -26,7 +26,8 @@ from app.aitag.application.pipeline import (
     update_run,
 )
 from app.aitag.domain import rules
-from app.aitag.domain.models import PolicyAiConfig, PolicyAiRun
+from app.aitag.domain.models import PolicyAiRun, PolicyAiTask
+from app.aitag.domain.tasks import TASKS
 from app.aitag.repositories import source
 from app.aitag.repositories import tagging as repo
 from app.common import internal_clients
@@ -98,7 +99,7 @@ async def _save_types(
                 continue
             seen.add(digest)
             tagged += 1 if _write_base_tag(session, current, row, values) else 0
-        locked = await repo.config(session, lock=True)
+        locked = await repo.task(session, "type", lock=True)
         if done_rows:
             last = done_rows[-1]
             locked.cursor_date, locked.cursor_content_id = last["collect_date"], str(last["content_id"])
@@ -117,12 +118,12 @@ def _cursor_text(day: Any, content_id: str) -> str:
     return f"{day.isoformat()} {content_id}".strip()
 
 
-async def _type_step(run_id: uuid.UUID, config: PolicyAiConfig, spend: Spend) -> str:
+async def _type_step(run_id: uuid.UUID, config: PolicyAiTask, spend: Spend) -> str:
     rows = await anyio.to_thread.run_sync(
-        source.read_batch, config.cursor_date, config.cursor_content_id, config.batch_size, today()
+        source.read_batch, config.cursor_date or today(), config.cursor_content_id, config.batch_size, today()
     )
     if not rows:
-        return "类型判断：没有新的源政策"
+        return "没有新的源政策"
     contents = await anyio.to_thread.run_sync(source.read_contents, [str(row["content_id"]) for row in rows])
     limit = config.content_max_chars
     prompt_rows = [rules.prompt_row(row, contents.get(str(row["content_id"])), limit) for row in rows]
@@ -131,7 +132,7 @@ async def _type_step(run_id: uuid.UUID, config: PolicyAiConfig, spend: Spend) ->
     status, results = await ask(
         run_id,
         spend,
-        prompt_id=config.type_prompt_id,
+        prompt_id=config.prompt_id,
         rows=prompt_rows,
         caller="政策AI打标·类型判断",
         run_field="type_run_id",
@@ -144,31 +145,35 @@ async def _type_step(run_id: uuid.UUID, config: PolicyAiConfig, spend: Spend) ->
         type_failed=counts["failed"],
         source_to=_cursor_text(last["collect_date"], str(last["content_id"])) if last else "",
     )
-    note = (
-        f"类型判断：读取 {len(rows)} 条，写入基础标签 {counts['tagged']} 条，其中失败或没对上码表 {counts['failed']} 条"
-    )
+    note = f"读取 {len(rows)} 条，写入基础标签 {counts['tagged']} 条，其中失败或没对上码表 {counts['failed']} 条"
     if counts["processed"] < len(rows):
         reason = status.get("error_message") or "任务提前停止"
         note += f"；{reason}，剩余 {len(rows) - counts['processed']} 条下批接着打"
     return note
 
 
-async def run_batch(run_id: uuid.UUID) -> None:
+STEPS = {"type": _type_step, "interpret": interpreting.interpret_step, "opportunity": interpreting.opportunity_step}
+FIRST_STAGE = {"type": "reading", "interpret": "interpreting", "opportunity": "opportunity"}
+
+
+async def run_batch(run_id: uuid.UUID, task: str) -> None:
     async with SessionLocal() as session:
-        config = await repo.config(session)
-        spent = await repo.spent_since(session, day_start(today()))
+        config = await repo.task(session, task)
+        spent = await repo.spent_since(session, task, day_start(today()))
+        cursor = _cursor_text(config.cursor_date, config.cursor_content_id) if config.cursor_date else ""
         session.add(
             PolicyAiRun(
                 id=run_id,
+                task=task,
                 status="running",
-                stage="reading",
-                source_from=_cursor_text(config.cursor_date, config.cursor_content_id),
+                stage=FIRST_STAGE[task],
+                source_from=cursor if task == "type" else "",
                 started_at=utcnow(),
             )
         )
         await session.commit()
     try:
-        note = await _run(run_id, config, Spend(limit=config.daily_cost_limit, before=spent))
+        note = await _run(run_id, task, config, Spend(limit=config.daily_cost_limit, before=spent))
         await update_run(run_id, status="success", stage="done", note=note, finished_at=utcnow())
     except Exception as exc:
         message = str(exc) if isinstance(exc, UserFacingError) else f"执行失败（{type(exc).__name__}）"
@@ -176,22 +181,12 @@ async def run_batch(run_id: uuid.UUID) -> None:
         raise
 
 
-async def _run(run_id: uuid.UUID, config: PolicyAiConfig, spend: Spend) -> str:
-    if not config.type_prompt_id:
-        raise UserFacingError("还没有选「政策类型判断」用的上线模板，请先在任务调度页设置")
-    notes: list[str] = []
-    steps = [("类型判断", _type_step)]
-    if config.interpret_prompt_id:
-        steps.append(("政策解读", interpreting.interpret_step))
-    if config.opportunity_prompt_id:
-        steps.append(("市场机会", interpreting.opportunity_step))
-    for name, step in steps:
-        if spend.remaining() <= 0:
-            used = spend.before + spend.run
-            notes.append(f"{name}：今日已花 {used:.2f} 元，达到每日上限 {spend.limit:.2f} 元，留到明天")
-            continue
-        notes.append(await step(run_id, config, spend))
-    return "；".join(notes)
+async def _run(run_id: uuid.UUID, task: str, config: PolicyAiTask, spend: Spend) -> str:
+    if not config.prompt_id:
+        raise UserFacingError(f"还没有选「{TASKS[task]}」用的上线模板，请在任务调度页这个任务的设置里选")
+    if spend.remaining() <= 0:
+        return f"今日已花 {spend.before:.2f} 元，达到每日上限 {spend.limit:.2f} 元，留到明天"
+    return await STEPS[task](run_id, config, spend)
 
 
 async def abandon(run_id: uuid.UUID, message: str) -> None:
@@ -227,6 +222,9 @@ def run_summary(run: PolicyAiRun) -> dict[str, Any]:
         "type_failed": run.type_failed,
         "interpret_rows": run.interpret_rows,
         "interpret_failed": run.interpret_failed,
+        "opportunity_rows": run.opportunity_rows,
+        "opportunity_failed": run.opportunity_failed,
+        "task": run.task,
         "type_run_id": run.type_run_id,
         "interpret_run_id": run.interpret_run_id,
         "opportunity_run_id": run.opportunity_run_id,

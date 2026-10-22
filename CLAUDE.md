@@ -213,7 +213,8 @@ policy / codebook / ai 走公共 Outbox，默认 5 分钟。审计服务按 `eve
 系统管理的任务调度页面 `/system/scheduler` 使用政策服务接口 `/api/v1/policy/scheduled-jobs`，
 资源 `system.scheduler` 归属 `policy-service`；READ 可查看，FULL 可设置计划和手动执行。
 `policy-worker` 独立容器持 PostgreSQL 全局会话锁，按北京时间每日调度任务。两项：爬虫监测增量同步
-（任务编码 `crawler`，默认 10:10，时刻可在页面改）和政策 AI 打标（`policy_ai`，上线时默认停用、页面手动执行）。
+（任务编码 `crawler`，默认 10:10，时刻可在页面改）和政策 AI 打标的三个任务（`policy_ai_type` / `policy_ai_interpret` / `policy_ai_opportunity`，
+上线时默认停用、页面手动执行）。
 执行、结果摘要、中断收尾都按任务编码分派（`app/worker/scheduler.py`、`app/scheduler/application/jobs.py`），超时按任务分别设（`TIMEOUTS`）。
 配置、执行队列、重试状态持久化在政策库；重启错过多天只合并一次增量。
 初始化无成功水位时拒绝自动同步，需要先完成历史回填，不能自动退回短窗口。
@@ -224,18 +225,20 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
 
 - `app/aitag/`（与 policy、crawler、scheduler 平级）。源数据是同一 MySQL 实例的 `bid_analyse.csys_policy_info` + `csys_policy_info_content`
   （正文，按 `content_id` 一对一），只读不回写。按采集日逐天读、日内按 `content_id` 分页；读取进度（采集日 + 正文ID）存在
-  `policy_ai_config`，一批写完才前移，费用到上限没跑到的行下批重读
-- 每批调 ai-service 的 `/internal/v1/pipeline-runs`：用模板**上线版本**、低优档、以当日剩余额度为费用上限跑，worker 到上限自停；
+  `policy_ai_tasks` 的类型判断那一行，一批写完才前移，费用到上限没跑到的行下批重读
+- 类型判断、政策解读、市场机会是三个独立的调度任务（`app/aitag/domain/tasks.py`），各有模板、每批条数、正文长度和每日上限（`policy_ai_tasks` 一任务一行），
+  一次执行只跑一个任务的一批。后两个按待办取数据，前一个没跑后一个就没有待办，彼此不串联
+- 每批调 ai-service 的 `/internal/v1/pipeline-runs`：用模板**上线版本**、低优档、以这个任务当日剩余额度为费用上限跑，worker 到上限自停；
   政策服务轮询到结束再取解析结果。调度超时或进程中断会停掉 ai-service 那边的任务
 - 类型判断结果用系统政策类型码表核对（缺「类」字的旧写法补上能对上就算），写进基础标签：按 `source_content_id` 更新，
   人工在打标后改过的行不覆盖；失败和没对上码表的写进备注。含「信息化建设类」的标「是否解读 = 是」
-- 第 2、3 步按待办做：基础标签「是否解读 = 是」且 `interpreted_at` 为空的政策做解读，一条展开成多行写解读表（「政策概览」写进「政策要文」，
+- 解读、市场机会按待办做：基础标签「是否解读 = 是」且 `interpreted_at` 为空的政策做解读，一条展开成多行写解读表（「政策概览」写进「政策要文」，
   非新增场景到码表查编码，名称对不上的写备注）；解读过、`opportunity_at` 为空的做市场机会，按一级行业 + 一级场景回填。
   费用到上限没轮到的不记时间，下批接着做；AI 行只要人工验证过或改过就不再覆盖（`app/aitag/application/interpreting.py`）
 - 解读列表「同步新增场景」：是否新增场景 = 是、人工验证、未同步的行，经 codebook `/internal/v1/scenarios/sync` 按编码规则
   （`app/domain/scenario_codes.py`：各级号全局最大 + 1，已有上级沿用，行业只查不建）写进场景码表并回填编码；动作 `policy.interpretations:sync_scenarios`
-- 账单：批次记三步各自的费用（`type_cost` 等，`pipeline.STAGE_COST`），`/api/v1/policy/ai-tagging/billing` 按北京日期汇总；
-  概览的 `current` 给出正在跑的步骤和 AI 已答条数
+- 账单：批次记 `task` 和各步费用列（`type_cost` 等），今日已花和 `/api/v1/policy/ai-tagging/tasks/{task}/billing` 都按费用列
+  （`tasks.TASK_COST`）算，拆分前三步合跑的旧批次也能各归各的任务；`/tasks` 的 `current` 给出每个任务正在跑的那批和 AI 已答条数
 - 内部调用密钥：`AI_POLICY_CALLER_SECRET`（政策→AI）、`CODEBOOK_POLICY_CALLER_SECRET`（政策→码表），compose 把同一个值传给两边
 
 ### 网关

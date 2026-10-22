@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatYuan, runStatusText, runStatusType } from './aiTagging'
+import { formatYuan, runResultText, taskOfJob } from './aiTagging'
 
 describe('政策 AI 打标', () => {
   it('金额到分，试跑的小额保留 4 位', () => {
@@ -8,8 +8,15 @@ describe('政策 AI 打标', () => {
     expect(formatYuan('abc')).toBe('—')
   })
 
-  it('状态写中文，不认识的原样显示', () => {
-    expect([runStatusText('running'), runStatusText('failed'), runStatusText('other')]).toEqual(['执行中', '失败', 'other'])
-    expect([runStatusType('success'), runStatusType('other')]).toEqual(['success', 'info'])
+  it('任务调度编码对回三个打标任务，别的任务不算', () => {
+    expect(['policy_ai_type', 'policy_ai_interpret', 'policy_ai_opportunity'].map(taskOfJob)).toEqual(['type', 'interpret', 'opportunity'])
+    expect([taskOfJob('crawler'), taskOfJob('policy_ai'), taskOfJob('policy_ai_x')]).toEqual([null, null, null])
+  })
+
+  it('执行结果：失败写原因，成功写说明，花过钱带上金额', () => {
+    expect(runResultText({ error_message: '还没有选模板', note: '' })).toBe('还没有选模板')
+    expect(runResultText({ error_message: '', note: '读取 10 条', cost: '0.325566' })).toBe('读取 10 条 · ¥0.33')
+    expect(runResultText({ error_message: '', note: '没有待解读的政策', cost: '0' })).toBe('没有待解读的政策')
+    expect(runResultText(null)).toBe('—')
   })
 })

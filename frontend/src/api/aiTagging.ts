@@ -1,34 +1,9 @@
 import { http, request } from './http'
-import type { Page } from './types'
-import type { AiTaggingResult } from './scheduler'
 
-/** 政策 AI 打标的设置。读取进度 = 采集日期 + 该日已读到的正文ID，改起始日期会从那天第一条重读。 */
-export interface AiTaggingConfig {
-  type_prompt_id: string
-  interpret_prompt_id: string
-  opportunity_prompt_id: string
-  batch_size: number
-  content_max_chars: number
-  daily_cost_limit: string
-  cursor_date: string
-  cursor_content_id: string
-  version: number
-  updated_at: string
-  updated_by_name: string
-}
+/** 政策 AI 打标的三个任务，在任务调度里各是一个任务（调度编码 = job_code）。 */
+export type AiTaskCode = 'type' | 'interpret' | 'opportunity'
 
-/** 可以给定时任务用的模板：政策类、已上线 */
-export interface OnlineTemplate {
-  prompt_id: string
-  title: string
-  release_no: number
-  released_at: string
-  model_id: string
-  output_fields: string[]
-  code: string
-}
-
-/** 正在跑的那一批：第几步、这一步 AI 答到第几条（ai-service 暂时取不到时 done、total 为空） */
+/** 正在跑的那一批：在做什么、AI 答到第几条（ai-service 暂时取不到时 done、total 为空） */
 export interface AiTaggingCurrent {
   id: string
   stage: string
@@ -39,44 +14,58 @@ export interface AiTaggingCurrent {
   total: number | null
 }
 
-export interface AiTaggingOverview {
-  current: AiTaggingCurrent | null
-  config: AiTaggingConfig
-  templates: OnlineTemplate[]
-  templates_error: string
+/** 一个打标任务的设置和今天的花费。读取进度只有类型判断有：采集日期 + 该日已读到的正文ID。 */
+export interface AiTask {
+  code: AiTaskCode
+  job_code: string
+  name: string
+  prompt_id: string
+  batch_size: number
+  content_max_chars: number
+  daily_cost_limit: string
+  cursor_date: string
+  cursor_content_id: string
+  version: number
+  updated_at: string
+  updated_by_name: string
   spent_today: string
   spent_month: string
+  current: AiTaggingCurrent | null
 }
 
-export interface AiTaggingRun extends AiTaggingResult {
-  id: string
-  started_at: string
-  finished_at: string
+/** 可以给打标任务用的模板：政策类、已上线 */
+export interface OnlineTemplate {
+  prompt_id: string
+  title: string
+  release_no: number
+  released_at: string
+  model_id: string
+  output_fields: string[]
+  code: string
 }
 
-export type AiTaggingConfigBody = Omit<AiTaggingConfig, 'cursor_content_id' | 'updated_at' | 'updated_by_name'>
+export type AiTaskBody = Pick<AiTask, 'prompt_id' | 'batch_size' | 'content_max_chars' | 'daily_cost_limit' | 'cursor_date' | 'version'>
 
-const base = '/policy/ai-tagging'
-export const aiTaggingOverview = () => request<AiTaggingOverview>(http.get(base))
-export const updateAiTaggingConfig = (body: AiTaggingConfigBody) => request<AiTaggingConfig>(http.put(`${base}/config`, body))
+/** 某个任务一天的账单。policies 是这个任务处理的政策条数；三类写入量只有对应任务有值。 */
 export interface BillingDay {
   day: string
   runs: number
   cost: string
-  type_cost: string
-  interpret_cost: string
-  opportunity_cost: string
-  source_rows: number
+  policies: number
   tagged_rows: number
   interpret_rows: number
+  opportunity_rows: number
 }
 
-export interface AiTaggingBilling {
+export interface AiTaskBilling {
   days: number
   items: BillingDay[]
-  total: Pick<BillingDay, 'cost' | 'type_cost' | 'interpret_cost' | 'opportunity_cost'>
+  total: string
 }
 
-export const aiTaggingBilling = (days: number) => request<AiTaggingBilling>(http.get(`${base}/billing`, { params: { days } }))
-export const listAiTaggingRuns = (page: number) =>
-  request<Page<AiTaggingRun>>(http.get(`${base}/runs`, { params: { page, page_size: 10 } }))
+const base = '/policy/ai-tagging'
+export const listAiTasks = () => request<{ items: AiTask[] }>(http.get(`${base}/tasks`))
+export const listAiTemplates = () => request<{ items: OnlineTemplate[]; error: string }>(http.get(`${base}/templates`))
+export const updateAiTask = (code: AiTaskCode, body: AiTaskBody) => request<AiTask>(http.put(`${base}/tasks/${code}`, body))
+export const aiTaskBilling = (code: AiTaskCode, days: number) =>
+  request<AiTaskBilling>(http.get(`${base}/tasks/${code}/billing`, { params: { days } }))

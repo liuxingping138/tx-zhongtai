@@ -1,4 +1,4 @@
-"""政策 AI 打标的设置和执行记录（任务调度页用）。"""
+"""政策 AI 打标三个任务的设置、今日费用、进度和账单（任务调度页用）。"""
 
 from __future__ import annotations
 
@@ -8,11 +8,12 @@ from typing import Any
 
 from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
-from platform_common.errors import ApiError, ErrorCode, VersionConflictError
+from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionConflictError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.aitag.application.tagging import day_start, run_summary, today
-from app.aitag.domain.models import PolicyAiConfig
+from app.aitag.application.tagging import day_start, today
+from app.aitag.domain.models import PolicyAiRun, PolicyAiTask
+from app.aitag.domain.tasks import TASKS, job_code
 from app.aitag.repositories import tagging as repo
 from app.common import internal_clients
 from app.common.audit_emit import enqueue_event
@@ -20,41 +21,55 @@ from app.common.audit_emit import enqueue_event
 BATCH_SIZE_RANGE = (1, 20_000)
 # 0 = 全文照传；要截就至少留 500 字。
 CONTENT_RANGE = (500, 200_000)
-PROMPT_FIELDS = ("type_prompt_id", "interpret_prompt_id", "opportunity_prompt_id")
 
 
-def _config_out(config: PolicyAiConfig) -> dict[str, Any]:
+def _task_out(task: PolicyAiTask) -> dict[str, Any]:
     return {
-        **{field: getattr(config, field) for field in PROMPT_FIELDS},
-        "batch_size": config.batch_size,
-        "content_max_chars": config.content_max_chars,
-        "daily_cost_limit": str(config.daily_cost_limit),
-        "cursor_date": config.cursor_date.isoformat(),
-        "cursor_content_id": config.cursor_content_id,
-        "version": config.version,
-        "updated_at": format_beijing(config.updated_at),
-        "updated_by_name": config.updated_by_name,
+        "code": task.code,
+        "job_code": job_code(task.code),
+        "name": TASKS[task.code],
+        "prompt_id": task.prompt_id,
+        "batch_size": task.batch_size,
+        "content_max_chars": task.content_max_chars,
+        "daily_cost_limit": str(task.daily_cost_limit),
+        "cursor_date": task.cursor_date.isoformat() if task.cursor_date else "",
+        "cursor_content_id": task.cursor_content_id,
+        "version": task.version,
+        "updated_at": format_beijing(task.updated_at),
+        "updated_by_name": task.updated_by_name,
     }
 
 
-async def overview(session: AsyncSession) -> dict[str, Any]:
-    """设置、可选的上线模板（政策类）和今天、本月已花的钱。ai-service 不可用时模板列表为空，设置照样能看。"""
+async def list_tasks(session: AsyncSession) -> dict[str, Any]:
+    """三个任务的设置、今天和本月已花、正在跑的那一批进度。任务调度页每几秒刷新一次，这里不取模板列表。"""
 
-    config = await repo.config(session)
-    try:
-        templates = await internal_clients.ai("GET", "/internal/v1/online-templates", params={"category": "policy"})
-        templates_error = ""
-    except Exception as exc:  # noqa: BLE001  模板列表取不到不影响看设置和记录，原因显示在页面上
-        templates, templates_error = [], f"取上线模板失败：{exc}"
+    rows = await repo.tasks(session)
+    running = await repo.running_runs(session)
     first_of_month = today().replace(day=1)
-    return {
-        "current": await _current(session),
-        "config": _config_out(config),
-        "templates": templates,
-        "templates_error": templates_error,
-        "spent_today": str(await repo.spent_since(session, day_start(today()))),
-        "spent_month": str(await repo.spent_since(session, day_start(first_of_month))),
-    }
+    items = []
+    for code in TASKS:
+        task = rows.get(code)
+        if task is None:
+            continue
+        items.append(
+            {
+                **_task_out(task),
+                "spent_today": str(await repo.spent_since(session, code, day_start(today()))),
+                "spent_month": str(await repo.spent_since(session, code, day_start(first_of_month))),
+                "current": await _current(running.get(code)),
+            }
+        )
+    return {"items": items}
+
+
+async def templates() -> dict[str, Any]:
+    """可选的上线模板（政策类）。ai-service 不可用时列表为空，原因显示在设置里，其余设置照样能改。"""
+
+    try:
+        items = await internal_clients.ai("GET", "/internal/v1/online-templates", params={"category": "policy"})
+        return {"items": items, "error": ""}
+    except Exception as exc:  # noqa: BLE001  模板列表取不到不影响看和改其余设置
+        return {"items": [], "error": f"取上线模板失败：{exc}"}
 
 
 def _in_range(value: int, bounds: tuple[int, int], label: str) -> int:
@@ -63,59 +78,57 @@ def _in_range(value: int, bounds: tuple[int, int], label: str) -> int:
     return value
 
 
-async def update(session: AsyncSession, actor: Actor, values: dict[str, Any]) -> dict[str, Any]:
-    config = await repo.config(session, lock=True)
-    if int(values.get("version") or 0) != config.version:
+def _cursor_date(value: Any) -> date:
+    cursor_date = date.fromisoformat(str(value))
+    if cursor_date > today():
+        raise ApiError("起始采集日期不能晚于今天", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    return cursor_date
+
+
+async def update_task(session: AsyncSession, actor: Actor, code: str, values: dict[str, Any]) -> dict[str, Any]:
+    if code not in TASKS:
+        raise NotFoundError("没有这个打标任务")
+    task = await repo.task(session, code, lock=True)
+    if int(values.get("version") or 0) != task.version:
         raise VersionConflictError("设置已被其他人修改，请刷新后重新保存")
+    # 先全部校验再改，任何一项不合格都不留下改了一半的设置。
     limit = Decimal(str(values["daily_cost_limit"]))
     if limit < 0:
         raise ApiError("每日费用上限不能是负数", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    cursor_date = date.fromisoformat(str(values["cursor_date"]))
-    if cursor_date > today():
-        raise ApiError("起始采集日期不能晚于今天", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    before = _config_out(config)
-    for field in PROMPT_FIELDS:
-        setattr(config, field, str(values.get(field) or "").strip())
-    config.batch_size = _in_range(int(values["batch_size"]), BATCH_SIZE_RANGE, "每批条数")
+    batch_size = _in_range(int(values["batch_size"]), BATCH_SIZE_RANGE, "每批条数")
     content_max = int(values["content_max_chars"])
-    config.content_max_chars = 0 if content_max == 0 else _in_range(content_max, CONTENT_RANGE, "正文截取字数")
-    config.daily_cost_limit = limit
+    content_max = 0 if content_max == 0 else _in_range(content_max, CONTENT_RANGE, "正文截取字数")
+    # 只有类型判断读源库，有读取进度。
+    cursor_date = _cursor_date(values["cursor_date"]) if code == "type" and values.get("cursor_date") else None
+    before = _task_out(task)
+    task.prompt_id = str(values.get("prompt_id") or "").strip()
+    task.batch_size, task.content_max_chars, task.daily_cost_limit = batch_size, content_max, limit
     # 改了起始日期就从那天的第一条重新读；没改就保持当前进度。
-    if cursor_date != config.cursor_date:
-        config.cursor_date, config.cursor_content_id = cursor_date, ""
-    config.version += 1
-    config.updated_at, config.updated_by_name = utcnow(), actor.name
-    after = _config_out(config)
+    if cursor_date is not None and cursor_date != task.cursor_date:
+        task.cursor_date, task.cursor_content_id = cursor_date, ""
+    task.version += 1
+    task.updated_at, task.updated_by_name = utcnow(), actor.name
+    after = _task_out(task)
     changed = {key: {"from": before[key], "to": after[key]} for key in after if before[key] != after[key]}
     await enqueue_event(
-        session, event_type="policy.ai_tagging.config_updated", actor=actor, target_id="policy_ai", changes=changed
+        session, event_type="policy.ai_tagging.config_updated", actor=actor, target_id=job_code(code), changes=changed
     )
     return after
 
 
-async def runs(session: AsyncSession, page: int, page_size: int) -> dict[str, Any]:
-    rows, total = await repo.page_runs(session, page, page_size)
-    items = [
-        {
-            "id": str(row.id),
-            **run_summary(row),
-            "started_at": format_beijing(row.started_at),
-            "finished_at": format_beijing(row.finished_at),
-        }
-        for row in rows
-    ]
-    return {"items": items, "total": total, "page": page, "page_size": page_size}
-
-
 # 进行到哪一步 -> 这一步在 ai-service 的任务ID列。
 _STAGE_RUN = {"typing": "type_run_id", "interpreting": "interpret_run_id", "opportunity": "opportunity_run_id"}
-STAGE_NAMES = {"reading": "读取源政策", "typing": "类型判断", "interpreting": "政策解读", "opportunity": "市场机会"}
+STAGE_NAMES = {
+    "reading": "读取源政策",
+    "typing": "模型判断中",
+    "interpreting": "模型解读中",
+    "opportunity": "模型回答中",
+}
 
 
-async def _current(session: AsyncSession) -> dict[str, Any] | None:
-    """正在跑的那一批：在哪一步、这一步 ai-service 答到第几条。取不到进度不影响页面。"""
+async def _current(run: PolicyAiRun | None) -> dict[str, Any] | None:
+    """正在跑的那一批：在做什么、ai-service 答到第几条。取不到进度不影响页面。"""
 
-    run = await repo.running_run(session)
     if run is None:
         return None
     current: dict[str, Any] = {
@@ -138,22 +151,23 @@ async def _current(session: AsyncSession) -> dict[str, Any] | None:
 
 
 BILLING_DAYS_MAX = 366
+_BILLING_COUNTS = ("runs", "policies", "tagged_rows", "interpret_rows", "opportunity_rows")
 
 
-async def billing(session: AsyncSession, days: int) -> dict[str, Any]:
-    """最近 days 天（含今天）每天的批次、费用和写入量，以及合计。没跑的日子不出现。"""
+async def billing(session: AsyncSession, code: str, days: int) -> dict[str, Any]:
+    """这个任务最近 days 天（含今天）每天的批次、费用和处理量，以及合计。没跑的日子不出现。"""
 
+    if code not in TASKS:
+        raise NotFoundError("没有这个打标任务")
     days = max(1, min(days, BILLING_DAYS_MAX))
-    rows = await repo.daily_billing(session, day_start(today() - timedelta(days=days - 1)))
-    money = ("cost", "type_cost", "interpret_cost", "opportunity_cost")
-    counts = ("runs", "source_rows", "tagged_rows", "interpret_rows")
+    rows = await repo.daily_billing(session, code, day_start(today() - timedelta(days=days - 1)))
     items = [
         {
             "day": str(row["day"]),
-            **{key: str(row[key] or 0) for key in money},
-            **{key: int(row[key] or 0) for key in counts},  # type: ignore[call-overload]  # SUM 出来是数值或空
+            "cost": str(row["cost"] or 0),
+            **{key: int(row.get(key) or 0) for key in _BILLING_COUNTS},  # type: ignore[call-overload]  # SUM 出来是数值或空
         }
         for row in rows
     ]
-    total = {key: str(sum((Decimal(item[key]) for item in items), Decimal(0))) for key in money}
+    total = str(sum((Decimal(item["cost"]) for item in items), Decimal(0)))
     return {"days": days, "items": items, "total": total}

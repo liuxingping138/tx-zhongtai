@@ -10,10 +10,11 @@ export interface ScheduledRun {
 }
 /** 爬虫增量同步的结果摘要 */
 export interface CrawlerResult { date_from?: string; date_to?: string; watermark?: string; days_synced?: number; site_rows?: number }
-/** 政策 AI 打标一批的结果摘要（也是调度页「政策 AI 打标」面板的一行） */
+/** 政策 AI 打标一批的结果摘要。task 是三个打标任务之一；source_rows 是这一批处理的政策条数。 */
 export interface AiTaggingResult {
-  status: string; stage: string; source_from: string; source_to: string; source_rows: number
+  task: string; status: string; stage: string; source_from: string; source_to: string; source_rows: number
   tagged_rows: number; type_failed: number; interpret_rows: number; interpret_failed: number
+  opportunity_rows: number; opportunity_failed: number
   type_run_id: string; interpret_run_id: string; opportunity_run_id: string
   cost: string; type_cost: string; interpret_cost: string; opportunity_cost: string
   note: string; error_message: string

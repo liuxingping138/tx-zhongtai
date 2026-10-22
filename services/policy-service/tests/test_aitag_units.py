@@ -12,7 +12,7 @@ from typing import Any
 import httpx
 import pytest
 from platform_common.actors import Actor
-from platform_common.errors import ApiError, DependencyUnavailableError, VersionConflictError
+from platform_common.errors import ApiError, DependencyUnavailableError, NotFoundError, VersionConflictError
 
 from app.aitag.application import pipeline, settings, tagging
 from app.aitag.repositories import source
@@ -162,9 +162,8 @@ def run_store(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
 def _config(**overrides: Any) -> Any:
     values = {
-        "type_prompt_id": "p" * 32,
-        "interpret_prompt_id": "",
-        "opportunity_prompt_id": "",
+        "code": "type",
+        "prompt_id": "p" * 32,
         "batch_size": 10,
         "content_max_chars": 1000,
         "daily_cost_limit": Decimal(10),
@@ -182,27 +181,37 @@ def _use_config(monkeypatch: pytest.MonkeyPatch, config: Any, spent: Decimal = D
     async def spent_since(*_: Any) -> Decimal:
         return spent
 
-    monkeypatch.setattr(repo, "config", get_config)
+    monkeypatch.setattr(repo, "task", get_config)
     monkeypatch.setattr(repo, "spent_since", spent_since)
 
 
 async def test_missing_template_fails_with_a_message_the_page_can_show(
     monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]
 ) -> None:
-    _use_config(monkeypatch, _config(type_prompt_id=""))
+    _use_config(monkeypatch, _config(prompt_id=""))
     run_id = uuid.uuid4()
-    with pytest.raises(UserFacingError, match="上线模板"):
-        await tagging.run_batch(run_id)
+    with pytest.raises(UserFacingError, match="「政策解读」用的上线模板"):
+        await tagging.run_batch(run_id, "interpret")
     run = run_store[str(run_id)]
-    assert run.status == "failed" and "上线模板" in run.error_message
+    assert (run.task, run.status) == ("interpret", "failed") and "上线模板" in run.error_message
+
+
+async def test_a_task_over_its_daily_budget_asks_nothing(
+    monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]
+) -> None:
+    _use_config(monkeypatch, _config(daily_cost_limit=Decimal(1)), spent=Decimal("1.2"))
+    run_id = uuid.uuid4()
+    await tagging.run_batch(run_id, "type")
+    run = run_store[str(run_id)]
+    assert run.status == "success" and run.note == "今日已花 1.20 元，达到每日上限 1.00 元，留到明天"
 
 
 async def test_empty_source_is_a_successful_batch(monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]) -> None:
     _use_config(monkeypatch, _config())
     monkeypatch.setattr(source, "read_batch", lambda *_: [])
     run_id = uuid.uuid4()
-    await tagging.run_batch(run_id)
-    assert (run_store[str(run_id)].status, run_store[str(run_id)].note) == ("success", "类型判断：没有新的源政策")
+    await tagging.run_batch(run_id, "type")
+    assert (run_store[str(run_id)].status, run_store[str(run_id)].note) == ("success", "没有新的源政策")
 
 
 async def test_unexpected_errors_hide_details_from_the_page(
@@ -216,7 +225,7 @@ async def test_unexpected_errors_hide_details_from_the_page(
     monkeypatch.setattr(source, "read_batch", broken)
     run_id = uuid.uuid4()
     with pytest.raises(RuntimeError):
-        await tagging.run_batch(run_id)
+        await tagging.run_batch(run_id, "type")
     assert run_store[str(run_id)].error_message == "执行失败（RuntimeError）"
 
 
@@ -242,7 +251,7 @@ async def test_cancelled_wait_stops_the_ai_run(monkeypatch: pytest.MonkeyPatch, 
     monkeypatch.setattr(internal_clients, "ai", ai)
     monkeypatch.setattr(internal_clients, "codebook", names)
     with pytest.raises(asyncio.CancelledError):
-        await tagging.run_batch(uuid.uuid4())
+        await tagging.run_batch(uuid.uuid4(), "type")
     assert ("POST", f"/internal/v1/pipeline-runs/{'r' * 32}/stop") in calls
 
 
@@ -272,143 +281,139 @@ async def test_abandon_marks_failed_and_stops_the_ai_run(
     await tagging.abandon(uuid.uuid4(), "不存在的批次不报错")
 
 
-def _settings_config() -> Any:
-    return SimpleNamespace(
-        type_prompt_id="",
-        interpret_prompt_id="",
-        opportunity_prompt_id="",
-        batch_size=1000,
-        content_max_chars=15000,
-        daily_cost_limit=Decimal(100),
-        cursor_date=DAY,
-        cursor_content_id="c9",
-        version=3,
-        updated_at=None,
-        updated_by_name="",
-    )
+def _task(code: str = "type", **overrides: Any) -> Any:
+    values = {
+        "code": code,
+        "prompt_id": "",
+        "batch_size": 1000,
+        "content_max_chars": 15000,
+        "daily_cost_limit": Decimal(100),
+        "cursor_date": DAY if code == "type" else None,
+        "cursor_content_id": "c9" if code == "type" else "",
+        "version": 3,
+        "updated_at": None,
+        "updated_by_name": "",
+    }
+    return SimpleNamespace(**(values | overrides))
 
 
 async def test_settings_validate_ranges_and_reset_the_cursor_on_date_change(monkeypatch: pytest.MonkeyPatch) -> None:
-    config = _settings_config()
+    task = _task()
     events: list[dict[str, Any]] = []
 
-    async def get_config(*_: Any, **__: Any) -> Any:
-        return config
+    async def get_task(*_: Any, **__: Any) -> Any:
+        return task
 
     async def record(_session: Any, **kwargs: Any) -> None:
         events.append(kwargs)
 
-    monkeypatch.setattr(repo, "config", get_config)
+    monkeypatch.setattr(repo, "task", get_task)
     monkeypatch.setattr(settings, "enqueue_event", record)
     monkeypatch.setattr(settings, "today", lambda: DAY + timedelta(days=30))
     body = {"batch_size": 50, "content_max_chars": 8000, "daily_cost_limit": "20", "cursor_date": DAY.isoformat()}
+    update = settings.update_task
     with pytest.raises(VersionConflictError):
-        await settings.update(FakeSession(), ACTOR, {**body, "version": 1})  # type: ignore[arg-type]
+        await update(FakeSession(), ACTOR, "type", {**body, "version": 1})  # type: ignore[arg-type]
     with pytest.raises(ApiError, match="每批条数"):
-        await settings.update(FakeSession(), ACTOR, {**body, "batch_size": 0, "version": 3})  # type: ignore[arg-type]
+        await update(FakeSession(), ACTOR, "type", {**body, "batch_size": 0, "version": 3})  # type: ignore[arg-type]
     with pytest.raises(ApiError, match="晚于今天"):
-        await settings.update(FakeSession(), ACTOR, {**body, "cursor_date": "2099-01-01", "version": 3})  # type: ignore[arg-type]
-    kept = await settings.update(FakeSession(), ACTOR, {**body, "type_prompt_id": "t" * 32, "version": 3})  # type: ignore[arg-type]
+        await update(FakeSession(), ACTOR, "type", {**body, "cursor_date": "2099-01-01", "version": 3})  # type: ignore[arg-type]
+    kept = await update(FakeSession(), ACTOR, "type", {**body, "prompt_id": "t" * 32, "version": 3})  # type: ignore[arg-type]
     assert (kept["batch_size"], kept["cursor_content_id"], kept["version"]) == (50, "c9", 4)
+    assert events[-1]["target_id"] == "policy_ai_type"
     assert events[-1]["changes"]["batch_size"] == {"from": 1000, "to": 50}
-    moved = await settings.update(FakeSession(), ACTOR, {**body, "cursor_date": "2026-09-01", "version": 4})  # type: ignore[arg-type]
+    moved = await update(FakeSession(), ACTOR, "type", {**body, "cursor_date": "2026-09-01", "version": 4})  # type: ignore[arg-type]
     assert (moved["cursor_date"], moved["cursor_content_id"]) == ("2026-09-01", "")
-    full = await settings.update(FakeSession(), ACTOR, {**body, "content_max_chars": 0, "version": 5})  # type: ignore[arg-type]
+    full = await update(FakeSession(), ACTOR, "type", {**body, "content_max_chars": 0, "version": 5})  # type: ignore[arg-type]
     assert full["content_max_chars"] == 0  # 0 = 全文照传
     with pytest.raises(ApiError, match="正文截取字数"):
-        await settings.update(FakeSession(), ACTOR, {**body, "content_max_chars": 100, "version": 6})  # type: ignore[arg-type]
+        await update(FakeSession(), ACTOR, "type", {**body, "content_max_chars": 100, "version": 6})  # type: ignore[arg-type]
 
 
-async def test_overview_still_shows_settings_when_ai_service_is_down(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def get_config(*_: Any, **__: Any) -> Any:
-        return _settings_config()
+async def test_only_the_type_task_has_a_reading_cursor(monkeypatch: pytest.MonkeyPatch) -> None:
+    task = _task("interpret")
 
-    async def spent(*_: Any) -> Decimal:
-        return Decimal("1.5")
+    async def get_task(*_: Any, **__: Any) -> Any:
+        return task
+
+    async def record(*_: Any, **__: Any) -> None:
+        return None
+
+    monkeypatch.setattr(repo, "task", get_task)
+    monkeypatch.setattr(settings, "enqueue_event", record)
+    body = {"batch_size": 5, "content_max_chars": 0, "daily_cost_limit": "3.5", "cursor_date": "2026-09-01"}
+    out = await settings.update_task(FakeSession(), ACTOR, "interpret", {**body, "version": 3})  # type: ignore[arg-type]
+    assert (out["name"], out["job_code"], out["cursor_date"], out["daily_cost_limit"]) == (
+        "政策解读",
+        "policy_ai_interpret",
+        "",
+        "3.5",
+    )
+
+
+async def test_task_list_still_shows_progress_when_ai_service_is_down(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def tasks(*_: Any) -> dict[str, Any]:
+        return {code: _task(code) for code in ("opportunity", "type", "interpret")}
+
+    async def spent(_session: Any, code: str, _since: Any) -> Decimal:
+        return {"type": Decimal("1.5"), "interpret": Decimal(2), "opportunity": Decimal(0)}[code]
 
     async def down(*_: Any, **__: Any) -> Any:
         raise DependencyUnavailableError("ai-service 暂时不可用")
 
     running = SimpleNamespace(
-        id=uuid.uuid4(),
-        stage="interpreting",
-        interpret_run_id="i" * 32,
-        started_at=None,
-        cost=Decimal("0.3"),
+        id=uuid.uuid4(), stage="interpreting", interpret_run_id="i" * 32, started_at=None, cost=Decimal("0.3")
     )
 
-    async def current(*_: Any) -> Any:
-        return running
+    async def runs(*_: Any) -> dict[str, Any]:
+        return {"interpret": running}
 
-    monkeypatch.setattr(repo, "config", get_config)
+    monkeypatch.setattr(repo, "tasks", tasks)
     monkeypatch.setattr(repo, "spent_since", spent)
-    monkeypatch.setattr(repo, "running_run", current)
+    monkeypatch.setattr(repo, "running_runs", runs)
     monkeypatch.setattr(internal_clients, "ai", down)
-    data = await settings.overview(FakeSession())  # type: ignore[arg-type]
-    # ai-service 不可用：进度取不到，但正在跑哪一步照样显示。
-    assert (data["current"]["stage_name"], data["current"]["done"]) == ("政策解读", None)
-    assert data["templates"] == [] and "不可用" in data["templates_error"]
-    assert (data["spent_today"], data["config"]["cursor_content_id"]) == ("1.5", "c9")
+    items = (await settings.list_tasks(FakeSession()))["items"]  # type: ignore[arg-type]
+    # 按页面顺序；ai-service 不可用时进度取不到，但正在做什么照样显示。
+    assert [item["code"] for item in items] == ["type", "interpret", "opportunity"]
+    assert [item["spent_today"] for item in items] == ["1.5", "2", "0"]
+    assert items[0]["current"] is None
+    assert (items[1]["current"]["stage_name"], items[1]["current"]["done"]) == ("模型解读中", None)
+    templates = await settings.templates()
+    assert templates["items"] == [] and "不可用" in templates["error"]
 
 
 async def test_running_batch_shows_how_far_the_ai_run_has_got(monkeypatch: pytest.MonkeyPatch) -> None:
     running = SimpleNamespace(id=uuid.uuid4(), stage="typing", type_run_id="t" * 32, started_at=None, cost=Decimal(0))
 
-    async def current(*_: Any) -> Any:
-        return running
-
     async def ai(method: str, path: str, **_: Any) -> Any:
         assert path.endswith("t" * 32)
         return {"done_count": 40, "total_count": 100}
 
-    monkeypatch.setattr(repo, "running_run", current)
     monkeypatch.setattr(internal_clients, "ai", ai)
-    data = await settings._current(FakeSession())  # type: ignore[arg-type]
-    assert data is not None and (data["stage_name"], data["done"], data["total"]) == ("类型判断", 40, 100)
+    data = await settings._current(running)  # type: ignore[arg-type]
+    assert data is not None and (data["stage_name"], data["done"], data["total"]) == ("模型判断中", 40, 100)
+    assert await settings._current(None) is None
 
 
 async def test_billing_sums_each_day_and_the_period(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[Any] = []
 
-    async def daily(_session: Any, since: Any) -> list[dict[str, Any]]:
-        seen.append(since)
+    async def daily(_session: Any, code: str, since: Any) -> list[dict[str, Any]]:
+        seen.append((code, since))
         return [
-            {
-                "day": DAY,
-                "runs": 2,
-                "cost": Decimal("1.5"),
-                "type_cost": Decimal("0.5"),
-                "interpret_cost": Decimal(1),
-                "opportunity_cost": None,
-                "source_rows": 40,
-                "tagged_rows": 38,
-                "interpret_rows": 12,
-            },
-            {
-                "day": DAY - timedelta(1),
-                "runs": 1,
-                "cost": Decimal("0.25"),
-                "type_cost": Decimal("0.25"),
-                "interpret_cost": Decimal(0),
-                "opportunity_cost": Decimal(0),
-                "source_rows": 10,
-                "tagged_rows": 10,
-                "interpret_rows": None,
-            },
+            {"day": DAY, "runs": 2, "cost": Decimal("1.5"), "policies": 4, "interpret_rows": 12},
+            {"day": DAY - timedelta(1), "runs": 1, "cost": Decimal("0.25"), "policies": None, "interpret_rows": None},
         ]
 
     monkeypatch.setattr(repo, "daily_billing", daily)
     monkeypatch.setattr(settings, "today", lambda: DAY)
-    data = await settings.billing(FakeSession(), 999)  # type: ignore[arg-type]
-    assert data["days"] == 366 and seen[0] == pipeline.day_start(DAY - timedelta(days=365))
+    data = await settings.billing(FakeSession(), "interpret", 999)  # type: ignore[arg-type]
+    assert data["days"] == 366 and seen[0] == ("interpret", pipeline.day_start(DAY - timedelta(days=365)))
     first, second = data["items"]
-    assert (first["day"], first["opportunity_cost"], first["tagged_rows"], second["interpret_rows"]) == (
-        "2026-10-01",
-        "0",
-        38,
-        0,
-    )
-    assert data["total"] == {"cost": "1.75", "type_cost": "0.75", "interpret_cost": "1", "opportunity_cost": "0"}
+    assert (first["day"], first["policies"], first["interpret_rows"], second["policies"]) == ("2026-10-01", 4, 12, 0)
+    assert data["total"] == "1.75"
+    with pytest.raises(NotFoundError):
+        await settings.billing(FakeSession(), "nope", 7)  # type: ignore[arg-type]
 
 
 async def test_each_stage_records_its_own_cost(monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]) -> None:

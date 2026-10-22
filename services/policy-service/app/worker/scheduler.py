@@ -14,6 +14,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.aitag.application.tagging import run_batch as run_policy_tagging
+from app.aitag.domain.tasks import task_of
 from app.common.errors import UserFacingError
 from app.core.database import SessionLocal, engine
 from app.crawler.application.crawler_sync import run as run_crawler_sync
@@ -64,8 +65,8 @@ async def claim_next() -> tuple[uuid.UUID, str, uuid.UUID] | None:
 
 
 async def execute_sync(code: str, sync_id: uuid.UUID) -> None:
-    if code == "policy_ai":
-        await run_policy_tagging(sync_id)
+    if task := task_of(code):
+        await run_policy_tagging(sync_id, task)
         return
     # 空库不自动跑短窗口、也不自动全量回填，要求已有成功水位。
     async with SessionLocal() as session:

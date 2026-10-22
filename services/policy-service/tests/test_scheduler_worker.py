@@ -119,7 +119,7 @@ class TestExecuteClaim:
         await worker.execute_claim((row.id, "crawler", uuid.uuid4()))
         assert "执行超过" in row.error_message and "已中止本次执行" in row.error_message
         # 按任务各自的超时说：AI 打标一批要等模型逐条回答，给 6 小时。
-        assert "360 分钟" in worker.safe_error(TimeoutError(), "policy_ai")
+        assert "360 分钟" in worker.safe_error(TimeoutError(), "policy_ai_interpret")
 
     async def test_missing_run_record_is_an_error(
         self, monkeypatch: pytest.MonkeyPatch, patched: SimpleNamespace

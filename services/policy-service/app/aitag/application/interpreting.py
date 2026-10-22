@@ -16,7 +16,7 @@ from platform_common.clock import utcnow
 
 from app.aitag.application.pipeline import ROBOT, Spend, ask, not_run, update_run
 from app.aitag.domain import interpret_rules as rules
-from app.aitag.domain.models import PolicyAiConfig
+from app.aitag.domain.models import PolicyAiTask
 from app.aitag.domain.rules import clean_content
 from app.aitag.repositories import source
 from app.aitag.repositories import tagging as repo
@@ -146,17 +146,17 @@ async def _save_interpretations(
     return {"rows": written, "failed": failed}
 
 
-async def interpret_step(run_id: uuid.UUID, config: PolicyAiConfig, spend: Spend) -> str:
+async def interpret_step(run_id: uuid.UUID, config: PolicyAiTask, spend: Spend) -> str:
     async with SessionLocal() as session:
         tags = await repo.interpret_backlog(session, config.batch_size)
     if not tags:
-        return "政策解读：没有待解读的政策"
+        return "没有待解读的政策"
     rows = await _prompt_rows(tags, config.content_max_chars)
-    await update_run(run_id, stage="interpreting")
+    await update_run(run_id, stage="interpreting", source_rows=len(tags))
     status, results = await ask(
         run_id,
         spend,
-        prompt_id=config.interpret_prompt_id,
+        prompt_id=config.prompt_id,
         rows=rows,
         caller="政策AI打标·政策解读",
         run_field="interpret_run_id",
@@ -164,7 +164,7 @@ async def interpret_step(run_id: uuid.UUID, config: PolicyAiConfig, spend: Spend
     counts = await _save_interpretations(run_id, tags, results, await _codes(results))
     await update_run(run_id, interpret_rows=counts["rows"], interpret_failed=counts["failed"])
     left = sum(1 for result in results if not_run(result))
-    note = f"政策解读：{len(tags)} 条政策写入解读 {counts['rows']} 行，解读失败 {counts['failed']} 条"
+    note = f"{len(tags)} 条政策写入解读 {counts['rows']} 行，解读失败 {counts['failed']} 条"
     if left:
         note += f"；{status.get('error_message') or '任务提前停止'}，{left} 条下批接着解读"
     return note
@@ -206,7 +206,7 @@ async def _save_opportunities(run_id: uuid.UUID, tags: list[BaseTag], results: l
     return {"rows": filled, "failed": failed}
 
 
-async def opportunity_step(run_id: uuid.UUID, config: PolicyAiConfig, spend: Spend) -> str:
+async def opportunity_step(run_id: uuid.UUID, config: PolicyAiTask, spend: Spend) -> str:
     async with SessionLocal() as session:
         tags = await repo.opportunity_backlog(session, config.batch_size)
         grouped = await repo.ai_interpretations(session, [str(tag.source_content_id) for tag in tags])
@@ -221,24 +221,25 @@ async def opportunity_step(run_id: uuid.UUID, config: PolicyAiConfig, spend: Spe
         await session.commit()
     tags = [tag for tag in tags if rows_by_source.get(str(tag.source_content_id))]
     if not tags:
-        return "市场机会：没有待补的政策"
+        return "没有待补市场机会的政策"
     base_rows = await _prompt_rows(tags, config.content_max_chars)
     rows = [
         rules.opportunity_prompt_row(row, rows_by_source[str(tag.source_content_id)])
         for tag, row in zip(tags, base_rows, strict=True)
     ]
-    await update_run(run_id, stage="opportunity")
+    await update_run(run_id, stage="opportunity", source_rows=len(tags))
     status, results = await ask(
         run_id,
         spend,
-        prompt_id=config.opportunity_prompt_id,
+        prompt_id=config.prompt_id,
         rows=rows,
         caller="政策AI打标·市场机会",
         run_field="opportunity_run_id",
     )
     counts = await _save_opportunities(run_id, tags, results)
+    await update_run(run_id, opportunity_rows=counts["rows"], opportunity_failed=counts["failed"])
     left = sum(1 for result in results if not_run(result))
-    note = f"市场机会：{len(tags)} 条政策回填 {counts['rows']} 行，失败 {counts['failed']} 条"
+    note = f"{len(tags)} 条政策回填 {counts['rows']} 行，失败 {counts['failed']} 条"
     if left:
         note += f"；{status.get('error_message') or '任务提前停止'}，{left} 条下批接着补"
     return note

@@ -1,6 +1,11 @@
-"""政策 AI 打标的设置和执行记录。挂在任务调度资源下：查看看设置和记录，完整档才能改设置。"""
+"""政策 AI 打标三个任务的设置、可选模板和账单。挂在任务调度资源下：查看档看设置和账单，完整档才能改设置。
+
+执行和执行记录走任务调度的接口（每个任务是一个调度任务，编码 policy_ai_<任务>）。
+"""
 
 from __future__ import annotations
+
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
@@ -16,58 +21,59 @@ from app.core.database import get_db_session
 
 router = APIRouter(prefix="/api/v1/policy/ai-tagging", tags=["政策AI打标"])
 RESOURCE = "system.scheduler"
+Task = Literal["type", "interpret", "opportunity"]
 
 
-class ConfigBody(BaseModel):
+class TaskBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    type_prompt_id: str = Field(default="", max_length=32)
-    interpret_prompt_id: str = Field(default="", max_length=32)
-    opportunity_prompt_id: str = Field(default="", max_length=32)
+    prompt_id: str = Field(default="", max_length=32)
     batch_size: int
     content_max_chars: int
     daily_cost_limit: str = Field(pattern=r"^\d{1,8}(\.\d{1,2})?$")
-    cursor_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    # 只有类型判断有读取进度，其余任务传空串。
+    cursor_date: str = Field(default="", pattern=r"^(\d{4}-\d{2}-\d{2})?$")
     version: int = Field(ge=1)
 
 
-@router.get("")
+@router.get("/tasks")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
-async def overview(
+async def list_tasks(
     session: AsyncSession = Depends(get_db_session, scope="function"),
     _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
 ) -> JSONResponse:
-    return success_json(await service.overview(session))
+    """三个任务的设置、今天和本月已花、正在跑的进度。"""
+
+    return success_json(await service.list_tasks(session))
 
 
-@router.put("/config")
+@router.get("/templates")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
-async def update_config(
-    body: ConfigBody,
+async def list_templates(_: Actor = Depends(require_policy_permission(RESOURCE, "list"))) -> JSONResponse:
+    """可选的上线模板（政策类）。"""
+
+    return success_json(await service.templates())
+
+
+@router.put("/tasks/{task}")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def update_task(
+    task: Task,
+    body: TaskBody,
     session: AsyncSession = Depends(get_db_session, scope="function"),
     actor: Actor = Depends(require_policy_permission(RESOURCE, "update")),
 ) -> JSONResponse:
-    return success_json(await service.update(session, actor, body.model_dump()))
+    return success_json(await service.update_task(session, actor, task, body.model_dump()))
 
 
-@router.get("/runs")
-@classified(SecurityClass.RESOURCE_AUTHORIZED)
-async def runs(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    session: AsyncSession = Depends(get_db_session, scope="function"),
-    _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
-) -> JSONResponse:
-    return success_json(await service.runs(session, page, page_size))
-
-
-@router.get("/billing")
+@router.get("/tasks/{task}/billing")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def billing(
+    task: Task,
     days: int = Query(30, ge=1, le=366),
     session: AsyncSession = Depends(get_db_session, scope="function"),
     _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
 ) -> JSONResponse:
-    """按天的账单：每天几批、花了多少（拆到三步）、读了和写了多少。"""
+    """这个任务按天的账单：每天几批、花了多少、处理和写入多少。"""
 
-    return success_json(await service.billing(session, days))
+    return success_json(await service.billing(session, task, days))
