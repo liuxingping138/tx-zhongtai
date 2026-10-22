@@ -331,6 +331,50 @@
         }
       }
     },
+    "/api/v1/policy/ai-tagging/billing": {
+      "get": {
+        "tags": [
+          "政策AI打标"
+        ],
+        "summary": "Billing",
+        "description": "按天的账单：每天几批、花了多少（拆到三步）、读了和写了多少。",
+        "operationId": "billing_api_v1_policy_ai_tagging_billing_get",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 366,
+              "minimum": 1,
+              "default": 30,
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/policy/sources": {
       "get": {
         "tags": [

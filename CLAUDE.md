@@ -233,6 +233,8 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
   费用到上限没轮到的不记时间，下批接着做；AI 行只要人工验证过或改过就不再覆盖（`app/aitag/application/interpreting.py`）
 - 解读列表「同步新增场景」：是否新增场景 = 是、人工验证、未同步的行，经 codebook `/internal/v1/scenarios/sync` 按编码规则
   （`app/domain/scenario_codes.py`：各级号全局最大 + 1，已有上级沿用，行业只查不建）写进场景码表并回填编码；动作 `policy.interpretations:sync_scenarios`
+- 账单：批次记三步各自的费用（`type_cost` 等，`pipeline.STAGE_COST`），`/api/v1/policy/ai-tagging/billing` 按北京日期汇总；
+  概览的 `current` 给出正在跑的步骤和 AI 已答条数
 - 内部调用密钥：`AI_POLICY_CALLER_SECRET`（政策→AI）、`CODEBOOK_POLICY_CALLER_SECRET`（政策→码表），compose 把同一个值传给两边
 
 ### 网关

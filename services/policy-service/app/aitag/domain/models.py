@@ -65,6 +65,15 @@ class PolicyAiRun(Base):
     interpret_rows: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="写入政策解读条数")
     interpret_failed: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="解读失败条数")
     cost: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False, default=Decimal(0), comment="费用(元)")
+    type_cost: Mapped[Decimal] = mapped_column(
+        Numeric(12, 6), nullable=False, default=Decimal(0), comment="类型判断费用(元)"
+    )
+    interpret_cost: Mapped[Decimal] = mapped_column(
+        Numeric(12, 6), nullable=False, default=Decimal(0), comment="政策解读费用(元)"
+    )
+    opportunity_cost: Mapped[Decimal] = mapped_column(
+        Numeric(12, 6), nullable=False, default=Decimal(0), comment="市场机会费用(元)"
+    )
     note: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="说明")
     error_message: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="失败原因")
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="开始时间")

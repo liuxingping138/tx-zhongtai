@@ -5,6 +5,7 @@ import { Refresh } from '@element-plus/icons-vue'
 
 import { aiTaggingOverview, listAiTaggingRuns, updateAiTaggingConfig, type AiTaggingOverview, type AiTaggingRun } from '@/api/aiTagging'
 import { errorMessage } from '@/api/errors'
+import AiTaggingBilling from './AiTaggingBilling.vue'
 import { formatYuan, runStatusText, runStatusType } from './aiTagging'
 
 /** 政策 AI 打标的设置、花费和每批明细。执行由上面的任务列表「立即执行」或每日计划触发。 */
@@ -27,7 +28,13 @@ const form = reactive({
   version: 1,
 })
 const config = computed(() => overview.value?.config)
-const running = computed(() => runs.value.some(run => run.status === 'running'))
+const running = computed(() => Boolean(overview.value?.current) || runs.value.some(run => run.status === 'running'))
+const progress = computed(() => {
+  const current = overview.value?.current
+  return current?.total ? Math.round(((current.done ?? 0) / current.total) * 100) : 0
+})
+const tab = ref<'runs' | 'billing'>('runs')
+const billingView = ref<InstanceType<typeof AiTaggingBilling>>()
 const STEPS = [
   { key: 'type_prompt_id', label: '政策类型判断', hint: '结果写入「政策基础标签」，信息化建设类标为需要解读' },
   { key: 'interpret_prompt_id', label: '政策解读', hint: '对需要解读的政策逐条解读，写入「政策解读列表」' },
@@ -43,6 +50,8 @@ async function load(quiet = false): Promise<void> {
     total.value = history.total
     if (!quiet || !saving.value) Object.assign(form, { ...data.config })
     loadError.value = ''
+    // 账单页签开着时一起刷新，跑完一批能马上看到当天的费用。
+    if (tab.value === 'billing') await billingView.value?.load()
   } catch (error) {
     loadError.value = errorMessage(error, '政策 AI 打标设置加载失败')
   } finally {
@@ -184,12 +193,50 @@ async function turnPage(next: number): Promise<void> {
         </el-button>
       </div>
     </el-form>
+    <div
+      v-if="overview?.current"
+      class="ai-tagging__current"
+      role="status"
+    >
+      <span>正在执行：<strong>{{ overview.current.stage_name }}</strong> · 本批已花 {{ formatYuan(overview.current.cost) }}</span>
+      <el-progress
+        v-if="overview.current.total"
+        :percentage="progress"
+        :format="() => `${overview?.current?.done ?? 0} / ${overview?.current?.total ?? 0} 条`"
+      />
+    </div>
+    <el-tabs v-model="tab">
+      <el-tab-pane
+        label="每批明细"
+        name="runs"
+      />
+      <el-tab-pane
+        label="按天账单"
+        name="billing"
+      />
+    </el-tabs>
+    <AiTaggingBilling
+      v-if="tab === 'billing'"
+      ref="billingView"
+    />
     <el-table
+      v-else
       :data="runs"
       class="data-table"
       row-key="id"
       empty-text="还没有执行过"
     >
+      <el-table-column type="expand">
+        <template #default="{ row }">
+          <dl class="ai-tagging__detail">
+            <div><dt>类型判断</dt><dd>{{ formatYuan(row.type_cost) }} · 批量任务 {{ row.type_run_id || '—' }}</dd></div>
+            <div><dt>政策解读</dt><dd>{{ formatYuan(row.interpret_cost) }} · 批量任务 {{ row.interpret_run_id || '—' }}</dd></div>
+            <div><dt>市场机会</dt><dd>{{ formatYuan(row.opportunity_cost) }} · 批量任务 {{ row.opportunity_run_id || '—' }}</dd></div>
+            <div><dt>读取范围</dt><dd>{{ row.source_from || '—' }} → {{ row.source_to || '—' }}</dd></div>
+            <div><dt>说明</dt><dd>{{ row.error_message || row.note || '—' }}</dd></div>
+          </dl>
+        </template>
+      </el-table-column>
       <el-table-column
         prop="started_at"
         label="开始时间"
@@ -258,7 +305,7 @@ async function turnPage(next: number): Promise<void> {
       </el-table-column>
     </el-table>
     <el-pagination
-      v-if="total > 10"
+      v-if="tab === 'runs' && total > 10"
       class="ai-tagging__pager"
       layout="prev, pager, next, total"
       :total="total"
@@ -279,4 +326,9 @@ async function turnPage(next: number): Promise<void> {
 .ai-tagging__hint { display: block; color: var(--zt-ink-500); font-size: 12px; line-height: 1.6; }
 .ai-tagging__actions { grid-column: 1 / -1; }
 .ai-tagging__pager { margin-top: 12px; justify-content: flex-end; }
+.ai-tagging__current { display: grid; gap: 6px; margin: 4px 0 12px; padding: 10px 12px; border-radius: 4px; background: var(--el-color-primary-light-9); font-size: 13px; }
+.ai-tagging__detail { display: grid; gap: 4px; margin: 0; padding: 4px 48px; font-size: 13px; }
+.ai-tagging__detail div { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 8px; }
+.ai-tagging__detail dt { color: var(--zt-ink-500); }
+.ai-tagging__detail dd { margin: 0; word-break: break-all; }
 </style>

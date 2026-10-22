@@ -325,9 +325,102 @@ async def test_overview_still_shows_settings_when_ai_service_is_down(monkeypatch
     async def down(*_: Any, **__: Any) -> Any:
         raise DependencyUnavailableError("ai-service 暂时不可用")
 
+    running = SimpleNamespace(
+        id=uuid.uuid4(),
+        stage="interpreting",
+        interpret_run_id="i" * 32,
+        started_at=None,
+        cost=Decimal("0.3"),
+    )
+
+    async def current(*_: Any) -> Any:
+        return running
+
     monkeypatch.setattr(repo, "config", get_config)
     monkeypatch.setattr(repo, "spent_since", spent)
+    monkeypatch.setattr(repo, "running_run", current)
     monkeypatch.setattr(internal_clients, "ai", down)
     data = await settings.overview(FakeSession())  # type: ignore[arg-type]
+    # ai-service 不可用：进度取不到，但正在跑哪一步照样显示。
+    assert (data["current"]["stage_name"], data["current"]["done"]) == ("政策解读", None)
     assert data["templates"] == [] and "不可用" in data["templates_error"]
     assert (data["spent_today"], data["config"]["cursor_content_id"]) == ("1.5", "c9")
+
+
+async def test_running_batch_shows_how_far_the_ai_run_has_got(monkeypatch: pytest.MonkeyPatch) -> None:
+    running = SimpleNamespace(id=uuid.uuid4(), stage="typing", type_run_id="t" * 32, started_at=None, cost=Decimal(0))
+
+    async def current(*_: Any) -> Any:
+        return running
+
+    async def ai(method: str, path: str, **_: Any) -> Any:
+        assert path.endswith("t" * 32)
+        return {"done_count": 40, "total_count": 100}
+
+    monkeypatch.setattr(repo, "running_run", current)
+    monkeypatch.setattr(internal_clients, "ai", ai)
+    data = await settings._current(FakeSession())  # type: ignore[arg-type]
+    assert data is not None and (data["stage_name"], data["done"], data["total"]) == ("类型判断", 40, 100)
+
+
+async def test_billing_sums_each_day_and_the_period(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[Any] = []
+
+    async def daily(_session: Any, since: Any) -> list[dict[str, Any]]:
+        seen.append(since)
+        return [
+            {
+                "day": DAY,
+                "runs": 2,
+                "cost": Decimal("1.5"),
+                "type_cost": Decimal("0.5"),
+                "interpret_cost": Decimal(1),
+                "opportunity_cost": None,
+                "source_rows": 40,
+                "tagged_rows": 38,
+                "interpret_rows": 12,
+            },
+            {
+                "day": DAY - timedelta(1),
+                "runs": 1,
+                "cost": Decimal("0.25"),
+                "type_cost": Decimal("0.25"),
+                "interpret_cost": Decimal(0),
+                "opportunity_cost": Decimal(0),
+                "source_rows": 10,
+                "tagged_rows": 10,
+                "interpret_rows": None,
+            },
+        ]
+
+    monkeypatch.setattr(repo, "daily_billing", daily)
+    monkeypatch.setattr(settings, "today", lambda: DAY)
+    data = await settings.billing(FakeSession(), 999)  # type: ignore[arg-type]
+    assert data["days"] == 366 and seen[0] == pipeline.day_start(DAY - timedelta(days=365))
+    first, second = data["items"]
+    assert (first["day"], first["opportunity_cost"], first["tagged_rows"], second["interpret_rows"]) == (
+        "2026-10-01",
+        "0",
+        38,
+        0,
+    )
+    assert data["total"] == {"cost": "1.75", "type_cost": "0.75", "interpret_cost": "1", "opportunity_cost": "0"}
+
+
+async def test_each_stage_records_its_own_cost(monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]) -> None:
+    run_id = uuid.uuid4()
+    run_store[str(run_id)] = SimpleNamespace(cost=Decimal(0), interpret_run_id="", interpret_cost=Decimal(0))
+
+    async def ai(method: str, path: str, **_: Any) -> Any:
+        if method == "POST":
+            return {"id": "r" * 32}
+        if path.endswith("/results"):
+            return {"items": []}
+        return {"status": "done", "inference_cost": "0.4", "search_cost": "0.1"}
+
+    monkeypatch.setattr(internal_clients, "ai", ai)
+    monkeypatch.setattr(pipeline, "POLL_SECONDS", 0)
+    spend = pipeline.Spend(limit=Decimal(10), before=Decimal(0), run=Decimal("0.2"))
+    await pipeline.ask(run_id, spend, prompt_id="p", rows=[], caller="c", run_field="interpret_run_id")
+    stored = run_store[str(run_id)]
+    assert (stored.interpret_cost, stored.cost, spend.run) == (Decimal("0.5"), Decimal("0.7"), Decimal("0.7"))

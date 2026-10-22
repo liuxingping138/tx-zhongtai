@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -47,6 +47,7 @@ async def overview(session: AsyncSession) -> dict[str, Any]:
         templates, templates_error = [], f"取上线模板失败：{exc}"
     first_of_month = today().replace(day=1)
     return {
+        "current": await _current(session),
         "config": _config_out(config),
         "templates": templates,
         "templates_error": templates_error,
@@ -102,3 +103,55 @@ async def runs(session: AsyncSession, page: int, page_size: int) -> dict[str, An
         for row in rows
     ]
     return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+# 进行到哪一步 -> 这一步在 ai-service 的任务ID列。
+_STAGE_RUN = {"typing": "type_run_id", "interpreting": "interpret_run_id", "opportunity": "opportunity_run_id"}
+STAGE_NAMES = {"reading": "读取源政策", "typing": "类型判断", "interpreting": "政策解读", "opportunity": "市场机会"}
+
+
+async def _current(session: AsyncSession) -> dict[str, Any] | None:
+    """正在跑的那一批：在哪一步、这一步 ai-service 答到第几条。取不到进度不影响页面。"""
+
+    run = await repo.running_run(session)
+    if run is None:
+        return None
+    current: dict[str, Any] = {
+        "id": str(run.id),
+        "stage": run.stage,
+        "stage_name": STAGE_NAMES.get(run.stage, run.stage),
+        "started_at": format_beijing(run.started_at),
+        "cost": str(run.cost),
+        "done": None,
+        "total": None,
+    }
+    ai_run_id = getattr(run, _STAGE_RUN.get(run.stage, ""), "") or ""
+    if ai_run_id:
+        try:
+            status = await internal_clients.ai("GET", f"/internal/v1/pipeline-runs/{ai_run_id}")
+            current.update(done=status.get("done_count"), total=status.get("total_count"))
+        except Exception:  # noqa: BLE001, S110  进度是锦上添花，ai-service 暂时不可用时页面照常显示其余信息
+            pass
+    return current
+
+
+BILLING_DAYS_MAX = 366
+
+
+async def billing(session: AsyncSession, days: int) -> dict[str, Any]:
+    """最近 days 天（含今天）每天的批次、费用和写入量，以及合计。没跑的日子不出现。"""
+
+    days = max(1, min(days, BILLING_DAYS_MAX))
+    rows = await repo.daily_billing(session, day_start(today() - timedelta(days=days - 1)))
+    money = ("cost", "type_cost", "interpret_cost", "opportunity_cost")
+    counts = ("runs", "source_rows", "tagged_rows", "interpret_rows")
+    items = [
+        {
+            "day": str(row["day"]),
+            **{key: str(row[key] or 0) for key in money},
+            **{key: int(row[key] or 0) for key in counts},  # type: ignore[call-overload]  # SUM 出来是数值或空
+        }
+        for row in rows
+    ]
+    total = {key: str(sum((Decimal(item[key]) for item in items), Decimal(0))) for key in money}
+    return {"days": days, "items": items, "total": total}

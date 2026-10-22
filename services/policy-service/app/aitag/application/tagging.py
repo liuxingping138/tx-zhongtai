@@ -231,6 +231,9 @@ def run_summary(run: PolicyAiRun) -> dict[str, Any]:
         "interpret_run_id": run.interpret_run_id,
         "opportunity_run_id": run.opportunity_run_id,
         "cost": str(run.cost),
+        "type_cost": str(run.type_cost),
+        "interpret_cost": str(run.interpret_cost),
+        "opportunity_cost": str(run.opportunity_cost),
         "note": run.note,
         "error_message": run.error_message,
     }

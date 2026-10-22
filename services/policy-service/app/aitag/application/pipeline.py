@@ -22,6 +22,12 @@ FINISHED = {"done", "cancelled", "failed", "interrupted"}
 # ai-service 对没轮到的行写「未执行（任务停止或中断）」：费用到上限或任务被停。这些行下批重做。
 NOT_RUN = "未执行"
 ROBOT = Actor(id="policy-ai-tagging", name="政策AI打标")
+# 每一步在批次记录上的任务ID列 -> 这一步的费用列，账单按步骤拆。
+STAGE_COST = {
+    "type_run_id": "type_cost",
+    "interpret_run_id": "interpret_cost",
+    "opportunity_run_id": "opportunity_cost",
+}
 
 
 def today() -> date:
@@ -90,7 +96,9 @@ async def ask(
     except asyncio.CancelledError:
         await asyncio.shield(stop_quietly(ai_run_id))
         raise
-    spend.run += cost_of(status)
+    stage_cost = cost_of(status)
+    spend.run += stage_cost
+    await update_run(run_id, **{STAGE_COST[run_field]: stage_cost})
     data = await internal_clients.ai("GET", f"/internal/v1/pipeline-runs/{ai_run_id}/results")
     return status, list(data["items"])
 

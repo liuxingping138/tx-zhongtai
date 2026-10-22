@@ -15,7 +15,8 @@ export interface AiTaggingResult {
   status: string; stage: string; source_from: string; source_to: string; source_rows: number
   tagged_rows: number; type_failed: number; interpret_rows: number; interpret_failed: number
   type_run_id: string; interpret_run_id: string; opportunity_run_id: string
-  cost: string; note: string; error_message: string
+  cost: string; type_cost: string; interpret_cost: string; opportunity_cost: string
+  note: string; error_message: string
 }
 export interface ScheduledJob {
   code: string; name: string; enabled: boolean; daily_time: string; next_run_at: string | null

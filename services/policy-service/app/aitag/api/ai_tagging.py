@@ -59,3 +59,15 @@ async def runs(
     _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
 ) -> JSONResponse:
     return success_json(await service.runs(session, page, page_size))
+
+
+@router.get("/billing")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def billing(
+    days: int = Query(30, ge=1, le=366),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
+) -> JSONResponse:
+    """按天的账单：每天几批、花了多少（拆到三步）、读了和写了多少。"""
+
+    return success_json(await service.billing(session, days))

@@ -108,3 +108,33 @@ async def taken_relation_keys(session: AsyncSession, keys: list[str]) -> set[str
 async def delete_rows(session: AsyncSession, rows: list[Interpretation]) -> None:
     for row in rows:
         await session.delete(row)
+
+
+async def running_run(session: AsyncSession) -> PolicyAiRun | None:
+    rows = await session.scalars(
+        select(PolicyAiRun).where(PolicyAiRun.status == "running").order_by(PolicyAiRun.started_at.desc()).limit(1)
+    )
+    return rows.first()
+
+
+async def daily_billing(session: AsyncSession, since: datetime) -> list[dict[str, object]]:
+    """按北京时间的日期汇总每天的批次数、费用（含三步各自）和写入行数。"""
+
+    day = func.date(func.timezone("Asia/Shanghai", PolicyAiRun.started_at)).label("day")
+    rows = await session.execute(
+        select(
+            day,
+            func.count().label("runs"),
+            func.sum(PolicyAiRun.cost).label("cost"),
+            func.sum(PolicyAiRun.type_cost).label("type_cost"),
+            func.sum(PolicyAiRun.interpret_cost).label("interpret_cost"),
+            func.sum(PolicyAiRun.opportunity_cost).label("opportunity_cost"),
+            func.sum(PolicyAiRun.source_rows).label("source_rows"),
+            func.sum(PolicyAiRun.tagged_rows).label("tagged_rows"),
+            func.sum(PolicyAiRun.interpret_rows).label("interpret_rows"),
+        )
+        .where(PolicyAiRun.started_at >= since)
+        .group_by(day)
+        .order_by(day.desc())
+    )
+    return [dict(row._mapping) for row in rows]
