@@ -172,7 +172,10 @@ ColumnPicker 按用户ID和route.path保存字段键（存储键 `zt:columns:v2:
 
 ## 工作台页面（AI提问）
 
-`frontend/src/modules/ai/`：提问配置、批量提问、多轮对话不是字段列表，不套 `ListPage`，内容放在白底细边框面板（`shared/ai.css` 的 `.ai-panel`）里；页面标题只给读屏（`.ai-sr-only`）。提问配置占满内容区高度（`calc(100dvh - var(--workspace-header-height) - 48px)`），左右分栏，1200px 及以下改为上下排、整页滚动；批量提问上方左模板列表、右模板详情，历史在下方，整页纵向滚动，1100px 及以下上下排；多轮对话是占满内容区高度的单个对话面板。
+`frontend/src/modules/ai/`：提问配置、批量提问、多轮对话不是字段列表，不套 `ListPage`，内容放在白底细边框面板（`shared/ai.css` 的 `.ai-panel`）里；页面标题只给读屏（`.ai-sr-only`）。提问配置占满内容区高度（`calc(100dvh - var(--workspace-header-height) - 48px)`），三栏：模板栏、编辑区、试发栏（`TrialPanel.vue`），1360px 及以下试发栏下移、900px 及以下单列；批量提问左模板栏、右运行卡（`RunCard.vue`）加历史，整页纵向滚动，960px 及以下单列；多轮对话是占满内容区高度的单个对话面板，`AnswerTranscript` 用 `variant="chat"` 居中成阅读列。
+
+- 提示词编辑器是 `prompts/PromptEditor.vue`：透明 textarea 叠在同字体的镜像层上，镜像层把变量渲染成 `<mark>` 做高亮，`@` 候选按光标位置弹出；变量的分段和状态判断是 `prompts/promptVariables.ts` 里的纯函数（有单测）。镜像层由渲染函数生成，样式要用 `:deep(mark...)` 才能命中。Ctrl/⌘ + Enter 试发，Ctrl/⌘ + S 保存。
+- 输出字段、码表来源、测试数据在 `prompts/PromptSettings.vue`。码表下拉里「上传的码表文件」在库里是空串，Element Plus 会把空串当未选，页面用哨兵值 `uploaded` 代替，不要改回空串。
 
 - 流式回答统一用 `shared/useAnswerStream.ts`（底层 `api/eventStream.ts`：带令牌和 CSRF、401 续期重试一次、错误还原成中文提示），消息列表 `AnswerTranscript.vue`，用量和费用 `StreamStatsBar.vue`，模型选择 `ModelPicker.vue`（未配密钥的模型可见但不可选）。事件处理是 `shared/streamEvents.ts` 里的纯函数，加新事件先改它和单测。
 - 下载走 `shared/downloads.ts`（底层 `downloadFile`），不放在 `api/ai.ts`：契约测试会逐个调用 api 目录导出的函数。

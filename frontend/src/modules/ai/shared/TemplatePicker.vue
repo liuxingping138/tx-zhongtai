@@ -85,10 +85,16 @@ const emptyMessage = computed(() => {
           @click="emit('select', item)"
         >
           <strong>{{ item.title }}</strong>
-          <span>{{ item.category_name }} · <slot
-            name="meta"
-            :item="item"
-          /></span>
+          <span class="picker__meta">
+            <em
+              v-if="item.release"
+              class="picker__live"
+              :title="`第 ${item.release.release_no} 版已上线`"
+            >已上线</em>{{ item.category_name }} · <slot
+              name="meta"
+              :item="item"
+            />
+          </span>
         </button>
       </li>
     </ul>
@@ -100,4 +106,8 @@ const emptyMessage = computed(() => {
 .picker__search { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 0; }
 .picker__list { flex: 1; min-height: 0; }
 .picker__empty { padding: 16px 8px; }
+.picker__list :deep(button) { position: relative; }
+.picker__list :deep(button[aria-current="true"])::before { content: ""; position: absolute; left: 0; top: 9px; bottom: 9px; width: 3px; border-radius: 2px; background: var(--zt-blue-600); }
+.picker__meta { display: flex !important; align-items: center; gap: 6px; }
+.picker__live { flex: none; padding: 0 5px; border-radius: 3px; background: #e2f2eb; color: #2f7558; font-size: 11px; font-style: normal; line-height: 16px; }
 </style>

@@ -22,7 +22,7 @@ const form = reactive({
   interpret_prompt_id: '',
   opportunity_prompt_id: '',
   batch_size: 1000,
-  content_max_chars: 15000,
+  content_max_chars: 0,
   daily_cost_limit: '100',
   cursor_date: '',
   version: 1,
@@ -57,6 +57,11 @@ async function load(quiet = false): Promise<void> {
   } finally {
     loading.value = false
   }
+}
+
+/** 0 = 全文；切到截取时给个常用的起点，再按需调。 */
+function setContentMode(mode: string | number | boolean | undefined): void {
+  form.content_max_chars = mode === 'all' ? 0 : 15000
 }
 
 async function save(): Promise<void> {
@@ -154,15 +159,28 @@ async function turnPage(next: number): Promise<void> {
         />
         <span class="ai-tagging__hint">一次执行读这么多条源政策；先用几十条试跑</span>
       </el-form-item>
-      <el-form-item label="正文截取字数">
+      <el-form-item label="发给模型的正文">
+        <el-radio-group
+          :model-value="form.content_max_chars ? 'cut' : 'all'"
+          @update:model-value="setContentMode"
+        >
+          <el-radio value="all">
+            全文
+          </el-radio>
+          <el-radio value="cut">
+            截取前
+          </el-radio>
+        </el-radio-group>
         <el-input-number
+          v-if="form.content_max_chars"
           v-model="form.content_max_chars"
           :min="500"
-          :max="30000"
+          :max="200000"
           :step="1000"
           controls-position="right"
+          aria-label="截取字数"
         />
-        <span class="ai-tagging__hint">正文是整页文字，超出部分不发给模型，控制费用</span>
+        <span class="ai-tagging__hint">{{ form.content_max_chars ? '超出部分不发给模型，省费用但可能漏掉后文' : '整页正文全部发给模型，最长的有十几万字，费用按实际长度算' }}</span>
       </el-form-item>
       <el-form-item label="每日费用上限（元）">
         <el-input

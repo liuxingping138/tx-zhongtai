@@ -57,12 +57,10 @@ async function takeOffline(): Promise<void> {
 
 <template>
   <div class="release-bar">
-    <el-tag
-      :type="status.type"
-      size="small"
-    >
-      {{ status.text }}
-    </el-tag>
+    <span
+      class="release-bar__status"
+      :class="`is-${status.type}`"
+    >{{ status.text }}</span>
     <span
       v-if="release"
       class="release-bar__meta"
@@ -92,8 +90,12 @@ async function takeOffline(): Promise<void> {
 </template>
 
 <style scoped>
-.release-bar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--zt-border); background: var(--zt-soft); }
+.release-bar { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; padding-left: 4px; }
 .release-bar .el-button { margin: 0; }
 .release-bar__meta { color: var(--zt-ink-500); font-size: 12px; }
-.release-bar__spacer { flex: 1; }
+.release-bar__spacer { display: none; }
+.release-bar__status { display: inline-flex; align-items: center; gap: 6px; color: var(--zt-ink-700); font-size: 12px; }
+.release-bar__status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #b3bdca; }
+.release-bar__status.is-success::before { background: #3d8c6e; }
+.release-bar__status.is-warning::before { background: #c4842a; }
 </style>

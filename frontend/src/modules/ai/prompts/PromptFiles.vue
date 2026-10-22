@@ -13,8 +13,8 @@ const busy = ref<PromptFileKind | null>(null)
 const pickers = ref<Record<PromptFileKind, HTMLInputElement | null>>({ excel: null, code: null })
 
 const SLOTS: { kind: PromptFileKind; label: string; accept: string; empty: string }[] = [
-  { kind: 'excel', label: 'Excel', accept: '.xlsx', empty: '未上传（.xlsx，第一行为表头）' },
-  { kind: 'code', label: '码表', accept: '.txt', empty: '未上传（.txt，用 @【上传码表】引用）' },
+  { kind: 'excel', label: 'Excel', accept: '.xlsx', empty: '未上传，第一行是表头' },
+  { kind: 'code', label: '码表', accept: '.txt', empty: '未上传 .txt' },
 ]
 
 const slots = computed(() => (props.systemCode ? SLOTS.filter(slot => slot.kind === 'excel') : SLOTS))

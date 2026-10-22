@@ -3,7 +3,10 @@ import { nextTick, ref, watch } from 'vue'
 
 import type { ChatMessage } from './useAnswerStream'
 
-const props = defineProps<{ messages: ChatMessage[]; running: boolean; empty: string }>()
+/** chat：对话页的阅读样式——居中一栏，回答不加框直接排成正文，提问是靠右的气泡。 */
+const props = withDefaults(defineProps<{ messages: ChatMessage[]; running: boolean; empty: string; variant?: 'panel' | 'chat' }>(), {
+  variant: 'panel',
+})
 const box = ref<HTMLElement | null>(null)
 
 // 回答过程中跟随到底部；用户往上翻看时不强行拉回。
@@ -23,6 +26,7 @@ watch(
   <div
     ref="box"
     class="transcript"
+    :class="`transcript--${variant}`"
     role="log"
     aria-live="polite"
   >
@@ -89,4 +93,12 @@ watch(
 .transcript__reasoning pre { margin-top: 6px; color: var(--zt-ink-700); font-size: 13px; }
 .transcript__tip { margin: 6px 0 0; color: var(--zt-ink-500); font-size: 12px; }
 .transcript__item .el-alert { margin-top: 8px; }
+.transcript__item--assistant { border-color: transparent; background: transparent; padding-left: 2px; }
+.transcript__item--user { border-radius: 14px 14px 4px 14px; }
+.transcript--chat { padding: 28px max(20px, calc((100% - 820px) / 2)); gap: 22px; }
+.transcript--chat .transcript__item { max-width: 100%; }
+.transcript--chat .transcript__item--user { max-width: 78%; padding: 10px 16px; }
+.transcript--chat .transcript__text { font-size: 15px; line-height: 1.85; }
+.transcript--chat .transcript__meta { font-size: 11px; }
+.transcript--chat .transcript__empty::first-line { color: var(--zt-ink-900); font-size: 20px; font-weight: 600; line-height: 2.2; }
 </style>

@@ -1,0 +1,36 @@
+import { describe, expect, it } from 'vitest'
+
+import { promptSegments, unusedColumns, usedVariables, variableState } from './promptVariables'
+
+const HEADERS = ['政策标题', '政策正文']
+
+describe('提示词变量', () => {
+  it('按能否替换分三种：Excel 列、码表、找不到', () => {
+    expect(variableState('政策标题', HEADERS, false)).toBe('column')
+    expect(variableState('上传码表', HEADERS, true)).toBe('code')
+    expect(variableState('上传码表', HEADERS, false)).toBe('missing')
+    expect(variableState('政策名称', HEADERS, true)).toBe('missing')
+  })
+
+  it('切出变量片段，拼回去和原文一字不差', () => {
+    const text = '标题：@【政策标题】\n正文：@【政策正文】，参考 @【上传码表】 和 @【不存在】'
+    const segments = promptSegments(text, HEADERS, true)
+    expect(segments.map(item => item.text).join('')).toBe(text)
+    expect(segments.filter(item => item.state).map(item => [item.text, item.state])).toEqual([
+      ['@【政策标题】', 'column'],
+      ['@【政策正文】', 'column'],
+      ['@【上传码表】', 'code'],
+      ['@【不存在】', 'missing'],
+    ])
+    expect(promptSegments('', HEADERS, false)).toEqual([])
+  })
+
+  it('列出用到的变量和还没用的列', () => {
+    const text = '@【政策标题】 @【政策标题】 @【地区】'
+    expect(usedVariables(text, HEADERS, false)).toEqual([
+      { name: '政策标题', state: 'column', count: 2 },
+      { name: '地区', state: 'missing', count: 1 },
+    ])
+    expect(unusedColumns(text, HEADERS)).toEqual(['政策正文'])
+  })
+})

@@ -7,16 +7,15 @@ import { createPrompt, deletePrompt, listPrompts, updatePrompt, type AiModel, ty
 import { errorMessage } from '@/api/errors'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import { useAuthStore } from '@/stores/auth'
-import AnswerTranscript from '../shared/AnswerTranscript.vue'
 import ModelPicker from '../shared/ModelPicker.vue'
-import StreamStatsBar from '../shared/StreamStatsBar.vue'
 import { appendBlock, outputFormatBlock, splitFields } from '../shared/aiText'
 import TemplatePicker from '../shared/TemplatePicker.vue'
 import { ALL_CATEGORIES, defaultCategory } from '../shared/categories'
 import { useAnswerStream } from '../shared/useAnswerStream'
-import MentionTextarea from './MentionTextarea.vue'
-import PromptFiles from './PromptFiles.vue'
+import PromptEditor from './PromptEditor.vue'
+import PromptSettings from './PromptSettings.vue'
 import ReleaseBar from './ReleaseBar.vue'
+import TrialPanel from './TrialPanel.vue'
 import '../shared/ai.css'
 
 const auth = useAuthStore()
@@ -99,12 +98,7 @@ function filesChanged(template: PromptTemplate): void {
 }
 
 function appendFields(): void {
-  const fields = splitFields(form.output_fields)
-  if (!fields.length) {
-    ElMessage.warning('先填写新增输出字段，多个字段用竖线 | 隔开')
-    return
-  }
-  form.content = appendBlock(form.content, outputFormatBlock(fields))
+  form.content = appendBlock(form.content, outputFormatBlock(splitFields(form.output_fields)))
 }
 
 async function save(): Promise<void> {
@@ -164,215 +158,169 @@ async function trial(): Promise<void> {
 </script>
 
 <template>
-  <section class="workbench">
+  <section class="studio">
     <h1 class="ai-sr-only">
       提问配置
     </h1>
-    <div class="workbench__left">
-      <div class="ai-panel workbench__templates">
-        <div class="ai-panel__head">
-          <h2>提示词模板</h2>
-          <el-button
-            v-if="canCreate"
-            size="small"
-            :icon="Plus"
-            @click="choose(null)"
-          >
-            新建
-          </el-button>
-        </div>
-        <TemplatePicker
-          v-model:category="categoryFilter"
-          :templates="templates"
-          :categories="categories"
-          :selected-id="selected?.id"
-          :loading="loading"
-          :error="loadError"
-          empty-text="还没有模板，点「新建」开始"
-          @select="choose"
+    <aside class="ai-panel studio__rail">
+      <div class="ai-panel__head">
+        <h2>模板</h2>
+        <el-button
+          v-if="canCreate"
+          size="small"
+          type="primary"
+          plain
+          :icon="Plus"
+          @click="choose(null)"
         >
-          <template #meta="{ item }">
-            {{ item.excel_name ? `${item.excel_rows} 行` : '未上传 Excel' }} · {{ item.updated_at }}
-          </template>
-        </TemplatePicker>
+          新建
+        </el-button>
       </div>
-
-      <form
-        class="ai-panel workbench__editor"
-        @submit.prevent="save"
+      <TemplatePicker
+        v-model:category="categoryFilter"
+        :templates="templates"
+        :categories="categories"
+        :selected-id="selected?.id"
+        :loading="loading"
+        :error="loadError"
+        empty-text="还没有模板，点「新建」开始写第一个"
+        @select="choose"
       >
-        <div class="ai-panel__head">
-          <h2>{{ selected ? '编辑模板' : '新模板' }}</h2>
+        <template #meta="{ item }">
+          {{ item.excel_name ? `${item.excel_rows} 行测试数据` : '还没有测试数据' }}
+        </template>
+      </TemplatePicker>
+    </aside>
+
+    <form
+      class="ai-panel studio__main"
+      @submit.prevent="save"
+    >
+      <header class="studio__head">
+        <div class="studio__title-row">
+          <input
+            v-model="form.title"
+            class="studio__title"
+            maxlength="255"
+            aria-label="模板标题"
+            :placeholder="selected ? '模板标题' : '给新模板起个名字'"
+            :readonly="!canEdit"
+          >
           <el-tag
             v-if="unsaved.dirty.value"
             type="warning"
             size="small"
+            effect="plain"
           >
             未保存
           </el-tag>
+          <span class="studio__spacer" />
+          <el-button
+            v-if="canEdit && selected"
+            text
+            type="danger"
+            aria-label="删除模板"
+            @click="remove"
+          >
+            删除
+          </el-button>
+          <el-button
+            v-if="canEdit"
+            type="primary"
+            native-type="submit"
+            :loading="saving"
+            title="Ctrl/⌘ + S"
+          >
+            保存
+          </el-button>
         </div>
-        <ReleaseBar
-          v-if="selected"
-          :template="selected"
-          :can-release="canRelease"
-          :dirty="unsaved.dirty.value"
-          @changed="replace"
-        />
-        <div class="workbench__fields">
-          <span class="workbench__label">标题</span>
-          <el-input
-            v-model="form.title"
-            maxlength="255"
-            aria-label="提示词标题"
-            placeholder="提示词标题"
-            :disabled="!canEdit"
-          />
-          <span class="workbench__label">类型</span>
+        <div class="studio__meta-row">
           <el-select
             v-model="form.category"
+            class="studio__category"
+            size="small"
             aria-label="模板类型"
-            placeholder="选择模板类型"
+            placeholder="类型"
             :disabled="!canEdit"
           >
             <el-option
               v-for="item in categoryOptions"
               :key="item.code"
-              :label="item.name"
+              :label="`${item.name}类`"
               :value="item.code"
               :disabled="!item.editable"
             />
           </el-select>
-          <span class="workbench__label">内容</span>
-          <MentionTextarea
-            v-model="form.content"
-            label="提示词内容"
-            :headers="selected?.excel_headers ?? []"
-            :has-code="Boolean(form.code_table || selected?.code_name)"
-          />
-          <span class="workbench__label">新增输出字段</span>
-          <div class="workbench__inline">
-            <el-input
-              v-model="form.output_fields"
-              maxlength="2000"
-              aria-label="新增输出字段"
-              placeholder="多个字段用竖线隔开，例如：行业|场景|依据"
-              :disabled="!canEdit"
-            />
-            <el-button
-              :disabled="!canEdit"
-              @click="appendFields"
-            >
-              追加格式要求
-            </el-button>
-          </div>
-          <span class="workbench__label">模型</span>
           <ModelPicker
             v-model="form.model_id"
-            v-model:thinking="thinking"
             :models="models"
+            :show-thinking="false"
+            size="small"
             allow-empty
+            label="模板使用的模型"
           />
-          <span class="workbench__label">码表</span>
-          <el-select
-            v-model="form.code_table"
-            aria-label="码表来源"
-            :disabled="!canEdit"
-          >
-            <el-option
-              label="用上传的码表文件（没有就不用码表）"
-              value=""
-            />
-            <el-option
-              v-for="item in codeTables"
-              :key="item.key"
-              :label="`系统${item.name}（实时取最新）`"
-              :value="item.key"
-            />
-          </el-select>
-          <span class="workbench__label">附件</span>
-          <PromptFiles
+          <ReleaseBar
+            v-if="selected"
             :template="selected"
-            :can-edit="canEdit"
-            :can-export="canExport"
-            :system-code="Boolean(form.code_table)"
-            @changed="filesChanged"
+            :can-release="canRelease"
+            :dirty="unsaved.dirty.value"
+            @changed="replace"
           />
         </div>
-        <footer class="workbench__actions">
-          <el-button
-            v-if="canEdit && selected"
-            type="danger"
-            plain
-            @click="remove"
-          >
-            删除模板
-          </el-button>
-          <span class="workbench__spacer" />
-          <el-button
-            v-if="canEdit"
-            native-type="submit"
-            :loading="saving"
-          >
-            保存模板
-          </el-button>
-          <el-button
-            v-if="canEdit"
-            type="primary"
-            :disabled="answer.running.value || !trialModel?.available"
-            @click="trial"
-          >
-            试发提问
-          </el-button>
-        </footer>
-      </form>
-    </div>
+      </header>
 
-    <div class="ai-panel workbench__output">
-      <div class="ai-panel__head">
-        <h2>试发结果</h2>
-        <el-button
-          v-if="answer.running.value"
-          size="small"
-          @click="answer.stop"
-        >
-          停止
-        </el-button>
-        <el-button
-          v-else
-          size="small"
-          :disabled="!answer.messages.value.length"
-          @click="answer.clear"
-        >
-          清空
-        </el-button>
-      </div>
-      <AnswerTranscript
-        :messages="answer.messages.value"
-        :running="answer.running.value"
-        empty="试发会把 @【列名】替换成 Excel 第一行的值、@【上传码表】替换成码表全文再提问。&#10;效果满意后保存模板，到「批量提问」逐行运行。"
+      <PromptEditor
+        v-model="form.content"
+        :headers="selected?.excel_headers ?? []"
+        :has-code="Boolean(form.code_table || selected?.code_name)"
+        :disabled="!canEdit"
+        @run="trial"
+        @save="save"
       />
-      <StreamStatsBar
-        :stats="answer.stats"
-        :cost="answer.cost.value"
+
+      <PromptSettings
+        v-model:output-fields="form.output_fields"
+        v-model:code-table="form.code_table"
+        :template="selected"
+        :code-tables="codeTables"
+        :can-edit="canEdit"
+        :can-export="canExport"
+        @append-format="appendFields"
+        @files-changed="filesChanged"
       />
-    </div>
+    </form>
+
+    <TrialPanel
+      v-model:thinking="thinking"
+      class="studio__trial"
+      :answer="answer"
+      :model="trialModel"
+      :can-run="canEdit"
+      :has-excel="Boolean(selected?.excel_name)"
+      @run="trial"
+    />
   </section>
 </template>
 
 <style scoped>
-.workbench { display: grid; grid-template-columns: minmax(420px, 1fr) minmax(340px, 1fr); gap: 16px; height: calc(100dvh - var(--workspace-header-height) - 48px); min-height: 560px; }
-.workbench__left { display: flex; flex-direction: column; gap: 16px; min-height: 0; overflow: auto; }
-.workbench__templates { display: flex; flex-direction: column; flex: 0 0 auto; max-height: 300px; }
-.workbench__editor { display: flex; flex-direction: column; }
-.workbench__fields { display: grid; grid-template-columns: 92px minmax(0, 1fr); align-items: start; gap: 12px 12px; padding: 16px; }
-.workbench__label { padding-top: 7px; color: var(--zt-ink-700); font-size: 13px; }
-.workbench__inline { display: flex; gap: 8px; }
-.workbench__actions { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--zt-border); }
-.workbench__actions .el-button { margin: 0; }
-.workbench__spacer { flex: 1; }
-.workbench__output { display: flex; flex-direction: column; min-height: 0; }
-@media (max-width: 1200px) {
-  .workbench { grid-template-columns: minmax(0, 1fr); height: auto; }
-  .workbench__output { min-height: 480px; }
+.studio { display: grid; grid-template-columns: 248px minmax(0, 1fr) minmax(340px, 400px); gap: 12px; height: calc(100dvh - var(--workspace-header-height) - 48px); min-height: 600px; }
+.studio__rail, .studio__main, .studio__trial { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.studio__head { padding: 14px 18px 12px; border-bottom: 1px solid var(--zt-border); }
+.studio__title-row, .studio__meta-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.studio__title-row .el-button { margin: 0; }
+.studio__meta-row { flex-wrap: wrap; margin-top: 10px; }
+.studio__title { flex: 1; min-width: 0; padding: 2px 0; border: 0; border-bottom: 1px dashed transparent; background: transparent; color: var(--zt-ink-900); font: 600 19px/1.4 var(--zt-font); outline: none; }
+.studio__title:hover:not([readonly]), .studio__title:focus { border-bottom-color: var(--el-color-primary-light-5); }
+.studio__title::placeholder { color: #a5b0bf; font-weight: 500; }
+.studio__spacer { flex: 1; }
+.studio__category { width: 104px; }
+@media (max-width: 1360px) {
+  .studio { grid-template-columns: 228px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(420px, 46vh); height: auto; }
+  .studio__rail { grid-row: 1 / span 2; max-height: calc(100dvh - var(--workspace-header-height) - 48px); position: sticky; top: 0; }
+  .studio__main { min-height: 640px; }
+}
+@media (max-width: 900px) {
+  .studio { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
+  .studio__rail { grid-row: auto; position: static; max-height: 320px; }
 }
 </style>

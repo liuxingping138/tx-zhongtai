@@ -8,10 +8,10 @@ import { errorMessage } from '@/api/errors'
 import FilterBar from '@/components/FilterBar.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
 import { useAuthStore } from '@/stores/auth'
-import ModelPicker from '../shared/ModelPicker.vue'
 import { RUN_MODE_TEXT, RUN_STATUS_TEXT, isActive } from '../shared/aiText'
 import TemplatePicker from '../shared/TemplatePicker.vue'
 import BatchHistory from './BatchHistory.vue'
+import RunCard from './RunCard.vue'
 import '../shared/ai.css'
 
 const POLL_MS = 2000
@@ -160,195 +160,125 @@ async function start(limit: number): Promise<void> {
     <h1 class="ai-sr-only">
       批量提问
     </h1>
-    <div class="batch__top">
-      <div class="ai-panel batch__templates">
-        <div class="ai-panel__head">
-          <h2>选择模板</h2>
-        </div>
-        <TemplatePicker
-          :templates="templates"
-          :categories="categories"
-          :selected-id="selectedId"
-          :error="loadError"
-          empty-text="还没有模板，请先到「提问配置」新建"
-          @select="item => selectedId = item.id"
-        >
-          <template #meta="{ item }">
-            {{ item.excel_name ? `${item.excel_rows} 行` : '未上传 Excel' }} · {{ item.model_name || '未指定模型' }}
-          </template>
-        </TemplatePicker>
-      </div>
-
-      <div class="ai-panel batch__detail">
-        <div class="ai-panel__head">
-          <h2>{{ selected?.title ?? '运行' }}</h2>
-        </div>
-        <p
-          v-if="!selected"
-          class="ai-panel__hint batch__placeholder"
-        >
-          在左侧选择一个模板，这里显示它的 Excel、码表、输出字段和提示词，确认后再运行。
-        </p>
-        <dl
-          v-else
-          class="batch__facts"
-        >
-          <div><dt>Excel</dt><dd>{{ selected.excel_name ? `${selected.excel_name}（${selected.excel_rows} 行）` : '未上传' }}</dd></div>
-          <div><dt>码表</dt><dd>{{ selected.code_table_name ? `系统${selected.code_table_name}（运行时取最新）` : selected.code_name || '未上传' }}</dd></div>
-          <div><dt>输出字段</dt><dd>{{ selected.fields.join('、') || '未设置（结果表里不会多出解析列）' }}</dd></div>
-          <div>
-            <dt>提示词</dt><dd class="batch__content">
-              {{ selected.content }}
-            </dd>
-          </div>
-        </dl>
-        <div class="batch__run">
-          <ModelPicker
-            v-if="selected && !selected.model_id"
-            v-model="fallbackModel"
-            v-model:thinking="thinking"
-            :models="models"
-          />
-          <p
-            v-else-if="selected && runModel"
-            class="ai-panel__hint"
-          >
-            使用模板配置的模型：{{ runModel.name }}
-            <el-switch
-              v-if="runModel.supports_thinking"
-              v-model="thinking"
-              active-text="深度思考"
-              class="batch__thinking"
-            />
-          </p>
-          <p
-            v-if="blocker"
-            class="ai-panel__hint batch__blocker"
-          >
-            {{ blocker }}
-          </p>
-          <div
-            v-if="canRun"
-            class="batch__actions"
-          >
-            <el-button
-              :disabled="Boolean(blocker)"
-              :loading="starting"
-              @click="start(TEST_ROWS)"
-            >
-              运行 {{ TEST_ROWS }} 条测试
-            </el-button>
-            <el-button
-              type="primary"
-              :disabled="Boolean(blocker)"
-              :loading="starting"
-              @click="start(0)"
-            >
-              运行全部
-            </el-button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="ai-panel batch__history">
+    <aside class="ai-panel batch__rail">
       <div class="ai-panel__head">
-        <h2>批量提问历史</h2>
-        <el-button
-          size="small"
-          :icon="Refresh"
-          :loading="loadingRuns"
-          @click="loadRuns()"
-        >
-          刷新
-        </el-button>
+        <h2>模板</h2>
       </div>
-      <FilterBar
-        class="batch__filters"
-        :query="query"
-        :applied="applied"
-        @search="search"
-        @reset="resetFilters"
+      <TemplatePicker
+        :templates="templates"
+        :categories="categories"
+        :selected-id="selectedId"
+        :error="loadError"
+        empty-text="还没有模板，先到「提问配置」新建"
+        @select="item => selectedId = item.id"
       >
-        <el-form-item label="模板名称">
-          <FilterSelect
-            v-model="query.prompt_title"
-            :options="filterOptions.prompt_title"
-            placeholder="输入或选择模板"
-          />
-        </el-form-item>
-        <el-form-item label="模板类型">
-          <FilterSelect
-            v-model="query.prompt_category"
-            :options="categories.map(item => item.code)"
-            :labels="categoryLabels"
-            placeholder="全部"
-            size="short"
-          />
-        </el-form-item>
-        <el-form-item label="运行方式">
-          <FilterSelect
-            v-model="query.run_mode"
-            :options="RUN_MODE_OPTIONS"
-            :labels="RUN_MODE_TEXT"
-            placeholder="全部"
-            size="short"
-          />
-        </el-form-item>
-        <el-form-item label="发起人">
-          <FilterSelect
-            v-model="query.created_by_name"
-            :options="filterOptions.created_by_name"
-            placeholder="输入或选择发起人"
-            size="short"
-          />
-        </el-form-item>
-        <el-form-item label="状态">
-          <FilterSelect
-            v-model="query.status"
-            :options="STATUS_OPTIONS"
-            :labels="RUN_STATUS_TEXT"
-            placeholder="全部"
-            size="short"
-          />
-        </el-form-item>
-      </FilterBar>
-      <BatchHistory
-        v-model:page="page"
-        :filtered="filtered"
-        :items="runs"
-        :total="total"
-        :loading="loadingRuns"
+        <template #meta="{ item }">
+          {{ item.excel_name ? `${item.excel_rows} 行` : '未上传 Excel' }}
+        </template>
+      </TemplatePicker>
+    </aside>
+
+    <div class="batch__main">
+      <RunCard
+        v-model:fallback-model="fallbackModel"
+        v-model:thinking="thinking"
+        :template="selected"
+        :models="models"
+        :run-model="runModel"
+        :blocker="selected ? blocker : ''"
         :can-run="canRun"
-        :can-export="canExport"
-        :editable-categories="editableCategories"
-        @changed="loadRuns()"
+        :starting="starting"
+        :test-rows="TEST_ROWS"
+        @start="start"
       />
+
+      <div class="ai-panel batch__history">
+        <div class="ai-panel__head">
+          <h2>批量提问历史</h2>
+          <el-button
+            size="small"
+            :icon="Refresh"
+            :loading="loadingRuns"
+            @click="loadRuns()"
+          >
+            刷新
+          </el-button>
+        </div>
+        <FilterBar
+          class="batch__filters"
+          :query="query"
+          :applied="applied"
+          @search="search"
+          @reset="resetFilters"
+        >
+          <el-form-item label="模板名称">
+            <FilterSelect
+              v-model="query.prompt_title"
+              :options="filterOptions.prompt_title"
+              placeholder="输入或选择模板"
+            />
+          </el-form-item>
+          <el-form-item label="模板类型">
+            <FilterSelect
+              v-model="query.prompt_category"
+              :options="categories.map(item => item.code)"
+              :labels="categoryLabels"
+              placeholder="全部"
+              size="short"
+            />
+          </el-form-item>
+          <el-form-item label="运行方式">
+            <FilterSelect
+              v-model="query.run_mode"
+              :options="RUN_MODE_OPTIONS"
+              :labels="RUN_MODE_TEXT"
+              placeholder="全部"
+              size="short"
+            />
+          </el-form-item>
+          <el-form-item label="发起人">
+            <FilterSelect
+              v-model="query.created_by_name"
+              :options="filterOptions.created_by_name"
+              placeholder="输入或选择发起人"
+              size="short"
+            />
+          </el-form-item>
+          <el-form-item label="状态">
+            <FilterSelect
+              v-model="query.status"
+              :options="STATUS_OPTIONS"
+              :labels="RUN_STATUS_TEXT"
+              placeholder="全部"
+              size="short"
+            />
+          </el-form-item>
+        </FilterBar>
+        <BatchHistory
+          v-model:page="page"
+          :filtered="filtered"
+          :items="runs"
+          :total="total"
+          :loading="loadingRuns"
+          :can-run="canRun"
+          :can-export="canExport"
+          :editable-categories="editableCategories"
+          @changed="loadRuns()"
+        />
+      </div>
     </div>
   </section>
 </template>
 
 <style scoped>
-.batch { display: flex; flex-direction: column; gap: 16px; }
-/* 上面是选模板和看详情，并排占满整行；历史在下面，整页纵向滚动。 */
-.batch__top { display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); gap: 16px; height: clamp(440px, 56vh, 600px); }
-.batch__templates, .batch__detail { display: flex; flex-direction: column; min-height: 0; }
-.batch__placeholder { flex: 1; display: grid; place-items: center; padding: 24px; text-align: center; }
-.batch__facts { flex: 1; min-height: 0; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); gap: 10px; margin: 0; padding: 14px 16px 0; font-size: 13px; }
-.batch__facts div { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 8px; min-height: 0; }
-.batch__facts dt { color: var(--zt-ink-500); }
-.batch__facts dd { margin: 0; color: var(--zt-ink-900); word-break: break-word; }
-.batch__content { min-height: 0; overflow: auto; white-space: pre-wrap; padding: 8px 10px; border-radius: 4px; background: var(--zt-soft); line-height: 1.7; }
-.batch__run { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; padding: 14px 16px 16px; border-top: 1px solid var(--zt-border); margin-top: 14px; }
-.batch__thinking { margin-left: 10px; }
-.batch__blocker { color: var(--el-color-warning-dark-2); }
-.batch__actions { display: flex; gap: 8px; margin-left: auto; }
-.batch__actions .el-button { margin: 0; }
+/* 左边模板整列；右边上方运行卡、下方历史，整页纵向滚动时模板列停在原位。 */
+.batch { display: grid; grid-template-columns: 248px minmax(0, 1fr); align-items: start; gap: 12px; }
+.batch__rail { display: flex; flex-direction: column; position: sticky; top: 0; height: calc(100dvh - var(--workspace-header-height) - 48px); min-height: 420px; overflow: hidden; }
+.batch__main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .batch__filters { padding: 12px 16px; border-bottom: 1px solid var(--zt-border); }
 .batch__history { display: flex; flex-direction: column; height: clamp(480px, calc(100dvh - var(--workspace-header-height) - 48px), 820px); }
-@media (max-width: 1100px) {
-  .batch__top { grid-template-columns: minmax(0, 1fr); height: auto; }
-  .batch__templates { height: 320px; }
-  .batch__detail { min-height: 420px; }
+@media (max-width: 960px) {
+  .batch { grid-template-columns: minmax(0, 1fr); }
+  .batch__rail { position: static; height: 320px; }
 }
 </style>

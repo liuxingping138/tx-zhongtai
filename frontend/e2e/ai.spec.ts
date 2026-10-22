@@ -15,15 +15,18 @@ test('AI提问：新建模板、上传 Excel、@ 插入列名，批量和对话�
 
   await expect(page.getByRole('navigation', { name: '一级模块' }).getByText('AI提问')).toBeVisible({ timeout: 20_000 })
   await page.getByRole('button', { name: '新建' }).click()
-  await page.getByRole('textbox', { name: '提示词标题' }).fill(title)
+  await page.getByRole('textbox', { name: '模板标题' }).fill(title)
   const content = page.getByRole('textbox', { name: '提示词内容' })
   await content.fill('企业：')
-  await page.getByRole('textbox', { name: '新增输出字段' }).fill('行业|场景')
-  await page.getByRole('button', { name: '追加格式要求' }).click()
+  // 输出字段是标签输入：竖线断开成两个字段，回车收下最后一个。
+  const fields = page.getByRole('textbox', { name: '输出字段' })
+  await fields.fill('行业|场景')
+  await fields.press('Enter')
+  await page.getByRole('button', { name: '把格式要求追加到提示词' }).click()
   await expect(content).toHaveValue(/2、返回字段：行业、场景/)
   await expect(page.getByText('未保存')).toBeVisible()
   const created = page.waitForResponse(r => r.url().endsWith('/api/v1/ai/prompts') && r.request().method() === 'POST')
-  await page.getByRole('button', { name: '保存模板' }).click()
+  await page.getByRole('button', { name: '保存', exact: true }).click()
   expect((await created).status()).toBe(201)
   await expect(page.getByRole('list', { name: '提示词模板' }).getByText(title)).toBeVisible()
 
@@ -43,14 +46,16 @@ test('AI提问：新建模板、上传 Excel、@ 插入列名，批量和对话�
 
   await page.goto('/ai/batch-runs')
   await page.getByRole('list', { name: '提示词模板' }).getByText(title).click()
-  await expect(page.getByText('ai-template.xlsx（2 行）')).toBeVisible()
+  const runCard = page.getByRole('region', { name: '运行' })
+  await expect(runCard.getByRole('heading', { name: title })).toBeVisible()
+  await expect(runCard.getByText('2 行', { exact: true })).toBeVisible()
   await expect(page.getByText(/接口密钥未配置|请选择运行使用的模型/)).toBeVisible()
-  await expect(page.getByRole('button', { name: '运行全部' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /^运行全部/ })).toBeDisabled()
   await expect(page.getByRole('heading', { name: '批量提问历史' })).toBeVisible()
 
   await page.goto('/ai/chat')
   // Element Plus 的输入框被选中项那层盖住，要点外层包裹元素才能展开。
-  await page.locator('.model-picker .el-select__wrapper').click()
+  await page.locator('.chat__model .el-select__wrapper').click()
   await expect(page.getByRole('option').filter({ hasText: '未配置密钥' }).first()).toBeVisible()
   await expect(page.getByRole('button', { name: '发送' })).toBeDisabled()
 

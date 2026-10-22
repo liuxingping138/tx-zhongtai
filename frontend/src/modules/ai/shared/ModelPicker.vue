@@ -3,10 +3,17 @@ import { computed } from 'vue'
 
 import type { AiModel } from '@/api/ai'
 
-const props = withDefaults(defineProps<{ models: AiModel[]; label?: string; allowEmpty?: boolean; showThinking?: boolean }>(), {
+const props = withDefaults(defineProps<{
+  models: AiModel[]
+  label?: string
+  allowEmpty?: boolean
+  showThinking?: boolean
+  size?: 'default' | 'small'
+}>(), {
   label: '模型',
   allowEmpty: false,
   showThinking: true,
+  size: 'default',
 })
 const model = defineModel<string>({ required: true })
 const thinking = defineModel<boolean>('thinking', { default: false })
@@ -18,9 +25,11 @@ const current = computed(() => props.models.find(item => item.id === model.value
     <el-select
       v-model="model"
       :aria-label="label"
-      :placeholder="allowEmpty ? '未指定（运行时选择）' : '选择模型'"
+      :placeholder="allowEmpty ? '模型：运行时再选' : '选择模型'"
       :clearable="allowEmpty"
+      :size="size"
       class="model-picker__select"
+      :class="`model-picker__select--${size}`"
     >
       <el-option
         v-for="item in models"
@@ -51,5 +60,6 @@ const current = computed(() => props.models.find(item => item.id === model.value
 <style scoped>
 .model-picker { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; }
 .model-picker__select { width: 280px; }
+.model-picker__select--small { width: 200px; }
 .model-picker__off { margin-left: 8px; color: var(--el-color-warning); font-size: 12px; }
 </style>
