@@ -7,6 +7,7 @@ import io
 
 import pytest
 from fastapi import UploadFile
+from openpyxl import load_workbook
 from platform_common.errors import ApiError
 from platform_common.excel import build_workbook, build_workbook_async, parse_sheet_async
 from platform_common.http_utils import read_upload_within_limit
@@ -16,6 +17,12 @@ from app.domain.fields import POLICY_TYPE_COLUMNS
 
 def _upload(payload: bytes) -> UploadFile:
     return UploadFile(filename="t.xlsx", file=io.BytesIO(payload))
+
+
+def _cells(payload: bytes) -> list[tuple[object, ...]]:
+    sheet = load_workbook(io.BytesIO(payload)).active
+    assert sheet is not None
+    return [tuple(row) for row in sheet.iter_rows(values_only=True)]
 
 
 def test_read_upload_accepts_file_at_limit() -> None:
@@ -34,7 +41,9 @@ def test_excel_async_wrappers_match_sync_results() -> None:
 
     async def run() -> None:
         payload = await build_workbook_async(POLICY_TYPE_COLUMNS, rows, sheet_name="政策类型枚举值")
-        assert payload == build_workbook(POLICY_TYPE_COLUMNS, rows, sheet_name="政策类型枚举值")
+        # xlsx 里带精确到秒的创建时间，两次生成跨秒字节就不同；比内容，不比字节。
+        expected = build_workbook(POLICY_TYPE_COLUMNS, rows, sheet_name="政策类型枚举值")
+        assert _cells(payload) == _cells(expected)
         assert len(await parse_sheet_async(payload, POLICY_TYPE_COLUMNS, subject="码表")) == 1
 
     asyncio.run(run())

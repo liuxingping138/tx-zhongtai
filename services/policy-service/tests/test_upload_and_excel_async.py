@@ -7,6 +7,7 @@ import io
 
 import pytest
 from fastapi import UploadFile
+from openpyxl import load_workbook
 from platform_common.errors import ApiError
 from platform_common.excel import (
     build_workbook,
@@ -21,6 +22,12 @@ from app.policy.domain.fields import SOURCE_COLUMNS
 
 def _upload(payload: bytes) -> UploadFile:
     return UploadFile(filename="t.xlsx", file=io.BytesIO(payload))
+
+
+def _cells(payload: bytes) -> list[tuple[object, ...]]:
+    sheet = load_workbook(io.BytesIO(payload)).active
+    assert sheet is not None
+    return [tuple(row) for row in sheet.iter_rows(values_only=True)]
 
 
 def test_read_upload_accepts_file_at_limit() -> None:
@@ -62,7 +69,9 @@ def test_excel_async_wrappers_match_sync_results() -> None:
 
     async def run() -> None:
         payload = await build_workbook_async(SOURCE_COLUMNS, rows, sheet_name="网站编码")
-        assert payload == build_workbook(SOURCE_COLUMNS, rows, sheet_name="网站编码")
+        # xlsx 里带精确到秒的创建时间，两次生成跨秒字节就不同；比内容，不比字节。
+        expected = build_workbook(SOURCE_COLUMNS, rows, sheet_name="网站编码")
+        assert _cells(payload) == _cells(expected)
 
         parsed = await parse_sheet_async(payload, SOURCE_COLUMNS, subject="政策")
         assert len(parsed) == 1
