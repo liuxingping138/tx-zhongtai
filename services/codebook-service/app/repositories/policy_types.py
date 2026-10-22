@@ -43,7 +43,7 @@ _NUMERIC_SEQ_NO = case(
     (PolicyType.seq_no.op("~")("^[0-9]+$"), cast(PolicyType.seq_no, Integer)),
     else_=None,
 )
-_ORDER_BY = (
+ORDER_BY = (
     _NUMERIC_SEQ_NO.nulls_last(),
     PolicyType.seq_no,
     PolicyType.type_name,
@@ -72,7 +72,7 @@ async def list_items(
     conds = _conditions(filters)
     total = int(await session.scalar(select(func.count()).select_from(PolicyType).where(*conds)) or 0)
     result = await session.execute(
-        select(PolicyType).where(*conds).order_by(*_ORDER_BY).offset((page - 1) * page_size).limit(page_size)
+        select(PolicyType).where(*conds).order_by(*ORDER_BY).offset((page - 1) * page_size).limit(page_size)
     )
     return list(result.scalars()), total
 
@@ -86,7 +86,7 @@ async def count_filtered(session: AsyncSession, filters: Filters) -> int:
 async def list_filtered(session: AsyncSession, filters: Filters) -> list[PolicyType]:
     """导出用：与列表一致的筛选和排序，不分页。"""
 
-    result = await session.execute(select(PolicyType).where(*_conditions(filters)).order_by(*_ORDER_BY))
+    result = await session.execute(select(PolicyType).where(*_conditions(filters)).order_by(*ORDER_BY))
     return list(result.scalars())
 
 

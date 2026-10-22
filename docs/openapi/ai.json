@@ -348,6 +348,127 @@
         }
       }
     },
+    "/api/v1/ai/prompts/{prompt_id}/releases": {
+      "get": {
+        "tags": [
+          "ai-prompts"
+        ],
+        "summary": "List Releases",
+        "operationId": "list_releases_api_v1_ai_prompts__prompt_id__releases_get",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prompt Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/prompts/{prompt_id}/release": {
+      "post": {
+        "tags": [
+          "ai-prompts"
+        ],
+        "summary": "Publish",
+        "description": "上线是管理员的事：业务人员能改模板，但不能让改动直接进定时任务。",
+        "operationId": "publish_api_v1_ai_prompts__prompt_id__release_post",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prompt Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/prompts/{prompt_id}/offline": {
+      "post": {
+        "tags": [
+          "ai-prompts"
+        ],
+        "summary": "Take Offline",
+        "operationId": "take_offline_api_v1_ai_prompts__prompt_id__offline_post",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prompt Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/ai/batch-runs": {
       "get": {
         "tags": [
@@ -1248,6 +1369,12 @@
             "type": "string",
             "maxLength": 100,
             "title": "Model Id",
+            "default": ""
+          },
+          "code_table": {
+            "type": "string",
+            "maxLength": 32,
+            "title": "Code Table",
             "default": ""
           },
           "version": {

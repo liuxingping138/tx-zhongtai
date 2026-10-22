@@ -1,4 +1,4 @@
-"""提示词模板：增删改、Excel 与码表附件。"""
+"""提示词模板：增删改、Excel 与码表附件，以及取模板实际使用的码表文本。"""
 
 from __future__ import annotations
 
@@ -16,17 +16,26 @@ from app.application import model_configs
 from app.application.audit_emit import enqueue_event
 from app.application.sheets import decode_code_table, sheet_summary
 from app.core import storage
+from app.core.codebook import fetch_code_table
 from app.domain.categories import CategoryAccess, category_name, checked_category
-from app.domain.models import PromptTemplate, new_id
+from app.domain.code_tables import checked_code_table, code_table_name
+from app.domain.models import PromptTemplate, TemplateRelease, new_id
+from app.domain.releases import release_summary
 from app.domain.templating import split_fields
 from app.repositories import prompts as repo
+from app.repositories import releases as release_repo
 
 EXCEL_SUFFIX = ".xlsx"
 CODE_SUFFIX = ".txt"
 TITLE_MAX = 255
 
 
-def to_dict(template: PromptTemplate, model_names: dict[str, str], access: CategoryAccess) -> dict[str, Any]:
+def to_dict(
+    template: PromptTemplate,
+    model_names: dict[str, str],
+    access: CategoryAccess,
+    release: TemplateRelease | None = None,
+) -> dict[str, Any]:
     return {
         "id": template.id,
         "title": template.title,
@@ -42,6 +51,9 @@ def to_dict(template: PromptTemplate, model_names: dict[str, str], access: Categ
         "excel_rows": template.excel_rows,
         "excel_headers": list(template.excel_headers or []),
         "code_name": template.code_name,
+        "code_table": template.code_table,
+        "code_table_name": code_table_name(template.code_table) if template.code_table else "",
+        "release": release_summary(template, release),
         "version": template.version,
         "created_at": format_beijing(template.created_at),
         "created_by_name": template.created_by_name,
@@ -65,14 +77,23 @@ def _validated(values: dict[str, Any]) -> dict[str, str]:
         "content": content,
         "output_fields": "|".join(split_fields(str(values.get("output_fields") or ""))),
         "model_id": str(values.get("model_id") or "").strip(),
+        "code_table": checked_code_table(values.get("code_table")),
     }
+
+
+async def to_out(session: AsyncSession, template: PromptTemplate, access: CategoryAccess) -> dict[str, Any]:
+    releases = await release_repo.by_ids(session, [template.release_id] if template.release_id else [])
+    release = releases.get(template.release_id or "")
+    return to_dict(template, await model_configs.names(session), access, release)
 
 
 async def list_prompts(session: AsyncSession, access: CategoryAccess) -> list[dict[str, Any]]:
     """只列当前用户能看到的类型；一个类型都没授权时是空列表，不是全部。"""
 
     names = await model_configs.names(session)
-    return [to_dict(item, names, access) for item in await repo.list_all(session, categories=access.readable)]
+    items = await repo.list_all(session, categories=access.readable)
+    releases = await release_repo.by_ids(session, [item.release_id for item in items if item.release_id])
+    return [to_dict(item, names, access, releases.get(item.release_id or "")) for item in items]
 
 
 async def require(session: AsyncSession, prompt_id: str, *, lock: bool = False) -> PromptTemplate:
@@ -101,7 +122,7 @@ async def create_prompt(
     repo.add(session, template)
     await session.flush()
     await enqueue_event(session, event_type="ai.prompt.created", actor=actor, target_id=template.id)
-    return to_dict(template, await model_configs.names(session), access)
+    return await to_out(session, template, access)
 
 
 def _touch(template: PromptTemplate, actor: Actor) -> None:
@@ -135,13 +156,15 @@ async def update_prompt(
     await enqueue_event(
         session, event_type="ai.prompt.updated", actor=actor, target_id=template.id, changes={"fields": sorted(changes)}
     )
-    return to_dict(template, await model_configs.names(session), access)
+    return await to_out(session, template, access)
 
 
 async def delete_prompt(session: AsyncSession, actor: Actor, access: CategoryAccess, prompt_id: str) -> None:
     """批量任务发起时已经复制了 Excel 和码表，删模板不影响历史任务和正在跑的任务。"""
 
     template = await require_editable(session, access, prompt_id, lock=True)
+    if template.release_id:
+        raise ApiError("模板已上线，定时任务在用它，先下线再删除", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     await repo.delete(session, template)
     await enqueue_event(session, event_type="ai.prompt.deleted", actor=actor, target_id=prompt_id)
     await session.flush()
@@ -182,7 +205,7 @@ async def upload_file(
     )
     await session.flush()
     await anyio.to_thread.run_sync(storage.write_atomic, storage.prompt_file(prompt_id, kind), payload)
-    return to_dict(template, await model_configs.names(session), access)
+    return await to_out(session, template, access)
 
 
 async def delete_file(
@@ -199,7 +222,7 @@ async def delete_file(
     )
     await session.flush()
     await anyio.Path(storage.prompt_file(prompt_id, kind)).unlink(missing_ok=True)
-    return to_dict(template, await model_configs.names(session), access)
+    return await to_out(session, template, access)
 
 
 async def download_file(
@@ -215,3 +238,14 @@ async def download_file(
         session, event_type="ai.prompt.file_exported", actor=actor, target_id=prompt_id, changes={"kind": kind}
     )
     return await path.read_bytes(), name
+
+
+async def code_text(template: PromptTemplate) -> str | None:
+    """模板实际用的码表全文：选了系统码表就实时取，否则读上传的码表文件；都没有时为 None。"""
+
+    if template.code_table:
+        return await fetch_code_table(template.code_table)
+    path = anyio.Path(storage.prompt_file(template.id, "code"))
+    if template.code_name and await path.is_file():
+        return await path.read_text(encoding="utf-8")
+    return None

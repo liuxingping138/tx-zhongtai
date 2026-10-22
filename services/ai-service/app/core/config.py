@@ -24,6 +24,10 @@ class Settings(BaseServiceSettings):
 
     audit_ingest_url: str = "http://audit-service:8002"
     audit_ingest_secret: str = ""
+    # 模板引用系统码表时从码表服务的内部接口实时取。
+    codebook_base_url: str = "http://codebook-service:8003"
+    codebook_service_secret: str = ""
+    codebook_timeout_seconds: float = 10.0
     worker_poll_interval_seconds: float = 2.0
     worker_max_attempts: int = 8
 
@@ -47,7 +51,7 @@ class Settings(BaseServiceSettings):
     def _reject_demo_secrets_in_production(self) -> Settings:
         if self.environment == Environment.PRODUCTION:
             markers = ("dev-", "example", "changeme", "test-secret", "p6-only")
-            for token in (self.iam_service_secret, self.audit_ingest_secret):
+            for token in (self.iam_service_secret, self.audit_ingest_secret, self.codebook_service_secret):
                 if token and any(marker in token.lower() for marker in markers):
                     raise ValueError("生产环境内部调用密钥看起来是示例值，拒绝启动")
         return self

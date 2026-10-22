@@ -75,7 +75,7 @@ class TestPolicyTypes:
         assert err.value.http_status == 409
 
     async def test_update_rules(self, env: SimpleNamespace) -> None:
-        env.row = _stamp(PolicyType, seq_no="1", type_name="产业扶持", definition="补贴")
+        env.row = _stamp(PolicyType, seq_no="1", type_name="产业扶持", definition="补贴", priority="")
         with pytest.raises(NotFoundError):
             env.row, saved = None, env.row
             await policy_types.update_policy_type(_Session(), ACTOR, uuid.uuid4(), {"version": 1})  # type: ignore[arg-type]
@@ -98,9 +98,10 @@ class TestPolicyTypes:
     async def test_import_inserts_updates_and_reports_the_rest(
         self, env: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        existing = _stamp(PolicyType, seq_no="1", type_name="老类型", definition="旧")
-        same = _stamp(PolicyType, seq_no="2", type_name="没变", definition="一样")
-        by_name = {"老类型": existing, "没变": same}
+        existing = _stamp(PolicyType, seq_no="1", type_name="老类型", definition="旧", priority="P1")
+        same = _stamp(PolicyType, seq_no="2", type_name="没变", definition="一样", priority="P2")
+        reprioritized = _stamp(PolicyType, seq_no="4", type_name="改优先级", definition="d", priority="P2")
+        by_name = {"老类型": existing, "没变": same, "改优先级": reprioritized}
         monkeypatch.setattr(
             policy_types.repo, "get_by_name", AsyncMock(side_effect=lambda _s, name, **_: by_name.get(name))
         )
@@ -110,15 +111,18 @@ class TestPolicyTypes:
             [
                 {"type_name": "新类型", "seq_no": "3", "definition": "x"},
                 {"type_name": "老类型", "seq_no": "1", "definition": "新"},
-                {"type_name": "没变", "seq_no": "2", "definition": "一样"},
+                {"type_name": "没变", "seq_no": "2", "definition": "一样", "priority": ""},
+                {"type_name": "改优先级", "seq_no": "4", "definition": "d", "priority": "P0"},
                 {"type_name": " ", "definition": "无名"},
             ],
         )
         session = _Session()
         result = await policy_types.import_policy_types(session, ACTOR, b"")  # type: ignore[arg-type]
-        assert (result["inserted"], result["updated"], result["skipped"], result["total"]) == (1, 1, 2, 4)
+        assert (result["inserted"], result["updated"], result["skipped"], result["total"]) == (1, 2, 2, 5)
         assert {row["skip_reason"] for row in captured["skipped"]} == {"内容无变化", "政策类型为空"}
         assert existing.version == 2 and same.version == 1 and len(session.added) == 1
+        # 旧版 Excel 没有优先级列（读成空串）不清掉已填的；填了值就照常更新。
+        assert (existing.priority, same.priority, reprioritized.priority) == ("P1", "P2", "P0")
 
     async def test_export_is_capped_before_any_query(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(policy_types.repo, "count_filtered", AsyncMock(return_value=10**7))

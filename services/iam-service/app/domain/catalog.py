@@ -72,6 +72,8 @@ RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("ai.category.policy", "政策类模板", "ai-service", NodeType.RESOURCE, True, 65, "ai"),
     ResourceSpec("ai.category.customer", "客户类模板", "ai-service", NodeType.RESOURCE, True, 66, "ai"),
     ResourceSpec("ai.category.tender", "招投标类模板", "ai-service", NodeType.RESOURCE, True, 67, "ai"),
+    # 上线后模板进定时任务、按真实数据花钱，只给管理员；业务人员能改模板但不能上线。不是菜单，按钮在提问配置页。
+    ResourceSpec("ai.releases", "模板上线", "ai-service", NodeType.RESOURCE, True, 68, "ai"),
 )
 
 ACTION_SPECS: tuple[ActionSpec, ...] = (
@@ -157,6 +159,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ActionSpec("ai.category.customer", "update", GrantLevel.FULL),
     ActionSpec("ai.category.tender", "list", GrantLevel.READ),
     ActionSpec("ai.category.tender", "update", GrantLevel.FULL),
+    ActionSpec("ai.releases", "list", GrantLevel.READ),
+    ActionSpec("ai.releases", "publish", GrantLevel.FULL),
 )
 
 MENU_SPECS: tuple[MenuSpec, ...] = (

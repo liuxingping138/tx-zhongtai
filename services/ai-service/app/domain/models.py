@@ -50,6 +50,11 @@ class PromptTemplate(Base):
     excel_rows: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="Excel 数据行数")
     excel_headers: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list, comment="Excel 表头")
     code_name: Mapped[str] = mapped_column(String(255), nullable=False, default="", comment="码表文件名")
+    # 选了系统码表就不用上传的码表文件，每次实时从码表服务取。
+    code_table: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="", server_default="", comment="系统码表"
+    )
+    release_id: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="当前上线版本ID")
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, comment="版本号")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="创建时间")
     created_by_id: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="创建人ID")
@@ -57,6 +62,27 @@ class PromptTemplate(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="更新时间")
     updated_by_id: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="更新人ID")
     updated_by_name: Mapped[str] = mapped_column(String(128), nullable=False, default="", comment="更新人")
+
+
+class TemplateRelease(Base):
+    """模板上线时冻结的一版。定时任务只跑上线版本：之后再改模板只改草稿，重新上线才生效。"""
+
+    __tablename__ = "ai_template_releases"
+    __table_args__ = {"comment": "模板上线版本"}
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id, comment="版本ID")
+    prompt_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True, comment="模板ID")
+    release_no: Mapped[int] = mapped_column(Integer, nullable=False, comment="上线版本号")
+    title: Mapped[str] = mapped_column(String(255), nullable=False, comment="提示词标题")
+    category: Mapped[str] = mapped_column(String(16), nullable=False, comment="模板类型")
+    content: Mapped[str] = mapped_column(Text, nullable=False, comment="提示词内容")
+    output_fields: Mapped[str] = mapped_column(Text, nullable=False, comment="新增输出字段")
+    model_id: Mapped[str] = mapped_column(String(100), nullable=False, comment="模型ID")
+    code_table: Mapped[str] = mapped_column(String(32), nullable=False, default="", comment="系统码表")
+    code_name: Mapped[str] = mapped_column(String(255), nullable=False, default="", comment="码表文件名")
+    released_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="上线时间")
+    released_by_id: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="上线人ID")
+    released_by_name: Mapped[str] = mapped_column(String(128), nullable=False, default="", comment="上线人")
 
 
 class AiModel(Base):

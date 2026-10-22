@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import hmac
 from collections.abc import Callable
 from typing import Annotated, Any
 
 from fastapi import Depends, Request
 from platform_common.authz import AuthzClient
-from platform_common.errors import InternalCallerRejectedError, UnauthenticatedError
+from platform_common.errors import UnauthenticatedError
+from platform_common.internal_calls import verify_internal_caller
 from platform_common.request_context import get_request_id
 from platform_common.route_audit import mark_permission_dependency
 from platform_common.service_authz import cached_authz_client
@@ -26,14 +26,7 @@ def classified(security_class: SecurityClass) -> Callable[[Callable[..., Any]], 
 
 
 def require_internal_caller(request: Request, settings: Settings) -> str:
-    service = (request.headers.get("x-internal-service") or "").strip()
-    token = request.headers.get("x-internal-token") or ""
-    expected = settings.internal_caller_secrets.get(service)
-    given = token.encode()
-    wanted = (expected or "").encode()
-    if not service or not expected or len(given) != len(wanted) or not hmac.compare_digest(given, wanted):
-        raise InternalCallerRejectedError()
-    return service
+    return verify_internal_caller(request, settings.internal_caller_secrets)
 
 
 def get_authz_client(settings: Annotated[Settings, Depends(get_settings)]) -> AuthzClient:

@@ -67,7 +67,7 @@
 | `/policy/sources` | 19/19（表格列 16 + 省市区编码 3） |
 | `/policy/base-tags` | 20/20 |
 | `/policy/interpretations` | 27/27（表格列 26，含数据状态；+ 租户标识 1） |
-| `/codebook/policy-types` | 7/7 |
+| `/codebook/policy-types` | 8/8 |
 | `/codebook/scenarios` | 35/35 |
 | `/codebook/area-codes` | 15/15 |
 | `/policy/crawler-monitoring` | 8/8（只读，无编辑表单） |

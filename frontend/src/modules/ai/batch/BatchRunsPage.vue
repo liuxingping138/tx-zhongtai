@@ -194,7 +194,7 @@ async function start(limit: number): Promise<void> {
           class="batch__facts"
         >
           <div><dt>Excel</dt><dd>{{ selected.excel_name ? `${selected.excel_name}（${selected.excel_rows} 行）` : '未上传' }}</dd></div>
-          <div><dt>码表</dt><dd>{{ selected.code_name || '未上传' }}</dd></div>
+          <div><dt>码表</dt><dd>{{ selected.code_table_name ? `系统${selected.code_table_name}（运行时取最新）` : selected.code_name || '未上传' }}</dd></div>
           <div><dt>输出字段</dt><dd>{{ selected.fields.join('、') || '未设置（结果表里不会多出解析列）' }}</dd></div>
           <div>
             <dt>提示词</dt><dd class="batch__content">

@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 
-import { createPrompt, deletePrompt, listPrompts, updatePrompt, type AiModel, type PromptTemplate, type TemplateCategory } from '@/api/ai'
+import { createPrompt, deletePrompt, listPrompts, updatePrompt, type AiModel, type PromptTemplate, type SystemCodeTable, type TemplateCategory } from '@/api/ai'
 import { errorMessage } from '@/api/errors'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import { useAuthStore } from '@/stores/auth'
@@ -16,14 +16,17 @@ import { ALL_CATEGORIES, defaultCategory } from '../shared/categories'
 import { useAnswerStream } from '../shared/useAnswerStream'
 import MentionTextarea from './MentionTextarea.vue'
 import PromptFiles from './PromptFiles.vue'
+import ReleaseBar from './ReleaseBar.vue'
 import '../shared/ai.css'
 
 const auth = useAuthStore()
 const canEditPage = computed(() => auth.canFull('ai.prompts'))
 const canExport = computed(() => auth.canExport('ai.prompts'))
+const canRelease = computed(() => auth.canFull('ai.releases'))
 const templates = ref<PromptTemplate[]>([])
 const models = ref<AiModel[]>([])
 const categories = ref<TemplateCategory[]>([])
+const codeTables = ref<SystemCodeTable[]>([])
 const editableCategories = computed(() => categories.value.filter(item => item.editable))
 const selected = ref<PromptTemplate | null>(null)
 const categoryFilter = ref(ALL_CATEGORIES)
@@ -34,7 +37,7 @@ const loading = ref(false)
 const loadError = ref('')
 const saving = ref(false)
 const thinking = ref(false)
-const form = reactive({ title: '', category: '', content: '', output_fields: '', model_id: '' })
+const form = reactive({ title: '', category: '', content: '', output_fields: '', model_id: '', code_table: '' })
 const unsaved = useUnsavedForm(ref(true), () => ({ ...form }), saving)
 // 编辑区一直打开，useUnsavedForm 只在打开时记基线；不先记一次，空表单也算「未保存」。
 unsaved.markSaved()
@@ -55,6 +58,7 @@ async function load(): Promise<void> {
     templates.value = data.items
     models.value = data.models
     categories.value = data.categories
+    codeTables.value = data.code_tables
     if (!selected.value) {
       form.category = defaultCategory(editableCategories.value, categoryFilter.value)
       unsaved.markSaved()
@@ -71,9 +75,9 @@ onBeforeUnmount(answer.stop)
 
 function fill(template: PromptTemplate | null): void {
   selected.value = template
-  const { title, category, content, output_fields, model_id } = template
-    ?? { title: '', category: defaultCategory(editableCategories.value, categoryFilter.value), content: '', output_fields: '', model_id: '' }
-  Object.assign(form, { title, category, content, output_fields, model_id })
+  const { title, category, content, output_fields, model_id, code_table } = template
+    ?? { title: '', category: defaultCategory(editableCategories.value, categoryFilter.value), content: '', output_fields: '', model_id: '', code_table: '' }
+  Object.assign(form, { title, category, content, output_fields, model_id, code_table })
   unsaved.markSaved()
 }
 
@@ -207,6 +211,13 @@ async function trial(): Promise<void> {
             未保存
           </el-tag>
         </div>
+        <ReleaseBar
+          v-if="selected"
+          :template="selected"
+          :can-release="canRelease"
+          :dirty="unsaved.dirty.value"
+          @changed="replace"
+        />
         <div class="workbench__fields">
           <span class="workbench__label">标题</span>
           <el-input
@@ -236,7 +247,7 @@ async function trial(): Promise<void> {
             v-model="form.content"
             label="提示词内容"
             :headers="selected?.excel_headers ?? []"
-            :has-code="Boolean(selected?.code_name)"
+            :has-code="Boolean(form.code_table || selected?.code_name)"
           />
           <span class="workbench__label">新增输出字段</span>
           <div class="workbench__inline">
@@ -261,11 +272,29 @@ async function trial(): Promise<void> {
             :models="models"
             allow-empty
           />
+          <span class="workbench__label">码表</span>
+          <el-select
+            v-model="form.code_table"
+            aria-label="码表来源"
+            :disabled="!canEdit"
+          >
+            <el-option
+              label="用上传的码表文件（没有就不用码表）"
+              value=""
+            />
+            <el-option
+              v-for="item in codeTables"
+              :key="item.key"
+              :label="`系统${item.name}（实时取最新）`"
+              :value="item.key"
+            />
+          </el-select>
           <span class="workbench__label">附件</span>
           <PromptFiles
             :template="selected"
             :can-edit="canEdit"
             :can-export="canExport"
+            :system-code="Boolean(form.code_table)"
             @changed="filesChanged"
           />
         </div>

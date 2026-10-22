@@ -7,6 +7,8 @@ from enum import StrEnum
 
 class SecurityClass(StrEnum):
     RESOURCE_AUTHORIZED = "resource_authorized"
+    # /internal/ 下的服务间接口：不挂用户权限，靠 internal_calls.verify_internal_caller 核对调用方。
+    INTERNAL = "internal"
     HEALTH = "health"
 
 

@@ -111,6 +111,8 @@ def template(**overrides: Any) -> PromptTemplate:
         "excel_rows": 0,
         "excel_headers": [],
         "code_name": "",
+        "code_table": "",
+        "release_id": None,
         "version": 1,
         "created_at": NOW,
         "created_by_id": "u1",

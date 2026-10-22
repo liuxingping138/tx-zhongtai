@@ -18,7 +18,7 @@ from platform_common.excel import run_excel_parse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application import model_configs
-from app.application.prompts import require, require_editable
+from app.application.prompts import code_text, require, require_editable
 from app.application.sheets import read_sheet
 from app.core import storage
 from app.core.config import get_settings
@@ -93,7 +93,7 @@ def _check_message(message: str) -> str:
 
 
 async def _first_row_values(session: AsyncSession, prompt_id: str) -> dict[str, str]:
-    """模板 Excel 第一条数据 + 码表全文，用来把 @【列名】@【上传码表】替换成真实值。"""
+    """模板 Excel 第一条数据 + 码表全文（上传的或系统码表），用来把 @【列名】@【上传码表】替换成真实值。"""
 
     template = await require(session, prompt_id)
     values: dict[str, str] = {}
@@ -103,9 +103,9 @@ async def _first_row_values(session: AsyncSession, prompt_id: str) -> dict[str, 
             lambda content: read_sheet(content, limit=1), await anyio.Path(excel).read_bytes()
         )
         values.update(rows[0] if rows else {})
-    code = storage.prompt_file(prompt_id, "code")
-    if template.code_name and await anyio.Path(code).is_file():
-        values[CODE_TABLE_FIELD] = await anyio.Path(code).read_text(encoding="utf-8")
+    code = await code_text(template)
+    if code is not None:
+        values[CODE_TABLE_FIELD] = code
     return values
 
 

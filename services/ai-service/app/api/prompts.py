@@ -9,12 +9,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.schemas import FileKind, PromptBody, file_response
 from app.api.security import CategoryAccess, SecurityClass, classified, get_category_access, require_ai_permission
 from app.application import prompts as service
+from app.application import releases
 from app.application.asking import available_models
 from app.core.config import get_settings
 from app.core.database import get_db_session
+from app.domain.code_tables import SYSTEM_CODE_TABLES
 
 router = APIRouter(prefix="/api/v1/ai/prompts", tags=["ai-prompts"])
 RESOURCE = "ai.prompts"
+RELEASE_RESOURCE = "ai.releases"
 
 
 @router.get("")
@@ -29,6 +32,7 @@ async def list_prompts(
             "items": await service.list_prompts(session, access),
             "models": await available_models(session),
             "categories": access.options(),
+            "code_tables": [{"key": key, "name": name} for key, name in SYSTEM_CODE_TABLES.items()],
         }
     )
 
@@ -106,3 +110,38 @@ async def download_file(
 ) -> Response:
     content, filename = await service.download_file(session, actor, access, prompt_id, kind)
     return file_response(content, filename)
+
+
+@router.get("/{prompt_id}/releases")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def list_releases(
+    prompt_id: str,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    access: CategoryAccess = Depends(get_category_access),
+    _: Actor = Depends(require_ai_permission(RESOURCE, "list")),
+) -> JSONResponse:
+    return success_json(await releases.list_releases(session, access, prompt_id))
+
+
+@router.post("/{prompt_id}/release")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def publish(
+    prompt_id: str,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    access: CategoryAccess = Depends(get_category_access),
+    actor: Actor = Depends(require_ai_permission(RELEASE_RESOURCE, "publish")),
+) -> JSONResponse:
+    """上线是管理员的事：业务人员能改模板，但不能让改动直接进定时任务。"""
+
+    return success_json(await releases.publish(session, actor, access, prompt_id))
+
+
+@router.post("/{prompt_id}/offline")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def take_offline(
+    prompt_id: str,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    access: CategoryAccess = Depends(get_category_access),
+    actor: Actor = Depends(require_ai_permission(RELEASE_RESOURCE, "publish")),
+) -> JSONResponse:
+    return success_json(await releases.take_offline(session, actor, access, prompt_id))

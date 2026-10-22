@@ -8,6 +8,7 @@ POLICY_TYPE_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec("seq_no", "序号"),
     ColumnSpec("type_name", "政策类型", searchable=True),
     ColumnSpec("definition", "定义", searchable=True),
+    ColumnSpec("priority", "优先级"),
 )
 
 SCENARIO_COLUMNS: tuple[ColumnSpec, ...] = (

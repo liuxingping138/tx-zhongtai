@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import hmac
-
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from platform_common.errors import InternalCallerRejectedError
+from platform_common.internal_calls import verify_internal_caller
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import AuthorizeRequest
@@ -21,14 +19,7 @@ router = APIRouter(prefix="/internal/v1", tags=["internal"])
 
 
 def require_internal_caller(request: Request, settings: Settings) -> str:
-    service = (request.headers.get("x-internal-service") or "").strip()
-    token = request.headers.get("x-internal-token") or ""
-    expected = settings.internal_caller_secrets.get(service)
-    given = token.encode()
-    wanted = (expected or "").encode()
-    if not service or not expected or len(given) != len(wanted) or not hmac.compare_digest(given, wanted):
-        raise InternalCallerRejectedError()
-    return service
+    return verify_internal_caller(request, settings.internal_caller_secrets)
 
 
 @router.get("/jwks")

@@ -1338,6 +1338,47 @@
           }
         }
       }
+    },
+    "/internal/v1/code-tables/{name}": {
+      "get": {
+        "tags": [
+          "internal"
+        ],
+        "summary": "Code Table",
+        "description": "AI 模板引用系统码表：每次取最新内容，码表改了模板跟着变。",
+        "operationId": "code_table_internal_v1_code_tables__name__get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1516,6 +1557,12 @@
             "title": "Definition",
             "default": ""
           },
+          "priority": {
+            "type": "string",
+            "maxLength": 8,
+            "title": "Priority",
+            "default": ""
+          },
           "version": {
             "type": "integer",
             "minimum": 1.0,
@@ -1544,6 +1591,12 @@
           "definition": {
             "type": "string",
             "title": "Definition",
+            "default": ""
+          },
+          "priority": {
+            "type": "string",
+            "maxLength": 8,
+            "title": "Priority",
             "default": ""
           },
           "version": {

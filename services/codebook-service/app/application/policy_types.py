@@ -24,6 +24,7 @@ def _to_out(row: PolicyType) -> dict[str, Any]:
         "seq_no": row.seq_no,
         "type_name": row.type_name,
         "definition": row.definition,
+        "priority": row.priority,
         "version": row.version,
         "created_at": format_beijing(row.created_at),
         "created_by_name": row.created_by_name,
@@ -32,9 +33,12 @@ def _to_out(row: PolicyType) -> dict[str, Any]:
     }
 
 
+_FIELDS = ("seq_no", "type_name", "definition", "priority")
+
+
 def _apply_fields(row: PolicyType, data: dict[str, str]) -> dict[str, Any]:
     changes: dict[str, Any] = {}
-    for field in ("seq_no", "type_name", "definition"):
+    for field in _FIELDS:
         if field not in data:
             continue
         new = (data[field] or "").strip()
@@ -73,6 +77,7 @@ async def create_policy_type(session: AsyncSession, actor: Actor, data: dict[str
         seq_no=(data.get("seq_no") or "").strip(),
         type_name=type_name,
         definition=(data.get("definition") or "").strip(),
+        priority=(data.get("priority") or "").strip(),
         version=1,
         created_at=now,
         created_by_id=actor.id,
@@ -108,7 +113,7 @@ async def update_policy_type(
         existing = await repo.get_by_name(session, type_name)
         if existing and existing.id != row.id:
             raise ApiError("政策类型已存在", code=ErrorCode.VERSION_CONFLICT, http_status=409)
-    changes = _apply_fields(row, {k: str(data.get(k, getattr(row, k))) for k in ("seq_no", "type_name", "definition")})
+    changes = _apply_fields(row, {k: str(data.get(k, getattr(row, k))) for k in _FIELDS})
     if not changes:
         return _to_out(row)
     row.version += 1
@@ -143,6 +148,7 @@ async def import_policy_types(session: AsyncSession, actor: Actor, content: byte
                     seq_no=item.get("seq_no", "").strip(),
                     type_name=type_name,
                     definition=item.get("definition", "").strip(),
+                    priority=item.get("priority", "").strip(),
                     version=1,
                     created_at=now,
                     created_by_id=actor.id,
@@ -154,7 +160,11 @@ async def import_policy_types(session: AsyncSession, actor: Actor, content: byte
             )
             inserted += 1
             continue
-        changed = _apply_fields(row, item)
+        # 旧版 Excel 没有「优先级」列，读出来是空串；不能因此把已填的优先级清掉。
+        keep_priority = not item.get("priority", "").strip()
+        changed = _apply_fields(
+            row, {key: value for key, value in item.items() if not (keep_priority and key == "priority")}
+        )
         if not changed:
             skipped_rows.append({**item, "skip_reason": "内容无变化"})
             continue
@@ -200,7 +210,8 @@ async def _assert_exportable(session: AsyncSession, filters: Filters) -> None:
 async def export_policy_types(session: AsyncSession, actor: Actor, filters: Filters) -> bytes:
     await _assert_exportable(session, filters)
     rows = [
-        _to_out(item) | {"seq_no": item.seq_no, "type_name": item.type_name, "definition": item.definition}
+        _to_out(item)
+        | {"seq_no": item.seq_no, "type_name": item.type_name, "definition": item.definition, "priority": item.priority}
         for item in await repo.list_filtered(session, filters)
     ]
     await enqueue_event(

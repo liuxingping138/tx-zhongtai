@@ -27,6 +27,7 @@ class PromptBody(_Body):
     content: str = Field(max_length=200_000)
     output_fields: str = Field(default="", max_length=2000)
     model_id: str = Field(default="", max_length=100)
+    code_table: str = Field(default="", max_length=32)
     version: int | None = None
 
 

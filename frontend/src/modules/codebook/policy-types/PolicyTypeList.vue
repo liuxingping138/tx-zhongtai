@@ -40,7 +40,7 @@ const visible = ref(false)
 const saving = ref(false)
 const saveError = ref('')
 const editing = ref<PolicyTypeItem | null>(null)
-const form = reactive({ seq_no: '', type_name: '', definition: '' })
+const form = reactive({ seq_no: '', type_name: '', definition: '', priority: '' })
 
 
 const listQuery = useListQuery(query, (): Promise<void> => load())
@@ -73,6 +73,7 @@ function openCreate() {
   form.seq_no = ''
   form.type_name = ''
   form.definition = ''
+  form.priority = ''
   visible.value = true
 }
 
@@ -82,6 +83,7 @@ function openEdit(row: PolicyTypeItem) {
   form.seq_no = row.seq_no
   form.type_name = row.type_name
   form.definition = row.definition
+  form.priority = row.priority
   visible.value = true
 }
 
@@ -158,6 +160,12 @@ const editorGroups: EditorGroup[] = [
         "maxLength": 64
       },
       {
+        "key": "priority",
+        "label": "优先级",
+        "maxLength": 8,
+        "hint": "如 P0、P1、P2，P0 最先。AI 给政策打类型时，多个类型同时命中按它排序。"
+      },
+      {
         "key": "definition",
         "label": "定义",
         "long": true,
@@ -171,6 +179,7 @@ const editorGuard = useUnsavedForm(visible, () => form, saving)
 const tableColumns = [
  { prop: 'seq_no', label: '序号', width: 80 },
  { prop: 'type_name', label: '政策类型', width: 160 },
+ { prop: 'priority', label: '优先级', width: 80 },
  { prop: 'definition', label: '定义', minWidth: 360, grow: 1, wrap: true },
  { prop: 'created_at', label: '入库时间', time: true, width: 190 },
  { prop: 'created_by_name', label: '入库人', width: 120 },

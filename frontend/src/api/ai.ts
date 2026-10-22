@@ -21,6 +21,22 @@ export interface TemplateCategory {
   editable: boolean
 }
 
+/** 模板可引用的系统码表；选了就每次实时从码表服务取，不用上传的码表文件 */
+export interface SystemCodeTable {
+  key: string
+  name: string
+}
+
+/** 模板当前生效的上线版本；定时任务只跑它 */
+export interface TemplateReleaseInfo {
+  id: string
+  release_no: number
+  released_at: string
+  released_by_name: string
+  /** 上线后草稿又改了哪些会影响结果的内容，空表示和上线版本一致 */
+  unreleased_changes: string[]
+}
+
 export interface PromptTemplate {
   id: string
   title: string
@@ -37,6 +53,9 @@ export interface PromptTemplate {
   excel_rows: number
   excel_headers: string[]
   code_name: string
+  code_table: string
+  code_table_name: string
+  release: TemplateReleaseInfo | null
   version: number
   created_at: string
   created_by_name: string
@@ -50,6 +69,7 @@ export interface PromptPayload {
   content: string
   output_fields: string
   model_id: string
+  code_table: string
   version?: number
 }
 
@@ -106,7 +126,7 @@ export interface BatchRunPage {
 export const AI_BASE = '/ai'
 const BASE = AI_BASE
 
-export function listPrompts(): Promise<{ items: PromptTemplate[]; models: AiModel[]; categories: TemplateCategory[] }> {
+export function listPrompts(): Promise<{ items: PromptTemplate[]; models: AiModel[]; categories: TemplateCategory[]; code_tables: SystemCodeTable[] }> {
   return request(http.get(`${BASE}/prompts`))
 }
 
@@ -120,6 +140,14 @@ export function updatePrompt(id: string, payload: PromptPayload): Promise<Prompt
 
 export function deletePrompt(id: string): Promise<null> {
   return request(http.delete(`${BASE}/prompts/${id}`))
+}
+
+export function publishPrompt(id: string): Promise<PromptTemplate> {
+  return request(http.post(`${BASE}/prompts/${id}/release`))
+}
+
+export function offlinePrompt(id: string): Promise<PromptTemplate> {
+  return request(http.post(`${BASE}/prompts/${id}/offline`))
 }
 
 export function uploadPromptFile(id: string, kind: PromptFileKind, file: File): Promise<PromptTemplate> {

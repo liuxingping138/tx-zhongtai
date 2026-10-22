@@ -161,6 +161,8 @@ services:
       CODEBOOK_IAM_SERVICE_SECRET: ${CODEBOOK_IAM_SERVICE_SECRET:-dev-only-change-me-internal}
       CODEBOOK_AUDIT_INGEST_URL: http://audit-service:8002
       CODEBOOK_AUDIT_INGEST_SECRET: ${CODEBOOK_AUDIT_INGEST_SECRET:-dev-only-change-me-ingest}
+      # AI 模板引用系统码表走内部接口；和 AI_CODEBOOK_SERVICE_SECRET 读同一个变量，两边不会配岔。
+      CODEBOOK_INTERNAL_CALLER_SECRETS: '{"ai-service":"${CODEBOOK_AI_CALLER_SECRET:-dev-only-change-me-internal}"}'
     depends_on:
       postgres:
         condition: service_healthy
@@ -263,6 +265,8 @@ services:
       AI_IAM_SERVICE_SECRET: ${AI_IAM_SERVICE_SECRET:-dev-only-change-me-internal}
       AI_AUDIT_INGEST_URL: http://audit-service:8002
       AI_AUDIT_INGEST_SECRET: ${AI_AUDIT_INGEST_SECRET:-dev-only-change-me-ingest}
+      AI_CODEBOOK_BASE_URL: http://codebook-service:8003
+      AI_CODEBOOK_SERVICE_SECRET: ${CODEBOOK_AI_CALLER_SECRET:-dev-only-change-me-internal}
       AI_UPLOAD_MAX_BYTES: ${AI_UPLOAD_MAX_BYTES:-20971520}
       AI_ARK_API_KEY: ${AI_ARK_API_KEY:-}
       AI_BAIDU_API_KEY: ${AI_BAIDU_API_KEY:-}
@@ -302,6 +306,8 @@ services:
       AI_IAM_SERVICE_SECRET: ${AI_IAM_SERVICE_SECRET:-dev-only-change-me-internal}
       AI_AUDIT_INGEST_URL: http://audit-service:8002
       AI_AUDIT_INGEST_SECRET: ${AI_AUDIT_INGEST_SECRET:-dev-only-change-me-ingest}
+      AI_CODEBOOK_BASE_URL: http://codebook-service:8003
+      AI_CODEBOOK_SERVICE_SECRET: ${CODEBOOK_AI_CALLER_SECRET:-dev-only-change-me-internal}
       AI_UPLOAD_MAX_BYTES: ${AI_UPLOAD_MAX_BYTES:-20971520}
       AI_ARK_API_KEY: ${AI_ARK_API_KEY:-}
       AI_BAIDU_API_KEY: ${AI_BAIDU_API_KEY:-}

@@ -16,6 +16,7 @@ from platform_common.request_context import RequestIdMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
 from app.api.area_codes import router as area_codes_router
+from app.api.internal import router as internal_router
 from app.api.policy_types import router as policy_types_router
 from app.api.scenarios import router as scenarios_router
 from app.api.security import get_authz_client
@@ -64,6 +65,7 @@ def create_app() -> FastAPI:
     app.include_router(policy_types_router)
     app.include_router(scenarios_router)
     app.include_router(area_codes_router)
+    app.include_router(internal_router)
     return app
 
 

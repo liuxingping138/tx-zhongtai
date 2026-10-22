@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { deletePromptFile, uploadPromptFile, type PromptFileKind, type PromptTemplate } from '@/api/ai'
 import { errorMessage } from '@/api/errors'
 import { downloadPromptFile } from '../shared/downloads'
 
-const props = defineProps<{ template: PromptTemplate | null; canEdit: boolean; canExport: boolean }>()
+/** systemCode：模板选了系统码表，上传的码表文件不生效，只留 Excel 一行 */
+const props = defineProps<{ template: PromptTemplate | null; canEdit: boolean; canExport: boolean; systemCode: boolean }>()
 const emit = defineEmits<{ changed: [template: PromptTemplate] }>()
 const busy = ref<PromptFileKind | null>(null)
 const pickers = ref<Record<PromptFileKind, HTMLInputElement | null>>({ excel: null, code: null })
@@ -15,6 +16,8 @@ const SLOTS: { kind: PromptFileKind; label: string; accept: string; empty: strin
   { kind: 'excel', label: 'Excel', accept: '.xlsx', empty: '未上传（.xlsx，第一行为表头）' },
   { kind: 'code', label: '码表', accept: '.txt', empty: '未上传（.txt，用 @【上传码表】引用）' },
 ]
+
+const slots = computed(() => (props.systemCode ? SLOTS.filter(slot => slot.kind === 'excel') : SLOTS))
 
 function fileName(kind: PromptFileKind): string {
   if (!props.template) return ''
@@ -66,7 +69,7 @@ async function download(kind: PromptFileKind): Promise<void> {
 <template>
   <div class="prompt-files">
     <div
-      v-for="slot in SLOTS"
+      v-for="slot in slots"
       :key="slot.kind"
       class="prompt-files__row"
     >

@@ -9,6 +9,7 @@ class PolicyTypeWrite(BaseModel):
     seq_no: str = ""
     type_name: str
     definition: str = ""
+    priority: str = Field(default="", max_length=8)
     version: int | None = None
 
 

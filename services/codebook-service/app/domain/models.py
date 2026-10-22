@@ -35,6 +35,8 @@ class PolicyType(Base):
     seq_no: Mapped[str] = mapped_column(String(32), nullable=False, default="", comment="序号")
     type_name: Mapped[str] = mapped_column(String(64), nullable=False, comment="政策类型")
     definition: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="定义")
+    # 多个类型同时命中时 AI 按优先级排序打标，如 P0 信息化建设类 > P1 工业制造类 > P2 其他。
+    priority: Mapped[str] = mapped_column(String(8), nullable=False, default="", server_default="", comment="优先级")
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, comment="版本号")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="入库时间")
     created_by_id: Mapped[str] = mapped_column(String(64), nullable=False, comment="入库人ID")

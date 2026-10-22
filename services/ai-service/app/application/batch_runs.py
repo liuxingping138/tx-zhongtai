@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.asking import resolve_model
 from app.application.audit_emit import enqueue_event
+from app.application.prompts import code_text
 from app.application.prompts import require_editable as require_editable_prompt
 from app.core import storage
 from app.core.config import get_settings
@@ -152,13 +153,16 @@ async def get_run(session: AsyncSession, access: CategoryAccess, run_id: str) ->
     return to_dict(run)
 
 
-def _snapshot_files(prompt_id: str, run_id: str) -> None:
+def _snapshot_files(prompt_id: str, run_id: str, code: str | None) -> None:
+    """码表按发起时的内容冻结：系统码表之后再改，也不影响这个任务和它的重跑。"""
+
     target = storage.run_dir(run_id)
     target.mkdir(parents=True, exist_ok=True)
-    for kind in ("excel", "code"):
-        source = storage.prompt_file(prompt_id, kind)
-        if source.is_file():
-            shutil.copyfile(source, target / storage.PROMPT_FILES[kind])
+    excel = storage.prompt_file(prompt_id, "excel")
+    if excel.is_file():
+        shutil.copyfile(excel, target / storage.PROMPT_FILES["excel"])
+    if code is not None:
+        storage.write_atomic(target / storage.PROMPT_FILES["code"], code.encode("utf-8"))
 
 
 async def start_run(
@@ -169,6 +173,8 @@ async def start_run(
     model = await resolve_model(session, template.model_id or str(values.get("model_id") or ""))
     if not template.excel_name or not storage.prompt_file(template.id, "excel").is_file():
         raise ApiError("该模板未上传 Excel，无法批量提问", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    # 先取码表：码表服务不可用就不建任务，免得排进队列才发现没有码表。
+    code = await code_text(template)
     # 同一模板同时只跑一个任务。模板行已加锁，两个人同时点运行只有一个能建出任务。
     await reconcile_stale(session)
     running = await repo.active_for_prompt(session, template.id)
@@ -204,7 +210,7 @@ async def start_run(
     )
     repo.add(session, run)
     await session.flush()
-    await anyio.to_thread.run_sync(_snapshot_files, template.id, run.id)
+    await anyio.to_thread.run_sync(_snapshot_files, template.id, run.id, code)
     await enqueue_event(
         session,
         event_type="ai.batch_run.started",

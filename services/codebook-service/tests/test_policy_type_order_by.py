@@ -11,11 +11,11 @@ from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
 
 from app.domain.models import PolicyType
-from app.repositories.policy_types import _ORDER_BY
+from app.repositories.policy_types import ORDER_BY
 
 
 def _order_by_sql() -> str:
-    stmt = select(PolicyType.id).order_by(*_ORDER_BY)
+    stmt = select(PolicyType.id).order_by(*ORDER_BY)
     compiled = stmt.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
     return str(compiled).replace("\n", " ")
 

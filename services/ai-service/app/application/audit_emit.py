@@ -19,6 +19,8 @@ _EVENT_META = {
     "ai.prompt.file_uploaded": ("ai.prompts", "update", "prompt_template", "上传模板文件"),
     "ai.prompt.file_deleted": ("ai.prompts", "update", "prompt_template", "删除模板文件"),
     "ai.prompt.file_exported": ("ai.prompts", "export", "prompt_template", "下载模板文件"),
+    "ai.prompt.released": ("ai.releases", "publish", "prompt_template", "模板上线"),
+    "ai.prompt.offlined": ("ai.releases", "publish", "prompt_template", "模板下线"),
     "ai.model.created": ("ai.models", "create", "ai_model", "新增模型配置"),
     "ai.model.updated": ("ai.models", "update", "ai_model", "编辑模型配置"),
     "ai.batch_run.started": ("ai.batch_runs", "run", "batch_run", "发起批量提问"),

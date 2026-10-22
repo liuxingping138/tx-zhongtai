@@ -9,6 +9,8 @@ export interface PolicyTypeItem {
   seq_no: string
   type_name: string
   definition: string
+  /** AI 打政策类型时多个命中按它排序，如 P0 最先 */
+  priority: string
   version: number
   created_at: string
   created_by_name: string
@@ -62,13 +64,13 @@ export function listPolicyTypes(params: { keyword?: FilterParam; page?: number; 
   return request(http.get('/codebook/policy-types', { params }))
 }
 
-export function createPolicyType(body: { seq_no?: string; type_name: string; definition?: string }): Promise<PolicyTypeItem> {
+export function createPolicyType(body: { seq_no?: string; type_name: string; definition?: string; priority?: string }): Promise<PolicyTypeItem> {
   return request(http.post('/codebook/policy-types', body))
 }
 
 export function updatePolicyType(
   id: string,
-  body: { seq_no?: string; type_name: string; definition?: string; version: number },
+  body: { seq_no?: string; type_name: string; definition?: string; priority?: string; version: number },
 ): Promise<PolicyTypeItem> {
   return request(http.patch(`/codebook/policy-types/${id}`, body))
 }

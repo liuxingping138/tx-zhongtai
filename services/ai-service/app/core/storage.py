@@ -3,6 +3,7 @@
 <data_dir>/prompts/<模板ID>/source.xlsx   模板 Excel
 <data_dir>/prompts/<模板ID>/code.txt      码表
 <data_dir>/runs/<任务ID>/...              批量产物（见 RUN_FILES）
+<data_dir>/releases/<版本ID>/code.txt    上线时冻结的上传码表（用系统码表的版本没有这个文件）
 """
 
 from __future__ import annotations
@@ -46,6 +47,10 @@ def prompt_file(prompt_id: str, kind: str) -> Path:
 
 def run_dir(run_id: str) -> Path:
     return data_dir() / "runs" / _checked(run_id)
+
+
+def release_code_file(release_id: str) -> Path:
+    return data_dir() / "releases" / _checked(release_id) / PROMPT_FILES["code"]
 
 
 def run_file(run_id: str, kind: str) -> Path:
