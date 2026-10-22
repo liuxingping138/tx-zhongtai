@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from app.aitag.domain.rules import SOURCE_ID
@@ -52,12 +53,38 @@ def _clean(value: Any) -> str:
     return "" if text.lower() in _BLANKS else text
 
 
+# 系统码表把层级连写成「交通行业 > 交通运输业 > 多式联运」（见 codebook 的 code_tables）。码表名称里没有「>」。
+_LEVEL_SEP = re.compile(r"\s*[>＞]\s*")
+_LEVEL_GROUPS = (LEVEL_FIELDS[:3], LEVEL_FIELDS[3:])
+
+
+def _split_levels(values: dict[str, str]) -> None:
+    """模型偶尔把码表里的整条路径原样填进一个字段。按层级拆回一二三级，不然名称对不上码表、查不到编码。
+
+    同一组（行业或场景）里取段数最多的那条路径，从第一级往下填；路径没覆盖到的级别保留模型自己填的值。
+    """
+
+    for fields in _LEVEL_GROUPS:
+        paths = [_LEVEL_SEP.split(values[field]) for field in fields if _LEVEL_SEP.search(values[field])]
+        if not paths:
+            continue
+        parts = [part for part in max(paths, key=len) if part][: len(fields)]
+        for index, field in enumerate(fields):
+            if index < len(parts):
+                values[field] = parts[index]
+            elif _LEVEL_SEP.search(values[field]):
+                values[field] = ""
+
+
 def interpretation_values(item: dict[str, Any]) -> dict[str, str]:
     values = dict.fromkeys(set(ANSWER_FIELDS.values()), "")
     for answer_name, column in ANSWER_FIELDS.items():
         text = _clean(item.get(answer_name))
         if text and not values[column]:
-            values[column] = text[: _WIDTHS[column]] if column in _WIDTHS else text
+            values[column] = text
+    _split_levels(values)
+    for column, width in _WIDTHS.items():
+        values[column] = values[column][:width]
     # 模型偶尔答「是的」「新增」，统一成表里的是 / 否。
     values["is_new_scenario"] = "是" if values["is_new_scenario"].startswith(("是", "新增")) else "否"
     return values

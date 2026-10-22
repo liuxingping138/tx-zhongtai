@@ -77,3 +77,36 @@ def test_later_steps_reuse_the_first_step_column_names() -> None:
     )
     row = rules.base_prompt_row(tag, "正文")
     assert (row["源ID"], row["政策标题"], row["政策正文"], row["发文部门"]) == ("c1", "方案", "正文", "市数据局")
+
+
+def test_codebook_paths_pasted_into_one_field_are_split_into_levels() -> None:
+    # 码表把层级连写成「a > b > c」，模型偶尔整串填进一级字段。
+    values = rules.interpretation_values(
+        {
+            "一级行业": "交通行业 > 交通运输、仓储和邮政业 > 多式联运和运输代理业",
+            "一级场景": "低空经济＞低空物流配送",
+            "三级场景": "无人机货运",
+        }
+    )
+    assert rules.scenario_names(values) == (
+        "交通行业",
+        "交通运输、仓储和邮政业",
+        "多式联运和运输代理业",
+        "低空经济",
+        "低空物流配送",
+        "无人机货运",  # 路径只到二级，三级保留模型自己填的
+    )
+
+
+def test_the_longest_path_wins_and_leftover_paths_are_cleared() -> None:
+    values = rules.interpretation_values(
+        {"一级场景": "低空经济", "三级场景": "低空经济 > 低空物流配送 > 无人机货运", "一级行业": "互联网行业一部"}
+    )
+    assert rules.scenario_names(values) == ("互联网行业一部", "", "", "低空经济", "低空物流配送", "无人机货运")
+    short = rules.interpretation_values({"一级场景": "低空经济 > 低空物流配送", "三级场景": "云 > 存储"})
+    assert rules.scenario_names(short)[3:] == ("低空经济", "低空物流配送", "")
+
+
+def test_long_paths_are_split_before_columns_are_truncated() -> None:
+    values = rules.interpretation_values({"一级行业": "行" * 100 + " > " + "业" * 100})
+    assert (values["industry_l1"], values["industry_l2"]) == ("行" * 100, "业" * 100)
