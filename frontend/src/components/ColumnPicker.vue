@@ -4,25 +4,31 @@ import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { Setting } from '@element-plus/icons-vue'
 import type { DataColumn } from './dataColumns'
+import { restoreColumns } from './columnSelection'
 const props = defineProps<{ columns: readonly DataColumn[]; defaults: string[]; legacyDefaults?: string[] }>()
 const selected = defineModel<string[]>({ required: true })
 const route = useRoute()
 const auth = useAuthStore()
 const storageSuffix = `${auth.user?.id || 'anonymous'}:${route.path}`
 const storageKey = `zt:columns:v2:${storageSuffix}`
-const known = new Set(props.columns.map(col => col.prop))
+// 保存时页面上有哪些列，用来认出之后新加的列（见 restoreColumns）。
+const knownKey = `zt:columns:known:${storageSuffix}`
+const columnKeys = props.columns.map(col => col.prop)
+const known = new Set(columnKeys)
+function remember(value: string[]): void {
+  localStorage.setItem(storageKey, JSON.stringify(value))
+  localStorage.setItem(knownKey, JSON.stringify(columnKeys))
+}
 try {
   const current = localStorage.getItem(storageKey)
   const saved: unknown = JSON.parse(current || localStorage.getItem(`zt:columns:v1:${storageSuffix}`) || 'null')
-  if (Array.isArray(saved)) {
-    const valid = [...new Set(saved.filter((key): key is string => typeof key === 'string' && known.has(key)))]
-    const wasCompactDefault = !current && props.legacyDefaults && valid.length === props.legacyDefaults.length && props.legacyDefaults.every(key => valid.includes(key))
-    if (valid.length && !wasCompactDefault) selected.value = valid
-  }
-  localStorage.setItem(storageKey, JSON.stringify(selected.value))
+  const restored = restoreColumns(saved, JSON.parse(localStorage.getItem(knownKey) || 'null'), columnKeys)
+  const wasCompactDefault = !current && props.legacyDefaults && restored?.length === props.legacyDefaults.length && props.legacyDefaults.every(key => restored.includes(key))
+  if (restored && !wasCompactDefault) selected.value = restored
+  remember(selected.value)
 } catch { /* Storage restrictions must not prevent using the table. */ }
 watch(selected, value => {
-  try { localStorage.setItem(storageKey, JSON.stringify(value)) } catch { /* In-memory selection still works. */ }
+  try { remember(value) } catch { /* In-memory selection still works. */ }
 }, { deep: true })
 const count = computed(() => selected.value.filter(key => known.has(key)).length)
 
