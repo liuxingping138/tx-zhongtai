@@ -1,5 +1,5 @@
 import { computed, type Component } from 'vue'
-import { ChatDotRound, Collection, Connection, EditPen, Files, Key, Link, MapLocation, Menu, Monitor, PriceTag, Reading, Tickets, Timer, User } from '@element-plus/icons-vue'
+import { ChatDotRound, Collection, Connection, Cpu, EditPen, Files, Key, Link, MapLocation, Menu, Monitor, PriceTag, Reading, Tickets, Timer, User } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { pathForRouteName } from '@/router/menu'
 
@@ -21,6 +21,7 @@ const descriptions: Record<string, string> = {
   '/ai/prompts': '编写提示词模板并试发',
   '/ai/batch-runs': '按 Excel 逐行批量提问',
   '/ai/chat': '与大模型连续对话',
+  '/ai/models': '维护可选模型、接入点和单价',
 }
 
 // 图标按子模块用途配置，不继承一级模块图标；同一入口在导航和查找中保持一致。
@@ -39,6 +40,7 @@ const entryIcons: Record<string, Component> = {
   '/ai/prompts': EditPen,
   '/ai/batch-runs': Files,
   '/ai/chat': ChatDotRound,
+  '/ai/models': Cpu,
 }
 
 export function useWorkspace() {
@@ -53,7 +55,7 @@ export function useWorkspace() {
       if (!result.has(key)) result.set(key, { key, title: parent?.title || '业务模块', entries: [] })
       result.get(key)!.entries.push({ title: item.title, path, description: descriptions[path] || '进入业务模块', icon: entryIcons[path] || Menu })
     }
-    // 模块顺序以 iam 菜单 sort_order 为准（系统管理、政策、码表管理），前端不另行排序。
+    // 模块顺序以 iam 菜单 sort_order 为准（系统管理、政策、码表管理、AI提问），前端不另行排序。
     return [...result.values()]
   })
   return { auth, groups }

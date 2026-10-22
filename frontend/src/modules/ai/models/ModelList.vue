@@ -85,7 +85,6 @@ onMounted(() => { void load() })
           v-model="selected"
           :columns="columns"
           :defaults="defaults"
-          :legacy-defaults="SUMMARY_KEYS"
         />
       </template>
       <BusinessTable

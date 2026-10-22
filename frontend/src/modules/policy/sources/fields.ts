@@ -55,9 +55,9 @@ export const EDITOR_GROUPS: EditorGroup[] = [
   },
   {
     title: '采集与标签',
-    hint: '按业务约定填写采集优先级及分类。',
+    hint: '按业务约定填写抓取优先级及分类。',
     fields: [
-      { key: 'crawl_priority', label: '采集优先级', maxLength: 255 },
+      { key: 'crawl_priority', label: '抓取优先级', maxLength: 255 },
       { key: 'tag', label: '标签' },
       { key: 'data_type', label: '数据类型', hint: '综合填 0，政策填 1，新闻填 2；0、1 全爬，2 爬聚集板块。' },
     ],
