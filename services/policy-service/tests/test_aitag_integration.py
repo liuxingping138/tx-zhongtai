@@ -155,7 +155,7 @@ async def test_rows_not_run_before_the_cost_limit_are_read_again_next_time(monke
     config, tags, runs = await _state()
     # c3 虽然答了，但排在没执行的 c2 后面：进度只到 c1，下批从 c2 重读，c3 再打一次也只是更新。
     assert set(tags) == {"c1"} and (config.cursor_date, config.cursor_content_id) == (DAY, "c1")
-    assert "剩余 2 条下次接着打" in runs[0].note
+    assert "剩余 2 条下批接着打" in runs[0].note
 
 
 async def test_nothing_is_read_once_today_s_budget_is_spent(monkeypatch: pytest.MonkeyPatch) -> None:
