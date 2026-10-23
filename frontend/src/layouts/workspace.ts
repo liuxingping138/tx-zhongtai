@@ -1,5 +1,5 @@
 import { computed, type Component } from 'vue'
-import { ChatDotRound, Collection, Connection, Cpu, EditPen, Files, Key, Link, MapLocation, Menu, Money, Monitor, PriceTag, Reading, Tickets, Timer, User } from '@element-plus/icons-vue'
+import { ChatDotRound, Collection, Connection, Cpu, DataAnalysis, EditPen, Files, Key, Link, MapLocation, Menu, Money, Monitor, PriceTag, Reading, Tickets, Timer, User } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { pathForRouteName } from '@/router/menu'
 
@@ -9,6 +9,7 @@ export interface WorkspaceGroup { key: string; title: string; entries: Workspace
 const descriptions: Record<string, string> = {
   '/policy/sources': '维护采集网站与信源信息',
   '/policy/crawler-monitoring': '按网站查看采集健康状况',
+  '/policy/crawler-config': '按周、按省统计上线的爬虫栏目数',
   '/policy/interpretations': '整理政策内容与业务解读',
   '/policy/base-tags': '维护政策分类与基础标签',
   '/codebook/policy-types': '统一政策分类口径',
@@ -29,6 +30,7 @@ const descriptions: Record<string, string> = {
 const entryIcons: Record<string, Component> = {
   '/policy/sources': Link,
   '/policy/crawler-monitoring': Monitor,
+  '/policy/crawler-config': DataAnalysis,
   '/policy/interpretations': Reading,
   '/policy/base-tags': PriceTag,
   '/codebook/policy-types': Collection,

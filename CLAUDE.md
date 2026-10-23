@@ -10,6 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 当前进度：公共框架已到 P6（账号/会话/RBAC、Outbox、审计、隔离验收、备份恢复、OpenAPI），
 政策三张表（信源、基础标签、解读）与码表三张表（政策类型、行业场景、省市区编码）已接入，
 爬虫监测已接入（只读统计页，数据来自外部爬虫库采集总表的按天聚合，按网站统计），
+爬虫配置周报已接入（按规则表把信源标成已爬，按周按省统计上线栏目数），
 AI提问已接入（独立的 ai-service：提示词模板、按 Excel 逐行批量提问、多轮对话，从旧 Django 项目 difyapi/chat_web 迁来）。
 **客户、招投标仅有占位目录**，未开发——不要为它们提前暴露无功能入口或做过度抽象。
 其余文档按 设计决策 / 操作手册 分类，索引见 `docs/README.md`。文档只写与现有代码一致的现状，过时内容直接删除，历史留在 git 里。
@@ -108,7 +109,7 @@ policy 和 codebook 的基础设施代码高度重复，已统一下沉。**新�
 `api/`（路由、Query 参数、权限依赖）→ `application/`（业务编排、审计入队）→
 `repositories/`（SQLAlchemy 查询）→ `domain/`（models、fields 列清单）。
 `core/` 放配置、数据库等。依赖方向由各服务的 import-linter 契约强制（`make check` 跑 `lint-imports`）。
-policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/` 三个子包，每个子包内部仍是这四层，
+policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、`aitag/`、`crawlconfig/` 几个子包，每个子包内部仍是这四层，
 跨领域共用的审计入队、鉴权依赖、Outbox 表放 `app/common/`。
 
 ### 鉴权链路
@@ -145,6 +146,16 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/` �
 - 卡片「较上周」读 `policy_crawler_status_daily`（每日状态分布）。同步重建快照后按快照写当天一行；最近 90 天缺的日期
  由同步用按天统计推算补齐（口径同快照：每个网站最后入库日期），推算一次约 10 秒，所以只在缺数时跑、页面不能现算
 - 整表 `GROUP BY` 在代理后跑十分钟都出不来，带 `collect_date` 的单天聚合只要 1.4 秒：全量统计按天循环，别写一条大 SQL
+
+### 爬虫配置周报：规则表 → 信源已爬 → 按周按省统计
+
+- `app/crawlconfig/`（与 policy、crawler 平级）。爬虫同事维护的规则表 `crawler2021.policy_rules_alls` 一行一个栏目，
+  `site_code` 对应信源的网站编码（老数据很多没填）。调度任务 `crawler_config` 每天 18:00 只读这一列，把**未爬、没填状态**的信源改成已爬、
+  上线时间记同步当天；已爬、异常（人工标）不动，从规则表消失也不改回。批次记在 `policy_crawler_config_syncs`
+- 周报 `/policy/crawler-config`（资源 `policy.crawler_config`：查看 / 导出 / 完整档才能「立即同步」）直接对信源表分组统计，不建快照：
+  信源表一行算一个栏目（用户说的「网站数量」就是这个 `count(1)`），按上线时间落在哪个自然周（周一到周日）算新增，
+  `POLICY_CRAWLER_CONFIG_REPORT_START`（默认 2026-10-26）那周之前上线的、已爬没填日期的都算期初存量
+- 「立即同步」的接口在 `app/scheduler/api/config_sync.py`：只往调度队列放一次，执行仍在 policy-worker，HTTP 进程不连爬虫库
 
 ### AI提问：模型调用走统一客户端，批量在 worker 里跑
 
@@ -214,8 +225,8 @@ policy / codebook / ai 走公共 Outbox，默认 5 分钟。审计服务按 `eve
 
 系统管理的任务调度页面 `/system/scheduler` 使用政策服务接口 `/api/v1/policy/scheduled-jobs`，
 资源 `system.scheduler` 归属 `policy-service`；READ 可查看，FULL 可设置计划和手动执行。
-`policy-worker` 独立容器持 PostgreSQL 全局会话锁，按北京时间每日调度任务。两项：爬虫监测增量同步
-（任务编码 `crawler`，默认 10:10，时刻可在页面改）和政策 AI 打标的三个任务（`policy_ai_type` / `policy_ai_interpret` / `policy_ai_opportunity`，
+`policy-worker` 独立容器持 PostgreSQL 全局会话锁，按北京时间每日调度任务。三类：爬虫监测增量同步
+（任务编码 `crawler`，默认 10:10，时刻可在页面改）、爬虫配置同步（`crawler_config`，默认 18:00）和政策 AI 打标的三个任务（`policy_ai_type` / `policy_ai_interpret` / `policy_ai_opportunity`，
 上线时默认停用、页面手动执行）。
 执行、结果摘要、中断收尾都按任务编码分派（`app/worker/scheduler.py`、`app/scheduler/application/jobs.py`），超时按任务分别设（`TIMEOUTS`）。
 配置、执行队列、重试状态持久化在政策库；重启错过多天只合并一次增量。

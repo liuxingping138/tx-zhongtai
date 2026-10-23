@@ -2260,6 +2260,142 @@
         }
       }
     },
+    "/api/v1/policy/crawler-config/report": {
+      "get": {
+        "tags": [
+          "policy-crawler-config"
+        ],
+        "summary": "Get Report",
+        "operationId": "get_report_api_v1_policy_crawler_config_report_get",
+        "parameters": [
+          {
+            "name": "week",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "所选周内任意一天，默认本周（北京时间）",
+              "title": "Week"
+            },
+            "description": "所选周内任意一天，默认本周（北京时间）"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/crawler-config/report/export": {
+      "get": {
+        "tags": [
+          "policy-crawler-config"
+        ],
+        "summary": "Export Report",
+        "operationId": "export_report_api_v1_policy_crawler_config_report_export_get",
+        "parameters": [
+          {
+            "name": "week",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "所选周内任意一天，默认本周（北京时间）",
+              "title": "Week"
+            },
+            "description": "所选周内任意一天，默认本周（北京时间）"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/crawler-config/sync": {
+      "get": {
+        "tags": [
+          "policy-crawler-config"
+        ],
+        "summary": "Sync Status",
+        "operationId": "sync_status_api_v1_policy_crawler_config_sync_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "policy-crawler-config"
+        ],
+        "summary": "Trigger Sync",
+        "operationId": "trigger_sync_api_v1_policy_crawler_config_sync_post",
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/policy/interpretations": {
       "get": {
         "tags": [

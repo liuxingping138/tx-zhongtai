@@ -12,6 +12,7 @@ export const MODULE_LABELS: Record<string, string> = {
   'policy.base_tags': '政策基础标签表',
   'policy.interpretations': '政策解读列表',
   'policy.crawler_monitoring': '爬虫监测',
+  'policy.crawler_config': '爬虫配置周报',
   codebook: '码表管理',
   'codebook.policy_types': '政策类型码表',
   'codebook.scenarios': '行业场景码表',
@@ -53,6 +54,7 @@ export const ACTION_LABELS: Record<string, string> = {
   run: '运行',
   stop: '停止',
   resolve: '补码',
+  sync: '同步',
 }
 
 export function moduleLabel(code: string | null | undefined): string {

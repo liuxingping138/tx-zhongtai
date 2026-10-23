@@ -106,6 +106,12 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '爬虫监测', resource: 'policy.crawler_monitoring' },
       },
       {
+        path: 'policy/crawler-config',
+        name: 'policy-crawler-config',
+        component: () => import('@/modules/policy/crawler-config/CrawlerConfigReport.vue'),
+        meta: { title: '爬虫配置周报', resource: 'policy.crawler_config' },
+      },
+      {
         path: 'policy/base-tags',
         name: 'policy-base-tags',
         component: () => import('@/modules/policy/base-tags/BaseTagList.vue'),

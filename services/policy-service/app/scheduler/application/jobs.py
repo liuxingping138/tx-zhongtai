@@ -164,6 +164,20 @@ async def trigger_job(session: AsyncSession, code: str, actor: Actor) -> dict[st
     return run_data(row)
 
 
+async def crawler_config_status(session: AsyncSession) -> dict[str, Any]:
+    """周报页的同步状态：正在排队或执行的那次，以及最近一次执行和它的结果。"""
+
+    active = await repo.active_run(session, CRAWLER_CONFIG)
+    last = await session.scalar(
+        select(ScheduledRun)
+        .where(ScheduledRun.job_code == CRAWLER_CONFIG)
+        .order_by(ScheduledRun.created_at.desc())
+        .limit(1)
+    )
+    last_data = {**run_data(last), "result": await sync_result(session, last)} if last else None
+    return {"active_run": run_data(active) if active else None, "last_run": last_data}
+
+
 async def history(session: AsyncSession, code: str, page: int, page_size: int) -> dict[str, Any]:
     await repo.get_job(session, code)
     rows, total = await repo.history(session, code, page, page_size)

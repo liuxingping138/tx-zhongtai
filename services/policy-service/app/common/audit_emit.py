@@ -44,6 +44,12 @@ _EVENT_META = {
     ),
     "policy.interpretation.imported": ("policy.interpretations", "import", "interpretation", "导入政策解读表"),
     "policy.interpretation.exported": ("policy.interpretations", "export", "interpretation", "导出政策解读表"),
+    "policy.crawler_config.exported": (
+        "policy.crawler_config",
+        "export",
+        "crawler_config_report",
+        "导出爬虫配置周报",
+    ),
     "policy.crawler_monitoring.exported": (
         "policy.crawler_monitoring",
         "export",

@@ -9,6 +9,7 @@ export const ROUTE_BY_NAME: Record<string, string> = {
   'codebook-area-codes': '/codebook/area-codes',
   'policy-sources': '/policy/sources',
   'policy-crawler-monitoring': '/policy/crawler-monitoring',
+  'policy-crawler-config': '/policy/crawler-config',
   'policy-base-tags': '/policy/base-tags',
   'policy-interpretations': '/policy/interpretations',
   'ai-prompts': '/ai/prompts',

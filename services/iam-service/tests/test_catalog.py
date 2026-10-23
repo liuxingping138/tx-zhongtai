@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.domain.catalog import ACTION_SPECS, MENU_SPECS, RESOURCE_SPECS, RETIRED_RESOURCE_CODES
+from app.domain.enums import GrantLevel
 
 
 def test_unpublished_business_resources_have_no_actions() -> None:
@@ -25,6 +26,8 @@ def test_codebook_resources_are_published() -> None:
     assert by_code["policy.interpretations"].published is True
     assert by_code["policy.crawler_monitoring"].published is True
     assert by_code["policy.crawler_monitoring"].name == "爬虫监测"
+    assert by_code["policy.crawler_config"].published is True
+    assert by_code["policy.crawler_config"].service_code == "policy-service"
     assert by_code["system.roles"].name == "角色与权限"
 
 
@@ -80,3 +83,14 @@ def test_ai_actions_that_spend_money_need_the_right_tier() -> None:
     # 上线让模板进定时任务按真实数据花钱，必须是完整档，且不挂菜单（按钮在提问配置页）。
     assert levels[("ai.releases", "publish")] == "FULL"
     assert "ai.releases" not in {spec.resource_code for spec in MENU_SPECS}
+
+
+def test_crawler_config_report_is_read_for_leaders_and_full_to_sync() -> None:
+    """周报给领导看：查看、导出各一档，手动同步规则表要完整档。"""
+
+    levels = {
+        spec.action_code: spec.required_level for spec in ACTION_SPECS if spec.resource_code == "policy.crawler_config"
+    }
+    assert levels == {"list": GrantLevel.READ, "export": GrantLevel.EXPORT, "sync": GrantLevel.FULL}
+    menu = {spec.code: spec for spec in MENU_SPECS}["menu.policy.crawler_config"]
+    assert (menu.route_name, menu.parent_code, menu.enabled) == ("policy-crawler-config", "menu.policy", True)
