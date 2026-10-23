@@ -32,5 +32,8 @@ class ConfigSyncRun(Base):
     blank_code_rows: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="规则表没填网站编码的行数")
     matched: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="关联上的信源数")
     marked: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="本次标为已爬的信源数")
+    redated: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, comment="已爬但上线时间对齐成规则创建日期的信源数"
+    )
     unknown_codes: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="信源表里没有的网站编码数")
     error_message: Mapped[str | None] = mapped_column(Text, comment="失败原因")

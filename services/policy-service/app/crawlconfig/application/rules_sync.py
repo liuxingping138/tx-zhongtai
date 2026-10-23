@@ -1,18 +1,18 @@
-"""爬虫配置同步：规则表里出现的网站编码，对应信源从未爬改成已爬，上线时间记同步当天（北京日期）。
+"""爬虫配置同步：规则表里出现的网站编码，对应信源标成已爬，上线时间 = 这个网站最早那条规则的创建日期。
 
-只做这一个方向：已爬、异常的不动（异常是人工标的），网站从规则表里消失也不改回去。
-调度任务 crawler_config 每天跑一次，统计页可以手动触发；失败、超时由调度收口（abandon）。
+爬虫同事每周批量建规则，创建日期就是真实的配置日：按它统计每周配置数量和用户按规则表透视的结果一致，
+同步哪天漏跑、重跑几次都不会让网站换周。已爬的上线时间也对齐成创建日期；异常是人工标的不动，
+网站从规则表里消失也不改回去。调度任务 crawler_config 每天跑，统计页可以手动触发；失败、超时由调度收口。
 """
 
 from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import datetime
 from typing import Any
 
 from platform_common.actors import Actor
-from platform_common.clock import BEIJING, utcnow
+from platform_common.clock import utcnow
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,7 +24,16 @@ from app.crawlconfig.repositories import rules_source, sources
 ROBOT = Actor(id="crawler-config-sync", name="爬虫配置同步")
 # 审计里最多记这么多个网站编码。
 AUDIT_CODES_MAX = 500
-SUMMARY_FIELDS = ("status", "rule_rows", "rule_codes", "blank_code_rows", "matched", "marked", "unknown_codes")
+SUMMARY_FIELDS = (
+    "status",
+    "rule_rows",
+    "rule_codes",
+    "blank_code_rows",
+    "matched",
+    "marked",
+    "redated",
+    "unknown_codes",
+)
 
 
 async def run(sync_id: uuid.UUID) -> None:
@@ -34,24 +43,23 @@ async def run(sync_id: uuid.UUID) -> None:
     rules = await asyncio.to_thread(rules_source.read_rule_codes)
     async with SessionLocal() as session:
         now = utcnow()
-        marked = await sources.mark_online(
-            session, rules.codes, today=datetime.now(BEIJING).date().isoformat(), now=now, actor=ROBOT
-        )
+        marked, redated = await sources.apply_rule_dates(session, rules.first_dates, now=now, actor=ROBOT)
         matched = await sources.count_known(session, rules.codes)
         row = await session.get(ConfigSyncRun, sync_id, with_for_update=True)
         if row is None:
             raise RuntimeError("同步批次记录丢失")
         row.status, row.finished_at = "success", now
         row.rule_rows, row.rule_codes, row.blank_code_rows = rules.rows, len(rules.codes), rules.blank_rows
-        row.matched, row.marked, row.unknown_codes = matched, len(marked), len(rules.codes) - matched
-        if marked:
+        row.matched, row.marked, row.redated = matched, len(marked), len(redated)
+        row.unknown_codes = len(rules.codes) - matched
+        if marked or redated:
             await enqueue_event(
                 session,
                 event_type="policy.crawler_config.synced",
                 actor=ROBOT,
                 target_id="batch",
-                changes={"crawler_status": "已爬", "rows": len(marked)},
-                extra={"site_codes": marked[:AUDIT_CODES_MAX]},
+                changes={"crawler_status": "已爬", "marked": len(marked), "redated": len(redated)},
+                extra={"marked_codes": marked[:AUDIT_CODES_MAX], "redated_codes": redated[:AUDIT_CODES_MAX]},
             )
         await session.commit()
 

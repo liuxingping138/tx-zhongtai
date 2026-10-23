@@ -43,9 +43,9 @@ class Settings(BaseServiceSettings):
     crawler_data_table: str = "csys_policy_info_source_all"
     # 爬虫配置统计：爬虫同事维护的规则表，一行一个栏目，site_code 对应信源的网站编码。
     crawler_rules_table: str = "policy_rules_alls"
-    # 爬虫配置统计从这天起算每周新增（这天所在的周只算这天及以后）；
-    # 更早上线的（含 10-22 统一补填的历史网站）算期初存量。
-    crawler_config_report_start: date = date(2026, 10, 23)
+    # 2026-10-22 上线时统一给历史已爬网站补填的上线时间，不是真实配置日：这天上线的算期初存量，不计入任何一周。
+    # 规则表里能关联上的网站，同步会把上线时间改成规则创建日期，剩下的才停在这天。
+    crawler_config_backfill_date: date = date(2026, 10, 22)
 
     @field_validator("crawler_data_table", "crawler_rules_table")
     @classmethod

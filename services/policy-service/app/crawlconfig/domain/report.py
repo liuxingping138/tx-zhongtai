@@ -20,16 +20,11 @@ def week_end(day: date) -> date:
     return week_start(day) + timedelta(days=6)
 
 
-def trend_weeks(selected: date, report_start: date, count: int = TREND_WEEKS) -> list[date]:
-    """所选周往前最多 count 周（周一），不早于统计起点所在的周；所选周还在起点之前时为空。"""
+def trend_weeks(selected: date, count: int = TREND_WEEKS) -> list[date]:
+    """所选周和它之前的 count - 1 周（周一），从早到晚。"""
 
-    last, first = week_start(selected), week_start(report_start)
-    first = max(first, last - timedelta(weeks=count - 1))
-    weeks: list[date] = []
-    while first <= last:
-        weeks.append(first)
-        first += timedelta(weeks=1)
-    return weeks
+    last = week_start(selected)
+    return [last - timedelta(weeks=count - 1 - offset) for offset in range(count)]
 
 
 def _parse_day(text: str) -> date | None:

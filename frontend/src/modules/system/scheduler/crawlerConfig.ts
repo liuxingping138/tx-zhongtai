@@ -6,9 +6,10 @@ export const CRAWLER_CONFIG_JOB = 'crawler_config'
 /** 一次配置同步的结果写成一句话；还没有结果（排队、失败）返回空串。 */
 export function configResultText(result: ScheduledRun['result']): string {
   if (result?.marked === undefined) return ''
+  const redated = result.redated ? ` · 上线时间对齐规则创建日期 ${result.redated} 个` : ''
   const unknown = result.unknown_codes ? `，${result.unknown_codes} 个信源表里没有` : ''
   const blank = result.blank_code_rows ? ` · ${result.blank_code_rows} 行没填网站编码` : ''
-  return `新标已爬 ${result.marked} 个 · 规则表网站编码 ${result.rule_codes ?? 0} 个${unknown}${blank}`
+  return `新标已爬 ${result.marked} 个${redated} · 规则表网站编码 ${result.rule_codes ?? 0} 个${unknown}${blank}`
 }
 
 /** 执行记录一行的结果：有结果写结果，失败写原因。 */

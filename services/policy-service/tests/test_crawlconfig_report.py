@@ -11,8 +11,6 @@ from openpyxl import load_workbook
 from app.crawlconfig.application.report_excel import build_report_workbook
 from app.crawlconfig.domain import report as rules
 
-START = date(2026, 10, 26)  # 周一
-
 
 def test_weeks_run_monday_to_sunday() -> None:
     assert rules.week_start(date(2026, 10, 23)) == date(2026, 10, 19)  # 周五
@@ -20,11 +18,10 @@ def test_weeks_run_monday_to_sunday() -> None:
     assert rules.week_end(date(2026, 11, 1)) == date(2026, 11, 1)  # 周日
 
 
-def test_trend_never_reaches_before_the_report_start_and_keeps_twelve_weeks_at_most() -> None:
-    assert rules.trend_weeks(date(2026, 10, 23), START) == []
-    assert rules.trend_weeks(date(2026, 11, 4), START) == [date(2026, 10, 26), date(2026, 11, 2)]
-    weeks = rules.trend_weeks(date(2027, 6, 1), START)
-    assert len(weeks) == rules.TREND_WEEKS and weeks[-1] == date(2027, 5, 31)
+def test_trend_is_the_selected_week_and_eleven_before_it() -> None:
+    weeks = rules.trend_weeks(date(2026, 10, 23))
+    assert len(weeks) == rules.TREND_WEEKS
+    assert (weeks[0], weeks[-1]) == (date(2026, 8, 3), date(2026, 10, 19))
 
 
 def test_weekly_series_adds_baseline_and_weeks_before_the_window_to_the_cumulative() -> None:
@@ -80,8 +77,7 @@ def test_workbook_opens_with_the_weekly_province_table_leaders_read() -> None:
     data = {
         "week_from": "2026-10-26",
         "week_to": "2026-11-01",
-        "report_start": "2026-10-23",
-        "counted": True,
+        "backfill_date": "2026-10-22",
         "baseline": 10,
         "provinces": [
             {"province_name": "北京市", **beijing, "weekly": [2]},

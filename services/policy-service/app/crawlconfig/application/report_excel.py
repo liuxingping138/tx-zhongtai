@@ -67,7 +67,7 @@ def _province_weekly_sheet(book: Workbook, data: dict[str, Any]) -> None:
 
     weeks = data["trend"]
     headers = [("省份", 16), *((f"{w['week_from'][5:]}至{w['week_to'][5:]}", 13) for w in weeks), ("合计", 10)]
-    caption = f"各省每周配置网站数量（{data['report_start']} 起统计）"
+    caption = "各省每周配置网站数量（近 12 周，最后一列是所选这周）"
     sheet = _sheet(book.create_sheet(), "分省每周配置", caption, headers)
     for row in data["provinces"]:
         weekly = row.get("weekly") or [0] * len(weeks)
@@ -98,7 +98,7 @@ def build_report_workbook(data: dict[str, Any], abnormal: list[dict[str, Any]]) 
     trend = _sheet(
         book.create_sheet(),
         "每周趋势",
-        f"每周配置网站数量（{data['report_start']} 起统计，之前的 {data['baseline']} 个算期初存量）",
+        f"每周配置网站数量（{data['backfill_date']} 统一补填上线时间的 {data['baseline']} 个算期初存量）",
         [("周开始", 12), ("周结束", 12), ("当周配置", 10), ("累计已配置", 12)],
     )
     for item in data["trend"]:

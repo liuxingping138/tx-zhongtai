@@ -34,38 +34,28 @@ def _province(row: dict[str, Any]) -> dict[str, Any]:
 
 
 async def build_report(session: AsyncSession, week: date | None) -> dict[str, Any]:
-    start = get_settings().crawler_config_report_start
+    backfill = get_settings().crawler_config_backfill_date.isoformat()
     selected = rules.week_start(week or datetime.now(BEIJING).date())
-    week_to = rules.week_end(selected)
-    # 统计起点之前上线的不算新增：起点所在的那周只从起点那天算起，整周都在之前时区间为空。
-    new_from = max(selected, start).isoformat()
-    rows = sorted(await repo.province_rows(session, new_from, week_to.isoformat()), key=rules.province_order)
+    week_from, week_to = selected.isoformat(), rules.week_end(selected).isoformat()
+    rows = sorted(await repo.province_rows(session, week_from, week_to, backfill), key=rules.province_order)
     provinces = [_province(row) for row in rows]
     totals: dict[str, Any] = {key: sum(row[key] for row in provinces) for key in COUNT_FIELDS}
     totals["coverage"] = rules.coverage(totals["online"], totals["total"])
-    weeks = rules.trend_weeks(selected, start)
-    daily = await repo.online_by_day(session, start.isoformat(), week_to.isoformat()) if weeks else {}
-    by_province = (
-        rules.province_weekly(
-            await repo.online_by_province_day(session, max(weeks[0], start).isoformat(), week_to.isoformat()), weeks
-        )
-        if weeks
-        else {}
-    )
+    weeks = rules.trend_weeks(selected)
+    baseline = await repo.count_baseline(session, backfill)
+    trend = rules.weekly_series(await repo.online_by_day(session, week_to, backfill), weeks, baseline)
+    daily_by_province = await repo.online_by_province_day(session, weeks[0].isoformat(), week_to, backfill)
+    by_province = rules.province_weekly(daily_by_province, weeks)
     for row in provinces:
-        # 每个省近几周（和 trend 同样的周）各新配置了多少网站，领导按省看每周进度。
+        # 每个省近 12 周（和 trend 同样的周）各配置了多少网站，最后一个就是所选这周。
         row["weekly"] = by_province.get(row["province_name"], [0] * len(weeks))
-    baseline = await repo.count_baseline(session, start.isoformat())
-    trend = rules.weekly_series(daily, weeks, baseline)
-    new_sites = await repo.sites_online_between(session, new_from, week_to.isoformat())
+    new_sites = await repo.sites_online_between(session, week_from, week_to, backfill)
     return {
-        "week_from": selected.isoformat(),
-        "week_to": week_to.isoformat(),
-        "report_start": start.isoformat(),
-        "counted": week_to >= start,
+        "week_from": week_from,
+        "week_to": week_to,
+        "backfill_date": backfill,
         "baseline": baseline,
-        # 卡片「较上周」：上周也在统计范围里才有可比的数。
-        "previous_new": earlier[-1]["new"] if (earlier := trend[:-1]) else None,
+        "previous_new": trend[-2]["new"],
         "totals": totals,
         "provinces": provinces,
         "trend": trend,

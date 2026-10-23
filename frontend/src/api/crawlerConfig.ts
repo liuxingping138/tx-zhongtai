@@ -8,7 +8,7 @@ export interface ConfigCounts {
 }
 export interface ConfigProvince extends ConfigCounts {
   province_name: string
-  /** 和 trend 同样的几周里，这个省每周新配置的栏目数 */
+  /** 和 trend 同样的 12 周里，这个省每周配置了多少网站 */
   weekly: number[]
 }
 export interface ConfigWeek { week_from: string; week_to: string; new: number; cumulative: number }
@@ -18,19 +18,19 @@ export interface ConfigSite {
 }
 export interface ConfigSyncSummary {
   status: string; rule_rows: number; rule_codes: number; blank_code_rows: number
-  matched: number; marked: number; unknown_codes: number; finished_at: string
+  matched: number; marked: number; redated: number; unknown_codes: number; finished_at: string
 }
 export interface CrawlerConfigReport {
   week_from: string; week_to: string
-  /** 统计起始周（周一）：之前上线的算期初存量 */
-  report_start: string
-  /** 所选周是否在统计范围内 */
-  counted: boolean
+  /** 上线时统一补填上线时间的那天：这天上线的不知道真实配置日，算期初存量，不计入任何一周 */
+  backfill_date: string
+  /** 期初存量：补填日上线的加上已爬没填日期的 */
   baseline: number
-  /** 上周新增；上周不在统计范围内时为 null */
-  previous_new: number | null
+  /** 上一周配置了多少 */
+  previous_new: number
   totals: ConfigCounts
   provinces: ConfigProvince[]
+  /** 近 12 周，从早到晚，最后一周就是所选这周 */
   trend: ConfigWeek[]
   new_sites: ConfigSite[]
   last_sync: ConfigSyncSummary | null

@@ -1,4 +1,4 @@
-import type { ConfigCounts, ConfigProvince, ConfigSyncStatus, ConfigWeek } from '@/api/crawlerConfig'
+import type { ConfigSyncStatus, ConfigWeek } from '@/api/crawlerConfig'
 import type { ChartOption, ChartPalette } from '@/components/charts/echarts'
 
 function parseDay(value: string): Date {
@@ -25,17 +25,16 @@ export function rangeText(from: string, to: string): string {
   return `${dayText(from)} – ${dayText(to)}`
 }
 
-/** 「11-02 至 11-08」：趋势图横轴和提示里用，年份在标题里已经有了。 */
-export function weekLabel(week: Pick<ConfigWeek, 'week_from' | 'week_to'>): string {
-  return `${week.week_from.slice(5)} 至 ${week.week_to.slice(5)}`
+/** 「10-19」：趋势图横轴，一周用周一表示。 */
+export function weekLabel(week: Pick<ConfigWeek, 'week_from'>): string {
+  return week.week_from.slice(5)
 }
 
-/** 本周比上周多了几个；上周不在统计范围里时不比。 */
-export function deltaText(current: number, previous: number | null): { text: string; tone: 'good' | 'bad' | 'flat' } | null {
-  if (previous === null) return null
+/** 本周比上周多了几个。 */
+export function deltaText(current: number, previous: number): { text: string; tone: 'good' | 'bad' | 'flat' } {
   const diff = current - previous
   if (diff === 0) return { text: '与上周持平', tone: 'flat' }
-  return { text: `较上周 ${diff > 0 ? '+' : ''}${diff}`, tone: diff > 0 ? 'good' : 'bad' }
+  return { text: `较上周 ${diff > 0 ? '+' : ''}${diff.toLocaleString()}`, tone: diff > 0 ? 'good' : 'bad' }
 }
 
 /** 同步还在排队或执行中。 */
@@ -50,69 +49,44 @@ export function syncFailure(status: ConfigSyncStatus | null): string {
   return `最近一次同步失败：${last.error_message || '原因未知'}。页面数据停在上次成功同步时。`
 }
 
-/** 覆盖进度环：已配置蓝色填充、异常砖红、未配置是浅灰底槽。 */
-export function coverageOption(totals: ConfigCounts, palette: ChartPalette): ChartOption {
-  const other = Math.max(0, totals.total - totals.online - totals.abnormal)
-  return {
-    tooltip: { trigger: 'item', formatter: '{b}：{c} 个（{d}%）' },
-    series: [{
-      type: 'pie',
-      radius: ['72%', '92%'],
-      silent: false,
-      avoidLabelOverlap: false,
-      label: { show: false },
-      itemStyle: { borderColor: '#fff', borderWidth: 2 },
-      data: [
-        { name: '已配置', value: totals.online, itemStyle: { color: palette.primary } },
-        { name: '异常', value: totals.abnormal, itemStyle: { color: palette.danger } },
-        { name: '未配置', value: other, itemStyle: { color: palette.border } },
-      ],
-    }],
-  }
+/** 有数据的周少于两周时柱图没有可比的，不画。 */
+export function trendWorthShowing(weeks: ConfigWeek[]): boolean {
+  return weeks.filter(week => week.new > 0).length >= 2
 }
 
-/** 每周配置数的底色深浅：0 不着色，其余按占全表最大值的比例，最浅也看得出来。 */
-export function heatLevel(value: number, max: number): number {
-  if (!value || !max) return 0
-  return Math.round((0.15 + (0.85 * value) / max) * 100) / 100
-}
-
-/** 本周各省配置网站数量：只列有配置的省，按数量从多到少；条长按最多的那个省折算。 */
-export function weekProvinces(rows: ConfigProvince[]): { name: string; count: number; share: number }[] {
-  const picked = rows.filter(row => row.new > 0).sort((a, b) => b.new - a.new)
-  const max = picked[0]?.new ?? 0
-  return picked.map(row => ({ name: row.province_name, count: row.new, share: max ? (row.new * 100) / max : 0 }))
-}
-
-/** 每周新配置的网站数，一周一根柱子；累计数在提示框里。 */
+/** 近 12 周每周配置数量：所选那周（最后一根）用实色，其余淡一些；累计在提示框里。 */
 export function weeklyOption(weeks: ConfigWeek[], palette: ChartPalette): ChartOption {
   const axisLabel = { color: palette.inkMuted }
+  const last = weeks.length - 1
   return {
-    grid: { left: 8, right: 8, top: 28, bottom: 4, containLabel: true },
+    grid: { left: 8, right: 8, top: 24, bottom: 4, containLabel: true },
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
       formatter: (params: { dataIndex: number }[]) => {
         const week = weeks[params[0]?.dataIndex ?? -1]
         if (!week) return ''
-        return [`<b>${week.week_from} 至 ${week.week_to}</b>`, `当周配置 ${week.new} 个`, `累计已配置 ${week.cumulative.toLocaleString()} 个`].join('<br/>')
+        return [`<b>${week.week_from} 至 ${week.week_to}</b>`, `配置 ${week.new.toLocaleString()} 个网站`, `截至周末累计 ${week.cumulative.toLocaleString()} 个`, '点击查看这一周'].join('<br/>')
       },
     },
-    xAxis: {
-      type: 'category',
-      data: weeks.map(weekLabel),
-      axisLine: { lineStyle: { color: palette.border } },
-      axisTick: { show: false },
-      axisLabel,
-    },
-    yAxis: { type: 'value', name: '网站数', minInterval: 1, nameTextStyle: axisLabel, axisLabel, splitLine: { lineStyle: { color: palette.border, type: 'dashed' } } },
+    xAxis: { type: 'category', data: weeks.map(weekLabel), axisLine: { lineStyle: { color: palette.border } }, axisTick: { show: false }, axisLabel },
+    yAxis: { type: 'value', minInterval: 1, axisLabel, splitLine: { lineStyle: { color: palette.border, type: 'dashed' } } },
     series: [{
-      name: '当周配置',
+      name: '配置网站数量',
       type: 'bar',
-      data: weeks.map(week => week.new),
-      barMaxWidth: 40,
-      itemStyle: { color: palette.success, borderRadius: [3, 3, 0, 0] },
-      label: { show: true, position: 'top', color: palette.ink, fontWeight: 600 },
+      cursor: 'pointer',
+      barMaxWidth: 36,
+      data: weeks.map((week, index) => ({
+        value: week.new,
+        itemStyle: { color: palette.success, opacity: index === last ? 1 : 0.45, borderRadius: [3, 3, 0, 0] },
+      })),
+      label: { show: true, position: 'top', color: palette.ink, formatter: (item: { value: number }) => (item.value ? String(item.value) : '') },
     }],
   }
+}
+
+/** 分省表「近 12 周」小柱：按这一行的最大值折算高度（百分比），没配置的周留一条底线。 */
+export function sparkHeights(values: number[]): number[] {
+  const max = Math.max(0, ...values)
+  return values.map(value => (value && max ? Math.max(8, Math.round((value * 100) / max)) : 0))
 }

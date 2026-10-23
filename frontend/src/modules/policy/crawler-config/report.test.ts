@@ -1,16 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import type { ConfigProvince } from '@/api/crawlerConfig'
 import type { ScheduledRun } from '@/api/scheduler'
 import { chartPalette } from '@/components/charts/echarts'
-import {
-  coverageOption, dayText, deltaText, heatLevel, rangeText, syncFailure, syncRunning, weekLabel, weekProvinces, weekTitle, weeklyOption,
-} from './report'
+import { dayText, deltaText, rangeText, sparkHeights, syncFailure, syncRunning, trendWorthShowing, weekLabel, weekTitle, weeklyOption } from './report'
 
-const week = { week_from: '2026-11-02', week_to: '2026-11-08', new: 4, cumulative: 109 }
+const week = (week_from: string, added: number) => ({ week_from, week_to: week_from, new: added, cumulative: 100 + added })
 const run = (status: ScheduledRun['status'], error: string | null = null) => ({ status, error_message: error }) as ScheduledRun
-const province = (province_name: string, added: number): ConfigProvince =>
-  ({ province_name, new: added, total: 10, online: 5, pending: 5, abnormal: 0, coverage: 50, weekly: [] })
 
 describe('日期和周次', () => {
   it('ISO 周次和周选择器一致', () => {
@@ -22,30 +17,17 @@ describe('日期和周次', () => {
   it('月日写法', () => {
     expect(dayText('2026-10-23')).toBe('10月23日')
     expect(rangeText('2026-10-19', '2026-10-25')).toBe('10月19日 – 10月25日')
-    expect(weekLabel(week)).toBe('11-02 至 11-08')
+    expect(weekLabel(week('2026-11-02', 4))).toBe('11-02')
   })
 })
 
-describe('本周各省配置网站数量', () => {
-  it('只列有配置的省，按数量从多到少，条长按最多的省折算', () => {
-    const rows = weekProvinces([province('广东省', 5), province('浙江省', 66), province('湖北省', 0), province('辽宁省', 33)])
-    expect(rows).toEqual([
-      { name: '浙江省', count: 66, share: 100 },
-      { name: '辽宁省', count: 33, share: 50 },
-      { name: '广东省', count: 5, share: (5 * 100) / 66 },
-    ])
-    expect(weekProvinces([province('湖北省', 0)])).toEqual([])
-  })
-
-  it('较上周：多了绿、少了红、一样写持平，上周不在范围不比', () => {
-    expect(deltaText(5, 3)).toEqual({ text: '较上周 +2', tone: 'good' })
+describe('较上周与同步状态', () => {
+  it('多了绿、少了红、一样写持平', () => {
+    expect(deltaText(267, 203)).toEqual({ text: '较上周 +64', tone: 'good' })
     expect(deltaText(1, 3)).toEqual({ text: '较上周 -2', tone: 'bad' })
     expect(deltaText(3, 3)).toEqual({ text: '与上周持平', tone: 'flat' })
-    expect(deltaText(3, null)).toBeNull()
   })
-})
 
-describe('同步状态', () => {
   it('在跑不提示失败，最近一次失败才提示', () => {
     expect(syncRunning({ active_run: run('queued'), last_run: null })).toBe(true)
     expect(syncRunning(null)).toBe(false)
@@ -55,19 +37,24 @@ describe('同步状态', () => {
   })
 })
 
-describe('图表', () => {
-  it('每周一根柱子，累计数只在提示框里', () => {
-    const option = weeklyOption([week], chartPalette()) as { series: { type: string; data: number[] }[] }
-    expect(option.series.map(item => [item.type, item.data])).toEqual([['bar', [4]]])
+describe('每周配置数量图和分省小柱', () => {
+  it('有数据的周不到两周就不画', () => {
+    expect(trendWorthShowing([week('2026-10-12', 0), week('2026-10-19', 267)])).toBe(false)
+    expect(trendWorthShowing([week('2026-10-12', 203), week('2026-10-19', 267)])).toBe(true)
   })
 
-  it('进度环三段：已配置、异常、未配置', () => {
-    const totals = { total: 100, online: 60, pending: 38, abnormal: 2, new: 5, coverage: 60 }
-    const option = coverageOption(totals, chartPalette()) as { series: { data: { name: string; value: number }[] }[] }
-    expect(option.series[0]?.data.map(item => [item.name, item.value])).toEqual([['已配置', 60], ['异常', 2], ['未配置', 38]])
+  it('所选那周实色，其余淡色，0 不标数字', () => {
+    const option = weeklyOption([week('2026-10-12', 203), week('2026-10-19', 0)], chartPalette()) as {
+      series: { data: { value: number; itemStyle: { opacity: number } }[]; label: { formatter: (item: { value: number }) => string } }[]
+    }
+    const [series] = option.series
+    expect(series?.data.map(item => [item.value, item.itemStyle.opacity])).toEqual([[203, 0.45], [0, 1]])
+    expect([series?.label.formatter({ value: 0 }), series?.label.formatter({ value: 5 })]).toEqual(['', '5'])
   })
 
-  it('每周配置数底色：0 不着色，最大值最深，最小的也看得出来', () => {
-    expect([heatLevel(0, 10), heatLevel(10, 10), heatLevel(1, 10)]).toEqual([0, 1, 0.24])
+  it('小柱按这一行最大值折算，最低也看得见，全 0 不画', () => {
+    expect(sparkHeights([0, 1, 10])).toEqual([0, 10, 100])
+    expect(sparkHeights([0, 0])).toEqual([0, 0])
+    expect(sparkHeights([1, 100])).toEqual([8, 100])
   })
 })

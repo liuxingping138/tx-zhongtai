@@ -14,13 +14,18 @@ from app.policy.domain.models import Source
 _DETAIL_ORDER = (Source.province_code, Source.province_name, Source.city_code, Source.site_code)
 
 
-def online_between(date_from: str, date_to: str) -> ColumnElement[bool]:
-    """上线时间落在 [date_from, date_to]（YYYY-MM-DD 文本按字符串比较）。date_from 晚于 date_to 时一行也不中。"""
+def online_between(date_from: str, date_to: str, backfill: str) -> ColumnElement[bool]:
+    """上线时间落在 [date_from, date_to]（YYYY-MM-DD 文本按字符串比较），统一补填日（backfill）的不算。"""
 
-    return and_(Source.online_date != "", Source.online_date >= date_from, Source.online_date <= date_to)
+    return and_(
+        Source.online_date != "",
+        Source.online_date != backfill,
+        Source.online_date >= date_from,
+        Source.online_date <= date_to,
+    )
 
 
-async def province_rows(session: AsyncSession, new_from: str, new_to: str) -> list[dict[str, Any]]:
+async def province_rows(session: AsyncSession, new_from: str, new_to: str, backfill: str) -> list[dict[str, Any]]:
     status = Source.crawler_status
     stmt = select(
         Source.province_name,
@@ -29,43 +34,48 @@ async def province_rows(session: AsyncSession, new_from: str, new_to: str) -> li
         func.count().filter(status == CRAWLER_STATUS_ONLINE).label("online"),
         func.count().filter(status.in_(CRAWLER_STATUS_PENDING)).label("pending"),
         func.count().filter(status == CRAWLER_STATUS_ABNORMAL).label("abnormal"),
-        func.count().filter(online_between(new_from, new_to)).label("new"),
+        func.count().filter(online_between(new_from, new_to, backfill)).label("new"),
     ).group_by(Source.province_name)
     return [dict(row._mapping) for row in await session.execute(stmt)]
 
 
-async def online_by_day(session: AsyncSession, date_from: str, date_to: str) -> dict[str, int]:
+async def online_by_day(session: AsyncSession, date_to: str, backfill: str) -> dict[str, int]:
+    """截至 date_to 每天上线多少：趋势的每周数量和累计都从它算。"""
+
     stmt = (
-        select(Source.online_date, func.count()).where(online_between(date_from, date_to)).group_by(Source.online_date)
+        select(Source.online_date, func.count())
+        .where(online_between("", date_to, backfill))
+        .group_by(Source.online_date)
     )
     return {day: int(number) for day, number in await session.execute(stmt)}
 
 
-async def online_by_province_day(session: AsyncSession, date_from: str, date_to: str) -> list[tuple[str, str, int]]:
-    """（省份，上线日期，栏目数）：分省每周配置数按它加总。"""
+async def online_by_province_day(
+    session: AsyncSession, date_from: str, date_to: str, backfill: str
+) -> list[tuple[str, str, int]]:
+    """（省份，上线日期，网站数）：分省每周配置数按它加总。"""
 
     stmt = (
         select(Source.province_name, Source.online_date, func.count())
-        .where(online_between(date_from, date_to))
+        .where(online_between(date_from, date_to, backfill))
         .group_by(Source.province_name, Source.online_date)
     )
     return [(province, day, int(number)) for province, day, number in await session.execute(stmt)]
 
 
-async def count_baseline(session: AsyncSession, before: str) -> int:
-    """期初存量：起始周之前上线的，加上已爬但没填上线时间的。"""
+async def count_baseline(session: AsyncSession, backfill: str) -> int:
+    """期初存量：上线时间是统一补填日的（不知道真实配置日），加上已爬但没填上线时间的。"""
 
     cond = or_(
-        and_(Source.online_date != "", Source.online_date < before),
+        Source.online_date == backfill,
         and_(Source.crawler_status == CRAWLER_STATUS_ONLINE, Source.online_date == ""),
     )
     return int(await session.scalar(select(func.count()).where(cond)) or 0)
 
 
-async def sites_online_between(session: AsyncSession, date_from: str, date_to: str) -> Sequence[Source]:
-    return (
-        await session.scalars(select(Source).where(online_between(date_from, date_to)).order_by(*_DETAIL_ORDER))
-    ).all()
+async def sites_online_between(session: AsyncSession, date_from: str, date_to: str, backfill: str) -> Sequence[Source]:
+    stmt = select(Source).where(online_between(date_from, date_to, backfill)).order_by(*_DETAIL_ORDER)
+    return (await session.scalars(stmt)).all()
 
 
 async def abnormal_sites(session: AsyncSession) -> Sequence[Source]:

@@ -19,11 +19,10 @@ import { useExcelExport } from '@/composables/useExcelExport'
 import { configResultText } from '@/modules/system/scheduler/crawlerConfig'
 import { useAuthStore } from '@/stores/auth'
 import { formatTime } from '@/utils/time'
-import ConfigCoverage from './ConfigCoverage.vue'
 import ConfigNewSites from './ConfigNewSites.vue'
-import ConfigProvinces from './ConfigProvinces.vue'
-import ConfigWeekHero from './ConfigWeekHero.vue'
-import { rangeText, syncFailure, syncRunning, weekTitle, weeklyOption } from './report'
+import ConfigOverview from './ConfigOverview.vue'
+import ConfigProvinceTable from './ConfigProvinceTable.vue'
+import { rangeText, syncFailure, syncRunning, trendWorthShowing, weekTitle, weeklyOption } from './report'
 
 const RESOURCE = 'policy.crawler_config'
 const POLL_MS = 3000
@@ -36,6 +35,8 @@ const status = ref<ConfigSyncStatus | null>(null)
 const loading = ref(false)
 const error = ref('')
 const syncing = ref(false)
+/** 分省表里点中的省份：明细只看这个省，换周后清掉。 */
+const province = ref('')
 let sequence = 0
 let pollTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -75,7 +76,14 @@ function shiftWeek(weeks: number): void {
 
 function pickWeek(value: string | null): void {
   week.value = value ? mondayOf(new Date(`${value}T00:00:00`)) : ''
+  province.value = ''
   void load()
+}
+
+/** 点趋势图里的某一周，整页切到那一周。 */
+function pickTrendWeek(params: { dataIndex: number }): void {
+  const picked = report.value?.trend[params.dataIndex]
+  if (picked) pickWeek(picked.week_from === mondayOf(new Date()) ? null : picked.week_from)
 }
 
 async function load(): Promise<void> {
@@ -166,16 +174,18 @@ onBeforeUnmount(() => clearTimeout(pollTimer))
           :disabled="isCurrentWeek"
           @click="shiftWeek(1)"
         />
-        <el-button
-          v-if="!isCurrentWeek"
-          @click="pickWeek(null)"
-        >
-          回到本周
-        </el-button>
         <span
           v-if="report"
           class="config__range"
         >{{ rangeText(report.week_from, report.week_to) }}</span>
+        <el-button
+          v-if="!isCurrentWeek"
+          link
+          type="primary"
+          @click="pickWeek(null)"
+        >
+          回到本周
+        </el-button>
       </div>
       <div class="config__actions">
         <el-button
@@ -190,7 +200,7 @@ onBeforeUnmount(() => clearTimeout(pollTimer))
           :allowed="auth.canExport(RESOURCE)"
           :loading="exporting"
           :disabled="!report"
-          hint="第一张是本周各省配置网站数量，另有分省每周配置、分省累计、本周新增明细、每周趋势、异常清单。"
+          hint="第一张是所选这周各省配置网站数量，另有分省每周配置、分省累计、配置明细、每周趋势、异常清单。"
           @click="onExport"
         >
           下载报告
@@ -212,37 +222,38 @@ onBeforeUnmount(() => clearTimeout(pollTimer))
     />
 
     <template v-if="report">
-      <ConfigWeekHero
+      <ConfigOverview
         :report="report"
         :week-name="weekName"
+        :abnormal-link="abnormalLink"
       />
-      <div class="config__row">
-        <section class="trend">
+      <section
+        v-if="trendWorthShowing(report.trend)"
+        class="trend"
+      >
+        <header>
           <h2>每周配置数量</h2>
-          <p
-            v-if="!report.trend.length"
-            class="trend__empty"
-          >
-            从 {{ report.report_start }} 开始按周统计，每过一周这里多一根柱子。
-          </p>
-          <BaseChart
-            v-else
-            :option="trend"
-            :label="`每周配置网站数量：${report.trend.map(item => `${item.week_from} 起 ${item.new} 个`).join('，')}`"
-            height="230px"
-          />
-        </section>
-        <ConfigCoverage
-          :report="report"
-          :abnormal-link="abnormalLink"
+          <p>近 12 周，深色是{{ weekName }}；点柱子查看那一周</p>
+        </header>
+        <BaseChart
+          :option="trend"
+          :label="`近 12 周每周配置网站数量：${report.trend.map(item => `${item.week_from} 起 ${item.new} 个`).join('，')}`"
+          height="220px"
+          @select="pickTrendWeek"
         />
-      </div>
-      <ConfigProvinces
+      </section>
+      <ConfigProvinceTable
         :report="report"
-        :current="isCurrentWeek"
         :week-name="weekName"
+        :selected="province"
+        @select="province = $event"
       />
-      <ConfigNewSites :report="report" />
+      <ConfigNewSites
+        :report="report"
+        :week-name="weekName"
+        :province="province"
+        @clear="province = ''"
+      />
     </template>
   </div>
 </template>
@@ -255,13 +266,9 @@ onBeforeUnmount(() => clearTimeout(pollTimer))
 .config__week, .config__actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .config__week .el-button + .el-button, .config__actions .el-button + .el-button { margin-left: 0; }
 .config__picker { width: 168px; }
-.config__range { margin-left: 4px; color: var(--zt-ink-900); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.config__range { margin: 0 4px; color: var(--zt-ink-900); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .config__sync { display: flex; align-items: center; gap: 6px; margin: -4px 0 0; color: var(--zt-ink-500); font-size: 12px; line-height: 1.6; }
-.config__row { display: grid; grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr); gap: 14px; }
 .trend { padding: 16px 20px 8px; min-width: 0; }
-.trend h2 { margin: 0 0 4px; color: var(--zt-ink-900); font-size: 15px; font-weight: 600; }
-.trend__empty { display: grid; place-items: center; height: 230px; margin: 0; color: var(--zt-ink-500); font-size: 13px; }
-@media (max-width: 1100px) {
-  .config__row { grid-template-columns: minmax(0, 1fr); }
-}
+.trend h2 { margin: 0; color: var(--zt-ink-900); font-size: 15px; font-weight: 600; }
+.trend p { margin: 4px 0 0; color: var(--zt-ink-500); font-size: 12px; }
 </style>
