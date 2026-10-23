@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { Plus } from '@element-plus/icons-vue'
-import { computed, onMounted, reactive } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import { importAfterAreaResolve } from '@/api/codebook'
+import { requestRetag, type AiTaskCode } from '@/api/aiTagging'
 import { createBaseTag, importBaseTags, listBaseTags, updateBaseTag, type BaseTagItem } from '@/api/policy'
 import { errorMessage } from '@/api/errors'
 import { reportImportResult, runExcelImport } from '@/api/excelImport'
 import AuditLogButton from '@/components/AuditLogButton.vue'
+import BatchChoiceDialog from '@/components/BatchChoiceDialog.vue'
 import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
 import ExportButton from '@/components/ExportButton.vue'
@@ -22,8 +24,9 @@ import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useListLoader } from '@/composables/useListLoader'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import { useRecordEditor } from '@/composables/useRecordEditor'
+import { useTableSelection } from '@/composables/useTableSelection'
 import { useAuthStore } from '@/stores/auth'
-import { EDITOR_GROUPS, SUMMARY_KEYS, TABLE_COLUMNS } from './fields'
+import { AI_STATUS_CHOICES, EDITOR_GROUPS, RETAG_CHOICES, SUMMARY_KEYS, TABLE_COLUMNS } from './fields'
 
 const RESOURCE = 'policy.base_tags'
 const auth = useAuthStore()
@@ -35,6 +38,7 @@ const query = reactive({
   policy_types: [] as string[],
   is_penetrate: [] as string[],
   need_interpret: [] as string[],
+  ai_status: [] as string[],
   page: 1,
   page_size: 20,
 })
@@ -50,6 +54,22 @@ const { columns, defaults, selected } = useDetailColumns(TABLE_COLUMNS, EDITOR_G
 
 async function refresh() {
   await Promise.all([load(), filters.load()])
+}
+
+// 打失败的、或模板改好后想重打的：按「打标状态」筛出来，勾选后放回某个任务的待办。
+const selection = useTableSelection<BaseTagItem>()
+const checked = selection.checked
+const retagOpen = ref(false)
+async function submitRetag(step: string) {
+  const result = await requestRetag(selection.ids.value, step as AiTaskCode)
+  const message = result.queued
+    ? `已把 ${result.queued} 条放回「${result.task}」的待办，到任务调度执行它或等每日计划`
+    : '没有可以重新打标的政策'
+  return { message, skipped: result.skipped }
+}
+async function afterRetag() {
+  selection.clear()
+  await refresh()
 }
 
 const editor = useRecordEditor<BaseTagItem>({
@@ -119,6 +139,13 @@ onMounted(() => {
           :loading="exporting"
           @click="onExport"
         />
+        <el-button
+          v-if="canWrite"
+          :disabled="!checked.length"
+          @click="retagOpen = true"
+        >
+          重新打标{{ checked.length ? `（${checked.length}）` : '' }}
+        </el-button>
         <AuditLogButton :module="RESOURCE" />
       </template>
       <template #filters>
@@ -162,6 +189,12 @@ onMounted(() => {
                 size="short"
               />
             </el-form-item>
+            <el-form-item label="打标状态">
+              <FilterSelect
+                v-model="query.ai_status"
+                :options="AI_STATUS_CHOICES"
+              />
+            </el-form-item>
           </template>
         </FilterBar>
       </template>
@@ -174,7 +207,9 @@ onMounted(() => {
         />
       </template>
       <BusinessTable
+        :ref="selection.bindTable"
         :items="items"
+        :selectable="canWrite"
         :columns="columns"
         :selected="selected"
         :summary-keys="SUMMARY_KEYS"
@@ -185,8 +220,18 @@ onMounted(() => {
         :filtered="resultFiltered"
         @reset="listQuery.resetFilters"
         @edit="editor.openEdit"
+        @selection-change="checked = $event"
       />
     </ListPage>
+    <BatchChoiceDialog
+      v-model="retagOpen"
+      title="重新打标"
+      :count="checked.length"
+      prompt="重新打标的是："
+      :choices="RETAG_CHOICES"
+      :submit="submitRetag"
+      @done="afterRetag"
+    />
     <RecordEditorDrawer
       :editor="editor"
       :groups="EDITOR_GROUPS"

@@ -10,9 +10,10 @@ from typing import Any
 
 import pytest
 import pytest_asyncio
+from platform_common.actors import Actor
 from sqlalchemy import delete, select, text
 
-from app.aitag.application import pipeline, settings, tagging
+from app.aitag.application import pipeline, retag, settings, tagging
 from app.aitag.domain.models import PolicyAiRun, PolicyAiTask
 from app.common import internal_clients
 from app.common.errors import UserFacingError
@@ -21,6 +22,7 @@ from app.policy.domain.models import BaseTag, Interpretation
 
 pytestmark = pytest.mark.skipif(os.environ.get("SCHEDULER_INTEGRATION") != "1", reason="需要独立 scheduler_test 数据库")
 PROMPT = "p" * 32
+ACTOR = Actor(id="u1", name="管理员")
 DAY = date(2026, 10, 1)
 
 
@@ -215,6 +217,34 @@ async def test_a_task_without_a_template_says_so(monkeypatch: pytest.MonkeyPatch
         await tagging.run_batch(uuid.uuid4(), "interpret")
     _, _, runs = await _state()
     assert [(run.task, run.status) for run in runs] == [("interpret", "failed")]
+
+
+async def test_retagging_types_goes_first_overrides_edits_and_keeps_the_cursor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _serve(monkeypatch, ROWS, FakeAi({"c1": "资金扶持类", "c2": "资金扶持类", "c3": "资金扶持类"}))
+    await tagging.run_batch(uuid.uuid4(), "type")
+    async with SessionLocal() as session:
+        tags = {str(row.source_content_id): row for row in await session.scalars(select(BaseTag))}
+        tags["c2"].remark, tags["c2"].updated_at = "人工改过", tags["c2"].updated_at + timedelta(minutes=1)
+        await session.commit()
+        ids = [tags[key].id for key in ("c1", "c2", "c3")]
+        out = await retag.request(session, ACTOR, ids, "type")
+        await session.commit()
+        assert out["queued"] == 3 and (await settings.list_tasks(session))["items"][0]["pending"] == 3
+
+    # c3 在源库里已经找不到了；c1、c2 重打成信息化建设类，c2 是人点名重打的，人工改过也覆盖。
+    monkeypatch.setattr(tagging.source, "read_by_ids", lambda ids: [row for row in ROWS if row["content_id"] != "c3"])
+    calls = _serve(monkeypatch, ROWS, FakeAi({"c1": "信息化建设类", "c2": "信息化建设类"}))
+    await tagging.run_batch(uuid.uuid4(), "type")
+    config, tags_after, runs = await _state()
+    assert calls == []  # 有排队重打的，这一批不按进度读新政策
+    assert (config.cursor_date, config.cursor_content_id) == (DAY + timedelta(1), "c3")
+    assert [tags_after[key].policy_types for key in ("c1", "c2")] == ["信息化建设类", "信息化建设类"]
+    assert all(tags_after[key].type_retag_at is None for key in ("c1", "c2", "c3"))
+    assert "源库里已经找不到这条政策" in tags_after["c3"].remark and tags_after["c3"].policy_types == "资金扶持类"
+    latest = max(runs, key=lambda run: run.started_at)
+    assert latest.note.startswith("重新判断类型 3 条（1 条源库里已找不到，已跳过）：")
 
 
 class StagedAi:

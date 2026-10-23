@@ -22,6 +22,7 @@ _EVENT_META = {
         "新增场景同步到行业场景码表",
     ),
     "policy.ai_tagging.opportunity": ("policy.interpretations", "update", "interpretation", "政策 AI 回填市场机会"),
+    "policy.ai_tagging.retag_requested": ("policy.base_tags", "update", "base_tag", "政策重新打标"),
     "policy.source.created": ("policy.sources", "create", "source", "新增信源"),
     "policy.source.updated": ("policy.sources", "update", "source", "编辑信源"),
     "policy.source.status_changed": ("policy.sources", "update", "source", "批量改爬虫状态"),
@@ -34,6 +35,12 @@ _EVENT_META = {
     "policy.base_tag.exported": ("policy.base_tags", "export", "base_tag", "导出政策基础标签表"),
     "policy.interpretation.created": ("policy.interpretations", "create", "interpretation", "新增政策解读"),
     "policy.interpretation.updated": ("policy.interpretations", "update", "interpretation", "编辑政策解读"),
+    "policy.interpretation.status_changed": (
+        "policy.interpretations",
+        "update",
+        "interpretation",
+        "批量改解读数据状态",
+    ),
     "policy.interpretation.imported": ("policy.interpretations", "import", "interpretation", "导入政策解读表"),
     "policy.interpretation.exported": ("policy.interpretations", "export", "interpretation", "导出政策解读表"),
     "policy.crawler_monitoring.exported": (

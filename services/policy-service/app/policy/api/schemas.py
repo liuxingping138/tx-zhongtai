@@ -18,6 +18,13 @@ class SourceStatusRequest(BaseModel):
     crawler_status: str = Field(min_length=1, max_length=64)
 
 
+class InterpretationStatusRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+    data_status: str = Field(min_length=1, max_length=32)
+
+
 class SourceWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

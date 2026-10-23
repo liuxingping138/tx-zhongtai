@@ -78,3 +78,18 @@ INTERPRETATION_COLUMNS: tuple[ColumnSpec, ...] = (
 DATA_STATUS_PENDING = "待验证"
 DATA_STATUS_VERIFIED = "人工验证"
 DATA_STATUS_CHOICES: tuple[str, ...] = (DATA_STATUS_PENDING, DATA_STATUS_VERIFIED)
+
+# AI 打标失败时写进基础标签备注的说明开头（app.aitag 写），基础标签列表的「打标状态」按它筛出要重打的政策。
+AI_NOTE_TYPE_FAILED = "AI 类型判断失败"
+AI_NOTE_TYPE_UNKNOWN = "AI 返回的类型不在码表里"
+AI_NOTE_TYPE_EMPTY = "AI 没有判断出政策类型"
+AI_NOTE_INTERPRET_FAILED = "AI 解读失败"
+AI_NOTE_OPPORTUNITY_FAILED = "AI 市场机会失败"
+AI_STATUS_CHOICES: tuple[str, ...] = (
+    "类型判断失败",
+    "解读失败",
+    "市场机会失败",
+    "等待重新判断类型",
+    "待解读",
+    "待补市场机会",
+)

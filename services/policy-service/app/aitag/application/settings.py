@@ -45,6 +45,7 @@ async def list_tasks(session: AsyncSession) -> dict[str, Any]:
 
     rows = await repo.tasks(session)
     running = await repo.running_runs(session)
+    pending = await repo.pending_counts(session)
     first_of_month = today().replace(day=1)
     items = []
     for code in TASKS:
@@ -57,6 +58,8 @@ async def list_tasks(session: AsyncSession) -> dict[str, Any]:
                 "spent_today": str(await repo.spent_since(session, code, day_start(today()))),
                 "spent_month": str(await repo.spent_since(session, code, day_start(first_of_month))),
                 "current": await _current(running.get(code)),
+                # 待办：类型判断是等着重新判断的，解读、市场机会是等着做的。
+                "pending": pending.get(code, 0),
             }
         )
     return {"items": items}

@@ -27,6 +27,7 @@ def base_tag_filters(
     policy_types: list[str] | None = Query(default=None),
     is_penetrate: list[str] | None = Query(default=None),
     need_interpret: list[str] | None = Query(default=None),
+    ai_status: list[str] | None = Query(default=None, description="打标状态：类型判断失败、解读失败、待解读等"),
 ) -> Filters:
     return {
         "policy_name": policy_name,
@@ -34,6 +35,7 @@ def base_tag_filters(
         "policy_types": policy_types,
         "is_penetrate": is_penetrate,
         "need_interpret": need_interpret,
+        "ai_status": ai_status,
     }
 
 

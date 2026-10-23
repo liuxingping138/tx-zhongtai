@@ -21,6 +21,8 @@ _BATCH_SQL = """
     ORDER BY content_id LIMIT %s
 """
 _CONTENT_CHUNK = 200
+# 重新判断类型：按源政策 ID 直接取，和按天读取用同一组字段。
+_BY_IDS_SQL = _BATCH_SQL.split("WHERE", maxsplit=1)[0] + "WHERE content_id IN ({marks})"
 
 
 @retry_mysql_read
@@ -40,6 +42,20 @@ def read_batch(cursor_date: date, cursor_id: str, limit: int, until: date) -> li
             else:
                 last = str(got[-1]["content_id"])
     return rows
+
+
+@retry_mysql_read
+def read_by_ids(content_ids: list[str]) -> list[dict[str, Any]]:
+    """按源政策 ID 取政策（不管采集日、不管是否删除），保持传入的顺序。源库里已经没有的不返回。"""
+
+    found: dict[str, dict[str, Any]] = {}
+    with mysql_connect(get_settings().policy_source_db) as connection, connection.cursor() as cursor:
+        for start in range(0, len(content_ids), _CONTENT_CHUNK):
+            chunk = content_ids[start : start + _CONTENT_CHUNK]
+            cursor.execute(_BY_IDS_SQL.format(marks=", ".join(["%s"] * len(chunk))), chunk)
+            for row in cast(list[dict[str, Any]], cursor.fetchall()):
+                found[str(row["content_id"])] = row
+    return [found[content_id] for content_id in content_ids if content_id in found]
 
 
 @retry_mysql_read

@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 
 from platform_common.filters import Filters, ilike_any
-from sqlalchemy import ColumnElement, func, select
+from sqlalchemy import ColumnElement, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
+from app.policy.domain.fields import (
+    AI_NOTE_INTERPRET_FAILED,
+    AI_NOTE_OPPORTUNITY_FAILED,
+    AI_NOTE_TYPE_EMPTY,
+    AI_NOTE_TYPE_FAILED,
+    AI_NOTE_TYPE_UNKNOWN,
+)
 from app.policy.domain.models import BaseTag
 
 
@@ -40,9 +48,33 @@ FILTER_COLUMNS: dict[str, InstrumentedAttribute[str]] = {
 }
 
 
+def _remark_starts(*prefixes: str) -> ColumnElement[bool]:
+    # 备注各段用「；」连接，失败说明可能在开头也可能在中间。
+    return or_(*(or_(BaseTag.remark.like(f"{p}%"), BaseTag.remark.like(f"%；{p}%")) for p in prefixes))
+
+
+# 「打标状态」精确筛选：AI 打标失败待重打的、排着队的待办。它不是一列，不在 FILTER_COLUMNS 里。
+AI_STATUS: dict[str, Callable[[], ColumnElement[bool]]] = {
+    "类型判断失败": lambda: _remark_starts(AI_NOTE_TYPE_FAILED, AI_NOTE_TYPE_UNKNOWN, AI_NOTE_TYPE_EMPTY),
+    "解读失败": lambda: _remark_starts(AI_NOTE_INTERPRET_FAILED),
+    "市场机会失败": lambda: _remark_starts(AI_NOTE_OPPORTUNITY_FAILED),
+    "等待重新判断类型": lambda: BaseTag.type_retag_at.is_not(None),
+    "待解读": lambda: and_(
+        BaseTag.need_interpret == "是", BaseTag.source_content_id.is_not(None), BaseTag.interpreted_at.is_(None)
+    ),
+    "待补市场机会": lambda: and_(BaseTag.interpreted_at.is_not(None), BaseTag.opportunity_at.is_(None)),
+}
+EXACT_FILTERS = ("ai_status",)
+
+
 def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
     conds: list[ColumnElement[bool]] = []
     for key, value in filters.items():
+        if key == "ai_status":
+            statuses = [] if isinstance(value, int) else list(value or [])
+            if statuses:
+                conds.append(or_(*(AI_STATUS[item]() for item in statuses)))  # 不认识的状态 KeyError，API 转 422
+            continue
         column = FILTER_COLUMNS[key]  # 未知字段直接报错，避免筛选被静默忽略
         cond = ilike_any(column, value)
         if cond is not None:

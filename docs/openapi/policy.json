@@ -314,6 +314,46 @@
         }
       }
     },
+    "/api/v1/policy/ai-tagging/retag": {
+      "post": {
+        "tags": [
+          "政策AI打标"
+        ],
+        "summary": "Request Retag",
+        "description": "基础标签列表上勾选政策重新打标：放回某个任务的待办，下次执行那个任务时处理。",
+        "operationId": "request_retag_api_v1_policy_ai_tagging_retag_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetagBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/policy/sources": {
       "get": {
         "tags": [
@@ -1151,6 +1191,27 @@
               ],
               "title": "Need Interpret"
             }
+          },
+          {
+            "name": "ai_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "打标状态：类型判断失败、解读失败、待解读等",
+              "title": "Ai Status"
+            },
+            "description": "打标状态：类型判断失败、解读失败、待解读等"
           }
         ],
         "responses": {
@@ -1393,6 +1454,27 @@
               ],
               "title": "Need Interpret"
             }
+          },
+          {
+            "name": "ai_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "打标状态：类型判断失败、解读失败、待解读等",
+              "title": "Ai Status"
+            },
+            "description": "打标状态：类型判断失败、解读失败、待解读等"
           }
         ],
         "responses": {
@@ -2626,6 +2708,46 @@
         }
       }
     },
+    "/api/v1/policy/interpretations/data-status": {
+      "post": {
+        "tags": [
+          "policy-interpretations"
+        ],
+        "summary": "Set Data Status",
+        "description": "勾选多条批量改数据状态，人工核对完一次改成「人工验证」。",
+        "operationId": "set_data_status_api_v1_policy_interpretations_data_status_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InterpretationStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/policy/interpretations/{item_id}": {
       "get": {
         "tags": [
@@ -3054,6 +3176,33 @@
         "title": "InterpretationPatch",
         "description": "仅修改显式提供的字段；空字符串表示显式清空。"
       },
+      "InterpretationStatusRequest": {
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Ids"
+          },
+          "data_status": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Data Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ids",
+          "data_status"
+        ],
+        "title": "InterpretationStatusRequest"
+      },
       "InterpretationWrite": {
         "properties": {
           "version": {
@@ -3209,6 +3358,36 @@
           "version"
         ],
         "title": "JobUpdate"
+      },
+      "RetagBody": {
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Ids"
+          },
+          "step": {
+            "type": "string",
+            "enum": [
+              "type",
+              "interpret",
+              "opportunity"
+            ],
+            "title": "Step"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ids",
+          "step"
+        ],
+        "title": "RetagBody"
       },
       "SourceClearRequest": {
         "properties": {

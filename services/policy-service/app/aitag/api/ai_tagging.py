@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import Literal
 
 from fastapi import APIRouter, Depends
@@ -15,6 +16,7 @@ from platform_common.http_utils import success_json
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.aitag.application import retag
 from app.aitag.application import settings as service
 from app.common.security import classified, require_policy_permission
 from app.core.database import get_db_session
@@ -22,6 +24,13 @@ from app.core.database import get_db_session
 router = APIRouter(prefix="/api/v1/policy/ai-tagging", tags=["政策AI打标"])
 RESOURCE = "system.scheduler"
 Task = Literal["type", "interpret", "opportunity"]
+
+
+class RetagBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+    step: Task
 
 
 class TaskBody(BaseModel):
@@ -64,3 +73,15 @@ async def update_task(
     actor: Actor = Depends(require_policy_permission(RESOURCE, "update")),
 ) -> JSONResponse:
     return success_json(await service.update_task(session, actor, task, body.model_dump()))
+
+
+@router.post("/retag")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def request_retag(
+    body: RetagBody,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    actor: Actor = Depends(require_policy_permission("policy.base_tags", "update")),
+) -> JSONResponse:
+    """基础标签列表上勾选政策重新打标：放回某个任务的待办，下次执行那个任务时处理。"""
+
+    return success_json(await retag.request(session, actor, body.ids, body.step))

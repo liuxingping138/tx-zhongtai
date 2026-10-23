@@ -5,8 +5,20 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from app.policy.domain.fields import (
+    AI_NOTE_INTERPRET_FAILED,
+    AI_NOTE_OPPORTUNITY_FAILED,
+    AI_NOTE_TYPE_EMPTY,
+    AI_NOTE_TYPE_FAILED,
+    AI_NOTE_TYPE_UNKNOWN,
+)
+
 INFORMATIZATION = "信息化建设类"
 TYPE_FIELD = "政策类型名称"
+# 解读、市场机会失败时追加到基础标签备注里的前缀；重新打标时据此清掉旧的失败说明，列表也按它筛。
+INTERPRET_FAILED = AI_NOTE_INTERPRET_FAILED
+OPPORTUNITY_FAILED = AI_NOTE_OPPORTUNITY_FAILED
+NOTE_SEP = "；"
 TYPES_MAX = 5
 # 模型偶尔用逗号、分号、斜杠代替顿号，都按分隔符处理。
 _TYPE_SEPARATORS = re.compile(r"[、,，;；/|｜\s]+")
@@ -95,13 +107,13 @@ def tagging_outcome(result: dict[str, Any], known: list[str]) -> tuple[list[str]
     """一行的结果 -> (类型, 备注)。失败、没对上码表都写进备注，页面上能筛出来人工处理。"""
 
     if result.get("error"):
-        return [], f"AI 类型判断失败：{str(result['error'])[:200]}"
+        return [], f"{AI_NOTE_TYPE_FAILED}：{str(result['error'])[:200]}"
     answers = [str(item.get(TYPE_FIELD) or "") for item in result.get("items") or []]
     types, unknown = parse_policy_types("、".join(answers), known)
     if unknown:
-        return types, f"AI 返回的类型不在码表里：{'、'.join(unknown)}"
+        return types, f"{AI_NOTE_TYPE_UNKNOWN}：{'、'.join(unknown)}"
     if not types:
-        return [], "AI 没有判断出政策类型"
+        return [], AI_NOTE_TYPE_EMPTY
     return types, ""
 
 
@@ -112,3 +124,9 @@ def resume_point(results: list[dict[str, Any]], not_run: str) -> int:
         if str(result.get("error") or "").startswith(not_run):
             return index
     return len(results)
+
+
+def drop_notes(remark: str, prefixes: tuple[str, ...]) -> str:
+    """去掉备注里以这些前缀开头的几段（备注各段用「；」连接），其余原样保留。"""
+
+    return NOTE_SEP.join(part for part in (remark or "").split(NOTE_SEP) if part and not part.startswith(prefixes))

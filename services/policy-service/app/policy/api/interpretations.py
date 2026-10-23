@@ -14,9 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.security import classified, require_policy_permission
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
-from app.policy.api.schemas import InterpretationPatch, InterpretationWrite
+from app.policy.api.schemas import InterpretationPatch, InterpretationStatusRequest, InterpretationWrite
+from app.policy.application import interpretation_status, scenario_sync
 from app.policy.application import interpretations as service
-from app.policy.application import scenario_sync
 
 router = APIRouter(prefix="/api/v1/policy/interpretations", tags=["policy-interpretations"])
 RESOURCE = "policy.interpretations"
@@ -158,6 +158,18 @@ async def sync_new_scenarios(
     """把人工验证过的新增场景写进行业场景码表，编码回填到解读行。"""
 
     return success_json(await scenario_sync.sync(session, actor))
+
+
+@router.post("/data-status")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def set_data_status(
+    body: InterpretationStatusRequest,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    actor: Actor = Depends(require_policy_permission(RESOURCE, "update")),
+) -> JSONResponse:
+    """勾选多条批量改数据状态，人工核对完一次改成「人工验证」。"""
+
+    return success_json(await interpretation_status.set_data_status(session, actor, body.ids, body.data_status))
 
 
 @router.get("/{item_id}")

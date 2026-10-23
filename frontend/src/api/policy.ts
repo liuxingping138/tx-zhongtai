@@ -119,6 +119,11 @@ export function updateSource(id: string, body: Partial<SourceItem> & { version: 
   return request(http.patch(`/policy/sources/${id}`, body))
 }
 
+/** 勾选多条批量改政策解读的数据状态（待验证 / 人工验证）。 */
+export function setInterpretationsDataStatus(ids: string[], dataStatus: string): Promise<{ updated: number; unchanged: number }> {
+  return request(http.post('/policy/interpretations/data-status', { ids, data_status: dataStatus }))
+}
+
 /** 勾选多条批量改爬虫状态；改成「已爬」的上线时间由后端记为当天。 */
 export function setSourcesCrawlerStatus(ids: string[], crawlerStatus: string): Promise<{ updated: number; unchanged: number }> {
   return request(http.post('/policy/sources/crawler-status', { ids, crawler_status: crawlerStatus }))

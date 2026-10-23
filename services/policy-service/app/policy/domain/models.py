@@ -104,6 +104,10 @@ class BaseTag(Base):
     opportunity_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, comment="AI市场机会时间"
     )
+    # 在列表上勾选「重新判断类型」的时间：下次类型判断先重打这些，打完清空。
+    type_retag_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="重新判断类型的请求时间"
+    )
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, comment="版本号")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="入库时间")
     created_by_id: Mapped[str] = mapped_column(String(64), nullable=False, comment="入库人ID")

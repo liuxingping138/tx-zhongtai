@@ -7,12 +7,14 @@ import {
   createInterpretation,
   importInterpretations,
   listInterpretations,
+  setInterpretationsDataStatus,
   updateInterpretation,
   type InterpretationItem,
 } from '@/api/policy'
 import { errorMessage } from '@/api/errors'
 import { reportImportResult, runExcelImport } from '@/api/excelImport'
 import AuditLogButton from '@/components/AuditLogButton.vue'
+import BatchChoiceDialog from '@/components/BatchChoiceDialog.vue'
 import SyncScenariosButton from './SyncScenariosButton.vue'
 import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
@@ -28,6 +30,7 @@ import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useListLoader } from '@/composables/useListLoader'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import { useRecordEditor } from '@/composables/useRecordEditor'
+import { useTableSelection } from '@/composables/useTableSelection'
 import { useAuthStore } from '@/stores/auth'
 import { EDITOR_DEFAULTS, EDITOR_GROUPS, SUMMARY_KEYS, TABLE_COLUMNS } from './fields'
 
@@ -62,6 +65,23 @@ const { columns, defaults, selected } = useDetailColumns(TABLE_COLUMNS, EDITOR_G
 const scenarioSync = ref<InstanceType<typeof SyncScenariosButton>>()
 async function refresh() {
   await Promise.all([load(), filters.load(), scenarioSync.value?.refresh()])
+}
+
+// AI 写的行都是「待验证」：人工核对完勾选多条，一次改成「人工验证」。
+const selection = useTableSelection<InterpretationItem>()
+const checked = selection.checked
+const statusOpen = ref(false)
+const STATUS_CHOICES = [
+  { value: '人工验证', label: '人工验证', hint: '核对过、内容可用。之后 AI 重新解读、回填市场机会都不会再覆盖这些行；新增场景改成人工验证后才能同步进码表。' },
+  { value: '待验证', label: '待验证', hint: '退回待核对。AI 重新解读时可以替换这些行。' },
+]
+async function submitStatus(status: string) {
+  const result = await setInterpretationsDataStatus(selection.ids.value, status)
+  return { message: `已改 ${result.updated} 条${result.unchanged ? `，${result.unchanged} 条原本就是「${status}」` : ''}` }
+}
+async function afterStatus() {
+  selection.clear()
+  await refresh()
 }
 
 const editor = useRecordEditor<InterpretationItem>({
@@ -131,6 +151,13 @@ onMounted(() => {
           :loading="exporting"
           @click="onExport"
         />
+        <el-button
+          v-if="canWrite"
+          :disabled="!checked.length"
+          @click="statusOpen = true"
+        >
+          批量改数据状态{{ checked.length ? `（${checked.length}）` : '' }}
+        </el-button>
         <SyncScenariosButton
           v-if="canWrite"
           ref="scenarioSync"
@@ -219,7 +246,9 @@ onMounted(() => {
         />
       </template>
       <BusinessTable
+        :ref="selection.bindTable"
         :items="items"
+        :selectable="canWrite"
         :columns="columns"
         :selected="selected"
         :summary-keys="SUMMARY_KEYS"
@@ -230,8 +259,18 @@ onMounted(() => {
         :filtered="resultFiltered"
         @reset="listQuery.resetFilters"
         @edit="editor.openEdit"
+        @selection-change="checked = $event"
       />
     </ListPage>
+    <BatchChoiceDialog
+      v-model="statusOpen"
+      title="批量改数据状态"
+      :count="checked.length"
+      prompt="数据状态改为："
+      :choices="STATUS_CHOICES"
+      :submit="submitStatus"
+      @done="afterStatus"
+    />
     <RecordEditorDrawer
       :editor="editor"
       :groups="EDITOR_GROUPS"

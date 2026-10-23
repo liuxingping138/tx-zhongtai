@@ -17,7 +17,7 @@ from platform_common.clock import utcnow
 from app.aitag.application.pipeline import ROBOT, Spend, ask, not_run, update_run
 from app.aitag.domain import interpret_rules as rules
 from app.aitag.domain.models import PolicyAiTask
-from app.aitag.domain.rules import clean_content
+from app.aitag.domain.rules import INTERPRET_FAILED, NOTE_SEP, OPPORTUNITY_FAILED, clean_content
 from app.aitag.repositories import source
 from app.aitag.repositories import tagging as repo
 from app.common import internal_clients
@@ -39,7 +39,7 @@ def _untouched(row: Interpretation) -> bool:
 
 
 def _append_remark(tag: BaseTag, message: str) -> None:
-    tag.remark = f"{tag.remark}；{message}" if tag.remark else message
+    tag.remark = f"{tag.remark}{NOTE_SEP}{message}" if tag.remark else message
 
 
 async def _prompt_rows(tags: list[BaseTag], max_chars: int) -> list[dict[str, str]]:
@@ -116,7 +116,7 @@ async def _save_interpretations(
             tag.interpreted_at, tag.opportunity_at = utcnow(), None
             if result.get("error") or not result.get("items"):
                 failed += 1
-                _append_remark(tag, f"AI 解读失败：{str(result.get('error') or '没有解读出内容')[:200]}")
+                _append_remark(tag, f"{INTERPRET_FAILED}：{str(result.get('error') or '没有解读出内容')[:200]}")
                 continue
             rows = old.get(str(tag.source_content_id), [])
             await repo.delete_rows(session, [row for row in rows if _untouched(row)])
@@ -182,7 +182,7 @@ async def _save_opportunities(run_id: uuid.UUID, tags: list[BaseTag], results: l
             tag.opportunity_at = utcnow()
             if result.get("error"):
                 failed += 1
-                _append_remark(tag, f"AI 市场机会失败：{str(result['error'])[:200]}")
+                _append_remark(tag, f"{OPPORTUNITY_FAILED}：{str(result['error'])[:200]}")
                 continue
             rows = grouped.get(str(tag.source_content_id), [])
             matches = rules.match_opportunities(

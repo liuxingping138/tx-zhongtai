@@ -16,7 +16,7 @@ import anyio
 from platform_common.clock import utcnow
 from platform_common.errors import ApiError
 
-from app.aitag.application import interpreting
+from app.aitag.application import interpreting, retag
 from app.aitag.application.pipeline import (
     NOT_RUN,
     ROBOT,
@@ -47,13 +47,19 @@ async def policy_type_names() -> list[str]:
     return [line.split("\t")[0] for line in lines if line.strip()]
 
 
-def _write_base_tag(session: Any, existing: BaseTag | None, source_row: dict[str, Any], values: dict[str, str]) -> bool:
-    """有这条政策的 AI 行就更新；人工在打标之后改过的不覆盖。返回是否写入。"""
+def _write_base_tag(
+    session: Any, existing: BaseTag | None, source_row: dict[str, Any], values: dict[str, str], *, force: bool = False
+) -> bool:
+    """有这条政策的 AI 行就更新，返回是否写入。
+
+    人工在打标之后改过的不覆盖，除非是人在列表上点了「重新判断类型」（force）。
+    """
 
     now = utcnow()
     if existing is not None:
-        if existing.tagged_at is not None and existing.updated_at > existing.tagged_at:
+        if not force and existing.tagged_at is not None and existing.updated_at > existing.tagged_at:
             return False
+        existing.type_retag_at = None
         for key, value in values.items():
             setattr(existing, key, value)
         existing.refresh_hash()
@@ -82,7 +88,7 @@ def _write_base_tag(session: Any, existing: BaseTag | None, source_row: dict[str
 
 
 async def _save_types(
-    run_id: uuid.UUID, rows: list[dict[str, Any]], results: list[dict[str, Any]], known: list[str]
+    run_id: uuid.UUID, rows: list[dict[str, Any]], results: list[dict[str, Any]], known: list[str], *, retag: bool
 ) -> dict[str, int]:
     processed = rules.resume_point(results, NOT_RUN)
     done_rows, done_results = rows[:processed], results[:processed]
@@ -100,9 +106,10 @@ async def _save_types(
             if current is None and (digest in seen or await repo.base_tag_by_hash(session, digest)):
                 continue
             seen.add(digest)
-            tagged += 1 if _write_base_tag(session, current, row, values) else 0
+            tagged += 1 if _write_base_tag(session, current, row, values, force=retag) else 0
         locked = await repo.task(session, "type", lock=True)
-        if done_rows:
+        # 重新判断的是列表上点名的旧政策，不动按天读取的进度。
+        if done_rows and not retag:
             last = done_rows[-1]
             locked.cursor_date, locked.cursor_content_id = last["collect_date"], str(last["content_id"])
         await enqueue_event(
@@ -121,11 +128,24 @@ def _cursor_text(day: Any, content_id: str) -> str:
 
 
 async def _type_step(run_id: uuid.UUID, config: PolicyAiTask, spend: Spend) -> str:
+    """有人在列表上点了「重新判断类型」的，这一批先重打它们；没有才按读取进度读新政策。"""
+
+    queued = await retag.type_queue(config.batch_size)
+    if queued:
+        rows, missing = await retag.read_queued(queued)
+        prefix = f"重新判断类型 {len(queued)} 条" + (f"（{missing} 条源库里已找不到，已跳过）" if missing else "")
+        return f"{prefix}：{await _tag(run_id, config, spend, rows, retag=True)}" if rows else prefix
     rows = await anyio.to_thread.run_sync(
         source.read_batch, config.cursor_date or today(), config.cursor_content_id, config.batch_size, today()
     )
     if not rows:
         return "没有新的源政策"
+    return await _tag(run_id, config, spend, rows, retag=False)
+
+
+async def _tag(
+    run_id: uuid.UUID, config: PolicyAiTask, spend: Spend, rows: list[dict[str, Any]], *, retag: bool
+) -> str:
     contents = await anyio.to_thread.run_sync(source.read_contents, [str(row["content_id"]) for row in rows])
     limit = config.content_max_chars
     prompt_rows = [rules.prompt_row(row, contents.get(str(row["content_id"])), limit) for row in rows]
@@ -139,8 +159,8 @@ async def _type_step(run_id: uuid.UUID, config: PolicyAiTask, spend: Spend) -> s
         caller="政策AI打标·类型判断",
         run_field="type_run_id",
     )
-    counts = await _save_types(run_id, rows, results, known)
-    last = rows[counts["processed"] - 1] if counts["processed"] else None
+    counts = await _save_types(run_id, rows, results, known, retag=retag)
+    last = rows[counts["processed"] - 1] if counts["processed"] and not retag else None
     await update_run(
         run_id,
         tagged_rows=counts["tagged"],

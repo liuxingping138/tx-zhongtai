@@ -181,8 +181,12 @@ def _use_config(monkeypatch: pytest.MonkeyPatch, config: Any, spent: Decimal = D
     async def spent_since(*_: Any) -> Decimal:
         return spent
 
+    async def no_queue(*_: Any) -> list[str]:
+        return []
+
     monkeypatch.setattr(repo, "task", get_config)
     monkeypatch.setattr(repo, "spent_since", spent_since)
+    monkeypatch.setattr(tagging.retag, "type_queue", no_queue)
 
 
 async def test_missing_template_fails_with_a_message_the_page_can_show(
@@ -399,11 +403,17 @@ async def test_task_list_still_shows_progress_when_ai_service_is_down(monkeypatc
     monkeypatch.setattr(repo, "tasks", tasks)
     monkeypatch.setattr(repo, "spent_since", spent)
     monkeypatch.setattr(repo, "running_runs", runs)
+
+    async def pending(*_: Any) -> dict[str, int]:
+        return {"type": 0, "interpret": 5, "opportunity": 2}
+
+    monkeypatch.setattr(repo, "pending_counts", pending)
     monkeypatch.setattr(internal_clients, "ai", down)
     items = (await settings.list_tasks(FakeSession()))["items"]  # type: ignore[arg-type]
     # 按页面顺序；ai-service 不可用时进度取不到，但正在做什么照样显示。
     assert [item["code"] for item in items] == ["type", "interpret", "opportunity"]
     assert [item["spent_today"] for item in items] == ["1.5", "2", "0"]
+    assert [item["pending"] for item in items] == [0, 5, 2]
     assert items[0]["current"] is None
     assert (items[1]["current"]["stage_name"], items[1]["current"]["done"]) == ("模型解读中", None)
     templates = await settings.templates()

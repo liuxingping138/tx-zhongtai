@@ -22,6 +22,7 @@ import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useListLoader } from '@/composables/useListLoader'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import { useRecordEditor, type RecordForm } from '@/composables/useRecordEditor'
+import { useTableSelection } from '@/composables/useTableSelection'
 import { useAuthStore } from '@/stores/auth'
 import BatchStatusDialog from './BatchStatusDialog.vue'
 import { EDITOR_GROUPS, SUMMARY_KEYS, TABLE_COLUMNS } from './fields'
@@ -31,8 +32,8 @@ const auth = useAuthStore()
 const canWrite = computed(() => auth.canFull(RESOURCE))
 const canPurge = computed(() => auth.canFull(RESOURCE) && auth.isSuperadmin)
 const clearing = ref(false)
-const table = ref<{ clearSelection: () => void }>()
-const checked = ref<SourceItem[]>([])
+const selection = useTableSelection<SourceItem>()
+const checked = selection.checked
 const batchOpen = ref(false)
 
 const query = reactive({
@@ -62,8 +63,7 @@ async function refresh() {
 }
 
 async function afterBatch() {
-  table.value?.clearSelection()
-  checked.value = []
+  selection.clear()
   await refresh()
 }
 
@@ -252,7 +252,7 @@ onMounted(() => {
         />
       </template>
       <BusinessTable
-        ref="table"
+        :ref="selection.bindTable"
         :items="items"
         :selectable="canWrite"
         :columns="columns"

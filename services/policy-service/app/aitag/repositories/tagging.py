@@ -122,3 +122,41 @@ async def running_runs(session: AsyncSession) -> dict[str, PolicyAiRun]:
         select(PolicyAiRun).where(PolicyAiRun.status == "running").order_by(PolicyAiRun.started_at)
     )
     return {row.task: row for row in rows}
+
+
+async def type_retag_queue(session: AsyncSession, limit: int) -> list[BaseTag]:
+    """列表上点了「重新判断类型」、还没重打的政策，先点的先打。"""
+
+    rows = await session.scalars(
+        select(BaseTag)
+        .where(BaseTag.type_retag_at.is_not(None), BaseTag.source_content_id.is_not(None))
+        .order_by(BaseTag.type_retag_at, BaseTag.id)
+        .limit(limit)
+    )
+    return list(rows)
+
+
+async def base_tags_by_source_ids(session: AsyncSession, source_ids: list[str]) -> list[BaseTag]:
+    if not source_ids:
+        return []
+    return list(
+        await session.scalars(select(BaseTag).where(BaseTag.source_content_id.in_(source_ids)).with_for_update())
+    )
+
+
+async def pending_counts(session: AsyncSession) -> dict[str, int]:
+    """三个任务各有多少待办：待重新判断类型的、待解读的、待补市场机会的。"""
+
+    retag = BaseTag.type_retag_at.is_not(None)
+    interpret = (BaseTag.need_interpret == "是") & BaseTag.interpreted_at.is_(None)
+    opportunity = BaseTag.interpreted_at.is_not(None) & BaseTag.opportunity_at.is_(None)
+    row = (
+        await session.execute(
+            select(
+                func.count().filter(retag),
+                func.count().filter(interpret),
+                func.count().filter(opportunity),
+            ).where(BaseTag.source_content_id.is_not(None))
+        )
+    ).one()
+    return {"type": int(row[0]), "interpret": int(row[1]), "opportunity": int(row[2])}

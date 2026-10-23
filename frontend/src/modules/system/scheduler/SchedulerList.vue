@@ -38,11 +38,14 @@ const visibleColumns = computed(() => columns.filter(col => selected.value.inclu
 function aiTask(job: ScheduledJob): AiTask | null {
   return aiTasks.value.find(task => task.job_code === job.code) ?? null
 }
-/** 数据进度：爬虫是源数据入库时间；类型判断是读到的采集日；解读、市场机会按待办做，没有进度。 */
+/** 数据进度：爬虫是源数据入库时间；类型判断是读到的采集日和排队重判的条数；解读、市场机会是待办条数。 */
 function progress(job: ScheduledJob): string {
   if (job.code === 'crawler') return formatTime(job.watermark)
   const task = aiTask(job)
-  return task?.cursor_date ? `读到 ${task.cursor_date}` : '—'
+  if (!task) return '—'
+  if (task.code !== 'type') return task.pending ? `待${task.code === 'interpret' ? '解读' : '补'} ${task.pending} 条` : '没有待办'
+  const read = task.cursor_date ? `读到 ${task.cursor_date}` : '—'
+  return task.pending ? `${read} · 待重判 ${task.pending}` : read
 }
 function cost(job: ScheduledJob): string {
   const task = aiTask(job)

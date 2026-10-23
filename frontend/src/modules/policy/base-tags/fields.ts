@@ -63,3 +63,25 @@ export const EDITOR_GROUPS: EditorGroup[] = [
     ],
   },
 ]
+
+/** 「打标状态」筛选：AI 打标失败、要重打的，以及排着队的待办。和后端 policy.domain.fields.AI_STATUS_CHOICES 一致。 */
+export const AI_STATUS_CHOICES = ['类型判断失败', '解读失败', '市场机会失败', '等待重新判断类型', '待解读', '待补市场机会']
+
+/** 重新打标的三种：放回哪个任务的待办、会发生什么。 */
+export const RETAG_CHOICES = [
+  {
+    value: 'type',
+    label: '重新判断类型',
+    hint: '下次执行「政策类型判断」时先重读这些政策、重新判断类型，覆盖现在的类型（人工改过的也覆盖）。会产生模型费用。',
+  },
+  {
+    value: 'interpret',
+    label: '重新解读',
+    hint: '放回「政策解读」的待办，下次执行时重新解读，市场机会也会跟着重补。人工验证过的解读行保留。只对「是否解读 = 是」的政策有效。会产生模型费用。',
+  },
+  {
+    value: 'opportunity',
+    label: '重新补市场机会',
+    hint: '放回「政策市场机会」的待办，下次执行时重新补。只对已解读的政策有效。会产生模型费用。',
+  },
+]

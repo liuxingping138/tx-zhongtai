@@ -15,6 +15,15 @@ async def get_by_id(session: AsyncSession, item_id: uuid.UUID) -> Interpretation
     return await session.get(Interpretation, item_id)
 
 
+async def get_many_for_update(session: AsyncSession, item_ids: list[uuid.UUID]) -> list[Interpretation]:
+    """批量改状态：一次锁住勾选的行，和单条编辑互斥。按主键排序加锁，避免两个批量请求交叉死锁。"""
+
+    result = await session.execute(
+        select(Interpretation).where(Interpretation.id.in_(set(item_ids))).order_by(Interpretation.id).with_for_update()
+    )
+    return list(result.scalars())
+
+
 async def get_for_update(session: AsyncSession, item_id: uuid.UUID) -> Interpretation | None:
     """更新路径专用：锁住目标行，见 sources.get_for_update 的说明。"""
 

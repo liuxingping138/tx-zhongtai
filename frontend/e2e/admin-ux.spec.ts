@@ -199,3 +199,57 @@ test('editing interpretation preserves generated policy UID and tenant identifie
   expect(payload?.policy_uid).toBe('custom-policy-uid')
   expect(payload?.tenant_id).toBe('tenant-a')
 })
+
+test('基础标签：按打标状态筛出来，勾选后重新打标，跳过的逐条说明原因', async ({ page }) => {
+  let payload: Record<string, unknown> | undefined
+  await page.route('**/api/v1/policy/base-tags?**', route => respond(route, {
+    items: [
+      { id: 't1', policy_name: '解读失败的政策', remark: 'AI 解读失败：限流', need_interpret: '是', version: 1 },
+      { id: 't2', policy_name: '手工录入的政策', remark: '', need_interpret: '是', version: 1 },
+    ],
+    total: 2,
+  }))
+  await page.route('**/api/v1/policy/ai-tagging/retag', route => {
+    payload = route.request().postDataJSON()
+    return respond(route, { step: 'interpret', task: '政策解读', queued: 1, skipped: [{ reason: '手工录入或导入的政策没有源政策，不能重新打标', count: 1 }] })
+  })
+  await page.goto('/policy/base-tags')
+  await expect(page.locator('.el-form-item').filter({ hasText: '打标状态' })).toBeVisible()
+  const retag = page.getByRole('button', { name: /^重新打标/ })
+  await expect(retag).toBeDisabled()
+  // 表头的全选框：样式化的可见替身，点它。
+  await page.locator('.el-table__header .el-checkbox').click()
+  await expect(retag).toHaveText('重新打标（2）')
+  await retag.click()
+  const dialog = page.getByRole('dialog', { name: '重新打标' })
+  await dialog.getByText('重新解读', { exact: true }).click()
+  await expect(dialog).toContainText('人工验证过的解读行保留')
+  await dialog.getByRole('button', { name: '确定' }).click()
+  const alert = page.locator('.el-message-box')
+  await expect(alert).toContainText('已把 1 条放回「政策解读」的待办')
+  await expect(alert).toContainText('1 条：手工录入或导入的政策没有源政策，不能重新打标')
+  expect(payload).toEqual({ ids: ['t1', 't2'], step: 'interpret' })
+})
+
+test('政策解读：勾选多条一次改成人工验证', async ({ page }) => {
+  let payload: Record<string, unknown> | undefined
+  await page.route('**/api/v1/policy/interpretations?**', route => respond(route, {
+    items: [
+      { id: 'i1', policy_title: '政策一', data_status: '待验证', version: 1 },
+      { id: 'i2', policy_title: '政策二', data_status: '待验证', version: 1 },
+    ],
+    total: 2,
+  }))
+  await page.route('**/api/v1/policy/interpretations/data-status', route => {
+    payload = route.request().postDataJSON()
+    return respond(route, { updated: 2, unchanged: 0 })
+  })
+  await page.goto('/policy/interpretations')
+  await page.locator('.el-table__header .el-checkbox').click()
+  await page.getByRole('button', { name: '批量改数据状态（2）' }).click()
+  const dialog = page.getByRole('dialog', { name: '批量改数据状态' })
+  await expect(dialog).toContainText('之后 AI 重新解读、回填市场机会都不会再覆盖这些行')
+  await dialog.getByRole('button', { name: '确定' }).click()
+  await expect(page.getByText('已改 2 条')).toBeVisible()
+  expect(payload).toEqual({ ids: ['i1', 'i2'], data_status: '人工验证' })
+})

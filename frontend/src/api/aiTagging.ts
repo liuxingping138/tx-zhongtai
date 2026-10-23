@@ -31,6 +31,8 @@ export interface AiTask {
   spent_today: string
   spent_month: string
   current: AiTaggingCurrent | null
+  /** 待办条数：类型判断是等着重新判断的，解读、市场机会是等着做的 */
+  pending: number
 }
 
 /** 可以给打标任务用的模板：政策类、已上线 */
@@ -49,4 +51,12 @@ export type AiTaskBody = Pick<AiTask, 'prompt_id' | 'batch_size' | 'content_max_
 const base = '/policy/ai-tagging'
 export const listAiTasks = () => request<{ items: AiTask[] }>(http.get(`${base}/tasks`))
 export const listAiTemplates = () => request<{ items: OnlineTemplate[]; error: string }>(http.get(`${base}/templates`))
+/** 基础标签列表上勾选政策重新打标：放回某个任务的待办，下次执行那个任务时处理。 */
+export interface RetagResult {
+  step: AiTaskCode
+  task: string
+  queued: number
+  skipped: { reason: string; count: number }[]
+}
+export const requestRetag = (ids: string[], step: AiTaskCode) => request<RetagResult>(http.post(`${base}/retag`, { ids, step }))
 export const updateAiTask = (code: AiTaskCode, body: AiTaskBody) => request<AiTask>(http.put(`${base}/tasks/${code}`, body))
