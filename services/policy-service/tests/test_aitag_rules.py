@@ -9,11 +9,27 @@ KNOWN = ["信息化建设类", "工业制造类", "资金扶持类", "科技创�
 
 def test_content_is_compacted_and_truncated_with_a_visible_marker() -> None:
     page = "第一条\r\n\r\n\r\n   第二条　　内容\t\t结束"
-    assert rules.clean_content(page, 100) == "第一条\n 第二条 内容 结束"
+    assert rules.clean_content(page, 100) == "第一条\n第二条 内容 结束"
     assert rules.clean_content("甲" * 10, 4) == "甲甲甲甲……（正文过长，以下省略）"
     assert rules.clean_content(None, 10) == ""
     # 0 = 全文照传，十几万字也不截。
     assert rules.clean_content("甲" * 150_000, 0) == "甲" * 150_000
+
+
+def test_web_page_source_is_turned_into_its_visible_text() -> None:
+    """源库正文是整页网页源码：脚本、样式、网页头都不要，段落保留，一句话里的行内标签不拆行。"""
+
+    page = (
+        "<!DOCTYPE html><html><head><title>标题</title><style>.a{color:red}</style>"
+        "<script>var x = 1;</script></head><body><div class='nav'>首页 &gt; 新闻</div>"
+        "<p>新华社北京10月16日电 <strong>习近平</strong>致信祝贺&nbsp;湖南大学。</p>"
+        "<p>第二段<br/>换行后</p><script>jQuery('.fjxz')</script><noscript>请开启脚本</noscript></body></html>"
+    )
+    assert rules.clean_content(page, 0) == "首页 > 新闻\n新华社北京10月16日电 习近平致信祝贺 湖南大学。\n第二段\n换行后"
+    # 不像网页的文字（Excel 里贴的正文、带尖括号的公式）原样处理。
+    assert rules.clean_content("指标 a<b 且 c>d", 0) == "指标 a<b 且 c>d"
+    # 先提取再截断：截的是文字，不是源码。
+    assert rules.clean_content("<html><body><p>" + "字" * 50 + "</p></body></html>", 10).startswith("字" * 10 + "……")
 
 
 def test_policy_types_accept_old_spellings_drop_duplicates_and_cap_at_five() -> None:

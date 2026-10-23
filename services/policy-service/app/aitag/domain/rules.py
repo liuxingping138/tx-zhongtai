@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from html.parser import HTMLParser
 from typing import Any
 
 from app.policy.domain.fields import (
@@ -29,13 +30,64 @@ SOURCE_ID = "源ID"
 PROMPT_COLUMNS = ("政策标题", "政策正文", "省份", "地市", "出台时间", "发文部门", "政策层级")
 
 
+# 源库的「正文」是整页网页源码（实测 60 条全是，文字只占 6% 左右，其余是标签、样式和脚本）。
+_HTML_START = re.compile(r"<\s*(?:!doctype|html|head|body|div|p|span|br|table|meta|script)\b", re.IGNORECASE)
+# 这些标签里的内容不是给人看的。
+_HIDDEN_TAGS = {"script", "style", "head", "noscript", "template", "svg", "iframe"}
+# 块级标签前后断行，保留段落；行内标签（span、a、strong…）不断，免得把一句话拆成好几行。
+_BLOCK_TAGS = {
+    "p", "div", "br", "li", "ul", "ol", "tr", "table", "section", "article", "header", "footer",
+    "h1", "h2", "h3", "h4", "h5", "h6", "dd", "dt", "dl", "blockquote", "pre", "hr",
+}  # fmt: skip
+
+
+class _PageText(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self._hidden = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in _HIDDEN_TAGS:
+            self._hidden += 1
+        elif tag in _BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in _BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in _HIDDEN_TAGS:
+            self._hidden = max(0, self._hidden - 1)
+        elif tag in _BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if not self._hidden:
+            self.parts.append(data)
+
+
+def page_text(text: str) -> str:
+    """网页源码 -> 看得见的文字（去掉脚本、样式、网页头，块级标签处断行）。不像网页的原样返回。"""
+
+    if not _HTML_START.search(text[:5000]):
+        return text
+    parser = _PageText()
+    parser.feed(text)
+    parser.close()
+    return "".join(parser.parts)
+
+
 def clean_content(text: str | None, max_chars: int) -> str:
-    """正文是整页抓下来的文字：压掉连续空白和空行。
+    """正文发给模型前的整理：网页源码先提取成文字，再压掉连续空白和空行。
 
     max_chars 为 0 时全文照传；否则截到上限，截断处标明，免得模型以为原文就到这。
     """
 
-    value = _BLANK_LINES.sub("\n", _SPACES.sub(" ", (text or "").replace("\r", "\n"))).strip()
+    value = page_text((text or "").replace("\r", "\n"))
+    lines = (line.strip() for line in _SPACES.sub(" ", value).split("\n"))
+    value = _BLANK_LINES.sub("\n", "\n".join(line for line in lines if line)).strip()
     if max_chars <= 0 or len(value) <= max_chars:
         return value
     return value[:max_chars] + "……（正文过长，以下省略）"

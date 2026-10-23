@@ -226,7 +226,8 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
 ### 政策 AI 打标：读源库 → 用上线模板跑 → 写政策表
 
 - `app/aitag/`（与 policy、crawler、scheduler 平级）。源数据是同一 MySQL 实例的 `bid_analyse.csys_policy_info` + `csys_policy_info_content`
-  （正文，按 `content_id` 一对一），只读不回写。按采集日逐天读、日内按 `content_id` 分页；读取进度（采集日 + 正文ID）存在
+  （正文，按 `content_id` 一对一），只读不回写。正文其实是整页网页源码，发给模型前由 `rules.page_text` 提取成看得见的文字（只剩约 6%），
+  不提取既浪费十几倍的输入费用，又和业务人员用 Excel 测试时的输入口径不一致。按采集日逐天读、日内按 `content_id` 分页；读取进度（采集日 + 正文ID）存在
   `policy_ai_tasks` 的类型判断那一行，一批写完才前移，费用到上限没跑到的行下批重读
 - 类型判断、政策解读、市场机会是三个独立的调度任务（`app/aitag/domain/tasks.py`），各有模板、每批条数、正文长度和每日上限（`policy_ai_tasks` 一任务一行），
   一次执行只跑一个任务的一批。后两个按待办取数据，前一个没跑后一个就没有待办，彼此不串联
