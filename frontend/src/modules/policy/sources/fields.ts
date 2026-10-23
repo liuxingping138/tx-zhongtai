@@ -3,6 +3,7 @@ import type { EditorGroup } from '@/components/editorGroups'
 
 export const TABLE_COLUMNS: DataColumn[] = [
   { prop: 'site_name', label: '网站名称', minWidth: 240, grow: 2 },
+  { prop: 'site_code', label: '网站编码', width: 130 },
   { prop: 'site_type', label: '网站类型', width: 120 },
   { prop: 'crawler_status', label: '爬虫状态', width: 110 },
   { prop: 'online_date', label: '上线时间', width: 110 },
@@ -19,6 +20,7 @@ export const TABLE_COLUMNS: DataColumn[] = [
     width: 120,
   },
   { prop: 'department', label: '所属部门', width: 220 },
+  { prop: 'internal_id', label: '内部唯一id', width: 290 },
   { prop: 'created_at', label: '入库时间', width: 190, time: true },
   { prop: 'created_by_name', label: '入库人', width: 110 },
   { prop: 'updated_at', label: '更新时间', width: 190, time: true },

@@ -9,10 +9,10 @@ describe('列设置的记忆', () => {
     expect(restoreColumns(['name', 'status'], ['name', 'status', 'watermark'], CURRENT)).toEqual(['name', 'plan', 'status', 'cost'])
   })
 
-  it('没有列清单的旧记录：列改过名就把新列补上，没改过就原样恢复', () => {
+  it('没有列清单的旧记录：分不清隐藏的和后加的，没记着的列都显示出来', () => {
     const old = ['name', 'enabled', 'daily_time', 'status', 'finished_at', 'watermark', 'next_run_at']
     expect(restoreColumns(old, null, CURRENT)).toEqual(CURRENT)
-    expect(restoreColumns(['name', 'status'], null, CURRENT)).toEqual(['name', 'status'])
+    expect(restoreColumns(['name', 'status'], null, CURRENT)).toEqual(CURRENT)
   })
 
   it('按页面列顺序返回；没记过或记的全不认识时交给默认值', () => {

@@ -253,3 +253,15 @@ test('政策解读：勾选多条一次改成人工验证', async ({ page }) => 
   await expect(page.getByText('已改 2 条')).toBeVisible()
   expect(payload).toEqual({ ids: ['i1', 'i2'], data_status: '人工验证' })
 })
+
+test('信源管理：列表显示网站编码和内部唯一id', async ({ page }) => {
+  await page.route('**/api/v1/policy/sources?**', route => respond(route, {
+    items: [{ id: 's1', site_name: '某市人民政府', site_code: '11010100001', internal_id: 'abc123', version: 1 }],
+    total: 1,
+  }))
+  await page.goto('/policy/sources')
+  const header = page.locator('.el-table__header')
+  await expect(header).toContainText('网站编码')
+  await expect(header).toContainText('内部唯一id')
+  await expect(page.locator('.el-table__body')).toContainText('11010100001')
+})
