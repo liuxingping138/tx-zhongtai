@@ -165,7 +165,7 @@ async def trigger_job(session: AsyncSession, code: str, actor: Actor) -> dict[st
 
 
 async def crawler_config_status(session: AsyncSession) -> dict[str, Any]:
-    """周报页的同步状态：正在排队或执行的那次，以及最近一次执行和它的结果。"""
+    """统计页的同步状态：正在排队或执行的那次，以及最近一次执行和它的结果。"""
 
     active = await repo.active_run(session, CRAWLER_CONFIG)
     last = await session.scalar(

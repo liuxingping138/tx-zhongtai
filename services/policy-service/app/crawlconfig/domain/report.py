@@ -1,4 +1,4 @@
-"""爬虫配置周报的口径：信源表一行算一个栏目，按上线时间落在哪个自然周（周一到周日）统计每周新增。
+"""爬虫配置统计的口径：信源表一行算一个栏目，按上线时间落在哪个自然周（周一到周日）统计每周新增。
 
 统计起始周之前上线的（含首次同步一次性标上的历史网站、没填上线时间的已爬）算期初存量，不算进任何一周的新增。
 """
@@ -70,6 +70,20 @@ def weekly_series(daily: dict[str, int], weeks: list[date], baseline: int) -> li
             }
         )
     return series
+
+
+def province_weekly(rows: list[tuple[str, str, int]], weeks: list[date]) -> dict[str, list[int]]:
+    """各省每周新配置的栏目数，和 weeks 一一对应；不在这些周里的不算。省份为空的记在 BLANK_PROVINCE 名下。"""
+
+    index = {monday: position for position, monday in enumerate(weeks)}
+    result: dict[str, list[int]] = {}
+    for province, text, number in rows:
+        day = _parse_day(text)
+        position = index.get(week_start(day)) if day else None
+        if position is None:
+            continue
+        result.setdefault(province or BLANK_PROVINCE, [0] * len(weeks))[position] += number
+    return result
 
 
 def province_order(row: dict[str, Any]) -> tuple[int, str, str]:

@@ -1,4 +1,4 @@
-"""爬虫配置周报的 Excel：分省汇总、本周新增明细、每周趋势、异常清单四个工作表。给领导看，带标题行和列宽。"""
+"""爬虫配置统计的 Excel：分省汇总、分省每周配置、本周新增明细、每周趋势、异常清单。给领导看，带标题行和列宽。"""
 
 from __future__ import annotations
 
@@ -45,6 +45,23 @@ def _site_sheet(book: Workbook, title: str, caption: str, sites: list[dict[str, 
         append_text_row(sheet, [site.get(key, "") for key, _, _ in SITE_HEADERS])
 
 
+def _province_weekly_sheet(book: Workbook, data: dict[str, Any]) -> None:
+    """省份 × 周的新配置栏目数，末列合计、末行全国合计。统计起点之前的周没有这张表的数据。"""
+
+    weeks = data["trend"]
+    headers = [("省份", 16), *((f"{w['week_from'][5:]}至{w['week_to'][5:]}", 13) for w in weeks), ("合计", 10)]
+    sheet = _sheet(
+        book.create_sheet(), "分省每周配置", f"各省每周新配置上线的栏目数（统计起始周 {data['report_start']}）", headers
+    )
+    for row in data["provinces"]:
+        weekly = row.get("weekly") or [0] * len(weeks)
+        append_text_row(sheet, [row["province_name"], *weekly, sum(weekly)])
+    totals = [w["new"] for w in weeks]
+    append_text_row(sheet, ["合计", *totals, sum(totals)])
+    for column in range(1, len(headers) + 1):
+        sheet.cell(row=sheet.max_row, column=column).font = _BOLD
+
+
 def build_report_workbook(data: dict[str, Any], abnormal: list[dict[str, Any]]) -> bytes:
     week = f"{data['week_from']} 至 {data['week_to']}"
     note = "" if data["counted"] else f"（统计从 {data['report_start']} 那周开始，本周不计新增）"
@@ -52,7 +69,7 @@ def build_report_workbook(data: dict[str, Any], abnormal: list[dict[str, Any]]) 
     summary = _sheet(
         active_worksheet(book),
         "分省汇总",
-        f"爬虫配置周报（{week}）{note}　导出时间 {format_beijing(utcnow())}",
+        f"爬虫配置统计（{week}）{note}　导出时间 {format_beijing(utcnow())}",
         [("省份", 16), ("栏目总数", 10), ("已爬", 10), ("未爬", 10), ("异常", 10), ("本周新增", 10), ("覆盖率", 10)],
     )
     for row in [*data["provinces"], {**data["totals"], "province_name": "合计"}]:
@@ -61,6 +78,7 @@ def build_report_workbook(data: dict[str, Any], abnormal: list[dict[str, Any]]) 
     for column in range(1, 8):
         summary.cell(row=summary.max_row, column=column).font = _BOLD
 
+    _province_weekly_sheet(book, data)
     _site_sheet(book, "本周新增明细", f"本周新增上线栏目（{week}），共 {len(data['new_sites'])} 个", data["new_sites"])
 
     trend = _sheet(

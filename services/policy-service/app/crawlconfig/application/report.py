@@ -1,4 +1,4 @@
-"""爬虫配置周报：所选自然周的分省统计、近 12 周趋势和本周新增明细；导出同一份数据的 Excel。"""
+"""爬虫配置统计：所选自然周的分省统计、近 12 周趋势和本周新增明细；导出同一份数据的 Excel。"""
 
 from __future__ import annotations
 
@@ -45,6 +45,16 @@ async def build_report(session: AsyncSession, week: date | None) -> dict[str, An
     totals["coverage"] = rules.coverage(totals["online"], totals["total"])
     weeks = rules.trend_weeks(selected, start)
     daily = await repo.online_by_day(session, start.isoformat(), week_to.isoformat()) if weeks else {}
+    by_province = (
+        rules.province_weekly(
+            await repo.online_by_province_day(session, weeks[0].isoformat(), week_to.isoformat()), weeks
+        )
+        if weeks
+        else {}
+    )
+    for row in provinces:
+        # 每个省近几周（和 trend 同样的周）各新配置了多少栏目，领导按省看每周进度。
+        row["weekly"] = by_province.get(row["province_name"], [0] * len(weeks))
     baseline = await repo.count_baseline(session, start.isoformat())
     trend = rules.weekly_series(daily, weeks, baseline)
     new_sites = await repo.sites_online_between(session, new_from, week_to.isoformat())
@@ -75,4 +85,4 @@ async def export_report(session: AsyncSession, actor: Actor, week: date | None) 
         target_id=data["week_from"],
         extra={"week_from": data["week_from"], "week_to": data["week_to"]},
     )
-    return content, f"爬虫配置周报_{data['week_from']}至{data['week_to']}.xlsx"
+    return content, f"爬虫配置统计_{data['week_from']}至{data['week_to']}.xlsx"

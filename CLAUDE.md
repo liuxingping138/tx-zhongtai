@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 当前进度：公共框架已到 P6（账号/会话/RBAC、Outbox、审计、隔离验收、备份恢复、OpenAPI），
 政策三张表（信源、基础标签、解读）与码表三张表（政策类型、行业场景、省市区编码）已接入，
 爬虫监测已接入（只读统计页，数据来自外部爬虫库采集总表的按天聚合，按网站统计），
-爬虫配置周报已接入（按规则表把信源标成已爬，按周按省统计上线栏目数），
+爬虫配置统计已接入（按规则表把信源标成已爬，按周按省统计上线栏目数），
 AI提问已接入（独立的 ai-service：提示词模板、按 Excel 逐行批量提问、多轮对话，从旧 Django 项目 difyapi/chat_web 迁来）。
 **客户、招投标仅有占位目录**，未开发——不要为它们提前暴露无功能入口或做过度抽象。
 其余文档按 设计决策 / 操作手册 分类，索引见 `docs/README.md`。文档只写与现有代码一致的现状，过时内容直接删除，历史留在 git 里。
@@ -147,12 +147,12 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
  由同步用按天统计推算补齐（口径同快照：每个网站最后入库日期），推算一次约 10 秒，所以只在缺数时跑、页面不能现算
 - 整表 `GROUP BY` 在代理后跑十分钟都出不来，带 `collect_date` 的单天聚合只要 1.4 秒：全量统计按天循环，别写一条大 SQL
 
-### 爬虫配置周报：规则表 → 信源已爬 → 按周按省统计
+### 爬虫配置统计：规则表 → 信源已爬 → 按周按省统计
 
 - `app/crawlconfig/`（与 policy、crawler 平级）。爬虫同事维护的规则表 `crawler2021.policy_rules_alls` 一行一个栏目，
   `site_code` 对应信源的网站编码（老数据很多没填）。调度任务 `crawler_config` 每天 18:00 只读这一列，把**未爬、没填状态**的信源改成已爬、
   上线时间记同步当天；已爬、异常（人工标）不动，从规则表消失也不改回。批次记在 `policy_crawler_config_syncs`
-- 周报 `/policy/crawler-config`（资源 `policy.crawler_config`：查看 / 导出 / 完整档才能「立即同步」）直接对信源表分组统计，不建快照：
+- 统计页 `/policy/crawler-config`（资源 `policy.crawler_config`：查看 / 导出 / 完整档才能「立即同步」）直接对信源表分组统计，不建快照：
   信源表一行算一个栏目（用户说的「网站数量」就是这个 `count(1)`），按上线时间落在哪个自然周（周一到周日）算新增，
   `POLICY_CRAWLER_CONFIG_REPORT_START`（默认 2026-10-26）那周之前上线的、已爬没填日期的都算期初存量
 - 「立即同步」的接口在 `app/scheduler/api/config_sync.py`：只往调度队列放一次，执行仍在 policy-worker，HTTP 进程不连爬虫库

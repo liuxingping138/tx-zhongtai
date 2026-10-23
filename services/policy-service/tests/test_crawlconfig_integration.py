@@ -147,6 +147,12 @@ async def test_report_counts_new_sites_per_week_and_keeps_earlier_ones_as_baseli
         "（未填省份）": (1, 0, 1, 0, 0),
     }
     assert data["totals"]["total"] == 7 and data["totals"]["coverage"] == 57.1
+    # 分省每周：和趋势同样两周（10-26 那周、11-02 那周）。
+    assert {row["province_name"]: row["weekly"] for row in data["provinces"]} == {
+        "北京市": [0, 2],
+        "河北省": [1, 0],
+        "（未填省份）": [0, 0],
+    }
 
     # 起始周之前的周：不算新增，趋势为空。
     async with SessionLocal() as session:

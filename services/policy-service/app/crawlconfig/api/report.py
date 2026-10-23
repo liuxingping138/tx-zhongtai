@@ -1,4 +1,4 @@
-"""爬虫配置周报：领导看的按周、按省统计和 Excel 下载。手动同步的入口在调度的 api（app.scheduler.api.config_sync）。"""
+"""爬虫配置统计：领导看的按周、按省统计和 Excel 下载。手动同步的入口在调度的 api（app.scheduler.api.config_sync）。"""
 
 from __future__ import annotations
 

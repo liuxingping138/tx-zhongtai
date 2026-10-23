@@ -86,7 +86,7 @@ def test_ai_actions_that_spend_money_need_the_right_tier() -> None:
 
 
 def test_crawler_config_report_is_read_for_leaders_and_full_to_sync() -> None:
-    """周报给领导看：查看、导出各一档，手动同步规则表要完整档。"""
+    """爬虫配置统计给领导看：查看、导出各一档，手动同步规则表要完整档。"""
 
     levels = {
         spec.action_code: spec.required_level for spec in ACTION_SPECS if spec.resource_code == "policy.crawler_config"

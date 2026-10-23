@@ -1,4 +1,4 @@
-"""爬虫配置周报的口径：自然周、统计起始周之前算期初存量、累计上线，以及导出的 Excel 四个工作表。"""
+"""爬虫配置统计的口径：自然周、统计起始周之前算期初存量、累计上线，分省每周配置数，以及导出的 Excel。"""
 
 from __future__ import annotations
 
@@ -37,6 +37,18 @@ def test_weekly_series_adds_baseline_and_weeks_before_the_window_to_the_cumulati
     assert rules.weekly_series(daily, [], baseline=100) == []
 
 
+def test_province_weekly_counts_line_up_with_trend_weeks() -> None:
+    weeks = [date(2026, 10, 26), date(2026, 11, 2)]
+    rows = [
+        ("广东省", "2026-10-27", 3),
+        ("广东省", "2026-11-08", 2),
+        ("", "2026-11-03", 1),
+        ("广东省", "2026-10-20", 9),  # 不在这两周
+        ("北京市", "坏日期", 4),
+    ]
+    assert rules.province_weekly(rows, weeks) == {"广东省": [3, 2], rules.BLANK_PROVINCE: [0, 1]}
+
+
 def test_provinces_follow_codes_then_uncoded_then_blank() -> None:
     rows = [
         {"province_name": "", "province_code": None},
@@ -66,13 +78,15 @@ def test_workbook_has_four_sheets_with_totals_and_keeps_formula_like_text_as_tex
         "report_start": "2026-10-26",
         "counted": True,
         "baseline": 10,
-        "provinces": [{"province_name": "北京市", **counts}],
+        "provinces": [{"province_name": "北京市", **counts, "weekly": [2]}],
         "totals": counts,
         "trend": [{"week_from": "2026-10-26", "week_to": "2026-11-01", "new": 2, "cumulative": 12}],
         "new_sites": [_site('=HYPERLINK("x")', "11000000001"), _site("北京市人民政府", "11000000002")],
     }
     book = load_workbook(BytesIO(build_report_workbook(data, [_site("异常网站", "11000000003")])))
-    assert book.sheetnames == ["分省汇总", "本周新增明细", "每周趋势", "异常清单"]
+    assert book.sheetnames == ["分省汇总", "分省每周配置", "本周新增明细", "每周趋势", "异常清单"]
+    weekly = [list(row) for row in book["分省每周配置"].iter_rows(min_row=2, values_only=True)]
+    assert weekly == [["省份", "10-26至11-01", "合计"], ["北京市", 2, 2], ["合计", 2, 2]]
     summary = [list(row) for row in book["分省汇总"].iter_rows(min_row=2, values_only=True)]
     assert summary == [
         ["省份", "栏目总数", "已爬", "未爬", "异常", "本周新增", "覆盖率"],

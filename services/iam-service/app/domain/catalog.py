@@ -58,7 +58,7 @@ RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("policy.interpretations", "政策解读列表", "policy-service", NodeType.RESOURCE, True, 23, "policy"),
     ResourceSpec("policy.base_tags", "政策基础标签表", "policy-service", NodeType.RESOURCE, True, 24, "policy"),
     # 给领导看的按周、按省配置栏目数；完整档才能手动同步规则表。
-    ResourceSpec("policy.crawler_config", "爬虫配置周报", "policy-service", NodeType.RESOURCE, True, 25, "policy"),
+    ResourceSpec("policy.crawler_config", "爬虫配置统计", "policy-service", NodeType.RESOURCE, True, 25, "policy"),
     ResourceSpec("customer", "客户", "customer-service", NodeType.RESOURCE, False, 30),
     ResourceSpec("tender", "招投标", "tender-service", NodeType.RESOURCE, False, 40),
     ResourceSpec("codebook", "码表管理", "codebook-service", NodeType.DIRECTORY, True, 50),
@@ -202,7 +202,7 @@ MENU_SPECS: tuple[MenuSpec, ...] = (
     ),
     MenuSpec(
         "menu.policy.crawler_config",
-        "爬虫配置周报",
+        "爬虫配置统计",
         25,
         "policy-crawler-config",
         "policy.crawler_config",

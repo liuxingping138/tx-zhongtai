@@ -48,7 +48,7 @@ _EVENT_META = {
         "policy.crawler_config",
         "export",
         "crawler_config_report",
-        "导出爬虫配置周报",
+        "导出爬虫配置统计",
     ),
     "policy.crawler_monitoring.exported": (
         "policy.crawler_monitoring",

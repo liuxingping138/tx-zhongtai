@@ -109,7 +109,7 @@ export const routes: RouteRecordRaw[] = [
         path: 'policy/crawler-config',
         name: 'policy-crawler-config',
         component: () => import('@/modules/policy/crawler-config/CrawlerConfigReport.vue'),
-        meta: { title: '爬虫配置周报', resource: 'policy.crawler_config' },
+        meta: { title: '爬虫配置统计', resource: 'policy.crawler_config' },
       },
       {
         path: 'policy/base-tags',

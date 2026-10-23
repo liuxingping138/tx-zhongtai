@@ -6,7 +6,11 @@ export interface ConfigCounts {
   /** 已爬占比，百分数，一位小数 */
   coverage: number
 }
-export interface ConfigProvince extends ConfigCounts { province_name: string }
+export interface ConfigProvince extends ConfigCounts {
+  province_name: string
+  /** 和 trend 同样的几周里，这个省每周新配置的栏目数 */
+  weekly: number[]
+}
 export interface ConfigWeek { week_from: string; week_to: string; new: number; cumulative: number }
 export interface ConfigSite {
   province_name: string; city_name: string; district_name: string; site_name: string

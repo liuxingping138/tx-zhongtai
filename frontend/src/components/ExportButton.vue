@@ -28,7 +28,7 @@ const NO_EXPORT_HINT = '你的角色没有导出权限，如需下载 Excel 请�
         :disabled="!allowed || disabled"
         @click="$emit('click')"
       >
-        下载 Excel
+        <slot>下载 Excel</slot>
       </el-button>
     </span>
   </el-tooltip>

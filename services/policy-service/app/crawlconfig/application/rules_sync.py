@@ -1,7 +1,7 @@
 """爬虫配置同步：规则表里出现的网站编码，对应信源从未爬改成已爬，上线时间记同步当天（北京日期）。
 
 只做这一个方向：已爬、异常的不动（异常是人工标的），网站从规则表里消失也不改回去。
-调度任务 crawler_config 每天跑一次，周报页可以手动触发；失败、超时由调度收口（abandon）。
+调度任务 crawler_config 每天跑一次，统计页可以手动触发；失败、超时由调度收口（abandon）。
 """
 
 from __future__ import annotations
@@ -74,7 +74,7 @@ async def summary(session: AsyncSession, sync_id: uuid.UUID | None) -> dict[str,
 
 
 async def latest(session: AsyncSession) -> dict[str, Any] | None:
-    """最近一次成功的同步：周报页顶部显示「数据截至」。"""
+    """最近一次成功的同步：统计页顶部显示「数据截至」。"""
 
     row = await session.scalar(
         select(ConfigSyncRun)

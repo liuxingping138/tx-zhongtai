@@ -1,4 +1,4 @@
-"""配置周报的统计查询。全部读信源表，两万来行的分组统计是毫秒级，不建快照表。"""
+"""爬虫配置统计的查询。全部读信源表，两万来行的分组统计是毫秒级，不建快照表。"""
 
 from __future__ import annotations
 
@@ -39,6 +39,17 @@ async def online_by_day(session: AsyncSession, date_from: str, date_to: str) -> 
         select(Source.online_date, func.count()).where(online_between(date_from, date_to)).group_by(Source.online_date)
     )
     return {day: int(number) for day, number in await session.execute(stmt)}
+
+
+async def online_by_province_day(session: AsyncSession, date_from: str, date_to: str) -> list[tuple[str, str, int]]:
+    """（省份，上线日期，栏目数）：分省每周配置数按它加总。"""
+
+    stmt = (
+        select(Source.province_name, Source.online_date, func.count())
+        .where(online_between(date_from, date_to))
+        .group_by(Source.province_name, Source.online_date)
+    )
+    return [(province, day, int(number)) for province, day, number in await session.execute(stmt)]
 
 
 async def count_baseline(session: AsyncSession, before: str) -> int:
