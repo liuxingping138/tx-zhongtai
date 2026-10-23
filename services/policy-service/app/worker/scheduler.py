@@ -17,6 +17,7 @@ from app.aitag.application.tagging import run_batch as run_policy_tagging
 from app.aitag.domain.tasks import task_of
 from app.common.errors import UserFacingError
 from app.core.database import SessionLocal, engine
+from app.crawlconfig.application import rules_sync
 from app.crawler.application.crawler_sync import run as run_crawler_sync
 from app.scheduler.application.jobs import (
     abandon_running_sync,
@@ -26,7 +27,7 @@ from app.scheduler.application.jobs import (
     sync_result,
 )
 from app.scheduler.domain.models import ScheduledRun, SchedulerHeartbeat
-from app.scheduler.domain.scheduling import LEADER_LOCK, MAX_ATTEMPTS, TIMEOUTS, retry_delay
+from app.scheduler.domain.scheduling import CRAWLER_CONFIG, LEADER_LOCK, MAX_ATTEMPTS, TIMEOUTS, retry_delay
 
 logger = logging.getLogger("policy.scheduler")
 POLL_SECONDS = 5
@@ -69,6 +70,9 @@ async def claim_next() -> tuple[uuid.UUID, str, uuid.UUID] | None:
 async def execute_sync(code: str, sync_id: uuid.UUID) -> None:
     if task := task_of(code):
         await run_policy_tagging(sync_id, task)
+        return
+    if code == CRAWLER_CONFIG:
+        await rules_sync.run(sync_id)
         return
     # 空库不自动跑短窗口、也不自动全量回填，要求已有成功水位。
     async with SessionLocal() as session:

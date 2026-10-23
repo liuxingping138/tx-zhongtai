@@ -74,6 +74,11 @@ INTERPRETATION_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec("data_status", "数据状态"),
 )
 
+# 信源的爬虫状态。改成「已爬」记当天上线；「异常」由人工标，规则表同步（app.crawlconfig）只把未爬、没填的改成已爬。
+CRAWLER_STATUS_ONLINE = "已爬"
+CRAWLER_STATUS_ABNORMAL = "异常"
+CRAWLER_STATUS_PENDING: tuple[str, ...] = ("", "未爬")
+
 # 政策解读的数据状态：新录入、导入时默认待验证，人工核对后改为人工验证。
 DATA_STATUS_PENDING = "待验证"
 DATA_STATUS_VERIFIED = "人工验证"

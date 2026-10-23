@@ -6,10 +6,15 @@ export interface ScheduledRun {
   status: 'queued' | 'running' | 'retrying' | 'success' | 'failed' | 'cancelled'
   attempts: number; created_at: string; scheduled_at: string; available_at: string
   started_at: string | null; finished_at: string | null; error_message: string | null
-  result: (CrawlerResult & Partial<AiTaggingResult>) | null
+  result: (CrawlerResult & Partial<AiTaggingResult> & Partial<CrawlerConfigResult>) | null
 }
 /** 爬虫增量同步的结果摘要 */
 export interface CrawlerResult { date_from?: string; date_to?: string; watermark?: string; days_synced?: number; site_rows?: number }
+/** 爬虫配置同步的结果摘要：规则表多少行、多少个网站编码，关联上多少信源、这次新标已爬多少个。 */
+export interface CrawlerConfigResult {
+  status: string; rule_rows: number; rule_codes: number; blank_code_rows: number
+  matched: number; marked: number; unknown_codes: number
+}
 /** 政策 AI 打标一批的结果摘要。task 是三个打标任务之一；source_rows 是这一批处理的政策条数。 */
 export interface AiTaggingResult {
   task: string; status: string; stage: string; source_from: string; source_to: string; source_rows: number

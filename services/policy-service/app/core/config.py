@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date
 from functools import lru_cache
 
 from platform_common.config import BaseServiceSettings, Environment
@@ -40,8 +41,12 @@ class Settings(BaseServiceSettings):
     crawler_mysql_password: str = ""
     crawler_mysql_db: str = "crawler2021"
     crawler_data_table: str = "csys_policy_info_source_all"
+    # 爬虫配置周报：爬虫同事维护的规则表，一行一个栏目，site_code 对应信源的网站编码。
+    crawler_rules_table: str = "policy_rules_alls"
+    # 周报从这天所在的周开始统计每周新增；更早上线的（含首次同步一次性标上的历史网站）算期初存量。
+    crawler_config_report_start: date = date(2026, 10, 26)
 
-    @field_validator("crawler_data_table")
+    @field_validator("crawler_data_table", "crawler_rules_table")
     @classmethod
     def _table_name_is_identifier(cls, value: str) -> str:
         if not _TABLE_NAME.fullmatch(value):

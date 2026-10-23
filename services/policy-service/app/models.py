@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.common.models import OutboxEvent
+from app.crawlconfig.domain.models import ConfigSyncRun
 from app.crawler.domain.models import (
     CrawlerSite,
     CrawlerSiteDaily,
@@ -13,6 +14,7 @@ from app.scheduler.domain.models import ScheduledJob, ScheduledRun, SchedulerHea
 
 __all__ = [
     "BaseTag",
+    "ConfigSyncRun",
     "CrawlerSite",
     "CrawlerSiteDaily",
     "CrawlerSyncRun",

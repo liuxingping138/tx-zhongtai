@@ -7,6 +7,7 @@ import ScrollPort from '@/components/ScrollPort.vue'
 import { formatTime } from '@/utils/time'
 import { useAuthStore } from '@/stores/auth'
 import { TASK_PURPOSE, formatYuan, runResultText, taskOfJob } from './aiTagging'
+import { CRAWLER_CONFIG_JOB, configResultText, configRunText } from './crawlerConfig'
 import { STATUS_TEXT, duration, statusType, type RunStatus } from './runStatus'
 import type { SchedulerHistory } from './useSchedulerHistory'
 
@@ -14,6 +15,7 @@ const props = defineProps<{ history: SchedulerHistory }>()
 // 历史记录状态在页面里只创建一次，拆成顶层 ref 后模板能直接解包。
 const { job, visible, records, loading, error, page, total, load } = props.history
 const task = computed(() => (job.value ? taskOfJob(job.value.code) : null))
+const isConfig = computed(() => job.value?.code === CRAWLER_CONFIG_JOB)
 // 打标任务的花费统一在「AI提问 → 费用账单」看，这里带上用途跳过去。
 const auth = useAuthStore()
 const billingLink = computed(() =>
@@ -22,6 +24,7 @@ const billingLink = computed(() =>
 
 function resultText(row: ScheduledRun): string {
   if (task.value) return runResultText(row.result)
+  if (isConfig.value) return configRunText(row)
   if (!row.result?.days_synced && row.result?.days_synced !== 0) return row.error_message || '—'
   return `处理 ${row.result.days_synced} 个采集日 · 网站快照 ${row.result.site_rows ?? '—'} 条`
 }
@@ -92,6 +95,9 @@ function resultText(row: ScheduledRun): string {
                   读取进度：{{ row.result.source_from || '—' }} → {{ row.result.source_to || '—' }}
                 </p>
               </template>
+              <p v-else-if="isConfig">
+                {{ configResultText(row.result) }}
+              </p>
               <template v-else-if="row.result">
                 <p>处理日期：{{ row.result.date_from || '—' }} 至 {{ row.result.date_to || '—' }}</p>
                 <p>数据更新至：{{ formatTime(row.result.watermark) }}</p>

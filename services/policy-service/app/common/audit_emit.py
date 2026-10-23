@@ -26,6 +26,7 @@ _EVENT_META = {
     "policy.source.created": ("policy.sources", "create", "source", "新增信源"),
     "policy.source.updated": ("policy.sources", "update", "source", "编辑信源"),
     "policy.source.status_changed": ("policy.sources", "update", "source", "批量改爬虫状态"),
+    "policy.crawler_config.synced": ("policy.sources", "update", "source", "爬虫配置同步标记已爬"),
     "policy.source.imported": ("policy.sources", "import", "source", "导入信源"),
     "policy.source.exported": ("policy.sources", "export", "source", "导出信源"),
     "policy.source.purged": ("policy.sources", "purge", "source", "清空信源表"),

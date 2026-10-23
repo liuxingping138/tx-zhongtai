@@ -12,9 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.aitag.application import tagging
 from app.aitag.domain.tasks import task_of
 from app.common.audit_emit import enqueue_event
+from app.crawlconfig.application import rules_sync
 from app.crawler.domain.models import CrawlerSyncRun
 from app.scheduler.domain.models import ScheduledJob, ScheduledRun, SchedulerHeartbeat
-from app.scheduler.domain.scheduling import JOBS, next_daily
+from app.scheduler.domain.scheduling import CRAWLER_CONFIG, JOBS, next_daily
 from app.scheduler.repositories import jobs as repo
 
 
@@ -58,6 +59,9 @@ async def abandon_running_sync(session: AsyncSession, row: ScheduledRun, message
     if task_of(row.job_code):
         await tagging.abandon(row.sync_run_id, message)
         return
+    if row.job_code == CRAWLER_CONFIG:
+        await rules_sync.abandon(session, row.sync_run_id, message)
+        return
     sync = await session.get(CrawlerSyncRun, row.sync_run_id)
     if sync is None or sync.status != "running":
         return
@@ -69,6 +73,8 @@ async def abandon_running_sync(session: AsyncSession, row: ScheduledRun, message
 async def sync_result(session: AsyncSession, row: ScheduledRun) -> dict[str, Any] | None:
     if task_of(row.job_code):
         return await tagging.summary(row.sync_run_id) or row.result
+    if row.job_code == CRAWLER_CONFIG:
+        return await rules_sync.summary(session, row.sync_run_id) or row.result
     sync = await session.get(CrawlerSyncRun, row.sync_run_id) if row.sync_run_id else None
     if sync is None:
         return row.result

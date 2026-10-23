@@ -7,7 +7,7 @@ from app.scheduler.domain.scheduling import JOBS, TIMEOUTS
 
 
 def test_each_tagging_task_is_its_own_scheduled_job_in_page_order() -> None:
-    assert list(JOBS) == ["crawler", "policy_ai_type", "policy_ai_interpret", "policy_ai_opportunity"]
+    assert list(JOBS) == ["crawler", "crawler_config", "policy_ai_type", "policy_ai_interpret", "policy_ai_opportunity"]
     assert [JOBS[job_code(task)] for task in TASKS] == ["政策类型判断", "政策解读", "政策市场机会"]
     assert all(TIMEOUTS[job_code(task)] == 6 * 3600 for task in TASKS)
 

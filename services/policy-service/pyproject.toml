@@ -60,7 +60,7 @@ root_package = "app"
 [[tool.importlinter.contracts]]
 name = "领域内分层：api → application → repositories → domain"
 type = "layers"
-containers = ["app.policy", "app.crawler", "app.scheduler", "app.aitag"]
+containers = ["app.policy", "app.crawler", "app.scheduler", "app.aitag", "app.crawlconfig"]
 layers = ["api", "application", "repositories", "domain"]
 
 [[tool.importlinter.contracts]]
@@ -69,7 +69,7 @@ type = "independence"
 modules = ["app.policy", "app.crawler"]
 
 [[tool.importlinter.contracts]]
-name = "调度只经爬虫、AI 打标的 application 触发执行，不依赖政策"
+name = "调度只经爬虫、爬虫配置、AI 打标的 application 触发执行，不依赖政策"
 type = "forbidden"
 source_modules = ["app.scheduler"]
 forbidden_modules = [
@@ -78,31 +78,42 @@ forbidden_modules = [
     "app.crawler.repositories",
     "app.aitag.api",
     "app.aitag.repositories",
+    "app.crawlconfig.api",
+    "app.crawlconfig.repositories",
 ]
 # 经爬虫 application 间接用到它的仓储是正常链路。
 allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
-name = "政策、爬虫监测、AI 打标不依赖调度"
+name = "政策、爬虫监测、爬虫配置、AI 打标不依赖调度"
 type = "forbidden"
-source_modules = ["app.policy", "app.crawler", "app.aitag"]
+source_modules = ["app.policy", "app.crawler", "app.aitag", "app.crawlconfig"]
 forbidden_modules = ["app.scheduler"]
 
 [[tool.importlinter.contracts]]
 name = "common、core 不依赖任何领域"
 type = "forbidden"
 source_modules = ["app.common", "app.core"]
-forbidden_modules = ["app.policy", "app.crawler", "app.scheduler", "app.aitag"]
+forbidden_modules = ["app.policy", "app.crawler", "app.scheduler", "app.aitag", "app.crawlconfig"]
 
 [[tool.importlinter.contracts]]
 name = "入口层不跳过 application 直接用仓储"
 type = "forbidden"
-source_modules = ["app.cli", "app.worker", "app.policy.api", "app.crawler.api", "app.scheduler.api", "app.aitag.api"]
+source_modules = [
+    "app.cli",
+    "app.worker",
+    "app.policy.api",
+    "app.crawler.api",
+    "app.scheduler.api",
+    "app.aitag.api",
+    "app.crawlconfig.api",
+]
 forbidden_modules = [
     "app.policy.repositories",
     "app.crawler.repositories",
     "app.scheduler.repositories",
     "app.aitag.repositories",
+    "app.crawlconfig.repositories",
 ]
 allow_indirect_imports = true
 

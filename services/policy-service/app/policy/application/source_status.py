@@ -12,10 +12,9 @@ from platform_common.errors import ApiError, ErrorCode, NotFoundError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.audit_emit import enqueue_event
+from app.policy.domain.fields import CRAWLER_STATUS_ONLINE as ONLINE_STATUS
 from app.policy.repositories import sources as repo
 
-# 爬虫状态改成这个值，就记为当天上线。
-ONLINE_STATUS = "已爬"
 # 审计里最多记这么多个网站编码，和接口单次勾选上限一致。
 BATCH_STATUS_MAX = 500
 

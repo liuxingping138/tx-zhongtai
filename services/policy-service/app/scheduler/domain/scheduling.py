@@ -4,12 +4,18 @@ from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from app.aitag.domain.tasks import TASKS, job_code
+from app.crawlconfig.domain.models import JOB_CODE
 
 BEIJING = ZoneInfo("Asia/Shanghai")
-# 页面上的任务按这个顺序列出：爬虫同步，然后是政策 AI 打标的三个任务。
-JOBS = {"crawler": "爬虫监测增量同步", **{job_code(task): name for task, name in TASKS.items()}}
-# 单次执行的超时：爬虫增量几分钟；AI 打标一批要等模型逐条回答，上千条要一两个小时。
-TIMEOUTS = {"crawler": 1800, **{job_code(task): 6 * 3600 for task in TASKS}}
+CRAWLER_CONFIG = JOB_CODE
+# 页面上的任务按这个顺序列出：爬虫同步、爬虫配置同步，然后是政策 AI 打标的三个任务。
+JOBS = {
+    "crawler": "爬虫监测增量同步",
+    CRAWLER_CONFIG: "爬虫配置同步",
+    **{job_code(task): name for task, name in TASKS.items()},
+}
+# 单次执行的超时：爬虫增量几分钟；配置同步只读规则表一列，几秒；AI 打标一批要等模型逐条回答，上千条要一两个小时。
+TIMEOUTS = {"crawler": 1800, CRAWLER_CONFIG: 600, **{job_code(task): 6 * 3600 for task in TASKS}}
 ACTIVE = ("queued", "running", "retrying")
 MAX_ATTEMPTS = 3
 LEADER_LOCK = 72120260929
