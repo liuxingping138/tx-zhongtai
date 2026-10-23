@@ -2,8 +2,11 @@
 import { computed } from 'vue'
 
 import type { PromptTemplate, SystemCodeTable } from '@/api/ai'
+import type { ContractTask } from '@/api/aiTagging'
 import { splitFields } from '../shared/aiText'
 import PromptFiles from './PromptFiles.vue'
+import TaskFit from './TaskFit.vue'
+import type { TaskFitResult } from './taskFit'
 
 /** 编辑器下方：输出字段（标签输入）、码表来源、测试数据（Excel 和上传的码表）。 */
 defineProps<{
@@ -11,6 +14,10 @@ defineProps<{
   codeTables: SystemCodeTable[]
   canEdit: boolean
   canExport: boolean
+  /** 政策类模板：三个打标任务的约定（取测试数据用）和按草稿的适配检查；不是政策类时不显示 */
+  sampleTasks: ContractTask[]
+  showFit: boolean
+  fit: TaskFitResult[]
 }>()
 const emit = defineEmits<{ 'append-format': []; 'files-changed': [template: PromptTemplate] }>()
 const outputFields = defineModel<string>('outputFields', { required: true })
@@ -93,8 +100,19 @@ const codeSource = computed({
         :can-edit="canEdit"
         :can-export="canExport"
         :system-code="Boolean(codeTable)"
+        :sample-tasks="sampleTasks"
         @changed="item => emit('files-changed', item)"
       />
+    </div>
+    <div
+      v-if="showFit"
+      class="settings__tile settings__tile--fit"
+    >
+      <div class="settings__tile-head">
+        <h3>定时任务适配</h3>
+        <span class="settings__tip">按当前草稿检查；任务设置里选模板时也会核对</span>
+      </div>
+      <TaskFit :results="fit" />
     </div>
   </section>
 </template>
@@ -104,6 +122,7 @@ const codeSource = computed({
 .settings__tile { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 12px 18px 14px; }
 .settings__tile--wide { grid-column: 1 / -1; border-bottom: 1px solid var(--zt-border); }
 .settings__tile--wide + .settings__tile + .settings__tile { border-left: 1px solid var(--zt-border); }
+.settings__tile--fit { grid-column: 1 / -1; border-top: 1px solid var(--zt-border); }
 .settings__tile-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 24px; }
 .settings__tile h3 { margin: 0; color: var(--zt-ink-700); font-size: 13px; font-weight: 600; }
 .settings__tip { margin: 0; color: var(--zt-ink-500); font-size: 12px; line-height: 1.5; }

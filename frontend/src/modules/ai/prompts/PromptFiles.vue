@@ -3,11 +3,21 @@ import { computed, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { deletePromptFile, uploadPromptFile, type PromptFileKind, type PromptTemplate } from '@/api/ai'
+import type { ContractTask } from '@/api/aiTagging'
 import { errorMessage } from '@/api/errors'
 import { downloadPromptFile } from '../shared/downloads'
+import SampleDialog from './SampleDialog.vue'
 
-/** systemCode：模板选了系统码表，上传的码表文件不生效，只留 Excel 一行 */
-const props = defineProps<{ template: PromptTemplate | null; canEdit: boolean; canExport: boolean; systemCode: boolean }>()
+/** systemCode：模板选了系统码表，上传的码表文件不生效，只留 Excel 一行。
+ * sampleTasks：政策类模板能从数据库取测试数据（和正式打标的输入一致），空数组就不显示这个入口。 */
+const props = defineProps<{
+  template: PromptTemplate | null
+  canEdit: boolean
+  canExport: boolean
+  systemCode: boolean
+  sampleTasks: ContractTask[]
+}>()
+const sampling = ref(false)
 const emit = defineEmits<{ changed: [template: PromptTemplate] }>()
 const busy = ref<PromptFileKind | null>(null)
 const pickers = ref<Record<PromptFileKind, HTMLInputElement | null>>({ excel: null, code: null })
@@ -98,6 +108,14 @@ async function download(kind: PromptFileKind): Promise<void> {
         {{ fileName(slot.kind) ? '重新上传' : '上传' }}
       </el-button>
       <el-button
+        v-if="slot.kind === 'excel' && canEdit && sampleTasks.length"
+        size="small"
+        :disabled="!template"
+        @click="sampling = true"
+      >
+        从数据库取
+      </el-button>
+      <el-button
         v-if="canExport && fileName(slot.kind)"
         size="small"
         @click="download(slot.kind)"
@@ -115,14 +133,22 @@ async function download(kind: PromptFileKind): Promise<void> {
         删除
       </el-button>
     </div>
+    <SampleDialog
+      v-if="template"
+      v-model="sampling"
+      :template="template"
+      :tasks="sampleTasks"
+      @done="item => emit('changed', item)"
+    />
   </div>
 </template>
 
 <style scoped>
 .prompt-files { display: grid; gap: 8px; }
-.prompt-files__row { display: flex; align-items: center; gap: 8px; min-height: 32px; }
+/* 栏窄时按钮整组换到下一行，不撑出横向滚动条。 */
+.prompt-files__row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; min-height: 32px; }
 .prompt-files__row .el-button { margin: 0; }
 .prompt-files__label { flex: 0 0 64px; color: var(--zt-ink-700); font-size: 13px; }
-.prompt-files__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.prompt-files__name { flex: 1 1 120px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .prompt-files__name.is-empty { color: var(--zt-ink-500); }
 </style>

@@ -35,7 +35,13 @@ export interface AiTask {
   pending: number
 }
 
-/** 可以给打标任务用的模板：政策类、已上线 */
+/** 模板放进某个打标任务的检查结果：errors 必须改（写不回表），warnings 能跑但结果可能不理想。 */
+export interface TemplateCheck {
+  errors: string[]
+  warnings: string[]
+}
+
+/** 可以给打标任务用的模板：政策类、已上线。checks 是放进三个任务各自的检查结果。 */
 export interface OnlineTemplate {
   prompt_id: string
   title: string
@@ -44,6 +50,26 @@ export interface OnlineTemplate {
   model_id: string
   output_fields: string[]
   code: string
+  variables: string[]
+  system_code: boolean
+  checks: Record<AiTaskCode, TemplateCheck>
+}
+
+/** 打标任务给模板哪些列（@【列名】能引用的）、要模板输出哪些字段。 */
+export interface ContractTask {
+  code: AiTaskCode
+  name: string
+  columns: string[]
+  required_fields: string[]
+}
+
+/** 从数据库取的测试数据：和正式打标交给模板的一模一样。 */
+export interface TaggingSamples {
+  task: AiTaskCode
+  file_name: string
+  note: string
+  headers: string[]
+  rows: string[][]
 }
 
 export type AiTaskBody = Pick<AiTask, 'prompt_id' | 'batch_size' | 'content_max_chars' | 'daily_cost_limit' | 'cursor_date' | 'version'>
@@ -59,4 +85,7 @@ export interface RetagResult {
   skipped: { reason: string; count: number }[]
 }
 export const requestRetag = (ids: string[], step: AiTaskCode) => request<RetagResult>(http.post(`${base}/retag`, { ids, step }))
+export const getTaggingContract = () => request<{ tasks: ContractTask[] }>(http.get(`${base}/contract`))
+export const getTaggingSamples = (task: AiTaskCode, day: string, limit: number) =>
+  request<TaggingSamples>(http.get(`${base}/samples`, { params: { task, limit, ...(task === 'type' ? { day } : {}) }, timeout: 120_000 }))
 export const updateAiTask = (code: AiTaskCode, body: AiTaskBody) => request<AiTask>(http.put(`${base}/tasks/${code}`, body))

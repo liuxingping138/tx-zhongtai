@@ -150,6 +150,11 @@ export function offlinePrompt(id: string): Promise<PromptTemplate> {
   return request(http.post(`${BASE}/prompts/${id}/offline`))
 }
 
+/** 从数据库取来的测试数据存成模板的测试 Excel（替换原来的）。 */
+export function savePromptTestRows(id: string, body: { file_name: string; headers: string[]; rows: string[][] }): Promise<PromptTemplate> {
+  return request(http.post(`${BASE}/prompts/${id}/test-data`, body, { timeout: 120_000 }))
+}
+
 export function uploadPromptFile(id: string, kind: PromptFileKind, file: File): Promise<PromptTemplate> {
   const form = new FormData()
   form.append('file', file)

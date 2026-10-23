@@ -160,3 +160,16 @@ async def pending_counts(session: AsyncSession) -> dict[str, int]:
         )
     ).one()
     return {"type": int(row[0]), "interpret": int(row[1]), "opportunity": int(row[2])}
+
+
+async def recent_tags(session: AsyncSession, *, interpreted: bool, limit: int) -> list[BaseTag]:
+    """取测试数据用：最近打标的、要解读的政策（interpreted=False），或最近解读过的政策（interpreted=True）。"""
+
+    condition = (
+        BaseTag.interpreted_at.is_not(None)
+        if interpreted
+        else (BaseTag.need_interpret == "是") & BaseTag.source_content_id.is_not(None)
+    )
+    order = BaseTag.interpreted_at if interpreted else BaseTag.tagged_at
+    rows = await session.scalars(select(BaseTag).where(condition).order_by(order.desc(), BaseTag.id).limit(limit))
+    return list(rows)

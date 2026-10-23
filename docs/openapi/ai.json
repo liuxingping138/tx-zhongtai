@@ -348,6 +348,57 @@
         }
       }
     },
+    "/api/v1/ai/prompts/{prompt_id}/test-data": {
+      "post": {
+        "tags": [
+          "ai-prompts"
+        ],
+        "summary": "Save Test Rows",
+        "description": "从数据库取来的测试数据（前端从政策服务取）存成模板的测试 Excel，替换原来的。",
+        "operationId": "save_test_rows_api_v1_ai_prompts__prompt_id__test_data_post",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prompt Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestRowsBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/ai/prompts/{prompt_id}/releases": {
       "get": {
         "tags": [
@@ -1728,6 +1779,47 @@
           "prompt_id"
         ],
         "title": "RunBody"
+      },
+      "TestRowsBody": {
+        "properties": {
+          "file_name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 6,
+            "pattern": "\\.xlsx$",
+            "title": "File Name"
+          },
+          "headers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Headers"
+          },
+          "rows": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Rows"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "file_name",
+          "headers",
+          "rows"
+        ],
+        "title": "TestRowsBody",
+        "description": "从数据库取来的测试数据：存成模板的测试 Excel。"
       },
       "ValidationError": {
         "properties": {

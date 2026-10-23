@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 
@@ -16,6 +16,8 @@ import PromptEditor from './PromptEditor.vue'
 import PromptSettings from './PromptSettings.vue'
 import ReleaseBar from './ReleaseBar.vue'
 import TrialPanel from './TrialPanel.vue'
+import { fitSummary } from './taskFit'
+import { useTaskFit } from './useTaskFit'
 import '../shared/ai.css'
 
 const auth = useAuthStore()
@@ -41,6 +43,10 @@ const unsaved = useUnsavedForm(ref(true), () => ({ ...form }), saving)
 // 编辑区一直打开，useUnsavedForm 只在打开时记基线；不先记一次，空表单也算「未保存」。
 unsaved.markSaved()
 const answer = useAnswerStream()
+// 政策类模板：和三个打标任务的适配检查、从数据库取测试数据。切到政策类时才去取约定。
+const taskFit = useTaskFit(form)
+watch(() => form.category, category => { if (category === 'policy') void taskFit.load() }, { immediate: true })
+const releaseFit = computed(() => fitSummary(taskFit.results.value))
 
 /** 编辑区的类型下拉：能编辑的类型；只读模板也要显示它自己的类型。 */
 const categoryOptions = computed(() => {
@@ -264,30 +270,37 @@ async function trial(): Promise<void> {
             :template="selected"
             :can-release="canRelease"
             :dirty="unsaved.dirty.value"
+            :fit="releaseFit"
             @changed="replace"
           />
         </div>
       </header>
 
-      <PromptEditor
-        v-model="form.content"
-        :headers="selected?.excel_headers ?? []"
-        :has-code="Boolean(form.code_table || selected?.code_name)"
-        :disabled="!canEdit"
-        @run="trial"
-        @save="save"
-      />
+      <!-- 标题栏固定，编辑器和下面的设置一起滚动：设置变高（如政策类模板的定时任务适配）时不挤压、不盖住编辑器。 -->
+      <div class="studio__body">
+        <PromptEditor
+          v-model="form.content"
+          :headers="selected?.excel_headers ?? []"
+          :has-code="Boolean(form.code_table || selected?.code_name)"
+          :disabled="!canEdit"
+          @run="trial"
+          @save="save"
+        />
 
-      <PromptSettings
-        v-model:output-fields="form.output_fields"
-        v-model:code-table="form.code_table"
-        :template="selected"
-        :code-tables="codeTables"
-        :can-edit="canEdit"
-        :can-export="canExport"
-        @append-format="appendFields"
-        @files-changed="filesChanged"
-      />
+        <PromptSettings
+          v-model:output-fields="form.output_fields"
+          v-model:code-table="form.code_table"
+          :template="selected"
+          :code-tables="codeTables"
+          :can-edit="canEdit"
+          :can-export="canExport"
+          :sample-tasks="taskFit.sampleTasks.value"
+          :show-fit="taskFit.visible.value"
+          :fit="taskFit.results.value"
+          @append-format="appendFields"
+          @files-changed="filesChanged"
+        />
+      </div>
     </form>
 
     <TrialPanel
@@ -313,6 +326,9 @@ async function trial(): Promise<void> {
 .studio__title:hover:not([readonly]), .studio__title:focus { border-bottom-color: var(--el-color-primary-light-5); }
 .studio__title::placeholder { color: #a5b0bf; font-weight: 500; }
 .studio__spacer { flex: 1; }
+.studio__body { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto; }
+/* 编辑器不能被压得比输入区还矮，否则输入框会盖到下面的设置上。 */
+.studio__body > .prompt-editor { flex: 1 0 auto; }
 .studio__category { width: 104px; }
 @media (max-width: 1360px) {
   .studio { grid-template-columns: 228px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(420px, 46vh); height: auto; }

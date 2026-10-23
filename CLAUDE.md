@@ -237,6 +237,10 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
   人工在打标后改过的行不覆盖；失败和没对上码表的写进备注。含「信息化建设类」的标「是否解读 = 是」
 - 重新打标（`app/aitag/application/retag.py`，`POST /api/v1/policy/ai-tagging/retag`）：基础标签勾选后放回某个任务的待办，不当场调模型。
   重新判断类型记 `type_retag_at`，类型判断下一批先按源政策 ID 重打这些、强制覆盖、不动读取进度；重新解读 / 补机会清掉完成时间。失败说明前缀在 `policy.domain.fields.AI_NOTE_*`，列表「打标状态」按它筛
+- 模板和任务的约定在 `app/aitag/domain/contract.py`：每个任务给模板哪些列、要哪些输出字段，`check_template` 分必须改（errors）和提醒（warnings）。
+  任务设置换模板时后端按它拦下；提问配置页按草稿实时提示（前端 `modules/ai/prompts/taskFit.ts` 同一套规则，两边改要一起改）
+- 「从数据库取测试数据」（`app/aitag/application/samples.py`，`GET /api/v1/policy/ai-tagging/samples`，权限 `policy.base_tags:list`）：按任务生成和正式打标一样的行，
+  前端再存成模板测试 Excel（ai-service `POST /api/v1/ai/prompts/{id}/test-data`）。接口只能挂本服务资源，所以不用 AI 模块的模板权限
 - 解读、市场机会按待办做：基础标签「是否解读 = 是」且 `interpreted_at` 为空的政策做解读，一条展开成多行写解读表（「政策概览」写进「政策要文」，
   非新增场景到码表查编码，名称对不上的写备注）；解读过、`opportunity_at` 为空的做市场机会，按一级行业 + 一级场景回填。
   费用到上限没轮到的不记时间，下批接着做；AI 行只要人工验证过或改过就不再覆盖（`app/aitag/application/interpreting.py`）

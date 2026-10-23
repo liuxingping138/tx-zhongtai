@@ -342,6 +342,20 @@ async def test_settings_validate_ranges_and_reset_the_cursor_on_date_change(monk
     monkeypatch.setattr(repo, "task", get_task)
     monkeypatch.setattr(settings, "enqueue_event", record)
     monkeypatch.setattr(settings, "today", lambda: DAY + timedelta(days=30))
+
+    async def online() -> list[dict[str, Any]]:
+        good = {
+            "prompt_id": "t" * 32,
+            "title": "类型判断",
+            "variables": ["政策正文"],
+            "output_fields": ["政策类型名称"],
+        }
+        return [
+            settings._with_checks(good),
+            settings._with_checks({**good, "prompt_id": "x" * 32, "output_fields": []}),
+        ]
+
+    monkeypatch.setattr(settings, "_online_templates", online)
     body = {"batch_size": 50, "content_max_chars": 8000, "daily_cost_limit": "20", "cursor_date": DAY.isoformat()}
     update = settings.update_task
     with pytest.raises(VersionConflictError):
@@ -356,6 +370,11 @@ async def test_settings_validate_ranges_and_reset_the_cursor_on_date_change(monk
     assert events[-1]["changes"]["batch_size"] == {"from": 1000, "to": 50}
     moved = await update(FakeSession(), ACTOR, "type", {**body, "cursor_date": "2026-09-01", "version": 4})  # type: ignore[arg-type]
     assert (moved["cursor_date"], moved["cursor_content_id"]) == ("2026-09-01", "")
+    # 换成放进类型判断写不回表的模板：拦下并说清楚；不存在的模板也拦下。
+    with pytest.raises(ApiError, match="不能用于政策类型判断：输出字段缺少：政策类型名称"):
+        await update(FakeSession(), ACTOR, "type", {**body, "prompt_id": "x" * 32, "version": 5})  # type: ignore[arg-type]
+    with pytest.raises(ApiError, match="不存在、不是政策类或已下线"):
+        await update(FakeSession(), ACTOR, "type", {**body, "prompt_id": "n" * 32, "version": 5})  # type: ignore[arg-type]
     full = await update(FakeSession(), ACTOR, "type", {**body, "content_max_chars": 0, "version": 5})  # type: ignore[arg-type]
     assert full["content_max_chars"] == 0  # 0 = 全文照传
     with pytest.raises(ApiError, match="正文截取字数"):

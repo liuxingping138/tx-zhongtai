@@ -123,3 +123,30 @@ def test_raw_file_is_resumed_and_read_back_with_last_attempt_winning(tmp_path: P
     assert results["a2"].format_error and results["a2"].failure_kind == "格式不对"
     assert results["a1"].failure_kind == ""
     assert read_raw(tmp_path / "missing.csv") == {}
+
+
+async def test_rows_from_the_database_become_a_normal_test_workbook(monkeypatch: pytest.MonkeyPatch) -> None:
+    """从数据库取的测试数据存成和上传的一样的 Excel：表头一行，超长正文截断并标明，读回来列和行数不变。"""
+
+    from app.application import prompts as prompt_service
+    from app.application.sheets import CELL_CUT, read_sheet, rows_workbook
+
+    saved: dict[str, Any] = {}
+
+    async def upload(
+        _s: Any, _a: Any, _acc: Any, prompt_id: str, kind: str, upload: tuple[str, bytes]
+    ) -> dict[str, Any]:
+        saved.update(prompt_id=prompt_id, kind=kind, name=upload[0], content=upload[1])
+        return {"id": prompt_id}
+
+    monkeypatch.setattr(prompt_service, "upload_file", upload)
+    data = {
+        "file_name": "数据库样本-政策类型判断-2条.xlsx",
+        "headers": ["源ID", "政策正文"],
+        "rows": [["c1", "甲" * 40_000], ["c2", "=HYPERLINK(1)"]],
+    }
+    await prompt_service.save_test_rows(None, None, None, "p" * 32, data)  # type: ignore[arg-type]
+    headers, rows = read_sheet(saved["content"])
+    assert (saved["kind"], saved["name"], headers) == ("excel", data["file_name"], ["源ID", "政策正文"])
+    assert rows[0]["政策正文"].endswith(CELL_CUT) and rows[1]["政策正文"] == "=HYPERLINK(1)"
+    assert len(read_sheet(rows_workbook(["a"], [["1"], ["2"]]))[1]) == 2

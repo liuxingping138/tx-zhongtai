@@ -170,3 +170,19 @@ def test_billing_route_needs_both_dates(client: TestClient, monkeypatch: pytest.
     ok = client.get("/api/v1/ai/billing", params={"date_from": "2026-10-01", "date_to": "2026-10-22"})
     assert ok.status_code == 200 and ok.json()["data"]["date_to"] == "2026-10-22"
     assert client.get("/api/v1/ai/billing", params={"date_from": "2026-10-01"}).status_code == 422
+
+
+def test_test_data_route_validates_and_saves(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[dict[str, Any]] = []
+
+    async def save(_s: Any, _a: Any, _acc: Any, prompt_id: str, data: dict[str, Any]) -> dict[str, Any]:
+        seen.append(data)
+        return {"id": prompt_id}
+
+    monkeypatch.setattr(prompts, "save_test_rows", save)
+    body = {"file_name": "数据库样本-政策解读-1条.xlsx", "headers": ["政策正文"], "rows": [["正文"]]}
+    assert client.post(f"/api/v1/ai/prompts/{PROMPT_ID}/test-data", json=body).status_code == 200
+    assert seen == [body]
+    bad = client.post(f"/api/v1/ai/prompts/{PROMPT_ID}/test-data", json={**body, "file_name": "a.csv"})
+    assert bad.status_code == 422
+    assert client.post(f"/api/v1/ai/prompts/{PROMPT_ID}/test-data", json={**body, "rows": []}).status_code == 422

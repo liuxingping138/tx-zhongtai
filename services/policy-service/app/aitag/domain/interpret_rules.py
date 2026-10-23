@@ -101,11 +101,15 @@ def relation_key(content_id: str, values: dict[str, str]) -> str:
     return f"{content_id[:UID_MAX]}{code}{values.get('opportunity_type', '')}"
 
 
+# 市场机会这一步多给模板的一列：这条政策解读出的「一级行业/一级场景」，一行一个。
+SCENES_COLUMN = "行业场景"
+
+
 def opportunity_prompt_row(base: dict[str, str], rows: list[dict[str, str]]) -> dict[str, str]:
     """市场机会这一步额外带上解读出的「一级行业/一级场景」，模板可以用 @【行业场景】引用，按它逐个写机会。"""
 
     pairs = list(dict.fromkeys(f"{row['industry_l1']}/{row['scenario_l1_name']}" for row in rows))
-    return {**base, "行业场景": "\n".join(pairs)}
+    return {**base, SCENES_COLUMN: "\n".join(pairs)}
 
 
 def match_opportunities(items: list[dict[str, Any]], rows: list[dict[str, str]]) -> dict[int, str]:

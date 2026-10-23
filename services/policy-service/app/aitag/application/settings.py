@@ -12,6 +12,7 @@ from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionCo
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.aitag.application.tagging import day_start, today
+from app.aitag.domain.contract import check_template
 from app.aitag.domain.models import PolicyAiRun, PolicyAiTask
 from app.aitag.domain.tasks import TASKS, job_code
 from app.aitag.repositories import tagging as repo
@@ -65,14 +66,40 @@ async def list_tasks(session: AsyncSession) -> dict[str, Any]:
     return {"items": items}
 
 
+def _with_checks(item: dict[str, Any]) -> dict[str, Any]:
+    """每个上线模板放进三个任务各有没有问题（见 domain.contract），任务设置里据此提示、保存时据此拦下。"""
+
+    variables, fields = list(item.get("variables") or []), list(item.get("output_fields") or [])
+    system_code = bool(item.get("system_code"))
+    return {**item, "checks": {code: check_template(code, variables, fields, system_code) for code in TASKS}}
+
+
+async def _online_templates() -> list[dict[str, Any]]:
+    items = await internal_clients.ai("GET", "/internal/v1/online-templates", params={"category": "policy"})
+    return [_with_checks(item) for item in items]
+
+
 async def templates() -> dict[str, Any]:
     """可选的上线模板（政策类）。ai-service 不可用时列表为空，原因显示在设置里，其余设置照样能改。"""
 
     try:
-        items = await internal_clients.ai("GET", "/internal/v1/online-templates", params={"category": "policy"})
-        return {"items": items, "error": ""}
+        return {"items": await _online_templates(), "error": ""}
     except Exception as exc:  # noqa: BLE001  模板列表取不到不影响看和改其余设置
         return {"items": [], "error": f"取上线模板失败：{exc}"}
+
+
+async def _check_prompt(code: str, prompt_id: str) -> None:
+    """换模板时核对：模板得是上线的政策类模板，放进这个任务没有必须改的问题。"""
+
+    found = next((item for item in await _online_templates() if item["prompt_id"] == prompt_id), None)
+    if found is None:
+        raise ApiError(
+            "选的模板不存在、不是政策类或已下线，请刷新后重选", code=ErrorCode.VALIDATION_ERROR, http_status=422
+        )
+    errors = found["checks"][code]["errors"]
+    if errors:
+        message = f"「{found['title']}」不能用于{TASKS[code]}：{'；'.join(errors)}"
+        raise ApiError(message, code=ErrorCode.VALIDATION_ERROR, http_status=422)
 
 
 def _in_range(value: int, bounds: tuple[int, int], label: str) -> int:
@@ -103,8 +130,11 @@ async def update_task(session: AsyncSession, actor: Actor, code: str, values: di
     content_max = 0 if content_max == 0 else _in_range(content_max, CONTENT_RANGE, "正文截取字数")
     # 只有类型判断读源库，有读取进度。
     cursor_date = _cursor_date(values["cursor_date"]) if code == "type" and values.get("cursor_date") else None
+    prompt_id = str(values.get("prompt_id") or "").strip()
+    if prompt_id and prompt_id != task.prompt_id:
+        await _check_prompt(code, prompt_id)
     before = _task_out(task)
-    task.prompt_id = str(values.get("prompt_id") or "").strip()
+    task.prompt_id = prompt_id
     task.batch_size, task.content_max_chars, task.daily_cost_limit = batch_size, content_max, limit
     # 改了起始日期就从那天的第一条重新读；没改就保持当前进度。
     if cursor_date is not None and cursor_date != task.cursor_date:

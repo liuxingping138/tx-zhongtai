@@ -21,6 +21,14 @@ _MEDIA_TYPES = {
 }
 
 
+class TestRowsBody(_Body):
+    """从数据库取来的测试数据：存成模板的测试 Excel。"""
+
+    file_name: str = Field(min_length=6, max_length=120, pattern=r"\.xlsx$")
+    headers: list[str] = Field(min_length=1, max_length=50)
+    rows: list[list[str]] = Field(min_length=1, max_length=200)
+
+
 class PromptBody(_Body):
     title: str = Field(max_length=255)
     category: str = Field(max_length=16)

@@ -13,6 +13,7 @@ from pathlib import Path
 from openpyxl import Workbook
 from platform_common.excel import active_worksheet, append_text_row
 
+from app.application.sheets import excel_cell
 from app.domain.templating import extract_fields
 
 RAW_COLUMNS = ["myid", "提问", "model_name", "content", "input_tokens", "output_tokens", "error", "search_count"]
@@ -130,13 +131,8 @@ def result_columns(headers: list[str], fields: list[str]) -> tuple[list[str], li
     return [*headers, "myid", *parsed, *meta], parsed, meta
 
 
-# Excel 单元格最多 32767 字，超了文件打不开。流水线任务的正文可能十几万字：结果表里截断并标明，完整内容在原始返回 CSV。
-CELL_MAX = 32_000
-CELL_CUT = "……（超过 Excel 单元格上限，已截断）"
-
-
-def _cell(value: str) -> str:
-    return value if len(value) <= CELL_MAX else value[: CELL_MAX - len(CELL_CUT)] + CELL_CUT
+# 流水线任务的正文可能十几万字：结果表里截断并标明（见 sheets.excel_cell），完整内容在原始返回 CSV。
+_cell = excel_cell
 
 
 def build_result(

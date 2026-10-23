@@ -30,7 +30,7 @@ from app.core.codebook import fetch_code_table
 from app.domain.categories import FULL_ACCESS
 from app.domain.code_tables import code_table_name
 from app.domain.models import ACTIVE_STATUSES, RUN_QUEUED, RUN_SOURCE_PIPELINE, BatchRun, TemplateRelease, new_id
-from app.domain.templating import build_myid, parse_fields, split_fields
+from app.domain.templating import build_myid, parse_fields, split_fields, template_variables
 from app.repositories import batch_runs as run_repo
 from app.repositories import releases as release_repo
 
@@ -197,6 +197,9 @@ async def online_templates(session: AsyncSession, category: str) -> list[dict[st
                 "released_at": format_beijing(release.released_at),
                 "model_id": release.model_id,
                 "output_fields": split_fields(release.output_fields),
+                # 政策服务按它核对模板能不能放进某个打标任务（用了哪些列、码表是不是系统的）。
+                "variables": template_variables(release.content),
+                "system_code": bool(release.code_table),
                 "code": code_table_name(release.code_table) if release.code_table else release.code_name,
             }
         )

@@ -5,13 +5,15 @@ openpyxl 是同步 CPU 计算，调用方一律经 run_excel_parse 放到线程�
 
 from __future__ import annotations
 
+import io
 import json
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
+from openpyxl import Workbook
 from platform_common.errors import ApiError, ErrorCode
-from platform_common.excel import iter_workbook_rows
+from platform_common.excel import active_worksheet, append_text_row, iter_workbook_rows
 
 from app.core.storage import PROMPT_FILES, ROWS_FILE
 
@@ -96,3 +98,26 @@ def read_run_input(run_dir: Path) -> tuple[list[str], list[dict[str, str]]]:
 
 def has_run_input(run_dir: Path) -> bool:
     return (run_dir / ROWS_FILE).is_file() or (run_dir / PROMPT_FILES["excel"]).is_file()
+
+
+# Excel 单元格最多 32767 字，超了文件打不开：截断并标明。
+CELL_MAX = 32_000
+CELL_CUT = "……（超过 Excel 单元格上限，已截断）"
+
+
+def excel_cell(value: str) -> str:
+    return value if len(value) <= CELL_MAX else value[: CELL_MAX - len(CELL_CUT)] + CELL_CUT
+
+
+def rows_workbook(headers: list[str], rows: list[list[str]]) -> bytes:
+    """表头 + 行生成测试数据 Excel（第一行表头），和用户自己上传的 Excel 一个样子。"""
+
+    book = Workbook()
+    sheet = active_worksheet(book)
+    sheet.title = "测试数据"
+    append_text_row(sheet, headers)
+    for row in rows:
+        append_text_row(sheet, [excel_cell(str(value or "")) for value in row])
+    buffer = io.BytesIO()
+    book.save(buffer)
+    return buffer.getvalue()

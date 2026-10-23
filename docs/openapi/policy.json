@@ -354,6 +354,103 @@
         }
       }
     },
+    "/api/v1/policy/ai-tagging/contract": {
+      "get": {
+        "tags": [
+          "政策AI打标"
+        ],
+        "summary": "Contract",
+        "description": "三个打标任务各给模板哪些列（@【列名】能引用的）、要模板输出哪些字段。",
+        "operationId": "contract_api_v1_policy_ai_tagging_contract_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/ai-tagging/samples": {
+      "get": {
+        "tags": [
+          "政策AI打标"
+        ],
+        "summary": "Sample Rows",
+        "description": "从数据库取模板的测试数据，和正式打标交给模板的一模一样。前端再存成模板的测试 Excel。",
+        "operationId": "sample_rows_api_v1_policy_ai_tagging_samples_get",
+        "parameters": [
+          {
+            "name": "task",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "type",
+                "interpret",
+                "opportunity"
+              ],
+              "type": "string",
+              "title": "Task"
+            }
+          },
+          {
+            "name": "day",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "类型判断用：源政策的采集日期",
+              "title": "Day"
+            },
+            "description": "类型判断用：源政策的采集日期"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/policy/sources": {
       "get": {
         "tags": [

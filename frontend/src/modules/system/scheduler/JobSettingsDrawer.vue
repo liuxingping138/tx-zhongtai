@@ -21,13 +21,23 @@ const schedule = reactive({ enabled: false, daily_time: '10:00' })
 const ai = reactive({ prompt_id: '', batch_size: 10, content_max_chars: 0, daily_cost_limit: '0', cursor_date: '' })
 const unsaved = useUnsavedForm(visible, () => ({ schedule, ai: task.value ? ai : null }), saving)
 
-// 选着的模板被下线后不在上线列表里，也要显示成一项，免得下拉框里露出一串 ID。
+// 放进这个任务写不回表的模板置灰并写原因；选着的模板被下线后不在上线列表里，也显示成一项，免得露出一串 ID。
 const templateOptions = computed(() => {
-  const options = templates.value.map(item => ({ value: item.prompt_id, label: `${item.title}（第 ${item.release_no} 版）` }))
+  const code = task.value?.code
+  const options = templates.value.map(item => {
+    const errors = code ? item.checks?.[code]?.errors ?? [] : []
+    return { value: item.prompt_id, label: `${item.title}（第 ${item.release_no} 版）`, disabled: errors.length > 0, reason: errors[0] ?? '' }
+  })
   if (ai.prompt_id && !options.some(item => item.value === ai.prompt_id)) {
-    options.unshift({ value: ai.prompt_id, label: '已下线的模板，请重新选择' })
+    options.unshift({ value: ai.prompt_id, label: '已下线的模板，请重新选择', disabled: false, reason: '' })
   }
   return options
+})
+/** 选着的模板放进这个任务的问题：必须改的和提醒都列在下拉框下面。 */
+const chosenCheck = computed(() => {
+  const code = task.value?.code
+  const chosen = templates.value.find(item => item.prompt_id === ai.prompt_id)
+  return code && chosen ? chosen.checks?.[code] ?? null : null
 })
 
 /** 先填好表单再打开：未保存提示以打开那一刻的内容为基线。 */
@@ -125,6 +135,7 @@ defineExpose({ open })
           <el-select
             v-model="ai.prompt_id"
             clearable
+            popper-class="job-settings-popper"
             :placeholder="templates.length ? '选择已上线的政策类模板' : '还没有已上线的政策类模板'"
           >
             <el-option
@@ -132,12 +143,37 @@ defineExpose({ open })
               :key="item.value"
               :label="item.label"
               :value="item.value"
-            />
+              :disabled="item.disabled"
+            >
+              <span>{{ item.label }}</span>
+              <span
+                v-if="item.reason"
+                class="job-settings__option-reason"
+              >不能用：{{ item.reason }}</span>
+            </el-option>
           </el-select>
           <span
             class="job-settings__hint"
             :class="{ 'is-error': templatesError }"
           >{{ templatesError || '只列政策类、已上线的模板；用的是上线时冻结的那一版' }}</span>
+          <ul
+            v-if="chosenCheck && (chosenCheck.errors.length || chosenCheck.warnings.length)"
+            class="job-settings__checks"
+          >
+            <li
+              v-for="text in chosenCheck.errors"
+              :key="text"
+              class="is-error"
+            >
+              {{ text }}
+            </li>
+            <li
+              v-for="text in chosenCheck.warnings"
+              :key="text"
+            >
+              {{ text }}
+            </li>
+          </ul>
         </el-form-item>
         <el-form-item label="每批条数">
           <el-input-number
@@ -240,5 +276,13 @@ defineExpose({ open })
 .job-settings__intro { margin: 0 0 18px; padding: 10px 12px; border-radius: 4px; background: var(--zt-soft); color: var(--zt-ink-700); font-size: 13px; line-height: 1.7; }
 .job-settings__hint { display: block; width: 100%; color: var(--zt-ink-500); font-size: 12px; line-height: 1.6; }
 .job-settings__hint.is-error { color: var(--el-color-danger); }
+.job-settings__checks { width: 100%; margin: 6px 0 0; padding: 8px 12px 8px 26px; border-radius: 4px; background: #fdf6ec; color: #8a5a14; font-size: 12px; line-height: 1.6; }
+.job-settings__checks .is-error { color: var(--el-color-danger); }
 .job-settings__section { margin: 24px 0 12px; padding-top: 16px; border-top: 1px solid var(--zt-border); color: var(--zt-ink-900); font-size: 14px; font-weight: 600; }
+</style>
+
+<style>
+/* 下拉列表挂在 body 上，scoped 样式够不着：不能用的模板多一行原因，选项要能撑高。 */
+.job-settings-popper .el-select-dropdown__item:has(.job-settings__option-reason) { height: auto; padding-top: 6px; padding-bottom: 6px; line-height: 1.5; }
+.job-settings-popper .job-settings__option-reason { display: block; max-width: 460px; color: var(--el-color-danger); font-size: 12px; line-height: 1.4; white-space: normal; }
 </style>

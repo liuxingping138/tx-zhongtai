@@ -6,7 +6,7 @@ from platform_common.actors import Actor
 from platform_common.http_utils import read_named_upload, success_json
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas import FileKind, PromptBody, file_response
+from app.api.schemas import FileKind, PromptBody, TestRowsBody, file_response
 from app.api.security import CategoryAccess, SecurityClass, classified, get_category_access, require_ai_permission
 from app.application import prompts as service
 from app.application import releases
@@ -85,6 +85,20 @@ async def upload_file(
     # 鉴权通过后才解析 multipart，并且边读边按上限中止。
     content, filename = await read_named_upload(request, get_settings().upload_max_bytes, missing="请选择要上传的文件")
     return success_json(await service.upload_file(session, actor, access, prompt_id, kind, (filename, content)))
+
+
+@router.post("/{prompt_id}/test-data")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def save_test_rows(
+    prompt_id: str,
+    body: TestRowsBody,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    access: CategoryAccess = Depends(get_category_access),
+    actor: Actor = Depends(require_ai_permission(RESOURCE, "update")),
+) -> JSONResponse:
+    """从数据库取来的测试数据（前端从政策服务取）存成模板的测试 Excel，替换原来的。"""
+
+    return success_json(await service.save_test_rows(session, actor, access, prompt_id, body.model_dump()))
 
 
 @router.delete("/{prompt_id}/files/{kind}")

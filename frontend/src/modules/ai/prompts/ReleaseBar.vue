@@ -6,7 +6,8 @@ import { offlinePrompt, publishPrompt, type PromptTemplate } from '@/api/ai'
 import { errorMessage } from '@/api/errors'
 
 /** 模板的上线状态和上线 / 下线按钮。定时任务只跑上线版本：之后改模板只改草稿，重新上线才生效。 */
-const props = defineProps<{ template: PromptTemplate; canRelease: boolean; dirty: boolean }>()
+/** fit：政策类模板放进三个打标任务的结论（如「可用于政策类型判断；不能用于政策解读」），上线确认里一并写明。 */
+const props = defineProps<{ template: PromptTemplate; canRelease: boolean; dirty: boolean; fit?: string }>()
 const emit = defineEmits<{ changed: [template: PromptTemplate] }>()
 const busy = ref(false)
 
@@ -27,9 +28,15 @@ async function publish(): Promise<void> {
     ElMessage.warning('有未保存的修改，先保存模板再上线')
     return
   }
+  // 后端也会拦；先在这里说，免得用户点完确认才被退回。
+  if (!props.template.model_id) {
+    ElMessage.warning('上线前要在模板上选定模型（标题下面的「模型」），定时任务不会替你挑')
+    return
+  }
   const next = (release.value?.release_no ?? 0) + 1
   const tip = release.value ? `第 ${next} 版会替换正在生效的第 ${release.value.release_no} 版，` : ''
-  if (!await confirm(`${tip}定时任务之后按这一版的提示词、输出字段、模型和码表跑真实数据，会产生模型费用。`, `上线第 ${next} 版？`, '上线')) return
+  const fit = props.fit ? `定时任务适配：${props.fit}。` : ''
+  if (!await confirm(`${tip}定时任务之后按这一版的提示词、输出字段、模型和码表跑真实数据，会产生模型费用。${fit}`, `上线第 ${next} 版？`, '上线')) return
   busy.value = true
   try {
     emit('changed', await publishPrompt(props.template.id))

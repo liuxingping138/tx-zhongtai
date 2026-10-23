@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application import model_configs
 from app.application.audit_emit import enqueue_event
-from app.application.sheets import decode_code_table, sheet_summary
+from app.application.sheets import decode_code_table, rows_workbook, sheet_summary
 from app.core import storage
 from app.core.codebook import fetch_code_table
 from app.domain.categories import CategoryAccess, category_name, checked_category
@@ -210,6 +210,22 @@ async def upload_file(
     await session.flush()
     await anyio.to_thread.run_sync(storage.write_atomic, storage.prompt_file(prompt_id, kind), payload)
     return await to_out(session, template, access)
+
+
+async def save_test_rows(
+    session: AsyncSession,
+    actor: Actor,
+    access: CategoryAccess,
+    prompt_id: str,
+    data: dict[str, Any],
+) -> dict[str, Any]:
+    """从数据库取来的测试数据（file_name、headers、rows）存成模板的测试 Excel。
+
+    之后和上传的 Excel 一样用：试发取第一行，批量跑全部行。
+    """
+
+    content = await run_excel_parse(rows_workbook, list(data["headers"]), list(data["rows"]))
+    return await upload_file(session, actor, access, prompt_id, "excel", (str(data["file_name"]), content))
 
 
 async def delete_file(
