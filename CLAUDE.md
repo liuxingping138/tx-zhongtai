@@ -298,6 +298,8 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
 - 上传用 `read_upload_within_limit(file, settings.import_max_bytes)`。
   先 `await file.read()` 再判断长度，体积上限形同虚设
 - 导出前用 `count_filtered` 校验 `export_max_rows`（默认 10 万），超限不执行查询
+- `build_workbook` 不经 openpyxl，由 `platform_common/xlsx_writer.py` 直接写只含文本的 xlsx（内联字符串，不会成公式）：
+  2 万行信源 3.3 秒降到 0.5 秒。业务导出走它，不要为加样式改回逐格建对象
 - 自己拼 Excel 时逐行用 `platform_common.excel.append_text_row`，别直接 `sheet.append`：openpyxl 会把 `=` 开头的
   字符串存成公式，导出的网站名、导入内容里带 `=HYPERLINK(...)` 就成了打开即执行的活公式
 

@@ -1,6 +1,7 @@
 """业务表 Excel 解析与生成。
 
-openpyxl 是纯 CPU 同步库，服务里一律用 *_async 包装放到线程池执行，
+导出走 xlsx_writer 直接写 XML（比 openpyxl 快 6 倍多）；解析和服务里自己拼的表仍用 openpyxl。
+两者都是纯 CPU 同步操作，服务里一律用 *_async 包装放到线程池执行，
 否则会把整个服务的事件循环占住。同步版本保留给单元测试直接调用。
 """
 
@@ -8,7 +9,7 @@ from __future__ import annotations
 
 import base64
 import zipfile
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Iterator
 from functools import partial
 from io import BytesIO
 from typing import IO, TYPE_CHECKING, Any
@@ -23,6 +24,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from platform_common.clock import format_beijing
 from platform_common.columns import AUDIT_EXPORT_COLUMNS, ColumnSpec, header_to_field
 from platform_common.errors import ApiError, ErrorCode
+from platform_common.xlsx_writer import write_text_xlsx
 
 if TYPE_CHECKING:
     from xml.etree.ElementTree import Element
@@ -231,23 +233,21 @@ def build_workbook(
     sheet_name: str,
     include_audit: bool = True,
 ) -> bytes:
-    book = Workbook()
-    sheet = active_worksheet(book)
-    sheet.title = sheet_name[:31]
     export_cols = (*columns, *AUDIT_EXPORT_COLUMNS) if include_audit else columns
-    append_text_row(sheet, [spec.header for spec in export_cols])
-    for row in rows:
-        values = []
-        for spec in export_cols:
-            value = row.get(spec.field)
-            if spec.field in {"created_at", "updated_at"}:
-                values.append(format_beijing(value))
-            else:
-                values.append("" if value is None else str(value))
-        append_text_row(sheet, values)
-    buffer = BytesIO()
-    book.save(buffer)
-    return buffer.getvalue()
+
+    def lines() -> Iterator[list[str]]:
+        yield [spec.header for spec in export_cols]
+        for row in rows:
+            values = []
+            for spec in export_cols:
+                value = row.get(spec.field)
+                if spec.field in {"created_at", "updated_at"}:
+                    values.append(format_beijing(value))
+                else:
+                    values.append("" if value is None else str(value))
+            yield values
+
+    return write_text_xlsx(sheet_name, lines(), column_count=len(export_cols))
 
 
 SKIP_REASON_COLUMN = ColumnSpec("skip_reason", "校验说明")
