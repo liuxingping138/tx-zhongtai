@@ -44,11 +44,23 @@ const query = reactive({
   crawl_priority: [] as string[],
   site_type: [] as string[],
   crawler_status: [] as string[],
+  site_code: [] as string[],
+  online_date_from: '',
+  online_date_to: '',
   page: 1,
   page_size: 20,
 })
 const filters = useFilterOptions('/policy/sources')
 const cityBinding = computed(() => filters.bindCity('city_name', query.province_name))
+/** 上线时间区间拆成起止两个参数提交，地址栏和导出都按这两个字段走。 */
+const onlineRange = computed<[string, string] | null>({
+  get: (): [string, string] | null =>
+    query.online_date_from || query.online_date_to ? [query.online_date_from, query.online_date_to] : null,
+  set: (value: [string, string] | null) => {
+    query.online_date_from = value?.[0] ?? ''
+    query.online_date_to = value?.[1] ?? ''
+  },
+})
 const listQuery = useListQuery(query, (): Promise<void> => load())
 const { items, total, loading, loadError, resultFiltered, load } = useListLoader({
   requested: () => listQuery.requested(),
@@ -226,6 +238,26 @@ onMounted(() => {
                 v-model="query.crawler_status"
                 v-bind="filters.bind('crawler_status')"
                 size="short"
+              />
+            </el-form-item>
+            <el-form-item label="网站编码">
+              <FilterSelect
+                v-model="query.site_code"
+                v-bind="filters.bind('site_code')"
+              />
+            </el-form-item>
+            <el-form-item
+              label="上线时间"
+              class="filter-form__item--wide"
+            >
+              <el-date-picker
+                v-model="onlineRange"
+                type="daterange"
+                value-format="YYYY-MM-DD"
+                range-separator="至"
+                start-placeholder="开始日期"
+                end-placeholder="结束日期"
+                unlink-panels
               />
             </el-form-item>
             <el-form-item label="标签">

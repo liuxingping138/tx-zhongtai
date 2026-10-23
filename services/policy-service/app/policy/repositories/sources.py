@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import operator
 import uuid
+from collections.abc import Callable
 from typing import Any, cast
 
 from platform_common.filters import Filters, ilike_any
-from sqlalchemy import ColumnElement, CursorResult, delete, func, or_, select
+from sqlalchemy import ColumnElement, CursorResult, and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
@@ -76,10 +78,20 @@ FILTER_COLUMNS: dict[str, InstrumentedAttribute[str]] = {
     "crawler_status": Source.crawler_status,
 }
 
+# 上线时间区间（含两端）。上线时间存 YYYY-MM-DD 文本，按字符串比较即按日期比较；没填上线时间的不落在任何区间里。
+DATE_RANGE_FILTERS: dict[str, Callable[[Any, str], ColumnElement[bool]]] = {
+    "online_date_from": operator.ge,
+    "online_date_to": operator.le,
+}
+
 
 def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
     conds: list[ColumnElement[bool]] = []
     for key, value in filters.items():
+        if key in DATE_RANGE_FILTERS:
+            if isinstance(value, str) and value:
+                conds.append(and_(Source.online_date != "", DATE_RANGE_FILTERS[key](Source.online_date, value)))
+            continue
         column = FILTER_COLUMNS[key]  # 未知字段直接报错，避免筛选被静默忽略
         cond = ilike_any(column, value)
         if cond is not None:

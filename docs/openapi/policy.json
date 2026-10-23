@@ -633,6 +633,44 @@
               ],
               "title": "Crawler Status"
             }
+          },
+          {
+            "name": "online_date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(\\d{4}-\\d{2}-\\d{2})?$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "上线时间起，含当天",
+              "title": "Online Date From"
+            },
+            "description": "上线时间起，含当天"
+          },
+          {
+            "name": "online_date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(\\d{4}-\\d{2}-\\d{2})?$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "上线时间止，含当天",
+              "title": "Online Date To"
+            },
+            "description": "上线时间止，含当天"
           }
         ],
         "responses": {
@@ -932,6 +970,44 @@
               ],
               "title": "Crawler Status"
             }
+          },
+          {
+            "name": "online_date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(\\d{4}-\\d{2}-\\d{2})?$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "上线时间起，含当天",
+              "title": "Online Date From"
+            },
+            "description": "上线时间起，含当天"
+          },
+          {
+            "name": "online_date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(\\d{4}-\\d{2}-\\d{2})?$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "上线时间止，含当天",
+              "title": "Online Date To"
+            },
+            "description": "上线时间止，含当天"
           }
         ],
         "responses": {

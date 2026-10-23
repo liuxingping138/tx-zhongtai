@@ -105,6 +105,9 @@ export function listSources(params: {
   crawl_priority?: FilterParam
   site_type?: FilterParam
   crawler_status?: FilterParam
+  /** 上线时间区间，YYYY-MM-DD，含两端 */
+  online_date_from?: string
+  online_date_to?: string
   page?: number
   page_size?: number
 }): Promise<Page<SourceItem>> {

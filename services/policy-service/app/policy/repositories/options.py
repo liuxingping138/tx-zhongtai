@@ -13,6 +13,7 @@ from app.policy.domain.models import BaseTag, Interpretation, Source
 
 SOURCE_OPTION_COLUMNS: OptionColumns = {
     "site_name": Source.site_name,
+    "site_code": Source.site_code,
     "province_name": Source.province_name,
     "city_name": Source.city_name,
     "tag": Source.tag,

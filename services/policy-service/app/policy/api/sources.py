@@ -20,6 +20,8 @@ from app.policy.application import sources as service
 
 router = APIRouter(prefix="/api/v1/policy/sources", tags=["policy-sources"])
 RESOURCE = "policy.sources"
+# 日期筛选允许空串：前端没选日期时会带上空参数。
+DATE_PATTERN = r"^(\d{4}-\d{2}-\d{2})?$"
 
 
 def source_filters(
@@ -31,6 +33,8 @@ def source_filters(
     crawl_priority: list[str] | None = Query(default=None),
     site_type: list[str] | None = Query(default=None),
     crawler_status: list[str] | None = Query(default=None),
+    online_date_from: str | None = Query(default=None, pattern=DATE_PATTERN, description="上线时间起，含当天"),
+    online_date_to: str | None = Query(default=None, pattern=DATE_PATTERN, description="上线时间止，含当天"),
 ) -> Filters:
     return {
         "site_name": site_name,
@@ -41,6 +45,8 @@ def source_filters(
         "crawl_priority": crawl_priority,
         "site_type": site_type,
         "crawler_status": crawler_status,
+        "online_date_from": online_date_from,
+        "online_date_to": online_date_to,
     }
 
 

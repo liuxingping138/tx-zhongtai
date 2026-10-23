@@ -30,8 +30,11 @@ export const TABLE_COLUMNS: DataColumn[] = [
 /** 窄屏卡片的摘要字段，也是列设置早期「精简默认列」的识别依据。 */
 export const SUMMARY_KEYS = ['site_name', 'province_name', 'city_name', 'tag', 'crawl_priority']
 
-/** 爬虫状态的可选值。改成「已爬」时后端把上线时间记为当天，见 policy-service 的 online_date_after。 */
-export const CRAWLER_STATUSES = ['未爬', '已爬']
+/**
+ * 爬虫状态的可选值。改成「已爬」时后端把上线时间记为当天，见 policy-service 的 online_date_after；
+ * 「异常」由人工标记，规则表同步不会改它，筛出来导出给业务核对。
+ */
+export const CRAWLER_STATUSES = ['未爬', '已爬', '异常']
 
 export const EDITOR_GROUPS: EditorGroup[] = [
   {

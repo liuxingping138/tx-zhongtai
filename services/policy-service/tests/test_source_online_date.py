@@ -141,3 +141,19 @@ def test_imported_crawled_sources_without_a_date_get_today(monkeypatch: pytest.M
     ]
     rows = sources._build_rows(ACTOR, staged, set())  # type: ignore[arg-type]
     assert [row.online_date for row in rows] == [TODAY, "2024-01-02", ""]
+
+
+def test_online_date_range_filter_includes_both_ends_and_skips_blank_dates() -> None:
+    """上线时间筛选含起止两天，没填上线时间的行不算在任何区间里；空串参数不参与筛选。"""
+
+    from sqlalchemy.dialects import postgresql
+
+    from app.policy.repositories import sources as repo
+
+    conds = repo._conditions({"online_date_from": "2026-10-19", "online_date_to": "2026-10-25"})
+    sql = [str(c.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})) for c in conds]
+    assert sql == [
+        "policy_sources.online_date != '' AND policy_sources.online_date >= '2026-10-19'",
+        "policy_sources.online_date != '' AND policy_sources.online_date <= '2026-10-25'",
+    ]
+    assert repo._conditions({"online_date_from": "", "online_date_to": None}) == []

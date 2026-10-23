@@ -22,8 +22,12 @@ TABLES = [
     ("/api/v1/policy/crawler-monitoring/sites", crawler_sites),
 ]
 
-# 爬虫监测的状态、基础标签的打标状态是精确匹配，不在 FILTER_COLUMNS 里。
-EXTRA_FILTERS = {"/api/v1/policy/crawler-monitoring/sites": {"status"}, "/api/v1/policy/base-tags": {"ai_status"}}
+# 爬虫监测的状态、基础标签的打标状态是精确匹配，信源的上线时间是区间，都不在 FILTER_COLUMNS 里。
+EXTRA_FILTERS = {
+    "/api/v1/policy/crawler-monitoring/sites": {"status"},
+    "/api/v1/policy/base-tags": {"ai_status"},
+    "/api/v1/policy/sources": set(sources.DATE_RANGE_FILTERS),
+}
 
 
 def _query_params(path: str) -> set[str]:
