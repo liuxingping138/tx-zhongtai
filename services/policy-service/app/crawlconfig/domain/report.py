@@ -21,7 +21,7 @@ def week_end(day: date) -> date:
 
 
 def trend_weeks(selected: date, report_start: date, count: int = TREND_WEEKS) -> list[date]:
-    """所选周往前最多 count 周（周一），不早于统计起始周；所选周还在起始周之前时为空。"""
+    """所选周往前最多 count 周（周一），不早于统计起点所在的周；所选周还在起点之前时为空。"""
 
     last, first = week_start(selected), week_start(report_start)
     first = max(first, last - timedelta(weeks=count - 1))

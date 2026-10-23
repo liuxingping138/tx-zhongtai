@@ -3,7 +3,7 @@ import { DocumentAdd } from '@element-plus/icons-vue'
 
 import type { CrawlerConfigReport } from '@/api/crawlerConfig'
 
-/** 本周新增上线的栏目明细。 */
+/** 本周新配置的网站明细。 */
 defineProps<{ report: CrawlerConfigReport }>()
 </script>
 
@@ -14,8 +14,8 @@ defineProps<{ report: CrawlerConfigReport }>()
         <DocumentAdd />
       </el-icon>
       <div>
-        <h2>本周新增明细</h2>
-        <p>{{ report.new_sites.length ? `共 ${report.new_sites.length.toLocaleString()} 个栏目，按省份、地市排列` : '上线时间在本周的栏目' }}</p>
+        <h2>本周新配置的网站</h2>
+        <p>{{ report.new_sites.length ? `共 ${report.new_sites.length.toLocaleString()} 个，按省份、地市排列` : '上线时间在本周的网站' }}</p>
       </div>
     </header>
     <div
@@ -25,7 +25,7 @@ defineProps<{ report: CrawlerConfigReport }>()
       <el-icon aria-hidden="true">
         <DocumentAdd />
       </el-icon>
-      <p>{{ report.counted ? '这一周还没有新上线的栏目。爬虫同事更新规则表后点「立即同步」就能看到。' : `${report.report_start} 那周开始统计新增，这一周之前上线的都算期初存量。` }}</p>
+      <p>{{ report.counted ? '这一周还没有新配置的网站。' : `${report.report_start} 开始统计，之前配置的都算期初存量。` }}</p>
     </div>
     <el-table
       v-else

@@ -34,10 +34,10 @@ def _province(row: dict[str, Any]) -> dict[str, Any]:
 
 
 async def build_report(session: AsyncSession, week: date | None) -> dict[str, Any]:
-    start = rules.week_start(get_settings().crawler_config_report_start)
+    start = get_settings().crawler_config_report_start
     selected = rules.week_start(week or datetime.now(BEIJING).date())
     week_to = rules.week_end(selected)
-    # 起始周之前的周没有「新增」：区间起点挪到起始周，整周都在之前时区间为空。
+    # 统计起点之前上线的不算新增：起点所在的那周只从起点那天算起，整周都在之前时区间为空。
     new_from = max(selected, start).isoformat()
     rows = sorted(await repo.province_rows(session, new_from, week_to.isoformat()), key=rules.province_order)
     provinces = [_province(row) for row in rows]
@@ -47,13 +47,13 @@ async def build_report(session: AsyncSession, week: date | None) -> dict[str, An
     daily = await repo.online_by_day(session, start.isoformat(), week_to.isoformat()) if weeks else {}
     by_province = (
         rules.province_weekly(
-            await repo.online_by_province_day(session, weeks[0].isoformat(), week_to.isoformat()), weeks
+            await repo.online_by_province_day(session, max(weeks[0], start).isoformat(), week_to.isoformat()), weeks
         )
         if weeks
         else {}
     )
     for row in provinces:
-        # 每个省近几周（和 trend 同样的周）各新配置了多少栏目，领导按省看每周进度。
+        # 每个省近几周（和 trend 同样的周）各新配置了多少网站，领导按省看每周进度。
         row["weekly"] = by_province.get(row["province_name"], [0] * len(weeks))
     baseline = await repo.count_baseline(session, start.isoformat())
     trend = rules.weekly_series(daily, weeks, baseline)
@@ -62,7 +62,7 @@ async def build_report(session: AsyncSession, week: date | None) -> dict[str, An
         "week_from": selected.isoformat(),
         "week_to": week_to.isoformat(),
         "report_start": start.isoformat(),
-        "counted": selected >= start,
+        "counted": week_to >= start,
         "baseline": baseline,
         # 卡片「较上周」：上周也在统计范围里才有可比的数。
         "previous_new": earlier[-1]["new"] if (earlier := trend[:-1]) else None,

@@ -16,7 +16,7 @@ const sum = (values: number[]) => values.reduce((total, value) => total + value,
     v-if="!weeks.length"
     class="weekly__empty"
   >
-    {{ reportStart }} 那周开始按周统计。从那周起，这里每个省每周新配置了多少栏目一目了然。
+    从 {{ reportStart }} 开始按周统计，之后每个省每周配置了多少网站都列在这里。
   </p>
   <div
     v-else

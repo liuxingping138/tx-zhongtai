@@ -152,9 +152,10 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
 - `app/crawlconfig/`（与 policy、crawler 平级）。爬虫同事维护的规则表 `crawler2021.policy_rules_alls` 一行一个栏目，
   `site_code` 对应信源的网站编码（老数据很多没填）。调度任务 `crawler_config` 每天 18:00 只读这一列，把**未爬、没填状态**的信源改成已爬、
   上线时间记同步当天；已爬、异常（人工标）不动，从规则表消失也不改回。批次记在 `policy_crawler_config_syncs`
-- 统计页 `/policy/crawler-config`（资源 `policy.crawler_config`：查看 / 导出 / 完整档才能「立即同步」）直接对信源表分组统计，不建快照：
-  信源表一行算一个栏目（用户说的「网站数量」就是这个 `count(1)`），按上线时间落在哪个自然周（周一到周日）算新增，
-  `POLICY_CRAWLER_CONFIG_REPORT_START`（默认 2026-10-26）那周之前上线的、已爬没填日期的都算期初存量
+- 统计页「爬虫配置统计」`/policy/crawler-config`（资源 `policy.crawler_config`：查看 / 导出 / 完整档才能「立即同步」）直接对信源表分组统计，不建快照。
+  用户每周给领导的是「省份 / 配置网站数量 / 总计」：信源表一行算一个网站（他们也叫栏目），按上线时间落在哪个自然周（周一到周日）透视，
+  省份随数据变化不写死。`POLICY_CRAWLER_CONFIG_REPORT_START`（默认 2026-10-23，可以不是周一）之前上线的、已爬没填日期的都算期初存量，
+  起点所在那周只算起点及以后。报告 Excel 第一张就是那张表
 - 「立即同步」的接口在 `app/scheduler/api/config_sync.py`：只往调度队列放一次，执行仍在 policy-worker，HTTP 进程不连爬虫库
 
 ### AI提问：模型调用走统一客户端，批量在 worker 里跑

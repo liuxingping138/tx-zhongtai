@@ -70,30 +70,39 @@ def _site(name: str, code: str) -> dict[str, Any]:
     }
 
 
-def test_workbook_has_four_sheets_with_totals_and_keeps_formula_like_text_as_text() -> None:
-    counts = {"total": 3, "online": 2, "pending": 1, "abnormal": 0, "new": 2, "coverage": 66.7}
+def test_workbook_opens_with_the_weekly_province_table_leaders_read() -> None:
+    """第一张就是每周汇报那张：本周有配置的省份按数量从多到少，末行总计。公式样的文字保持文本。"""
+
+    beijing = {"total": 3, "online": 2, "pending": 1, "abnormal": 0, "new": 2, "coverage": 66.7}
+    hebei = {"total": 5, "online": 5, "pending": 0, "abnormal": 0, "new": 3, "coverage": 100.0}
+    hubei = {"total": 1, "online": 0, "pending": 1, "abnormal": 0, "new": 0, "coverage": 0.0}
+    totals = {"total": 9, "online": 7, "pending": 2, "abnormal": 0, "new": 5, "coverage": 77.8}
     data = {
         "week_from": "2026-10-26",
         "week_to": "2026-11-01",
-        "report_start": "2026-10-26",
+        "report_start": "2026-10-23",
         "counted": True,
         "baseline": 10,
-        "provinces": [{"province_name": "北京市", **counts, "weekly": [2]}],
-        "totals": counts,
-        "trend": [{"week_from": "2026-10-26", "week_to": "2026-11-01", "new": 2, "cumulative": 12}],
+        "provinces": [
+            {"province_name": "北京市", **beijing, "weekly": [2]},
+            {"province_name": "河北省", **hebei, "weekly": [3]},
+            {"province_name": "湖北省", **hubei, "weekly": [0]},
+        ],
+        "totals": totals,
+        "trend": [{"week_from": "2026-10-26", "week_to": "2026-11-01", "new": 5, "cumulative": 15}],
         "new_sites": [_site('=HYPERLINK("x")', "11000000001"), _site("北京市人民政府", "11000000002")],
     }
     book = load_workbook(BytesIO(build_report_workbook(data, [_site("异常网站", "11000000003")])))
-    assert book.sheetnames == ["分省汇总", "分省每周配置", "本周新增明细", "每周趋势", "异常清单"]
-    weekly = [list(row) for row in book["分省每周配置"].iter_rows(min_row=2, values_only=True)]
-    assert weekly == [["省份", "10-26至11-01", "合计"], ["北京市", 2, 2], ["合计", 2, 2]]
-    summary = [list(row) for row in book["分省汇总"].iter_rows(min_row=2, values_only=True)]
-    assert summary == [
-        ["省份", "栏目总数", "已爬", "未爬", "异常", "本周新增", "覆盖率"],
-        ["北京市", 3, 2, 1, 0, 2, "66.7%"],
-        ["合计", 3, 2, 1, 0, 2, "66.7%"],
-    ]
+    assert book.sheetnames == ["本周配置数量", "分省每周配置", "分省累计", "本周新增明细", "每周趋势", "异常清单"]
+
+    def rows(name: str) -> list[list[object]]:
+        return [list(row) for row in book[name].iter_rows(min_row=2, values_only=True)]
+
+    assert book["本周配置数量"]["A1"].value == "爬虫配置网站数量（2026-10-26 至 2026-11-01）"
+    assert rows("本周配置数量") == [["省份", "配置网站数量"], ["河北省", 3], ["北京市", 2], ["总计", 5]]
+    assert rows("分省每周配置")[-1] == ["总计", 5, 5]
+    assert rows("分省累计")[-1] == ["总计", 9, 7, 2, 0, "77.8%"]
     detail = book["本周新增明细"]
     assert detail["D3"].value == '=HYPERLINK("x")' and detail["D3"].data_type == "s"
-    assert [row[2] for row in book["每周趋势"].iter_rows(min_row=3, values_only=True)] == [2]
+    assert [row[2] for row in book["每周趋势"].iter_rows(min_row=3, values_only=True)] == [5]
     assert book["异常清单"]["D3"].value == "异常网站"

@@ -154,6 +154,14 @@ async def test_report_counts_new_sites_per_week_and_keeps_earlier_ones_as_baseli
         "（未填省份）": [0, 0],
     }
 
+    # 起点不是周一时，起点所在那周只从起点算起。
+    monkeypatch.setattr(get_settings(), "crawler_config_report_start", date(2026, 11, 4))
+    async with SessionLocal() as session:
+        partial = await report.build_report(session, date(2026, 11, 5))
+    assert (partial["counted"], [site["site_code"] for site in partial["new_sites"]]) == (True, ["B5"])
+    assert partial["baseline"] == 4  # B1、B2、B3、B4（11-03，起点前一天）
+    monkeypatch.setattr(get_settings(), "crawler_config_report_start", date(2026, 10, 26))
+
     # 起始周之前的周：不算新增，趋势为空。
     async with SessionLocal() as session:
         before = await report.build_report(session, date(2026, 10, 23))

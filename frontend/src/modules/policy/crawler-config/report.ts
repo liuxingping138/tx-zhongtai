@@ -1,4 +1,4 @@
-import type { ConfigCounts, ConfigProvince, ConfigSyncStatus, ConfigWeek, CrawlerConfigReport } from '@/api/crawlerConfig'
+import type { ConfigCounts, ConfigProvince, ConfigSyncStatus, ConfigWeek } from '@/api/crawlerConfig'
 import type { ChartOption, ChartPalette } from '@/components/charts/echarts'
 
 function parseDay(value: string): Date {
@@ -50,7 +50,7 @@ export function syncFailure(status: ConfigSyncStatus | null): string {
   return `最近一次同步失败：${last.error_message || '原因未知'}。页面数据停在上次成功同步时。`
 }
 
-/** 覆盖进度环：已爬蓝色填充、异常砖红、未爬是浅灰底槽。 */
+/** 覆盖进度环：已配置蓝色填充、异常砖红、未配置是浅灰底槽。 */
 export function coverageOption(totals: ConfigCounts, palette: ChartPalette): ChartOption {
   const other = Math.max(0, totals.total - totals.online - totals.abnormal)
   return {
@@ -63,34 +63,12 @@ export function coverageOption(totals: ConfigCounts, palette: ChartPalette): Cha
       label: { show: false },
       itemStyle: { borderColor: '#fff', borderWidth: 2 },
       data: [
-        { name: '已爬', value: totals.online, itemStyle: { color: palette.primary } },
+        { name: '已配置', value: totals.online, itemStyle: { color: palette.primary } },
         { name: '异常', value: totals.abnormal, itemStyle: { color: palette.danger } },
-        { name: '未爬及其他', value: other, itemStyle: { color: palette.border } },
+        { name: '未配置', value: other, itemStyle: { color: palette.border } },
       ],
     }],
   }
-}
-
-export type ProvinceSort = 'total' | 'new' | 'coverage'
-
-export interface ProvinceBar {
-  item: ConfigProvince
-  /** 已爬、异常占栏目总数的百分比，剩下的是底槽 */
-  online: number
-  abnormal: number
-  hint: string
-}
-
-const SORTERS: Record<ProvinceSort, (a: ConfigProvince, b: ConfigProvince) => number> = {
-  total: (a, b) => b.total - a.total,
-  new: (a, b) => b.new - a.new || b.total - a.total,
-  coverage: (a, b) => a.coverage - b.coverage || b.total - a.total,
-}
-
-/** 分省排序：按栏目数从多到少、本周新增从多到少，或覆盖率从低到高（先看落后的省）；没填省份的始终排最后。 */
-export function sortProvinces(rows: ConfigProvince[], sort: ProvinceSort): ConfigProvince[] {
-  const blank = (row: ConfigProvince) => (row.province_name.startsWith('（') ? 1 : 0)
-  return [...rows].sort((a, b) => blank(a) - blank(b) || SORTERS[sort](a, b))
 }
 
 /** 每周配置数的底色深浅：0 不着色，其余按占全表最大值的比例，最浅也看得出来。 */
@@ -99,21 +77,14 @@ export function heatLevel(value: number, max: number): number {
   return Math.round((0.15 + (0.85 * value) / max) * 100) / 100
 }
 
-/** 分省进度条：每个省已爬、异常占栏目总数的比例。 */
-export function provinceBars(rows: ConfigProvince[], sort: ProvinceSort): ProvinceBar[] {
-  const sorted = sortProvinces(rows, sort)
-  return sorted.map(item => {
-    const share = (value: number) => (item.total ? (value * 100) / item.total : 0)
-    return {
-      item,
-      online: share(item.online),
-      abnormal: share(item.abnormal),
-      hint: `${item.province_name}：栏目 ${item.total} 个，已爬 ${item.online}，未爬 ${item.pending}，异常 ${item.abnormal}，本周新增 ${item.new}`,
-    }
-  })
+/** 本周各省配置网站数量：只列有配置的省，按数量从多到少；条长按最多的那个省折算。 */
+export function weekProvinces(rows: ConfigProvince[]): { name: string; count: number; share: number }[] {
+  const picked = rows.filter(row => row.new > 0).sort((a, b) => b.new - a.new)
+  const max = picked[0]?.new ?? 0
+  return picked.map(row => ({ name: row.province_name, count: row.new, share: max ? (row.new * 100) / max : 0 }))
 }
 
-/** 每周新配置的栏目数，一周一根柱子；累计数在提示框里。 */
+/** 每周新配置的网站数，一周一根柱子；累计数在提示框里。 */
 export function weeklyOption(weeks: ConfigWeek[], palette: ChartPalette): ChartOption {
   const axisLabel = { color: palette.inkMuted }
   return {
@@ -124,7 +95,7 @@ export function weeklyOption(weeks: ConfigWeek[], palette: ChartPalette): ChartO
       formatter: (params: { dataIndex: number }[]) => {
         const week = weeks[params[0]?.dataIndex ?? -1]
         if (!week) return ''
-        return [`<b>${week.week_from} 至 ${week.week_to}</b>`, `当周新配置 ${week.new} 个`, `累计已配置 ${week.cumulative.toLocaleString()} 个`].join('<br/>')
+        return [`<b>${week.week_from} 至 ${week.week_to}</b>`, `当周配置 ${week.new} 个`, `累计已配置 ${week.cumulative.toLocaleString()} 个`].join('<br/>')
       },
     },
     xAxis: {
@@ -134,9 +105,9 @@ export function weeklyOption(weeks: ConfigWeek[], palette: ChartPalette): ChartO
       axisTick: { show: false },
       axisLabel,
     },
-    yAxis: { type: 'value', name: '栏目数', minInterval: 1, nameTextStyle: axisLabel, axisLabel, splitLine: { lineStyle: { color: palette.border, type: 'dashed' } } },
+    yAxis: { type: 'value', name: '网站数', minInterval: 1, nameTextStyle: axisLabel, axisLabel, splitLine: { lineStyle: { color: palette.border, type: 'dashed' } } },
     series: [{
-      name: '当周新配置',
+      name: '当周配置',
       type: 'bar',
       data: weeks.map(week => week.new),
       barMaxWidth: 40,
@@ -144,36 +115,4 @@ export function weeklyOption(weeks: ConfigWeek[], palette: ChartPalette): ChartO
       label: { show: true, position: 'top', color: palette.ink, fontWeight: 600 },
     }],
   }
-}
-
-export interface HeadlinePart { text: string; strong?: boolean; tone?: 'good' | 'bad' }
-
-/**
- * 页面最上面给领导的一句话：截至什么时候已配置多少栏目、覆盖多少，本周新增多少，有没有异常。
- * 看往周时「已配置」用那周周末的累计数；统计起点之前的周不谈新增。
- */
-export function headline(report: CrawlerConfigReport, current: boolean): HeadlinePart[][] {
-  const configured = current ? report.totals.online : (report.trend.at(-1)?.cumulative ?? report.totals.online)
-  const asOf = current ? '截至今天' : `截至 ${dayText(report.week_to)}`
-  const sentences: HeadlinePart[][] = [[
-    { text: `${asOf}，已配置爬虫栏目 ` },
-    { text: configured.toLocaleString(), strong: true },
-    { text: ' 个' },
-    ...(current ? [{ text: `，占信源栏目的 ` }, { text: `${report.totals.coverage}%`, strong: true }] : []),
-  ]]
-  if (report.counted) {
-    const delta = deltaText(report.totals.new, report.previous_new)
-    sentences.push([
-      { text: '本周新增 ' },
-      { text: report.totals.new.toLocaleString(), strong: true },
-      { text: ' 个' },
-      ...(delta ? [{ text: `，${delta.text}`, tone: delta.tone === 'flat' ? undefined : delta.tone }] : []),
-    ])
-  } else {
-    sentences.push([{ text: `每周新增从 ${dayText(report.report_start)}那周开始统计，之前配置的都算期初存量` }])
-  }
-  if (report.totals.abnormal) {
-    sentences.push([{ text: '有 ' }, { text: report.totals.abnormal.toLocaleString(), strong: true, tone: 'bad' }, { text: ' 个栏目异常待核对' }])
-  }
-  return sentences
 }
