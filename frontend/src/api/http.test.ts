@@ -2,6 +2,8 @@ import type { AxiosAdapter, AxiosResponse, InternalAxiosRequestConfig } from 'ax
 import { AxiosError } from 'axios'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { errorMessage } from './errors'
+
 const session = vi.hoisted(() => ({
   getAccessToken: vi.fn(() => ''),
   getCsrfToken: vi.fn(() => ''),
@@ -101,17 +103,29 @@ describe('错误映射', () => {
   })
 
   it('503 给通用提示，409 用服务端说明，其它状态不弹提示', async () => {
+    const tick = () => new Promise(resolve => setTimeout(resolve, 0))
     respondWith(() => fail(503, 'DEPENDENCY_UNAVAILABLE', '内部细节'))
     await expect(http.get('/x')).rejects.toBeTruthy()
+    await tick()
     expect(message.error).toHaveBeenCalledWith('服务暂时不可用，请稍后重试')
     respondWith(() => fail(409, 'VERSION_CONFLICT', '数据已被修改'))
     await expect(http.get('/x')).rejects.toBeTruthy()
+    await tick()
     expect(message.warning).toHaveBeenCalledWith('数据已被修改')
     message.warning.mockReset()
     message.error.mockReset()
     respondWith(() => fail(422, 'X', '字段错误'))
     await expect(http.get('/x')).rejects.toBeTruthy()
     expect(message.warning).not.toHaveBeenCalled()
+    expect(message.error).not.toHaveBeenCalled()
+  })
+
+  it('页面自己用 errorMessage 提示过的错误，请求层不再弹通用提示，同一个错误只有一条', async () => {
+    message.error.mockReset()
+    respondWith(() => fail(503, 'DEPENDENCY_UNAVAILABLE', '源库暂时连不上'))
+    const shown = await http.get('/x').catch((error: unknown) => errorMessage(error))
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(shown).toBe('源库暂时连不上')
     expect(message.error).not.toHaveBeenCalled()
   })
 

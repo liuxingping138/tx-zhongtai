@@ -21,7 +21,20 @@ export function isApiError(error: unknown): error is ApiError {
   return Boolean(error && typeof error === 'object' && 'status' in error && 'code' in error && 'message' in error)
 }
 
+// 页面已经拿去提示过的错误。请求层的通用提示（503、409）只给没人处理的错误兜底，免得同一个错误弹两条。
+const shown = new WeakSet<object>()
+
+export function markShown(error: unknown): void {
+  if (error && typeof error === 'object') shown.add(error)
+}
+
+export function wasShown(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && shown.has(error))
+}
+
+/** 取给用户看的错误说明。调用它就当页面会自己提示这个错误，请求层不再弹通用提示。 */
 export function errorMessage(error: unknown, fallback = '请求失败'): string {
+  markShown(error)
   if (isApiError(error)) {
     return error.message || fallback
   }

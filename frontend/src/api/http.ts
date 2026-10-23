@@ -2,7 +2,7 @@ import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
 
 import { getAccessToken, getCsrfToken, isAuthPublicPath, onAccessTokenChange, onRemoteLogout, refreshSession, setAccessToken } from './session'
-import { ApiRequestError } from './errors'
+import { ApiRequestError, wasShown } from './errors'
 import type { ApiError, ApiResponse } from './types'
 
 interface RetryConfig extends InternalAxiosRequestConfig {
@@ -54,17 +54,24 @@ function toApiError(error: AxiosError<ApiResponseBody<unknown>>): ApiRequestErro
   return new ApiRequestError({ status: 0, code: 'NETWORK_ERROR', message: '网络异常，请检查网络连接', requestId: null })
 }
 
+/** 503、409 的通用提示只兜底：等页面先处理（页面 catch 都在这一轮微任务里跑完），页面已经用 errorMessage 提示过就不再弹。 */
+function notifyUnlessShown(error: ApiError, show: () => void): void {
+  setTimeout(() => {
+    if (!wasShown(error)) show()
+  }, 0)
+}
+
 function notifyByStatus(error: ApiError): void {
   if (error.status === 429) {
     ElMessage.warning(error.retryAfter ? `${error.message}（请 ${error.retryAfter} 秒后重试）` : error.message)
     return
   }
   if (error.status === 503) {
-    ElMessage.error('服务暂时不可用，请稍后重试')
+    notifyUnlessShown(error, () => ElMessage.error('服务暂时不可用，请稍后重试'))
     return
   }
   if (error.status === 409) {
-    ElMessage.warning(error.message || '数据已被修改，请刷新后重试')
+    notifyUnlessShown(error, () => ElMessage.warning(error.message || '数据已被修改，请刷新后重试'))
   }
 }
 
