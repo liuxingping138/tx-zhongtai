@@ -129,3 +129,15 @@ async def test_batch_rejects_blank_status_and_missing_rows(env: SimpleNamespace)
     with pytest.raises(NotFoundError):
         await source_status.set_crawler_status(None, ACTOR, [env.rows[0].id, uuid.uuid4()], "已爬")  # type: ignore[arg-type]
     assert env.events == []
+
+
+def test_imported_crawled_sources_without_a_date_get_today(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sources, "beijing_today", lambda: TODAY)
+    base = {"site_name": "某网站", "province_name": "北京市", "district_code": "110101", "tag": ""}
+    staged = [
+        sources._stage({**base, "site_name": "甲", "crawler_status": "已爬"}),
+        sources._stage({**base, "site_name": "乙", "crawler_status": "已爬", "online_date": "2024-01-02"}),
+        sources._stage({**base, "site_name": "丙", "crawler_status": "未爬"}),
+    ]
+    rows = sources._build_rows(ACTOR, staged, set())  # type: ignore[arg-type]
+    assert [row.online_date for row in rows] == [TODAY, "2024-01-02", ""]

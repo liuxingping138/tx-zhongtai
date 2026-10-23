@@ -291,10 +291,15 @@ def _check_rows(staged: list[_StagedSource], db_internal: set[str], db_site: set
 
 def _build_rows(actor: Actor, staged: list[_StagedSource], db_site: set[str]) -> list[Source]:
     now = utcnow()
+    today = beijing_today()
     taken = db_site | {row.site_code for row in staged if row.site_code}
     built: list[Source] = []
     for row in staged:
         normalized = _normalized_values(row.values)
+        # 和新建一样：爬虫状态是「已爬」、上线时间没填的记为导入当天；文件里填了日期的照文件。
+        normalized["online_date"] = online_date_after(
+            "", normalized["crawler_status"], "", normalized["online_date"], today
+        )
         site_code = row.site_code or next_site_code(
             site_code_prefix(normalized["province_code"], normalized["city_code"], normalized["district_code"]), taken
         )
