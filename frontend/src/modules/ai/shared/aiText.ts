@@ -1,4 +1,4 @@
-import type { AiModel, RunStatus } from '@/api/ai'
+import type { AiModel, BatchRun, RunStatus } from '@/api/ai'
 
 /** 码表占位符：模板里写 @【上传码表】，提问时替换为整段码表文本。与后端 CODE_TABLE_FIELD 一致。 */
 export const CODE_TABLE_FIELD = '上传码表'
@@ -64,7 +64,14 @@ export function formatYuan(value: number): string {
   return `¥${value.toFixed(4)}`
 }
 
-export const RUN_MODE_TEXT: Record<'test' | 'all', string> = { test: '测试 10 条', all: '运行全部' }
+export const RUN_MODE_TEXT: Record<'test' | 'all', string> = { test: '只跑前几条', all: '运行全部' }
+
+/** 批量任务列表里的来源：样本试跑只在模板页看，不出现在这里。 */
+export const RUN_SOURCE_TEXT: Record<'manual' | 'pipeline', string> = { manual: '页面发起', pipeline: '定时任务' }
+
+export function runModeText(run: Pick<BatchRun, 'row_limit'>): string {
+  return run.row_limit > 0 ? `前 ${run.row_limit} 条` : '全部'
+}
 
 export const RUN_STATUS_TEXT: Record<RunStatus, string> = {
   queued: '排队中',

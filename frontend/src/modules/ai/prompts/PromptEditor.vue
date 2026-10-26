@@ -133,7 +133,7 @@ function onKeydown(event: KeyboardEvent): void {
         v-model="text"
         class="prompt-editor__input"
         aria-label="提示词内容"
-        placeholder="写下要让模型做的事。输入 @ 插入 Excel 列名，批量提问时逐行替换成该行的值；@【上传码表】替换成码表全文。"
+        placeholder="写下要让模型做的事。输入 @ 插入 Excel 列名，跑的时候逐行替换成该行的值；@【上传码表】替换成码表全文。"
         spellcheck="false"
         :readonly="disabled"
         @input="detect"

@@ -27,7 +27,7 @@ export interface SystemCodeTable {
   name: string
 }
 
-/** 模板当前生效的上线版本；定时任务只跑它 */
+/** 模板当前生效的上线版本；定时任务和批量任务只跑它 */
 export interface TemplateReleaseInfo {
   id: string
   release_no: number
@@ -35,6 +35,43 @@ export interface TemplateReleaseInfo {
   released_by_name: string
   /** 上线后草稿又改了哪些会影响结果的内容，空表示和上线版本一致 */
   unreleased_changes: string[]
+  title: string
+  category_name: string
+  content: string
+  fields: string[]
+  /** 上线版本引用的 Excel 列：批量任务的数据必须有这些列 */
+  variables: string[]
+  model_id: string
+  model_name: string
+  /** 码表名称（系统码表名或上传的文件名），空表示不用码表 */
+  code: string
+}
+
+/** 模板最近一次样本试跑；current 表示跑的就是现在保存的草稿 */
+export interface SampleSummary {
+  id: string
+  status: RunStatus
+  total_count: number
+  done_count: number
+  failed_count: number
+  format_failed_count: number
+  created_at: string
+  created_by_name: string
+  current: boolean
+}
+
+/** 历史上线版本 */
+export interface TemplateRelease {
+  id: string
+  release_no: number
+  current: boolean
+  title: string
+  content: string
+  output_fields: string
+  model_id: string
+  code: string
+  released_at: string
+  released_by_name: string
 }
 
 export interface PromptTemplate {
@@ -56,6 +93,7 @@ export interface PromptTemplate {
   code_table: string
   code_table_name: string
   release: TemplateReleaseInfo | null
+  sample: SampleSummary | null
   version: number
   created_at: string
   created_by_name: string
@@ -83,6 +121,12 @@ export interface BatchRun {
   prompt_title: string
   prompt_category: string
   prompt_category_name: string
+  /** 本次上传的数据文件名；旧任务、定时任务为空 */
+  input_name: string
+  /** manual：批量任务页发起；pipeline：定时任务；sample：模板页的样本试跑 */
+  source: 'manual' | 'pipeline' | 'sample'
+  /** 跑的是第几版上线版本；样本试跑和旧任务为空 */
+  release_no: number | null
   prompt_content: string
   output_fields: string
   model_id: string
@@ -171,6 +215,7 @@ export interface BatchRunFilters {
   created_by_name?: string[]
   run_mode?: string[]
   status?: string[]
+  source?: string[]
 }
 
 export function listBatchRuns(page = 1, pageSize = 15, filters: BatchRunFilters = {}): Promise<BatchRunPage> {
@@ -185,8 +230,64 @@ export function batchOptions(): Promise<{ templates: PromptTemplate[]; models: A
   return request(http.get(`${BASE}/batch-runs/options`))
 }
 
-export function startBatchRun(payload: { prompt_id: string; model_id: string; thinking: boolean; limit: number }): Promise<BatchRun> {
-  return request(http.post(`${BASE}/batch-runs`, payload))
+/** 选好数据文件后的检查结果：按哪一版、哪个模型跑多少行 */
+export interface BatchInputSummary { name: string; rows: number; headers: string[]; release_no: number; model_name: string }
+
+export function previewBatchInput(promptId: string, file: File): Promise<BatchInputSummary> {
+  const form = new FormData()
+  form.append('file', file)
+  return request(http.post(`${BASE}/batch-runs/input-preview`, form, { params: { prompt_id: promptId }, timeout: 300_000 }))
+}
+
+/** limit 为 0 跑全部；其余参数放 query，文件放 multipart。 */
+export function startBatchRun(payload: { prompt_id: string; thinking: boolean; limit: number }, file: File): Promise<BatchRun> {
+  const form = new FormData()
+  form.append('file', file)
+  return request(http.post(`${BASE}/batch-runs`, form, { params: payload, timeout: 300_000 }))
+}
+
+export type RunRowStatus = 'done' | 'failed' | 'format' | 'pending'
+
+/** 一行的结果：提示词用到的输入列、解析出的字段（一行可能有多条），或者失败原因 */
+export interface RunRow {
+  row: number
+  inputs: Record<string, string>
+  status: RunRowStatus
+  error: string
+  items: Record<string, string>[]
+  /** 没设输出字段或格式不对时，模型的原话 */
+  answer: string
+}
+
+export interface RunRows {
+  columns: string[]
+  fields: string[]
+  items: RunRow[]
+  /** 符合条件（如只看失败）的行数；items 最多 50 行 */
+  matched: number
+  total: number
+}
+
+export function getBatchRunRows(id: string, failedOnly = false): Promise<RunRows> {
+  return request(http.get(`${BASE}/batch-runs/${id}/rows`, { params: { failed_only: failedOnly } }))
+}
+
+export interface SampleRunState { run: BatchRun | null; rows: RunRows | null }
+
+export function getSampleRun(promptId: string): Promise<SampleRunState> {
+  return request(http.get(`${BASE}/prompts/${promptId}/sample-run`))
+}
+
+export function startSampleRun(promptId: string, body: { model_id: string; thinking: boolean; limit: number }): Promise<SampleRunState> {
+  return request(http.post(`${BASE}/prompts/${promptId}/sample-run`, body))
+}
+
+export function stopSampleRun(promptId: string): Promise<SampleRunState> {
+  return request(http.post(`${BASE}/prompts/${promptId}/sample-run/stop`))
+}
+
+export function listPromptReleases(promptId: string): Promise<TemplateRelease[]> {
+  return request(http.get(`${BASE}/prompts/${promptId}/releases`))
 }
 
 export function getBatchRun(id: string): Promise<BatchRun> {

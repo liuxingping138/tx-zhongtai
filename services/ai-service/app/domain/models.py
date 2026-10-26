@@ -32,8 +32,11 @@ RUN_FAILED = "failed"
 RUN_CANCELLED = "cancelled"
 RUN_INTERRUPTED = "interrupted"
 ACTIVE_STATUSES = (RUN_QUEUED, RUN_RUNNING, RUN_STOPPING)
+# 发起来源：批量任务页（manual）、政策定时打标（pipeline）都跑上线版本；样本试跑（sample）跑草稿和模板的测试样本，
+# 只在模板页看，不进批量任务列表。
 RUN_SOURCE_MANUAL = "manual"
 RUN_SOURCE_PIPELINE = "pipeline"
+RUN_SOURCE_SAMPLE = "sample"
 
 
 class PromptTemplate(Base):
@@ -134,7 +137,7 @@ class BatchRun(Base):
     """模板内容、输出字段在发起时冻结成快照：之后改模板不影响历史，模板删了也能追溯。"""
 
     __tablename__ = "ai_batch_runs"
-    __table_args__ = {"comment": "批量提问任务"}
+    __table_args__ = {"comment": "批量任务（含定时任务和样本试跑）"}
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id, comment="任务ID")
     prompt_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True, comment="模板ID")
@@ -174,18 +177,26 @@ class BatchRun(Base):
     )
     created_by_id: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="发起人ID")
     created_by_name: Mapped[str] = mapped_column(String(128), nullable=False, default="", comment="发起人")
-    # 流水线（政策服务定时打标）发起的任务：用上线版本、按低优档跑，并带费用上限。页面上手动发起的是 manual。
+    # 流水线（政策服务定时打标）发起的任务按低优档跑，并带费用上限。
     source: Mapped[str] = mapped_column(
-        String(16), nullable=False, default=RUN_SOURCE_MANUAL, server_default=RUN_SOURCE_MANUAL, comment="发起来源"
+        String(16),
+        nullable=False,
+        default=RUN_SOURCE_MANUAL,
+        server_default=RUN_SOURCE_MANUAL,
+        index=True,
+        comment="发起来源",
     )
     release_no: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="上线版本号")
+    input_name: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="", server_default="", comment="输入文件名"
+    )
     service_tier: Mapped[str] = mapped_column(
         String(16), nullable=False, default="", server_default="", comment="服务档位"
     )
     cost_limit: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True, comment="费用上限(元)")
 
 
-# 试发、多轮对话一次调用记一行（批量提问的费用记在 BatchRun 上），费用账单把两边合起来。
+# 试发、多轮对话一次调用记一行（批量任务的费用记在 BatchRun 上），费用账单把两边合起来。
 CALL_TRIAL = "trial"
 CALL_CHAT = "chat"
 

@@ -1,8 +1,7 @@
 """流水线任务：政策服务定时打标时，用模板的上线版本跑一批数据，再把解析后的结果取回去写业务表。
 
-和页面上的批量提问共用同一套执行（worker、重试、计费、历史），区别只在：
+和页面上的批量任务一样只跑上线版本，共用同一套执行（worker、重试、计费、历史），区别只在：
 - 输入不是上传的 Excel，而是调用方传来的行，原样存成 rows.json（政策正文可能十几万字，Excel 单元格放不下）；
-- 提示词、输出字段、模型、码表都取上线版本，草稿上的改动不影响生产；
 - 按低优档跑，并带费用上限，到上限自动停。
 """
 
@@ -18,7 +17,7 @@ from platform_common.clock import format_beijing, utcnow
 from platform_common.errors import ApiError, ErrorCode, NotFoundError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application import batch_runs, prompts
+from app.application import batch_runs, prompts, releases
 from app.application.asking import resolve_model
 from app.application.audit_emit import enqueue_event
 from app.application.batch_output import read_raw
@@ -26,7 +25,6 @@ from app.application.batch_runs import require as require_run
 from app.application.batch_runs import to_dict as run_to_dict
 from app.application.sheets import has_run_input, read_run_input
 from app.core import storage
-from app.core.codebook import fetch_code_table
 from app.domain.categories import FULL_ACCESS
 from app.domain.code_tables import code_table_name
 from app.domain.models import ACTIVE_STATUSES, RUN_QUEUED, RUN_SOURCE_PIPELINE, BatchRun, TemplateRelease, new_id
@@ -74,19 +72,7 @@ def _cost_limit(value: object) -> Decimal | None:
 
 async def _release(session: AsyncSession, prompt_id: str) -> TemplateRelease:
     template = await prompts.require(session, prompt_id, lock=True)
-    release = (await release_repo.by_ids(session, [template.release_id] if template.release_id else [])).get(
-        template.release_id or ""
-    )
-    if release is None:
-        raise _invalid(f"模板「{template.title}」还没有上线，定时任务只用上线版本")
-    return release
-
-
-async def _release_code(release: TemplateRelease) -> str | None:
-    if release.code_table:
-        return await fetch_code_table(release.code_table)
-    path = anyio.Path(storage.release_code_file(release.id))
-    return await path.read_text(encoding="utf-8") if await path.is_file() else None
+    return await releases.current(session, template, "定时任务")
 
 
 def _write_snapshot(run_id: str, headers: list[str], rows: list[dict[str, str]], code: str | None) -> None:
@@ -102,7 +88,7 @@ async def create(session: AsyncSession, caller: Actor, values: dict[str, Any]) -
     headers, rows = _checked_rows(values.get("rows"))
     release = await _release(session, str(values.get("prompt_id") or ""))
     model = await resolve_model(session, release.model_id)
-    code = await _release_code(release)
+    code = await releases.release_code(release)
     run = BatchRun(
         id=new_id(),
         prompt_id=release.prompt_id,

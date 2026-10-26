@@ -60,7 +60,7 @@ onMounted(() => { void load() })
   <div>
     <ListPage
       title="模型配置"
-      hint="提问配置、批量提问和多轮对话可选的模型与单价。保存后立即生效，已在跑的批量任务仍按开跑时的配置。"
+      hint="提示词模板、批量任务和多轮对话可选的模型与单价。保存后立即生效，已在跑的批量任务仍按开跑时的配置。"
       :total="items.length"
       :page="1"
       :page-size="items.length || 20"

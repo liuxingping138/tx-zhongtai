@@ -9,11 +9,13 @@ const props = withDefaults(defineProps<{
   allowEmpty?: boolean
   showThinking?: boolean
   size?: 'default' | 'small'
+  disabled?: boolean
 }>(), {
   label: '模型',
   allowEmpty: false,
   showThinking: true,
   size: 'default',
+  disabled: false,
 })
 const model = defineModel<string>({ required: true })
 const thinking = defineModel<boolean>('thinking', { default: false })
@@ -28,6 +30,7 @@ const current = computed(() => props.models.find(item => item.id === model.value
       :placeholder="allowEmpty ? '模型：运行时再选' : '选择模型'"
       :clearable="allowEmpty"
       :size="size"
+      :disabled="disabled"
       class="model-picker__select"
       :class="`model-picker__select--${size}`"
     >

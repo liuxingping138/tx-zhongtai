@@ -31,3 +31,17 @@ def model_table(monkeypatch: pytest.MonkeyPatch) -> list[object]:
     monkeypatch.setattr(model_configs, "get", get)
     monkeypatch.setattr(model_configs, "add", lambda _session, row: rows.append(row))
     return rows  # type: ignore[return-value]
+
+
+@pytest.fixture(autouse=True)
+def no_sample_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """模板列表要查每个模板最近一次样本试跑；单测没有库，默认都没试跑过。集成测试走真实查询。"""
+
+    if os.environ.get("AI_INTEGRATION"):
+        return
+    from app.repositories import batch_runs
+
+    async def latest_samples(_session: object, _ids: object) -> dict[str, object]:
+        return {}
+
+    monkeypatch.setattr(batch_runs, "latest_samples", latest_samples)

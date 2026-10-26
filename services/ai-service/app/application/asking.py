@@ -81,7 +81,10 @@ async def resolve_model(session: AsyncSession, model_id: str) -> LlmModel:
 
 
 def llm_request(model: LlmModel, body: dict[str, Any]) -> LlmRequest:
-    return LlmRequest(model.base_url, api_key_for(model), body, get_settings().llm_read_timeout_seconds)
+    settings = get_settings()
+    return LlmRequest(
+        settings.llm_base_url or model.base_url, api_key_for(model), body, settings.llm_read_timeout_seconds
+    )
 
 
 def _check_message(message: str) -> str:

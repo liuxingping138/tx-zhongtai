@@ -82,12 +82,11 @@ class ChatBody(_Body):
     previous_response_id: str | None = Field(default=None, max_length=200)
 
 
-class RunBody(_Body):
-    prompt_id: str = Field(max_length=32)
+class SampleRunBody(_Body):
+    # 模板没选模型时，用页面试发区当前的模型
     model_id: str = Field(default="", max_length=100)
     thinking: bool = False
-    # 0 表示跑全部，「运行 10 条测试」传 10
-    limit: int = Field(default=0, ge=0, le=100_000)
+    limit: int = Field(default=10, ge=1, le=50)
 
 
 def file_response(content: bytes, filename: str) -> Response:

@@ -10,6 +10,7 @@ import {
   mentionAt,
   mentionOptions,
   outputFormatBlock,
+  runModeText,
   runStatusType,
   splitFields,
 } from './aiText'
@@ -60,5 +61,12 @@ describe('费用与状态', () => {
     expect(['done', 'failed', 'interrupted', 'running', 'cancelled'].map(s => runStatusType(s as never))).toEqual(['success', 'danger', 'warning', 'primary', 'info'])
     expect(isActive('stopping')).toBe(true)
     expect(isActive('cancelled')).toBe(false)
+  })
+})
+
+describe('运行范围', () => {
+  it('只跑前几条写条数，不限条数写全部', () => {
+    expect(runModeText({ row_limit: 10 })).toBe('前 10 条')
+    expect(runModeText({ row_limit: 0 })).toBe('全部')
   })
 })

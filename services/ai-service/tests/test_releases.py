@@ -11,10 +11,9 @@ from app.core import codebook, storage
 from app.core.config import get_settings
 from app.domain.categories import FULL_ACCESS
 from app.domain.models import TemplateRelease
-from app.repositories import batch_runs as run_repo
 from app.repositories import prompts as prompt_repo
 from app.repositories import releases as release_repo
-from tests.helpers import ACTOR, PROMPT_ID, FakeSession, noop, template, xlsx
+from tests.helpers import ACTOR, PROMPT_ID, FakeSession, noop, template
 
 READY = {"output_fields": "政策类型名称", "model_id": "baidu-deepseek-v3.2"}
 
@@ -104,29 +103,14 @@ async def test_online_template_cannot_be_deleted_and_offline_needs_a_release(mon
         await releases.take_offline(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID)  # type: ignore[arg-type]
 
 
-async def test_system_code_table_is_fetched_live_and_frozen_into_the_run(monkeypatch: pytest.MonkeyPatch) -> None:
-    """系统码表每次实时取；发起批量时把那一刻的内容写进任务快照，之后码表再改也不影响这次任务和它的重跑。"""
+async def test_system_code_table_is_fetched_live(monkeypatch: pytest.MonkeyPatch) -> None:
+    """系统码表每次实时取；上传的码表只在没选系统码表时用。发起批量时冻结的那份见 test_batch_inputs。"""
 
     item = template(excel_name="a.xlsx", code_table="scenarios", code_name="旧码表.txt")
     _tables(monkeypatch, item, [])
-    asked = _codebook(monkeypatch, "一级行业\t一级场景\n教育行业\t智慧校园")
-
-    async def idle(*_: Any, **__: Any) -> None:
-        return None
-
-    monkeypatch.setattr(run_repo, "active_for_prompt", idle)
-    monkeypatch.setattr(run_repo, "mark_stale_interrupted", idle)
-    storage.write_atomic(storage.prompt_file(PROMPT_ID, "excel"), xlsx([["名称"], ["甲"]]))
+    _codebook(monkeypatch, "一级行业\t一级场景\n教育行业\t智慧校园")
     storage.write_atomic(storage.prompt_file(PROMPT_ID, "code"), "上传的旧码表".encode())
     assert await prompts.code_text(item) == "一级行业\t一级场景\n教育行业\t智慧校园"
-    run = await batch_runs.start_run(
-        FakeSession(),
-        ACTOR,
-        FULL_ACCESS,
-        {"prompt_id": PROMPT_ID, "model_id": "baidu-deepseek-v3.2"},  # type: ignore[arg-type]
-    )
-    snapshot = storage.run_dir(run["id"]) / storage.PROMPT_FILES["code"]
-    assert snapshot.read_text(encoding="utf-8").endswith("智慧校园") and asked == ["scenarios", "scenarios"]
     item.code_table = ""
     assert await prompts.code_text(item) == "上传的旧码表"
 

@@ -88,7 +88,7 @@ async def request_retag(
     return success_json(await retag.request(session, actor, body.ids, body.step))
 
 
-# 提问配置页用：取的是政策数据，能看政策基础标签的人就能取，不需要任务调度权限。
+# 提示词模板页用：取的是政策数据，能看政策基础标签的人就能取，不需要任务调度权限。
 # 接口只能挂本服务的资源（test_route_security_class），所以不用 AI 模块的模板权限。
 TEMPLATE_RESOURCE = "policy.base_tags"
 

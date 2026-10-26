@@ -1,25 +1,30 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import type { PromptTemplate, SystemCodeTable } from '@/api/ai'
+import type { AiModel, PromptTemplate, SystemCodeTable, TemplateCategory } from '@/api/ai'
 import type { ContractTask } from '@/api/aiTagging'
+import ModelPicker from '../shared/ModelPicker.vue'
 import { splitFields } from '../shared/aiText'
 import PromptFiles from './PromptFiles.vue'
 import TaskFit from './TaskFit.vue'
 import type { TaskFitResult } from './taskFit'
 
-/** 编辑器下方：输出字段（标签输入）、码表来源、测试数据（Excel 和上传的码表）。 */
+/** 编辑器下方的模板设置：常驻显示，不收起——输出字段、模型、码表决定结果长什么样，写提示词时要一直看得到。 */
 defineProps<{
   template: PromptTemplate | null
+  categories: TemplateCategory[]
+  models: AiModel[]
   codeTables: SystemCodeTable[]
   canEdit: boolean
   canExport: boolean
-  /** 政策类模板：三个打标任务的约定（取测试数据用）和按草稿的适配检查；不是政策类时不显示 */
+  /** 政策类模板：三个打标任务的约定（取测试样本用）和按草稿的适配检查；不是政策类时不显示 */
   sampleTasks: ContractTask[]
   showFit: boolean
   fit: TaskFitResult[]
 }>()
 const emit = defineEmits<{ 'append-format': []; 'files-changed': [template: PromptTemplate] }>()
+const category = defineModel<string>('category', { required: true })
+const modelId = defineModel<string>('modelId', { required: true })
 const outputFields = defineModel<string>('outputFields', { required: true })
 const codeTable = defineModel<string>('codeTable', { required: true })
 
@@ -39,97 +44,145 @@ const codeSource = computed({
 
 <template>
   <section
-    class="settings__config"
-    aria-label="输出和数据"
+    class="config"
+    aria-label="模板设置"
   >
-    <div class="settings__tile settings__tile--wide">
-      <div class="settings__tile-head">
-        <h3>输出字段</h3>
-        <el-button
-          link
-          type="primary"
-          :disabled="!canEdit || !fields.length"
-          @click="emit('append-format')"
+    <div class="config__row config__row--inline">
+      <label class="config__item">
+        <span>类型</span>
+        <el-select
+          v-model="category"
+          class="config__category"
+          aria-label="模板类型"
+          placeholder="选择类型"
+          :disabled="!canEdit"
         >
-          把格式要求追加到提示词
-        </el-button>
-      </div>
-      <el-input-tag
-        v-model="fields"
-        aria-label="输出字段"
-        placeholder="输入字段名回车，如：行业"
-        :delimiter="FIELD_DELIMITER"
-        :disabled="!canEdit"
-        clearable
-        draggable
-      />
-      <p class="settings__tip">
-        模型按这些字段返回 JSON，批量结果每个字段一列
-      </p>
-    </div>
-    <div class="settings__tile">
-      <div class="settings__tile-head">
-        <h3>码表</h3>
-      </div>
-      <el-select
-        v-model="codeSource"
-        aria-label="码表来源"
-        :disabled="!canEdit"
-      >
-        <el-option
-          label="上传的码表文件"
-          :value="UPLOADED_CODE"
+          <el-option
+            v-for="item in categories"
+            :key="item.code"
+            :label="`${item.name}类`"
+            :value="item.code"
+            :disabled="!item.editable"
+          />
+        </el-select>
+      </label>
+      <div class="config__item config__item--grow">
+        <span>模型</span>
+        <ModelPicker
+          v-model="modelId"
+          :models="models"
+          :show-thinking="false"
+          :disabled="!canEdit"
+          allow-empty
+          label="模板使用的模型"
         />
-        <el-option
-          v-for="item in codeTables"
-          :key="item.key"
-          :label="`系统${item.name}`"
-          :value="item.key"
-        />
-      </el-select>
-      <p class="settings__tip">
-        {{ codeTable ? '每次提问取码表最新内容，用 @【上传码表】引用' : '在下方上传 .txt 码表，没有就不用码表' }}
-      </p>
-    </div>
-    <div class="settings__tile">
-      <div class="settings__tile-head">
-        <h3>测试数据</h3>
       </div>
-      <PromptFiles
-        :template="template"
-        :can-edit="canEdit"
-        :can-export="canExport"
-        :system-code="Boolean(codeTable)"
-        :sample-tasks="sampleTasks"
-        @changed="item => emit('files-changed', item)"
-      />
     </div>
+
+    <div class="config__row">
+      <span class="config__label">码表</span>
+      <div class="config__code">
+        <el-select
+          v-model="codeSource"
+          class="config__code-select"
+          aria-label="码表来源"
+          :disabled="!canEdit"
+        >
+          <el-option
+            :label="template?.code_name ? '上传的码表文件' : '不用码表或上传文件'"
+            :value="UPLOADED_CODE"
+          />
+          <el-option
+            v-for="item in codeTables"
+            :key="item.key"
+            :label="`系统${item.name}`"
+            :value="item.key"
+          />
+        </el-select>
+        <PromptFiles
+          v-if="!codeTable"
+          kind="code"
+          class="config__code-file"
+          :template="template"
+          :can-edit="canEdit"
+          :can-export="canExport"
+          @changed="item => emit('files-changed', item)"
+        />
+      </div>
+    </div>
+
+    <div class="config__row">
+      <span class="config__label">输出字段</span>
+      <div class="config__fields">
+        <el-input-tag
+          v-model="fields"
+          aria-label="输出字段"
+          placeholder="输入字段名回车，如：行业"
+          size="small"
+          :delimiter="FIELD_DELIMITER"
+          :disabled="!canEdit"
+          clearable
+          draggable
+        />
+        <div class="config__fields-foot">
+          <span>{{ fields.length ? `共 ${fields.length} 个，` : '' }}模型按这些字段返回 JSON</span>
+          <el-button
+            link
+            type="primary"
+            :disabled="!canEdit || !fields.length"
+            @click="emit('append-format')"
+          >
+            把格式要求追加到提示词
+          </el-button>
+        </div>
+      </div>
+    </div>
+
+    <div class="config__row">
+      <span class="config__label">测试样本</span>
+      <div>
+        <PromptFiles
+          kind="excel"
+          :template="template"
+          :can-edit="canEdit"
+          :can-export="canExport"
+          :sample-tasks="sampleTasks"
+          @changed="item => emit('files-changed', item)"
+        />
+        <p class="config__tip">
+          只给试发和样本试跑用，正式的批量任务另外上传数据
+        </p>
+      </div>
+    </div>
+
     <div
       v-if="showFit"
-      class="settings__tile settings__tile--fit"
+      class="config__row"
     >
-      <div class="settings__tile-head">
-        <h3>定时任务适配</h3>
-        <span class="settings__tip">按当前草稿检查；任务设置里选模板时也会核对</span>
-      </div>
+      <span class="config__label">定时任务</span>
       <TaskFit :results="fit" />
     </div>
   </section>
 </template>
 
 <style scoped>
-.settings__config { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); border-top: 1px solid var(--zt-border); }
-.settings__tile { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 12px 18px 14px; }
-.settings__tile--wide { grid-column: 1 / -1; border-bottom: 1px solid var(--zt-border); }
-.settings__tile--wide + .settings__tile + .settings__tile { border-left: 1px solid var(--zt-border); }
-.settings__tile--fit { grid-column: 1 / -1; border-top: 1px solid var(--zt-border); }
-.settings__tile-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 24px; }
-.settings__tile h3 { margin: 0; color: var(--zt-ink-700); font-size: 13px; font-weight: 600; }
-.settings__tip { margin: 0; color: var(--zt-ink-500); font-size: 12px; line-height: 1.5; }
+.config { display: grid; gap: 12px; padding: 14px 18px 16px; border-top: 1px solid var(--zt-border); background: #fbfcfe; }
+.config__row { display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: start; gap: 12px; }
+.config__row--inline { display: flex; flex-wrap: wrap; gap: 10px 20px; }
+.config__item { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.config__item > span, .config__label { flex: none; width: 64px; color: var(--zt-ink-500); font-size: 13px; line-height: 32px; }
+.config__item--grow { flex: 1 1 220px; }
+.config__item--grow > :last-child { flex: 1; min-width: 0; }
+.config__category { width: 120px; }
+.config__item--grow :deep(.model-picker__select) { width: 100%; }
+.config__code { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; min-width: 0; }
+.config__code-select { width: 220px; }
+.config__code-file { flex: 1; min-width: 200px; }
+/* 十几个输出字段时标签框最多三行，再多在框里滚动，不把测试样本挤出视野。 */
+.config__fields :deep(.el-input-tag__inner) { max-height: 82px; overflow-y: auto; }
+.config__fields { display: grid; gap: 4px; min-width: 0; }
+.config__fields-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; color: var(--zt-ink-500); font-size: 12px; }
+.config__tip { margin: 4px 0 0; color: var(--zt-ink-500); font-size: 12px; }
 /* 标签输入框里真正的 input 不要再套一层全局聚焦框，外框已经变色。 */
-.settings__tile :deep(.el-input-tag__input:focus-visible) { outline: none; box-shadow: none; }
-@media (max-width: 900px) {
-  .settings__config { grid-template-columns: minmax(0, 1fr); }
-  .settings__tile--wide + .settings__tile + .settings__tile { border-left: 0; border-top: 1px solid var(--zt-border); }
-}
+.config :deep(.el-input-tag__input:focus-visible) { outline: none; box-shadow: none; }
 </style>

@@ -6,10 +6,10 @@ from platform_common.actors import Actor
 from platform_common.http_utils import read_named_upload, success_json
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas import FileKind, PromptBody, TestRowsBody, file_response
+from app.api.schemas import FileKind, PromptBody, SampleRunBody, TestRowsBody, file_response
 from app.api.security import CategoryAccess, SecurityClass, classified, get_category_access, require_ai_permission
 from app.application import prompts as service
-from app.application import releases
+from app.application import releases, sample_runs
 from app.application.asking import available_models
 from app.core.config import get_settings
 from app.core.database import get_db_session
@@ -124,6 +124,42 @@ async def download_file(
 ) -> Response:
     content, filename = await service.download_file(session, actor, access, prompt_id, kind)
     return file_response(content, filename)
+
+
+@router.get("/{prompt_id}/sample-run")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def latest_sample_run(
+    prompt_id: str,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    access: CategoryAccess = Depends(get_category_access),
+    _: Actor = Depends(require_ai_permission(RESOURCE, "list")),
+) -> JSONResponse:
+    return success_json(await sample_runs.latest(session, access, prompt_id))
+
+
+@router.post("/{prompt_id}/sample-run")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def start_sample_run(
+    prompt_id: str,
+    body: SampleRunBody,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    access: CategoryAccess = Depends(get_category_access),
+    actor: Actor = Depends(require_ai_permission(RESOURCE, "ask")),
+) -> JSONResponse:
+    """和试发一样会花钱，要试发的权限。"""
+
+    return success_json(await sample_runs.start(session, actor, access, prompt_id, body.model_dump()), status_code=201)
+
+
+@router.post("/{prompt_id}/sample-run/stop")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def stop_sample_run(
+    prompt_id: str,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    access: CategoryAccess = Depends(get_category_access),
+    actor: Actor = Depends(require_ai_permission(RESOURCE, "ask")),
+) -> JSONResponse:
+    return success_json(await sample_runs.stop(session, actor, access, prompt_id))
 
 
 @router.get("/{prompt_id}/releases")

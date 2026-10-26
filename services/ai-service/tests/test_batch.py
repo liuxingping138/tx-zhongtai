@@ -32,39 +32,6 @@ def _returns(module: Any, name: str, value: Any, monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(module, name, fake)
 
 
-async def test_start_snapshots_template_files_and_queues(monkeypatch: pytest.MonkeyPatch) -> None:
-    _returns(prompt_repo, "get", template(excel_name="a.xlsx", model_id=""), monkeypatch)
-    _returns(repo, "active_for_prompt", None, monkeypatch)
-    storage.write_atomic(storage.prompt_file(PROMPT_ID, "excel"), xlsx([["名称"], ["甲"]]))
-    session = FakeSession()
-    data = await service.start_run(
-        session,
-        ACTOR,
-        FULL_ACCESS,
-        {"prompt_id": PROMPT_ID, "model_id": "baidu-deepseek-v3.2", "thinking": True, "limit": 10},  # type: ignore[arg-type]
-    )
-    assert (data["status"], data["row_limit"], data["thinking"], data["model_id"]) == (
-        "queued",
-        10,
-        True,
-        "baidu-deepseek-v3.2",
-    )
-    assert (storage.run_dir(data["id"]) / "source.xlsx").is_file()
-    assert data["can_stop"] and not data["can_delete"]
-
-
-async def test_start_refuses_without_excel_or_when_same_template_is_running(monkeypatch: pytest.MonkeyPatch) -> None:
-    _returns(prompt_repo, "get", template(), monkeypatch)
-    with pytest.raises(ApiError, match="未上传 Excel"):
-        await service.start_run(FakeSession(), ACTOR, FULL_ACCESS, {"prompt_id": PROMPT_ID})  # type: ignore[arg-type]
-    _returns(prompt_repo, "get", template(excel_name="a.xlsx"), monkeypatch)
-    storage.write_atomic(storage.prompt_file(PROMPT_ID, "excel"), xlsx([["名称"], ["甲"]]))
-    _returns(repo, "active_for_prompt", run(status="running", done_count=3, total_count=9), monkeypatch)
-    with pytest.raises(ApiError) as conflict:
-        await service.start_run(FakeSession(), ACTOR, FULL_ACCESS, {"prompt_id": PROMPT_ID})  # type: ignore[arg-type]
-    assert conflict.value.http_status == 409 and "3/9" in conflict.value.message
-
-
 async def test_stop_cancels_queued_and_flags_running(monkeypatch: pytest.MonkeyPatch) -> None:
     queued = run(status="queued")
     _returns(repo, "get", queued, monkeypatch)

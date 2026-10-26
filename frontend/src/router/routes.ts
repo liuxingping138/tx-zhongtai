@@ -126,14 +126,21 @@ export const routes: RouteRecordRaw[] = [
       {
         path: 'ai/prompts',
         name: 'ai-prompts',
-        component: () => import('@/modules/ai/prompts/PromptWorkbench.vue'),
-        meta: { title: '提问配置', resource: 'ai.prompts' },
+        component: () => import('@/modules/ai/prompts/PromptListPage.vue'),
+        meta: { title: '提示词模板', resource: 'ai.prompts' },
+      },
+      {
+        // 新建是 /ai/prompts/new，保存后同一条路由换成模板 ID。
+        path: 'ai/prompts/:id',
+        name: 'ai-prompt-edit',
+        component: () => import('@/modules/ai/prompts/PromptEditorPage.vue'),
+        meta: { title: '提示词模板', resource: 'ai.prompts', menuPath: '/ai/prompts' },
       },
       {
         path: 'ai/batch-runs',
         name: 'ai-batch-runs',
         component: () => import('@/modules/ai/batch/BatchRunsPage.vue'),
-        meta: { title: '批量提问', resource: 'ai.batch_runs' },
+        meta: { title: '批量任务', resource: 'ai.batch_runs' },
       },
       {
         path: 'ai/chat',

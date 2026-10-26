@@ -8,26 +8,26 @@ import { errorMessage } from '@/api/errors'
 import { downloadPromptFile } from '../shared/downloads'
 import SampleDialog from './SampleDialog.vue'
 
-/** systemCode：模板选了系统码表，上传的码表文件不生效，只留 Excel 一行。
- * sampleTasks：政策类模板能从数据库取测试数据（和正式打标的输入一致），空数组就不显示这个入口。 */
+/** 模板的一个附件：测试样本（.xlsx）或上传的码表（.txt）。
+ * sampleTasks：政策类模板能从数据库取测试样本（和正式打标的输入一致），空数组就不显示这个入口。 */
 const props = defineProps<{
   template: PromptTemplate | null
+  kind: PromptFileKind
   canEdit: boolean
   canExport: boolean
-  systemCode: boolean
-  sampleTasks: ContractTask[]
+  sampleTasks?: ContractTask[]
 }>()
 const sampling = ref(false)
 const emit = defineEmits<{ changed: [template: PromptTemplate] }>()
 const busy = ref<PromptFileKind | null>(null)
 const pickers = ref<Record<PromptFileKind, HTMLInputElement | null>>({ excel: null, code: null })
 
-const SLOTS: { kind: PromptFileKind; label: string; accept: string; empty: string }[] = [
-  { kind: 'excel', label: 'Excel', accept: '.xlsx', empty: '未上传，第一行是表头' },
-  { kind: 'code', label: '码表', accept: '.txt', empty: '未上传 .txt' },
-]
+const SLOTS: Record<PromptFileKind, { kind: PromptFileKind; accept: string; empty: string }> = {
+  excel: { kind: 'excel', accept: '.xlsx', empty: '未上传，.xlsx 第一行是表头' },
+  code: { kind: 'code', accept: '.txt', empty: '未上传码表 .txt' },
+}
 
-const slots = computed(() => (props.systemCode ? SLOTS.filter(slot => slot.kind === 'excel') : SLOTS))
+const slots = computed(() => [SLOTS[props.kind]])
 
 function fileName(kind: PromptFileKind): string {
   if (!props.template) return ''
@@ -42,7 +42,7 @@ async function upload(kind: PromptFileKind, event: Event): Promise<void> {
   busy.value = kind
   try {
     emit('changed', await uploadPromptFile(props.template.id, kind, file))
-    ElMessage.success(kind === 'excel' ? 'Excel 已上传' : '码表已上传')
+    ElMessage.success(kind === 'excel' ? '测试样本已上传' : '码表已上传')
   } catch (error) {
     ElMessage.error(errorMessage(error, '上传失败，请重试'))
   } finally {
@@ -52,7 +52,7 @@ async function upload(kind: PromptFileKind, event: Event): Promise<void> {
 
 async function remove(kind: PromptFileKind): Promise<void> {
   if (!props.template) return
-  const ok = await ElMessageBox.confirm(`删除后批量提问将无法使用这份${kind === 'excel' ? ' Excel' : '码表'}，已发起的任务不受影响。`, '删除已上传的文件？', {
+  const ok = await ElMessageBox.confirm(kind === 'excel' ? '删除后试发和样本试跑就没有数据可用，批量任务不受影响。' : '删除后模板不再提供这个码表，已发起的任务和线上版本不受影响。', '删除已上传的文件？', {
     type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消',
   }).then(() => true, () => false)
   if (!ok) return
@@ -83,8 +83,8 @@ async function download(kind: PromptFileKind): Promise<void> {
       :key="slot.kind"
       class="prompt-files__row"
     >
-      <span class="prompt-files__label">{{ slot.label }}</span>
       <span
+        v-if="fileName(slot.kind) || slot.kind === 'excel' || !template"
         class="prompt-files__name"
         :class="{ 'is-empty': !fileName(slot.kind) }"
       >
@@ -100,16 +100,18 @@ async function download(kind: PromptFileKind): Promise<void> {
       >
       <el-button
         v-if="canEdit"
-        size="small"
+        link
+        type="primary"
         :disabled="!template"
         :loading="busy === slot.kind"
         @click="pickers[slot.kind]?.click()"
       >
-        {{ fileName(slot.kind) ? '重新上传' : '上传' }}
+        {{ fileName(slot.kind) ? '重新上传' : slot.kind === 'code' ? '上传码表 .txt' : '上传' }}
       </el-button>
       <el-button
-        v-if="slot.kind === 'excel' && canEdit && sampleTasks.length"
-        size="small"
+        v-if="slot.kind === 'excel' && canEdit && sampleTasks?.length"
+        link
+        type="primary"
         :disabled="!template"
         @click="sampling = true"
       >
@@ -117,16 +119,16 @@ async function download(kind: PromptFileKind): Promise<void> {
       </el-button>
       <el-button
         v-if="canExport && fileName(slot.kind)"
-        size="small"
+        link
+        type="primary"
         @click="download(slot.kind)"
       >
         下载
       </el-button>
       <el-button
         v-if="canEdit && fileName(slot.kind)"
-        size="small"
+        link
         type="danger"
-        plain
         :disabled="busy !== null"
         @click="remove(slot.kind)"
       >
@@ -137,7 +139,7 @@ async function download(kind: PromptFileKind): Promise<void> {
       v-if="template"
       v-model="sampling"
       :template="template"
-      :tasks="sampleTasks"
+      :tasks="sampleTasks ?? []"
       @done="item => emit('changed', item)"
     />
   </div>
@@ -146,9 +148,8 @@ async function download(kind: PromptFileKind): Promise<void> {
 <style scoped>
 .prompt-files { display: grid; gap: 8px; }
 /* 栏窄时按钮整组换到下一行，不撑出横向滚动条。 */
-.prompt-files__row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; min-height: 32px; }
+.prompt-files__row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; min-height: 32px; }
 .prompt-files__row .el-button { margin: 0; }
-.prompt-files__label { flex: 0 0 64px; color: var(--zt-ink-700); font-size: 13px; }
 .prompt-files__name { flex: 1 1 120px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .prompt-files__name.is-empty { color: var(--zt-ink-500); }
 </style>

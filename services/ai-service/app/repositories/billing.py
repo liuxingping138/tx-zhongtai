@@ -1,4 +1,4 @@
-"""费用账单：批量提问（含定时打标）和试发、多轮对话的用量，按北京日期 × 模型 × 用途汇总。"""
+"""费用账单：批量任务（含定时打标、样本试跑）和试发、多轮对话的用量，按北京日期 × 模型 × 用途汇总。"""
 
 from __future__ import annotations
 
@@ -8,10 +8,12 @@ from typing import Any
 from sqlalchemy import case, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.models import CALL_CHAT, RUN_SOURCE_PIPELINE, AiModel, BatchRun, CallUsage
+from app.domain.models import CALL_CHAT, RUN_SOURCE_PIPELINE, RUN_SOURCE_SAMPLE, AiModel, BatchRun, CallUsage
 
-# 页面上「用途」的写法：手动的批量提问统称「批量提问」，定时任务发起的写发起方（如「政策AI打标·类型判断」）。
-BATCH_PURPOSE = "批量提问"
+# 页面上「用途」的写法：页面发起的统称「批量任务」，模板页的整批试跑是「样本试跑」，
+# 定时任务发起的写发起方（如「政策AI打标·类型判断」）。
+BATCH_PURPOSE = "批量任务"
+SAMPLE_PURPOSE = "样本试跑"
 CALL_PURPOSES = {CALL_CHAT: "多轮对话"}
 TRIAL_PURPOSE = "试发"
 
@@ -32,7 +34,9 @@ async def daily(session: AsyncSession, since: datetime, until: datetime) -> list
     """
 
     batch_purpose = case(
-        (BatchRun.source == RUN_SOURCE_PIPELINE, BatchRun.created_by_name), else_=literal(BATCH_PURPOSE)
+        (BatchRun.source == RUN_SOURCE_PIPELINE, BatchRun.created_by_name),
+        (BatchRun.source == RUN_SOURCE_SAMPLE, literal(SAMPLE_PURPOSE)),
+        else_=literal(BATCH_PURPOSE),
     ).label("purpose")
     batch_day = _day(BatchRun.created_at)
     batches = (

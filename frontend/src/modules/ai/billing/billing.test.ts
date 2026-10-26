@@ -7,7 +7,7 @@ const row = (day: string, model: string, purpose: string, cost: string, calls = 
   ({ day, model, purpose, calls, input_tokens: 1000 * calls, output_tokens: 100 * calls, cost })
 
 const ROWS = [
-  row('2026-10-20', '方舟Flash', '批量提问', '1.5', 2),
+  row('2026-10-20', '方舟Flash', '批量任务', '1.5', 2),
   row('2026-10-22', '方舟Flash', '政策AI打标·政策解读', '0.25'),
   row('2026-10-22', '千帆V3.2', '多轮对话', '0.25', 3),
 ]
@@ -26,9 +26,9 @@ describe('费用账单', () => {
 
   it('花得最多的拿第一个颜色、垫在最底下', () => {
     const colors = colorMap(ROWS, 'purpose')
-    expect([...colors.keys()]).toEqual(['批量提问', '多轮对话', '政策AI打标·政策解读'])
+    expect([...colors.keys()]).toEqual(['批量任务', '多轮对话', '政策AI打标·政策解读'])
     const { series } = dailySeries(ROWS, '2026-10-20', '2026-10-22', 'purpose', colors)
-    expect(series.map(item => item.name)).toEqual(['批量提问', '多轮对话', '政策AI打标·政策解读'])
+    expect(series.map(item => item.name)).toEqual(['批量任务', '多轮对话', '政策AI打标·政策解读'])
   })
 
   it('每天都有一格，没花钱的日子是 0；颜色跟名字走，筛选不重新上色', () => {

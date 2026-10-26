@@ -39,6 +39,26 @@ async def _check_publishable(session: AsyncSession, template: PromptTemplate) ->
         await fetch_code_table(template.code_table)
 
 
+async def current(session: AsyncSession, template: PromptTemplate, purpose: str) -> TemplateRelease:
+    """模板正在生效的上线版本；没上线就拒绝，purpose 写清楚是谁要用（定时任务 / 批量任务）。"""
+
+    release = (await repo.by_ids(session, [template.release_id] if template.release_id else [])).get(
+        template.release_id or ""
+    )
+    if release is None:
+        raise _invalid(f"模板「{template.title}」还没有上线，{purpose}只用上线版本，请管理员先上线")
+    return release
+
+
+async def release_code(release: TemplateRelease) -> str | None:
+    """上线版本用的码表全文：系统码表实时取（取不到报 503），上传的码表读上线时复制的那份。"""
+
+    if release.code_table:
+        return await fetch_code_table(release.code_table)
+    path = anyio.Path(storage.release_code_file(release.id))
+    return await path.read_text(encoding="utf-8") if await path.is_file() else None
+
+
 def _copy_code_file(prompt_id: str, release_id: str) -> None:
     source = storage.prompt_file(prompt_id, "code")
     if source.is_file():

@@ -11,12 +11,13 @@ from typing import Any
 from openpyxl import Workbook
 from platform_common.actors import Actor
 
-from app.domain.models import AiModel, BatchRun, PromptTemplate
+from app.domain.models import AiModel, BatchRun, PromptTemplate, TemplateRelease
 
 ACTOR = Actor(id="u1", name="测试员")
 NOW = datetime(2026, 10, 15, 3, 0, tzinfo=UTC)
 PROMPT_ID = "a" * 32
 RUN_ID = "b" * 32
+RELEASE_ID = "c" * 32
 
 
 class FakeSession:
@@ -125,6 +126,28 @@ def template(**overrides: Any) -> PromptTemplate:
     return PromptTemplate(**values)
 
 
+def release(**overrides: Any) -> TemplateRelease:
+    """模板 template() 上线的第 3 版。"""
+
+    values: dict[str, Any] = {
+        "id": RELEASE_ID,
+        "prompt_id": PROMPT_ID,
+        "release_no": 3,
+        "title": "企业行业",
+        "category": "policy",
+        "content": "企业：@【名称】",
+        "output_fields": "行业",
+        "model_id": "baidu-deepseek-v3.2",
+        "code_table": "",
+        "code_name": "",
+        "released_at": NOW,
+        "released_by_id": "u1",
+        "released_by_name": "管理员",
+    }
+    values.update(overrides)
+    return TemplateRelease(**values)
+
+
 def run(**overrides: Any) -> BatchRun:
     values: dict[str, Any] = {
         "id": RUN_ID,
@@ -155,6 +178,9 @@ def run(**overrides: Any) -> BatchRun:
         "created_at": NOW,
         "created_by_id": "u1",
         "created_by_name": "测试员",
+        "source": "manual",
+        "release_no": None,
+        "input_name": "",
     }
     values.update(overrides)
     return BatchRun(**values)

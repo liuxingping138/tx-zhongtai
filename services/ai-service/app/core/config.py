@@ -40,6 +40,8 @@ class Settings(BaseServiceSettings):
     # 大模型密钥。没配的那家模型在下拉里显示为不可用，调用直接报错，不会悄悄换别家。
     ark_api_key: str = ""
     baidu_api_key: str = ""
+    # 只给隔离验收用：所有模型都改发到这个地址（模拟模型服务），不花钱也能跑通试发、样本试跑和批量。生产环境不许配。
+    llm_base_url: str = ""
     # 单条流式回答的读超时：联网搜索单条要几十秒，深度思考更久。
     llm_read_timeout_seconds: float = 600.0
 
@@ -52,6 +54,8 @@ class Settings(BaseServiceSettings):
     @model_validator(mode="after")
     def _reject_demo_secrets_in_production(self) -> Settings:
         if self.environment == Environment.PRODUCTION:
+            if self.llm_base_url:
+                raise ValueError("生产环境不能把模型调用改发到其他地址（AI_LLM_BASE_URL 只给隔离验收用）")
             markers = ("dev-", "example", "changeme", "test-secret", "p6-only")
             secrets = (self.iam_service_secret, self.audit_ingest_secret, self.codebook_service_secret)
             for token in (*secrets, *self.internal_caller_secrets.values()):

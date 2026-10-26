@@ -14,12 +14,12 @@ from platform_common.clock import utcnow
 from platform_common.errors import ApiError
 from sqlalchemy import delete
 
-from app.application import batch_execute, batch_queue, batch_runs, billing, prompts
+from app.application import batch_execute, batch_queue, batch_runs, billing, prompts, releases, sample_runs
 from app.core import storage
 from app.core.config import get_settings
 from app.core.database import SessionLocal, engine
 from app.domain.categories import FULL_ACCESS, CategoryAccess
-from app.domain.models import BatchRun, CallUsage, OutboxEvent, PromptTemplate
+from app.domain.models import BatchRun, CallUsage, OutboxEvent, PromptTemplate, TemplateRelease
 from app.repositories import batch_runs as repo
 from tests.helpers import ACTOR, fake_stream, run, xlsx
 
@@ -31,7 +31,7 @@ async def isolated(monkeypatch: pytest.MonkeyPatch) -> Any:
     assert engine.url.database == "ai_test", "拒绝在业务数据库执行破坏性测试"
     monkeypatch.setattr(get_settings(), "baidu_api_key", "integration")
     async with SessionLocal() as session:
-        for model in (BatchRun, CallUsage, PromptTemplate, OutboxEvent):
+        for model in (BatchRun, CallUsage, PromptTemplate, TemplateRelease, OutboxEvent):
             await session.execute(delete(model))
         await session.commit()
     yield
@@ -57,12 +57,22 @@ async def _template_with_excel(rows: int = 3) -> str:
         content = xlsx([["名称"], *[[f"企业{index}"] for index in range(rows)]])
         await prompts.upload_file(session, ACTOR, FULL_ACCESS, data["id"], "excel", ("企业.xlsx", content))
         await session.commit()
+    # 批量任务只跑上线版本：先上线第 1 版。
+    async with SessionLocal() as session:
+        await releases.publish(session, ACTOR, FULL_ACCESS, data["id"])
+        await session.commit()
     return str(data["id"])
 
 
 async def _start(prompt_id: str) -> dict[str, Any]:
     async with SessionLocal() as session:
-        run = await batch_runs.start_run(session, ACTOR, FULL_ACCESS, {"prompt_id": prompt_id})
+        run = await batch_runs.start_run(
+            session,
+            ACTOR,
+            FULL_ACCESS,
+            {"prompt_id": prompt_id},
+            upload=("本次.xlsx", storage.prompt_file(prompt_id, "excel").read_bytes()),
+        )
         await session.commit()
         return run
 
@@ -134,7 +144,13 @@ async def test_stop_running_run_sets_flag_and_queued_run_cancels() -> None:
 async def test_history_filters_on_real_rows() -> None:
     prompt_id = await _template_with_excel()
     async with SessionLocal() as session:
-        await batch_runs.start_run(session, ACTOR, FULL_ACCESS, {"prompt_id": prompt_id, "limit": 10})
+        await batch_runs.start_run(
+            session,
+            ACTOR,
+            FULL_ACCESS,
+            {"prompt_id": prompt_id, "limit": 2},
+            upload=("本次.xlsx", storage.prompt_file(prompt_id, "excel").read_bytes()),
+        )
         await session.commit()
     async with SessionLocal() as session:
         tests = await batch_runs.list_runs(session, FULL_ACCESS, page=1, page_size=15, filters={"run_mode": ["test"]})
@@ -171,6 +187,7 @@ async def test_billing_groups_batches_pipelines_and_calls_by_beijing_day() -> No
             run(id="3" * 32, created_at=late, source="pipeline", created_by_name="政策AI打标·政策解读",
                 inference_cost=Decimal("0.3"))
         )  # fmt: skip
+        session.add(run(id="4" * 32, created_at=late, source="sample", inference_cost=Decimal("0.04")))
         for index, kind in enumerate(("chat", "chat", "trial")):
             session.add(
                 CallUsage(id=f"{index}" * 32, kind=kind, model_id="m", model_name="百度-DeepSeek-V3.2",
@@ -182,9 +199,49 @@ async def test_billing_groups_batches_pipelines_and_calls_by_beijing_day() -> No
         earlier = await billing.daily(session, date(2026, 10, 21), date(2026, 10, 21))
     rows = {(item["purpose"], item["calls"], item["cost"], item["input_tokens"]) for item in data["items"]}
     assert rows == {
-        ("批量提问", 2, "0.350000", 7),
+        ("批量任务", 2, "0.350000", 7),
+        ("样本试跑", 1, "0.040000", 0),
         ("政策AI打标·政策解读", 1, "0.300000", 0),
         ("多轮对话", 2, "0.020000", 0),
         ("试发", 1, "0.010000", 0),
     }
     assert {item["day"] for item in data["items"]} == {"2026-10-22"} and earlier["items"] == []
+
+
+async def test_sample_runs_stay_on_the_template_page() -> None:
+    """样本试跑跑草稿，和正式任务互不阻挡；不进批量任务列表，模板上能看到最近一次。"""
+
+    prompt_id = await _template_with_excel(rows=3)
+    async with SessionLocal() as session:
+        await prompts.update_prompt(
+            session,
+            ACTOR,
+            FULL_ACCESS,
+            prompt_id,
+            {"title": "集成", "category": "policy", "content": "草稿：@【名称】", "output_fields": "行业",
+             "model_id": "baidu-deepseek-v3.2", "version": 2},
+        )  # fmt: skip
+        await session.commit()
+    formal = await _start(prompt_id)
+    async with SessionLocal() as session:
+        first = await sample_runs.start(session, ACTOR, FULL_ACCESS, prompt_id, {"limit": 2})
+        await session.commit()
+    async with SessionLocal() as session:
+        with pytest.raises(ApiError) as busy:
+            await sample_runs.start(session, ACTOR, FULL_ACCESS, prompt_id, {"limit": 2})
+    assert busy.value.http_status == 409
+    async with SessionLocal() as session:
+        await sample_runs.stop(session, ACTOR, FULL_ACCESS, prompt_id)
+        await session.commit()
+    async with SessionLocal() as session:
+        second = await sample_runs.start(session, ACTOR, FULL_ACCESS, prompt_id, {"limit": 3})
+        await session.commit()
+    async with SessionLocal() as session:
+        listed = await batch_runs.list_runs(session, FULL_ACCESS, page=1, page_size=15)
+        latest = await sample_runs.latest(session, FULL_ACCESS, prompt_id)
+        template = next(item for item in await prompts.list_prompts(session, FULL_ACCESS) if item["id"] == prompt_id)
+    assert [item["id"] for item in listed["items"]] == [formal["id"]]
+    assert formal["release_no"] == 1 and first["run"]["id"] != second["run"]["id"]
+    assert latest["run"]["id"] == second["run"]["id"] and latest["rows"]["total"] == 3
+    assert template["sample"]["id"] == second["run"]["id"] and template["sample"]["current"] is True
+    assert template["release"]["unreleased_changes"] == ["提示词内容"]

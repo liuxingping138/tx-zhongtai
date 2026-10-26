@@ -1,4 +1,4 @@
-"""批量提问执行进程：持全局锁的单个 leader 从数据库队列认领任务，最多同时跑 batch_max_running 个。"""
+"""批量任务执行进程：持全局锁的单个 leader 从数据库队列认领任务，最多同时跑 batch_max_running 个。"""
 
 from __future__ import annotations
 

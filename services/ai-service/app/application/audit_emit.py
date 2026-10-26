@@ -21,13 +21,15 @@ _EVENT_META = {
     "ai.prompt.file_exported": ("ai.prompts", "export", "prompt_template", "下载模板文件"),
     "ai.prompt.released": ("ai.releases", "publish", "prompt_template", "模板上线"),
     "ai.prompt.offlined": ("ai.releases", "publish", "prompt_template", "模板下线"),
+    "ai.prompt.sample_started": ("ai.prompts", "ask", "prompt_template", "样本试跑"),
+    "ai.prompt.sample_stopped": ("ai.prompts", "ask", "prompt_template", "停止样本试跑"),
     "ai.model.created": ("ai.models", "create", "ai_model", "新增模型配置"),
     "ai.model.updated": ("ai.models", "update", "ai_model", "编辑模型配置"),
-    "ai.batch_run.started": ("ai.batch_runs", "run", "batch_run", "发起批量提问"),
-    "ai.batch_run.stopped": ("ai.batch_runs", "stop", "batch_run", "停止批量提问"),
-    "ai.batch_run.retried": ("ai.batch_runs", "run", "batch_run", "重跑批量提问失败行"),
-    "ai.batch_run.deleted": ("ai.batch_runs", "delete", "batch_run", "删除批量提问记录"),
-    "ai.batch_run.exported": ("ai.batch_runs", "export", "batch_run", "下载批量提问结果"),
+    "ai.batch_run.started": ("ai.batch_runs", "run", "batch_run", "发起批量任务"),
+    "ai.batch_run.stopped": ("ai.batch_runs", "stop", "batch_run", "停止批量任务"),
+    "ai.batch_run.retried": ("ai.batch_runs", "run", "batch_run", "重跑批量任务失败行"),
+    "ai.batch_run.deleted": ("ai.batch_runs", "delete", "batch_run", "删除批量任务记录"),
+    "ai.batch_run.exported": ("ai.batch_runs", "export", "batch_run", "下载批量任务结果"),
 }
 
 _emitter = AuditEmitter(

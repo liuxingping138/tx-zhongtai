@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from platform_common.errors import ApiError
 from platform_common.internal_calls import internal_headers
 
-from app.application import batch_execute, pipeline_runs, prompts
+from app.application import batch_execute, pipeline_runs, prompts, releases
 from app.application.batch_output import RowResult, append_raw, build_result, start_raw
 from app.application.sheets import read_run_input
 from app.core import storage
@@ -64,7 +64,7 @@ def online(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
 
     monkeypatch.setattr(prompt_repo, "get", get)
     monkeypatch.setattr(release_repo, "by_ids", by_ids)
-    monkeypatch.setattr(pipeline_runs, "fetch_code_table", fetch)
+    monkeypatch.setattr(releases, "fetch_code_table", fetch)
     monkeypatch.setattr(pipeline_runs, "enqueue_event", noop)
     monkeypatch.setattr(run_repo, "add", lambda _session, item: added.append(item))
     monkeypatch.setattr(get_settings(), "baidu_api_key", "k")

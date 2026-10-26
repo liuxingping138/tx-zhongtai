@@ -19,9 +19,10 @@ from app.core import storage
 from app.core.codebook import fetch_code_table
 from app.domain.categories import CategoryAccess, category_name, checked_category
 from app.domain.code_tables import checked_code_table, code_table_name
-from app.domain.models import PromptTemplate, TemplateRelease, new_id
+from app.domain.models import BatchRun, PromptTemplate, TemplateRelease, new_id
 from app.domain.releases import release_summary
 from app.domain.templating import split_fields
+from app.repositories import batch_runs as run_repo
 from app.repositories import prompts as repo
 from app.repositories import releases as release_repo
 
@@ -30,11 +31,32 @@ CODE_SUFFIX = ".txt"
 TITLE_MAX = 255
 
 
+def sample_summary(template: PromptTemplate, run: BatchRun | None) -> dict[str, Any] | None:
+    """最近一次样本试跑；current 表示它跑的就是现在保存的草稿（提示词、输出字段、模型都没再改过）。"""
+
+    if run is None:
+        return None
+    return {
+        "id": run.id,
+        "status": run.status,
+        "total_count": run.total_count,
+        "done_count": run.done_count,
+        "failed_count": run.failed_count,
+        "format_failed_count": run.format_failed_count,
+        "created_at": format_beijing(run.created_at),
+        "created_by_name": run.created_by_name,
+        "current": run.prompt_content == template.content
+        and run.output_fields == template.output_fields
+        and (not template.model_id or run.model_id == template.model_id),
+    }
+
+
 def to_dict(
     template: PromptTemplate,
     model_names: dict[str, str],
     access: CategoryAccess,
     release: TemplateRelease | None = None,
+    sample: BatchRun | None = None,
 ) -> dict[str, Any]:
     return {
         "id": template.id,
@@ -53,7 +75,8 @@ def to_dict(
         "code_name": template.code_name,
         "code_table": template.code_table,
         "code_table_name": code_table_name(template.code_table) if template.code_table else "",
-        "release": release_summary(template, release),
+        "release": release_summary(template, release, model_names),
+        "sample": sample_summary(template, sample),
         "version": template.version,
         "created_at": format_beijing(template.created_at),
         "created_by_name": template.created_by_name,
@@ -84,7 +107,8 @@ def _validated(values: dict[str, Any]) -> dict[str, str]:
 async def to_out(session: AsyncSession, template: PromptTemplate, access: CategoryAccess) -> dict[str, Any]:
     releases = await release_repo.by_ids(session, [template.release_id] if template.release_id else [])
     release = releases.get(template.release_id or "")
-    return to_dict(template, await model_configs.names(session), access, release)
+    sample = (await run_repo.latest_samples(session, [template.id])).get(template.id)
+    return to_dict(template, await model_configs.names(session), access, release, sample)
 
 
 async def list_prompts(session: AsyncSession, access: CategoryAccess) -> list[dict[str, Any]]:
@@ -93,7 +117,8 @@ async def list_prompts(session: AsyncSession, access: CategoryAccess) -> list[di
     names = await model_configs.names(session)
     items = await repo.list_all(session, categories=access.readable)
     releases = await release_repo.by_ids(session, [item.release_id for item in items if item.release_id])
-    return [to_dict(item, names, access, releases.get(item.release_id or "")) for item in items]
+    samples = await run_repo.latest_samples(session, [item.id for item in items])
+    return [to_dict(item, names, access, releases.get(item.release_id or ""), samples.get(item.id)) for item in items]
 
 
 async def online(session: AsyncSession, category: str) -> list[PromptTemplate]:
@@ -221,7 +246,7 @@ async def save_test_rows(
 ) -> dict[str, Any]:
     """从数据库取来的测试数据（file_name、headers、rows）存成模板的测试 Excel。
 
-    之后和上传的 Excel 一样用：试发取第一行，批量跑全部行。
+    之后和上传的测试样本一样用：试发取第一行，样本试跑取前几行；正式的批量任务另外上传数据。
     """
 
     content = await run_excel_parse(rows_workbook, list(data["headers"]), list(data["rows"]))

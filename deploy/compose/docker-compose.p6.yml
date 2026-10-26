@@ -57,18 +57,37 @@ services:
       POLICY_CRAWLER_MYSQL_HOST: ""
       POLICY_CRAWLER_MYSQL_USER: ""
       POLICY_CRAWLER_MYSQL_PASSWORD: ""
-  # 不配模型密钥：验收只测模板、上传、权限和队列，不真的调用大模型（会产生费用）。
+  # 模型调用全部改发到 llm-mock（模拟模型服务），密钥是占位值：验收能跑通试发、样本试跑和批量任务，不会调用真实大模型。
   ai-service:
     environment:
       AI_ENVIRONMENT: test
       AI_IAM_SERVICE_SECRET: p6-only-change-me-internal
       AI_AUDIT_INGEST_SECRET: p6-only-change-me-ingest
-      AI_ARK_API_KEY: ""
-      AI_BAIDU_API_KEY: ""
+      AI_ARK_API_KEY: p6-mock
+      AI_BAIDU_API_KEY: p6-mock
+      AI_LLM_BASE_URL: http://llm-mock:8099
+    depends_on:
+      llm-mock:
+        condition: service_started
   ai-worker:
     environment:
       AI_ENVIRONMENT: test
       AI_IAM_SERVICE_SECRET: p6-only-change-me-internal
       AI_AUDIT_INGEST_SECRET: p6-only-change-me-ingest
-      AI_ARK_API_KEY: ""
-      AI_BAIDU_API_KEY: ""
+      AI_ARK_API_KEY: p6-mock
+      AI_BAIDU_API_KEY: p6-mock
+      AI_LLM_BASE_URL: http://llm-mock:8099
+      # 每行之间别太快跑完，e2e 才看得到「运行中」和停止。
+      AI_BATCH_CONCURRENCY: "2"
+    depends_on:
+      llm-mock:
+        condition: service_started
+  llm-mock:
+    build:
+      context: ../..
+      dockerfile: services/ai-service/Dockerfile
+    command: [".venv/bin/python", "/mock/llm_mock.py"]
+    volumes:
+      - ./p6/llm_mock.py:/mock/llm_mock.py:ro
+    networks:
+      - data

@@ -13,11 +13,16 @@ from app.domain.models import (
     RUN_INTERRUPTED,
     RUN_QUEUED,
     RUN_RUNNING,
+    RUN_SOURCE_MANUAL,
+    RUN_SOURCE_PIPELINE,
+    RUN_SOURCE_SAMPLE,
     RUN_STOPPING,
     BatchRun,
 )
 
 _RUNNING = (RUN_RUNNING, RUN_STOPPING)
+# 批量任务列表只列正式运行（页面发起、定时任务）；样本试跑在模板页看。
+TASK_SOURCES = (RUN_SOURCE_MANUAL, RUN_SOURCE_PIPELINE)
 
 
 RUN_MODES = ("test", "all")
@@ -33,6 +38,7 @@ def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
             in_any(BatchRun.prompt_category, filters.get("prompt_category")),
             in_any(BatchRun.created_by_name, filters.get("created_by_name")),
             in_any(BatchRun.status, filters.get("status")),
+            in_any(BatchRun.source, filters.get("source")),
         )
         if cond is not None
     ]
@@ -47,7 +53,11 @@ def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
 async def page(
     session: AsyncSession, *, offset: int, limit: int, categories: Collection[str], filters: Filters | None = None
 ) -> tuple[list[BatchRun], int]:
-    conditions = [*_conditions(filters or {}), BatchRun.prompt_category.in_(list(categories))]
+    conditions = [
+        *_conditions(filters or {}),
+        BatchRun.prompt_category.in_(list(categories)),
+        BatchRun.source.in_(TASK_SOURCES),
+    ]
     total = int(await session.scalar(select(func.count()).select_from(BatchRun).where(*conditions)) or 0)
     rows = await session.scalars(
         select(BatchRun)
@@ -62,7 +72,10 @@ async def page(
 async def distinct_values(session: AsyncSession, column: str, *, categories: Collection[str]) -> list[str]:
     field = {"prompt_title": BatchRun.prompt_title, "created_by_name": BatchRun.created_by_name}[column]
     rows = await session.scalars(
-        select(field).where(field != "", BatchRun.prompt_category.in_(list(categories))).distinct().order_by(field)
+        select(field)
+        .where(field != "", BatchRun.prompt_category.in_(list(categories)), BatchRun.source.in_(TASK_SOURCES))
+        .distinct()
+        .order_by(field)
     )
     return list(rows)
 
@@ -74,9 +87,29 @@ async def get(session: AsyncSession, run_id: str, *, lock: bool = False) -> Batc
     return (await session.scalars(statement)).first()
 
 
-async def active_for_prompt(session: AsyncSession, prompt_id: str) -> BatchRun | None:
-    statement = select(BatchRun).where(BatchRun.prompt_id == prompt_id, BatchRun.status.in_(ACTIVE_STATUSES))
+async def active_for_prompt(
+    session: AsyncSession, prompt_id: str, sources: Collection[str] = TASK_SOURCES
+) -> BatchRun | None:
+    """样本试跑和正式运行各管各的：试跑草稿不挡正式任务，反之亦然。"""
+
+    statement = select(BatchRun).where(
+        BatchRun.prompt_id == prompt_id, BatchRun.status.in_(ACTIVE_STATUSES), BatchRun.source.in_(list(sources))
+    )
     return (await session.scalars(statement.limit(1))).first()
+
+
+async def latest_samples(session: AsyncSession, prompt_ids: Collection[str]) -> dict[str, BatchRun]:
+    """每个模板最近一次样本试跑。"""
+
+    if not prompt_ids:
+        return {}
+    rows = await session.scalars(
+        select(BatchRun)
+        .where(BatchRun.prompt_id.in_(list(prompt_ids)), BatchRun.source == RUN_SOURCE_SAMPLE)
+        .order_by(BatchRun.prompt_id, BatchRun.created_at.desc())
+        .distinct(BatchRun.prompt_id)
+    )
+    return {row.prompt_id: row for row in rows}
 
 
 def add(session: AsyncSession, run: BatchRun) -> None:

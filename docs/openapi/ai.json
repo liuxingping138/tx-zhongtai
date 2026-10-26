@@ -399,6 +399,135 @@
         }
       }
     },
+    "/api/v1/ai/prompts/{prompt_id}/sample-run": {
+      "get": {
+        "tags": [
+          "ai-prompts"
+        ],
+        "summary": "Latest Sample Run",
+        "operationId": "latest_sample_run_api_v1_ai_prompts__prompt_id__sample_run_get",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prompt Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "ai-prompts"
+        ],
+        "summary": "Start Sample Run",
+        "description": "和试发一样会花钱，要试发的权限。",
+        "operationId": "start_sample_run_api_v1_ai_prompts__prompt_id__sample_run_post",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prompt Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SampleRunBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/prompts/{prompt_id}/sample-run/stop": {
+      "post": {
+        "tags": [
+          "ai-prompts"
+        ],
+        "summary": "Stop Sample Run",
+        "operationId": "stop_sample_run_api_v1_ai_prompts__prompt_id__sample_run_stop_post",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prompt Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/ai/prompts/{prompt_id}/releases": {
       "get": {
         "tags": [
@@ -649,6 +778,29 @@
               ],
               "title": "Status"
             }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "manual",
+                      "pipeline"
+                    ],
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
           }
         ],
         "responses": {
@@ -677,17 +829,53 @@
           "ai-batch-runs"
         ],
         "summary": "Start Run",
+        "description": "带文件的 multipart，其余参数在 query 里。0 条表示跑全部。",
         "operationId": "start_run_api_v1_ai_batch_runs_post",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RunBody"
-              }
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 32,
+              "title": "Prompt Id"
+            }
+          },
+          {
+            "name": "model_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "default": "",
+              "title": "Model Id"
+            }
+          },
+          {
+            "name": "thinking",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Thinking"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100000,
+              "minimum": 0,
+              "default": 0,
+              "title": "Limit"
             }
           }
-        },
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -735,7 +923,7 @@
           "ai-batch-runs"
         ],
         "summary": "Options",
-        "description": "批量页选模板用：只有批量权限、没有提问配置权限的人也要能选模板运行。",
+        "description": "新建任务选模板用：只有批量权限、没有模板权限的人也要能选上线的模板运行。",
         "operationId": "options_api_v1_ai_batch_runs_options_get",
         "responses": {
           "200": {
@@ -743,6 +931,48 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/batch-runs/input-preview": {
+      "post": {
+        "tags": [
+          "ai-batch-runs"
+        ],
+        "summary": "Preview Input",
+        "description": "选好文件先检查：不调用模型、不建任务。文件在权限依赖通过之后才读，边读边限流。",
+        "operationId": "preview_input_api_v1_ai_batch_runs_input_preview_post",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 32,
+              "title": "Prompt Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -802,6 +1032,56 @@
             "schema": {
               "type": "string",
               "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/batch-runs/{run_id}/rows": {
+      "get": {
+        "tags": [
+          "ai-batch-runs"
+        ],
+        "summary": "Run Rows",
+        "operationId": "run_rows_api_v1_ai_batch_runs__run_id__rows_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "failed_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Failed Only"
             }
           }
         ],
@@ -1747,13 +2027,8 @@
         ],
         "title": "PromptBody"
       },
-      "RunBody": {
+      "SampleRunBody": {
         "properties": {
-          "prompt_id": {
-            "type": "string",
-            "maxLength": 32,
-            "title": "Prompt Id"
-          },
           "model_id": {
             "type": "string",
             "maxLength": 100,
@@ -1767,18 +2042,15 @@
           },
           "limit": {
             "type": "integer",
-            "maximum": 100000.0,
-            "minimum": 0.0,
+            "maximum": 50.0,
+            "minimum": 1.0,
             "title": "Limit",
-            "default": 0
+            "default": 10
           }
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "prompt_id"
-        ],
-        "title": "RunBody"
+        "title": "SampleRunBody"
       },
       "TestRowsBody": {
         "properties": {
