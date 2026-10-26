@@ -2269,7 +2269,25 @@
         "operationId": "get_report_api_v1_policy_crawler_config_report_get",
         "parameters": [
           {
-            "name": "week",
+            "name": "unit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "week",
+                "month",
+                "quarter",
+                "year"
+              ],
+              "type": "string",
+              "description": "统计粒度：week / month / quarter / year",
+              "default": "week",
+              "title": "Unit"
+            },
+            "description": "统计粒度：week / month / quarter / year"
+          },
+          {
+            "name": "period",
             "in": "query",
             "required": false,
             "schema": {
@@ -2282,10 +2300,10 @@
                   "type": "null"
                 }
               ],
-              "description": "所选周内任意一天，默认本周（北京时间）",
-              "title": "Week"
+              "description": "所选这期内任意一天；不传时周看上周，月、季度、年看当前这期（北京时间）",
+              "title": "Period"
             },
-            "description": "所选周内任意一天，默认本周（北京时间）"
+            "description": "所选这期内任意一天；不传时周看上周，月、季度、年看当前这期（北京时间）"
           }
         ],
         "responses": {
@@ -2319,7 +2337,25 @@
         "operationId": "export_report_api_v1_policy_crawler_config_report_export_get",
         "parameters": [
           {
-            "name": "week",
+            "name": "unit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "week",
+                "month",
+                "quarter",
+                "year"
+              ],
+              "type": "string",
+              "description": "统计粒度：week / month / quarter / year",
+              "default": "week",
+              "title": "Unit"
+            },
+            "description": "统计粒度：week / month / quarter / year"
+          },
+          {
+            "name": "period",
             "in": "query",
             "required": false,
             "schema": {
@@ -2332,10 +2368,10 @@
                   "type": "null"
                 }
               ],
-              "description": "所选周内任意一天，默认本周（北京时间）",
-              "title": "Week"
+              "description": "所选这期内任意一天；不传时周看上周，月、季度、年看当前这期（北京时间）",
+              "title": "Period"
             },
-            "description": "所选周内任意一天，默认本周（北京时间）"
+            "description": "所选这期内任意一天；不传时周看上周，月、季度、年看当前这期（北京时间）"
           }
         ],
         "responses": {

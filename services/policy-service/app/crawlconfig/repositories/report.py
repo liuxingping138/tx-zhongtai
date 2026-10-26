@@ -39,28 +39,15 @@ async def province_rows(session: AsyncSession, new_from: str, new_to: str, backf
     return [dict(row._mapping) for row in await session.execute(stmt)]
 
 
-async def online_by_day(session: AsyncSession, date_to: str, backfill: str) -> dict[str, int]:
-    """截至 date_to 每天上线多少：趋势的每周数量和累计都从它算。"""
+async def online_by_day(session: AsyncSession, backfill: str) -> dict[str, int]:
+    """每天上线多少（不含期初）：柱图各期和上一期的数量都从它加总。"""
 
     stmt = (
         select(Source.online_date, func.count())
-        .where(online_between("", date_to, backfill))
+        .where(online_between("", "9999-12-31", backfill))
         .group_by(Source.online_date)
     )
     return {day: int(number) for day, number in await session.execute(stmt)}
-
-
-async def online_by_province_day(
-    session: AsyncSession, date_from: str, date_to: str, backfill: str
-) -> list[tuple[str, str, int]]:
-    """（省份，上线日期，网站数）：分省每周配置数按它加总。"""
-
-    stmt = (
-        select(Source.province_name, Source.online_date, func.count())
-        .where(online_between(date_from, date_to, backfill))
-        .group_by(Source.province_name, Source.online_date)
-    )
-    return [(province, day, int(number)) for province, day, number in await session.execute(stmt)]
 
 
 async def count_baseline(session: AsyncSession, backfill: str) -> int:

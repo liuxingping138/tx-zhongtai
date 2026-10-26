@@ -1,4 +1,6 @@
-"""爬虫配置统计：领导看的按周、按省统计和 Excel 下载。手动同步的入口在调度的 api（app.scheduler.api.config_sync）。"""
+"""爬虫配置统计：按周、月、季度、年看各省配置了多少网站，信源表按省的爬虫状态，和 Excel 下载。
+
+手动同步的入口在调度的 api（app.scheduler.api.config_sync）。"""
 
 from __future__ import annotations
 
@@ -16,30 +18,34 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.security import classified, require_policy_permission
 from app.core.database import get_db_session
 from app.crawlconfig.application import report as service
+from app.crawlconfig.domain.report import Unit
 
 router = APIRouter(prefix="/api/v1/policy/crawler-config", tags=["policy-crawler-config"])
 RESOURCE = "policy.crawler_config"
-WEEK_QUERY = Query(default=None, description="所选周内任意一天，默认本周（北京时间）")
+UNIT_QUERY = Query(default="week", description="统计粒度：week / month / quarter / year")
+PERIOD_QUERY = Query(default=None, description="所选这期内任意一天；不传时周看上周，月、季度、年看当前这期（北京时间）")
 
 
 @router.get("/report")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def get_report(
-    week: date | None = WEEK_QUERY,
+    unit: Unit = UNIT_QUERY,
+    period: date | None = PERIOD_QUERY,
     session: AsyncSession = Depends(get_db_session, scope="function"),
     _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
 ) -> JSONResponse:
-    return success_json(jsonable_encoder(await service.build_report(session, week)))
+    return success_json(jsonable_encoder(await service.build_report(session, unit, period)))
 
 
 @router.get("/report/export")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def export_report(
-    week: date | None = WEEK_QUERY,
+    unit: Unit = UNIT_QUERY,
+    period: date | None = PERIOD_QUERY,
     session: AsyncSession = Depends(get_db_session, scope="function"),
     actor: Actor = Depends(require_policy_permission(RESOURCE, "export")),
 ) -> Response:
-    content, filename = await service.export_report(session, actor, week)
+    content, filename = await service.export_report(session, actor, unit, period)
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

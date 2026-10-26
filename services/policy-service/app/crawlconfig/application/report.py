@@ -1,4 +1,5 @@
-"""爬虫配置统计：所选自然周的分省统计、近 12 周趋势和本周新增明细；导出同一份数据的 Excel。"""
+"""爬虫配置统计：所选一期（周、月、季度、年）各省配置了多少网站、配置明细，各期柱图，以及信源表按省的爬虫状态透视；
+导出同一份数据的 Excel。"""
 
 from __future__ import annotations
 
@@ -19,60 +20,65 @@ from app.crawlconfig.repositories import report as repo
 from app.policy.domain.models import Source
 
 SITE_FIELDS = ("province_name", "city_name", "district_name", "site_name", "site_code", "url", "crawler_status")
-COUNT_FIELDS = ("total", "online", "pending", "abnormal", "new")
+STATUS_FIELDS = ("total", "online", "pending", "abnormal")
 
 
 def site_row(row: Source) -> dict[str, str]:
     return {**{key: getattr(row, key) for key in SITE_FIELDS}, "online_date": row.online_date}
 
 
-def _province(row: dict[str, Any]) -> dict[str, Any]:
-    out: dict[str, Any] = {key: int(row[key]) for key in COUNT_FIELDS}
-    out["province_name"] = row["province_name"] or rules.BLANK_PROVINCE
-    out["coverage"] = rules.coverage(out["online"], out["total"])
-    return out
-
-
-async def build_report(session: AsyncSession, week: date | None) -> dict[str, Any]:
+async def build_report(session: AsyncSession, unit: rules.Unit, period: date | None) -> dict[str, Any]:
     backfill = get_settings().crawler_config_backfill_date.isoformat()
-    selected = rules.week_start(week or datetime.now(BEIJING).date())
-    week_from, week_to = selected.isoformat(), rules.week_end(selected).isoformat()
-    rows = sorted(await repo.province_rows(session, week_from, week_to, backfill), key=rules.province_order)
-    provinces = [_province(row) for row in rows]
-    totals: dict[str, Any] = {key: sum(row[key] for row in provinces) for key in COUNT_FIELDS}
+    today = datetime.now(BEIJING).date()
+    start = rules.period_start(period, unit) if period else rules.default_period(today, unit)
+    end = rules.period_end(start, unit)
+    previous = rules.shift(start, unit, -1)
+    daily = await repo.online_by_day(session, backfill)
+    rows = sorted(
+        await repo.province_rows(session, start.isoformat(), end.isoformat(), backfill), key=rules.province_order
+    )
+    status = [
+        {"province_name": row["province_name"] or rules.BLANK_PROVINCE, **{key: int(row[key]) for key in STATUS_FIELDS}}
+        for row in rows
+    ]
+    # 这期有配置的省份才列，按数量从多到少：几个省有就是几个。
+    configured: list[dict[str, Any]] = [
+        {"province_name": row["province_name"] or rules.BLANK_PROVINCE, "new": int(row["new"])}
+        for row in sorted(rows, key=lambda row: -int(row["new"]))
+        if row["new"]
+    ]
+    totals: dict[str, Any] = {key: sum(row[key] for row in status) for key in STATUS_FIELDS}
     totals["coverage"] = rules.coverage(totals["online"], totals["total"])
-    weeks = rules.trend_weeks(selected)
-    baseline = await repo.count_baseline(session, backfill)
-    trend = rules.weekly_series(await repo.online_by_day(session, week_to, backfill), weeks, baseline)
-    daily_by_province = await repo.online_by_province_day(session, weeks[0].isoformat(), week_to, backfill)
-    by_province = rules.province_weekly(daily_by_province, weeks)
-    for row in provinces:
-        # 每个省近 12 周（和 trend 同样的周）各配置了多少网站，最后一个就是所选这周。
-        row["weekly"] = by_province.get(row["province_name"], [0] * len(weeks))
-    new_sites = await repo.sites_online_between(session, week_from, week_to, backfill)
+    new_sites = await repo.sites_online_between(session, start.isoformat(), end.isoformat(), backfill)
     return {
-        "week_from": week_from,
-        "week_to": week_to,
-        "backfill_date": backfill,
-        "baseline": baseline,
-        "previous_new": trend[-2]["new"],
+        "unit": unit,
+        "period_from": start.isoformat(),
+        "period_to": end.isoformat(),
+        "current_from": rules.period_start(today, unit).isoformat(),
+        "new": sum(row["new"] for row in configured),
+        "previous_new": rules.count_between(daily, previous, rules.period_end(previous, unit)),
+        "periods": rules.series(daily, rules.window(today, unit, rules.earliest(daily)), unit),
+        "provinces": configured,
+        "status": status,
         "totals": totals,
-        "provinces": provinces,
-        "trend": trend,
+        "backfill_date": backfill,
+        "baseline": await repo.count_baseline(session, backfill),
         "new_sites": [site_row(row) for row in new_sites],
         "last_sync": await rules_sync.latest(session),
     }
 
 
-async def export_report(session: AsyncSession, actor: Actor, week: date | None) -> tuple[bytes, str]:
-    data = await build_report(session, week)
+async def export_report(
+    session: AsyncSession, actor: Actor, unit: rules.Unit, period: date | None
+) -> tuple[bytes, str]:
+    data = await build_report(session, unit, period)
     abnormal = [site_row(row) for row in await repo.abnormal_sites(session)]
     content = await to_thread.run_sync(build_report_workbook, data, abnormal)
     await enqueue_event(
         session,
         event_type="policy.crawler_config.exported",
         actor=actor,
-        target_id=data["week_from"],
-        extra={"week_from": data["week_from"], "week_to": data["week_to"]},
+        target_id=data["period_from"],
+        extra={"unit": unit, "period_from": data["period_from"], "period_to": data["period_to"]},
     )
-    return content, f"爬虫配置统计_{data['week_from']}至{data['week_to']}.xlsx"
+    return content, f"爬虫配置统计_{data['period_from']}至{data['period_to']}.xlsx"

@@ -1,5 +1,5 @@
 """爬虫配置统计的 Excel，给领导看：第一张就是每周汇报用的「省份 / 配置网站数量 / 总计」，
-后面是分省每周配置、分省累计、本周新增明细、每周趋势、异常清单。每张第一行标题、第二行表头。"""
+后面是这期配置明细、分省爬虫状态、各期趋势、异常清单。每张第一行标题、第二行表头。"""
 
 from __future__ import annotations
 
@@ -51,58 +51,41 @@ def _site_sheet(book: Workbook, title: str, caption: str, sites: list[dict[str, 
         append_text_row(sheet, [site.get(key, "") for key, _, _ in SITE_HEADERS])
 
 
-def _week_sheet(sheet: Worksheet, data: dict[str, Any], week: str) -> None:
-    """领导每周看的那张：本周有配置的省份，按配置网站数量从多到少，末行总计。"""
+def _period_sheet(sheet: Worksheet, data: dict[str, Any], period: str) -> None:
+    """领导每周看的那张：这一期有配置的省份，按配置网站数量从多到少，末行总计。"""
 
-    _sheet(sheet, "本周配置数量", f"爬虫配置网站数量（{week}）", [("省份", 18), ("配置网站数量", 14)])
-    rows = sorted((row for row in data["provinces"] if row["new"]), key=lambda row: -row["new"])
-    for row in rows:
+    _sheet(sheet, "配置数量", f"爬虫配置网站数量（{period}）", [("省份", 18), ("配置网站数量", 14)])
+    for row in data["provinces"]:
         append_text_row(sheet, [row["province_name"], row["new"]])
-    append_text_row(sheet, ["总计", data["totals"]["new"]])
+    append_text_row(sheet, ["总计", data["new"]])
     _bold_last_row(sheet, 2)
 
 
-def _province_weekly_sheet(book: Workbook, data: dict[str, Any]) -> None:
-    """省份 × 周的配置网站数量，末列合计、末行总计。统计起点之前的周没有数据。"""
+def _status_sheet(book: Workbook, data: dict[str, Any]) -> None:
+    """信源表按省透视爬虫状态，末行总计。"""
 
-    weeks = data["trend"]
-    headers = [("省份", 16), *((f"{w['week_from'][5:]}至{w['week_to'][5:]}", 13) for w in weeks), ("合计", 10)]
-    caption = "各省每周配置网站数量（近 12 周，最后一列是所选这周）"
-    sheet = _sheet(book.create_sheet(), "分省每周配置", caption, headers)
-    for row in data["provinces"]:
-        weekly = row.get("weekly") or [0] * len(weeks)
-        append_text_row(sheet, [row["province_name"], *weekly, sum(weekly)])
-    totals = [w["new"] for w in weeks]
-    append_text_row(sheet, ["总计", *totals, sum(totals)])
-    _bold_last_row(sheet, len(headers))
-
-
-def _province_total_sheet(book: Workbook, data: dict[str, Any]) -> None:
-    headers = [("省份", 16), ("信源网站数", 12), ("已配置", 10), ("未配置", 10), ("异常", 10), ("覆盖率", 10)]
-    sheet = _sheet(
-        book.create_sheet(), "分省累计", f"各省累计配置情况（截至导出时，{format_beijing(utcnow())}）", headers
-    )
-    for row in [*data["provinces"], {**data["totals"], "province_name": "总计"}]:
-        values = [row[key] for key in ("total", "online", "pending", "abnormal")]
-        append_text_row(sheet, [row["province_name"], *values, f"{row['coverage']}%"])
+    headers = [("省份", 16), ("已爬", 10), ("未爬", 10), ("异常", 10), ("合计", 10)]
+    caption = f"各省爬虫状态（截至导出时，{format_beijing(utcnow())}）"
+    sheet = _sheet(book.create_sheet(), "分省爬虫状态", caption, headers)
+    for row in [*data["status"], {**data["totals"], "province_name": "总计"}]:
+        append_text_row(sheet, [row[key] for key in ("province_name", "online", "pending", "abnormal", "total")])
     _bold_last_row(sheet, len(headers))
 
 
 def build_report_workbook(data: dict[str, Any], abnormal: list[dict[str, Any]]) -> bytes:
-    week = f"{data['week_from']} 至 {data['week_to']}"
+    period = f"{data['period_from']} 至 {data['period_to']}"
     book = Workbook()
-    _week_sheet(active_worksheet(book), data, week)
-    _province_weekly_sheet(book, data)
-    _province_total_sheet(book, data)
-    _site_sheet(book, "本周新增明细", f"本周新配置的网站（{week}），共 {len(data['new_sites'])} 个", data["new_sites"])
+    _period_sheet(active_worksheet(book), data, period)
+    _site_sheet(book, "配置明细", f"这期配置的网站（{period}），共 {len(data['new_sites'])} 个", data["new_sites"])
+    _status_sheet(book, data)
     trend = _sheet(
         book.create_sheet(),
-        "每周趋势",
-        f"每周配置网站数量（{data['backfill_date']} 统一补填上线时间的 {data['baseline']} 个算期初存量）",
-        [("周开始", 12), ("周结束", 12), ("当周配置", 10), ("累计已配置", 12)],
+        "配置趋势",
+        f"各期配置网站数量（{data['backfill_date']} 统一补填上线时间的 {data['baseline']} 个算期初，不计入任何一期）",
+        [("开始", 12), ("结束", 12), ("配置网站数量", 14)],
     )
-    for item in data["trend"]:
-        append_text_row(trend, [item["week_from"], item["week_to"], item["new"], item["cumulative"]])
+    for item in data["periods"]:
+        append_text_row(trend, [item["period_from"], item["period_to"], item["new"]])
     _site_sheet(book, "异常清单", f"爬虫状态为异常的网站，共 {len(abnormal)} 个，请业务核对", abnormal)
     buffer = BytesIO()
     book.save(buffer)

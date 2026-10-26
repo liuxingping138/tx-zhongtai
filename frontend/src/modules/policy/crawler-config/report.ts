@@ -1,40 +1,63 @@
-import type { ConfigSyncStatus, ConfigWeek } from '@/api/crawlerConfig'
+import type { ConfigPeriod, ConfigProvinceCount, ConfigStatusRow, ConfigSyncStatus, ConfigUnit, CrawlerConfigReport } from '@/api/crawlerConfig'
 import type { ChartOption, ChartPalette } from '@/components/charts/echarts'
+import { provinceShortName } from '../crawler-monitoring/charts'
 
-function parseDay(value: string): Date {
-  const [year = 0, month = 1, day = 1] = value.split('-').map(Number)
-  return new Date(year, month - 1, day)
+/** 后端把省份为空的记在这个名下；它不是信源表里的真实省份，不能拿去筛信源管理。 */
+export const BLANK_PROVINCE = '（未填省份）'
+
+export const UNITS: { value: ConfigUnit; label: string; name: string }[] = [
+  { value: 'week', label: '按周', name: '周' },
+  { value: 'month', label: '按月', name: '月' },
+  { value: 'quarter', label: '按季度', name: '季度' },
+  { value: 'year', label: '按年', name: '年' },
+]
+const RELATIVE: Record<ConfigUnit, [string, string]> = {
+  week: ['本周', '上周'],
+  month: ['本月', '上月'],
+  quarter: ['本季度', '上季度'],
+  year: ['今年', '去年'],
 }
 
-/** ISO 周次（周一开始，含 1 月 4 日的那周是第 1 周），和周选择器显示的一致。 */
-export function weekTitle(weekFrom: string): string {
-  const thursday = parseDay(weekFrom)
-  thursday.setDate(thursday.getDate() + 3 - ((thursday.getDay() + 6) % 7))
-  const firstDay = new Date(thursday.getFullYear(), 0, 1)
-  const week = 1 + Math.floor((thursday.getTime() - firstDay.getTime()) / 86400000 / 7)
-  return `${thursday.getFullYear()} 年第 ${week} 周`
-}
+const year = (day: string) => Number(day.slice(0, 4))
+const month = (day: string) => Number(day.slice(5, 7))
+const date = (day: string) => Number(day.slice(8, 10))
+const quarter = (day: string) => Math.floor((month(day) - 1) / 3) + 1
 
 /** 「10月19日」 */
 export function dayText(value: string): string {
-  return `${Number(value.slice(5, 7))}月${Number(value.slice(8, 10))}日`
+  return `${month(value)}月${date(value)}日`
 }
 
-/** 「10月19日 – 10月25日」 */
-export function rangeText(from: string, to: string): string {
-  return `${dayText(from)} – ${dayText(to)}`
+/** 柱图横轴：周用周一「10/19」，月「10月」，季度「26Q4」，年「2026」。 */
+export function periodLabel(unit: ConfigUnit, from: string): string {
+  if (unit === 'week') return `${month(from)}/${date(from)}`
+  if (unit === 'month') return month(from) === 1 ? `${year(from)}年1月` : `${month(from)}月`
+  if (unit === 'quarter') return `${String(year(from)).slice(2)}Q${quarter(from)}`
+  return String(year(from))
 }
 
-/** 「10-19」：趋势图横轴，一周用周一表示。 */
-export function weekLabel(week: Pick<ConfigWeek, 'week_from'>): string {
-  return week.week_from.slice(5)
+/** 一期的完整写法：「10月19日 – 10月25日」「2026年10月」「2026年第4季度」「2026年」。 */
+export function periodRange(unit: ConfigUnit, from: string, to: string): string {
+  if (unit === 'week') return `${dayText(from)} – ${dayText(to)}`
+  if (unit === 'month') return `${year(from)}年${month(from)}月`
+  if (unit === 'quarter') return `${year(from)}年第${quarter(from)}季度`
+  return `${year(from)}年`
 }
 
-/** 本周比上周多了几个。 */
-export function deltaText(current: number, previous: number): { text: string; tone: 'good' | 'bad' | 'flat' } {
+/** 所选这期叫什么：当前这期叫「本周 / 本月」，前一期叫「上周 / 上月」，再早的直接写日期。 */
+export function periodName(report: Pick<CrawlerConfigReport, 'unit' | 'period_from' | 'period_to' | 'current_from' | 'periods'>): string {
+  const [current, previous] = RELATIVE[report.unit]
+  if (report.period_from === report.current_from) return current
+  if (report.period_from === report.periods.at(-2)?.period_from) return previous
+  return periodRange(report.unit, report.period_from, report.period_to)
+}
+
+/** 「较上周 +64」：多了绿、少了红、一样写持平。上一期没有配置时不比。 */
+export function deltaText(current: number, previous: number, unit: ConfigUnit): { text: string; tone: 'good' | 'bad' | 'flat' } {
+  const name = `上一${UNITS.find(item => item.value === unit)?.name ?? '期'}`
   const diff = current - previous
-  if (diff === 0) return { text: '与上周持平', tone: 'flat' }
-  return { text: `较上周 ${diff > 0 ? '+' : ''}${diff.toLocaleString()}`, tone: diff > 0 ? 'good' : 'bad' }
+  if (diff === 0) return { text: `与${name}持平`, tone: 'flat' }
+  return { text: `较${name} ${diff > 0 ? '+' : '−'}${Math.abs(diff).toLocaleString()}`, tone: diff > 0 ? 'good' : 'bad' }
 }
 
 /** 同步还在排队或执行中。 */
@@ -49,44 +72,143 @@ export function syncFailure(status: ConfigSyncStatus | null): string {
   return `最近一次同步失败：${last.error_message || '原因未知'}。页面数据停在上次成功同步时。`
 }
 
-/** 有数据的周少于两周时柱图没有可比的，不画。 */
-export function trendWorthShowing(weeks: ConfigWeek[]): boolean {
-  return weeks.filter(week => week.new > 0).length >= 2
+/** 贴进 Excel、微信就是每周汇报那张「省份 / 配置网站数量 / 总计」，制表符分列。 */
+export function provinceTableText(provinces: ConfigProvinceCount[], total: number): string {
+  return [['省份', '配置网站数量'], ...provinces.map(row => [row.province_name, row.new]), ['总计', total]]
+    .map(row => row.join('\t'))
+    .join('\n')
 }
 
-/** 近 12 周每周配置数量：所选那周（最后一根）用实色，其余淡一些；累计在提示框里。 */
-export function weeklyOption(weeks: ConfigWeek[], palette: ChartPalette): ChartOption {
-  const axisLabel = { color: palette.inkMuted }
-  const last = weeks.length - 1
+/** 「#2c68bb」→「rgba(44, 104, 187, 0.35)」：只淡化柱子颜色，柱顶数字不跟着变淡。不是六位十六进制的原样返回。 */
+export function tint(color: string, alpha: number): string {
+  const hex = /^#([0-9a-f]{6})$/i.exec(color.trim())?.[1]
+  if (!hex) return color
+  const [r, g, b] = [0, 2, 4].map(index => parseInt(hex.slice(index, index + 2), 16))
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+function axis(palette: ChartPalette) {
+  return { axisLine: { lineStyle: { color: palette.border } }, axisTick: { show: false }, axisLabel: { color: palette.inkMuted } }
+}
+
+function valueAxis(palette: ChartPalette) {
+  return { type: 'value', minInterval: 1, axisLabel: { color: palette.inkMuted }, splitLine: { lineStyle: { color: palette.border, type: 'dashed' } } }
+}
+
+/** 各期配置数量：所选那期实色、其余同色淡化，柱顶小字写数量。 */
+export function periodOption(unit: ConfigUnit, periods: ConfigPeriod[], selected: string, palette: ChartPalette): ChartOption {
   return {
-    grid: { left: 8, right: 8, top: 24, bottom: 4, containLabel: true },
+    grid: { left: 4, right: 4, top: 28, bottom: 0, containLabel: true },
     tooltip: {
       trigger: 'axis',
-      axisPointer: { type: 'shadow' },
+      axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(44, 104, 187, 0.06)' } },
       formatter: (params: { dataIndex: number }[]) => {
-        const week = weeks[params[0]?.dataIndex ?? -1]
-        if (!week) return ''
-        return [`<b>${week.week_from} 至 ${week.week_to}</b>`, `配置 ${week.new.toLocaleString()} 个网站`, `截至周末累计 ${week.cumulative.toLocaleString()} 个`, '点击查看这一周'].join('<br/>')
+        const item = periods[params[0]?.dataIndex ?? -1]
+        if (!item) return ''
+        return [`<b>${periodRange(unit, item.period_from, item.period_to)}</b>`, `配置 ${item.new.toLocaleString()} 个网站`, '点击查看这一期各省'].join('<br/>')
       },
     },
-    xAxis: { type: 'category', data: weeks.map(weekLabel), axisLine: { lineStyle: { color: palette.border } }, axisTick: { show: false }, axisLabel },
-    yAxis: { type: 'value', minInterval: 1, axisLabel, splitLine: { lineStyle: { color: palette.border, type: 'dashed' } } },
+    xAxis: { type: 'category', data: periods.map(item => periodLabel(unit, item.period_from)), ...axis(palette) },
+    yAxis: { ...valueAxis(palette), splitNumber: 4 },
     series: [{
       name: '配置网站数量',
       type: 'bar',
       cursor: 'pointer',
-      barMaxWidth: 36,
-      data: weeks.map((week, index) => ({
-        value: week.new,
-        itemStyle: { color: palette.success, opacity: index === last ? 1 : 0.45, borderRadius: [3, 3, 0, 0] },
-      })),
-      label: { show: true, position: 'top', color: palette.ink, formatter: (item: { value: number }) => (item.value ? String(item.value) : '') },
+      barMaxWidth: 28,
+      data: periods.map(item => {
+        const picked = item.period_from === selected
+        return {
+          value: item.new,
+          itemStyle: { color: picked ? palette.primary : tint(palette.primary, 0.35), borderRadius: [4, 4, 0, 0] },
+          label: { color: picked ? palette.ink : palette.inkMuted, fontWeight: picked ? 600 : 400 },
+        }
+      }),
+      label: { show: true, position: 'top', fontSize: 11, formatter: (item: { value: number }) => (item.value ? item.value.toLocaleString() : '') },
     }],
   }
 }
 
-/** 分省表「近 12 周」小柱：按这一行的最大值折算高度（百分比），没配置的周留一条底线。 */
-export function sparkHeights(values: number[]): number[] {
-  const max = Math.max(0, ...values)
-  return values.map(value => (value && max ? Math.max(8, Math.round((value * 100) / max)) : 0))
+/** 所选这期各省配置数量：和分省爬虫状态同一种竖柱，有几个省就几根，从多到少，柱顶写数量。 */
+export function provinceOption(provinces: ConfigProvinceCount[], palette: ChartPalette): ChartOption {
+  return {
+    grid: { left: 4, right: 4, top: 28, bottom: 0, containLabel: true },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(44, 104, 187, 0.06)' } },
+      formatter: (params: { dataIndex: number }[]) => {
+        const item = provinces[params[0]?.dataIndex ?? -1]
+        return item ? `<b>${item.province_name}</b><br/>配置 ${item.new.toLocaleString()} 个网站<br/>点击查看这些网站` : ''
+      },
+    },
+    xAxis: {
+      type: 'category',
+      data: provinces.map(item => provinceShortName(item.province_name)),
+      ...axis(palette),
+      axisLabel: { color: palette.inkMuted, interval: 0, lineHeight: 13, formatter: (name: string) => name.split('').join('\n') },
+    },
+    yAxis: { ...valueAxis(palette), splitNumber: 4 },
+    series: [{
+      name: '配置网站数量',
+      type: 'bar',
+      cursor: 'pointer',
+      barMaxWidth: 22,
+      itemStyle: { color: palette.primary, borderRadius: [4, 4, 0, 0] },
+      data: provinces.map(item => item.new),
+      label: { show: true, position: 'top', fontSize: 11, color: palette.ink, formatter: (item: { value: number }) => item.value.toLocaleString() },
+    }],
+  }
 }
+
+/** 分省爬虫状态的三段：已爬用主色、异常红、未爬用主色的浅底，叠成一根柱，柱高就是这个省的信源总数，深色占多少一眼看出覆盖。 */
+export const STATUS_SERIES = [
+  { key: 'online', name: '已爬', color: (palette: ChartPalette) => palette.primary },
+  { key: 'abnormal', name: '异常', color: (palette: ChartPalette) => palette.danger },
+  { key: 'pending', name: '未爬', color: (palette: ChartPalette) => tint(palette.primary, 0.18) },
+] as const
+
+/** 按信源总数从多到少；省份为空的放最后。 */
+export function statusRows(rows: ConfigStatusRow[]): ConfigStatusRow[] {
+  return [...rows].sort((a, b) => Number(a.province_name === BLANK_PROVINCE) - Number(b.province_name === BLANK_PROVINCE) || b.total - a.total)
+}
+
+export function statusOption(rows: ConfigStatusRow[], palette: ChartPalette): ChartOption {
+  return {
+    legend: { left: 0, top: 0, itemWidth: 12, itemHeight: 12, textStyle: { color: palette.inkMuted } },
+    grid: { left: 4, right: 4, top: 40, bottom: 0, containLabel: true },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(44, 104, 187, 0.06)' } },
+      formatter: (params: { dataIndex: number }[]) => {
+        const row = rows[params[0]?.dataIndex ?? -1]
+        if (!row) return ''
+        const share = row.total ? ((row.online / row.total) * 100).toFixed(1) : '0.0'
+        return [
+          `<b>${row.province_name}</b>（共 ${row.total.toLocaleString()} 个）`,
+          `已爬 ${row.online.toLocaleString()}　未爬 ${row.pending.toLocaleString()}　异常 ${row.abnormal.toLocaleString()}`,
+          `覆盖率 ${share}%`,
+        ].join('<br/>')
+      },
+    },
+    xAxis: {
+      type: 'category',
+      data: rows.map(row => provinceShortName(row.province_name)),
+      ...axis(palette),
+      // 中文竖排，三十多个省挤在一行也不重叠，和爬虫监测的省份分布一样。
+      axisLabel: { color: palette.inkMuted, interval: 0, lineHeight: 13, formatter: (name: string) => name.split('').join('\n') },
+    },
+    yAxis: { ...valueAxis(palette), splitNumber: 4 },
+    series: STATUS_SERIES.map(series => ({
+      name: series.name,
+      type: 'bar',
+      stack: 'status',
+      barMaxWidth: 22,
+      itemStyle: { color: series.color(palette), borderRadius: series.key === 'pending' ? [4, 4, 0, 0] : 0 },
+      data: rows.map(row => row[series.key]),
+      // 柱顶写已爬数量（最上面一段负责写，才落在整根柱子顶上）。
+      label: series.key === 'pending'
+        ? { show: true, position: 'top', fontSize: 11, color: palette.primary, fontWeight: 600, formatter: (params: { dataIndex: number }) => (rows[params.dataIndex]?.online ?? 0).toLocaleString() }
+        : { show: false },
+    })),
+  }
+}
+

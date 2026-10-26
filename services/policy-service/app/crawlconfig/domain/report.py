@@ -1,30 +1,57 @@
-"""爬虫配置统计的口径：信源表一行算一个栏目，按上线时间落在哪个自然周（周一到周日）统计每周新增。
+"""爬虫配置统计的口径：信源表一行算一个栏目，按上线时间落在哪一期（自然周、月、季度、年）统计配置数量。
 
-统计起始周之前上线的（含首次同步一次性标上的历史网站、没填上线时间的已爬）算期初存量，不算进任何一周的新增。
+上线时间是统一补填日的（不知道真实配置日）和已爬没填上线时间的算期初存量，不算进任何一期。
 """
 
 from __future__ import annotations
 
 from datetime import date, timedelta
-from typing import Any
+from typing import Any, Literal
 
-TREND_WEEKS = 12
+Unit = Literal["week", "month", "quarter", "year"]
+UNITS: tuple[Unit, ...] = ("week", "month", "quarter", "year")
+# 柱图每种粒度往前看几期（含当前这期）；年看到最早有数据的那年为止，最多这么多年。
+WINDOW: dict[Unit, int] = {"week": 12, "month": 12, "quarter": 8, "year": 10}
+_MONTHS: dict[Unit, int] = {"month": 1, "quarter": 3, "year": 12}
 BLANK_PROVINCE = "（未填省份）"
 
 
-def week_start(day: date) -> date:
-    return day - timedelta(days=day.weekday())
+def period_start(day: date, unit: Unit) -> date:
+    if unit == "week":
+        return day - timedelta(days=day.weekday())
+    months = _MONTHS[unit]
+    return date(day.year, (day.month - 1) // months * months + 1, 1)
 
 
-def week_end(day: date) -> date:
-    return week_start(day) + timedelta(days=6)
+def shift(start: date, unit: Unit, count: int) -> date:
+    """start 所在这期往后（负数往前）挪 count 期，返回那一期的第一天。"""
+
+    start = period_start(start, unit)
+    if unit == "week":
+        return start + timedelta(weeks=count)
+    index = start.year * 12 + start.month - 1 + count * _MONTHS[unit]
+    return date(index // 12, index % 12 + 1, 1)
 
 
-def trend_weeks(selected: date, count: int = TREND_WEEKS) -> list[date]:
-    """所选周和它之前的 count - 1 周（周一），从早到晚。"""
+def period_end(start: date, unit: Unit) -> date:
+    return shift(start, unit, 1) - timedelta(days=1)
 
-    last = week_start(selected)
-    return [last - timedelta(weeks=count - 1 - offset) for offset in range(count)]
+
+def default_period(today: date, unit: Unit) -> date:
+    """周看上周：爬虫同事周五批量建规则，周一汇报的是上一整周；月、季度、年看当前这期，到今天为止。"""
+
+    current = period_start(today, unit)
+    return shift(current, unit, -1) if unit == "week" else current
+
+
+def window(today: date, unit: Unit, earliest: date | None) -> list[date]:
+    """柱图的各期（第一天），从早到晚，最后一期是今天所在这期。年只从最早有数据的那年画起。"""
+
+    count = WINDOW[unit]
+    if unit == "year" and earliest is not None:
+        count = min(count, today.year - earliest.year + 1)
+    current = period_start(today, unit)
+    return [shift(current, unit, offset) for offset in range(1 - max(count, 1), 1)]
 
 
 def _parse_day(text: str) -> date | None:
@@ -34,55 +61,36 @@ def _parse_day(text: str) -> date | None:
         return None
 
 
-def weekly_series(daily: dict[str, int], weeks: list[date], baseline: int) -> list[dict[str, Any]]:
-    """按天的上线数加总成每周新增，以及截至每周周日的累计上线（期初存量 + 起始周以来的新增）。
+def earliest(daily: dict[str, int]) -> date | None:
+    days = [day for day in map(_parse_day, daily) if day is not None]
+    return min(days, default=None)
 
-    daily 是统计起始周以来按上线日期的计数；早于第一周的（所选周离起始周超过 count 周时）计入累计的起点。
-    """
 
-    if not weeks:
-        return []
-    counts = dict.fromkeys(weeks, 0)
-    carried = baseline
+def count_between(daily: dict[str, int], start: date, end: date) -> int:
+    total = 0
     for text, number in daily.items():
         day = _parse_day(text)
-        if day is None:
-            continue
-        monday = week_start(day)
-        if monday in counts:
-            counts[monday] += number
-        elif monday < weeks[0]:
-            carried += number
-    series = []
-    for monday in weeks:
-        carried += counts[monday]
-        series.append(
-            {
-                "week_from": monday.isoformat(),
-                "week_to": week_end(monday).isoformat(),
-                "new": counts[monday],
-                "cumulative": carried,
-            }
-        )
-    return series
+        if day is not None and start <= day <= end:
+            total += number
+    return total
 
 
-def province_weekly(rows: list[tuple[str, str, int]], weeks: list[date]) -> dict[str, list[int]]:
-    """各省每周新配置的栏目数，和 weeks 一一对应；不在这些周里的不算。省份为空的记在 BLANK_PROVINCE 名下。"""
+def series(daily: dict[str, int], starts: list[date], unit: Unit) -> list[dict[str, Any]]:
+    """每期配置了多少网站；daily 是按上线日期的计数（已去掉期初）。"""
 
-    index = {monday: position for position, monday in enumerate(weeks)}
-    result: dict[str, list[int]] = {}
-    for province, text, number in rows:
+    counts = dict.fromkeys(starts, 0)
+    for text, number in daily.items():
         day = _parse_day(text)
-        position = index.get(week_start(day)) if day else None
-        if position is None:
-            continue
-        result.setdefault(province or BLANK_PROVINCE, [0] * len(weeks))[position] += number
-    return result
+        if day is not None and (start := period_start(day, unit)) in counts:
+            counts[start] += number
+    return [
+        {"period_from": start.isoformat(), "period_to": period_end(start, unit).isoformat(), "new": number}
+        for start, number in counts.items()
+    ]
 
 
 def province_order(row: dict[str, Any]) -> tuple[int, str, str]:
-    """按省份编码排（和码表、领导习惯的省份顺序一致），没有编码的排后面，没填省份的排最后。"""
+    """按省份编码排（和码表、信源表透视的省份顺序一致），没有编码的排后面，没填省份的排最后。"""
 
     name = str(row.get("province_name") or "")
     code = str(row.get("province_code") or "")

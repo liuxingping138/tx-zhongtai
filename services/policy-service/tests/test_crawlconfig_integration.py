@@ -112,8 +112,8 @@ async def test_abandon_marks_a_running_batch_failed() -> None:
         assert row is not None and (row.status, row.error_message) == ("failed", "执行超时")
 
 
-async def test_report_counts_sites_per_week_and_keeps_backfilled_ones_as_baseline() -> None:
-    """统一补填日上线的、已爬没填日期的算期初；所选周的数量按上线时间落在周一到周日，近 12 周和累计都有。"""
+async def test_report_counts_sites_per_period_and_keeps_backfilled_ones_as_baseline() -> None:
+    """统一补填日上线的、已爬没填日期的算期初；所选这期的数量按上线时间落在周一到周日，按月也一样口径。"""
 
     async with SessionLocal() as session:
         session.add_all(
@@ -123,24 +123,24 @@ async def test_report_counts_sites_per_week_and_keeps_backfilled_ones_as_baselin
                 _source("B3", "已爬", "2026-10-16", province="河北省"),  # 上一周
                 _source("B4", "异常", "2026-10-23"),  # 本周，后来标了异常
                 _source("B5", "已爬", "2026-10-25"),  # 本周周日
-                _source("B6", "已爬", "2024-10-15"),  # 很早以前：算在 12 周之前的累计里
+                _source("B6", "已爬", "2024-10-15"),  # 很早以前
                 _source("B7", "未爬"),
                 _source("B8", "", province=""),
             ]
         )
         await session.commit()
     async with SessionLocal() as session:
-        data = await report.build_report(session, date(2026, 10, 23))
-    assert (data["week_from"], data["week_to"], data["backfill_date"]) == ("2026-10-19", "2026-10-25", "2026-10-22")
-    assert data["baseline"] == 2
-    assert data["previous_new"] == 1
-    assert len(data["trend"]) == 12
-    assert [(item["new"], item["cumulative"]) for item in data["trend"][-2:]] == [(1, 4), (2, 6)]
+        data = await report.build_report(session, "week", date(2026, 10, 23))
+        month = await report.build_report(session, "month", date(2026, 10, 1))
+    assert (data["period_from"], data["period_to"], data["backfill_date"]) == ("2026-10-19", "2026-10-25", "2026-10-22")
+    assert (data["baseline"], data["new"], data["previous_new"]) == (2, 2, 1)
+    assert data["provinces"] == [{"province_name": "北京市", "new": 2}]
     assert [site["site_code"] for site in data["new_sites"]] == ["B4", "B5"]
-    weekly = {row["province_name"]: row["weekly"][-2:] for row in data["provinces"]}
-    assert weekly == {"北京市": [0, 2], "河北省": [1, 0], "（未填省份）": [0, 0]}
     counts = {
-        row["province_name"]: (row["total"], row["online"], row["pending"], row["abnormal"], row["new"])
-        for row in data["provinces"]
+        row["province_name"]: (row["total"], row["online"], row["pending"], row["abnormal"]) for row in data["status"]
     }
-    assert counts == {"北京市": (6, 4, 1, 1, 2), "河北省": (1, 1, 0, 0, 0), "（未填省份）": (1, 0, 1, 0, 0)}
+    assert counts == {"北京市": (6, 4, 1, 1), "河北省": (1, 1, 0, 0), "（未填省份）": (1, 0, 1, 0)}
+    assert (month["new"], month["provinces"]) == (
+        3,
+        [{"province_name": "北京市", "new": 2}, {"province_name": "河北省", "new": 1}],
+    )

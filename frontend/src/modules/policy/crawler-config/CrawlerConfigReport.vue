@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, ArrowRight, Clock, Refresh } from '@element-plus/icons-vue'
+import { Refresh } from '@element-plus/icons-vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
@@ -9,11 +9,10 @@ import {
   getCrawlerConfigReport,
   triggerConfigSync,
   type ConfigSyncStatus,
+  type ConfigUnit,
   type CrawlerConfigReport,
 } from '@/api/crawlerConfig'
 import { errorMessage } from '@/api/errors'
-import BaseChart from '@/components/charts/BaseChart.vue'
-import { chartPalette } from '@/components/charts/echarts'
 import ExportButton from '@/components/ExportButton.vue'
 import { useExcelExport } from '@/composables/useExcelExport'
 import { configResultText } from '@/modules/system/scheduler/crawlerConfig'
@@ -21,69 +20,63 @@ import { useAuthStore } from '@/stores/auth'
 import { formatTime } from '@/utils/time'
 import ConfigNewSites from './ConfigNewSites.vue'
 import ConfigOverview from './ConfigOverview.vue'
-import ConfigProvinceTable from './ConfigProvinceTable.vue'
-import { rangeText, syncFailure, syncRunning, trendWorthShowing, weekTitle, weeklyOption } from './report'
+import ConfigPeriodPanel from './ConfigPeriodPanel.vue'
+import ConfigStatusPanel from './ConfigStatusPanel.vue'
+import { periodName as nameOf, syncFailure, syncRunning } from './report'
 
 const RESOURCE = 'policy.crawler_config'
 const POLL_MS = 3000
 const auth = useAuthStore()
-const palette = chartPalette(getComputedStyle(document.documentElement))
 
-const week = ref('')
+const unit = ref<ConfigUnit>('week')
+/** 所选这期的第一天；空表示用后端的默认（周看上周，月、季度、年看当前这期）。 */
+const period = ref('')
 const report = ref<CrawlerConfigReport | null>(null)
 const status = ref<ConfigSyncStatus | null>(null)
 const loading = ref(false)
 const error = ref('')
 const syncing = ref(false)
-/** 分省表里点中的省份：明细只看这个省，换周后清掉。 */
+/** 各省柱图里点中的省份：抽屉里看这个省这期配置的网站。 */
 const province = ref('')
 let sequence = 0
 let pollTimer: ReturnType<typeof setTimeout> | undefined
 
 const running = computed(() => syncRunning(status.value))
 const failure = computed(() => syncFailure(status.value))
-const trend = computed(() => weeklyOption(report.value?.trend ?? [], palette))
-const isCurrentWeek = computed(() => !week.value || week.value === mondayOf(new Date()))
-const abnormalLink = computed(() => (auth.canRead('policy.sources') ? { path: '/policy/sources', query: { crawler_status: '异常' } } : null))
+const periodName = computed(() => (report.value ? nameOf(report.value) : ''))
+/** 卡片和透视表的数字点了去信源管理；没有信源管理权限就只是数字。 */
+const sourcesLink = computed(() => (auth.canRead('policy.sources')
+  ? (crawlerStatus: string, provinceName = '') => ({
+      path: '/policy/sources',
+      query: { ...(crawlerStatus ? { crawler_status: crawlerStatus } : {}), ...(provinceName ? { province_name: provinceName } : {}) },
+    })
+  : null))
 /** 领导只看数据更新时间；能同步的人再看规则表的对账细节（没填编码、信源表里没有的）。 */
 const lastSync = computed(() => {
   const sync = report.value?.last_sync
   if (!sync) return '规则表还没有同步过'
-  const time = `数据更新于 ${formatTime(sync.finished_at).slice(0, 16)}`
-  return auth.canFull(RESOURCE) ? `${time}：${configResultText(sync)}` : time
+  return `数据更新于 ${formatTime(sync.finished_at).slice(0, 16)}`
 })
-const weekName = computed(() => (isCurrentWeek.value ? '本周' : weekTitle(report.value?.week_from ?? '')))
+const syncDetail = computed(() => {
+  const sync = report.value?.last_sync
+  return sync && auth.canFull(RESOURCE) ? `${configResultText(sync)}。每天 18:00 按爬虫同事的规则表自动更新` : '每天 18:00 按爬虫同事的规则表自动更新'
+})
 
 const { exporting, onExport } = useExcelExport({
   path: `${CRAWLER_CONFIG_BASE}/report/export`,
-  filename: () => `爬虫配置统计_${report.value?.week_from ?? ''}至${report.value?.week_to ?? ''}.xlsx`,
-  filters: (): Record<string, string> => (week.value ? { week: week.value } : {}),
+  filename: () => `爬虫配置统计_${report.value?.period_from ?? ''}至${report.value?.period_to ?? ''}.xlsx`,
+  filters: (): Record<string, string> => ({ unit: unit.value, ...(period.value ? { period: period.value } : {}) }),
 })
 
-function pad(value: number): string {
-  return String(value).padStart(2, '0')
-}
-
-function mondayOf(day: Date): string {
-  const monday = new Date(day.getFullYear(), day.getMonth(), day.getDate() - ((day.getDay() + 6) % 7))
-  return `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`
-}
-
-function shiftWeek(weeks: number): void {
-  const [year = 0, month = 1, day = 1] = (report.value?.week_from ?? mondayOf(new Date())).split('-').map(Number)
-  pickWeek(mondayOf(new Date(year, month - 1, day + weeks * 7)))
-}
-
-function pickWeek(value: string | null): void {
-  week.value = value ? mondayOf(new Date(`${value}T00:00:00`)) : ''
-  province.value = ''
+function pickUnit(value: ConfigUnit): void {
+  unit.value = value
+  period.value = ''
   void load()
 }
 
-/** 点趋势图里的某一周，整页切到那一周。 */
-function pickTrendWeek(params: { dataIndex: number }): void {
-  const picked = report.value?.trend[params.dataIndex]
-  if (picked) pickWeek(picked.week_from === mondayOf(new Date()) ? null : picked.week_from)
+function pickPeriod(from: string): void {
+  period.value = from
+  void load()
 }
 
 async function load(): Promise<void> {
@@ -91,8 +84,11 @@ async function load(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    const data = await getCrawlerConfigReport(week.value || undefined)
-    if (current === sequence) report.value = data
+    const data = await getCrawlerConfigReport(unit.value, period.value || undefined)
+    if (current === sequence) {
+      report.value = data
+      period.value = data.period_from
+    }
   } catch (cause) {
     if (current === sequence) error.value = errorMessage(cause, '暂时无法获取统计，请稍后重试。')
   } finally {
@@ -144,50 +140,15 @@ onBeforeUnmount(() => clearTimeout(pollTimer))
     v-loading="loading && !report"
     class="config"
   >
-    <h1 class="config__sr-only">
-      爬虫配置统计
-    </h1>
-    <section
-      class="config__bar"
-      aria-label="统计周"
-    >
-      <div class="config__week">
-        <el-button
-          :icon="ArrowLeft"
-          aria-label="上一周"
-          @click="shiftWeek(-1)"
-        />
-        <el-date-picker
-          :model-value="report?.week_from ?? week"
-          type="week"
-          format="YYYY 年第 ww 周"
-          value-format="YYYY-MM-DD"
-          :clearable="false"
-          :disabled-date="(day: Date) => day.getTime() > Date.now()"
-          aria-label="选择周"
-          class="config__picker"
-          @update:model-value="pickWeek"
-        />
-        <el-button
-          :icon="ArrowRight"
-          aria-label="下一周"
-          :disabled="isCurrentWeek"
-          @click="shiftWeek(1)"
-        />
+    <div class="heading">
+      <div class="caption">
+        <h1>爬虫配置统计</h1>
         <span
-          v-if="report"
-          class="config__range"
-        >{{ rangeText(report.week_from, report.week_to) }}</span>
-        <el-button
-          v-if="!isCurrentWeek"
-          link
-          type="primary"
-          @click="pickWeek(null)"
-        >
-          回到本周
-        </el-button>
+          class="sync-time"
+          :title="syncDetail"
+        >{{ lastSync }}</span>
       </div>
-      <div class="config__actions">
+      <div class="actions">
         <el-button
           v-if="auth.canFull(RESOURCE)"
           :icon="Refresh"
@@ -200,19 +161,13 @@ onBeforeUnmount(() => clearTimeout(pollTimer))
           :allowed="auth.canExport(RESOURCE)"
           :loading="exporting"
           :disabled="!report"
-          hint="第一张是所选这周各省配置网站数量，另有分省每周配置、分省累计、配置明细、每周趋势、异常清单。"
+          hint="第一张是正在看的这一期各省配置网站数量（省份 / 配置网站数量 / 总计），另有配置明细、分省爬虫状态、各期趋势、异常清单。"
           @click="onExport"
         >
           下载报告
         </ExportButton>
       </div>
-    </section>
-    <p class="config__sync">
-      <el-icon aria-hidden="true">
-        <Clock />
-      </el-icon>
-      {{ lastSync }}。每天 18:00 按爬虫同事的规则表自动更新。
-    </p>
+    </div>
     <el-alert
       v-if="failure || error"
       :title="failure || error"
@@ -224,51 +179,37 @@ onBeforeUnmount(() => clearTimeout(pollTimer))
     <template v-if="report">
       <ConfigOverview
         :report="report"
-        :week-name="weekName"
-        :abnormal-link="abnormalLink"
+        :period-name="periodName"
+        :sources-link="sourcesLink"
       />
-      <section
-        v-if="trendWorthShowing(report.trend)"
-        class="trend"
-      >
-        <header>
-          <h2>每周配置数量</h2>
-          <p>近 12 周，深色是{{ weekName }}；点柱子查看那一周</p>
-        </header>
-        <BaseChart
-          :option="trend"
-          :label="`近 12 周每周配置网站数量：${report.trend.map(item => `${item.week_from} 起 ${item.new} 个`).join('，')}`"
-          height="220px"
-          @select="pickTrendWeek"
-        />
-      </section>
-      <ConfigProvinceTable
+      <ConfigPeriodPanel
         :report="report"
-        :week-name="weekName"
-        :selected="province"
-        @select="province = $event"
+        :period-name="periodName"
+        :loading="loading"
+        @unit="pickUnit"
+        @period="pickPeriod"
+        @province="province = $event"
+      />
+      <ConfigStatusPanel
+        :report="report"
+        :sources-link="sourcesLink"
       />
       <ConfigNewSites
         :report="report"
-        :week-name="weekName"
+        :period-name="periodName"
         :province="province"
-        @clear="province = ''"
+        @close="province = ''"
       />
     </template>
   </div>
 </template>
 
 <style scoped>
-.config { display: flex; flex-direction: column; gap: 14px; }
-.config__sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.config__bar, .trend { border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: var(--zt-panel); }
-.config__bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 12px; padding: 12px 16px; }
-.config__week, .config__actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.config__week .el-button + .el-button, .config__actions .el-button + .el-button { margin-left: 0; }
-.config__picker { width: 168px; }
-.config__range { margin: 0 4px; color: var(--zt-ink-900); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.config__sync { display: flex; align-items: center; gap: 6px; margin: -4px 0 0; color: var(--zt-ink-500); font-size: 12px; line-height: 1.6; }
-.trend { padding: 16px 20px 8px; min-width: 0; }
-.trend h2 { margin: 0; color: var(--zt-ink-900); font-size: 15px; font-weight: 600; }
-.trend p { margin: 4px 0 0; color: var(--zt-ink-500); font-size: 12px; }
+.config { display: flex; flex-direction: column; gap: var(--zt-space-3); }
+.heading, .caption, .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
+.heading { justify-content: space-between; }
+.caption h1 { margin: 0; font-size: 14px; font-weight: 600; color: var(--zt-ink-900); }
+.sync-time { color: var(--zt-ink-500); font-size: 12px; font-variant-numeric: tabular-nums; }
+.actions { gap: 8px; }
+.actions .el-button + .el-button { margin-left: 0; }
 </style>
