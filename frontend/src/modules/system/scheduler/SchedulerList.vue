@@ -318,7 +318,10 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
 .job-cell__note { color: var(--zt-ink-500); font-size: 12px; font-variant-numeric: tabular-nums; }
 .scheduler-note { color: var(--zt-ink-500); font-size: 13px; line-height: 1.8; margin: 16px 0; }
 .scheduler-page :deep(.list-page) { min-height: 0; max-height: none; }
-/* 任务不多：表格按内容撑开，不出内部滚动条。ScrollPort 默认 height: 0 再靠 flex 填满固定高度，这里两层都改回按内容算高。 */
-.scheduler-page :deep(.list-page__results) { flex: none; height: auto; }
-.scheduler-page :deep(.list-page__results .scroll-port__view) { flex: none; }
+/*
+ * 表格按任务数撑开，底下不留白；任务多到一屏放不下时封顶，改在表格里滚，表头吸顶、横向滚动条留在屏幕内。
+ * ScrollPort 默认 height: 0 再靠 flex 填满固定高度，这里改成按内容算高、最多到这么高。
+ */
+.scheduler-page :deep(.list-page__results) { flex: none; height: auto; max-height: max(360px, calc(100dvh - 250px)); }
+.scheduler-page :deep(.list-page__results .scroll-port__view) { flex: 0 1 auto; }
 </style>
