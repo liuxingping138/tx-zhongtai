@@ -3,7 +3,7 @@ import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { listAiTasks, type AiTask } from '@/api/aiTagging'
-import { listJobs, triggerJob, updateJob, type ScheduledJob, type SchedulerOverview } from '@/api/scheduler'
+import { listJobs, triggerJob, updateJob, type ScheduledJob, type SchedulerOverview, type WorkerStatus } from '@/api/scheduler'
 import { errorMessage } from '@/api/errors'
 import { useAuthStore } from '@/stores/auth'
 import { formatTime } from '@/utils/time'
@@ -14,12 +14,20 @@ import JobSettingsDrawer from './JobSettingsDrawer.vue'
 import SchedulerHistoryDrawer from './SchedulerHistoryDrawer.vue'
 import { TASK_INTRO, formatYuan, taskOfJob } from './aiTagging'
 import { CRAWLER_CONFIG_JOB, configProgress } from './crawlerConfig'
+import { SESSION_CLEANUP_JOB, cleanupProgress } from './sessionCleanup'
 import { STATUS_TEXT, statusType, type RunStatus } from './runStatus'
 import { useSchedulerHistory } from './useSchedulerHistory'
 
 const auth = useAuthStore()
 const canManage = computed(() => auth.canFull('system.scheduler'))
 const overview = ref<SchedulerOverview | null>(null)
+// 任务分散在各服务的执行进程里：哪个服务离线或取不到就点名，不影响看其他服务的任务。
+const offline = computed(() => overview.value?.workers.filter(worker => !worker.online) ?? [])
+const latestHeartbeat = computed(() =>
+  overview.value?.workers.map(worker => worker.heartbeat_at ?? '').sort().at(-1) || null)
+function offlineText(worker: WorkerStatus): string {
+  return worker.error ? `${worker.service}：${worker.error}` : `${worker.service}的执行进程暂未连接，任务保留在队列中，恢复后自动处理`
+}
 // 政策 AI 打标三个任务的设置、今天花费和进度，按调度编码对到任务行上。
 const aiTasks = ref<AiTask[]>([])
 const loading = ref(false)
@@ -43,6 +51,7 @@ function aiTask(job: ScheduledJob): AiTask | null {
 function progress(job: ScheduledJob): string {
   if (job.code === 'crawler') return formatTime(job.watermark)
   if (job.code === CRAWLER_CONFIG_JOB) return configProgress(job.last_run)
+  if (job.code === SESSION_CLEANUP_JOB) return cleanupProgress(job.last_run)
   const task = aiTask(job)
   if (!task) return '—'
   if (task.code !== 'type') return task.pending ? `待${task.code === 'interpret' ? '解读' : '补'} ${task.pending} 条` : '没有待办'
@@ -83,7 +92,10 @@ async function load(quiet = false) {
   const current = ++loadSequence
   try {
     // 打标设置取不到（如 ai-service 维护）不影响看任务列表，保留上一次的数据。
-    const [data, tasks] = await Promise.all([listJobs(), listAiTasks().catch(() => null)])
+    const [data, tasks] = await Promise.all([
+      listJobs(cause => errorMessage(cause, '服务暂不可用')),
+      listAiTasks().catch(() => null),
+    ])
     if (!disposed && current === loadSequence) {
       overview.value = data
       if (tasks) aiTasks.value = tasks.items
@@ -96,15 +108,18 @@ async function load(quiet = false) {
 async function execute(job: ScheduledJob) {
   if (pending.value) return
   const task = taskOfJob(job.code)
+  const sync = job.code === 'crawler' || job.code === CRAWLER_CONFIG_JOB
   const [message, title] = task
     ? [`${TASK_INTRO[task]}会产生模型费用，按这个任务的每日上限封顶。`, `立即执行一批「${job.name}」？`]
-    : [`按上次成功水位补齐「${job.name}」的数据，不改变每日计划。`, '立即执行增量同步？']
+    : sync
+      ? [`按上次成功水位补齐「${job.name}」的数据，不改变每日计划。`, '立即执行增量同步？']
+      : ['立即执行一次，不改变每日计划。', `立即执行「${job.name}」？`]
   const ok = await ElMessageBox.confirm(message, title,
     { confirmButtonText: '开始执行', cancelButtonText: '取消', type: 'info' }).then(() => true, () => false)
   if (!ok) return
   pending.value = job.code
   try {
-    await triggerJob(job.code)
+    await triggerJob(job.code, { base: job.base })
     ElMessage.success('任务已加入队列，执行进程会自动处理')
     await load()
   } catch (e) { ElMessage.error(errorMessage(e, '提交失败')) }
@@ -124,7 +139,7 @@ async function toggle(job: ScheduledJob, enabled: boolean) {
   }
   toggling.value = job.code
   try {
-    await updateJob(job.code, { enabled, daily_time: job.daily_time, version: job.version })
+    await updateJob(job.code, { enabled, daily_time: job.daily_time, version: job.version }, { base: job.base })
     ElMessage.success(enabled ? `已启用，每天 ${job.daily_time} 执行` : '已停用每日计划，排队中的执行已取消')
   } catch (e) { ElMessage.error(errorMessage(e, '切换失败，请刷新后重试')) }
   finally {
@@ -157,18 +172,19 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
     >
       <div>
         <el-tag
-          :type="overview?.worker_online ? 'success' : 'warning'"
+          :type="overview && !offline.length ? 'success' : 'warning'"
           effect="plain"
         >
-          {{ !overview ? '正在检查调度状态' : overview.worker_online ? '自动调度运行中' : '执行进程离线' }}
+          {{ !overview ? '正在检查调度状态' : !offline.length ? '自动调度运行中' : `${offline.length} 个服务的执行进程离线` }}
         </el-tag>
         <span>每日按北京时间执行 · 自动补齐缺失增量</span>
       </div>
-      <span v-if="overview?.heartbeat_at">最近心跳 {{ formatTime(overview.heartbeat_at) }}</span>
+      <span v-if="latestHeartbeat && !offline.length">最近心跳 {{ formatTime(latestHeartbeat) }}</span>
     </div>
     <el-alert
-      v-if="overview && !overview.worker_online"
-      title="执行进程暂未连接，任务将保留在队列中，恢复后自动处理。"
+      v-for="worker in offline"
+      :key="worker.service"
+      :title="offlineText(worker)"
       type="warning"
       :closable="false"
       show-icon
@@ -302,6 +318,6 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
 .job-cell__note { color: var(--zt-ink-500); font-size: 12px; font-variant-numeric: tabular-nums; }
 .scheduler-note { color: var(--zt-ink-500); font-size: 13px; line-height: 1.8; margin: 16px 0; }
 .scheduler-page :deep(.list-page) { min-height: 0; max-height: none; }
-/* 任务只有四个：表格按内容撑开，不出内部滚动条。 */
+/* 任务不多：表格按内容撑开，不出内部滚动条。 */
 .scheduler-page :deep(.list-page__results) { flex: none; min-height: 290px; }
 </style>

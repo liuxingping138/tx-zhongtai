@@ -76,7 +76,7 @@ async function saveTask(current: AiTask): Promise<void> {
 
 async function saveSchedule(current: ScheduledJob): Promise<void> {
   if (schedule.enabled === current.enabled && schedule.daily_time === current.daily_time) return
-  await updateJob(current.code, { ...schedule, version: current.version })
+  await updateJob(current.code, { ...schedule, version: current.version }, { base: current.base })
 }
 
 async function save(): Promise<void> {

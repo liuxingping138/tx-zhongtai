@@ -29,6 +29,8 @@ _EVENT_META: dict[str, tuple[str, str, str, str]] = {
     "iam.catalog.synced": ("system", "catalog_sync", "catalog", "同步资源清单"),
     "iam.admin.created": ("system.users", "admin_create", "user", "创建初始管理员"),
     "iam.authz.denied": ("system", "authorize", "resource", "鉴权拒绝"),
+    "scheduler.updated": ("system.scheduler", "update", "scheduled_job", "修改每日计划"),
+    "scheduler.triggered": ("system.scheduler", "execute", "scheduled_job", "手动执行定时任务"),
 }
 
 

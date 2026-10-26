@@ -20,7 +20,7 @@ export function useSchedulerHistory() {
     const current = ++sequence
     loading.value = !quiet
     try {
-      const data = await listRuns(job.value.code, page.value)
+      const data = await listRuns(job.value.code, page.value, { base: job.value.base })
       if (current !== sequence) return
       records.value = data.items
       total.value = data.total

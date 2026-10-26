@@ -15,10 +15,3 @@ TASK_COST = {"type": "type_cost", "interpret": "interpret_cost", "opportunity": 
 
 def job_code(task: str) -> str:
     return JOB_PREFIX + task
-
-
-def task_of(job: str) -> str | None:
-    """任务调度编码 -> 打标任务编码；不是打标任务返回 None。"""
-
-    task = job.removeprefix(JOB_PREFIX)
-    return task if job.startswith(JOB_PREFIX) and task in TASKS else None

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -19,11 +20,10 @@ from app.common.security import get_authz_client
 from app.core.database import SessionLocal, engine
 from app.crawler.domain.models import CrawlerSyncRun
 from app.main import app
-from app.scheduler.application import jobs as service
+from app.scheduler.application.jobs import run_crawler, scheduler
 from app.scheduler.domain.models import ScheduledRun
 from app.scheduler.domain.scheduling import LEADER_LOCK
-from app.scheduler.repositories import jobs as repo
-from app.worker import scheduler as worker
+from app.worker.scheduler import runner
 
 pytestmark = pytest.mark.skipif(os.environ.get("SCHEDULER_INTEGRATION") != "1", reason="需要独立 scheduler_test 数据库")
 ACTOR = Actor(id=str(uuid.uuid4()), name="调度验收")
@@ -49,7 +49,7 @@ async def isolated():
 
 async def trigger(code="crawler"):
     async with SessionLocal() as session:
-        row = await service.trigger_job(session, code, ACTOR)
+        row = await scheduler.trigger_job(session, code, ACTOR)
         await session.commit()
         return row
 
@@ -59,55 +59,55 @@ async def test_parallel_manual_requests_coalesce():
     assert sum(isinstance(x, dict) for x in results) == 1
     assert sum(isinstance(x, VersionConflictError) for x in results) == 1
     async with SessionLocal() as session:
-        assert len((await repo.history(session, "crawler", 1, 20))[0]) == 1
+        assert (await scheduler.history(session, "crawler", 1, 20))["total"] == 1
 
 
 async def test_missed_days_catch_up_once_and_manual_race():
     now = datetime.now(UTC)
     async with SessionLocal() as session:
-        job = await repo.get_job(session, "crawler", lock=True)
+        job = await scheduler.get_job(session, "crawler", lock=True)
         job.next_run_at = now - timedelta(days=4)
         await session.commit()
 
     async def schedule():
         async with SessionLocal() as session:
-            await repo.schedule_due(session, now)
+            await scheduler.schedule_due(session, now)
             await session.commit()
 
     results = await asyncio.gather(schedule(), trigger(), return_exceptions=True)
     assert all(x is None or isinstance(x, (dict, VersionConflictError)) for x in results)
     await schedule()
     async with SessionLocal() as session:
-        rows, total = await repo.history(session, "crawler", 1, 20)
-        assert total == 1 and rows[0].status == "queued"
-        assert (await repo.get_job(session, "crawler")).next_run_at > now
+        page = await scheduler.history(session, "crawler", 1, 20)
+        assert page["total"] == 1 and page["items"][0]["status"] == "queued"
+        assert (await scheduler.get_job(session, "crawler")).next_run_at > now
 
 
 async def test_pause_cancels_pending_and_version_conflict():
     await trigger()
     async with SessionLocal() as session:
-        await service.update_job(session, "crawler", ACTOR, enabled=False, daily_time="11:00", version=1)
+        await scheduler.update_job(session, "crawler", ACTOR, enabled=False, daily_time="11:00", version=1)
         await session.commit()
-        assert (await repo.history(session, "crawler", 1, 20))[0][0].status == "cancelled"
+        assert (await scheduler.history(session, "crawler", 1, 20))["items"][0]["status"] == "cancelled"
     async with SessionLocal() as session:
         with pytest.raises(VersionConflictError):
-            await service.update_job(session, "crawler", ACTOR, enabled=True, daily_time="12:00", version=1)
+            await scheduler.update_job(session, "crawler", ACTOR, enabled=True, daily_time="12:00", version=1)
     # 停用计划后仍允许一次手动执行。
     assert (await trigger())["status"] == "queued"
 
 
 async def test_failure_retry_success_and_saved_result(monkeypatch):
     await trigger()
-    claim = await worker.claim_next()
+    claim = await runner.claim_next()
     assert claim
-    monkeypatch.setattr(worker, "execute_sync", AsyncMock(side_effect=ValueError("secret")))
-    await worker.execute_claim(claim)
+    monkeypatch.setattr(runner, "execute", AsyncMock(side_effect=ValueError("secret")))
+    await runner.execute_claim(claim)
     async with SessionLocal() as session:
         row = await session.get(ScheduledRun, claim[0])
         assert row.status == "retrying" and row.attempts == 1 and "secret" not in row.error_message
         row.available_at = datetime.now(UTC) - timedelta(seconds=1)
         await session.commit()
-    next_claim = await worker.claim_next()
+    next_claim = await runner.claim_next()
     assert next_claim and next_claim[2] != claim[2]
 
     async def success(code, sync_id):
@@ -125,8 +125,8 @@ async def test_failure_retry_success_and_saved_result(monkeypatch):
             )
             await session.commit()
 
-    monkeypatch.setattr(worker, "execute_sync", success)
-    await worker.execute_claim(next_claim)
+    monkeypatch.setattr(runner, "execute", success)
+    await runner.execute_claim(next_claim)
     async with SessionLocal() as session:
         row = await session.get(ScheduledRun, claim[0])
         assert row.status == "success" and row.attempts == 2 and row.error_message is None
@@ -135,7 +135,7 @@ async def test_failure_retry_success_and_saved_result(monkeypatch):
 
 async def test_recovery_does_not_repeat_completed_sync():
     await trigger()
-    claim = await worker.claim_next()
+    claim = await runner.claim_next()
     async with SessionLocal() as session:
         session.add(
             CrawlerSyncRun(
@@ -148,16 +148,16 @@ async def test_recovery_does_not_repeat_completed_sync():
             )
         )
         await session.commit()
-    await worker.recover_interrupted()
+    await runner.recover_interrupted()
     async with SessionLocal() as session:
         row = await session.get(ScheduledRun, claim[0])
         assert row.status == "success" and row.result["site_rows"] == 4
-    assert await worker.claim_next() is None
+    assert await runner.claim_next() is None
 
 
 async def test_timeout_closes_running_sync_batch(monkeypatch):
     await trigger()
-    claim = await worker.claim_next()
+    claim = await runner.claim_next()
     assert claim
 
     # 先持久化已运行批次，再测试超时清理；不能假设远端 DB 在 50ms 内提交。
@@ -178,9 +178,9 @@ async def test_timeout_closes_running_sync_batch(monkeypatch):
         assert sync_id == claim[2]
         await asyncio.sleep(30)
 
-    monkeypatch.setattr(worker, "execute_sync", hang)
-    monkeypatch.setitem(worker.TIMEOUTS, "crawler", 0.05)
-    await worker.execute_claim(claim)
+    monkeypatch.setattr(runner, "execute", hang)
+    monkeypatch.setitem(scheduler.jobs, "crawler", dataclasses.replace(scheduler.jobs["crawler"], timeout_seconds=0.05))
+    await runner.execute_claim(claim)
     async with SessionLocal() as session:
         scheduled = await session.get(ScheduledRun, claim[0])
         sync = await session.get(CrawlerSyncRun, claim[2])
@@ -191,8 +191,8 @@ async def test_timeout_closes_running_sync_batch(monkeypatch):
 
 async def test_recovery_retries_interrupted_run_and_global_lock():
     await trigger()
-    claim = await worker.claim_next()
-    await worker.recover_interrupted()
+    claim = await runner.claim_next()
+    await runner.recover_interrupted()
     async with SessionLocal() as session:
         assert (await session.get(ScheduledRun, claim[0])).status == "retrying"
     async with engine.connect() as first, engine.connect() as second:
@@ -205,7 +205,7 @@ async def test_recovery_retries_interrupted_run_and_global_lock():
 
 async def test_empty_database_refuses_automatic_backfill():
     with pytest.raises(RuntimeError, match="首次历史回填"):
-        await worker.execute_sync("crawler", uuid.uuid4())
+        await run_crawler(uuid.uuid4())
 
 
 async def test_api_authorization_validation_and_queue():

@@ -1,65 +1,14 @@
-from fastapi import APIRouter, Depends, Query
-from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse
-from platform_common.actors import Actor
-from platform_common.enums import SecurityClass
-from platform_common.http_utils import success_json
-from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy.ext.asyncio import AsyncSession
+"""任务调度页的接口。路由由公共调度引擎生成，资源 system.scheduler。"""
 
-from app.common.security import classified, require_policy_permission
+from platform_common.scheduler import build_scheduler_router
+
+from app.common.security import require_policy_permission
 from app.core.database import get_db_session
-from app.scheduler.application import jobs as service
+from app.scheduler.application.jobs import scheduler
 
-router = APIRouter(prefix="/api/v1/policy/scheduled-jobs", tags=["任务调度"])
-RESOURCE = "system.scheduler"
-
-
-class JobUpdate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    enabled: bool
-    daily_time: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
-    version: int = Field(ge=1)
-
-
-@router.get("")
-@classified(SecurityClass.RESOURCE_AUTHORIZED)
-async def list_jobs(
-    session: AsyncSession = Depends(get_db_session, scope="function"),
-    _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
-) -> JSONResponse:
-    return success_json(jsonable_encoder(await service.list_jobs(session)))
-
-
-@router.patch("/{code}")
-@classified(SecurityClass.RESOURCE_AUTHORIZED)
-async def update_job(
-    code: str,
-    payload: JobUpdate,
-    session: AsyncSession = Depends(get_db_session, scope="function"),
-    actor: Actor = Depends(require_policy_permission(RESOURCE, "update")),
-) -> JSONResponse:
-    await service.update_job(session, code, actor, **payload.model_dump())
-    return success_json({"saved": True})
-
-
-@router.post("/{code}/runs", status_code=202)
-@classified(SecurityClass.RESOURCE_AUTHORIZED)
-async def trigger_job(
-    code: str,
-    session: AsyncSession = Depends(get_db_session, scope="function"),
-    actor: Actor = Depends(require_policy_permission(RESOURCE, "execute")),
-) -> JSONResponse:
-    return success_json(jsonable_encoder(await service.trigger_job(session, code, actor)), status_code=202)
-
-
-@router.get("/{code}/runs")
-@classified(SecurityClass.RESOURCE_AUTHORIZED)
-async def history(
-    code: str,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    session: AsyncSession = Depends(get_db_session, scope="function"),
-    _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
-) -> JSONResponse:
-    return success_json(jsonable_encoder(await service.history(session, code, page, page_size)))
+router = build_scheduler_router(
+    scheduler,
+    prefix="/api/v1/policy/scheduled-jobs",
+    require_permission=require_policy_permission,
+    get_db_session=get_db_session,
+)

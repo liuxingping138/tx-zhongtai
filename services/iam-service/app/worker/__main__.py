@@ -5,15 +5,22 @@ import signal
 
 import httpx
 from platform_common.logging_setup import get_logger, setup_logging
+from platform_common.scheduler import SchedulerRunner
 
 from app.application import outbox_delivery
 from app.application.outbox_delivery import DeliveryCounters, claim_and_deliver
+from app.application.scheduled_jobs import scheduler
 from app.core.config import get_settings
-from app.core.database import SessionLocal
+from app.core.database import SessionLocal, engine
 
 settings = get_settings()
 setup_logging(settings.service_name, level=settings.log_level, json_output=settings.environment != "development")
 logger = get_logger("iam.worker")
+# 与 policy 的调度锁键不同：两个服务各自一个 leader，库也各自独立。
+SCHEDULER_LOCK = 72120261026
+runner = SchedulerRunner(
+    scheduler, engine=engine, session_factory=SessionLocal, leader_lock=SCHEDULER_LOCK, logger_name="iam.scheduler"
+)
 
 
 async def _log_metrics() -> None:
@@ -43,6 +50,8 @@ async def run() -> None:
         except NotImplementedError:
             signal.signal(sig, lambda *_: _stop())
 
+    # 定时任务与 Outbox 投递在同一进程里并行：调度只在拿到全局锁时执行，停机时一起收尾。
+    scheduling = asyncio.create_task(runner.run(stop))
     timeout = httpx.Timeout(5.0)
     cycles = 0
     async with httpx.AsyncClient(base_url=settings.audit_ingest_url.rstrip("/"), timeout=timeout) as client:
@@ -60,6 +69,7 @@ async def run() -> None:
             except Exception:
                 logger.exception("iam_worker_loop_error")
                 await asyncio.sleep(settings.worker_poll_interval_seconds)
+    await scheduling
     logger.info("iam_worker_stopped")
 
 

@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const api = vi.hoisted(() => ({ listRuns: vi.fn<(code: string, page: number) => Promise<unknown>>() }))
+const api = vi.hoisted(() => ({ listRuns: vi.fn<(code: string, page: number, target: { base: string }) => Promise<unknown>>() }))
 vi.mock('@/api/scheduler', () => api)
 
 import type { ScheduledJob } from '@/api/scheduler'
 import { useSchedulerHistory } from './useSchedulerHistory'
 
-const job = { code: 'crawler', name: '爬虫监测增量同步' } as ScheduledJob
+const job = { code: 'crawler', name: '爬虫监测增量同步', base: '/policy/scheduled-jobs' } as ScheduledJob
 const pageOf = (ids: string[], total = ids.length) => ({ items: ids.map(id => ({ id })), total, page: 1, page_size: 20 })
 
 describe('useSchedulerHistory', () => {
@@ -21,7 +21,7 @@ describe('useSchedulerHistory', () => {
     expect(history.visible.value).toBe(true)
     expect(history.records.value).toEqual([])
     await vi.waitFor(() => expect(history.loading.value).toBe(false))
-    expect(api.listRuns).toHaveBeenCalledWith('crawler', 1)
+    expect(api.listRuns).toHaveBeenCalledWith('crawler', 1, { base: '/policy/scheduled-jobs' })
     expect(history.total.value).toBe(42)
     expect(history.records.value).toHaveLength(2)
   })

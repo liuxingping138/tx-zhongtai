@@ -1,14 +1,11 @@
 import asyncio
-from datetime import UTC, datetime, timedelta
 
-from app.core.database import SessionLocal, engine
-from app.scheduler.domain.models import SchedulerHeartbeat
+from app.core.database import engine
+from app.worker.scheduler import runner
 
 
 async def main() -> None:
-    async with SessionLocal() as session:
-        row = await session.get(SchedulerHeartbeat, 1)
-        healthy = row is not None and datetime.now(UTC) - row.seen_at < timedelta(seconds=60)
+    healthy = await runner.healthy()
     await engine.dispose()
     if not healthy:
         raise SystemExit(1)

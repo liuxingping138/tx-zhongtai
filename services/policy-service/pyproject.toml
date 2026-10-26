@@ -61,7 +61,8 @@ root_package = "app"
 name = "领域内分层：api → application → repositories → domain"
 type = "layers"
 containers = ["app.policy", "app.crawler", "app.scheduler", "app.aitag", "app.crawlconfig"]
-layers = ["api", "application", "repositories", "domain"]
+# 调度的查询在公共引擎里，app.scheduler 没有 repositories 层，所以这一层可缺。
+layers = ["api", "application", "(repositories)", "domain"]
 
 [[tool.importlinter.contracts]]
 name = "政策与爬虫监测互不依赖"

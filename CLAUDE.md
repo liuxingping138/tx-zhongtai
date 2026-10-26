@@ -103,13 +103,14 @@ policy 和 codebook 的基础设施代码高度重复，已统一下沉。**新�
 | 鉴权依赖 | `service_authz.py` | 绑定服务名与 Settings |
 | 审计入队与投递 | `audit_emit.py` 的 `AuditEmitter` | 本服务的 `_EVENT_META` |
 | 筛选项预览与搜索 | `options.py` | 字段映射表 |
+| 每日定时任务（队列、leader、重试、页面接口） | `scheduler/` | 三张表的 model、登记的 `Job` |
 
 ### 分层
 
 `api/`（路由、Query 参数、权限依赖）→ `application/`（业务编排、审计入队）→
 `repositories/`（SQLAlchemy 查询）→ `domain/`（models、fields 列清单）。
 `core/` 放配置、数据库等。依赖方向由各服务的 import-linter 契约强制（`make check` 跑 `lint-imports`）。
-policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、`aitag/`、`crawlconfig/` 几个子包，每个子包内部仍是这四层，
+policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、`aitag/`、`crawlconfig/` 几个子包，每个子包内部仍是这四层（`scheduler/` 的查询在公共引擎里，没有 repositories），
 跨领域共用的审计入队、鉴权依赖、Outbox 表放 `app/common/`。
 
 ### 鉴权链路
@@ -225,13 +226,16 @@ policy / codebook / ai 走公共 Outbox，默认 5 分钟。审计服务按 `eve
 
 ### 任务调度
 
-系统管理的任务调度页面 `/system/scheduler` 使用政策服务接口 `/api/v1/policy/scheduled-jobs`，
-资源 `system.scheduler` 归属 `policy-service`；READ 可查看，FULL 可设置计划和手动执行。
-`policy-worker` 独立容器持 PostgreSQL 全局会话锁，按北京时间每日调度任务。三类：爬虫监测增量同步
+平台所有定时任务都在系统管理的任务调度页 `/system/scheduler`。引擎在 `platform_common.scheduler`：各服务在自己的库里存计划和执行记录，
+登记自己的 `Job`，worker 持本服务的 PostgreSQL 全局会话锁执行；接口由 `build_scheduler_router` 生成，都校验资源 `system.scheduler`
+（READ 查看，FULL 设置计划和手动执行）。前端 `src/api/scheduler.ts` 的 `SCHEDULER_SERVICES` 把各服务的任务汇总成一张表，
+新服务接入照 `docs/guides/任务调度.md`「接入一个新服务的定时任务」，不要再自己写定时循环或宿主机 cron。
+
+现有任务：iam-service 的清理失效会话（`iam_session_cleanup`，默认 03:30，在 iam-worker 里与 Outbox 投递同进程）；
+policy-service 的三类（`policy-worker`，`app/scheduler/application/jobs.py` 登记）：爬虫监测增量同步
 （任务编码 `crawler`，默认 10:10，时刻可在页面改）、爬虫配置同步（`crawler_config`，默认 18:00）和政策 AI 打标的三个任务（`policy_ai_type` / `policy_ai_interpret` / `policy_ai_opportunity`，
 上线时默认停用、页面手动执行）。
-执行、结果摘要、中断收尾都按任务编码分派（`app/worker/scheduler.py`、`app/scheduler/application/jobs.py`），超时按任务分别设（`TIMEOUTS`）。
-配置、执行队列、重试状态持久化在政策库；重启错过多天只合并一次增量。
+执行、结果摘要、中断收尾、超时都写在各自的 `Job` 上，引擎不认识具体业务。重启错过多天只合并一次。
 初始化无成功水位时拒绝自动同步，需要先完成历史回填，不能自动退回短窗口。
 worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 internal data 网络会无法连接源库。
 详细规则和验收见 `docs/guides/任务调度.md`。

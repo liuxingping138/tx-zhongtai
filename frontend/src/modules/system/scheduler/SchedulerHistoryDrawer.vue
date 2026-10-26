@@ -8,6 +8,7 @@ import { formatTime } from '@/utils/time'
 import { useAuthStore } from '@/stores/auth'
 import { TASK_PURPOSE, formatYuan, runResultText, taskOfJob } from './aiTagging'
 import { CRAWLER_CONFIG_JOB, configResultText, configRunText } from './crawlerConfig'
+import { SESSION_CLEANUP_JOB, cleanupRunText } from './sessionCleanup'
 import { STATUS_TEXT, duration, statusType, type RunStatus } from './runStatus'
 import type { SchedulerHistory } from './useSchedulerHistory'
 
@@ -22,11 +23,19 @@ const billingLink = computed(() =>
   task.value && auth.canRead('ai.billing') ? { path: '/ai/billing', query: { purpose: TASK_PURPOSE[task.value] } } : null,
 )
 
-function resultText(row: ScheduledRun): string {
-  if (task.value) return runResultText(row.result)
-  if (isConfig.value) return configRunText(row)
+// 各任务自己的结果写法；没登记的按爬虫增量同步写。
+const RUN_TEXT: Record<string, (row: ScheduledRun) => string> = {
+  [CRAWLER_CONFIG_JOB]: configRunText,
+  [SESSION_CLEANUP_JOB]: cleanupRunText,
+}
+function crawlerRunText(row: ScheduledRun): string {
   if (!row.result?.days_synced && row.result?.days_synced !== 0) return row.error_message || '—'
   return `处理 ${row.result.days_synced} 个采集日 · 网站快照 ${row.result.site_rows ?? '—'} 条`
+}
+function resultText(row: ScheduledRun): string {
+  if (task.value) return runResultText(row.result)
+  const text = job.value ? RUN_TEXT[job.value.code] : undefined
+  return text ? text(row) : crawlerRunText(row)
 }
 </script>
 

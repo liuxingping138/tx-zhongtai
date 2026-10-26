@@ -7,6 +7,12 @@ from datetime import datetime
 from typing import Any
 
 from platform_common.orm_base import Base
+from platform_common.scheduler.models import (
+    ScheduledJobMixin,
+    ScheduledRunMixin,
+    SchedulerHeartbeatMixin,
+    run_table_args,
+)
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -208,3 +214,19 @@ class OutboxEvent(Base):
     lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, comment="租约截止时间")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="创建时间")
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True, comment="失败原因")
+
+
+class ScheduledJob(ScheduledJobMixin, Base):
+    __tablename__ = "iam_scheduled_jobs"
+    __table_args__ = {"comment": "定时任务配置"}
+
+
+class ScheduledRun(ScheduledRunMixin, Base):
+    __tablename__ = "iam_scheduled_runs"
+    __jobs_table__ = "iam_scheduled_jobs"
+    __table_args__ = run_table_args("定时任务执行记录")
+
+
+class SchedulerHeartbeat(SchedulerHeartbeatMixin, Base):
+    __tablename__ = "iam_scheduler_heartbeat"
+    __table_args__ = {"comment": "调度进程心跳"}
