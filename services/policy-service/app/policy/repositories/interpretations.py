@@ -43,7 +43,6 @@ async def list_relation_keys(session: AsyncSession) -> set[str]:
 # 列表与导出共用同一份筛选定义，避免两边条件逐渐走偏。
 FILTER_COLUMNS: dict[str, InstrumentedAttribute[str]] = {
     "policy_title": Interpretation.policy_title,
-    "industry_scenario_code": Interpretation.industry_scenario_code,
     "industry_l1": Interpretation.industry_l1,
     "scenario_l1_name": Interpretation.scenario_l1_name,
     "opportunity_type": Interpretation.opportunity_type,

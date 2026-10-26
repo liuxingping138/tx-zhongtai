@@ -1286,8 +1286,10 @@
                   "type": "null"
                 }
               ],
+              "description": "政策名称关键词，模糊匹配",
               "title": "Policy Name"
-            }
+            },
+            "description": "政策名称关键词，模糊匹配"
           },
           {
             "name": "province_name",
@@ -1549,8 +1551,10 @@
                   "type": "null"
                 }
               ],
+              "description": "政策名称关键词，模糊匹配",
               "title": "Policy Name"
-            }
+            },
+            "description": "政策名称关键词，模糊匹配"
           },
           {
             "name": "province_name",
@@ -2479,27 +2483,10 @@
                   "type": "null"
                 }
               ],
+              "description": "政策原文名称关键词，模糊匹配",
               "title": "Policy Title"
-            }
-          },
-          {
-            "name": "industry_scenario_code",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Industry Scenario Code"
-            }
+            },
+            "description": "政策原文名称关键词，模糊匹配"
           },
           {
             "name": "industry_l1",
@@ -2797,27 +2784,10 @@
                   "type": "null"
                 }
               ],
+              "description": "政策原文名称关键词，模糊匹配",
               "title": "Policy Title"
-            }
-          },
-          {
-            "name": "industry_scenario_code",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Industry Scenario Code"
-            }
+            },
+            "description": "政策原文名称关键词，模糊匹配"
           },
           {
             "name": "industry_l1",
@@ -3467,6 +3437,16 @@
             "title": "Target Customers",
             "default": ""
           },
+          "adapted_products": {
+            "type": "string",
+            "title": "Adapted Products",
+            "default": ""
+          },
+          "purchase_reason": {
+            "type": "string",
+            "title": "Purchase Reason",
+            "default": ""
+          },
           "opportunity_type": {
             "type": "string",
             "title": "Opportunity Type",
@@ -3505,6 +3485,11 @@
           "new_scenario_level": {
             "type": "string",
             "title": "New Scenario Level",
+            "default": ""
+          },
+          "remark": {
+            "type": "string",
+            "title": "Remark",
             "default": ""
           },
           "data_status": {
@@ -3625,6 +3610,16 @@
             "title": "Target Customers",
             "default": ""
           },
+          "adapted_products": {
+            "type": "string",
+            "title": "Adapted Products",
+            "default": ""
+          },
+          "purchase_reason": {
+            "type": "string",
+            "title": "Purchase Reason",
+            "default": ""
+          },
           "opportunity_type": {
             "type": "string",
             "title": "Opportunity Type",
@@ -3663,6 +3658,11 @@
           "new_scenario_level": {
             "type": "string",
             "title": "New Scenario Level",
+            "default": ""
+          },
+          "remark": {
+            "type": "string",
+            "title": "Remark",
             "default": ""
           },
           "data_status": {

@@ -98,3 +98,32 @@ def test_interpretation_patch_does_not_fill_empty_defaults(monkeypatch: object) 
     assert data == {"version": 4, "policy_summary": "摘要"}
     assert "policy_title" not in data
     assert "data_status" not in data
+
+
+def test_write_schemas_accept_every_field_the_editors_send() -> None:
+    """编辑抽屉按表的可写字段提交；schema 漏一个字段（extra=forbid）整次保存就 422「参数错误」。"""
+
+    from app.policy.api.schemas import BaseTagWrite, InterpretationWrite, SourceWrite
+    from app.policy.domain.models import BASE_TAG_FIELDS, INTERPRETATION_WRITE_FIELDS, SOURCE_FIELDS
+
+    assert set(INTERPRETATION_WRITE_FIELDS) <= set(InterpretationWrite.model_fields)
+    assert set(BASE_TAG_FIELDS) <= set(BaseTagWrite.model_fields)
+    assert set(SOURCE_FIELDS) <= set(SourceWrite.model_fields)
+
+
+def test_interpretation_patch_saves_opportunity_fields_and_remark(monkeypatch: object) -> None:
+    client, captured = _client_for(
+        monkeypatch, "/api/v1/policy/interpretations/{item_id}", interpretations_api.service, "update_interpretation"
+    )
+    item_id = uuid.uuid4()
+    body = {
+        "version": 2,
+        "is_new_scenario": "是",
+        "new_scenario_level": "三级场景",
+        "adapted_products": "云视讯",
+        "purchase_reason": "政务协同",
+        "remark": "人工改过",
+    }
+    response = client.patch(f"/api/v1/policy/interpretations/{item_id}", json=body)
+    assert response.status_code == 200
+    assert captured["data"] == body

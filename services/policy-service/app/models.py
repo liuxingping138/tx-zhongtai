@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.aitag.domain.models import PolicyAiRun, PolicyAiTask
 from app.common.models import OutboxEvent
 from app.crawlconfig.domain.models import ConfigSyncRun
 from app.crawler.domain.models import (
@@ -20,6 +21,8 @@ __all__ = [
     "CrawlerSyncRun",
     "Interpretation",
     "OutboxEvent",
+    "PolicyAiRun",
+    "PolicyAiTask",
     "ScheduledJob",
     "ScheduledRun",
     "SchedulerHeartbeat",

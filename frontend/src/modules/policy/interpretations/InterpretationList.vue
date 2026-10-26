@@ -20,6 +20,7 @@ import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
 import ExportButton from '@/components/ExportButton.vue'
 import FilterBar from '@/components/FilterBar.vue'
+import FilterKeyword from '@/components/FilterKeyword.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ImportButton from '@/components/ImportButton.vue'
 import ListPage from '@/components/ListPage.vue'
@@ -40,7 +41,6 @@ const canWrite = computed(() => auth.canFull(RESOURCE))
 
 const query = reactive({
   policy_title: [] as string[],
-  industry_scenario_code: [] as string[],
   industry_l1: [] as string[],
   scenario_l1_name: [] as string[],
   opportunity_type: [] as string[],
@@ -173,15 +173,11 @@ onMounted(() => {
           @reset="listQuery.resetFilters"
         >
           <el-form-item label="政策原文名称">
-            <FilterSelect
+            <FilterKeyword
               v-model="query.policy_title"
-              v-bind="filters.bind('policy_title')"
-            />
-          </el-form-item>
-          <el-form-item label="行业场景编码">
-            <FilterSelect
-              v-model="query.industry_scenario_code"
-              v-bind="filters.bind('industry_scenario_code')"
+              label="政策原文名称"
+              placeholder="输入政策名称关键词"
+              @search="listQuery.search"
             />
           </el-form-item>
           <el-form-item label="一级行业">

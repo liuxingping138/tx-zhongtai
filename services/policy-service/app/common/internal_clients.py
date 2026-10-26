@@ -44,3 +44,11 @@ async def ai(method: str, path: str, **kwargs: Any) -> Any:
 async def codebook(method: str, path: str, **kwargs: Any) -> Any:
     settings = get_settings()
     return await _call(settings.codebook_base_url, settings.codebook_service_secret, method, path, **kwargs)
+
+
+async def policy_type_names() -> list[str]:
+    """政策类型码表里的类型名称（去重、保持码表顺序）。AI 打标核对类型、列表的政策类型筛选项都用它。"""
+
+    data = await codebook("GET", "/internal/v1/code-tables/policy_types")
+    lines = str(data["text"]).split("\n")[1:]
+    return list(dict.fromkeys(line.split("\t")[0].strip() for line in lines if line.strip()))

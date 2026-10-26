@@ -14,6 +14,7 @@ import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
 import ExportButton from '@/components/ExportButton.vue'
 import FilterBar from '@/components/FilterBar.vue'
+import FilterKeyword from '@/components/FilterKeyword.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ImportButton from '@/components/ImportButton.vue'
 import ListPage from '@/components/ListPage.vue'
@@ -156,9 +157,11 @@ onMounted(() => {
           @reset="listQuery.resetFilters"
         >
           <el-form-item label="政策名称">
-            <FilterSelect
+            <FilterKeyword
               v-model="query.policy_name"
-              v-bind="filters.bind('policy_name')"
+              label="政策名称"
+              placeholder="输入政策名称关键词"
+              @search="listQuery.search"
             />
           </el-form-item>
           <el-form-item label="省份">

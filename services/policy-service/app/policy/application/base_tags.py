@@ -1,16 +1,18 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from collections import Counter
 from typing import Any
 
 from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
-from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionConflictError
+from platform_common.errors import ApiError, DependencyUnavailableError, ErrorCode, NotFoundError, VersionConflictError
 from platform_common.excel import build_workbook_async, parse_sheet_async
 from platform_common.filters import Filters
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common import internal_clients
 from app.common.audit_emit import enqueue_event
 from app.core.config import get_settings
 from app.policy.application.importing import (
@@ -24,6 +26,8 @@ from app.policy.domain.fields import BASE_TAG_COLUMNS
 from app.policy.domain.models import BASE_TAG_FIELDS, BaseTag, content_hash
 from app.policy.repositories import base_tags as repo
 from app.policy.repositories import options as options_repo
+
+logger = logging.getLogger("policy.base_tags")
 
 
 def _to_out(row: BaseTag) -> dict[str, Any]:
@@ -58,7 +62,15 @@ async def list_base_tags(
 
 
 async def list_base_tag_options(session: AsyncSession) -> dict[str, Any]:
-    return await options_repo.base_tag_options(session)
+    data = await options_repo.base_tag_options(session)
+    # 政策类型的候选值是政策类型码表，不在几百万条政策上去重。码表服务暂时取不到时下拉为空，仍可输入后回车。
+    try:
+        names = await internal_clients.policy_type_names()
+    except DependencyUnavailableError:
+        logger.warning("政策类型码表暂时取不到，筛选项先不给政策类型")
+        names = []
+    data["options"]["policy_types"] = {"items": names, "truncated": False}
+    return data
 
 
 async def search_base_tag_options(session: AsyncSession, *, field: str, keyword: str | None) -> list[str]:

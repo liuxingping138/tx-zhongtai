@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 
 from platform_common.orm_base import Base
-from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -73,6 +73,19 @@ class BaseTag(Base):
     __tablename__ = "policy_base_tags"
     __table_args__ = (
         UniqueConstraint("source_content_id", name="uq_policy_base_tags_source_content_id"),
+        # 政策名称按关键词模糊查找（ILIKE '%词%'），三个字及以上走这个三元组索引。
+        # 只给待重新判断的行建索引：类型判断每批先找这些。
+        Index(
+            "ix_policy_base_tags_type_retag_at",
+            "type_retag_at",
+            postgresql_where=text("type_retag_at IS NOT NULL"),
+        ),
+        Index(
+            "ix_policy_base_tags_policy_name_trgm",
+            "policy_name",
+            postgresql_using="gin",
+            postgresql_ops={"policy_name": "gin_trgm_ops"},
+        ),
         {"comment": "政策基础标签表"},
     )
 
@@ -127,6 +140,12 @@ class Interpretation(Base):
     __tablename__ = "policy_interpretations"
     __table_args__ = (
         UniqueConstraint("relation_key", name="uq_policy_interpretations_relation_key"),
+        Index(
+            "ix_policy_interpretations_policy_title_trgm",
+            "policy_title",
+            postgresql_using="gin",
+            postgresql_ops={"policy_title": "gin_trgm_ops"},
+        ),
         {"comment": "政策解读列表"},
     )
 

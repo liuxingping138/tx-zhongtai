@@ -42,9 +42,7 @@ __all__ = ["abandon", "day_start", "policy_type_names", "run_batch", "run_summar
 
 
 async def policy_type_names() -> list[str]:
-    data = await internal_clients.codebook("GET", "/internal/v1/code-tables/policy_types")
-    lines = str(data["text"]).split("\n")[1:]
-    return [line.split("\t")[0] for line in lines if line.strip()]
+    return await internal_clients.policy_type_names()
 
 
 def _write_base_tag(

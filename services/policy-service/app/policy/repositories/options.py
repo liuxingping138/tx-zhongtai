@@ -22,17 +22,15 @@ SOURCE_OPTION_COLUMNS: OptionColumns = {
     "crawler_status": Source.crawler_status,
 }
 
+# 政策名称、原文名称是输入关键词模糊查找，不出候选值；政策类型的候选值取政策类型码表。
+# 几百万条政策时，对这些长文本做去重会扫整张表。
 BASE_TAG_OPTION_COLUMNS: OptionColumns = {
-    "policy_name": BaseTag.policy_name,
     "province_name": BaseTag.province_name,
-    "policy_types": BaseTag.policy_types,
     "is_penetrate": BaseTag.is_penetrate,
     "need_interpret": BaseTag.need_interpret,
 }
 
 INTERPRETATION_OPTION_COLUMNS: OptionColumns = {
-    "policy_title": Interpretation.policy_title,
-    "industry_scenario_code": Interpretation.industry_scenario_code,
     "industry_l1": Interpretation.industry_l1,
     "scenario_l1_name": Interpretation.scenario_l1_name,
     "opportunity_type": Interpretation.opportunity_type,

@@ -172,7 +172,6 @@ export function importBaseTags(
 
 export function listInterpretations(params: {
   policy_title?: FilterParam
-  industry_scenario_code?: FilterParam
   industry_l1?: FilterParam
   scenario_l1_name?: FilterParam
   opportunity_type?: FilterParam

@@ -7,7 +7,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from platform_common.orm_base import Base
-from sqlalchemy import Date, DateTime, Integer, Numeric, String, Text
+from sqlalchemy import Date, DateTime, Index, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -52,7 +52,12 @@ class PolicyAiRun(Base):
     """
 
     __tablename__ = "policy_ai_runs"
-    __table_args__ = {"comment": "政策AI打标批次"}
+    __table_args__ = (
+        Index("ix_policy_ai_runs_started_at", "started_at"),
+        # 每个任务「今日已花」、最近一批按任务和开始时间查。
+        Index("ix_policy_ai_runs_task_started_at", "task", "started_at"),
+        {"comment": "政策AI打标批次"},
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, comment="批次编号")
     task: Mapped[str] = mapped_column(String(16), nullable=False, default="type", comment="任务编码")

@@ -22,7 +22,7 @@ RESOURCE = "policy.base_tags"
 
 
 def base_tag_filters(
-    policy_name: list[str] | None = Query(default=None),
+    policy_name: list[str] | None = Query(default=None, description="政策名称关键词，模糊匹配"),
     province_name: list[str] | None = Query(default=None),
     policy_types: list[str] | None = Query(default=None),
     is_penetrate: list[str] | None = Query(default=None),

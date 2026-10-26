@@ -23,8 +23,7 @@ RESOURCE = "policy.interpretations"
 
 
 def interpretation_filters(
-    policy_title: list[str] | None = Query(default=None),
-    industry_scenario_code: list[str] | None = Query(default=None),
+    policy_title: list[str] | None = Query(default=None, description="政策原文名称关键词，模糊匹配"),
     industry_l1: list[str] | None = Query(default=None),
     scenario_l1_name: list[str] | None = Query(default=None),
     opportunity_type: list[str] | None = Query(default=None),
@@ -35,7 +34,6 @@ def interpretation_filters(
 ) -> Filters:
     return {
         "policy_title": policy_title,
-        "industry_scenario_code": industry_scenario_code,
         "industry_l1": industry_l1,
         "scenario_l1_name": scenario_l1_name,
         "opportunity_type": opportunity_type,

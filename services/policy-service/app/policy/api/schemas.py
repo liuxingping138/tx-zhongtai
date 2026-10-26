@@ -85,6 +85,8 @@ class InterpretationWrite(BaseModel):
     scenario_l2_name: str = ""
     scenario_l3_name: str = ""
     target_customers: str = ""
+    adapted_products: str = ""
+    purchase_reason: str = ""
     opportunity_type: str = ""
     policy_summary: str = ""
     has_subsidy: str = ""
@@ -93,6 +95,7 @@ class InterpretationWrite(BaseModel):
     info_level: str = ""
     is_new_scenario: str = ""
     new_scenario_level: str = ""
+    remark: str = ""
     data_status: str = ""
 
 
