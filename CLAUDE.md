@@ -347,7 +347,7 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
 - 权限矩阵的勾选联动、整组勾选、锁定和搜索是 `permissions/matrix.ts` 里的纯函数，改交互先改它和单测
 
 - 筛选项：`v-bind="filters.bind('字段')"`（`useFilterOptions`），不要自己再维护一份 options
-- 几百万行的名称、标题字段（政策名称、政策原文名称）不出候选值，用 `FilterKeyword` 输入关键词，列上建 pg_trgm GIN 索引；政策类型的候选值取政策类型码表（`internal_clients.policy_type_names`），不在政策表上去重
+- 几百万行的名称、标题字段（政策名称、政策原文名称）不出候选值，用 `FilterKeyword` 输入关键词，列上建 pg_trgm GIN 索引；政策类型的候选值取政策类型码表（`internal_clients.policy_type_names`，包含匹配，pg_trgm 索引），政策解读的一级行业、一级场景取行业场景码表（`scenario_l1_names`，精确匹配走 B 树索引），都不在政策表上去重
 - 筛选一律多选：前端 query 字段默认 `[]`，`http` 按重复参数（`a=1&a=2`）提交；后端参数写
   `list[str] | None = Query(default=None)`，仓储用 `platform_common.filters` 的 `ilike_any`（模糊，同字段「或」）
   或 `in_any`（枚举精确）。只写 `str | None` 会让多选只剩最后一个值生效

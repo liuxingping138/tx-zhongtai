@@ -1,15 +1,17 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Any
 
 from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
-from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionConflictError
+from platform_common.errors import ApiError, DependencyUnavailableError, ErrorCode, NotFoundError, VersionConflictError
 from platform_common.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async
 from platform_common.filters import Filters
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common import internal_clients
 from app.common.audit_emit import enqueue_event
 from app.core.config import get_settings
 from app.policy.application.importing import add_in_batches
@@ -18,6 +20,8 @@ from app.policy.domain.fields import DATA_STATUS_CHOICES, DATA_STATUS_PENDING, I
 from app.policy.domain.models import INTERPRETATION_WRITE_FIELDS, Interpretation
 from app.policy.repositories import interpretations as repo
 from app.policy.repositories import options as options_repo
+
+logger = logging.getLogger("policy.interpretations")
 
 
 def _to_out(row: Interpretation) -> dict[str, Any]:
@@ -99,7 +103,16 @@ async def list_interpretations(
 
 
 async def list_interpretation_options(session: AsyncSession) -> dict[str, Any]:
-    return await options_repo.interpretation_options(session)
+    data = await options_repo.interpretation_options(session)
+    # 一级行业、一级场景的候选值是行业场景码表，不在几百万条解读上去重。码表服务暂时取不到时下拉为空。
+    try:
+        industries, scenarios = await internal_clients.scenario_l1_names()
+    except DependencyUnavailableError:
+        logger.warning("行业场景码表暂时取不到，筛选项先不给一级行业、一级场景")
+        industries, scenarios = [], []
+    data["options"]["industry_l1"] = {"items": industries, "truncated": False}
+    data["options"]["scenario_l1_name"] = {"items": scenarios, "truncated": False}
+    return data
 
 
 async def search_interpretation_options(session: AsyncSession, *, field: str, keyword: str | None) -> list[str]:

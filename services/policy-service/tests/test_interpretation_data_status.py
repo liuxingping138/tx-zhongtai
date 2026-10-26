@@ -39,12 +39,20 @@ def test_new_filters_are_registered_for_list_and_export() -> None:
 
 
 def test_enum_filters_match_exactly_and_names_match_fuzzily() -> None:
-    """枚举字段精确匹配，避免「一级」把「一级场景」也查出来；一级场景名称仍是模糊匹配。"""
+    """枚举字段和候选值取自码表的一级行业、一级场景精确匹配（走索引，「一级」也不会把「一级场景」查出来）；
+    政策原文名称是关键词，模糊匹配。"""
 
-    for field in ("is_new_scenario", "new_scenario_level", "info_level", "data_status"):
+    for field in (
+        "industry_l1",
+        "scenario_l1_name",
+        "is_new_scenario",
+        "new_scenario_level",
+        "info_level",
+        "data_status",
+    ):
         sql = _sql({field: ["x"]})
         assert " IN " in sql and "ILIKE" not in sql.upper(), field
-    assert "ILIKE" in _sql({"scenario_l1_name": ["x"]}).upper()
+    assert "ILIKE" in _sql({"policy_title": ["x"]}).upper()
 
 
 def test_empty_new_filters_do_not_filter() -> None:

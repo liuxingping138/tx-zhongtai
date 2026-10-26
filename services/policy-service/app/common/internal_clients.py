@@ -46,9 +46,28 @@ async def codebook(method: str, path: str, **kwargs: Any) -> Any:
     return await _call(settings.codebook_base_url, settings.codebook_service_secret, method, path, **kwargs)
 
 
-async def policy_type_names() -> list[str]:
-    """政策类型码表里的类型名称（去重、保持码表顺序）。AI 打标核对类型、列表的政策类型筛选项都用它。"""
+async def _code_table_rows(name: str) -> list[list[str]]:
+    """码表服务给的是带表头的制表符文本，去掉表头按列拆开。"""
 
-    data = await codebook("GET", "/internal/v1/code-tables/policy_types")
+    data = await codebook("GET", f"/internal/v1/code-tables/{name}")
     lines = str(data["text"]).split("\n")[1:]
-    return list(dict.fromkeys(line.split("\t")[0].strip() for line in lines if line.strip()))
+    return [[cell.strip() for cell in line.split("\t")] for line in lines if line.strip()]
+
+
+def _column(rows: list[list[str]], index: int) -> list[str]:
+    """某一列去空、去重，保持码表顺序。"""
+
+    return list(dict.fromkeys(row[index] for row in rows if len(row) > index and row[index]))
+
+
+async def policy_type_names() -> list[str]:
+    """政策类型码表里的类型名称。AI 打标核对类型、列表的政策类型筛选项都用它。"""
+
+    return _column(await _code_table_rows("policy_types"), 0)
+
+
+async def scenario_l1_names() -> tuple[list[str], list[str]]:
+    """行业场景码表的一级行业、一级场景名称，政策解读列表的筛选项用它，不在几百万条解读上去重。"""
+
+    rows = await _code_table_rows("scenario_l1")
+    return _column(rows, 0), _column(rows, 1)

@@ -53,7 +53,10 @@ FILTER_COLUMNS: dict[str, InstrumentedAttribute[str]] = {
 }
 
 # 取值有限的枚举字段用精确匹配：模糊匹配下选「一级」会把「一级场景」之类的值一并查出来。
-EXACT_FILTERS = frozenset({"is_new_scenario", "new_scenario_level", "info_level", "data_status"})
+# 一级行业、一级场景的候选值来自行业场景码表，按码表名称精确匹配，走各自的索引。
+EXACT_FILTERS = frozenset(
+    {"industry_l1", "scenario_l1_name", "is_new_scenario", "new_scenario_level", "info_level", "data_status"}
+)
 
 
 def _conditions(filters: Filters) -> list[ColumnElement[bool]]:

@@ -86,6 +86,13 @@ class BaseTag(Base):
             postgresql_using="gin",
             postgresql_ops={"policy_name": "gin_trgm_ops"},
         ),
+        # 一条政策可以有多个类型（如「信息化建设类、产业发展类」），按类型筛选是包含匹配，也走三元组索引。
+        Index(
+            "ix_policy_base_tags_policy_types_trgm",
+            "policy_types",
+            postgresql_using="gin",
+            postgresql_ops={"policy_types": "gin_trgm_ops"},
+        ),
         {"comment": "政策基础标签表"},
     )
 
@@ -162,7 +169,9 @@ class Interpretation(Base):
     industry_l2: Mapped[str] = mapped_column(String(128), nullable=False, default="", comment="二级行业")
     industry_l3: Mapped[str] = mapped_column(String(128), nullable=False, default="", comment="三级行业")
     scenario_code: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="场景编码")
-    scenario_l1_name: Mapped[str] = mapped_column(String(255), nullable=False, default="", comment="一级场景名称")
+    scenario_l1_name: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="", index=True, comment="一级场景名称"
+    )
     scenario_l2_name: Mapped[str] = mapped_column(String(255), nullable=False, default="", comment="二级场景名称")
     scenario_l3_name: Mapped[str] = mapped_column(String(255), nullable=False, default="", comment="三级场景名称")
     target_customers: Mapped[str] = mapped_column(

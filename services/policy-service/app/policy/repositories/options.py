@@ -30,9 +30,8 @@ BASE_TAG_OPTION_COLUMNS: OptionColumns = {
     "need_interpret": BaseTag.need_interpret,
 }
 
+# 一级行业、一级场景的候选值取行业场景码表。
 INTERPRETATION_OPTION_COLUMNS: OptionColumns = {
-    "industry_l1": Interpretation.industry_l1,
-    "scenario_l1_name": Interpretation.scenario_l1_name,
     "opportunity_type": Interpretation.opportunity_type,
     "is_new_scenario": Interpretation.is_new_scenario,
     "new_scenario_level": Interpretation.new_scenario_level,
