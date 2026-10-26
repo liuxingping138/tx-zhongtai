@@ -10,8 +10,8 @@ from typing import Any, Literal
 
 Unit = Literal["week", "month", "quarter", "year"]
 UNITS: tuple[Unit, ...] = ("week", "month", "quarter", "year")
-# 柱图每种粒度往前看几期（含当前这期）；年看到最早有数据的那年为止，最多这么多年。
-WINDOW: dict[Unit, int] = {"week": 12, "month": 12, "quarter": 8, "year": 10}
+# 周往前看 12 周（含本周）；年看到最早有数据的那年为止，最多 10 年。月、季度只画今年的 12 个月、4 个季度。
+WINDOW: dict[Unit, int] = {"week": 12, "year": 10}
 _MONTHS: dict[Unit, int] = {"month": 1, "quarter": 3, "year": 12}
 BLANK_PROVINCE = "（未填省份）"
 
@@ -45,8 +45,15 @@ def default_period(today: date, unit: Unit) -> date:
 
 
 def window(today: date, unit: Unit, earliest: date | None) -> list[date]:
-    """柱图的各期（第一天），从早到晚，最后一期是今天所在这期。年只从最早有数据的那年画起。"""
+    """柱图的各期（第一天），从早到晚。
 
+    月、季度是今年的 1–12 月、第一到第四季度，还没到的那几期也画出来（为 0），横轴固定不随月份滑动；
+    周、年的最后一期是今天所在这期，年只从最早有数据的那年画起。
+    """
+
+    if unit in ("month", "quarter"):
+        first = date(today.year, 1, 1)
+        return [shift(first, unit, offset) for offset in range(12 // _MONTHS[unit])]
     count = WINDOW[unit]
     if unit == "year" and earliest is not None:
         count = min(count, today.year - earliest.year + 1)

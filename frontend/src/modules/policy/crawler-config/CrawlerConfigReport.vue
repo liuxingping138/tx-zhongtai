@@ -21,6 +21,7 @@ import { formatTime } from '@/utils/time'
 import ConfigNewSites from './ConfigNewSites.vue'
 import ConfigOverview from './ConfigOverview.vue'
 import ConfigPeriodPanel from './ConfigPeriodPanel.vue'
+import ConfigProvinceDialog from './ConfigProvinceDialog.vue'
 import ConfigStatusPanel from './ConfigStatusPanel.vue'
 import { periodName as nameOf, syncFailure, syncRunning } from './report'
 
@@ -36,7 +37,9 @@ const status = ref<ConfigSyncStatus | null>(null)
 const loading = ref(false)
 const error = ref('')
 const syncing = ref(false)
-/** 各省柱图里点中的省份：抽屉里看这个省这期配置的网站。 */
+/** 各省配置弹窗：点配置数量的柱子或「各省明细」打开。 */
+const provincesOpen = ref(false)
+/** 弹窗里点中的省份：抽屉里看这个省这期配置的网站。 */
 const province = ref('')
 let sequence = 0
 let pollTimer: ReturnType<typeof setTimeout> | undefined
@@ -74,7 +77,10 @@ function pickUnit(value: ConfigUnit): void {
   void load()
 }
 
+/** 点柱子：整页换到那一期（卡片、下载报告跟着走），同时弹出这期各省配置。 */
 function pickPeriod(from: string): void {
+  provincesOpen.value = true
+  if (from === period.value) return
   period.value = from
   void load()
 }
@@ -188,11 +194,18 @@ onBeforeUnmount(() => clearTimeout(pollTimer))
         :loading="loading"
         @unit="pickUnit"
         @period="pickPeriod"
-        @province="province = $event"
+        @provinces="provincesOpen = true"
       />
       <ConfigStatusPanel
         :report="report"
         :sources-link="sourcesLink"
+      />
+      <ConfigProvinceDialog
+        v-model="provincesOpen"
+        :report="report"
+        :period-name="periodName"
+        :loading="loading"
+        @province="province = $event"
       />
       <ConfigNewSites
         :report="report"

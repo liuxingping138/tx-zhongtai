@@ -39,7 +39,6 @@ def test_window_ends_at_the_current_period_and_years_start_from_the_first_data()
     today = date(2026, 10, 26)
     weeks = rules.window(today, "week", None)
     assert (len(weeks), weeks[0], weeks[-1]) == (12, date(2026, 8, 10), date(2026, 10, 26))
-    assert rules.window(today, "quarter", None)[0] == date(2025, 1, 1)
     assert rules.window(today, "year", date(2023, 5, 1)) == [
         date(2023, 1, 1),
         date(2024, 1, 1),
@@ -47,6 +46,12 @@ def test_window_ends_at_the_current_period_and_years_start_from_the_first_data()
         date(2026, 1, 1),
     ]
     assert rules.window(today, "year", None) == [date(2017 + offset, 1, 1) for offset in range(10)]
+
+
+def test_months_and_quarters_are_this_whole_year_including_the_ones_not_yet_reached() -> None:
+    today = date(2026, 10, 26)
+    assert rules.window(today, "month", None) == [date(2026, month, 1) for month in range(1, 13)]
+    assert rules.window(today, "quarter", None) == [date(2026, month, 1) for month in (1, 4, 7, 10)]
 
 
 def test_series_and_previous_count_add_up_days_in_each_period() -> None:

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { ScheduledRun } from '@/api/scheduler'
 import { chartPalette } from '@/components/charts/echarts'
 import {
-  deltaText, periodLabel, periodName, periodOption, periodRange, provinceOption, provinceTableText, statusOption, statusRows, syncFailure, syncRunning, tint,
+  deltaText, periodLabel, periodName, periodOption, periodRange, provinceRanking, provinceTableText, statusOption, statusRows, syncFailure, syncRunning, tint,
 } from './report'
 
 const run = (status: ScheduledRun['status'], error: string | null = null) => ({ status, error_message: error }) as ScheduledRun
@@ -14,17 +14,17 @@ const weeks = [
 ]
 
 describe('每一期怎么写', () => {
-  it('横轴写法：周写周一，月写几月（1 月带年），季度、年简写', () => {
+  it('横轴写法：周写周一，月写几月，季度写第几季度，年简写', () => {
     expect(periodLabel('week', '2026-10-19')).toBe('10/19')
-    expect([periodLabel('month', '2026-10-01'), periodLabel('month', '2027-01-01')]).toEqual(['10月', '2027年1月'])
-    expect(periodLabel('quarter', '2026-10-01')).toBe('26Q4')
+    expect([periodLabel('month', '2026-10-01'), periodLabel('month', '2027-01-01')]).toEqual(['10月', '1月'])
+    expect(['2026-01-01', '2026-04-01', '2026-07-01', '2026-10-01'].map(day => periodLabel('quarter', day))).toEqual(['第一季度', '第二季度', '第三季度', '第四季度'])
     expect(periodLabel('year', '2026-01-01')).toBe('2026')
   })
 
   it('完整写法', () => {
     expect(periodRange('week', '2026-10-19', '2026-10-25')).toBe('10月19日 – 10月25日')
     expect(periodRange('month', '2026-10-01', '2026-10-31')).toBe('2026年10月')
-    expect(periodRange('quarter', '2026-07-01', '2026-09-30')).toBe('2026年第3季度')
+    expect(periodRange('quarter', '2026-07-01', '2026-09-30')).toBe('2026年第三季度')
     expect(periodRange('year', '2026-01-01', '2026-12-31')).toBe('2026年')
   })
 
@@ -34,6 +34,13 @@ describe('每一期怎么写', () => {
     expect(periodName({ ...base, period_from: '2026-10-19', period_to: '2026-10-25' })).toBe('上周')
     expect(periodName({ ...base, period_from: '2026-10-12', period_to: '2026-10-18' })).toBe('10月12日 – 10月18日')
     expect(periodName({ unit: 'month', current_from: '2026-10-01', periods: [], period_from: '2026-10-01', period_to: '2026-10-31' })).toBe('本月')
+  })
+
+  it('月、季度画全年时，上一期按当前这期的位置找，不是倒数第二根', () => {
+    const quarters = ['01', '04', '07', '10'].map(month => ({ period_from: `2026-${month}-01`, period_to: '', new: 0 }))
+    const base = { unit: 'quarter' as const, current_from: '2026-07-01', periods: quarters, period_to: '' }
+    expect(periodName({ ...base, period_from: '2026-04-01' })).toBe('上季度')
+    expect(periodName({ ...base, period_from: '2026-10-01' })).toBe('2026年第四季度')
   })
 })
 
@@ -56,7 +63,7 @@ describe('较上一期与同步状态', () => {
 describe('配置数量图和汇报表', () => {
   it('所选那期实色、其余同色淡化，0 不标数字', () => {
     const palette = chartPalette()
-    const option = periodOption('week', weeks, '2026-10-19', palette) as {
+    const option = periodOption('week', weeks, '2026-10-19', '2026-10-26', palette) as {
       series: { data: { value: number; itemStyle: { color: string } }[]; label: { formatter: (item: { value: number }) => string } }[]
       tooltip: { formatter: (params: { dataIndex: number }[]) => string }
     }
@@ -69,18 +76,10 @@ describe('配置数量图和汇报表', () => {
     expect(option.tooltip.formatter([{ dataIndex: 9 }])).toBe('')
   })
 
-  it('各省竖柱：从多到少，横轴简称竖排、提示框写全称', () => {
-    type Option = {
-      xAxis: { data: string[]; axisLabel: { formatter: (name: string) => string } }
-      tooltip: { formatter: (params: { dataIndex: number }[]) => string }
-      series: { label: { formatter: (item: { value: number }) => string } }[]
-    }
-    const option = provinceOption([{ province_name: '浙江省', new: 66 }, { province_name: '内蒙古自治区', new: 43 }], chartPalette()) as Option
-    expect(option.xAxis.data).toEqual(['浙江', '内蒙古'])
-    expect(option.xAxis.axisLabel.formatter('浙江')).toBe('浙\n江')
-    expect(option.tooltip.formatter([{ dataIndex: 1 }])).toContain('<b>内蒙古自治区</b><br/>配置 43 个网站')
-    expect(option.tooltip.formatter([])).toBe('')
-    expect(option.series[0]?.label.formatter({ value: 1200 })).toBe('1,200')
+  it('各省排行：名次、占这期总数的比例，横条以最多的省为满格', () => {
+    const rows = provinceRanking([{ province_name: '浙江省', new: 60 }, { province_name: '全国', new: 1 }], 80)
+    expect(rows.map(row => [row.rank, row.share, row.width])).toEqual([[1, '75.0%', '100%'], [2, '1.3%', '2%']])
+    expect(provinceRanking([], 0)).toEqual([])
   })
 
   it('分省爬虫状态按总数排、未填省份垫底，三段叠成一根柱', () => {
