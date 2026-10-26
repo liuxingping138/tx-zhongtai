@@ -51,6 +51,11 @@ function writeStep(template: PromptTemplate | null, dirty: boolean): StepState {
 function testStep(template: PromptTemplate | null): StepState {
   if (!template) return { text: '保存后用测试样本试跑', finished: false, warn: false }
   const sample = sampleState(template)
+  const release = template.release
+  // 已上线、草稿也没再改：线上那一版已经在跑，不用为它再去试跑；有试跑结果时照常显示结果。
+  if (release && !release.unreleased_changes.length && !['passed', 'failed', 'running'].includes(sample.kind)) {
+    return { text: `和线上第 ${release.release_no} 版一致`, finished: true, warn: false }
+  }
   return { text: sample.text, finished: sample.kind === 'passed' || sample.kind === 'failed', warn: sample.kind === 'failed' }
 }
 

@@ -63,6 +63,12 @@ describe('流程条', () => {
       .toEqual(['done', 'current', 'todo'])
   })
 
+  it('已上线且草稿没再改、也没试跑过：不催着去试跑', () => {
+    const steps = flowSteps(template({ release: release() }), false, true)
+    expect(tones(steps)).toEqual(['done', 'done', 'done'])
+    expect(steps[1]?.text).toBe('和线上第 2 版一致')
+  })
+
   it('已上线且草稿没再改：三步都完成', () => {
     expect(tones(flowSteps(template({ sample: sample(), release: release() }), false, true))).toEqual(['done', 'done', 'done'])
   })
