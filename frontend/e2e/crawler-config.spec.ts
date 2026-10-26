@@ -1,6 +1,6 @@
 import { expect, test, type Route } from '@playwright/test'
 
-/** 爬虫配置统计：一句话结论、按周配置数量、上周各省（点省份看网站）、分省爬虫状态、下载报告。接口全部用替身，省份和数量都只是样例。 */
+/** 爬虫配置统计：一句话结论、按周配置数量、上周各省配置排行（弹窗）、分省爬虫状态、下载报告。接口全部用替身，省份和数量都只是样例。 */
 const respond = (route: Route, data: unknown) => route.fulfill({ json: { code: 'OK', data } })
 
 const MONDAYS = ['08-10', '08-17', '08-24', '08-31', '09-07', '09-14', '09-21', '09-28', '10-05', '10-12', '10-19', '10-26']
@@ -60,8 +60,15 @@ test('默认看上周：一句话结论、各期和各省配置数量、分省�
   await expect(page.locator('.headline')).toContainText('上周新配置 267 个网站，分布在 11 个省，浙江省最多（66 个），较上一周 +64')
   await expect(page.locator('.card--main .card-value')).toHaveText('267')
   await expect(page.getByRole('heading', { name: '配置数量' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: /上周各省配置/ })).toContainText('共 267 个')
-  await expect(page.getByRole('button', { name: '复制表格' })).toBeEnabled()
+  // 各省配置是点柱子或「上周各省明细」弹出的排行，复制表格在弹窗里。
+  await page.getByRole('button', { name: '上周各省明细' }).click()
+  const provinces = page.locator('.province-dialog')
+  await expect(provinces.getByRole('heading', { name: '上周各省配置' })).toBeVisible()
+  await expect(provinces).toContainText('11 个省份有配置')
+  await expect(provinces.locator('.ranking li').first()).toContainText('浙江省')
+  await expect(provinces.getByRole('button', { name: '复制表格' })).toBeEnabled()
+  await page.keyboard.press('Escape')
+  await expect(provinces).toBeHidden()
   await expect(page.getByRole('button', { name: '下载报告' })).toBeEnabled()
   await expect(page.getByRole('button', { name: '立即同步' })).toHaveCount(0)
   if (process.env.SHOT_DIR) await page.screenshot({ path: `${process.env.SHOT_DIR}/page.png`, fullPage: true })
