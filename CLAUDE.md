@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 政策三张表（信源、基础标签、解读）与码表三张表（政策类型、行业场景、省市区编码）已接入，
 爬虫监测已接入（只读统计页，数据来自外部爬虫库采集总表的按天聚合，按网站统计），
 爬虫配置统计已接入（按规则表把信源标成已爬，按周按省统计上线栏目数），
-AI提问已接入（独立的 ai-service：提示词模板、按 Excel 逐行批量提问、多轮对话，从旧 Django 项目 difyapi/chat_web 迁来）。
+AI提问已接入（独立的 ai-service：提示词模板、样本试跑与上线、按 Excel 逐行跑的批量任务、多轮对话，从旧 Django 项目 difyapi/chat_web 迁来）。
 **客户、招投标仅有占位目录**，未开发——不要为它们提前暴露无功能入口或做过度抽象。
 其余文档按 设计决策 / 操作手册 分类，索引见 `docs/README.md`。文档只写与现有代码一致的现状，过时内容直接删除，历史留在 git 里。
 
@@ -57,7 +57,7 @@ cd frontend && pnpm exec playwright test --grep "date range"
 ### 开发部署机 vs 本机 / P6
 
 日常只使用 `1.119.196.77`。本机 Docker 栈已停止。分工：`make check` / `make test-unit` 在 Mac 上跑（不要 Docker）；
-集成和 e2e 在服务器上跑 P6：`bash scripts/p6-on-server.sh`（同步 → 集成 + e2e → 一定 `p6-down`），
+集成和 e2e 在服务器上跑 P6：`bash scripts/p6-on-server.sh`（同步 → 集成 + e2e → 一定 `p6-down`）。P6 的模型调用经 `AI_LLM_BASE_URL` 全部发到模拟模型服务 `llm-mock`（`deploy/compose/p6/llm_mock.py`，生产环境配了这个变量会拒绝启动），e2e 能不花钱跑通试发、样本试跑、上线和批量任务，
 Mac 不用开 Docker。P6 与业务栈同机但隔离（项目名 `tx-zhongtai-p6`、独立卷与库，网关只绑 `127.0.0.1:8090`），
 不要把 Playwright 打到 8091 的业务库。同步一律用 `scripts/sync-to-server.sh`，排除列表只维护那一份。脚本带 `--delete`，
 服务器上独有的文件（`.env`、密钥、P6 运行时文件等）全靠排除列表保护，新增服务器独有文件前先加进去。
@@ -74,7 +74,7 @@ services/
   audit-service/       审计写入、查询、到期清理
   policy-service/      政策：信源、基础标签、解读、爬虫监测
   codebook-service/    码表：政策类型、行业场景、省市区编码
-  ai-service/          AI提问：提示词模板、批量提问、多轮对话；Compose 里 ai-worker 共用此镜像执行批量任务
+  ai-service/          AI提问：提示词模板、批量任务、多轮对话；Compose 里 ai-worker 共用此镜像执行批量任务
   customer-service/    占位，仅 .gitkeep
   tender-service/      占位，仅 .gitkeep
 packages/platform-common/   跨服务公共包（见下）
@@ -181,7 +181,8 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
   只取名称列、去重（原表按客群重复，8370 行只有 3348 条路径）；六级码表按三级行业分组输出（「一级行业 > 二级行业 > 三级行业：场景；场景」，保留上级场景），约 3.8 万字，原样六列要 10.6 万字
 - 模板「上线」由 `ai.releases`（只给管理员）把提示词、输出字段、模型、码表冻结成 `ai_template_releases` 一版，模板 `release_id` 指向生效版本。
   上线后再改模板只改草稿，页面列出与上线版本不同的项；已上线的模板要先下线才能删。定时任务只用上线版本
-- 发起批量时把模板 Excel、码表复制进任务目录做快照：之后改模板、删模板都不影响排队中、运行中和已完成的任务
+- 主线是业务人员写模板、样本试跑 → 管理员上线 → 定时任务和批量任务都只跑上线版本（`releases.current`）。页面发起的批量任务单独上传本次 Excel，按上线版本引用的列检查（`input-preview` 预检不调模型），把输入文件、上线版本的提示词 / 输出字段 / 模型 / 码表冻结进任务目录和任务行（`release_no`、`input_name`）：之后改模板、重新上线、删模板都不影响排队中、运行中和已完成的任务
+- 样本试跑（`app/application/sample_runs.py`，`/api/v1/ai/prompts/{id}/sample-run`，权限同试发 `ai.prompts:ask`）：草稿 × 模板测试样本前 N 条（最多 50），也是一条 `ai_batch_runs`，`source=sample`，不进批量任务列表（`repositories/batch_runs.TASK_SOURCES`），和正式任务互不阻挡；模板列表带最近一次试跑（`sample`，`current` 表示跑的就是现在的草稿）。逐行结果预览 `run_rows.preview` 样本试跑和批量详情共用
 - `ai-worker` 持 Postgres 全局锁，用 `SKIP LOCKED` 认领排队任务，最多同时跑 `AI_BATCH_MAX_RUNNING` 个，每个任务
   `AI_BATCH_CONCURRENCY` 路并发。每行完成立即追加 `temp.csv`；进程被停时把已跑部分收尾成「中断」并生成结果。
   运行中超过 `AI_BATCH_STALE_SECONDS` 没心跳的任务，列表和进度接口会把它纠正为「中断」
@@ -195,7 +196,7 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
 - 旧打表系统的模板和批量历史用 `python -m app.cli.import_legacy <导出目录> [--update] [--dry-run]` 导入，保留原 ID，可重复跑；
   `--update` 用旧库最新内容覆盖：模板只覆盖导入后没在新系统里保存过的，任务除排队中、运行中的都覆盖。导出目录结构见 `app/application/legacy_import.py`
 - 对话和试发的内容不进审计，只记谁对哪个模板、哪个任务做了什么。多轮对话的上下文由模型服务端按 response_id 保存，本服务不存
-- 费用账单（`ai.billing`，`/api/v1/ai/billing`）：批量提问和定时任务的费用在 `ai_batch_runs` 上（定时任务的「用途」就是发起方名字，如「政策AI打标·类型判断」），
+- 费用账单（`ai.billing`，`/api/v1/ai/billing`）：批量任务、定时任务和样本试跑的费用在 `ai_batch_runs` 上（用途按 `source` 分成「批量任务」「样本试跑」，定时任务的用途是发起方名字，如「政策AI打标·类型判断」），
   试发和多轮对话答完时在 `ai_call_usages` 记一行（不记内容，`app/application/billing.py`）。新增调模型的入口要么走批量任务，要么也记进 `ai_call_usages`，否则账单漏钱
 
 ### 系统管理：给人分配角色即授权
@@ -258,7 +259,7 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
 - 重新打标（`app/aitag/application/retag.py`，`POST /api/v1/policy/ai-tagging/retag`）：基础标签勾选后放回某个任务的待办，不当场调模型。
   重新判断类型记 `type_retag_at`，类型判断下一批先按源政策 ID 重打这些、强制覆盖、不动读取进度；重新解读 / 补机会清掉完成时间。失败说明前缀在 `policy.domain.fields.AI_NOTE_*`，列表「打标状态」按它筛
 - 模板和任务的约定在 `app/aitag/domain/contract.py`：每个任务给模板哪些列、要哪些输出字段，`check_template` 分必须改（errors）和提醒（warnings）。
-  任务设置换模板时后端按它拦下；提问配置页按草稿实时提示（前端 `modules/ai/prompts/taskFit.ts` 同一套规则，两边改要一起改）
+  任务设置换模板时后端按它拦下；提示词模板编辑页按草稿实时提示（前端 `modules/ai/prompts/taskFit.ts` 同一套规则，两边改要一起改）
 - 「从数据库取测试数据」（`app/aitag/application/samples.py`，`GET /api/v1/policy/ai-tagging/samples`，权限 `policy.base_tags:list`）：按任务生成和正式打标一样的行，
   前端再存成模板测试 Excel（ai-service `POST /api/v1/ai/prompts/{id}/test-data`）。接口只能挂本服务资源，所以不用 AI 模块的模板权限
 - 解读、市场机会按待办做：基础标签「是否解读 = 是」且 `interpreted_at` 为空的政策做解读，一条展开成多行写解读表（「政策概览」写进「政策要文」，
@@ -346,6 +347,7 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
 - 权限矩阵的勾选联动、整组勾选、锁定和搜索是 `permissions/matrix.ts` 里的纯函数，改交互先改它和单测
 
 - 筛选项：`v-bind="filters.bind('字段')"`（`useFilterOptions`），不要自己再维护一份 options
+- 几百万行的名称、标题字段（政策名称、政策原文名称）不出候选值，用 `FilterKeyword` 输入关键词，列上建 pg_trgm GIN 索引；政策类型的候选值取政策类型码表（`internal_clients.policy_type_names`），不在政策表上去重
 - 筛选一律多选：前端 query 字段默认 `[]`，`http` 按重复参数（`a=1&a=2`）提交；后端参数写
   `list[str] | None = Query(default=None)`，仓储用 `platform_common.filters` 的 `ilike_any`（模糊，同字段「或」）
   或 `in_any`（枚举精确）。只写 `str | None` 会让多选只剩最后一个值生效

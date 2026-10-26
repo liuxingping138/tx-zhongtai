@@ -31,7 +31,7 @@
 |---|---|---|
 | 页面结构、总数、分页、加载失败 | `frontend/src/components/ListPage.vue` | title/hint、total/page/pageSize/loading/error，retry/change处理；结果区必须用 ScrollPort；概览区走 `summary` 插槽（筛选之前，不参与拉伸） |
 | 结果区滚动 | `frontend/src/components/ScrollPort.vue` | 常显横/纵滑槽；两指分轴；默认每页 20 条时未露出的行必须能上下滚到 |
-| 查询 | `frontend/src/components/FilterBar.vue`、`FilterSelect.vue` | query 与 applied；桌面展开全部字段，advanced 只作字段分组，桌面不折叠。`FilterSelect` 一律多选，query 里筛选字段默认值是 `[]`（不是 `''`），重置也赋 `[]`；状态卡片这类「点一下筛选、再点取消」的入口用 `toggleValue` |
+| 查询 | `frontend/src/components/FilterBar.vue`、`FilterSelect.vue` | query 与 applied；桌面展开全部字段，advanced 只作字段分组，桌面不折叠。`FilterSelect` 一律多选，query 里筛选字段默认值是 `[]`（不是 `''`），重置也赋 `[]`；状态卡片这类「点一下筛选、再点取消」的入口用 `toggleValue`。几百万行的名称、标题字段用 `FilterKeyword.vue`（关键词输入框，同样以 `string[]` 做 v-model，回车 emit search），后端照旧 `ilike_any`，并给该列建 pg_trgm 的 GIN 索引；不要再放进 `*_OPTION_COLUMNS` 去重取候选 |
 | 业务表格/详情/手机摘要 | `frontend/src/components/BusinessTable.vue` | items、完整columns、selected、titleKey、可选summaryKeys、canWrite/loading/filtered，edit/reset；批量操作传 `selectable`，用 `useTableSelection`：`:ref="selection.bindTable"`、`@selection-change="checked = $event"`，操作完 `selection.clear()`；选一个选项的批量操作用 `BatchChoiceDialog`（选项带后果说明，跳过的原因弹窗列出） |
 | 账号菜单 | `frontend/src/layouts/UserAccountMenu.vue` | 侧栏底部；显示名 + `/me.roles` |
 | 浮层焦点 | `frontend/src/layouts/AdminLayout.vue` | 打开时把焦点送进浮层、关闭后送回触发按钮；落回 body 会让键盘用户从头 Tab |
@@ -172,13 +172,13 @@ ColumnPicker 按用户ID和route.path保存字段键（存储键 `zt:columns:v2:
 
 ## 工作台页面（AI提问）
 
-`frontend/src/modules/ai/`：提问配置、批量提问、多轮对话不是字段列表，不套 `ListPage`，内容放在白底细边框面板（`shared/ai.css` 的 `.ai-panel`）里；页面标题只给读屏（`.ai-sr-only`）。提问配置占满内容区高度（`calc(100dvh - var(--workspace-header-height) - 48px)`），三栏：模板栏、编辑区、试发栏（`TrialPanel.vue`），1360px 及以下试发栏下移、900px 及以下单列；批量提问左模板栏、右运行卡（`RunCard.vue`）加历史，整页纵向滚动，960px 及以下单列；多轮对话是占满内容区高度的单个对话面板，`AnswerTranscript` 用 `variant="chat"` 居中成阅读列。
+`frontend/src/modules/ai/`：提示词模板、批量任务、多轮对话不是普通业务字段列表，不套 `ListPage`，内容放在白底细边框面板（`shared/ai.css` 的 `.ai-panel`）里；页面标题只给读屏（`.ai-sr-only`）。提示词模板是列表页 `prompts/PromptListPage.vue` 加编辑页 `prompts/PromptEditorPage.vue`（路由 `/ai/prompts/:id`，新建用 `new`，保存后 `router.replace` 成模板 ID，同一条路由不重建页面）。编辑页顶部的流程条 `FlowBar.vue` 和列表的两列状态都由 `prompts/templateStatus.ts` 的纯函数（`releaseState` / `sampleState` / `flowSteps`，有单测）算出，改判断先改它；右栏 `TestPanel.vue` 是「试发一条」（`TrialPanel.vue`）和「样本试跑」（`SampleRunPanel.vue`，运行中每 2 秒刷新）两个页签；上线审核是 `ReleaseDrawer.vue`，提示词差异用 `prompts/lineDiff.ts`（按行 LCS，折叠没变的行，有单测）。批量任务主页 `batch/BatchRunsPage.vue` 是筛选加任务表，新建是 `NewBatchTask.vue` 抽屉（只能选上线的模板，选好文件先调 `/ai/batch-runs/input-preview` 检查，发起是 `/ai/batch-runs` 的 multipart，其他参数放 query），详情是 `BatchRunDrawer.vue`；停止、重跑、删除、下载的确认文案在 `batch/runActions.ts`，列表和详情共用。逐行结果统一用 `shared/RunRows.vue`。多轮对话是占满内容区高度的单个对话面板，`AnswerTranscript` 用 `variant="chat"` 居中成阅读列。
 
 - 提示词编辑器是 `prompts/PromptEditor.vue`：透明 textarea 叠在同字体的镜像层上，镜像层把变量渲染成 `<mark>` 做高亮，`@` 候选按光标位置弹出；变量的分段和状态判断是 `prompts/promptVariables.ts` 里的纯函数（有单测）。镜像层由渲染函数生成，样式要用 `:deep(mark...)` 才能命中。Ctrl/⌘ + Enter 试发，Ctrl/⌘ + S 保存。
-- 输出字段、码表来源、测试数据在 `prompts/PromptSettings.vue`。码表下拉里「上传的码表文件」在库里是空串，Element Plus 会把空串当未选，页面用哨兵值 `uploaded` 代替，不要改回空串。
+- 类型、模型、码表、输出字段、测试样本和政策类的定时任务适配在 `prompts/PromptSettings.vue`，常驻在编辑器下方，不要再收进折叠区：它们决定结果长什么样。码表下拉里「上传的码表文件」在库里是空串，Element Plus 会把空串当未选，页面用哨兵值 `uploaded` 代替，不要改回空串。
 
 - 流式回答统一用 `shared/useAnswerStream.ts`（底层 `api/eventStream.ts`：带令牌和 CSRF、401 续期重试一次、错误还原成中文提示），消息列表 `AnswerTranscript.vue`，用量和费用 `StreamStatsBar.vue`，模型选择 `ModelPicker.vue`（未配密钥的模型可见但不可选）。事件处理是 `shared/streamEvents.ts` 里的纯函数，加新事件先改它和单测。
 - 下载走 `shared/downloads.ts`（底层 `downloadFile`），不放在 `api/ai.ts`：契约测试会逐个调用 api 目录导出的函数。
-- 模板编辑用 `useUnsavedForm`：切换模板、新建、离开页面前提示未保存的修改。附件上传、删除不动表单草稿。
-- 批量历史有任务在排队或运行时每 2 秒刷新，全部结束后停止轮询。
+- 模板编辑用 `useUnsavedForm`：返回列表、离开页面前提示未保存的修改；有未保存的修改时不能样本试跑、不能上线。附件上传、删除、上线、试跑状态变化只更新模板信息，不动表单草稿。
+- 批量任务列表有任务在排队或运行时每 2 秒刷新，全部结束后停止轮询；详情抽屉跟着列表里的进度变化刷新逐行结果。
 
