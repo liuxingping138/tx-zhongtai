@@ -41,42 +41,97 @@ _BLOCK_TAGS = {
 }  # fmt: skip
 
 
+# 网站的导航栏、页头页脚、面包屑：语义标签，或 class / id 里有这些词的块。实测 10 个政府网站只有 2 个用了
+# <nav>、<header>，其余是 div.header、ul.nav_menu、div.gov_headerNavBox 这种写法。按 - _ 和大小写拆开逐段比。
+# 以否定词开头的名字不算：「no-breadNav-padd」是没有面包屑时的正文外框（400 页里唯一一处误伤正文）。
+_CHROME_TAGS = {"nav", "header", "footer", "aside"}
+_CHROME_WORDS = {"header", "footer", "foot", "nav", "navbar", "menu", "submenu", "topbar", "breadcrumb", "crumb"}
+_NEGATIONS = {"no", "not", "non", "without"}
+_NAME_PARTS = re.compile(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])|\d+")
+
+
+def _is_chrome(tag: str, attrs: list[tuple[str, str | None]]) -> bool:
+    if tag in _CHROME_TAGS:
+        return True
+    for key, value in attrs:
+        for name in (value or "").split() if key in ("class", "id") else ():
+            parts = [part.lower() for part in _NAME_PARTS.findall(name)]
+            if parts and parts[0] not in _NEGATIONS and _CHROME_WORDS.intersection(parts):
+                return True
+    return False
+
+
 class _PageText(HTMLParser):
-    def __init__(self) -> None:
+    def __init__(self, *, skip_chrome: bool) -> None:
         super().__init__(convert_charrefs=True)
         self.parts: list[str] = []
         self._hidden = 0
+        self._skip_chrome = skip_chrome
+        # 正在跳过的导航块：标签名和同名标签的嵌套层数，回到 0 时这一块结束。
+        self._chrome = ""
+        self._chrome_depth = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag in _HIDDEN_TAGS:
+        if self._chrome:
+            if tag == self._chrome:
+                self._chrome_depth += 1
+        elif tag in _HIDDEN_TAGS:
             self._hidden += 1
+        elif self._skip_chrome and not self._hidden and _is_chrome(tag, attrs):
+            self._chrome, self._chrome_depth = tag, 1
         elif tag in _BLOCK_TAGS:
             self.parts.append("\n")
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag in _BLOCK_TAGS:
+        if tag in _BLOCK_TAGS and not self._chrome:
             self.parts.append("\n")
 
     def handle_endtag(self, tag: str) -> None:
-        if tag in _HIDDEN_TAGS:
+        if self._chrome:
+            if tag == self._chrome:
+                self._chrome_depth -= 1
+                if not self._chrome_depth:
+                    self._chrome = ""
+                    self.parts.append("\n")
+        elif tag in _HIDDEN_TAGS:
             self._hidden = max(0, self._hidden - 1)
         elif tag in _BLOCK_TAGS:
             self.parts.append("\n")
 
     def handle_data(self, data: str) -> None:
-        if not self._hidden:
+        if not self._hidden and not self._chrome:
             self.parts.append(data)
+
+    @property
+    def chrome_open(self) -> bool:
+        return bool(self._chrome)
+
+
+def _visible_text(text: str, *, skip_chrome: bool) -> str | None:
+    """导航块到网页结尾都没闭合时返回 None：后面的正文多半被它一起吞了。"""
+
+    parser = _PageText(skip_chrome=skip_chrome)
+    parser.feed(text)
+    parser.close()
+    return None if parser.chrome_open else "".join(parser.parts)
+
+
+def _keeps_body(full: str, body: str) -> bool:
+    """原文里最长的一段（一般是正文段落，导航项都很短）还在：没有把起错名字的正文外框当成导航。"""
+
+    longest = max(("".join(line.split()) for line in full.split("\n")), key=len, default="")
+    return longest in "".join(body.split())
 
 
 def page_text(text: str) -> str:
-    """网页源码 -> 看得见的文字（去掉脚本、样式、网页头，块级标签处断行）。不像网页的原样返回。"""
+    """网页源码 -> 看得见的文字（去掉脚本、样式、网页头、导航和页脚，块级标签处断行）。不像网页的原样返回。"""
 
     if not _HTML_START.search(text[:5000]):
         return text
-    parser = _PageText()
-    parser.feed(text)
-    parser.close()
-    return "".join(parser.parts)
+    full = _visible_text(text, skip_chrome=False) or ""
+    body = _visible_text(text, skip_chrome=True)
+    # 去导航出了岔子就退回整页文字：宁可多几行导航，也不能丢正文。
+    return body if body is not None and _keeps_body(full, body) else full
 
 
 def clean_content(text: str | None, max_chars: int) -> str:
@@ -97,10 +152,32 @@ def _text(value: Any) -> str:
     return "" if value is None else str(value).strip()
 
 
+# 有的网站用脚本写出标题，爬虫把整句脚本存成了标题：document.write("".length>0?"":"真正的标题")。
+_SCRIPT_TITLE = re.compile(r"^document\.write\s*\(")
+_STRING_LITERAL = re.compile(r"\"((?:[^\"\\]|\\.)*)\"|'((?:[^'\\]|\\.)*)'")
+_TAG = re.compile(r"<[^>]*>")
+TITLE_SCRIPT_NOTE = "标题原文是网页脚本，已取出其中的文字"
+
+
+def policy_title(raw: Any) -> tuple[str, bool]:
+    """源库的政策标题 -> (标题, 是否从脚本里取的)。
+
+    混进网页脚本的，取脚本里最长的一段文字（去掉标签）；取不出来就原样返回。
+    源库不改，按源政策 ID 能查到原文；写进基础标签的是取出来的标题，备注里注明。
+    """
+
+    title = _text(raw)
+    if not _SCRIPT_TITLE.match(title):
+        return title, False
+    texts = (_TAG.sub("", first or second).strip() for first, second in _STRING_LITERAL.findall(title))
+    best = max(texts, key=len, default="")
+    return (best, True) if best else (title, False)
+
+
 def prompt_row(row: dict[str, Any], content: str | None, max_chars: int) -> dict[str, str]:
     return {
         SOURCE_ID: _text(row.get("content_id")),
-        "政策标题": _text(row.get("name")),
+        "政策标题": policy_title(row.get("name"))[0],
         "政策正文": clean_content(content, max_chars),
         "省份": _text(row.get("prov_name")),
         "地市": _text(row.get("city_name")),
@@ -134,8 +211,11 @@ def parse_policy_types(answer: str, known: list[str]) -> tuple[list[str], list[s
 def base_tag_values(row: dict[str, Any], types: list[str], remark: str) -> dict[str, str]:
     """基础标签的业务字段。穿透词三列来自别的流程，打标不填。"""
 
+    title, from_script = policy_title(row.get("name"))
+    if from_script:
+        remark = NOTE_SEP.join(part for part in (remark, TITLE_SCRIPT_NOTE) if part)
     return {
-        "policy_name": _text(row.get("name")),
+        "policy_name": title,
         "issuing_dept": _text(row.get("introduced_department"))[:255],
         "issuer_industry": _text(row.get("department_industry"))[:255],
         "policy_level": _text(row.get("level"))[:64],
