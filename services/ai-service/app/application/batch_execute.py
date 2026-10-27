@@ -61,7 +61,10 @@ class Job:
     model: LlmModel
     headers: list[str]
     rows: list[dict[str, str]]
-    prompts: deque[tuple[str, str]]
+    # 还没问的行号。提示词轮到哪行才拼哪行：10 万行乘上码表全文一次拼好要几个 G，worker 会被 OOM 杀掉。
+    pending: deque[str]
+    code_text: str = ""
+    by_id: dict[str, dict[str, str]] = field(default_factory=dict)
     fields: list[str] = field(default_factory=list)
     results: dict[str, RowResult] = field(default_factory=dict)
     # 续跑前失败的结果：重问后被新结果替换；中途停止没轮到的行仍用它出现在结果里。
@@ -169,11 +172,15 @@ async def _record(job: Job, result: RowResult) -> None:
         line = f"{head} 成功 耗时={result.elapsed}s{tries}"
     await anyio.to_thread.run_sync(append_raw, job.path("raw"), result.raw_row(job.model.name))
     await anyio.to_thread.run_sync(_log, job, line)
+    # 提问原文已经落在原始返回 CSV 里；成功的行不再留着它（失败清单要写失败行的提问，失败的留着）。
+    if not result.error:
+        result.prompt = ""
 
 
 async def _consume(job: Job, client: httpx.AsyncClient) -> None:
-    while job.prompts and not job.stop.is_set():
-        myid, prompt = job.prompts.popleft()
+    while job.pending and not job.stop.is_set():
+        myid = job.pending.popleft()
+        prompt = fill_template(job.run.prompt_content, job.by_id[myid], job.code_text)
         result = await ask_row(job.model, prompt, job.run.thinking, job.fields, client)
         result.myid = myid
         await _record(job, result)
@@ -237,15 +244,16 @@ async def _load(run: BatchRun) -> Job:
     ids = {row["myid"] for row in rows}
     succeeded = {key: item for key, item in existing.items() if key in ids and not needs_retry(item, fields)}
     previous = {key: item for key, item in existing.items() if key in ids and key not in succeeded}
-    prompts = deque(
-        (row["myid"], fill_template(run.prompt_content, row, code_text)) for row in rows if row["myid"] not in succeeded
-    )
+    for item in succeeded.values():
+        item.prompt = ""
     return Job(
         run=run,
         model=model,
         headers=headers,
         rows=rows,
-        prompts=prompts,
+        pending=deque(row["myid"] for row in rows if row["myid"] not in succeeded),
+        code_text=code_text,
+        by_id={row["myid"]: row for row in rows},
         fields=fields,
         results=succeeded,
         previous=previous,
@@ -300,7 +308,7 @@ async def _run_job(job: Job) -> None:
     await anyio.to_thread.run_sync(start_raw, job.path("raw"))
     scope = f"{len(job.rows)} 条"
     if job.results or job.previous:
-        scope = f"续跑 {len(job.prompts)} 条（共 {len(job.rows)} 条，已成功 {len(job.results)} 条）"
+        scope = f"续跑 {len(job.pending)} 条（共 {len(job.rows)} 条，已成功 {len(job.results)} 条）"
     await anyio.to_thread.run_sync(
         _log, job, f"开始：模型={job.model.name}｜{scope}｜并发={settings.batch_concurrency}"
     )

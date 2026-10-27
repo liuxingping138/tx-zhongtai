@@ -8,12 +8,11 @@ from __future__ import annotations
 
 import csv
 import sys
-from collections.abc import Generator
+from collections.abc import Generator, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-from openpyxl import Workbook
-from platform_common.excel import active_worksheet, append_text_row
+from platform_common.xlsx_writer import write_text_xlsx
 
 from app.application.sheets import excel_cell
 from app.domain.templating import extract_fields
@@ -153,18 +152,20 @@ def build_result(
     model_name: str,
 ) -> None:
     columns, _, _ = result_columns(headers, fields)
-    book = Workbook()
-    sheet = active_worksheet(book)
-    sheet.title = "结果"
-    append_text_row(sheet, columns)
-    for row in rows:
-        result = results.get(row["myid"])
-        if result is None:
-            continue
-        base = [row.get(name, "") for name in headers] + [row["myid"]]
-        meta = [model_name, str(result.input_tokens), str(result.output_tokens), result.error, str(result.search_calls)]
-        for parsed in extract_fields(result.text, fields):
-            append_text_row(sheet, [_cell(value) for value in (*base, *[parsed[name] for name in fields], *meta)])
+
+    # 逐行流式写、只含文本的 xlsx：openpyxl 逐格建对象，10 万行要吃几个 G 内存。
+    def lines() -> Iterator[list[str]]:
+        yield list(columns)
+        for row in rows:
+            result = results.get(row["myid"])
+            if result is None:
+                continue
+            base = [row.get(name, "") for name in headers] + [row["myid"]]
+            tokens = (str(result.input_tokens), str(result.output_tokens))
+            meta = [model_name, *tokens, result.error, str(result.search_calls)]
+            for parsed in extract_fields(result.text, fields):
+                yield [_cell(value) for value in (*base, *[parsed[name] for name in fields], *meta)]
+
     temporary = path.with_name(path.name + ".tmp")
-    book.save(temporary)
+    temporary.write_bytes(write_text_xlsx("结果", lines(), column_count=len(columns)))
     temporary.replace(path)

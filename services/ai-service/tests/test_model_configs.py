@@ -149,7 +149,7 @@ async def test_batch_cost_adds_each_row_at_its_own_price(monkeypatch: pytest.Mon
             peak_hours="09:00-12:00,14:00-18:00",
         )
     )
-    job = batch_execute.Job(run=run(), model=economy, headers=[], rows=[{}, {}], prompts=deque())
+    job = batch_execute.Job(run=run(), model=economy, headers=[], rows=[{}, {}], pending=deque())
     storage.run_dir(RUN_ID).mkdir(parents=True, exist_ok=True)
     busy, idle = datetime(2026, 10, 21, 2, 0, tzinfo=UTC), datetime(2026, 10, 21, 14, 0, tzinfo=UTC)
     # 每行先按此刻算费用、再写日志，各取一次时间：北京 10:00 高峰、22:00 空闲。
