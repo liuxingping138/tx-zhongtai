@@ -35,7 +35,7 @@ export interface MePayload {
 
 export interface ResourceLevel {
   code: string
-  level: 'READ' | 'FULL'
+  level: 'READ' | 'EXPORT' | 'FULL'
 }
 
 export interface MenuItem {

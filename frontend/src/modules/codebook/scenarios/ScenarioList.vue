@@ -57,7 +57,7 @@ async function refresh() {
 }
 
 const editor = useRecordEditor<ScenarioItem>({
-  noun: '行业场景码表',
+  noun: '行业场景',
   groups: EDITOR_GROUPS,
   create: createScenario,
   update: (row, form) => updateScenario(row.id, { ...form, version: row.version }),

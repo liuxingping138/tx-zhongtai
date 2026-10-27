@@ -32,8 +32,12 @@ async function copyPassword() {
   if (!props.password) {
     return
   }
-  await navigator.clipboard.writeText(props.password)
-  ElMessage.success('已复制，离开后将不再显示')
+  try {
+    await navigator.clipboard.writeText(props.password)
+    ElMessage.success('已复制，离开后将不再显示')
+  } catch {
+    ElMessage.error('复制失败，请手动选中密码复制')
+  }
 }
 </script>
 

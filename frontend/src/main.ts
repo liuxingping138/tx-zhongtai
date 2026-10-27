@@ -27,14 +27,16 @@ const auth = useAuthStore()
 setUnauthorizedHandler(() => {
   auth.clearSession()
   if (router.currentRoute.value.name !== 'login') {
-    void router.replace({ name: 'login' })
+    // 和路由守卫一样带上 redirect：重新登录后回到刚才的页面，不是首页。
+    void router.replace({ name: 'login', query: { redirect: router.currentRoute.value.fullPath } })
   }
 })
 onRemoteLogout(() => {
   auth.signedIn = false
   auth.clearIdentity()
   if (router.currentRoute.value.name !== 'login') {
-    void router.replace({ name: 'login' })
+    // 和路由守卫一样带上 redirect：重新登录后回到刚才的页面，不是首页。
+    void router.replace({ name: 'login', query: { redirect: router.currentRoute.value.fullPath } })
   }
 })
 setForbiddenHandler(() => {

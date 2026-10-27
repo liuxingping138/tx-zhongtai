@@ -18,6 +18,14 @@ function pickPeriod(params: { dataIndex: number }): void {
   const item = props.report.periods[params.dataIndex]
   if (item && !isFuture(props.report, item.period_from)) emit('period', item.period_from)
 }
+
+// 上一期 / 下一期按钮：点柱子键盘够不着，图表旁边给一对按钮换期。
+const currentIndex = computed(() => props.report.periods.findIndex(item => item.period_from === props.report.current_from))
+const previous = computed(() => (currentIndex.value > 0 ? props.report.periods[currentIndex.value - 1] : undefined))
+const next = computed(() => {
+  const item = currentIndex.value >= 0 ? props.report.periods[currentIndex.value + 1] : undefined
+  return item && !isFuture(props.report, item.period_from) ? item : undefined
+})
 </script>
 
 <template>
@@ -34,6 +42,20 @@ function pickPeriod(params: { dataIndex: number }): void {
         </p>
       </div>
       <div class="tools">
+        <el-button
+          size="small"
+          :disabled="!previous"
+          @click="previous && emit('period', previous.period_from)"
+        >
+          上一{{ unitName }}
+        </el-button>
+        <el-button
+          size="small"
+          :disabled="!next"
+          @click="next && emit('period', next.period_from)"
+        >
+          下一{{ unitName }}
+        </el-button>
         <el-button
           size="small"
           @click="emit('provinces')"

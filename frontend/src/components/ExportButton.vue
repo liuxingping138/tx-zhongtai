@@ -10,7 +10,7 @@ withDefaults(defineProps<{
   hint?: string
 }>(), {
   disabled: false,
-  hint: '按当前已生效的筛选条件导出；未筛选时导出全表。',
+  hint: '按当前已生效的筛选条件下载；未筛选时下载全表。',
 })
 defineEmits<{ click: [] }>()
 const NO_EXPORT_HINT = '你的角色没有导出权限，如需下载 Excel 请联系管理员开通「导出」。'

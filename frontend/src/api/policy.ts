@@ -151,6 +151,7 @@ export function listBaseTags(params: {
   policy_types?: FilterParam
   is_penetrate?: FilterParam
   need_interpret?: FilterParam
+  ai_status?: FilterParam
   page?: number
   page_size?: number
 }): Promise<Page<BaseTagItem>> {
