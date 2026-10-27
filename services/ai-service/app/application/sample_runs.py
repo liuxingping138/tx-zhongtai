@@ -1,4 +1,4 @@
-"""样本试跑：用模板草稿把测试样本的前几条整批跑一遍，结果在模板页逐行看。
+"""样本试跑：用模板草稿把测试样本的前几条整批跑一遍，结果在模板页逐行看，也能下载结果 Excel。
 
 和试发（只问第一行）互补，确认整批效果后再请管理员上线。执行复用批量任务那一套（worker、重试、计费），
 来源记为 sample：不进批量任务列表，费用账单里用途是「样本试跑」。
@@ -13,7 +13,7 @@ from typing import Any
 import anyio
 from platform_common.actors import Actor
 from platform_common.clock import utcnow
-from platform_common.errors import ApiError, ErrorCode
+from platform_common.errors import ApiError, ErrorCode, NotFoundError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application import batch_runs
@@ -108,6 +108,26 @@ async def latest(session: AsyncSession, access: CategoryAccess, prompt_id: str) 
     ready = await anyio.to_thread.run_sync(has_run_input, storage.run_dir(run.id))
     rows = await anyio.to_thread.run_sync(lambda: preview(run)) if ready else None
     return {"run": batch_runs.to_dict(run), "rows": rows}
+
+
+async def download(
+    session: AsyncSession, actor: Actor, access: CategoryAccess, prompt_id: str, run_id: str, kind: str
+) -> tuple[bytes, str]:
+    """按试跑 ID 下载而不是「最近一次」：点下载的同时有人开了新一轮，拿到的也还是页面上那一轮。"""
+
+    run = await batch_runs.require(session, run_id)
+    if run.prompt_id != prompt_id or run.source != RUN_SOURCE_SAMPLE:
+        raise NotFoundError("试跑记录不存在")
+    access.require_read(run.prompt_category)
+    content, filename = await batch_runs.read_run_file(run, kind, label="样本试跑")
+    await enqueue_event(
+        session,
+        event_type="ai.prompt.sample_exported",
+        actor=actor,
+        target_id=prompt_id,
+        changes={"run_id": run.id, "file": kind},
+    )
+    return content, filename
 
 
 async def stop(session: AsyncSession, actor: Actor, access: CategoryAccess, prompt_id: str) -> dict[str, Any]:

@@ -23,6 +23,7 @@ _EVENT_META = {
     "ai.prompt.offlined": ("ai.releases", "publish", "prompt_template", "模板下线"),
     "ai.prompt.sample_started": ("ai.prompts", "ask", "prompt_template", "样本试跑"),
     "ai.prompt.sample_stopped": ("ai.prompts", "ask", "prompt_template", "停止样本试跑"),
+    "ai.prompt.sample_exported": ("ai.prompts", "export", "prompt_template", "下载样本试跑结果"),
     "ai.model.created": ("ai.models", "create", "ai_model", "新增模型配置"),
     "ai.model.updated": ("ai.models", "update", "ai_model", "编辑模型配置"),
     "ai.batch_run.started": ("ai.batch_runs", "run", "batch_run", "发起批量任务"),

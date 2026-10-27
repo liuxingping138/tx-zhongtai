@@ -72,6 +72,13 @@ test('AI提问主流程：写模板 → 试发 → 样本试跑 → 上线 → �
   await expect(sample.getByRole('listitem').filter({ hasText: '第 1 行' })).toContainText('成功')
   await expect(sample.getByRole('listitem').filter({ hasText: '第 2 行' })).toContainText('乙公司')
   await expect(flow.getByRole('listitem').filter({ hasText: '样本试跑' })).toContainText('2 条全部成功')
+  // 跑完能下载结果 Excel，文件名写明是样本试跑，和正式任务的结果分得开。
+  const [sampleFile] = await Promise.all([
+    page.waitForEvent('download'),
+    sample.getByRole('button', { name: '下载结果' }).click(),
+  ])
+  expect(sampleFile.suggestedFilename()).toBe(`${title}-样本试跑结果.xlsx`)
+  expect(await sampleFile.failure()).toBeNull()
 
   // 3. 上线：管理员在上线抽屉里看检查项，上线第 1 版。
   await flow.getByRole('button', { name: '上线', exact: true }).click()

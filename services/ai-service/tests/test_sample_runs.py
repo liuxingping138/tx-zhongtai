@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from platform_common.errors import ApiError
+from platform_common.errors import ApiError, NotFoundError
 
 from app.application import batch_runs, prompts, sample_runs
 from app.application.batch_output import FORMAT_ERROR_PREFIX, RowResult, append_raw, start_raw
@@ -131,3 +131,37 @@ def test_template_marks_whether_its_last_sample_ran_the_current_draft() -> None:
 async def test_formal_task_list_never_shows_sample_runs() -> None:
     assert RUN_SOURCE_SAMPLE not in repo.TASK_SOURCES
     assert batch_runs.to_dict(run(source=RUN_SOURCE_SAMPLE))["source"] == RUN_SOURCE_SAMPLE
+
+
+async def test_download_only_serves_this_templates_sample_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """下载挂的是模板的导出档，所以只给这个模板自己的样本试跑：拿它去下别的模板或正式任务的结果要 404。"""
+
+    events: list[dict[str, Any]] = []
+    sample_id = "d" * 32  # 别的用例会往公用任务目录写日志，这里用自己的目录
+    rows = {
+        sample_id: run(id=sample_id, source=RUN_SOURCE_SAMPLE),
+        "other-prompt": run(id="other-prompt", prompt_id="another", source=RUN_SOURCE_SAMPLE),
+        "formal": run(id="formal", source="manual"),
+    }
+
+    async def get(_session: Any, run_id: str, **_: Any) -> Any:
+        return rows[run_id]
+
+    async def record(*_: Any, **kwargs: Any) -> None:
+        events.append(kwargs)
+
+    monkeypatch.setattr(batch_runs, "require", get)
+    monkeypatch.setattr(sample_runs, "enqueue_event", record)
+    storage.write_atomic(storage.run_file(sample_id, "result"), b"xlsx")
+
+    content, filename = await sample_runs.download(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID, sample_id, "result")  # type: ignore[arg-type]
+    assert (content, filename) == (b"xlsx", "企业行业-样本试跑结果.xlsx")
+    assert events[0]["event_type"] == "ai.prompt.sample_exported"
+    assert events[0]["changes"] == {"run_id": sample_id, "file": "result"}
+
+    for run_id in ("other-prompt", "formal"):
+        with pytest.raises(NotFoundError):
+            await sample_runs.download(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID, run_id, "result")  # type: ignore[arg-type]
+    with pytest.raises(NotFoundError):
+        await sample_runs.download(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID, sample_id, "log")  # type: ignore[arg-type]
+    assert len(events) == 1

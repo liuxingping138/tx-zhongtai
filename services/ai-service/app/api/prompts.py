@@ -6,7 +6,7 @@ from platform_common.actors import Actor
 from platform_common.http_utils import read_named_upload, success_json
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas import FileKind, PromptBody, SampleRunBody, TestRowsBody, file_response
+from app.api.schemas import FileKind, PromptBody, RunFileKind, SampleRunBody, TestRowsBody, file_response
 from app.api.security import CategoryAccess, SecurityClass, classified, get_category_access, require_ai_permission
 from app.application import prompts as service
 from app.application import releases, sample_runs
@@ -160,6 +160,22 @@ async def stop_sample_run(
     actor: Actor = Depends(require_ai_permission(RESOURCE, "ask")),
 ) -> JSONResponse:
     return success_json(await sample_runs.stop(session, actor, access, prompt_id))
+
+
+@router.get("/{prompt_id}/sample-run/{run_id}/files/{kind}")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def download_sample_run(
+    prompt_id: str,
+    run_id: str,
+    kind: RunFileKind,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    access: CategoryAccess = Depends(get_category_access),
+    actor: Actor = Depends(require_ai_permission(RESOURCE, "export")),
+) -> Response:
+    """和模板附件一样要模板的导出档：在模板页试跑的人不用另有批量任务的权限。"""
+
+    content, filename = await sample_runs.download(session, actor, access, prompt_id, run_id, kind)
+    return file_response(content, filename)
 
 
 @router.get("/{prompt_id}/releases")

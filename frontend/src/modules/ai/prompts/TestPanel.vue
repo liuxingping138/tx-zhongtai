@@ -10,6 +10,7 @@ defineProps<{
   template: PromptTemplate | null
   model: AiModel | undefined
   canRun: boolean
+  canExport: boolean
   dirty: boolean
 }>()
 const emit = defineEmits<{ run: []; 'sample-changed': [run: BatchRun] }>()
@@ -69,6 +70,7 @@ const TABS = [{ key: 'trial', label: '试发一条' }, { key: 'sample', label: '
       :model="model"
       :thinking="thinking"
       :can-run="canRun"
+      :can-export="canExport"
       :dirty="dirty"
       @changed="run => emit('sample-changed', run)"
     />

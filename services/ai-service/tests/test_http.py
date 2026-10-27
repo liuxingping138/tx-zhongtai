@@ -247,10 +247,23 @@ def test_sample_run_routes(client: TestClient, monkeypatch: pytest.MonkeyPatch) 
 
     monkeypatch.setattr(sample_runs, "start", start)
     monkeypatch.setattr(sample_runs, "latest", latest)
+
+    async def download(_s: Any, _actor: Any, _access: Any, prompt_id: str, run_id: str, kind: str) -> Any:
+        calls.append(("download", prompt_id, run_id, kind))
+        return b"xlsx", "企业行业-样本试跑结果.xlsx"
+
     monkeypatch.setattr(sample_runs, "stop", stop)
+    monkeypatch.setattr(sample_runs, "download", download)
     url = f"/api/v1/ai/prompts/{PROMPT_ID}/sample-run"
     assert client.post(url, json={"limit": 5}).status_code == 201
     assert client.post(url, json={"limit": 51}).status_code == 422
     assert client.get(url).status_code == 200
     assert client.post(f"{url}/stop").status_code == 200
-    assert calls == [("start", PROMPT_ID, 5), ("latest", PROMPT_ID), ("stop", PROMPT_ID)]
+    assert client.get(f"{url}/{RUN_ID}/files/result").content == b"xlsx"
+    assert client.get(f"{url}/{RUN_ID}/files/source").status_code == 422
+    assert calls == [
+        ("start", PROMPT_ID, 5),
+        ("latest", PROMPT_ID),
+        ("stop", PROMPT_ID),
+        ("download", PROMPT_ID, RUN_ID, "result"),
+    ]

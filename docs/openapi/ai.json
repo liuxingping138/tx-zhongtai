@@ -528,6 +528,71 @@
         }
       }
     },
+    "/api/v1/ai/prompts/{prompt_id}/sample-run/{run_id}/files/{kind}": {
+      "get": {
+        "tags": [
+          "ai-prompts"
+        ],
+        "summary": "Download Sample Run",
+        "description": "和模板附件一样要模板的导出档：在模板页试跑的人不用另有批量任务的权限。",
+        "operationId": "download_sample_run_api_v1_ai_prompts__prompt_id__sample_run__run_id__files__kind__get",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prompt Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "result",
+                "raw",
+                "log",
+                "failed"
+              ],
+              "type": "string",
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/ai/prompts/{prompt_id}/releases": {
       "get": {
         "tags": [

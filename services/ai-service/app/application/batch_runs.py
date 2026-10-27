@@ -332,11 +332,18 @@ async def download(
 ) -> tuple[bytes, str]:
     run = await require(session, run_id)
     access.require_read(run.prompt_category)
-    path = storage.run_file(run.id, kind)
-    if not await anyio.Path(path).is_file():
-        raise NotFoundError("文件不存在或尚未生成")
+    content, filename = await read_run_file(run, kind)
     await enqueue_event(
         session, event_type="ai.batch_run.exported", actor=actor, target_id=run.id, changes={"file": kind}
     )
+    return content, filename
+
+
+async def read_run_file(run: BatchRun, kind: str, *, label: str = "") -> tuple[bytes, str]:
+    """任务产物和下载文件名（模板名-{label}结果.xlsx）；样本试跑的下载也用它。"""
+
+    path = storage.run_file(run.id, kind)
+    if not await anyio.Path(path).is_file():
+        raise NotFoundError("文件不存在或尚未生成")
     title = run.prompt_title.replace("/", "_")[:60]
-    return await anyio.Path(path).read_bytes(), f"{title}-{storage.RUN_FILES[kind][1]}"
+    return await anyio.Path(path).read_bytes(), f"{title}-{label}{storage.RUN_FILES[kind][1]}"

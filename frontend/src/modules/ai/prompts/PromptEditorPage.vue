@@ -323,6 +323,7 @@ function onStep(key: StepKey): void {
         :template="selected"
         :model="trialModel"
         :can-run="canEdit"
+        :can-export="canExport"
         :dirty="unsaved.dirty.value"
         @run="trial"
         @sample-changed="sampleChanged"

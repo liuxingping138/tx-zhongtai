@@ -6,12 +6,20 @@ import { getSampleRun, startSampleRun, stopSampleRun, type AiModel, type BatchRu
 import { errorMessage } from '@/api/errors'
 import { RUN_STATUS_TEXT, formatYuan, isActive, runStatusType } from '../shared/aiText'
 import RunRows from '../shared/RunRows.vue'
+import { downloadSampleFile } from '../shared/downloads'
 
 /**
  * 样本试跑：用保存的草稿把测试样本的前几条整批跑一遍，逐行看结果。
- * 试发只看第一行；整批跑过、结果没问题，再请管理员上线。
+ * 试发只看第一行；整批跑过、结果没问题，再请管理员上线。跑完可以下载结果 Excel 给别人看。
  */
-const props = defineProps<{ template: PromptTemplate | null; model: AiModel | undefined; thinking: boolean; canRun: boolean; dirty: boolean }>()
+const props = defineProps<{
+  template: PromptTemplate | null
+  model: AiModel | undefined
+  thinking: boolean
+  canRun: boolean
+  canExport: boolean
+  dirty: boolean
+}>()
 const emit = defineEmits<{ changed: [run: BatchRun] }>()
 
 const MAX_ROWS = 50
@@ -92,6 +100,17 @@ async function start(): Promise<void> {
     ElMessage.error(errorMessage(error, '试跑没能开始，请重试'))
   } finally {
     busy.value = false
+  }
+}
+
+async function download(): Promise<void> {
+  const current = run.value
+  const template = props.template
+  if (!current || !template) return
+  try {
+    await downloadSampleFile(template.id, current.id, 'result', `${template.title}-样本试跑结果.xlsx`)
+  } catch (error) {
+    ElMessage.error(errorMessage(error, '下载失败，请重试'))
   }
 }
 
@@ -182,6 +201,15 @@ async function stop(): Promise<void> {
           class="sample__failed"
         >失败 {{ run.failed_count }}{{ run.format_failed_count ? `（格式不对 ${run.format_failed_count}）` : '' }}</span>
         <span class="sample__cost">{{ formatYuan(run.inference_cost + run.search_cost) }}</span>
+        <el-button
+          v-if="canExport && run.files.result"
+          link
+          type="primary"
+          size="small"
+          @click="download"
+        >
+          下载结果
+        </el-button>
       </div>
       <el-progress
         v-if="running"
