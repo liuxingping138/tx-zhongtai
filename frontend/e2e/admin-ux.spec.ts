@@ -109,7 +109,7 @@ test('desktop keeps every filter visible and distinguishes draft from applied qu
   await expect(page.getByText('已筛选 1 项', { exact: true })).toBeVisible()
 })
 
-// 适配范围是电脑端 1024px 起（见 docs/guides/UI开发规范.md 第 0 节）。
+// 适配范围是电脑端 1024px 起（见 DESIGN.md「适配范围」）。
 // 1024 是下限，最容易出问题：列多、容器窄，既不能让整页横向溢出，
 // 也不能因为窄就退化成移动端摘要卡片，上传下载入口还必须留着。
 test('1024px 下限：无整页横溢出、工具栏入口齐全、筛选全展开、横滑到末列仍能操作', async ({ page }) => {

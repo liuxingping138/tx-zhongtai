@@ -337,40 +337,20 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
 不允许静默忽略——否则导出会悄悄变成导全表。
 `tests/test_export_filter_parity.py` 会强制三者一致。
 
-### 前端复用规范
+### 前端规范
 
-改页面前读 `DESIGN.md`、`UX-CONTRACT.md`、`docs/guides/UI开发规范.md`。优先复用：
+改页面前读 `DESIGN.md`（界面规则，以及用户确认过、不要自行推翻的页面决定）和 `docs/guides/UI开发规范.md`（公共组件、接入步骤、验收）。
+新增业务列表页照 `modules/policy/base-tags/BaseTagList.vue` 组装，不要在页面里自己拼抽屉、筛选项或下载。
 
-`ListPage` / `FilterBar` / `FilterSelect` / `ScrollPort` / `BusinessTable` / `ColumnPicker` /
-`GroupedFields` / `UserAccountMenu`，图表用 `BaseChart`（ECharts 按需注册在 `components/charts/echarts.ts`），基础视觉用 `theme.css`。
+前后端要一起守的约定：
 
-新增业务列表页 = 一份 `fields.ts`（`TABLE_COLUMNS` / `SUMMARY_KEYS` / `EDITOR_GROUPS`）+ 页面，照 `modules/policy/base-tags/BaseTagList.vue` 组装：
-
-- 查询与加载：`useListQuery`（FilterBar 直接接 `listQuery.search` / `listQuery.resetFilters`）+ `useListLoader`（只采用最后一次请求的结果）
-- 列：`useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)` 给出 ColumnPicker 和 BusinessTable 共用的完整列
-- 新增编辑：`useRecordEditor` + `RecordEditorDrawer`（分组表单、跨字段校验、409 冲突保留草稿、未保存保护都在里面），不要在页面里自己拼抽屉
-- 工具栏：`ImportButton`、`ExportButton` + `useExcelExport`、`AuditLogButton`
-- 权限矩阵的勾选联动、整组勾选、锁定和搜索是 `permissions/matrix.ts` 里的纯函数，改交互先改它和单测
-
-- 筛选项：`v-bind="filters.bind('字段')"`（`useFilterOptions`），不要自己再维护一份 options
 - 几百万行的名称、标题字段（政策名称、政策原文名称）不出候选值，用 `FilterKeyword` 输入关键词，列上建 pg_trgm GIN 索引；政策类型的候选值取政策类型码表（`internal_clients.policy_type_names`，包含匹配，pg_trgm 索引），政策解读的一级行业、一级场景取行业场景码表（`scenario_l1_names`，精确匹配走 B 树索引），都不在政策表上去重
 - 筛选一律多选：前端 query 字段默认 `[]`，`http` 按重复参数（`a=1&a=2`）提交；后端参数写
   `list[str] | None = Query(default=None)`，仓储用 `platform_common.filters` 的 `ilike_any`（模糊，同字段「或」）
   或 `in_any`（枚举精确）。只写 `str | None` 会让多选只剩最后一个值生效
-- Excel 下载：经 `useExcelExport({ path, filename, filters: () => filtersForExport(listQuery.applied) })`，
-  底层是 `downloadFile`。**不要用裸 fetch**——会绕开 401 自动续期和统一中文错误提示
-- 导出传 `applied` 而非 `query`：`query` 是用户还没点查询的输入
-- 重新部署后，开着的旧页面切路由会因旧分包文件不存在而失败；`router/chunkReload.ts` 在 `router.onError` 里整页刷新到目标地址一次（会话存储防循环），不要删
-- 修改共享组件或约定，同步更新 DESIGN.md / UX-CONTRACT.md / UI开发规范.md
-
-### 已确认的产品规则（不要自行推翻）
-
-- 列表默认展示全部字段，列设置支持逐列勾选/显示全部/恢复默认，浏览器记忆选择
-- 一列只展示对应字段，不在列里拼接部门、编码等辅助信息
-- 上传和下载入口都必须保留在列表工具栏
-- 列宽按字段内容制定，不给首列统一大宽度
-- 桌面筛选一次展开全部条件，点查询才生效
-- 账号入口在侧栏底部（显示名 + 角色），不做右上角芯片，不改登录页
+- Excel 下载经 `useExcelExport`（底层 `downloadFile`），**不要用裸 fetch**——会绕开 401 自动续期和统一中文错误提示；
+  导出传 `applied` 而非 `query`：`query` 是用户还没点查询的输入
+- 改了界面规则同步 DESIGN.md，改了公共组件用法同步 UI开发规范.md
 
 ### Git 提交信息
 

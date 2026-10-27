@@ -18,7 +18,7 @@
 
 - [`CLAUDE.md`](CLAUDE.md)：架构要点、硬性开发约定、排查提示，动手前先读
 - [工程规范](docs/guides/工程规范.md)：服务划分、代码标准、迁移兼容、日志、自动检查与评审清单
-- [UI 视觉规范](DESIGN.md) / [交互契约](UX-CONTRACT.md)：新增或修改前端页面必读
+- [设计规范](DESIGN.md)：界面规则和已确认的页面决定，新增或修改前端页面必读
 - [部署与维护](docs/guides/部署与维护.md)：同步、构建、数据库、备份恢复
 - [`docs/README.md`](docs/README.md)：其余文档的索引（设计决策、操作手册、OpenAPI、原始 Excel）
 
@@ -51,7 +51,7 @@ tx-zhongtai/
 ├── scripts/                   # 同步到服务器、隔离验收、备份恢复、代码规则检查等
 ├── docs/                      # 设计决策与操作手册
 ├── .githooks/                 # 提交与推送前的自动检查
-├── CLAUDE.md / DESIGN.md / UX-CONTRACT.md
+├── CLAUDE.md / DESIGN.md
 ├── Makefile
 ├── ruff.toml                  # 全部 Python 包共用的 lint 配置
 └── .env.example
