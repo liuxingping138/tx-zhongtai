@@ -4,7 +4,9 @@
 }
 .workspace-shell a { text-decoration: none; }
 .workspace-shell button { font-family: inherit; }
-.workspace-shell :is(a, button, input):focus-visible { outline: 2px solid #3558de; outline-offset: 3px; }
+/* 键盘焦点描边只给链接、按钮、复选框和单选框。能打字的输入框鼠标点一下也算 :focus-visible，
+   而 Element Plus 输入框的外框、模板标题的下划线已经表示了聚焦，再描一圈就成了框里套框。 */
+.workspace-shell :is(a, button, input[type="checkbox"], input[type="radio"]):focus-visible { outline: 2px solid #3558de; outline-offset: 3px; }
 .workspace-skip { position: fixed; z-index: 4000; left: 90px; top: -70px; padding: 12px; background: white; color: #162638; }
 .workspace-skip:focus { top: 8px; }
 .workspace-masthead { display: flex; align-items: center; flex: 0 0 var(--workspace-header-height); min-width: 0; padding-right: 24px; background: white; color: var(--zt-ink-900); border-bottom: 1px solid var(--zt-border); }

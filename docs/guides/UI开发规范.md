@@ -35,6 +35,7 @@
 | 业务表格/详情/手机摘要 | `frontend/src/components/BusinessTable.vue` | items、完整columns、selected、titleKey、可选summaryKeys、canWrite/loading/filtered，edit/reset；详情抽屉底部的动作用 `#detail-actions="{ row, close }"` 插槽；批量操作传 `selectable`，用 `useTableSelection`：`:ref="selection.bindTable"`、`@selection-change="checked = $event"`，操作完 `selection.clear()`；选一个选项的批量操作用 `BatchChoiceDialog`（选项带后果说明，跳过的原因弹窗列出） |
 | 账号菜单 | `frontend/src/layouts/UserAccountMenu.vue` | 侧栏底部；显示名 + `/me.roles` |
 | 浮层焦点 | `frontend/src/layouts/AdminLayout.vue` | 打开时把焦点送进浮层、关闭后送回触发按钮；落回 body 会让键盘用户从头 Tab |
+| 键盘焦点描边 | `frontend/src/styles/workspace.css` | 全局描边只给链接、按钮、复选框和单选框。能打字的输入框鼠标点一下也算 `:focus-visible`，不要给 `input` 加全局 outline：Element Plus 输入框靠外框变色表示聚焦，再描一圈就是框里套框；自己写的原生输入框自带聚焦样式 |
 | 显示列与浏览器记忆 | `frontend/src/components/ColumnPicker.vue` | 与表格共享 selected；完整columns与defaults |
 | 字段列类型 | `frontend/src/components/dataColumns.ts` | prop与API字段对应；label简明、fullLabel保留原名；可选width/minWidth/grow/wrap/time/link |
 | 列顺序与宽度计算 | `frontend/src/components/dataColumnLayout.ts` | layoutDataColumns固定短字段、让长字段吸收余量；不按首列特殊处理 |

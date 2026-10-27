@@ -182,6 +182,4 @@ const codeSource = computed({
 .config__fields { display: grid; gap: 4px; min-width: 0; }
 .config__fields-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; color: var(--zt-ink-500); font-size: 12px; }
 .config__tip { margin: 4px 0 0; color: var(--zt-ink-500); font-size: 12px; }
-/* 标签输入框里真正的 input 不要再套一层全局聚焦框，外框已经变色。 */
-.config :deep(.el-input-tag__input:focus-visible) { outline: none; box-shadow: none; }
 </style>
