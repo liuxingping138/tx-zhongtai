@@ -94,7 +94,7 @@ function sourceText(item: EffectivePermission): string {
 </template>
 
 <style scoped>
-.block { padding: 16px; border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: #fff; }
+.block { padding: 16px; border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: var(--zt-panel); }
 .block h3 { margin: 0 0 12px; font-size: 14px; font-weight: 650; color: var(--zt-ink-900); }
 .block__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .block__hint { font-size: 12px; color: var(--zt-ink-500); }
@@ -104,7 +104,7 @@ function sourceText(item: EffectivePermission): string {
 .perm-group h4 { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--zt-ink-500); }
 .perm-line {
   display: grid; grid-template-columns: minmax(96px, 150px) auto minmax(0, 1fr); align-items: center; gap: 12px;
-  padding: 8px 0; border-top: 1px solid #f0f3f8;
+  padding: 8px 0; border-top: 1px solid var(--zt-divider);
 }
 .perm-line__name { font-size: 13px; color: var(--zt-ink-900); }
 .perm-line.is-off .perm-line__name { color: var(--zt-ink-500); text-decoration: line-through; }

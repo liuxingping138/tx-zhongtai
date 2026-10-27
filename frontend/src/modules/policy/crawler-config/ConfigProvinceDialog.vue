@@ -121,7 +121,7 @@ async function copyTable(): Promise<void> {
 .row:hover { background: var(--zt-soft); }
 .ranking li + li .row { border-top: 1px solid var(--zt-border); border-radius: 0; }
 .rank { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--zt-soft); color: var(--zt-ink-500); font-size: 12px; font-variant-numeric: tabular-nums; }
-.rank.top { background: var(--zt-blue-600); color: #fff; font-weight: 600; }
+.rank.top { background: var(--zt-blue-600); color: var(--el-color-white); font-weight: 600; }
 .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .track { height: 8px; border-radius: 4px; background: var(--zt-soft); overflow: hidden; }
 .fill { display: block; height: 100%; border-radius: 4px; background: var(--zt-blue-600); }

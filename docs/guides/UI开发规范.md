@@ -6,7 +6,7 @@
 
 新增页面登记路由和 `router/menu.ts`，在 `layouts/workspace.ts` 配用途说明和独立图标（Element Plus Icons、17px、继承菜单颜色）。不在菜单里的详情页填 `meta.menuPath`，侧栏高亮挂到所属列表。新菜单走现有的路由、发布和权限体系，不能只加一个不受权限约束的链接。
 
-`AdminLayout.vue` 是唯一的导航外壳；基础色和宽高 token 在 `styles/theme.css`，外壳和列表的样式适配在 `styles/workspace.css`，不新增页面专属色板。
+`AdminLayout.vue` 是唯一的导航外壳；颜色变量在 `styles/theme.css`，外壳和列表的样式适配在 `styles/workspace.css`，不新增页面专属色板。页面和组件不写色值：状态色、浅底、边框、阴影、遮罩、聚焦外圈都有现成变量；`check_code_rules.py` 会拦住 `modules`、`components`、`layouts`、`views` 里的色值，确需写的文件登记在它的 `COLOR_FILES` 并写明理由。
 
 重新部署后，开着的旧页面切路由会因旧分包文件不存在而失败；`router/chunkReload.ts` 在 `router.onError` 里整页刷新到目标地址一次（会话存储防循环），不要删。
 

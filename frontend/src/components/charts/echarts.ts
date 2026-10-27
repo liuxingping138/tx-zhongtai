@@ -17,6 +17,8 @@ export interface ChartPalette {
   ink: string
   inkMuted: string
   border: string
+  /** 卡片底色：环形图扇区、堆叠柱之间留的缝用它，和卡片融在一起。 */
+  surface: string
   success: string
   warning: string
   danger: string
@@ -24,11 +26,12 @@ export interface ChartPalette {
 }
 
 const PALETTE_VARS: Record<keyof ChartPalette, [string, string]> = {
-  primary: ['--zt-blue-600', '#2c68bb'],
-  primaryLight: ['--el-color-primary-light-5', '#a0cfff'],
-  ink: ['--zt-ink-900', '#20324c'],
-  inkMuted: ['--zt-ink-500', '#697386'],
-  border: ['--zt-border', '#e3e9f1'],
+  primary: ['--zt-blue-600', '#3558de'],
+  primaryLight: ['--el-color-primary-light-5', '#9aacee'],
+  ink: ['--zt-ink-900', '#162638'],
+  inkMuted: ['--zt-ink-500', '#5f6c7b'],
+  border: ['--zt-border', '#dfe5eb'],
+  surface: ['--zt-panel', '#ffffff'],
   success: ['--chart-normal', '#3d8c6e'],
   warning: ['--chart-watch', '#c4842a'],
   danger: ['--chart-stale', '#d25b4a'],

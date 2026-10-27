@@ -59,7 +59,7 @@ const hasReport = computed(() => Boolean(result.value?.report_blob || result.val
 .import-result__heading { display: flex; align-items: center; gap: 14px; margin: 10px 0 24px; }
 .import-result__heading strong { color: var(--zt-ink-900); font-size: 16px; }
 .import-result__heading p { margin: 6px 0 0; color: var(--zt-ink-500); font-size: 12px; overflow-wrap: anywhere; }
-.is-success { color: #4b8a6b; } .is-warning { color: #b38843; }
+.is-success { color: var(--zt-success-text); } .is-warning { color: var(--zt-warning-text); }
 .import-result__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; padding: 22px 12px; border-radius: 10px; background: var(--zt-soft); text-align: center; }
 .import-result__stats dt { color: var(--zt-ink-500); font-size: 12px; }
 .import-result__stats dd { margin: 9px 0 0; color: var(--zt-ink-900); font-size: 23px; font-weight: 650; }

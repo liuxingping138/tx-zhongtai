@@ -166,7 +166,7 @@ const codeSource = computed({
 </template>
 
 <style scoped>
-.config { display: grid; gap: 12px; padding: 14px 18px 16px; border-top: 1px solid var(--zt-border); background: #fbfcfe; }
+.config { display: grid; gap: 12px; padding: 14px 18px 16px; border-top: 1px solid var(--zt-border); background: var(--zt-surface-subtle); }
 .config__row { display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: start; gap: 12px; }
 .config__row--inline { display: flex; flex-wrap: wrap; gap: 10px 20px; }
 .config__item { display: flex; align-items: center; gap: 12px; min-width: 0; }

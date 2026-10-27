@@ -327,10 +327,10 @@ onMounted(() => {
   gap: 4px 12px;
   margin: 0 0 12px;
   padding: 8px 16px;
-  border: 1px solid #f3dcb2;
+  border: 1px solid var(--zt-warning-border);
   border-radius: var(--zt-radius);
-  background: #fff8ec;
-  color: #8a5a00;
+  background: var(--zt-warning-soft);
+  color: var(--zt-warning-text);
   font-size: 13px;
 }
 </style>

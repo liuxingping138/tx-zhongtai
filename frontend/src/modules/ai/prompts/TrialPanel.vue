@@ -58,7 +58,7 @@ const emit = defineEmits<{ run: [] }>()
 .trial { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .trial__bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 16px; color: var(--zt-ink-500); font-size: 12px; }
 .trial__bar .el-button { margin: 0; }
-.trial__run { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--zt-border); background: #fafbfd; }
+.trial__run { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--zt-border); background: var(--zt-surface-subtle); }
 .trial__model { min-width: 0; overflow: hidden; color: var(--zt-ink-500); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.trial__run kbd { margin-left: 6px; padding: 0 4px; border-radius: 3px; background: rgb(255 255 255 / 22%); font: 11px/16px var(--zt-font); }
+.trial__run kbd { margin-left: 6px; padding: 0 4px; border-radius: 3px; background: color-mix(in srgb, var(--el-color-white) 22%, transparent); font: 11px/16px var(--zt-font); }
 </style>

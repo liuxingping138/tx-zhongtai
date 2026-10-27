@@ -13,7 +13,7 @@ const palette = chartPalette(getComputedStyle(document.documentElement))
 const slices = computed(() => healthSlices(props.overview.health, props.overview.thresholds, palette))
 const total = computed(() => props.overview.cards.sites)
 const healthRate = computed(() => percent(props.overview.cards.normal, total.value))
-const option = computed(() => healthOption(slices.value))
+const option = computed(() => healthOption(slices.value, palette))
 const rateChange = computed(() => {
   const base = props.overview.week_base
   return base ? rateDelta(props.overview.cards.normal, total.value, base.normal, base.sites) : null

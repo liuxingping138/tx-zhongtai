@@ -124,17 +124,17 @@ async function onLogout() {
 .user-account__meta strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
 .user-account__meta small { display: block; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 400; }
 .user-account__caret { flex-shrink: 0; font-size: 12px; }
-.user-account.is-nav { color: #e8f1fb; }
-.user-account.is-nav .user-account__avatar { background: #33567e; color: #f4f8ff; }
+.user-account.is-nav { color: var(--zt-ink-900); }
+.user-account.is-nav .user-account__avatar { background: var(--el-color-primary-light-9); color: var(--zt-blue-600); }
 .user-account.is-nav .user-account__meta small,
-.user-account.is-nav .user-account__caret { color: #93abc9; }
-.user-account.is-nav:hover { background: #ffffff12; }
+.user-account.is-nav .user-account__caret { color: var(--zt-ink-500); }
+.user-account.is-nav:hover { background: var(--zt-soft); }
 .user-account.is-header { width: auto; padding: 0; color: var(--zt-ink-700); }
-.user-account.is-header .user-account__avatar { background: #eaf0f8; color: #3a608e; }
-.user-account.is-header:hover { background: #eef3fa; }
+.user-account.is-header .user-account__avatar { background: var(--el-color-primary-light-9); color: var(--zt-blue-700); }
+.user-account.is-header:hover { background: var(--zt-soft); }
 .user-account.is-compact { justify-content: center; padding: 6px; }
 .user-account.is-header.is-compact { padding: 2px; border-radius: 10px; }
-.user-account:focus-visible { outline: 2px solid #93b9f1; outline-offset: 2px; }
+.user-account:focus-visible { outline: 2px solid var(--el-color-primary-light-5); outline-offset: 2px; }
 .user-account.is-header:focus-visible { outline-color: var(--zt-blue-600); }
 </style>
 
@@ -142,6 +142,6 @@ async function onLogout() {
 .user-account-dropdown { display: block; width: 100%; }
 .user-account-dropdown.is-header { width: auto; }
 .user-account-popper .user-account-identity { display: flex; flex-direction: column; gap: 2px; line-height: 1.3; }
-.user-account-popper .user-account-identity strong { font-size: 13px; color: var(--zt-ink-900, #1d2b3d); }
-.user-account-popper .user-account-identity small { font-size: 11px; color: var(--zt-ink-500, #6b7c93); }
+.user-account-popper .user-account-identity strong { font-size: 13px; color: var(--zt-ink-900); }
+.user-account-popper .user-account-identity small { font-size: 11px; color: var(--zt-ink-500); }
 </style>

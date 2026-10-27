@@ -255,11 +255,11 @@ async function stop(): Promise<void> {
 .sample__controls .el-input-number { width: 84px; }
 .sample__controls .el-button { margin-left: 4px; }
 .sample__hint, .sample__meta { margin: 0; color: var(--zt-ink-500); font-size: 12px; line-height: 1.6; }
-.sample__hint.is-blocked { color: #9a6418; }
+.sample__hint.is-blocked { color: var(--zt-warning-text); }
 .sample__summary { display: grid; gap: 6px; padding: 10px 12px; border-radius: 6px; background: var(--zt-soft); }
 .sample__status { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 13px; font-variant-numeric: tabular-nums; }
 .sample__failed { color: var(--el-color-danger); }
 .sample__cost { margin-left: auto; color: var(--zt-ink-500); }
-.sample__stale { margin: 0; color: #9a6418; font-size: 12px; }
+.sample__stale { margin: 0; color: var(--zt-warning-text); font-size: 12px; }
 .sample__empty { margin: 24px 8px; color: var(--zt-ink-500); font-size: 13px; line-height: 1.8; text-align: center; }
 </style>

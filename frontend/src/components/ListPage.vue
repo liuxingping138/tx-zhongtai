@@ -133,7 +133,7 @@ async function onSize(value: number) {
   min-height: 560px;
   flex: none;
 }
-.filter-card { padding: 14px 16px 16px; margin-bottom: 4px; background: #f6f8fb; border: 1px solid var(--zt-border); border-radius: var(--zt-radius); }
+.filter-card { padding: 14px 16px 16px; margin-bottom: 4px; background: var(--zt-surface-subtle); border: 1px solid var(--zt-border); border-radius: var(--zt-radius); }
 .table-card { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; scroll-margin-top: 12px; }
 .list-page__toolbar { min-height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; }
 .list-page__total { flex-shrink: 0; color: var(--zt-ink-700); font-size: 14px; font-variant-numeric: tabular-nums; }

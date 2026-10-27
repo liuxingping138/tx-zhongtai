@@ -137,15 +137,15 @@ const layouts = computed(() => new Map((props.rows?.items ?? []).map(row => [row
 .run-rows__empty { margin: 16px 0; color: var(--zt-ink-500); font-size: 13px; text-align: center; }
 .run-rows__list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
 .run-row { padding: 10px 12px; border: 1px solid var(--zt-border); border-left-width: 3px; border-radius: 6px; background: var(--zt-panel); font-size: 13px; }
-.run-row.is-done { border-left-color: #3d8c6e; }
+.run-row.is-done { border-left-color: var(--zt-success); }
 .run-row.is-failed { border-left-color: var(--el-color-danger); }
-.run-row.is-format { border-left-color: #c4842a; }
-.run-row.is-pending { border-left-color: #b3bdca; }
+.run-row.is-format { border-left-color: var(--zt-warning); }
+.run-row.is-pending { border-left-color: var(--zt-muted-mark); }
 .run-row__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .run-row__no { color: var(--zt-ink-900); font-weight: 600; font-variant-numeric: tabular-nums; }
 .run-row__status { color: var(--zt-ink-500); font-size: 12px; }
 .is-failed .run-row__status { color: var(--el-color-danger); }
-.is-format .run-row__status { color: #9a6418; }
+.is-format .run-row__status { color: var(--zt-warning-text); }
 .run-row dl { display: grid; grid-template-columns: minmax(64px, max-content) minmax(0, 1fr); gap: 2px 12px; margin: 0; }
 .run-row dt { color: var(--zt-ink-500); white-space: nowrap; }
 .run-row dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }

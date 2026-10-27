@@ -286,8 +286,8 @@ function closeDetail() { detailOpen.value = false }
 .business-table__desktop :deep(.el-button.is-link) { min-height: 24px; height: 24px; }
 .business-table__desktop :deep(.cell) { padding: 0 12px; line-height: 22px; }
 .cell-text--wrap { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.business-table__desktop :deep(.table-action) { position: sticky; right: 0; z-index: 2; background: #fff; box-shadow: -8px 0 10px -8px rgba(32, 50, 76, 0.18); }
-.business-table__desktop :deep(th.table-action) { background: #f0f4f9; }
+.business-table__desktop :deep(.table-action) { position: sticky; right: 0; z-index: 2; background: var(--zt-panel); box-shadow: -8px 0 10px -8px var(--zt-shadow-edge); }
+.business-table__desktop :deep(th.table-action) { background: var(--el-table-header-bg-color); }
 
 .record-title { padding: 0; border: 0; font: inherit; font-weight: 500; line-height: 22px; background: none; color: var(--zt-ink-900); text-align: left; cursor: pointer; display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .record-title:hover { color: var(--zt-blue-600); text-decoration: underline; }

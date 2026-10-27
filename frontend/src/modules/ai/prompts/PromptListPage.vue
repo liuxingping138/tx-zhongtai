@@ -246,12 +246,12 @@ function create(): void {
 .prompt-list__name { color: var(--zt-ink-900); font-weight: 600; text-decoration: none; }
 .prompt-list__name:hover { color: var(--zt-blue-600); }
 .prompt-list__state, .prompt-list__sample { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
-.prompt-list__state::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: #b3bdca; }
-.prompt-list__state.is-online::before { background: #3d8c6e; }
-.prompt-list__state.is-changed { color: #9a6418; }
-.prompt-list__state.is-changed::before { background: #c4842a; }
+.prompt-list__state::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--zt-muted-mark); }
+.prompt-list__state.is-online::before { background: var(--zt-success); }
+.prompt-list__state.is-changed { color: var(--zt-warning-text); }
+.prompt-list__state.is-changed::before { background: var(--zt-warning); }
 .prompt-list__sample { color: var(--zt-ink-500); }
-.prompt-list__sample.is-passed { color: #2f7558; }
-.prompt-list__sample.is-failed, .prompt-list__sample.is-stale { color: #9a6418; }
+.prompt-list__sample.is-passed { color: var(--zt-success-text); }
+.prompt-list__sample.is-failed, .prompt-list__sample.is-stale { color: var(--zt-warning-text); }
 .prompt-list__sample.is-running { color: var(--zt-blue-600); }
 </style>

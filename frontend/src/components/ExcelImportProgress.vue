@@ -52,7 +52,7 @@ const percentText = computed(() =>
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(29, 36, 51, 0.45);
+  background: var(--zt-overlay);
 }
 
 .import-card {

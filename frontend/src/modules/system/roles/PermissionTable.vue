@@ -237,7 +237,7 @@ function onColumn(group: ModuleGroup, column: Column) {
   display: grid;
   gap: 8px;
   padding: 12px 16px;
-  border-bottom: 1px solid #eef1f6;
+  border-bottom: 1px solid var(--zt-divider);
 }
 
 .perm-legend {
@@ -275,7 +275,7 @@ function onColumn(group: ModuleGroup, column: Column) {
 .perm-matrix th,
 .perm-matrix td {
   padding: 9px 16px;
-  border-top: 1px solid #eef1f6;
+  border-top: 1px solid var(--zt-divider);
   text-align: left;
   font-weight: 400;
   vertical-align: middle;
@@ -299,7 +299,7 @@ function onColumn(group: ModuleGroup, column: Column) {
   height: 16px;
   margin: 0;
   vertical-align: middle;
-  accent-color: #3558de;
+  accent-color: var(--zt-blue-600);
   cursor: pointer;
 }
 
@@ -308,13 +308,13 @@ function onColumn(group: ModuleGroup, column: Column) {
 }
 
 .perm-matrix :deep(.perm-matrix__na) {
-  color: #c0c6d0;
+  color: var(--zt-ink-400);
 }
 
 .perm-group__head th,
 .perm-group__head td {
   border-top: 1px solid var(--zt-border);
-  background: #fafbfd;
+  background: var(--zt-surface-subtle);
 }
 
 .perm-group__name {
@@ -339,11 +339,11 @@ function onColumn(group: ModuleGroup, column: Column) {
 }
 
 .perm-row:hover {
-  background: #f7faff;
+  background: var(--el-color-primary-light-9);
 }
 
 .perm-row.is-changed {
-  background: #fffaf0;
+  background: var(--zt-warning-soft);
 }
 
 .perm-matrix .perm-row__name {
@@ -368,10 +368,10 @@ function onColumn(group: ModuleGroup, column: Column) {
 .perm-row__changed {
   padding: 0 6px;
   border-radius: 10px;
-  background: #fdf0d5;
+  background: var(--zt-warning-soft);
   font-size: 12px;
   line-height: 18px;
-  color: #9a702d;
+  color: var(--zt-warning-text);
 }
 
 .perm-matrix .perm-row__hint {

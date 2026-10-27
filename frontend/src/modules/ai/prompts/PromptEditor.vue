@@ -214,29 +214,29 @@ function onKeydown(event: KeyboardEvent): void {
 .prompt-editor__backdrop { position: relative; pointer-events: none; color: transparent; }
 .prompt-editor__mirror { min-height: 100%; padding-bottom: 2em; }
 .prompt-editor__backdrop :deep(mark) { color: transparent; border-radius: 4px; padding: 1px 0; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
-.prompt-editor__backdrop :deep(mark.is-column) { background: #e3eefc; box-shadow: inset 0 -1.5px 0 #9bbcea; }
-.prompt-editor__backdrop :deep(mark.is-code) { background: #dcf1ee; box-shadow: inset 0 -1.5px 0 #82c3b8; }
-.prompt-editor__backdrop :deep(mark.is-missing) { background: #fbecd6; box-shadow: inset 0 -1.5px 0 #d7a45c; }
+.prompt-editor__backdrop :deep(mark.is-column) { background: var(--el-color-primary-light-8); box-shadow: inset 0 -1.5px 0 var(--el-color-primary-light-5); }
+.prompt-editor__backdrop :deep(mark.is-code) { background: var(--zt-teal-soft); box-shadow: inset 0 -1.5px 0 var(--zt-teal-line); }
+.prompt-editor__backdrop :deep(mark.is-missing) { background: var(--zt-warning-soft); box-shadow: inset 0 -1.5px 0 var(--zt-warning); }
 .prompt-editor__input { position: absolute; inset: 0; width: 100%; height: 100%; resize: none; background: transparent; color: var(--zt-ink-900); caret-color: var(--zt-blue-600); overflow: hidden; outline: none; }
-.prompt-editor__input::placeholder { color: #9aa6b6; }
+.prompt-editor__input::placeholder { color: var(--zt-ink-400); }
 .prompt-editor__input:focus-visible { box-shadow: inset 0 0 0 2px var(--el-color-primary-light-7); }
-.prompt-editor__menu { position: absolute; z-index: 30; min-width: 220px; max-width: 320px; max-height: 260px; overflow: auto; margin: 0; padding: 4px; list-style: none; border: 1px solid var(--zt-border); border-radius: 8px; background: var(--zt-panel); box-shadow: 0 10px 28px rgb(22 38 56 / 14%); }
+.prompt-editor__menu { position: absolute; z-index: 30; min-width: 220px; max-width: 320px; max-height: 260px; overflow: auto; margin: 0; padding: 4px; list-style: none; border: 1px solid var(--zt-border); border-radius: 8px; background: var(--zt-panel); box-shadow: 0 10px 28px var(--zt-shadow-float); }
 .prompt-editor__menu li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 10px; border-radius: 5px; font-size: 13px; cursor: pointer; }
 .prompt-editor__menu li small { color: var(--zt-ink-500); }
 .prompt-editor__menu li.is-active, .prompt-editor__menu li:hover { background: var(--el-color-primary-light-9); color: var(--zt-blue-600); }
 .prompt-editor__menu .prompt-editor__menu-hint { color: var(--zt-ink-500); cursor: default; }
 .prompt-editor__menu .prompt-editor__menu-hint:hover { background: none; color: var(--zt-ink-500); }
 /* 提示词很长、往下滚时变量这一行贴在可见区域底部，随时能插。 */
-.prompt-editor__vars { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 10px 22px; border-top: 1px solid var(--zt-border); background: #fafbfd; font-size: 12px; }
+.prompt-editor__vars { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 10px 22px; border-top: 1px solid var(--zt-border); background: var(--zt-surface-subtle); font-size: 12px; }
 .prompt-editor__vars-label { margin-right: 4px; color: var(--zt-ink-500); }
-.prompt-editor__vars-hint { color: #9aa6b6; }
+.prompt-editor__vars-hint { color: var(--zt-ink-400); }
 .prompt-editor__var { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; line-height: 18px; }
 .prompt-editor__var small { font-size: 11px; opacity: 0.8; }
-.prompt-editor__var.is-column { background: #e3eefc; color: #2362c5; }
-.prompt-editor__var.is-code { background: #dcf1ee; color: #1f7a6b; }
-.prompt-editor__var.is-missing { background: #fbecd6; color: #9a5b12; }
-.prompt-editor__add { padding: 1px 8px; border: 1px dashed #c9d4e2; border-radius: 999px; background: transparent; color: var(--zt-ink-500); font: inherit; line-height: 18px; cursor: pointer; }
+.prompt-editor__var.is-column { background: var(--el-color-primary-light-8); color: var(--zt-blue-700); }
+.prompt-editor__var.is-code { background: var(--zt-teal-soft); color: var(--zt-teal-text); }
+.prompt-editor__var.is-missing { background: var(--zt-warning-soft); color: var(--zt-warning-text); }
+.prompt-editor__add { padding: 1px 8px; border: 1px dashed var(--zt-border-strong); border-radius: 999px; background: transparent; color: var(--zt-ink-500); font: inherit; line-height: 18px; cursor: pointer; }
 .prompt-editor__add:hover:not(:disabled), .prompt-editor__add:focus-visible { border-color: var(--zt-blue-600); color: var(--zt-blue-600); }
 .prompt-editor__add:disabled { cursor: not-allowed; opacity: 0.5; }
-.prompt-editor__warn { margin-left: auto; color: #9a5b12; }
+.prompt-editor__warn { margin-left: auto; color: var(--zt-warning-text); }
 </style>

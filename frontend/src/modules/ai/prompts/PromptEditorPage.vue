@@ -352,7 +352,7 @@ function onStep(key: StepKey): void {
 .prompt-page__back:hover { color: var(--zt-blue-600); }
 .prompt-page__title { flex: 1; min-width: 0; padding: 2px 0; border: 0; border-bottom: 1px dashed transparent; background: transparent; color: var(--zt-ink-900); font: 600 19px/1.4 var(--zt-font); outline: none; }
 .prompt-page__title:hover:not([readonly]), .prompt-page__title:focus { border-bottom-color: var(--el-color-primary-light-5); }
-.prompt-page__title::placeholder { color: #a5b0bf; font-weight: 500; }
+.prompt-page__title::placeholder { color: var(--zt-ink-400); font-weight: 500; }
 .prompt-page__spacer { flex: 1; }
 .prompt-page__body { display: grid; flex: 1; grid-template-columns: minmax(0, 1fr) minmax(360px, 420px); gap: 12px; min-height: 0; }
 .prompt-page__main { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }

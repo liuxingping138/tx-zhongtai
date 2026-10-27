@@ -45,7 +45,7 @@ export function costOption(days: string[], series: Series[], palette: ChartPalet
       barMaxWidth: 28,
       // 段与段之间留一道白缝，颜色相近的两段也分得开；最上面一段圆角。
       itemStyle: {
-        borderColor: '#fff',
+        borderColor: palette.surface,
         borderWidth: 1,
         borderRadius: index === series.length - 1 ? [3, 3, 0, 0] : 0,
       },

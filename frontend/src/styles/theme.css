@@ -1,21 +1,71 @@
+/*
+ * 业务平台主题（2026-09-24 确认）。放在根上：弹窗、下拉、消息提示这些挂在 body 下的浮层，
+ * 和按根元素取色的图表，都和页面用同一套颜色。登录页沿用原独立视觉，见文件末尾的 .login。
+ * 页面和组件只引用这里的变量，不写色值。
+ */
 :root {
   --zt-blue-900: #203955;
   --zt-blue-800: #1f4d8f;
-  --zt-blue-700: #2362c5;
-  --zt-blue-600: #2c68bb;
-  --zt-ink-900: #20324c;
-  --zt-ink-700: #46566d;
-  --zt-ink-500: #697386;
-  --zt-border: #e3e9f1;
-  --zt-soft: #f3f6fa;
+  --zt-blue-700: #2948bb;
+  --zt-blue-600: #3558de;
+  --zt-ink-900: #162638;
+  --zt-ink-700: #435269;
+  --zt-ink-500: #5f6c7b;
+  /* 占位文字、禁用、次要标记，不用于正文。 */
+  --zt-ink-400: #8a95a5;
+  --zt-border: #dfe5eb;
+  /* 输入框、复选框这类控件的边框，比面板边框深一档。 */
+  --zt-border-strong: #d0d8e3;
+  /* 表格、列表内部的细分隔线。 */
+  --zt-divider: #eef1f5;
+  --zt-soft: #f4f6f8;
   --zt-panel: #ffffff;
+  /* 面板里的浅底区域，如设置区、底部操作条。 */
+  --zt-surface-subtle: #f9fafc;
+  /* 业务表格的表头底色和行悬停底色。 */
+  --zt-table-head: #eaf0f5;
+  --zt-row-hover: #f4f6fc;
   --zt-shadow: 0 3px 12px rgba(30, 52, 82, 0.035);
-  --el-color-primary: #2c68bb;
-  --el-color-primary-light-3: #5b96ec;
-  --el-color-primary-light-5: #89b5f2;
-  --el-color-primary-light-7: #b7d3f7;
-  --el-color-primary-light-9: #edf5ff;
-  --el-color-primary-dark-2: #235597;
+  --zt-shadow-soft: rgb(22 38 56 / 7%);
+  --zt-shadow-float: rgb(22 38 56 / 14%);
+  /* 吸附在右侧的操作列压在内容上的阴影。 */
+  --zt-shadow-edge: rgb(22 38 56 / 18%);
+  --zt-overlay: rgb(22 38 56 / 45%);
+  --zt-focus-ring: rgb(53 88 222 / 14%);
+
+  /* 状态色：成功、提醒、危险各一组。实色用于圆点、色条、图标，text 用于文字，soft 和 border 用于浅底提示。
+     和图表的正常、关注、停更是同一组颜色，大面积不用荧光色。 */
+  --zt-success: #3d8c6e;
+  --zt-success-text: #2f7558;
+  --zt-success-soft: #e8f5ee;
+  --zt-success-border: #bfdccf;
+  --zt-warning: #c4842a;
+  --zt-warning-text: #8a5a12;
+  --zt-warning-soft: #fdf3e3;
+  --zt-warning-border: #ecd3ac;
+  --zt-danger: #d25b4a;
+  --zt-danger-text: #a3402f;
+  --zt-danger-soft: #fbeceb;
+  --zt-danger-border: #f0cdc6;
+  /* 还没开始、跳过这类中性状态的圆点。 */
+  --zt-muted-mark: #b3bdca;
+  /* 提示词里引用码表的变量：和 Excel 列（蓝）、找不到的列（提醒色）区分开。 */
+  --zt-teal-text: #1f7a6b;
+  --zt-teal-soft: #dcf1ee;
+  --zt-teal-line: #82c3b8;
+
+  --chart-normal: var(--zt-success);
+  --chart-watch: var(--zt-warning);
+  --chart-stale: var(--zt-danger);
+  --chart-long: #8a7368;
+
+  --el-color-primary: #3558de;
+  --el-color-primary-light-3: #6b85e7;
+  --el-color-primary-light-5: #9aacee;
+  --el-color-primary-light-7: #c2ccf5;
+  --el-color-primary-light-8: #d7def9;
+  --el-color-primary-light-9: #eef1fc;
+  --el-color-primary-dark-2: #2948bb;
 }
 
 * {
@@ -60,10 +110,6 @@ body {
   filter: brightness(0.98);
 }
 
-.el-button--primary {
-  box-shadow: 0 3px 8px rgba(44, 104, 187, 0.12);
-}
-
 .el-loading-mask {
   background-color: rgba(247, 250, 255, 0.72);
   backdrop-filter: blur(2px);
@@ -100,7 +146,7 @@ body {
 }
 
 .pagination-row .el-pager li.is-active {
-  background: #edf5ff;
+  background: var(--el-color-primary-light-9);
   color: var(--zt-blue-700);
   font-weight: 700;
 }
@@ -131,11 +177,12 @@ body {
 .editor-overlay .el-dialog__footer { padding-top: 20px; }
 .editor-overlay .el-input__wrapper { min-height: 38px; }
 .editor-overlay .el-textarea__inner { padding: 10px 12px; line-height: 1.7; }
-.editor-dirty { display: inline-flex; align-items: center; gap: 6px; margin-right: 16px; color: #9a702d; font-size: 12px; vertical-align: middle; }
-.editor-dirty::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: #c5984c; }
-.el-tag--success { --el-tag-bg-color: #edf6f1; --el-tag-border-color: #d9eadf; --el-tag-text-color: #3e7b5d; }
-.el-tag--warning { --el-tag-bg-color: #fcf6eb; --el-tag-border-color: #f0e4cb; --el-tag-text-color: #9a702d; }
-.el-tag--info { --el-tag-bg-color: #f1f4f8; --el-tag-border-color: #e3e8ef; --el-tag-text-color: #6d7b8e; }
+.editor-dirty { display: inline-flex; align-items: center; gap: 6px; margin-right: 16px; color: var(--zt-warning-text); font-size: 12px; vertical-align: middle; }
+.editor-dirty::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--zt-warning); }
+.el-tag--success { --el-tag-bg-color: var(--zt-success-soft); --el-tag-border-color: var(--zt-success-border); --el-tag-text-color: var(--zt-success-text); }
+.el-tag--warning { --el-tag-bg-color: var(--zt-warning-soft); --el-tag-border-color: var(--zt-warning-border); --el-tag-text-color: var(--zt-warning-text); }
+.el-tag--danger { --el-tag-bg-color: var(--zt-danger-soft); --el-tag-border-color: var(--zt-danger-border); --el-tag-text-color: var(--zt-danger-text); }
+.el-tag--info { --el-tag-bg-color: var(--zt-soft); --el-tag-border-color: var(--zt-border); --el-tag-text-color: var(--zt-ink-500); }
 @media (max-width: 540px) { .editor-dirty { display: flex; margin: 0 0 12px; } .editor-overlay.el-drawer .el-drawer__body { padding: 16px; } }
 @media (prefers-reduced-motion: reduce) { .el-button { transition: none; } }
 
@@ -155,10 +202,10 @@ body {
   --zt-nav: #203955;
   --zt-nav-active: #33567e;
   --zt-nav-text: #c1d0e2;
-  --zt-scroll-thumb: #7f91a8;
-  --zt-scroll-track: #e6edf4;
-  --zt-scroll-hover: #667b94;
-  --zt-scroll-active: #4d6480;
+  --zt-scroll-thumb: #5d738c;
+  --zt-scroll-track: #d6dee8;
+  --zt-scroll-hover: #4d6480;
+  --zt-scroll-active: #3f546c;
   --el-font-family: var(--zt-font);
   --el-font-size-base: 14px;
   --el-border-radius-base: var(--zt-radius);
@@ -233,13 +280,13 @@ button:disabled { cursor: not-allowed; }
 
 .form-submit-error { margin-bottom: 20px; }
 
-/* 2026-09-24 已确认的业务平台主题；登录页沿用原独立视觉。 */
-.workspace-shell {
-  --workspace-rail-width: 216px; --workspace-header-height: 76px;
-  --zt-blue-600: #3558de; --zt-ink-900: #162638; --zt-ink-700: #435269; --zt-ink-500: #5f6c7b;
-  --chart-normal: #3d8c6e; --chart-watch: #c4842a; --chart-stale: #d25b4a; --chart-long: #8a7368;
-  --zt-panel: #fff; --zt-soft: #f4f6f8; --zt-border: #dfe5eb; --zt-radius: 6px;
-  --el-color-primary: #3558de; --el-color-primary-light-3: #6b85e7; --el-color-primary-light-5: #9aacee;
-  --el-color-primary-light-7: #c2ccf5; --el-color-primary-light-8: #d7def9; --el-color-primary-light-9: #eef1fc; --el-color-primary-dark-2: #2948bb;
-  --el-text-color-primary: #162638; --el-text-color-regular: #435269; --el-border-color: #dfe5eb;
+.workspace-shell { --workspace-rail-width: 216px; --workspace-header-height: 76px; }
+
+/* 登录页沿用原独立视觉（深蓝品牌区 + 认证表单），表单控件也保持原来的蓝。 */
+.login {
+  --zt-blue-600: #2c68bb; --zt-ink-900: #20324c; --zt-ink-700: #46566d; --zt-ink-500: #697386;
+  --zt-border: #e3e9f1; --zt-soft: #f3f6fa;
+  --el-color-primary: #2c68bb; --el-color-primary-light-3: #5b96ec; --el-color-primary-light-5: #89b5f2;
+  --el-color-primary-light-7: #b7d3f7; --el-color-primary-light-9: #edf5ff; --el-color-primary-dark-2: #235597;
+  --el-text-color-primary: #20324c; --el-text-color-regular: #46566d; --el-border-color: #e3e9f1;
 }

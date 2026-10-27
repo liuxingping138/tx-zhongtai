@@ -342,7 +342,7 @@ async function openAudit() {
 .user-drawer__body { display: flex; flex-direction: column; gap: 16px; min-height: 200px; }
 .user-drawer__error { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 32px; }
 .user-drawer__error p { margin: 0; color: var(--zt-ink-700); }
-.block { padding: 16px; border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: #fff; }
+.block { padding: 16px; border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: var(--zt-panel); }
 .block h3 { margin: 0 0 12px; font-size: 14px; font-weight: 650; color: var(--zt-ink-900); }
 .block__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .block__head h3 { margin-bottom: 12px; }

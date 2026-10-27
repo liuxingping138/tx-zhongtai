@@ -143,11 +143,11 @@ defineExpose({ validate, setError })
 .field-error { margin: 5px 0 0; color: var(--el-color-danger); font-size: 12px; line-height: 1.5; }
 .editor-intro { margin: 0 0 24px; color: var(--zt-ink-500); font-size: 12px; }
 .editor-intro span { color: var(--el-color-danger); }
-.editor-section { min-width: 0; margin: 0 0 26px; padding: 20px; border: 1px solid var(--zt-border); border-radius: 10px; background: #fff; }
+.editor-section { min-width: 0; margin: 0 0 26px; padding: 20px; border: 1px solid var(--zt-border); border-radius: 10px; background: var(--zt-panel); }
 .editor-section:last-child { margin-bottom: 0; }
 .editor-section--bare { margin: 0; padding: 0; border: 0; background: none; }
 .editor-section legend { padding: 0 8px; color: var(--zt-ink-900); font-size: 14px; font-weight: 650; }
-.editor-section legend span { margin-right: 9px; color: #7891b3; font-size: 11px; font-weight: 500; }
+.editor-section legend span { margin-right: 9px; color: var(--zt-ink-400); font-size: 11px; font-weight: 500; }
 .editor-section__hint { margin: -3px 0 20px; color: var(--zt-ink-500); font-size: 12px; line-height: 1.7; }
 .editor-section__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 18px; }
 .editor-section :deep(.el-form-item) { margin-bottom: 0; min-width: 0; }

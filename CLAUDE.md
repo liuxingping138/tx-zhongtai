@@ -21,7 +21,7 @@ AI提问已接入（独立的 ai-service：提示词模板、样本试跑与上�
 服务器 `.env` 是 `ENVIRONMENT=production`：新增内部密钥类变量（compose 里默认 `dev-only-…`）必须先写进服务器 `.env`，否则服务拒绝启动。
 
 ```bash
-make check            # 质量门：Python ruff+mypy，前端 type-check+build+lint，范围与密钥扫描，文件行数与忽略注释原因
+make check            # 质量门：Python ruff+mypy，前端 type-check+build+lint，范围与密钥扫描，文件行数与忽略注释原因，前端页面不写色值
 make test-unit        # 后端 pytest + 前端 vitest（不需要本机 Docker）
 make export-openapi   # 从本地 FastAPI 应用导出 OpenAPI；前端 src/api/contract.test.ts 拿它核对每个接口封装的方法和路径
 make hooks            # 启用 .githooks：提交前代码规则 + ruff、提交信息格式、推送前跑 check + test-unit + audit-deps

@@ -169,11 +169,11 @@ function submit() {
 .filter-bar :deep(.el-date-editor.el-date-editor--datetimerange) { min-width: 280px; }
 .filter-bar :deep(.el-input__wrapper), .filter-bar :deep(.el-select__wrapper), .filter-bar :deep(.el-date-editor) {
   min-height: 36px;
-  background: #fff;
-  box-shadow: 0 0 0 1px #d7dfeb inset;
+  background: var(--zt-panel);
+  box-shadow: 0 0 0 1px var(--zt-border-strong) inset;
 }
 .filter-bar :deep(.el-input__wrapper.is-focus), .filter-bar :deep(.el-select__wrapper.is-focused) {
-  box-shadow: 0 0 0 1px var(--zt-blue-600) inset, 0 0 0 3px rgba(44, 104, 187, 0.12);
+  box-shadow: 0 0 0 1px var(--zt-blue-600) inset, 0 0 0 3px var(--zt-focus-ring);
 }
 @media (max-width: 900px) {
   .filter-bar__fields { flex-basis: 100%; }

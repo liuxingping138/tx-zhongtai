@@ -367,11 +367,11 @@ onMounted(() => {
 
 .savebar {
   position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; justify-content: flex-end; gap: 12px;
-  margin: 16px -24px -24px; padding: 12px 24px; border-top: 1px solid #f3d19e;
-  border-radius: 0 0 var(--zt-radius) var(--zt-radius); background: #fffaf0; box-shadow: 0 -6px 16px rgb(15 35 70 / 6%);
+  margin: 16px -24px -24px; padding: 12px 24px; border-top: 1px solid var(--zt-warning-border);
+  border-radius: 0 0 var(--zt-radius) var(--zt-radius); background: var(--zt-warning-soft); box-shadow: 0 -6px 16px var(--zt-shadow-soft);
 }
 .savebar__text { margin-right: auto; font-size: 14px; color: var(--zt-ink-700); }
-.savebar__text strong { color: #b26a00; font-variant-numeric: tabular-nums; }
+.savebar__text strong { color: var(--zt-warning-text); font-variant-numeric: tabular-nums; }
 .savebar .el-button + .el-button { margin-left: 0; }
 @media (max-width: 1100px) {
   .role-head { flex-direction: column; }

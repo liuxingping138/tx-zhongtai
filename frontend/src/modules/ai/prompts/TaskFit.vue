@@ -55,10 +55,10 @@ function lines(item: TaskFitResult): string[] {
 .task-fit { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .task-fit li { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.6; }
 .task-fit__icon { flex: none; margin-top: 3px; font-size: 15px; }
-.is-ok .task-fit__icon { color: #3d8c6e; }
-.is-warn .task-fit__icon { color: #c4842a; }
+.is-ok .task-fit__icon { color: var(--zt-success); }
+.is-warn .task-fit__icon { color: var(--zt-warning); }
 .is-error .task-fit__icon { color: var(--el-color-danger); }
-.is-skip .task-fit__icon { color: #b3bdca; }
+.is-skip .task-fit__icon { color: var(--zt-muted-mark); }
 .task-fit__body { min-width: 0; }
 .task-fit__name { color: var(--zt-ink-900); font-weight: 600; }
 .is-skip .task-fit__name { color: var(--zt-ink-500); font-weight: 500; }

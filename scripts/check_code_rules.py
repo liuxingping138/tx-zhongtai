@@ -1,5 +1,5 @@
 """工程规范里 ruff / ESLint 管不到的几条：Python 源文件不超过 400 行；忽略注释必须写原因；
-数据库会话依赖必须是 function 作用域。"""
+数据库会话依赖必须是 function 作用域；前端页面和组件不写色值。"""
 
 from __future__ import annotations
 
@@ -24,6 +24,15 @@ ESLINT_DISABLE = re.compile(r"eslint-disable(?:-next-line|-line)?\b(?P<rest>[^*]
 TS_DIRECTIVE = re.compile(r"@ts-(?P<kind>ignore|nocheck|expect-error)\b(?P<rest>.*)")
 # 默认 request 作用域在响应发出后才提交事务，提交失败时客户端已收到成功响应。
 SESSION_DEPENDS = re.compile(r"Depends\(\s*get_db_session\s*\)")
+# 颜色只在 frontend/src/styles 的主题变量里定义，页面和组件引用变量；各写各的色值，全站就统一不起来。
+UI_SOURCE = re.compile(r"^frontend/src/(modules|components|layouts|views)/.+\.(vue|ts|css)$")
+COLOR_LITERAL = re.compile(r"#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b|\brgba?\(\s*\d")
+# 本来就要写色值的文件登记在这里，写明理由。
+COLOR_FILES: dict[str, str] = {
+    "frontend/src/views/LoginView.vue": "登录页沿用原独立视觉",
+    "frontend/src/modules/ai/billing/billing.ts": "费用账单的分类色板，按名字固定颜色，校验过色盲和对比度",
+    "frontend/src/components/charts/echarts.ts": "图表取色在拿不到主题变量时的兜底值",
+}
 
 
 def _is_python_test(rel: str) -> bool:
@@ -86,6 +95,16 @@ def frontend_comment_errors(rel: str, source: str) -> list[str]:
     return errors
 
 
+def color_literal_errors(rel: str, source: str) -> list[str]:
+    if rel in COLOR_FILES or rel.endswith(".test.ts"):
+        return []
+    return [
+        f"{rel}:{number}: 页面和组件里不写色值，用 theme.css 的变量（如 var(--zt-warning-text)）"
+        for number, line in enumerate(source.splitlines(), start=1)
+        if COLOR_LITERAL.search(line)
+    ]
+
+
 def line_count_errors(rel: str, source: str) -> list[str]:
     count = source.count("\n")
     if count > MAX_LINES and rel not in LONG_FILES:
@@ -112,8 +131,14 @@ def check(files: list[str], root: Path) -> list[str]:
                 errors += line_count_errors(rel, source)
         else:
             errors += frontend_comment_errors(rel, source)
+            if UI_SOURCE.match(rel):
+                errors += color_literal_errors(rel, source)
     stale = sorted(rel for rel in LONG_FILES if rel not in files)
     errors += [f"LONG_FILES 里的 {rel} 已不存在，删掉这条登记" for rel in stale]
+    # 只在扫到前端页面时核对颜色登记，单独检查 Python 文件时不报。
+    if any(UI_SOURCE.match(rel) for rel in files):
+        stale = sorted(rel for rel in COLOR_FILES if rel not in files)
+        errors += [f"COLOR_FILES 里的 {rel} 已不存在，删掉这条登记" for rel in stale]
     return errors
 
 

@@ -119,5 +119,5 @@ const COLUMNS = [
 .status-table :deep(.el-table__footer .cell) { font-weight: 600; color: var(--zt-ink-900); }
 .count-link { color: var(--zt-blue-600); text-decoration: none; }
 .count-link:hover { text-decoration: underline; }
-.zero { color: var(--zt-ink-400, #a8abb2); }
+.zero { color: var(--zt-ink-400); }
 </style>

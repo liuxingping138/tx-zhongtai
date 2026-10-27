@@ -112,21 +112,21 @@ function summary(role: RoleItem): string {
 .role-picker__empty { margin: 8px 0; font-size: 13px; color: var(--zt-ink-500); }
 .role-option {
   display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 8px 12px;
-  border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: #fff;
+  border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: var(--zt-panel);
   text-align: left; font: inherit; cursor: pointer; transition: border-color 160ms ease, background-color 160ms ease;
 }
-.role-option:hover:not(:disabled) { border-color: #c5dbf8; }
+.role-option:hover:not(:disabled) { border-color: var(--el-color-primary-light-7); }
 .role-option:focus-visible { outline: 2px solid var(--zt-blue-600); outline-offset: 1px; }
-.role-option.is-on { background: #edf5ff; border-color: #9ec2f3; }
-.role-option.is-inactive { background: #fafafa; }
+.role-option.is-on { background: var(--el-color-primary-light-9); border-color: var(--el-color-primary-light-5); }
+.role-option.is-inactive { background: var(--zt-surface-subtle); }
 .role-option:disabled { cursor: not-allowed; opacity: 0.7; }
 .role-option__box {
-  flex: none; width: 16px; height: 16px; margin-top: 2px; border: 1px solid #b8c2d1; border-radius: 4px; background: #fff;
+  flex: none; width: 16px; height: 16px; margin-top: 2px; border: 1px solid var(--zt-border-strong); border-radius: 4px; background: var(--zt-panel);
   display: grid; place-items: center;
 }
 .role-option.is-on .role-option__box { border-color: var(--zt-blue-600); background: var(--zt-blue-600); }
 .role-option.is-on .role-option__box::after {
-  content: ''; width: 8px; height: 4px; margin-top: -2px; border-left: 2px solid #fff; border-bottom: 2px solid #fff; transform: rotate(-45deg);
+  content: ''; width: 8px; height: 4px; margin-top: -2px; border-left: 2px solid var(--el-color-white); border-bottom: 2px solid var(--el-color-white); transform: rotate(-45deg);
 }
 .role-option__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .role-option__title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }

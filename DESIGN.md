@@ -13,7 +13,8 @@
 
 ## 视觉
 
-- 业务页面用 `theme.css` 里 `.workspace-shell` 那组颜色，登录页沿用独立的一组。页面不自己定颜色，图表配色用 `chartPalette()`
+- 颜色只在 `theme.css` 定义：业务页面这套放在根上，弹窗、下拉、消息提示和图表都是同一套；登录页在 `.login` 里保留原独立视觉
+- 页面和组件只引用变量，不写色值（代码规则检查会拦）：状态色 `--zt-success` / `--zt-warning` / `--zt-danger`，各带 `-text`、`-soft`、`-border`；占位文字 `--zt-ink-400`，控件边框 `--zt-border-strong`，浅底区域 `--zt-surface-subtle`，选中底用 Element Plus 的 `--el-color-primary-light-9`。图表配色用 `chartPalette()`
 - 系统中文字体（PingFang SC、Microsoft YaHei），不下载字体。标题 24px，正文与表格 14px，次级说明 12–13px，数字用等宽数字
 - 文字深蓝灰，蓝色只用于主操作、链接和选中。白底面板靠细边框区分，不加重阴影
 - 不加营销卡片、装饰插画、装饰英文和没有实际含义的统计卡片

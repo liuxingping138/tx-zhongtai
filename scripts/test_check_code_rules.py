@@ -61,10 +61,23 @@ def test_long_python_source_is_reported_unless_registered() -> None:
             del rules.LONG_FILES[APP]
 
 
+def test_ui_color_literals_are_reported_outside_registered_files() -> None:
+    page = "frontend/src/modules/demo/Page.vue"
+    assert rules.color_literal_errors(page, ".tag { color: #9a6418; }\n")
+    assert rules.color_literal_errors(page, "box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);\n")
+    assert rules.color_literal_errors(page, "background: #fff;\n")
+    assert not rules.color_literal_errors(page, ".tag { color: var(--zt-warning-text); }\n")
+    assert not rules.color_literal_errors(page, '<a href="#industry">行业</a>\n'), "锚点不是颜色"
+    assert not rules.color_literal_errors(page, "return `rgba(${r}, ${g}, ${b}, ${alpha})`\n"), "按变量拼的颜色不算写死"
+    assert not rules.color_literal_errors("frontend/src/modules/demo/page.test.ts", "expect(c).toBe('#fff')\n")
+    assert not rules.color_literal_errors("frontend/src/views/LoginView.vue", "color: #fff;\n")
+
+
 if __name__ == "__main__":
     test_python_suppressions_need_reason()
     test_strings_and_test_type_ignores_are_not_reported()
     test_frontend_suppressions_need_reason()
     test_session_dependency_must_be_function_scoped()
     test_long_python_source_is_reported_unless_registered()
+    test_ui_color_literals_are_reported_outside_registered_files()
     print("code_rules_selftest_ok")

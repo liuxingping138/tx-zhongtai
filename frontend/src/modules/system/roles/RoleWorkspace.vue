@@ -275,16 +275,16 @@ onMounted(load)
 }
 
 .role-item[aria-current="true"] {
-  background: #edf2fe;
+  background: var(--el-color-primary-light-9);
 }
 
 .role-item[aria-current="true"] .role-item__name {
-  color: #3558de;
+  color: var(--zt-blue-600);
   font-weight: 600;
 }
 
 .role-item:focus-visible {
-  outline: 2px solid #3558de;
+  outline: 2px solid var(--zt-blue-600);
   outline-offset: -2px;
 }
 

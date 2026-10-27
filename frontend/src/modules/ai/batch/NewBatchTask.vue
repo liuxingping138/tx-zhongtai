@@ -365,7 +365,7 @@ function close(done: () => void): void {
 .new-task__step { padding: 4px 0 22px; margin-bottom: 20px; border-bottom: 1px solid var(--zt-border); }
 .new-task__step:last-child { margin-bottom: 0; border-bottom: 0; }
 .new-task__step h3 { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; color: var(--zt-ink-900); font-size: 15px; font-weight: 650; }
-.new-task__step h3 span { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--zt-blue-600); color: #fff; font-size: 12px; }
+.new-task__step h3 span { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--zt-blue-600); color: var(--el-color-white); font-size: 12px; }
 .new-task__step .el-select { width: 100%; }
 .new-task__option { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .new-task__option small { color: var(--zt-ink-500); font-size: 12px; }
@@ -377,15 +377,15 @@ function close(done: () => void): void {
 .new-task__release dd { margin: 0; overflow-wrap: anywhere; }
 .new-task__columns { display: flex; flex-wrap: wrap; gap: 6px; }
 .new-task__fields { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.new-task__columns span { padding: 0 8px; border-radius: 4px; background: #e6eefb; color: var(--zt-blue-700); line-height: 22px; }
-.new-task__note { margin: 10px 0 0; color: #9a6418; }
+.new-task__columns span { padding: 0 8px; border-radius: 4px; background: var(--el-color-primary-light-9); color: var(--zt-blue-700); line-height: 22px; }
+.new-task__note { margin: 10px 0 0; color: var(--zt-warning-text); }
 .new-task__release summary { margin-top: 10px; color: var(--zt-blue-600); cursor: pointer; }
 .new-task__release pre { max-height: 260px; overflow: auto; margin: 8px 0 0; padding: 10px 12px; border-radius: 6px; background: var(--zt-panel); font: inherit; font-size: 13px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
 .new-task__problem { margin: 10px 0 0; color: var(--el-color-danger); font-size: 13px; }
 .new-task__upload { display: flex; flex-wrap: wrap; gap: 8px; }
 .new-task__upload .el-button { margin: 0; }
-.new-task__file { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid #bfdccf; border-radius: 6px; background: #f2f9f5; }
-.new-task__file > .el-icon { flex: none; color: #3d8c6e; font-size: 20px; }
+.new-task__file { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--zt-success-border); border-radius: 6px; background: var(--zt-success-soft); }
+.new-task__file > .el-icon { flex: none; color: var(--zt-success); font-size: 20px; }
 .new-task__file div { display: flex; flex: 1; flex-direction: column; min-width: 0; }
 .new-task__file strong { overflow: hidden; color: var(--zt-ink-900); text-overflow: ellipsis; white-space: nowrap; }
 .new-task__file span { color: var(--zt-ink-500); font-size: 12px; }

@@ -175,8 +175,8 @@ function onKeydown(event: KeyboardEvent): void {
 .chat__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--zt-border); }
 .chat__head h1 { margin: 0; color: var(--zt-ink-900); font-size: 15px; font-weight: 650; }
 .chat__dock { padding: 0 max(20px, calc((100% - 820px) / 2)) 16px; }
-.chat__composer { border: 1px solid #cfd9e6; border-radius: 14px; background: var(--zt-panel); box-shadow: 0 6px 20px rgb(30 52 82 / 7%); transition: border-color 160ms ease, box-shadow 160ms ease; }
-.chat__composer:focus-within { border-color: var(--el-color-primary-light-5); box-shadow: 0 6px 22px rgb(44 104 187 / 12%); }
+.chat__composer { border: 1px solid var(--zt-border-strong); border-radius: 14px; background: var(--zt-panel); box-shadow: 0 6px 20px var(--zt-shadow-soft); transition: border-color 160ms ease, box-shadow 160ms ease; }
+.chat__composer:focus-within { border-color: var(--el-color-primary-light-5); box-shadow: 0 6px 22px var(--zt-focus-ring); }
 .chat__composer :deep(.el-textarea__inner) { padding: 14px 16px 4px; border: 0; box-shadow: none; background: transparent; font-size: 15px; line-height: 1.7; }
 .chat__tools { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 6px 10px 10px 14px; }
 .chat__model { width: 240px; }

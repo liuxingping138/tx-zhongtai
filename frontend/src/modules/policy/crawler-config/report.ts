@@ -87,7 +87,7 @@ export function provinceTableText(provinces: ConfigProvinceCount[], total: numbe
     .join('\n')
 }
 
-/** 「#2c68bb」→「rgba(44, 104, 187, 0.35)」：只淡化柱子颜色，柱顶数字不跟着变淡。不是六位十六进制的原样返回。 */
+/** 六位十六进制颜色转成带透明度的 rgba：只淡化柱子颜色，柱顶数字不跟着变淡。不是六位十六进制的原样返回。 */
 export function tint(color: string, alpha: number): string {
   const hex = /^#([0-9a-f]{6})$/i.exec(color.trim())?.[1]
   if (!hex) return color
@@ -109,7 +109,7 @@ export function periodOption(unit: ConfigUnit, periods: ConfigPeriod[], selected
     grid: { left: 4, right: 4, top: 28, bottom: 0, containLabel: true },
     tooltip: {
       trigger: 'axis',
-      axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(44, 104, 187, 0.06)' } },
+      axisPointer: { type: 'shadow', shadowStyle: { color: tint(palette.primary, 0.06) } },
       formatter: (params: { dataIndex: number }[]) => {
         const item = periods[params[0]?.dataIndex ?? -1]
         if (!item) return ''
@@ -175,7 +175,7 @@ export function statusOption(rows: ConfigStatusRow[], palette: ChartPalette): Ch
     grid: { left: 4, right: 4, top: 40, bottom: 0, containLabel: true },
     tooltip: {
       trigger: 'axis',
-      axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(44, 104, 187, 0.06)' } },
+      axisPointer: { type: 'shadow', shadowStyle: { color: tint(palette.primary, 0.06) } },
       formatter: (params: { dataIndex: number }[]) => {
         const row = rows[params[0]?.dataIndex ?? -1]
         if (!row) return ''

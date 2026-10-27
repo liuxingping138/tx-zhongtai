@@ -276,7 +276,7 @@ defineExpose({ open })
 .job-settings__intro { margin: 0 0 18px; padding: 10px 12px; border-radius: 4px; background: var(--zt-soft); color: var(--zt-ink-700); font-size: 13px; line-height: 1.7; }
 .job-settings__hint { display: block; width: 100%; color: var(--zt-ink-500); font-size: 12px; line-height: 1.6; }
 .job-settings__hint.is-error { color: var(--el-color-danger); }
-.job-settings__checks { width: 100%; margin: 6px 0 0; padding: 8px 12px 8px 26px; border-radius: 4px; background: #fdf6ec; color: #8a5a14; font-size: 12px; line-height: 1.6; }
+.job-settings__checks { width: 100%; margin: 6px 0 0; padding: 8px 12px 8px 26px; border-radius: 4px; background: var(--zt-warning-soft); color: var(--zt-warning-text); font-size: 12px; line-height: 1.6; }
 .job-settings__checks .is-error { color: var(--el-color-danger); }
 .job-settings__section { margin: 24px 0 12px; padding-top: 16px; border-top: 1px solid var(--zt-border); color: var(--zt-ink-900); font-size: 14px; font-weight: 600; }
 </style>

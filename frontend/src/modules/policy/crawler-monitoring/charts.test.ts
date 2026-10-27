@@ -96,7 +96,7 @@ describe('健康结构', () => {
   })
 
   it('环形图每块对应一类', () => {
-    const option = healthOption(slices) as { series: { data: { name: string }[] }[] }
+    const option = healthOption(slices, palette) as { series: { data: { name: string }[] }[] }
     expect(option.series[0]?.data.map(item => item.name)).toEqual(['正常', '关注', '近期停更', '长期停更'])
   })
 

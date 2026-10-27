@@ -152,7 +152,7 @@ export function healthSlices(health: CrawlerHealth, thresholds: { normal_days: n
   ]
 }
 
-export function healthOption(slices: HealthSlice[]): ChartOption {
+export function healthOption(slices: HealthSlice[], palette: ChartPalette): ChartOption {
   return {
     tooltip: { trigger: 'item', formatter: '{b}：{c} 个（{d}%）' },
     series: [{
@@ -160,7 +160,7 @@ export function healthOption(slices: HealthSlice[]): ChartOption {
       radius: ['54%', '90%'],
       avoidLabelOverlap: false,
       label: { show: false },
-      itemStyle: { borderColor: '#fff', borderWidth: 2 },
+      itemStyle: { borderColor: palette.surface, borderWidth: 2 },
       data: slices.map(slice => ({ name: slice.label, value: slice.value, itemStyle: { color: slice.color } })),
     }],
   }
