@@ -19,7 +19,7 @@ from app.core import storage
 from app.core.codebook import fetch_code_table
 from app.domain.categories import CategoryAccess, category_name, checked_category
 from app.domain.code_tables import checked_code_table, code_table_name
-from app.domain.models import BatchRun, PromptTemplate, TemplateRelease, new_id
+from app.domain.models import RUN_SOURCE_SAMPLE, BatchRun, PromptTemplate, TemplateRelease, new_id
 from app.domain.releases import release_summary
 from app.domain.templating import split_fields
 from app.repositories import batch_runs as run_repo
@@ -194,10 +194,19 @@ async def delete_prompt(session: AsyncSession, actor: Actor, access: CategoryAcc
     template = await require_editable(session, access, prompt_id, lock=True)
     if template.release_id:
         raise ApiError("模板已上线，定时任务在用它，先下线再删除", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    if await run_repo.active_for_prompt(session, prompt_id, sources=(RUN_SOURCE_SAMPLE,)) is not None:
+        raise ApiError(
+            "这个模板的样本试跑还没结束，等它跑完或先停止再删除", code=ErrorCode.VALIDATION_ERROR, http_status=422
+        )
+    # 样本试跑只属于这个模板，记录和产物一起清掉，不留孤儿文件。
+    samples = await run_repo.sample_runs_for_prompt(session, prompt_id)
+    for sample in samples:
+        await run_repo.delete(session, sample)
     await repo.delete(session, template)
     await enqueue_event(session, event_type="ai.prompt.deleted", actor=actor, target_id=prompt_id)
     await session.flush()
-    await anyio.to_thread.run_sync(storage.remove_tree, storage.prompt_dir(prompt_id))
+    for folder in (storage.prompt_dir(prompt_id), *(storage.run_dir(sample.id) for sample in samples)):
+        await anyio.to_thread.run_sync(storage.remove_tree, folder)
 
 
 def _check_suffix(filename: str, suffix: str, label: str) -> None:

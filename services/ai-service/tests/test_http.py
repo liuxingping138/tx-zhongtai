@@ -14,6 +14,7 @@ from app.core.config import get_settings
 from app.core.database import get_db_session
 from app.domain.categories import FULL_ACCESS
 from app.main import app
+from app.repositories import batch_runs as run_repo
 from app.repositories import prompts as prompt_repo
 from tests.helpers import ACTOR, PROMPT_ID, RUN_ID, FakeSession, fake_stream, noop, sample_models, template, xlsx
 
@@ -143,6 +144,8 @@ def test_batch_routes_delegate_to_application(client: TestClient, monkeypatch: p
 def test_prompt_write_routes(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     _returns(prompt_repo, "get", template(), monkeypatch)
     monkeypatch.setattr(prompt_repo, "delete", noop)
+    _returns(run_repo, "active_for_prompt", None, monkeypatch)
+    _returns(run_repo, "sample_runs_for_prompt", [], monkeypatch)
     created = client.post("/api/v1/ai/prompts", json={"title": "t", "category": "policy", "content": "c"})
     assert created.status_code == 201
     updated = client.put(

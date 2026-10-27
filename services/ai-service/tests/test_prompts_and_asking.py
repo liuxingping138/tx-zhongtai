@@ -10,8 +10,10 @@ from app.application import prompts as service
 from app.core import storage
 from app.core.config import get_settings
 from app.domain.categories import FULL_ACCESS, CategoryAccess
+from app.domain.models import RUN_SOURCE_SAMPLE
+from app.repositories import batch_runs as run_repo
 from app.repositories import prompts as repo
-from tests.helpers import ACTOR, PROMPT_ID, FakeSession, fake_stream, noop, template, xlsx
+from tests.helpers import ACTOR, PROMPT_ID, FakeSession, fake_stream, noop, run, template, xlsx
 
 
 @pytest.fixture(autouse=True)
@@ -114,12 +116,30 @@ async def test_excel_and_code_uploads_are_stored_and_summarized(monkeypatch: pyt
         await service.download_file(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID, "code")  # type: ignore[arg-type]
 
 
-async def test_delete_removes_template_files(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_delete_removes_template_files_and_its_sample_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """样本试跑只属于这个模板：记录和产物一起删，不留孤儿文件；还在跑的先拦下。"""
+
     _use(monkeypatch, template())
+    sample = run(id="e" * 32, source=RUN_SOURCE_SAMPLE, status="done")
+    deleted: list[str] = []
     monkeypatch.setattr(repo, "delete", noop)
+    monkeypatch.setattr(run_repo, "delete", lambda _session, item: deleted.append(item.id) or noop())
+    monkeypatch.setattr(run_repo, "sample_runs_for_prompt", lambda _session, _prompt_id: _async([sample]))
+    monkeypatch.setattr(run_repo, "active_for_prompt", lambda _session, _prompt_id, sources=(): _async(sample))
     storage.write_atomic(storage.prompt_file(PROMPT_ID, "code"), b"x")
+    storage.write_atomic(storage.run_file(sample.id, "raw"), b"x")
+    with pytest.raises(ApiError, match="样本试跑还没结束"):
+        await service.delete_prompt(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID)  # type: ignore[arg-type]
+    assert storage.prompt_dir(PROMPT_ID).exists()
+
+    monkeypatch.setattr(run_repo, "active_for_prompt", lambda _session, _prompt_id, sources=(): _async(None))
     await service.delete_prompt(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID)  # type: ignore[arg-type]
-    assert not storage.prompt_dir(PROMPT_ID).exists()
+    assert not storage.prompt_dir(PROMPT_ID).exists() and not storage.run_dir(sample.id).exists()
+    assert deleted == [sample.id]
+
+
+async def _async(value: Any) -> Any:
+    return value
 
 
 async def test_list_only_queries_readable_categories_and_marks_editable(monkeypatch: pytest.MonkeyPatch) -> None:

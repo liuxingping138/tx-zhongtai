@@ -112,6 +112,13 @@ async def latest_samples(session: AsyncSession, prompt_ids: Collection[str]) -> 
     return {row.prompt_id: row for row in rows}
 
 
+async def sample_runs_for_prompt(session: AsyncSession, prompt_id: str) -> list[BatchRun]:
+    """这个模板自己的样本试跑记录（删模板时一起清掉）。"""
+
+    stmt = select(BatchRun).where(BatchRun.prompt_id == prompt_id, BatchRun.source == RUN_SOURCE_SAMPLE)
+    return list(await session.scalars(stmt))
+
+
 def add(session: AsyncSession, run: BatchRun) -> None:
     session.add(run)
 

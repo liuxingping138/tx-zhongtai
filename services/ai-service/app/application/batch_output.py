@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import csv
+import sys
 from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,6 +17,9 @@ from platform_common.excel import active_worksheet, append_text_row
 
 from app.application.sheets import excel_cell
 from app.domain.templating import extract_fields
+
+# 「提问」列是整段提示词：政策全文加六级码表能到十几万字，csv 默认 131072 字的单格上限会让整份结果读不回来，钱白花。
+csv.field_size_limit(sys.maxsize)
 
 RAW_COLUMNS = ["myid", "提问", "model_name", "content", "input_tokens", "output_tokens", "error", "search_count"]
 META_COLUMNS = ["model_name", "input_tokens", "output_tokens", "error", "search_count"]

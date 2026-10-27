@@ -64,12 +64,19 @@ async def available_models(session: AsyncSession) -> list[dict[str, Any]]:
     return [model_info(model) for model in await model_configs.enabled_models(session)]
 
 
-async def resolve_model(session: AsyncSession, model_id: str) -> LlmModel:
+RELEASE_MODEL_DISABLED = "它是上线版本用的模型，请改模板的模型后重新上线"
+
+
+async def resolve_model(session: AsyncSession, model_id: str, *, frozen: str = "") -> LlmModel:
+    """frozen：模型不是页面上现选的（上线版本、任务快照里冻结的）时，停用提示里说清该去哪改。"""
+
     row = await model_configs.find(session, model_id)
     if row is None:
         raise ApiError(f"未知模型：{model_id or '（未选择）'}", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     if not row.enabled:
-        raise ApiError(f"模型「{row.name}」已停用，请换一个模型", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+        raise ApiError(
+            f"模型「{row.name}」已停用，{frozen or '请换一个模型'}", code=ErrorCode.VALIDATION_ERROR, http_status=422
+        )
     model = model_configs.to_model(row)
     if not api_key_for(model):
         raise ApiError(

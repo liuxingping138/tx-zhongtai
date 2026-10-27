@@ -202,17 +202,24 @@ async def _watch(job: Job) -> None:
 
     while True:
         await asyncio.sleep(PROGRESS_SECONDS)
-        async with SessionLocal() as session:
-            await repo.update_fields(session, job.run.id, _progress(job))
-            if await repo.cancel_flag(session, job.run.id):
-                job.stop.set()
-            await session.commit()
+        # 库连接抖一下不能让它死掉：它一死心跳就停，任务被误判中断、停止按钮失效、跑完还被记成失败。
+        try:
+            async with SessionLocal() as session:
+                await repo.update_fields(session, job.run.id, _progress(job))
+                if await repo.cancel_flag(session, job.run.id):
+                    job.stop.set()
+                await session.commit()
+        except Exception:
+            logger.exception("batch_run_watch_failed run=%s", job.run.id)
 
 
 async def _load(run: BatchRun) -> Job:
     # 停用的模型也照跑：任务是停用前排进来的。
     async with SessionLocal() as session:
         config = await model_configs.find(session, run.model_id)
+        # 解析 Excel、读回原始返回、拼全部提示词可能超过心跳超时：先报一次平安，大任务别一开始就被当成中断。
+        await repo.update_fields(session, run.id, {"heartbeat_at": utcnow()})
+        await session.commit()
     if config is None:
         raise RuntimeError(f"未知模型：{run.model_id}")
     model = with_service_tier(model_configs.to_model(config), run.service_tier)

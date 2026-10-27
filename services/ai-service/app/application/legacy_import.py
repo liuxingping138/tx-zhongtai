@@ -59,8 +59,10 @@ def _time(value: str | None) -> datetime | None:
 
 
 def _overwrite(existing: Any, fresh: Any, *, keep: tuple[str, ...]) -> None:
+    # 只覆盖导入时显式赋过值的列：fresh 上没赋值的（类型、码表、上线版本、来源……）是 None，
+    # 搬过去会撞 NOT NULL 让整次导入回滚，release_id 变 None 还会把已上线的模板悄悄下线。
     for attr in inspect(type(fresh)).column_attrs:
-        if attr.key not in keep:
+        if attr.key not in keep and attr.key in fresh.__dict__:
             setattr(existing, attr.key, getattr(fresh, attr.key))
 
 

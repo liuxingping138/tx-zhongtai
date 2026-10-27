@@ -17,7 +17,7 @@ from platform_common.filters import Filters
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application import releases
-from app.application.asking import resolve_model
+from app.application.asking import RELEASE_MODEL_DISABLED, resolve_model
 from app.application.audit_emit import enqueue_event
 from app.application.batch_inputs import inspect_upload, snapshot_input
 from app.application.prompts import require_editable as require_editable_prompt
@@ -33,6 +33,7 @@ from app.domain.models import (
     RUN_DONE,
     RUN_QUEUED,
     RUN_SOURCE_MANUAL,
+    RUN_SOURCE_PIPELINE,
     RUN_STOPPING,
     BatchRun,
     PromptTemplate,
@@ -68,7 +69,12 @@ def pending_rows(run: BatchRun) -> int:
     return max(run.total_count - run.done_count, 0) + run.failed_count
 
 
+_PIPELINE_NO_RETRY = "定时任务的批次由政策服务取结果，重跑没人消费、只会再花钱；要补跑的政策在基础标签里「重新打标」"
+
+
 def _can_retry(run: BatchRun) -> bool:
+    if run.source == RUN_SOURCE_PIPELINE:
+        return False
     # 旧系统迁来的任务没有输入快照，无法重跑。
     ready = run.status not in ACTIVE_STATUSES and run.total_count > 0 and pending_rows(run) > 0
     return ready and has_run_input(storage.run_dir(run.id))
@@ -172,7 +178,7 @@ async def _plan(
 
     template = await require_editable_prompt(session, access, prompt_id, lock=lock)
     release = await releases.current(session, template, "批量任务")
-    model = await resolve_model(session, release.model_id)
+    model = await resolve_model(session, release.model_id, frozen=RELEASE_MODEL_DISABLED)
     # 同一模板同时只跑一个正式任务。发起时模板行已加锁，两个人同时点运行只有一个能建出任务。
     await reconcile_stale(session)
     running = await repo.active_for_prompt(session, template.id)
@@ -269,8 +275,10 @@ async def retry_run(session: AsyncSession, actor: Actor, access: CategoryAccess,
         raise ApiError("任务仍在运行，结束后才能重跑", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     if not await anyio.to_thread.run_sync(_can_retry, run):
         reason = "没有失败或未完成的行" if run.total_count and not pending_rows(run) else _NO_SNAPSHOT
+        if run.source == RUN_SOURCE_PIPELINE:
+            reason = _PIPELINE_NO_RETRY
         raise ApiError(reason, code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    await resolve_model(session, run.model_id)
+    await resolve_model(session, run.model_id, frozen="它是任务发起时冻结的模型，重新启用它或新建任务")
     running = await repo.active_for_prompt(session, run.prompt_id)
     if running is not None:
         raise ApiError("该模板已有任务在运行，请等它结束或先停止", code=ErrorCode.VERSION_CONFLICT, http_status=409)

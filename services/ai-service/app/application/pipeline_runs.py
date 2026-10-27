@@ -18,7 +18,7 @@ from platform_common.errors import ApiError, ErrorCode, NotFoundError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application import batch_runs, prompts, releases
-from app.application.asking import resolve_model
+from app.application.asking import RELEASE_MODEL_DISABLED, resolve_model
 from app.application.audit_emit import enqueue_event
 from app.application.batch_output import read_raw
 from app.application.batch_runs import require as require_run
@@ -87,7 +87,7 @@ def _write_snapshot(run_id: str, headers: list[str], rows: list[dict[str, str]],
 async def create(session: AsyncSession, caller: Actor, values: dict[str, Any]) -> dict[str, Any]:
     headers, rows = _checked_rows(values.get("rows"))
     release = await _release(session, str(values.get("prompt_id") or ""))
-    model = await resolve_model(session, release.model_id)
+    model = await resolve_model(session, release.model_id, frozen=RELEASE_MODEL_DISABLED)
     code = await releases.release_code(release)
     run = BatchRun(
         id=new_id(),
@@ -131,6 +131,8 @@ async def create(session: AsyncSession, caller: Actor, values: dict[str, Any]) -
 
 
 async def status(session: AsyncSession, run_id: str) -> dict[str, Any]:
+    # worker 被强杀又没拉起时，没心跳的任务要先纠正成「中断」，政策服务才不会一直轮询到自己超时。
+    await batch_runs.reconcile_stale(session)
     return run_to_dict(await require_run(session, run_id))
 
 
