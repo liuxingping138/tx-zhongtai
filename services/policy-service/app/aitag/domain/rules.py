@@ -262,3 +262,31 @@ def drop_notes(remark: str, prefixes: tuple[str, ...]) -> str:
     """去掉备注里以这些前缀开头的几段（备注各段用「；」连接），其余原样保留。"""
 
     return NOTE_SEP.join(part for part in (remark or "").split(NOTE_SEP) if part and not part.startswith(prefixes))
+
+
+# 基础标签里由人维护、打标不碰的列。
+MANUAL_FIELDS = ("is_penetrate", "penetrate_words", "penetrate_score")
+AI_NOTES = (
+    AI_NOTE_TYPE_FAILED,
+    AI_NOTE_TYPE_UNKNOWN,
+    AI_NOTE_TYPE_EMPTY,
+    AI_NOTE_INTERPRET_FAILED,
+    AI_NOTE_OPPORTUNITY_FAILED,
+    TITLE_SCRIPT_NOTE,
+)
+DUPLICATE_NOTE = "重新判断后内容和另一条基础标签相同，未重复写入"
+
+
+def keep_manual_edits(values: dict[str, str], existing: Any) -> dict[str, str]:
+    """重新判断类型覆盖的是源库字段和类型：人填的穿透三列照旧，备注里人写的几段留着，只换掉 AI 写的几段。"""
+
+    kept = dict(values)
+    for field in MANUAL_FIELDS:
+        kept[field] = getattr(existing, field) or ""
+    kept["remark"] = NOTE_SEP.join(part for part in (values["remark"], drop_notes(existing.remark, AI_NOTES)) if part)
+    return kept
+
+
+def note_duplicate(remark: str) -> str:
+    # 这次的结果不写了，上次 AI 留的失败说明也就过时了，一起去掉。
+    return NOTE_SEP.join(part for part in (DUPLICATE_NOTE, drop_notes(remark, (DUPLICATE_NOTE, *AI_NOTES))) if part)

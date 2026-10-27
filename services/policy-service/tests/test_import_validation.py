@@ -92,6 +92,22 @@ class TestImportSources:
         assert result["rejected"] is True
         assert "上线时间格式不对" in _reasons(source_env)[0]
 
+    async def test_overlong_cells_and_unknown_crawler_status_are_reported_not_500(
+        self, source_env: dict[str, Any]
+    ) -> None:
+        """超长值撞到库里是 DataError，用户只看到「服务器内部错误」；爬虫状态乱写会让配置统计的合计对不上。
+        都在校验说明里写明。"""
+
+        source_env["rows"] = [
+            _source(site_name="甲" * 256, district_code="110101"),
+            _source(site_name="乙", district_code="110101", crawler_status="已上线"),
+        ]
+        result = await sources.import_sources(_Session(), ACTOR, b"")  # type: ignore[arg-type]
+        assert result["rejected"] is True
+        reasons = _reasons(source_env)
+        assert "网站名称超过 255 字" in reasons[0]
+        assert "爬虫状态只能填 已爬、未爬、异常" in reasons[1]
+
     async def test_missing_area_code_prefers_the_reason_carried_in_the_file(self, source_env: dict[str, Any]) -> None:
         source_env["rows"] = [_source(site_name="甲", skip_reason="区县不标准"), _source(site_name="乙")]
         await sources.import_sources(_Session(), ACTOR, b"")  # type: ignore[arg-type]

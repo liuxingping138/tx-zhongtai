@@ -72,9 +72,9 @@ class TestSources:
             await sources.create_source(_Session(), ACTOR, self._data(district_code=""))  # type: ignore[arg-type]
 
     async def test_online_date_is_normalized_and_bad_dates_are_rejected(self, env: SimpleNamespace) -> None:
-        data = self._data(site_type="政府门户", crawler_status="已上线", online_date="2024/1/2")
+        data = self._data(site_type="政府门户", crawler_status="已爬", online_date="2024/1/2")
         out = await sources.create_source(_Session(), ACTOR, data)  # type: ignore[arg-type]
-        assert (out["site_type"], out["crawler_status"], out["online_date"]) == ("政府门户", "已上线", "2024-01-02")
+        assert (out["site_type"], out["crawler_status"], out["online_date"]) == ("政府门户", "已爬", "2024-01-02")
         with pytest.raises(ApiError, match="上线时间"):
             await sources.create_source(_Session(), ACTOR, self._data(online_date="2024-02-30"))  # type: ignore[arg-type]
 

@@ -78,6 +78,14 @@ INTERPRETATION_COLUMNS: tuple[ColumnSpec, ...] = (
 CRAWLER_STATUS_ONLINE = "已爬"
 CRAWLER_STATUS_ABNORMAL = "异常"
 CRAWLER_STATUS_PENDING: tuple[str, ...] = ("", "未爬")
+# 新建、编辑、导入、批量改都只收这几个值：配置统计按它们分列，别的写法会让分省合计对不上。
+CRAWLER_STATUS_CHOICES: tuple[str, ...] = (*CRAWLER_STATUS_PENDING, CRAWLER_STATUS_ONLINE, CRAWLER_STATUS_ABNORMAL)
+CRAWLER_STATUS_ERROR = "爬虫状态只能填 已爬、未爬、异常（留空按未爬）"
+
+
+def crawler_status_error(value: str) -> str | None:
+    return None if value.strip() in CRAWLER_STATUS_CHOICES else CRAWLER_STATUS_ERROR
+
 
 # 政策解读的数据状态：新录入、导入时默认待验证，人工核对后改为人工验证。
 DATA_STATUS_PENDING = "待验证"

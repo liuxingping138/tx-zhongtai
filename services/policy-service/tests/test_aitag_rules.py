@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from types import SimpleNamespace
 
 from app.aitag.domain import rules
 from app.policy.domain.fields import AI_NOTE_TYPE_EMPTY
@@ -130,3 +131,23 @@ def test_script_titles_keep_only_the_text_and_note_it() -> None:
     assert values["remark"] == f"{AI_NOTE_TYPE_EMPTY}；{rules.TITLE_SCRIPT_NOTE}"
     assert rules.base_tag_values({"name": raw}, [], "")["remark"] == rules.TITLE_SCRIPT_NOTE
     assert rules.base_tag_values({"name": "正常标题"}, [], "")["remark"] == ""
+
+
+def test_retag_keeps_manual_columns_and_hand_written_remarks() -> None:
+    """重新判断类型只换源库字段、类型和 AI 写的备注；人填的穿透三列、人写的备注照旧。"""
+
+    existing = SimpleNamespace(
+        is_penetrate="是",
+        penetrate_words="数字政府",
+        penetrate_score="0.9",
+        remark=f"{AI_NOTE_TYPE_EMPTY}；领导关注；{rules.TITLE_SCRIPT_NOTE}",
+    )
+    fresh = rules.base_tag_values({"name": "政策甲"}, ["信息化建设类"], "")
+    kept = rules.keep_manual_edits(fresh, existing)
+    assert (kept["is_penetrate"], kept["penetrate_words"], kept["penetrate_score"]) == ("是", "数字政府", "0.9")
+    assert kept["remark"] == "领导关注"
+    assert kept["policy_types"] == "信息化建设类" and fresh["is_penetrate"] == ""
+    failed = rules.base_tag_values({"name": "政策甲"}, [], AI_NOTE_TYPE_EMPTY)
+    assert rules.keep_manual_edits(failed, existing)["remark"] == f"{AI_NOTE_TYPE_EMPTY}；领导关注"
+    assert rules.note_duplicate("领导关注") == f"{rules.DUPLICATE_NOTE}；领导关注"
+    assert rules.note_duplicate(rules.note_duplicate("")) == rules.DUPLICATE_NOTE

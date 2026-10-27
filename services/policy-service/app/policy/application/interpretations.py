@@ -6,6 +6,7 @@ from typing import Any
 
 from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
+from platform_common.columns import overlong_reasons, string_lengths
 from platform_common.errors import ApiError, DependencyUnavailableError, ErrorCode, NotFoundError, VersionConflictError
 from platform_common.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async
 from platform_common.filters import Filters
@@ -20,6 +21,8 @@ from app.policy.domain.fields import DATA_STATUS_CHOICES, DATA_STATUS_PENDING, I
 from app.policy.domain.models import INTERPRETATION_WRITE_FIELDS, Interpretation
 from app.policy.repositories import interpretations as repo
 from app.policy.repositories import options as options_repo
+
+INTERPRETATION_LENGTHS = string_lengths(Interpretation)
 
 logger = logging.getLogger("policy.interpretations")
 
@@ -78,6 +81,16 @@ def _values(data: dict[str, str]) -> dict[str, str]:
     return values
 
 
+def _write_error(values: dict[str, str]) -> str | None:
+    """新建、编辑、导入共用：数据状态取值和列宽。"""
+
+    if message := _data_status_error(values):
+        return message
+    if reasons := overlong_reasons(values, INTERPRETATION_COLUMNS, INTERPRETATION_LENGTHS):
+        return "、".join(reasons)
+    return None
+
+
 def _data_status_error(values: dict[str, str]) -> str | None:
     """数据状态只允许固定两项，写入前统一校验。"""
 
@@ -132,7 +145,7 @@ async def create_interpretation(session: AsyncSession, actor: Actor, data: dict[
     values = _values(data)
     if not values["policy_title"]:
         raise ApiError("政策原文名称不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    if message := _data_status_error(values):
+    if message := _write_error(values):
         raise ApiError(message, code=ErrorCode.VALIDATION_ERROR, http_status=422)
     if await repo.get_by_relation_key(session, values["relation_key"]):
         raise ApiError("已存在相同的关联主键", code=ErrorCode.VERSION_CONFLICT, http_status=409)
@@ -177,7 +190,7 @@ async def update_interpretation(
     values = _values(payload)
     if not values["policy_title"]:
         raise ApiError("政策原文名称不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    if message := _data_status_error(values):
+    if message := _write_error(values):
         raise ApiError(message, code=ErrorCode.VALIDATION_ERROR, http_status=422)
     existing = await repo.get_by_relation_key(session, values["relation_key"])
     if existing and existing.id != row.id:
@@ -207,7 +220,7 @@ async def update_interpretation(
 def _import_skip_reason(values: dict[str, str], seen: set[str]) -> str | None:
     if not values["policy_title"]:
         return "政策原文名称为空"
-    if message := _data_status_error(values):
+    if message := _write_error(values):
         return message
     if values["relation_key"] in seen:
         return "关联主键已存在"
@@ -292,4 +305,4 @@ async def export_interpretations(session: AsyncSession, actor: Actor, filters: F
         actor=actor,
         extra={"count": len(rows)},
     )
-    return await build_workbook_async(INTERPRETATION_COLUMNS, rows, sheet_name="政策解读表")
+    return await build_workbook_async(INTERPRETATION_COLUMNS, rows, sheet_name="政策解读列表")

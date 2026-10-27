@@ -248,7 +248,7 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
 
 - `app/aitag/`（与 policy、crawler、scheduler 平级）。源数据是同一 MySQL 实例的 `bid_analyse.csys_policy_info` + `csys_policy_info_content`
   （正文，按 `content_id` 一对一），只读不回写。正文其实是整页网页源码，发给模型前由 `rules.page_text` 提取成看得见的文字（只剩约 6%），并去掉导航、页头页脚（语义标签，或 class / id 拆开后含 header、footer、nav、menu、crumb 等词的块，否定词开头的如 `no-breadNav-padd` 不算；去完把原文最长一段弄丢了、或导航块到结尾没闭合，就退回整页文字。400 页实测再少约四分之一、没丢正文句子），
-  不提取既浪费十几倍的输入费用，又和业务人员用 Excel 测试时的输入口径不一致。按采集日逐天读、日内按 `content_id` 分页；读取进度（采集日 + 正文ID）存在
+  不提取既浪费十几倍的输入费用，又和业务人员用 Excel 测试时的输入口径不一致。按采集日逐天读、日内按 `content_id` 分页，只读到昨天整天（源政策 ID 是哈希、不按入库先后排，当天读过一批后再入库的会漏）；读取进度（采集日 + 正文ID）存在
   `policy_ai_tasks` 的类型判断那一行，一批写完才前移，费用到上限没跑到的行下批重读
 - 类型判断、政策解读、市场机会是三个独立的调度任务（`app/aitag/domain/tasks.py`），各有模板、每批条数、正文长度和每日上限（`policy_ai_tasks` 一任务一行），
   一次执行只跑一个任务的一批。后两个按待办取数据，前一个没跑后一个就没有待办，彼此不串联
@@ -257,7 +257,7 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
 - 类型判断结果用系统政策类型码表核对（缺「类」字的旧写法补上能对上就算），写进基础标签：按 `source_content_id` 更新，
   人工在打标后改过的行不覆盖；失败和没对上码表的写进备注。含「信息化建设类」的标「是否解读 = 是」
 - 重新打标（`app/aitag/application/retag.py`，`POST /api/v1/policy/ai-tagging/retag`）：基础标签勾选后放回某个任务的待办，不当场调模型。
-  重新判断类型记 `type_retag_at`，类型判断下一批先按源政策 ID 重打这些、强制覆盖、不动读取进度；重新解读 / 补机会清掉完成时间。失败说明前缀在 `policy.domain.fields.AI_NOTE_*`，列表「打标状态」按它筛；表格里的「打标状态」列由 `policy.domain.fields.ai_status` 按同一套条件算，改筛选条件要一起改。源库标题是 `document.write(...)` 脚本残留的，`rules.policy_title` 取出其中文字写进基础标签和提示词，备注注明
+  重新判断类型记 `type_retag_at`，类型判断下一批先按源政策 ID 重打这些、强制覆盖（人填的穿透三列和人写的备注保留，只换 AI 写的几段；重打后内容和另一条基础标签相同的不写、出队并在备注注明，否则撞内容哈希整批回滚）、不动读取进度；重新解读 / 补机会清掉完成时间。失败说明前缀在 `policy.domain.fields.AI_NOTE_*`，列表「打标状态」按它筛；表格里的「打标状态」列由 `policy.domain.fields.ai_status` 按同一套条件算，改筛选条件要一起改。源库标题是 `document.write(...)` 脚本残留的，`rules.policy_title` 取出其中文字写进基础标签和提示词，备注注明
 - 模板和任务的约定在 `app/aitag/domain/contract.py`：每个任务给模板哪些列、要哪些输出字段，`check_template` 分必须改（errors）和提醒（warnings）。
   任务设置换模板时后端按它拦下；提示词模板编辑页按草稿实时提示（前端 `modules/ai/prompts/taskFit.ts` 同一套规则，两边改要一起改）
 - 「从数据库取测试数据」（`app/aitag/application/samples.py`，`GET /api/v1/policy/ai-tagging/samples`，权限 `policy.base_tags:list`）：按任务生成和正式打标一样的行，
@@ -319,6 +319,8 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
 - 上传用 `read_upload_within_limit(file, settings.import_max_bytes)`。
   先 `await file.read()` 再判断长度，体积上限形同虚设
 - 导出前用 `count_filtered` 校验 `export_max_rows`（默认 10 万），超限不执行查询
+- 导入、新建、编辑前用 `platform_common.columns.string_lengths(Model)` + `overlong_reasons` 按模型列宽校验，超长的写进校验说明 / 422；
+  不校验的话撞到库里是 DataError，用户只看到「服务器内部错误」。信源的爬虫状态只收 `CRAWLER_STATUS_CHOICES`，别的写法会让配置统计分省合计对不上
 - `build_workbook` 不经 openpyxl，由 `platform_common/xlsx_writer.py` 直接写只含文本的 xlsx（内联字符串，不会成公式）：
   2 万行信源 3.3 秒降到 0.5 秒。业务导出走它，不要为加样式改回逐格建对象
 - 自己拼 Excel 时逐行用 `platform_common.excel.append_text_row`，别直接 `sheet.append`：openpyxl 会把 `=` 开头的

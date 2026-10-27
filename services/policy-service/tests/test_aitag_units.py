@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
@@ -15,6 +15,7 @@ from platform_common.actors import Actor
 from platform_common.errors import ApiError, DependencyUnavailableError, VersionConflictError
 
 from app.aitag.application import pipeline, settings, tagging
+from app.aitag.domain import rules
 from app.aitag.repositories import source
 from app.aitag.repositories import tagging as repo
 from app.common import internal_clients
@@ -469,3 +470,64 @@ async def test_each_stage_records_its_own_cost(monkeypatch: pytest.MonkeyPatch, 
     await pipeline.ask(run_id, spend, prompt_id="p", rows=[], caller="c", run_field="interpret_run_id")
     stored = run_store[str(run_id)]
     assert (stored.interpret_cost, stored.cost, spend.run) == (Decimal("0.5"), Decimal("0.7"), Decimal("0.7"))
+
+
+async def test_type_step_reads_only_through_yesterday(
+    monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]
+) -> None:
+    """源政策 ID 是哈希，不按入库先后排：当天读过一批后再入库的会漏，所以只读到昨天整天，当天留到明天。"""
+
+    _use_config(monkeypatch, _config(cursor_date=None))
+    windows: list[tuple[Any, ...]] = []
+    monkeypatch.setattr(source, "read_batch", lambda *args: windows.append(args) or [])
+    await tagging.run_batch(uuid.uuid4(), "type")
+    yesterday = tagging.today() - timedelta(days=1)
+    assert windows == [(yesterday, "", 10, yesterday)]
+
+
+async def test_retag_keeps_manual_edits_and_does_not_duplicate_another_row(monkeypatch: pytest.MonkeyPatch) -> None:
+    """重打后内容和另一条一样（原来只差一句失败备注）：不写、出队、备注注明，整批不能因撞唯一约束回滚；
+    人填了穿透词的那条重打后穿透词还在。"""
+
+    from app.policy.domain.models import BASE_TAG_FIELDS, BaseTag, content_hash
+
+    def tag(content_id: str, remark: str, **manual: str) -> BaseTag:
+        values = rules.base_tag_values({"name": "政策甲"}, ["信息化建设类"] if not remark else [], remark) | manual
+        row = BaseTag(source_content_id=content_id, version=1, **values)
+        row.content_hash = content_hash(values, BASE_TAG_FIELDS)
+        row.type_retag_at = datetime.now(UTC)
+        return row
+
+    done = tag("c0", "")
+    failed = tag("c1", "AI 类型判断失败：限流")
+    manual = tag("c2", "AI 类型判断失败：限流；领导关注", is_penetrate="是", penetrate_words="数字政府")
+    rows_by_hash = {row.content_hash: row for row in (done, failed, manual)}
+
+    async def by_source(_session: Any, _ids: list[str]) -> dict[str, BaseTag]:
+        return {"c1": failed, "c2": manual}
+
+    async def by_hash(_session: Any, digest: str) -> BaseTag | None:
+        return rows_by_hash.get(digest)
+
+    async def task(_session: Any, _code: str, lock: bool = False) -> Any:
+        return SimpleNamespace(cursor_date=DAY, cursor_content_id="")
+
+    async def noop(*_: Any, **__: Any) -> None:
+        return None
+
+    monkeypatch.setattr(repo, "base_tags_by_source", by_source)
+    monkeypatch.setattr(repo, "base_tag_by_hash", by_hash)
+    monkeypatch.setattr(repo, "task", task)
+    monkeypatch.setattr(tagging, "enqueue_event", noop)
+    monkeypatch.setattr(tagging, "SessionLocal", FakeSession)
+    rows = [
+        {"content_id": "c1", "name": "政策甲", "collect_date": DAY},
+        {"content_id": "c2", "name": "政策甲", "collect_date": DAY},
+    ]
+    ok = {"error": "", "items": [{"政策类型名称": "信息化建设类"}]}
+    counts = await tagging._save_types(uuid.uuid4(), rows, [ok, ok], ["信息化建设类"], retag=True)
+
+    assert counts == {"processed": 2, "tagged": 1, "failed": 0, "duplicate": 1}
+    assert failed.type_retag_at is None and failed.remark == rules.DUPLICATE_NOTE and failed.policy_types == ""
+    assert manual.type_retag_at is None and manual.policy_types == "信息化建设类"
+    assert (manual.is_penetrate, manual.penetrate_words, manual.remark) == ("是", "数字政府", "领导关注")

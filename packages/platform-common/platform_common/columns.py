@@ -6,7 +6,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any
+
+from sqlalchemy import inspect
 
 
 @dataclass(frozen=True)
@@ -14,6 +18,23 @@ class ColumnSpec:
     field: str
     header: str
     searchable: bool = False
+
+
+def string_lengths(model: type) -> dict[str, int]:
+    """ORM 模型里每个定长文本列的上限。导入、新建前按它校验：超长的值撞到库里是 DataError，用户只看到 500。"""
+
+    mapper: Any = inspect(model)
+    return {column.key: length for column in mapper.columns if (length := getattr(column.type, "length", None))}
+
+
+def overlong_reasons(values: Mapping[str, str], columns: Sequence[ColumnSpec], lengths: Mapping[str, int]) -> list[str]:
+    """超过列宽的字段，按表头写成校验说明：「网站名称超过 255 字」。"""
+
+    return [
+        f"{spec.header}超过 {lengths[spec.field]} 字"
+        for spec in columns
+        if spec.field in lengths and len(values.get(spec.field) or "") > lengths[spec.field]
+    ]
 
 
 # 导出时统一追加的留痕列，六张业务表一致。

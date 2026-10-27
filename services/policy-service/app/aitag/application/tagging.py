@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import timedelta
 from http import HTTPStatus
 from typing import Any
 
@@ -90,7 +91,7 @@ async def _save_types(
 ) -> dict[str, int]:
     processed = rules.resume_point(results, NOT_RUN)
     done_rows, done_results = rows[:processed], results[:processed]
-    tagged = failed = 0
+    tagged = failed = duplicate = 0
     seen: set[str] = set()
     async with SessionLocal() as session:
         existing = await repo.base_tags_by_source(session, [str(row["content_id"]) for row in done_rows])
@@ -99,9 +100,17 @@ async def _save_types(
             failed += 1 if remark else 0
             values = rules.base_tag_values(row, types, remark)
             current = existing.get(str(row["content_id"]))
+            if current is not None and retag:
+                values = rules.keep_manual_edits(values, current)
             digest = content_hash(values, BASE_TAG_FIELDS)
-            # 手工导入过、或同一批里有一模一样的一行（各地转发同一文件），不重复建：内容哈希唯一。
-            if current is None and (digest in seen or await repo.base_tag_by_hash(session, digest)):
+            # 内容哈希唯一：手工导入过、同一批里有一模一样的一行（各地转发同一文件）就不重复建；
+            # 已有的行改完和另一行一样（原来只差一句失败备注）也不能写：
+            # 否则撞唯一约束整批回滚、队列还在，下次又白调一遍模型。
+            other = None if digest in seen else await repo.base_tag_by_hash(session, digest)
+            if digest in seen or (other is not None and other is not current):
+                if current is not None:
+                    _note_duplicate(current)
+                    duplicate += 1
                 continue
             seen.add(digest)
             tagged += 1 if _write_base_tag(session, current, row, values, force=retag) else 0
@@ -115,10 +124,21 @@ async def _save_types(
             event_type="policy.ai_tagging.tagged",
             actor=ROBOT,
             target_id=str(run_id),
-            extra={"rows": len(done_rows), "tagged": tagged, "failed": failed},
+            extra={"rows": len(done_rows), "tagged": tagged, "failed": failed, "duplicate": duplicate},
         )
         await session.commit()
-    return {"processed": processed, "tagged": tagged, "failed": failed}
+    return {"processed": processed, "tagged": tagged, "failed": failed, "duplicate": duplicate}
+
+
+def _note_duplicate(row: BaseTag) -> None:
+    """重打后和另一条内容一样：出队、备注注明，不动其他字段。"""
+
+    row.type_retag_at = None
+    row.remark = rules.note_duplicate(row.remark)
+    row.refresh_hash()
+    row.version += 1
+    row.tagged_at = row.updated_at = utcnow()
+    row.updated_by_id, row.updated_by_name = ROBOT.id, ROBOT.name
 
 
 def _cursor_text(day: Any, content_id: str) -> str:
@@ -133,8 +153,10 @@ async def _type_step(run_id: uuid.UUID, config: PolicyAiTask, spend: Spend) -> s
         rows, missing = await retag.read_queued(queued)
         prefix = f"重新判断类型 {len(queued)} 条" + (f"（{missing} 条源库里已找不到，已跳过）" if missing else "")
         return f"{prefix}：{await _tag(run_id, config, spend, rows, retag=True)}" if rows else prefix
+    # 只读到昨天整天：源政策 ID 是哈希，不按入库先后排，当天读过一批后再入库、ID 更小的就永远读不到了。
+    yesterday = today() - timedelta(days=1)
     rows = await anyio.to_thread.run_sync(
-        source.read_batch, config.cursor_date or today(), config.cursor_content_id, config.batch_size, today()
+        source.read_batch, config.cursor_date or yesterday, config.cursor_content_id, config.batch_size, yesterday
     )
     if not rows:
         return "没有新的源政策"
@@ -166,6 +188,8 @@ async def _tag(
         source_to=_cursor_text(last["collect_date"], str(last["content_id"])) if last else "",
     )
     note = f"读取 {len(rows)} 条，写入基础标签 {counts['tagged']} 条，其中失败或没对上码表 {counts['failed']} 条"
+    if counts["duplicate"]:
+        note += f"，{counts['duplicate']} 条重打后和已有记录内容相同、未重复写入"
     if counts["processed"] < len(rows):
         reason = status.get("error_message") or "任务提前停止"
         note += f"；{reason}，剩余 {len(rows) - counts['processed']} 条下批接着打"

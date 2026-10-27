@@ -7,6 +7,7 @@ from typing import Any
 
 from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
+from platform_common.columns import overlong_reasons, string_lengths
 from platform_common.errors import ApiError, DependencyUnavailableError, ErrorCode, NotFoundError, VersionConflictError
 from platform_common.excel import build_workbook_async, parse_sheet_async
 from platform_common.filters import Filters
@@ -26,6 +27,8 @@ from app.policy.domain.fields import BASE_TAG_COLUMNS, ai_status
 from app.policy.domain.models import BASE_TAG_FIELDS, BaseTag, content_hash
 from app.policy.repositories import base_tags as repo
 from app.policy.repositories import options as options_repo
+
+BASE_TAG_LENGTHS = string_lengths(BaseTag)
 
 logger = logging.getLogger("policy.base_tags")
 
@@ -95,10 +98,16 @@ async def get_base_tag(session: AsyncSession, item_id: uuid.UUID) -> dict[str, A
     return _to_out(row)
 
 
+def _require_lengths(values: dict[str, str]) -> None:
+    if reasons := overlong_reasons(values, BASE_TAG_COLUMNS, BASE_TAG_LENGTHS):
+        raise ApiError("、".join(reasons), code=ErrorCode.VALIDATION_ERROR, http_status=422)
+
+
 async def create_base_tag(session: AsyncSession, actor: Actor, data: dict[str, str]) -> dict[str, Any]:
     values = _values(data)
     if not values["policy_name"]:
         raise ApiError("政策名称不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    _require_lengths(values)
     digest = content_hash(values, BASE_TAG_FIELDS)
     if await repo.get_by_hash(session, digest):
         raise ApiError("已存在完全相同的政策基础标签", code=ErrorCode.VERSION_CONFLICT, http_status=409)
@@ -137,6 +146,7 @@ async def update_base_tag(
     values = _values({field: str(data.get(field, getattr(row, field) or "")) for field in BASE_TAG_FIELDS})
     if not values["policy_name"]:
         raise ApiError("政策名称不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    _require_lengths(values)
     digest = content_hash(values, BASE_TAG_FIELDS)
     existing = await repo.get_by_hash(session, digest)
     if existing and existing.id != row.id:
@@ -177,6 +187,7 @@ def _check_rows(staged: list[tuple[dict[str, str], str, str]], db_hashes: set[st
             reasons.append(missing_area_reason(carried_reason))
         if not values["policy_name"]:
             reasons.append("政策名称为空")
+        reasons.extend(overlong_reasons(values, BASE_TAG_COLUMNS, BASE_TAG_LENGTHS))
         if digest in db_hashes:
             reasons.append("内容已存在")
         if file_hashes[digest] > 1:
@@ -248,4 +259,4 @@ async def export_base_tags(session: AsyncSession, actor: Actor, filters: Filters
         actor=actor,
         extra={"count": len(rows)},
     )
-    return await build_workbook_async(BASE_TAG_COLUMNS, rows, sheet_name="政策基础信息表")
+    return await build_workbook_async(BASE_TAG_COLUMNS, rows, sheet_name="政策基础标签表")

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.audit_emit import enqueue_event
 from app.policy.domain.fields import CRAWLER_STATUS_ONLINE as ONLINE_STATUS
+from app.policy.domain.fields import crawler_status_error
 from app.policy.repositories import sources as repo
 
 # 审计里最多记这么多个网站编码，和接口单次勾选上限一致。
@@ -43,6 +44,8 @@ async def set_crawler_status(
     status = status.strip()
     if not status:
         raise ApiError("爬虫状态不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    if message := crawler_status_error(status):
+        raise ApiError(message, code=ErrorCode.VALIDATION_ERROR, http_status=422)
     rows = await repo.get_many_for_update(session, item_ids)
     if len(rows) != len(set(item_ids)):
         raise NotFoundError("部分信源已不存在，请刷新后重试")

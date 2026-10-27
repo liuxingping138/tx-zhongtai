@@ -9,6 +9,7 @@ from typing import Any
 
 from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
+from platform_common.columns import overlong_reasons, string_lengths
 from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionConflictError
 from platform_common.excel import build_workbook_async, parse_sheet_async
 from platform_common.filters import Filters
@@ -31,10 +32,12 @@ from app.policy.application.region import (
     site_code_prefix,
 )
 from app.policy.application.source_status import beijing_today, online_date_after
-from app.policy.domain.fields import SOURCE_COLUMNS
+from app.policy.domain.fields import SOURCE_COLUMNS, crawler_status_error
 from app.policy.domain.models import SOURCE_FIELDS, Source
 from app.policy.repositories import options as options_repo
 from app.policy.repositories import sources as repo
+
+SOURCE_LENGTHS = string_lengths(Source)
 
 # 与 policy_sources.site_code 的 String(16) 一致。
 SITE_CODE_MAX_LENGTH = 16
@@ -105,6 +108,16 @@ def _require_valid(values: dict[str, str]) -> None:
         raise ApiError("省市区编码不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     if normalize_online_date(values["online_date"]) is None:
         raise ApiError(ONLINE_DATE_ERROR, code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    if message := crawler_status_error(values["crawler_status"]):
+        raise ApiError(message, code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    if reasons := _overlong(values):
+        raise ApiError("、".join(reasons), code=ErrorCode.VALIDATION_ERROR, http_status=422)
+
+
+def _overlong(values: dict[str, str]) -> list[str]:
+    # 上线时间按入库的格式量（Excel 日期读出来带 00:00:00，归一后才是 10 位）。
+    normalized = {**values, "online_date": normalize_online_date(values["online_date"]) or values["online_date"]}
+    return overlong_reasons(normalized, SOURCE_COLUMNS, SOURCE_LENGTHS)
 
 
 def _has_any_area_code(item: dict[str, str]) -> bool:
@@ -280,6 +293,9 @@ def _check_rows(staged: list[_StagedSource], db_internal: set[str], db_site: set
             reasons.append("网站名称为空")
         if normalize_online_date(row.values["online_date"]) is None:
             reasons.append(ONLINE_DATE_ERROR)
+        if message := crawler_status_error(row.values["crawler_status"]):
+            reasons.append(message)
+        reasons.extend(_overlong(row.values))
         if row.internal_id in db_internal:
             reasons.append("内部唯一id已存在")
         if file_internal[row.internal_id] > 1:
@@ -381,4 +397,4 @@ async def export_sources(session: AsyncSession, actor: Actor, filters: Filters) 
         actor=actor,
         extra={"count": len(rows)},
     )
-    return await build_workbook_async(SOURCE_COLUMNS, rows, sheet_name="网站编码")
+    return await build_workbook_async(SOURCE_COLUMNS, rows, sheet_name="信源管理")
