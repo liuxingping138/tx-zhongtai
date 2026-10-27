@@ -187,21 +187,29 @@ test('import results persist and include updated counts alongside skipped rows',
   await expect(dialog).toHaveCount(0)
 })
 
-test('editing interpretation preserves generated policy UID and tenant identifier', async ({ page }) => {
+test('核对页按组编辑：政策唯一标识和租户标识原样提交', async ({ page }) => {
   let payload: Record<string, unknown> | undefined
-  await page.route('**/api/v1/policy/interpretations?**', route => respond(route, { items: [{ id: 'one', policy_title: '已有政策', policy_uid: 'custom-policy-uid', tenant_id: 'tenant-a', version: 2 }], total: 1 }))
+  const row = { id: 'one', policy_title: '已有政策', policy_uid: 'custom-policy-uid', tenant_id: 'tenant-a', data_status: '待验证', version: 2 }
   await page.route('**/api/v1/policy/interpretations/one', route => {
+    if (route.request().method() !== 'PATCH') return respond(route, row)
     payload = route.request().postDataJSON()
-    return respond(route, { id: 'one' })
+    return respond(route, { ...row, ...payload, version: 3 })
   })
-  await page.goto('/policy/interpretations')
-  await page.getByRole('button', { name: '编辑', exact: true }).click()
-  await expect(page.locator('.el-drawer').getByLabel('租户标识', { exact: true })).toHaveValue('tenant-a')
-  await page.getByRole('dialog').getByLabel('政策原文名称', { exact: true }).fill('修改后的政策')
-  await page.getByRole('button', { name: '保存', exact: true }).click()
-  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await page.route('**/api/v1/policy/interpretations/one/content', route =>
+    route.fulfill({ status: 404, json: { code: 'RESOURCE_NOT_FOUND', message: '这条不是从源库打标的，没有正文' } }))
+  await page.goto('/policy/interpretations/one')
+  // 一次只改一组：别的组的「编辑」在改完之前点不了。
+  const basic = page.getByRole('region', { name: '基本信息' })
+  await basic.getByRole('button', { name: '编辑', exact: true }).click()
+  await expect(page.getByRole('region', { name: '解读内容' }).getByRole('button', { name: '编辑', exact: true })).toBeDisabled()
+  await expect(basic.getByLabel('租户标识', { exact: true })).toHaveValue('tenant-a')
+  await basic.getByLabel('政策原文名称', { exact: true }).fill('修改后的政策')
+  await basic.getByRole('button', { name: '保存这一组' }).click()
+  await expect(page.getByText('已保存')).toBeVisible()
   expect(payload?.policy_uid).toBe('custom-policy-uid')
   expect(payload?.tenant_id).toBe('tenant-a')
+  expect(payload?.version).toBe(2)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('修改后的政策')
 })
 
 test('基础标签：按打标状态筛出来，勾选后重新打标，跳过的逐条说明原因', async ({ page }) => {
@@ -260,20 +268,24 @@ test('政策解读：勾选多条一次改成人工验证', async ({ page }) => 
   expect(payload).toEqual({ ids: ['i1', 'i2'], data_status: '人工验证' })
 })
 
-test('政策解读：在详情里读完直接标为人工验证', async ({ page }) => {
+test('政策解读核对页：读完标为人工验证，接着打开下一条', async ({ page }) => {
   let payload: Record<string, unknown> | undefined
-  await page.route('**/api/v1/policy/interpretations?**', route => respond(route, {
-    items: [
-      { id: 'i1', policy_title: '待核对的政策', data_status: '待验证', version: 1 },
-      { id: 'i2', policy_title: '核对过的政策', data_status: '人工验证', version: 1 },
-    ],
-    total: 2,
-  }))
+  const rows = [
+    { id: 'i1', policy_title: '待核对的政策', data_status: '待验证', version: 1 },
+    { id: 'i2', policy_title: '核对过的政策', data_status: '人工验证', version: 1 },
+  ]
+  await page.route('**/api/v1/policy/interpretations?**', (route) => {
+    const params = new URL(route.request().url()).searchParams
+    const size = Number(params.get('page_size') ?? 20)
+    const at = Number(params.get('page') ?? 1)
+    return respond(route, { items: rows.slice((at - 1) * size, at * size), total: rows.length, page: at, page_size: size })
+  })
+  for (const row of rows) await page.route(`**/api/v1/policy/interpretations/${row.id}`, route => respond(route, row))
   await page.route('**/api/v1/policy/interpretations/data-status', route => {
     payload = route.request().postDataJSON()
     return respond(route, { updated: 1, unchanged: 0 })
   })
-  // 正文点开详情才去源库取：手工录入的行说明没有正文，长正文先给前 8 段。
+  // 正文打开核对页才去源库取：手工录入的行说明没有正文。
   await page.route('**/api/v1/policy/interpretations/i2/content', route =>
     route.fulfill({ status: 404, json: { code: 'RESOURCE_NOT_FOUND', message: '这条不是从源库打标的，没有正文' } }))
   await page.route('**/api/v1/policy/interpretations/i1/content', route => respond(route, {
@@ -284,25 +296,23 @@ test('政策解读：在详情里读完直接标为人工验证', async ({ page 
     chars: 60,
   }))
   await page.goto('/policy/interpretations')
-  const detail = page.getByRole('dialog', { name: '政策解读详情' })
-  // 已经人工验证的不再给这个按钮。
-  await page.getByRole('row').filter({ hasText: '核对过的政策' }).getByRole('button', { name: '查看' }).click()
-  await expect(detail.getByRole('button', { name: '编辑记录' })).toBeVisible()
-  await expect(detail.getByRole('button', { name: '标为人工验证' })).toHaveCount(0)
-  await expect(detail.getByText('这条不是从源库打标的，没有正文')).toBeVisible()
-  await detail.getByRole('button', { name: '关闭', exact: true }).click()
-  await expect(detail).toBeHidden()
-  await page.getByRole('row').filter({ hasText: '待核对的政策' }).getByRole('button', { name: '查看' }).click()
-  const content = detail.getByRole('region', { name: '政策正文' })
-  await expect(content).toContainText('第 8 段正文')
-  await expect(content).not.toContainText('第 9 段正文')
-  await expect(content.getByRole('link', { name: '打开原网页' })).toHaveAttribute('href', 'https://example.gov.cn/p/1')
-  await content.getByRole('button', { name: '展开全文（还有 2 段）' }).click()
+  await page.getByRole('link', { name: '待核对的政策' }).click()
+  await expect(page).toHaveURL(/\/policy\/interpretations\/i1\?pos=0$/)
+  await expect(page.getByText('第 1 条，共 2 条（当前筛选）')).toBeVisible()
+  // 正文在右栏直接给全文，不用再点展开。
+  const content = page.getByRole('region', { name: '政策正文' })
   await expect(content).toContainText('第 10 段正文')
-  await detail.getByRole('button', { name: '标为人工验证' }).click()
-  await expect(page.getByText('已标为人工验证')).toBeVisible()
-  await expect(detail).toBeHidden()
+  await expect(content.getByRole('link', { name: '打开原网页' })).toHaveAttribute('href', 'https://example.gov.cn/p/1')
+  await page.getByRole('button', { name: '核对无误，标为人工验证' }).click()
+  await expect(page.getByText('已标为人工验证，打开了下一条')).toBeVisible()
   expect(payload).toEqual({ ids: ['i1'], data_status: '人工验证' })
+  await expect(page).toHaveURL(/\/policy\/interpretations\/i2\?pos=1$/)
+  // 已经人工验证的不再给这个按钮；最后一条没有下一条。
+  await expect(page.getByRole('button', { name: '核对无误，标为人工验证' })).toHaveCount(0)
+  await expect(page.getByText('这条不是从源库打标的，没有正文')).toBeVisible()
+  await expect(page.getByRole('button', { name: '下一条' })).toBeDisabled()
+  await page.getByRole('button', { name: '返回政策解读列表' }).click()
+  await expect(page).toHaveURL(/\/policy\/interpretations$/)
 })
 
 test('信源管理：列表显示网站编码和内部唯一id', async ({ page }) => {

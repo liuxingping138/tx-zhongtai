@@ -5,13 +5,13 @@ import { ElMessage } from 'element-plus'
 
 import { importAfterAreaResolve } from '@/api/codebook'
 import { requestRetag, type AiTaskCode } from '@/api/aiTagging'
-import { createBaseTag, getBaseTagContent, importBaseTags, listBaseTags, updateBaseTag, type BaseTagItem } from '@/api/policy'
+import { createBaseTag, importBaseTags, listBaseTags, updateBaseTag, type BaseTagItem } from '@/api/policy'
 import { errorMessage } from '@/api/errors'
 import { reportImportResult, runExcelImport } from '@/api/excelImport'
 import AuditLogButton from '@/components/AuditLogButton.vue'
 import BatchChoiceDialog from '@/components/BatchChoiceDialog.vue'
 import BusinessTable from '@/components/BusinessTable.vue'
-import PolicyContent from '../shared/PolicyContent.vue'
+import { reviewQuery } from '../shared/reviewQuery'
 import ColumnPicker from '@/components/ColumnPicker.vue'
 import ExportButton from '@/components/ExportButton.vue'
 import FilterBar from '@/components/FilterBar.vue'
@@ -60,6 +60,11 @@ const { columns, defaults, selected } = useDetailColumns(TABLE_COLUMNS, EDITOR_G
 
 async function refresh() {
   await Promise.all([load(), filters.load()])
+}
+// 标题和「查看」进核对页：带上已生效的筛选和这条的位置，那边能翻上一条、下一条。
+function detailRoute(row: BaseTagItem, index: number) {
+  const position = (query.page - 1) * query.page_size + index
+  return { name: 'policy-base-tag-review', params: { id: row.id }, query: reviewQuery(listQuery.applied, position, query.page_size) }
 }
 
 // 打失败的、或模板改好后想重打的：按「打标状态」筛出来，勾选后放回某个任务的待办。
@@ -224,21 +229,13 @@ onMounted(() => {
         :selected="selected"
         :summary-keys="SUMMARY_KEYS"
         title-key="policy_name"
-        detail-title="政策基础标签详情"
+        :detail-route="detailRoute"
         :can-write="canWrite"
         :loading="loading"
         :filtered="resultFiltered"
         @reset="listQuery.resetFilters"
-        @edit="editor.openEdit"
         @selection-change="checked = $event"
-      >
-        <template #detail-extra="{ row }">
-          <PolicyContent
-            :key="row.id"
-            :load="() => getBaseTagContent(row.id)"
-          />
-        </template>
-      </BusinessTable>
+      />
     </ListPage>
     <BatchChoiceDialog
       v-model="retagOpen"

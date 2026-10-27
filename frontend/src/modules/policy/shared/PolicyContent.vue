@@ -7,10 +7,10 @@ import type { PolicyContent } from '@/api/policy'
 import { PREVIEW_PARAGRAPHS, paragraphs, shownParagraphs } from './policyContent'
 
 /**
- * 详情抽屉里的「政策正文」：打开时才按源政策 ID 去源库取，不进平台库。
- * 用在基础标签和解读的 `detail-extra` 槽位，父组件按行 ID 加 key，换一条就重新取。
+ * 「政策正文」：打开时才按源政策 ID 去源库取，不进平台库。父组件按记录 ID 加 key，换一条就重新取。
+ * panel 用在核对页右栏：直接给全文（外面的面板负责滚动），表头右侧的 `actions` 放「收起」。
  */
-const props = defineProps<{ load: () => Promise<PolicyContent> }>()
+const props = defineProps<{ load: () => Promise<PolicyContent>; panel?: boolean }>()
 
 const content = ref<PolicyContent | null>(null)
 const parts = ref<string[]>([])
@@ -18,7 +18,7 @@ const loading = ref(false)
 const error = ref('')
 // 404 是「这条没有正文」（手工录入、源库已删），不是故障：不给重试。
 const missing = ref(false)
-const expanded = ref(false)
+const expanded = ref(Boolean(props.panel))
 let ticket = 0
 
 const shown = computed(() => shownParagraphs(parts.value, expanded.value))
@@ -51,6 +51,7 @@ onMounted(fetchContent)
 <template>
   <section
     class="policy-content"
+    :class="{ 'policy-content--panel': panel }"
     aria-label="政策正文"
   >
     <header class="policy-content__head">
@@ -66,6 +67,7 @@ onMounted(fetchContent)
         rel="noopener noreferrer"
         class="policy-content__link"
       >打开原网页</a>
+      <slot name="actions" />
     </header>
     <p
       v-if="loading"
@@ -101,7 +103,7 @@ onMounted(fetchContent)
         {{ part }}
       </p>
       <el-button
-        v-if="hidden > 0"
+        v-if="hidden > 0 && !panel"
         link
         type="primary"
         class="policy-content__toggle"
@@ -115,6 +117,8 @@ onMounted(fetchContent)
 
 <style scoped>
 .policy-content { margin-top: 28px; }
+.policy-content--panel { margin-top: 0; }
+.policy-content--panel .policy-content__head { position: sticky; top: 0; z-index: 1; padding-top: 2px; background: var(--zt-panel); }
 .policy-content__head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--zt-border); }
 .policy-content__head h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--zt-ink-900); }
 .policy-content__meta { color: var(--zt-ink-500); font-size: 12px; }

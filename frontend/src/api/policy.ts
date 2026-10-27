@@ -162,6 +162,10 @@ export function createBaseTag(body: Partial<BaseTagItem>): Promise<BaseTagItem> 
   return request(http.post('/policy/base-tags', body))
 }
 
+export function getBaseTag(id: string): Promise<BaseTagItem> {
+  return request(http.get(`/policy/base-tags/${id}`))
+}
+
 export function updateBaseTag(id: string, body: Partial<BaseTagItem> & { version: number }): Promise<BaseTagItem> {
   return request(http.patch(`/policy/base-tags/${id}`, body))
 }
@@ -190,6 +194,10 @@ export function listInterpretations(params: {
 
 export function createInterpretation(body: Partial<InterpretationItem>): Promise<InterpretationItem> {
   return request(http.post('/policy/interpretations', body))
+}
+
+export function getInterpretation(id: string): Promise<InterpretationItem> {
+  return request(http.get(`/policy/interpretations/${id}`))
 }
 
 export function updateInterpretation(

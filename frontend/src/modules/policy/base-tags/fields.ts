@@ -29,6 +29,9 @@ export const TABLE_COLUMNS: DataColumn[] = [
 /** 窄屏卡片的摘要字段，也是列设置早期「精简默认列」的识别依据。 */
 export const SUMMARY_KEYS = ['policy_name', 'province_name', 'policy_types', 'issued_at', 'need_interpret']
 
+/** 列表的筛选字段，和列表页 query 里的一致；核对页靠它从地址栏带上筛选，翻上一条、下一条。 */
+export const FILTER_KEYS = ['policy_name', 'province_name', 'policy_types', 'is_penetrate', 'need_interpret', 'ai_status']
+
 export const EDITOR_GROUPS: EditorGroup[] = [
   {
     title: '政策基础信息',

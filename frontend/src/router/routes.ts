@@ -118,10 +118,23 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '政策基础标签表', resource: 'policy.base_tags' },
       },
       {
+        // 核对页：从列表带着筛选和位置进来，可翻上一条、下一条。
+        path: 'policy/base-tags/:id',
+        name: 'policy-base-tag-review',
+        component: () => import('@/modules/policy/base-tags/BaseTagReview.vue'),
+        meta: { title: '政策基础标签详情', resource: 'policy.base_tags', menuPath: '/policy/base-tags' },
+      },
+      {
         path: 'policy/interpretations',
         name: 'policy-interpretations',
         component: () => import('@/modules/policy/interpretations/InterpretationList.vue'),
         meta: { title: '政策解读列表', resource: 'policy.interpretations' },
+      },
+      {
+        path: 'policy/interpretations/:id',
+        name: 'policy-interpretation-review',
+        component: () => import('@/modules/policy/interpretations/InterpretationReview.vue'),
+        meta: { title: '政策解读详情', resource: 'policy.interpretations', menuPath: '/policy/interpretations' },
       },
       {
         path: 'ai/prompts',

@@ -1,5 +1,6 @@
 <script setup lang="ts" generic="T extends { id: string }">
 import { computed, ref, shallowRef, onMounted, onBeforeUnmount, type ShallowRef } from 'vue'
+import type { RouteLocationRaw } from 'vue-router'
 import { useNarrowViewport } from '@/composables/useNarrowViewport'
 import { layoutDataColumns } from './dataColumnLayout'
 import type { DataColumn } from './dataColumns'
@@ -13,6 +14,8 @@ const props = defineProps<{
   canWrite: boolean; loading: boolean; filtered: boolean; detailTitle?: string;
   /** 编辑表单的分组：详情按它分类展示，表单里没有的列归到「系统信息」。 */
   groups?: readonly EditorGroup[];
+  /** 有独立详情页的模块：标题和「查看」跳过去（编辑也在那里做），不再开抽屉。index 是行在当前页的位置。 */
+  detailRoute?: (row: T, index: number) => RouteLocationRaw;
   /** 首列加勾选框，用于批量操作；只勾当前页。 */
   selectable?: boolean;
 }>()
@@ -30,7 +33,7 @@ const summaryColumns = computed(() => (props.summaryKeys ?? props.selected)
   .slice(0, 3))
 const root = ref<HTMLElement>()
 const availableWidth = ref(0)
-const actionWidth = computed(() => props.canWrite ? 116 : 72)
+const actionWidth = computed(() => props.canWrite && !props.detailRoute ? 116 : 72)
 const fixedWidth = computed(() => actionWidth.value + (props.selectable ? SELECTION_WIDTH : 0))
 const laidOut = computed(() => layoutDataColumns(displayed.value, availableWidth.value - 2, fixedWidth.value))
 const totalWidth = computed(() => laidOut.value.reduce((sum, col) => sum + col.width, fixedWidth.value) + 2)
@@ -96,9 +99,18 @@ function closeDetail() { detailOpen.value = false }
             :title="col.fullLabel || col.label"
           >{{ col.label }}</span>
         </template>
-        <template #default="{ row }">
+        <template #default="{ row, $index }">
           <template v-if="col.prop === titleKey">
+            <RouterLink
+              v-if="detailRoute"
+              class="record-title"
+              :to="detailRoute(row, $index)"
+              :title="text(row, col)"
+            >
+              {{ text(row, col) }}
+            </RouterLink>
             <button
+              v-else
               type="button"
               class="record-title"
               :title="text(row, col)"
@@ -131,8 +143,16 @@ function closeDetail() { detailOpen.value = false }
         :width="actionWidth"
         class-name="table-action"
       >
-        <template #default="{ row }">
+        <template #default="{ row, $index }">
+          <RouterLink
+            v-if="detailRoute"
+            class="table-link"
+            :to="detailRoute(row, $index)"
+          >
+            查看
+          </RouterLink>
           <el-button
+            v-else
             link
             type="primary"
             @click="open(row)"
@@ -140,7 +160,7 @@ function closeDetail() { detailOpen.value = false }
             查看
           </el-button>
           <el-button
-            v-if="canWrite"
+            v-if="canWrite && !detailRoute"
             link
             type="primary"
             @click="emit('edit', row)"
@@ -162,11 +182,19 @@ function closeDetail() { detailOpen.value = false }
         @reset="emit('reset')"
       />
       <article
-        v-for="row in items"
+        v-for="(row, index) in items"
         :key="row.id"
         class="mobile-record"
       >
+        <RouterLink
+          v-if="detailRoute"
+          class="record-title"
+          :to="detailRoute(row, index)"
+        >
+          {{ value(row, titleKey) || '未命名记录' }}
+        </RouterLink>
         <button
+          v-else
           type="button"
           class="record-title"
           @click="open(row)"
@@ -184,14 +212,22 @@ function closeDetail() { detailOpen.value = false }
           </template>
         </dl>
         <div class="mobile-record__actions">
+          <RouterLink
+            v-if="detailRoute"
+            class="table-link"
+            :to="detailRoute(row, index)"
+          >
+            查看详情
+          </RouterLink>
           <el-button
+            v-else
             text
             type="primary"
             @click="open(row)"
           >
             查看详情
           </el-button><el-button
-            v-if="canWrite"
+            v-if="canWrite && !detailRoute"
             text
             type="primary"
             @click="emit('edit', row)"
@@ -255,6 +291,9 @@ function closeDetail() { detailOpen.value = false }
 
 .record-title { padding: 0; border: 0; font: inherit; font-weight: 500; line-height: 22px; background: none; color: var(--zt-ink-900); text-align: left; cursor: pointer; display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .record-title:hover { color: var(--zt-blue-600); text-decoration: underline; }
+a.record-title { text-decoration: none; }
+.table-link { color: var(--zt-blue-600); font-size: 14px; text-decoration: none; }
+.table-link:hover { text-decoration: underline; }
 .record-boolean { padding: 2px 9px; background: var(--zt-soft); border: 1px solid var(--zt-border); border-radius: 4px; }
 a { color: var(--zt-blue-600); }
 

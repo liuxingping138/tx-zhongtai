@@ -5,7 +5,6 @@ import { ElMessage } from 'element-plus'
 
 import {
   createInterpretation,
-  getInterpretationContent,
   importInterpretations,
   listInterpretations,
   setInterpretationsDataStatus,
@@ -18,7 +17,7 @@ import AuditLogButton from '@/components/AuditLogButton.vue'
 import BatchChoiceDialog from '@/components/BatchChoiceDialog.vue'
 import SyncScenariosButton from './SyncScenariosButton.vue'
 import BusinessTable from '@/components/BusinessTable.vue'
-import PolicyContent from '../shared/PolicyContent.vue'
+import { reviewQuery } from '../shared/reviewQuery'
 import ColumnPicker from '@/components/ColumnPicker.vue'
 import ExportButton from '@/components/ExportButton.vue'
 import FilterBar from '@/components/FilterBar.vue'
@@ -85,20 +84,10 @@ async function afterStatus() {
   selection.clear()
   await refresh()
 }
-// 在详情里读完就能标：不用关掉抽屉再回列表勾选。
-const verifying = ref(false)
-async function markVerified(row: InterpretationItem, close: () => void) {
-  verifying.value = true
-  try {
-    await setInterpretationsDataStatus([row.id], '人工验证')
-    ElMessage.success('已标为人工验证')
-    close()
-    await refresh()
-  } catch (error) {
-    ElMessage.error(errorMessage(error, '没能改成人工验证，请重试'))
-  } finally {
-    verifying.value = false
-  }
+// 标题和「查看」进核对页：带上已生效的筛选和这条的位置，那边能翻上一条、下一条，读完就标人工验证。
+function detailRoute(row: InterpretationItem, index: number) {
+  const position = (query.page - 1) * query.page_size + index
+  return { name: 'policy-interpretation-review', params: { id: row.id }, query: reviewQuery(listQuery.applied, position, query.page_size) }
 }
 
 const editor = useRecordEditor<InterpretationItem>({
@@ -267,30 +256,13 @@ onMounted(() => {
         :selected="selected"
         :summary-keys="SUMMARY_KEYS"
         title-key="policy_title"
-        detail-title="政策解读详情"
+        :detail-route="detailRoute"
         :can-write="canWrite"
         :loading="loading"
         :filtered="resultFiltered"
         @reset="listQuery.resetFilters"
-        @edit="editor.openEdit"
         @selection-change="checked = $event"
-      >
-        <template #detail-extra="{ row }">
-          <PolicyContent
-            :key="row.id"
-            :load="() => getInterpretationContent(row.id)"
-          />
-        </template>
-        <template #detail-actions="{ row, close }">
-          <el-button
-            v-if="canWrite && row.data_status !== '人工验证'"
-            :loading="verifying"
-            @click="markVerified(row, close)"
-          >
-            标为人工验证
-          </el-button>
-        </template>
-      </BusinessTable>
+      />
     </ListPage>
     <BatchChoiceDialog
       v-model="statusOpen"

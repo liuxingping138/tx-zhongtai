@@ -22,7 +22,7 @@
 | 筛选项候选值 | `composables/useFilterOptions.ts` | `v-bind="filters.bind('字段')"`；候选少的字段整份预发、本地过滤，候选多的自动转服务端搜索。不要再自己 reactive 一份 options |
 | 查询与 URL 恢复 | `composables/useListQuery.ts` | `useListQuery(query, load, 私有字段?)`，人名等个人信息放私有字段，不写 URL；FilterBar 直接接 `@search="listQuery.search"`（回第一页、生效草稿、加载）和 `@reset="listQuery.resetFilters"`（筛选恢复初始值，每页条数不变）。状态卡片这类单列切换用 `replaceApplied` + `toggleValue` |
 | 列表加载 | `composables/useListLoader.ts` | 传 `requested/commitPage`（来自 useListQuery）、`fetch`、`errorText`；返回 items/total/loading/loadError/resultFiltered/load。只采用最后一次请求的结果，不要在页面里再写请求序号 |
-| 业务表格、详情 | `components/BusinessTable.vue` | items、完整 columns、selected、titleKey、可选 summaryKeys、canWrite/loading/filtered，edit/reset；传 `groups`（即 EDITOR_GROUPS）后详情按表单分组分类展示。详情抽屉在字段后追加内容用 `#detail-extra`，底部动作用 `#detail-actions="{ row, close }"`，不要另造平行抽屉。批量操作传 `selectable`，用 `useTableSelection`：`:ref="selection.bindTable"`、`@selection-change="checked = $event"`，操作完 `selection.clear()`；选一个选项的批量操作用 `BatchChoiceDialog`（选项带后果说明，跳过的原因弹窗列出） |
+| 业务表格、详情 | `components/BusinessTable.vue` | items、完整 columns、selected、titleKey、可选 summaryKeys、canWrite/loading/filtered，edit/reset；传 `groups`（即 EDITOR_GROUPS）后详情按表单分组分类展示；有独立详情页的模块传 `detailRoute(row, index)`，标题和「查看」改成链接跳过去，行尾不再放「编辑」。详情抽屉在字段后追加内容用 `#detail-extra`，底部动作用 `#detail-actions="{ row, close }"`，不要另造平行抽屉。批量操作传 `selectable`，用 `useTableSelection`：`:ref="selection.bindTable"`、`@selection-change="checked = $event"`，操作完 `selection.clear()`；选一个选项的批量操作用 `BatchChoiceDialog`（选项带后果说明，跳过的原因弹窗列出） |
 | 分类详情 | `components/DetailSections.vue`、`DetailFieldTable.vue`、`detailSections.ts` | `buildDetailSections(columns, groups)` 按表单分组排、其余列归「系统信息」，`detailRows` 决定两个一行还是独占一行（有单测）；组标题右侧用 `#actions`，某一组换成编辑表单用 `#body` |
 | 表格列 + 编辑字段合成完整列 | `composables/useDetailColumns.ts` | `useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)` 返回 `columns/defaults/selected`：编辑表单里有、表格里没有的字段追加到列设置和详情，ColumnPicker 与 BusinessTable 共用这一份 |
 | 显示列与浏览器记忆 | `components/ColumnPicker.vue`、`components/columnSelection.ts` | 与表格共享 selected，传完整 columns 和 defaults。按用户和 route.path 存字段键（`zt:columns:v2:…`），同时记住当时页面有哪些列，之后新加的列默认显示，不会被当成用户隐藏的列。新模块不传 legacyDefaults，六个老业务表留着它只为迁移旧偏好 |
@@ -57,7 +57,7 @@
    - `TABLE_COLUMNS: DataColumn[]`：按业务字段顺序的表格列，宽度按下文「列宽配置」；
    - `SUMMARY_KEYS`：767px 以下摘要卡片显示的字段（最多 3 个），手机不验收，照常给就行；
    - `EDITOR_GROUPS: EditorGroup[]`：编辑抽屉的字段分组，必填、长度、提示都写在这里。
-3. 页面组件按 `BaseTagList.vue` 的结构组装：`useListQuery` + `useListLoader` 负责查询与加载，`useFilterOptions` 提供筛选候选，`useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)` 给出列设置与表格共用的完整列，`useRecordEditor` + `RecordEditorDrawer` 负责新增编辑，`useExcelExport` + `ExportButton`、`ImportButton`、`AuditLogButton` 组成工具栏。页面只写本模块的接口调用、筛选字段和导入说明，不复制公共组件内部布局。政策两张表的详情里用 `modules/policy/shared/PolicyContent.vue` 放在 `#detail-extra` 槽位显示正文（传 `load`，按行 ID 加 `key`），段落和折叠规则在 `policyContent.ts`（有单测）。
+3. 页面组件按 `BaseTagList.vue` 的结构组装：`useListQuery` + `useListLoader` 负责查询与加载，`useFilterOptions` 提供筛选候选，`useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)` 给出列设置与表格共用的完整列，`useRecordEditor` + `RecordEditorDrawer` 负责新增编辑，`useExcelExport` + `ExportButton`、`ImportButton`、`AuditLogButton` 组成工具栏。页面只写本模块的接口调用、筛选字段和导入说明，不复制公共组件内部布局。政策两张表不开详情抽屉，查看和编辑在核对页，见下文「核对页」。
 4. 按第 1 节接入导航。
 5. 按第 5 节验收，并确认用户访问的实际服务已更新。
 
@@ -135,6 +135,15 @@ frontend 目录运行 `pnpm run type-check`、`pnpm run lint`、`pnpm run test`�
 - 卡片底部一行写统计口径（如「7 天内有新数据入库」，天数取接口返回的阈值）
 - 同步时间放在概览标题区；同步失败、意外中断、运行中、首次未同步、超时未更新用独立的提示条。概览可收起；概览请求失败只在概览区显示重试，不影响明细
 - `ListPage` 检测到 `summary` 插槽后解除一屏上限，结果高度为 `clamp(440px, calc(100dvh - 220px), 880px)`；页面自然纵向滚动，表格保留 `ScrollPort` 双向滚动
+
+## 核对页（政策基础标签、政策解读）
+
+`modules/policy/shared/`：`PolicyReviewPage.vue` 是页面骨架（概要、按分组的字段表、右栏正文），`useReviewRecord.ts` 管取记录、翻条和按组编辑，两张表的 `BaseTagReview.vue`、`InterpretationReview.vue` 只给字段、概要字段、状态标签和右上角动作。
+
+- 列表经 BusinessTable 的 `detailRoute` 跳过来，地址带上已生效的筛选、这条在结果里的位置 `pos` 和列表每页条数 `ps`（`reviewQuery.ts`，有单测）。上一条、下一条用列表接口按位置取一条（`page=pos+1&page_size=1`），所以两张表的列表排序最后按 ID 兜底，顺序才固定。没有 `pos`（直接打开链接）就不显示翻条
+- 按组编辑：组标题右侧「编辑」把这一组换成 `GroupedFields`（`bare`），保存时整张表单连同版本号提交，和列表页的编辑抽屉一致；409 保留草稿并提示。一次只能改一组，改了没保存就翻条、离开都走 `useUnsavedForm` 的确认
+- 正文用 `PolicyContent` 的 `panel` 模式：直接给全文，表头右侧放「收起」；收起状态存在本浏览器
+- 政策解读「核对无误，标为人工验证」后调 `advance()`：同一位置换成了别的记录（这条出了筛选）就打开它，否则往后一条，最后一条就停在原页
 
 ## 任务调度
 

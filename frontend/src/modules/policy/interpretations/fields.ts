@@ -45,6 +45,9 @@ export const TABLE_COLUMNS: DataColumn[] = [
 /** 窄屏卡片的摘要字段，也是列设置早期「精简默认列」的识别依据。 */
 export const SUMMARY_KEYS = ['policy_title', 'opportunity_type', 'target_customers', 'has_subsidy']
 
+/** 列表的筛选字段，和列表页 query 里的一致；核对页靠它从地址栏带上筛选，翻上一条、下一条。 */
+export const FILTER_KEYS = ['policy_title', 'industry_l1', 'scenario_l1_name', 'opportunity_type', 'is_new_scenario', 'new_scenario_level', 'info_level', 'data_status']
+
 // 分组按核对的顺序：基本信息，行业与场景（同级的行业和场景并排，方便对照层级），AI 写的解读内容，最后是机会与补贴。
 // 新增、编辑和详情用同一套分组；表单里没有的政策唯一标识、关联主键和入库更新记录，详情里归到「系统信息」。
 export const EDITOR_GROUPS: EditorGroup[] = [
