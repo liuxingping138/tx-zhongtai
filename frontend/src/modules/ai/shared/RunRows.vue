@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 
 import type { RunRows, RunRowStatus } from '@/api/ai'
+import { itemSummary, rowLayout } from './runRowLayout'
 
 /**
  * 任务的逐行结果：这一行用到的输入、解析出的字段，失败的写原因，格式不对的附上模型原话。
@@ -17,6 +18,8 @@ const summary = computed(() => {
   const scope = failedOnly.value ? `失败 ${rows.matched} 行` : `共 ${rows.total} 行`
   return rows.matched > rows.items.length ? `${scope}，这里列前 ${rows.items.length} 行` : scope
 })
+// 一条政策展开成好几个场景时，一样的字段列一次、每个场景折叠成一行，不然第一行就要滚好几屏。
+const layouts = computed(() => new Map((props.rows?.items ?? []).map(row => [row.row, rowLayout(row.items, props.rows?.fields ?? [])])))
 </script>
 
 <template>
@@ -54,7 +57,7 @@ const summary = computed(() => {
       >
         <div class="run-row__head">
           <span class="run-row__no">第 {{ row.row }} 行</span>
-          <span class="run-row__status">{{ STATUS[row.status] }}</span>
+          <span class="run-row__status">{{ row.items.length > 1 ? `${STATUS[row.status]} · 解析出 ${row.items.length} 条` : STATUS[row.status] }}</span>
         </div>
         <dl
           v-if="rows.columns.length"
@@ -68,8 +71,38 @@ const summary = computed(() => {
             <dd>{{ row.inputs[column] || '—' }}</dd>
           </template>
         </dl>
+        <template v-if="row.items.length > 1">
+          <dl
+            v-if="layouts.get(row.row)?.shared.length"
+            class="run-row__fields"
+          >
+            <template
+              v-for="field in layouts.get(row.row)?.shared"
+              :key="field"
+            >
+              <dt>{{ field }}</dt>
+              <dd>{{ row.items[0]?.[field] || '—' }}</dd>
+            </template>
+          </dl>
+          <details
+            v-for="(item, index) in row.items"
+            :key="index"
+            class="run-row__item"
+          >
+            <summary>{{ index + 1 }}. {{ itemSummary(item, layouts.get(row.row)?.own ?? []) }}</summary>
+            <dl class="run-row__fields">
+              <template
+                v-for="field in layouts.get(row.row)?.own"
+                :key="field"
+              >
+                <dt>{{ field }}</dt>
+                <dd>{{ item[field] || '—' }}</dd>
+              </template>
+            </dl>
+          </details>
+        </template>
         <dl
-          v-for="(item, index) in row.items"
+          v-for="(item, index) in row.items.length > 1 ? [] : row.items"
           :key="index"
           class="run-row__fields"
         >
@@ -119,6 +152,10 @@ const summary = computed(() => {
 .run-row__inputs { padding-bottom: 6px; color: var(--zt-ink-500); font-size: 12px; }
 .run-row__inputs dd { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .run-row__fields { padding-top: 6px; border-top: 1px dashed var(--zt-border); color: var(--zt-ink-900); }
+.run-row__item { border-top: 1px dashed var(--zt-border); }
+.run-row__item summary { padding: 6px 0; color: var(--zt-ink-900); cursor: pointer; overflow-wrap: anywhere; }
+.run-row__item summary:hover { color: var(--zt-blue-600); }
+.run-row__item .run-row__fields { padding: 0 0 8px 16px; border-top: 0; }
 .run-row__error { margin: 6px 0 0; color: var(--el-color-danger); font-size: 12px; overflow-wrap: anywhere; }
 .run-row__answer { margin: 6px 0 0; padding: 6px 8px; border-radius: 4px; background: var(--zt-soft); color: var(--zt-ink-700); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>

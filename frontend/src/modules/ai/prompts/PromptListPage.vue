@@ -79,6 +79,11 @@ function create(): void {
     </h1>
     <div class="ai-panel prompt-list__panel">
       <div class="prompt-list__toolbar">
+        <span
+          v-if="categories.length > 1"
+          class="prompt-list__label"
+          aria-hidden="true"
+        >类型</span>
         <el-radio-group
           v-if="categories.length > 1"
           v-model="category"
@@ -95,6 +100,10 @@ function create(): void {
             {{ item.name }}
           </el-radio-button>
         </el-radio-group>
+        <span
+          class="prompt-list__label"
+          aria-hidden="true"
+        >上线状态</span>
         <el-radio-group
           v-model="status"
           aria-label="按上线状态查看"
@@ -143,7 +152,7 @@ function create(): void {
       >
         <el-table-column
           label="模板名称"
-          min-width="220"
+          min-width="190"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -159,11 +168,11 @@ function create(): void {
         <el-table-column
           prop="category_name"
           label="类型"
-          width="80"
+          width="70"
         />
         <el-table-column
           label="上线状态"
-          min-width="210"
+          min-width="200"
         >
           <template #default="{ row }">
             <span
@@ -175,7 +184,8 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="样本试跑"
-          min-width="220"
+          min-width="180"
+          show-overflow-tooltip
         >
           <template #default="{ row }">
             <span
@@ -187,7 +197,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="输出字段"
-          width="90"
+          width="80"
           align="right"
         >
           <template #default="{ row }">
@@ -196,7 +206,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="模型"
-          min-width="180"
+          min-width="150"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -225,6 +235,9 @@ function create(): void {
 .prompt-list__toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; padding: 12px 16px; border-bottom: 1px solid var(--zt-border); }
 .prompt-list__toolbar .el-button { margin: 0; }
 .prompt-list__search { width: 168px; }
+/* 两组切换前的小标签；和后面的按钮组挨着，组与组之间留开。 */
+.prompt-list__label { margin-right: -4px; color: var(--zt-ink-500); font-size: 13px; }
+.prompt-list__label + .el-radio-group + .prompt-list__label { margin-left: 8px; }
 .prompt-list__spacer { flex: 1; }
 .prompt-list__count { margin-left: 6px; color: var(--zt-ink-500); font-size: 12px; font-variant-numeric: tabular-nums; }
 .prompt-list :deep(.is-active) .prompt-list__count { color: inherit; opacity: .8; }

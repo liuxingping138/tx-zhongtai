@@ -32,7 +32,8 @@ export function sampleState(template: Pick<PromptTemplate, 'sample' | 'excel_nam
     return { kind: 'failed', text: `${sample.total_count} 条里 ${sample.failed_count} 条失败${format}`, detail: when }
   }
   if (sample.status !== 'done') return { kind: 'stopped', text: `没跑完（${sample.done_count}/${sample.total_count}）`, detail: when }
-  return { kind: 'passed', text: `${sample.total_count} 条全部成功`, detail: when }
+  // 只说明每条都解析出了字段，内容对不对还要人看。
+  return { kind: 'passed', text: `${sample.total_count} 条全部解析成功`, detail: when }
 }
 
 export type StepKey = 'write' | 'test' | 'release'
@@ -40,7 +41,8 @@ export type StepKey = 'write' | 'test' | 'release'
 export type StepTone = 'done' | 'warn' | 'current' | 'todo'
 export interface FlowStep { key: StepKey; title: string; tone: StepTone; text: string }
 
-interface StepState { text: string; finished: boolean; warn: boolean }
+/** optional：没做完也不算「下一步」，照实写状态、不高亮、不催 */
+interface StepState { text: string; finished: boolean; warn: boolean; optional?: boolean }
 
 function writeStep(template: PromptTemplate | null, dirty: boolean): StepState {
   if (!template) return { text: '写好提示词后保存', finished: false, warn: false }
@@ -51,12 +53,12 @@ function writeStep(template: PromptTemplate | null, dirty: boolean): StepState {
 function testStep(template: PromptTemplate | null): StepState {
   if (!template) return { text: '保存后用测试样本试跑', finished: false, warn: false }
   const sample = sampleState(template)
+  const finished = sample.kind === 'passed' || sample.kind === 'failed'
+  // 状态只看真实的试跑结果，和列表、上线检查说法一致。已上线且草稿没再改时，线上那一版已经在跑，
+  // 没试跑也不把它当成下一步去催；但不能画成完成，那会让人以为测过了。
   const release = template.release
-  // 已上线、草稿也没再改：线上那一版已经在跑，不用为它再去试跑；有试跑结果时照常显示结果。
-  if (release && !release.unreleased_changes.length && !['passed', 'failed', 'running'].includes(sample.kind)) {
-    return { text: `和线上第 ${release.release_no} 版一致`, finished: true, warn: false }
-  }
-  return { text: sample.text, finished: sample.kind === 'passed' || sample.kind === 'failed', warn: sample.kind === 'failed' }
+  const optional = Boolean(release && !release.unreleased_changes.length)
+  return { text: sample.text, finished, warn: sample.kind === 'failed', optional }
 }
 
 function releaseStep(template: PromptTemplate | null, canRelease: boolean): StepState {
@@ -75,8 +77,9 @@ export function flowSteps(template: PromptTemplate | null, dirty: boolean, canRe
     { key: 'release' as const, title: '上线', ...releaseStep(template, canRelease) },
   ]
   let next = false
-  return raw.map(({ key, title, text, finished, warn }) => {
+  return raw.map(({ key, title, text, finished, warn, optional }) => {
     if (finished) return { key, title, text, tone: warn ? 'warn' : 'done' }
+    if (optional) return { key, title, text, tone: 'todo' }
     const tone: StepTone = next ? 'todo' : 'current'
     next = true
     return { key, title, text, tone }

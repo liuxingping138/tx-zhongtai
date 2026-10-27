@@ -179,7 +179,6 @@ const codeSource = computed({
 .config__code-select { width: 220px; }
 .config__code-file { flex: 1; min-width: 200px; }
 /* 十几个输出字段时标签框最多三行，再多在框里滚动，不把测试样本挤出视野。 */
-.config__fields :deep(.el-input-tag__inner) { max-height: 82px; overflow-y: auto; }
 .config__fields { display: grid; gap: 4px; min-width: 0; }
 .config__fields-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; color: var(--zt-ink-500); font-size: 12px; }
 .config__tip { margin: 4px 0 0; color: var(--zt-ink-500); font-size: 12px; }

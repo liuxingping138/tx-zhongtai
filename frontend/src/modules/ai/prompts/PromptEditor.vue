@@ -204,19 +204,20 @@ function onKeydown(event: KeyboardEvent): void {
 </template>
 
 <style scoped>
-.prompt-editor { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.prompt-editor__surface { position: relative; flex: 1; min-height: 260px; }
+.prompt-editor { display: flex; flex-direction: column; }
+/* 输入框跟着内容长高、自己不滚动：高度由底下同字体的高亮层撑开，整个左栏只有一条滚动条。 */
+.prompt-editor__surface { position: relative; flex: 1 0 auto; min-height: 260px; }
 .prompt-editor__backdrop, .prompt-editor__input {
-  position: absolute; inset: 0; margin: 0; padding: 18px 22px; border: 0;
+  margin: 0; padding: 18px 22px; border: 0;
   font: 14px/1.85 var(--zt-font); letter-spacing: 0.01em; white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal;
 }
-.prompt-editor__backdrop { overflow: hidden; pointer-events: none; color: transparent; }
+.prompt-editor__backdrop { position: relative; pointer-events: none; color: transparent; }
 .prompt-editor__mirror { min-height: 100%; padding-bottom: 2em; }
 .prompt-editor__backdrop :deep(mark) { color: transparent; border-radius: 4px; padding: 1px 0; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .prompt-editor__backdrop :deep(mark.is-column) { background: #e3eefc; box-shadow: inset 0 -1.5px 0 #9bbcea; }
 .prompt-editor__backdrop :deep(mark.is-code) { background: #dcf1ee; box-shadow: inset 0 -1.5px 0 #82c3b8; }
 .prompt-editor__backdrop :deep(mark.is-missing) { background: #fbecd6; box-shadow: inset 0 -1.5px 0 #d7a45c; }
-.prompt-editor__input { width: 100%; height: 100%; resize: none; background: transparent; color: var(--zt-ink-900); caret-color: var(--zt-blue-600); overflow: auto; outline: none; }
+.prompt-editor__input { position: absolute; inset: 0; width: 100%; height: 100%; resize: none; background: transparent; color: var(--zt-ink-900); caret-color: var(--zt-blue-600); overflow: hidden; outline: none; }
 .prompt-editor__input::placeholder { color: #9aa6b6; }
 .prompt-editor__input:focus-visible { box-shadow: inset 0 0 0 2px var(--el-color-primary-light-7); }
 .prompt-editor__menu { position: absolute; z-index: 30; min-width: 220px; max-width: 320px; max-height: 260px; overflow: auto; margin: 0; padding: 4px; list-style: none; border: 1px solid var(--zt-border); border-radius: 8px; background: var(--zt-panel); box-shadow: 0 10px 28px rgb(22 38 56 / 14%); }
@@ -225,7 +226,8 @@ function onKeydown(event: KeyboardEvent): void {
 .prompt-editor__menu li.is-active, .prompt-editor__menu li:hover { background: var(--el-color-primary-light-9); color: var(--zt-blue-600); }
 .prompt-editor__menu .prompt-editor__menu-hint { color: var(--zt-ink-500); cursor: default; }
 .prompt-editor__menu .prompt-editor__menu-hint:hover { background: none; color: var(--zt-ink-500); }
-.prompt-editor__vars { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 10px 22px; border-top: 1px solid var(--zt-border); background: #fafbfd; font-size: 12px; }
+/* 提示词很长、往下滚时变量这一行贴在可见区域底部，随时能插。 */
+.prompt-editor__vars { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 10px 22px; border-top: 1px solid var(--zt-border); background: #fafbfd; font-size: 12px; }
 .prompt-editor__vars-label { margin-right: 4px; color: var(--zt-ink-500); }
 .prompt-editor__vars-hint { color: #9aa6b6; }
 .prompt-editor__var { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; line-height: 18px; }

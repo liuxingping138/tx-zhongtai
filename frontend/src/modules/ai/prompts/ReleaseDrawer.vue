@@ -11,6 +11,7 @@ import { sampleState } from './templateStatus'
 /**
  * 上线审核：管理员在这里看上线前检查、草稿比线上版本改了什么，再上线。
  * 业务人员也能打开看（只读），知道这次要请管理员上线什么。
+ * 草稿和线上版本一样时没有要上线的东西：只看线上这一版的内容和上线记录，管理员可以下线。
  */
 const props = defineProps<{ template: PromptTemplate; canRelease: boolean; dirty: boolean; fit?: string }>()
 const emit = defineEmits<{ changed: [template: PromptTemplate] }>()
@@ -25,6 +26,14 @@ const release = computed(() => props.template.release)
 const nextNo = computed(() => (history.value[0]?.release_no ?? release.value?.release_no ?? 0) + 1)
 const changes = computed(() => release.value?.unreleased_changes ?? [])
 const draftCode = computed(() => props.template.code_table_name || props.template.code_name)
+const upToDate = computed(() => Boolean(release.value && !changes.value.length))
+/** 「这一版的内容」：第一次上线看草稿，没有改动时看线上那一版。 */
+const shown = computed(() => {
+  const online = upToDate.value ? release.value : null
+  if (online) return { model: online.model_name, code: online.code, fields: online.fields, content: online.content }
+  const template = props.template
+  return { model: template.model_name, code: draftCode.value, fields: template.fields, content: template.content }
+})
 
 const checks = computed(() => {
   const template = props.template
@@ -42,10 +51,9 @@ const checks = computed(() => {
   else if (sample.kind === 'running') items.push({ level: 'warn', text: '样本试跑还没结束' })
   else items.push({ level: 'warn', text: '当前草稿还没用测试样本整批试跑过' })
   if (props.fit) items.push({ level: 'ok', text: `定时任务适配：${props.fit}` })
-  if (release.value && !changes.value.length) items.push({ level: 'error', text: `草稿和第 ${release.value.release_no} 版一样，不需要重新上线` })
   return items
 })
-const blocked = computed(() => checks.value.some(item => item.level === 'error'))
+const blocked = computed(() => upToDate.value || checks.value.some(item => item.level === 'error'))
 
 const contentDiff = computed(() => (release.value && changes.value.includes('提示词内容')
   ? foldUnchanged(lineDiff(release.value.content, props.template.content))
@@ -112,15 +120,20 @@ async function takeOffline(): Promise<void> {
 <template>
   <el-drawer
     v-model="open"
-    :title="`上线「${template.title}」`"
+    :title="upToDate ? `「${template.title}」线上版本` : `上线「${template.title}」`"
     size="min(760px, 100vw)"
     class="editor-overlay release"
   >
     <p class="release__intro">
-      上线后，定时任务和批量任务都按这一版运行；之后再改模板只改草稿，重新上线才生效。
+      {{ upToDate
+        ? `线上是第 ${release?.release_no} 版，草稿和它一样，没有要上线的改动。定时任务和批量任务都按这一版运行。`
+        : '上线后，定时任务和批量任务都按这一版运行；之后再改模板只改草稿，重新上线才生效。' }}
     </p>
 
-    <section class="release__section">
+    <section
+      v-if="!upToDate"
+      class="release__section"
+    >
       <h3>上线前检查</h3>
       <ul class="release__checks">
         <li
@@ -134,14 +147,8 @@ async function takeOffline(): Promise<void> {
     </section>
 
     <section class="release__section">
-      <h3>{{ release ? `草稿和线上第 ${release.release_no} 版相比` : '这一版的内容' }}</h3>
-      <template v-if="release">
-        <p
-          v-if="!changes.length"
-          class="release__muted"
-        >
-          没有改动。
-        </p>
+      <h3>{{ upToDate ? `线上第 ${release?.release_no} 版的内容` : release ? `草稿和线上第 ${release.release_no} 版相比` : '这一版的内容' }}</h3>
+      <template v-if="release && !upToDate">
         <dl
           v-if="metaChanges.length"
           class="release__meta"
@@ -194,13 +201,13 @@ async function takeOffline(): Promise<void> {
       </template>
       <template v-else>
         <dl class="release__meta">
-          <dt>模型</dt><dd>{{ template.model_name || '未选' }}</dd>
-          <dt>码表</dt><dd>{{ draftCode || '不用码表' }}</dd>
-          <dt>输出字段</dt><dd>{{ template.fields.join('、') || '未设置' }}</dd>
+          <dt>模型</dt><dd>{{ shown.model || '未选' }}</dd>
+          <dt>码表</dt><dd>{{ shown.code || '不用码表' }}</dd>
+          <dt>输出字段</dt><dd>{{ shown.fields.join('、') || '未设置' }}</dd>
         </dl>
         <details class="release__content">
           <summary>提示词全文</summary>
-          <pre>{{ template.content }}</pre>
+          <pre>{{ shown.content }}</pre>
         </details>
       </template>
     </section>
@@ -242,9 +249,10 @@ async function takeOffline(): Promise<void> {
           </el-button>
           <span class="release__spacer" />
           <el-button @click="open = false">
-            取消
+            {{ upToDate ? '关闭' : '取消' }}
           </el-button>
           <el-button
+            v-if="!upToDate"
             type="primary"
             :loading="busy"
             :disabled="blocked"
@@ -255,7 +263,7 @@ async function takeOffline(): Promise<void> {
         </template>
         <template v-else>
           <p class="release__muted">
-            {{ release && !changes.length ? '草稿和线上版本一样，没有要上线的改动。' : `上线由管理员操作。确认无误后请管理员上线第 ${nextNo} 版。` }}
+            {{ upToDate ? '没有要上线的改动。' : `上线由管理员操作。确认无误后请管理员上线第 ${nextNo} 版。` }}
           </p>
           <el-button @click="open = false">
             关闭

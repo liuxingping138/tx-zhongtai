@@ -83,7 +83,8 @@ function releaseAction(template: PromptTemplate, isNext: boolean): string {
   if (!canRelease.value) return isNext || template.release ? '查看上线内容' : ''
   // 版本号只增不减：线上那一版就是最新的；下线后不知道下一个号，抽屉里按上线记录写准。
   if (isNext) return template.release ? `上线第 ${template.release.release_no + 1} 版` : '上线'
-  return template.release ? '上线记录' : ''
+  // 不是下一步时（没有要上线的改动、或前面还有步骤没做）：看线上版本、上线记录，在里面下线。
+  return template.release ? '上线管理' : ''
 }
 
 async function load(): Promise<void> {
@@ -355,12 +356,10 @@ function onStep(key: StepKey): void {
 .prompt-page__spacer { flex: 1; }
 .prompt-page__body { display: grid; flex: 1; grid-template-columns: minmax(0, 1fr) minmax(360px, 420px); gap: 12px; min-height: 0; }
 .prompt-page__main { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-/* 编辑器占剩下的高度、自己滚动；设置区最多占一半、也自己滚动：不会出现两条滚动条并排。 */
-.prompt-page__scroll { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; }
-.prompt-page__scroll > .prompt-editor { flex: 1 1 auto; min-height: 220px; }
-/* 输入区跟着编辑器缩，变量那一行始终露在设置区上面。 */
-.prompt-page__scroll > .prompt-editor :deep(.prompt-editor__surface) { min-height: 160px; }
-.prompt-page__scroll > .config { flex: 0 1 auto; max-height: 52%; overflow-y: auto; }
+/* 左栏只有这一条滚动条：提示词在上、跟着内容长高，至少占六成高度；设置区接在下面，不收起也不自己滚。 */
+.prompt-page__scroll { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow-y: auto; }
+.prompt-page__scroll > .prompt-editor { flex: 1 0 auto; min-height: 60%; }
+.prompt-page__scroll > .config { flex: none; }
 @media (max-width: 1180px) {
   .prompt-page { height: auto; }
   .prompt-page__body { grid-template-columns: minmax(0, 1fr); }

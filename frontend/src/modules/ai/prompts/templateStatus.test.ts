@@ -36,7 +36,7 @@ describe('样本试跑状态', () => {
     expect(sampleState(template({ sample: sample({ current: false }) })).kind).toBe('stale')
     expect(sampleState(template({ sample: sample({ failed_count: 2, format_failed_count: 1 }) })).text).toBe('10 条里 2 条失败（格式不对 1）')
     expect(sampleState(template({ sample: sample({ status: 'cancelled', done_count: 4 }) })).kind).toBe('stopped')
-    expect(sampleState(template({ sample: sample() })).text).toBe('10 条全部成功')
+    expect(sampleState(template({ sample: sample() })).text).toBe('10 条全部解析成功')
   })
 })
 
@@ -63,10 +63,10 @@ describe('流程条', () => {
       .toEqual(['done', 'current', 'todo'])
   })
 
-  it('已上线且草稿没再改、也没试跑过：不催着去试跑', () => {
+  it('已上线且草稿没再改、也没试跑过：照实写没试跑，但不当成下一步去催', () => {
     const steps = flowSteps(template({ release: release() }), false, true)
-    expect(tones(steps)).toEqual(['done', 'done', 'done'])
-    expect(steps[1]?.text).toBe('和线上第 2 版一致')
+    expect(tones(steps)).toEqual(['done', 'todo', 'done'])
+    expect(steps[1]?.text).toBe(sampleState(template()).text)
   })
 
   it('已上线且草稿没再改：三步都完成', () => {

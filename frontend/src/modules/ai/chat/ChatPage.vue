@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { ElMessageBox } from 'element-plus'
 import { Position } from '@element-plus/icons-vue'
 
 import { chatModels, type AiModel } from '@/api/ai'
@@ -29,9 +30,24 @@ onMounted(async () => {
 })
 onBeforeUnmount(stop)
 
+/** 对话只在这一页里，清空就找不回来：有内容时先确认。 */
+async function confirmClear(title: string, action: string): Promise<boolean> {
+  if (!messages.value.length) return true
+  return ElMessageBox.confirm('这段对话没有保存，清空后找不回来。需要的内容请先复制。', title, {
+    type: 'warning', confirmButtonText: action, cancelButtonText: '取消',
+  }).then(() => true, () => false)
+}
+
 /** 换模型等于换了一段上下文：服务端保存的上一轮回答属于原来的模型。 */
-function changeModel(): void {
-  if (messages.value.length) clear()
+async function changeModel(next: string): Promise<void> {
+  if (next === modelId.value) return
+  if (!await confirmClear('换模型会清空这段对话', '换模型')) return
+  clear()
+  modelId.value = next
+}
+
+async function startOver(): Promise<void> {
+  if (await confirmClear('开始新对话？', '清空并开始')) clear()
 }
 
 async function submit(): Promise<void> {
@@ -61,7 +77,7 @@ function onKeydown(event: KeyboardEvent): void {
       <h1>多轮对话</h1>
       <el-button
         :disabled="!messages.length || running"
-        @click="clear"
+        @click="startOver"
       >
         新对话
       </el-button>
@@ -95,12 +111,12 @@ function onKeydown(event: KeyboardEvent): void {
         />
         <div class="chat__tools">
           <el-select
-            v-model="modelId"
+            :model-value="modelId"
             class="chat__model"
             size="small"
             aria-label="模型"
             placeholder="选择模型"
-            @change="changeModel"
+            @update:model-value="changeModel"
           >
             <el-option
               v-for="item in models"

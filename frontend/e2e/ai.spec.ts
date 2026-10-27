@@ -71,7 +71,7 @@ test('AI提问主流程：写模板 → 试发 → 样本试跑 → 上线 → �
   await expect(sample.getByText('已完成')).toBeVisible({ timeout: 60_000 })
   await expect(sample.getByRole('listitem').filter({ hasText: '第 1 行' })).toContainText('成功')
   await expect(sample.getByRole('listitem').filter({ hasText: '第 2 行' })).toContainText('乙公司')
-  await expect(flow.getByRole('listitem').filter({ hasText: '样本试跑' })).toContainText('2 条全部成功')
+  await expect(flow.getByRole('listitem').filter({ hasText: '样本试跑' })).toContainText('2 条全部解析成功')
   // 跑完能下载结果 Excel，文件名写明是样本试跑，和正式任务的结果分得开。
   const [sampleFile] = await Promise.all([
     page.waitForEvent('download'),
@@ -83,7 +83,7 @@ test('AI提问主流程：写模板 → 试发 → 样本试跑 → 上线 → �
   // 3. 上线：管理员在上线抽屉里看检查项，上线第 1 版。
   await flow.getByRole('button', { name: '上线', exact: true }).click()
   const review = page.getByRole('dialog', { name: `上线「${title}」` })
-  await expect(review).toContainText('样本试跑：2 条全部成功')
+  await expect(review).toContainText('样本试跑：2 条全部解析成功')
   await review.getByRole('button', { name: '上线第 1 版' }).click()
   await expect(page.getByText('第 1 版已上线').first()).toBeVisible()
   await expect(flow.getByRole('listitem').filter({ hasText: '上线' }).last()).toContainText('第 1 版已上线')
@@ -92,7 +92,7 @@ test('AI提问主流程：写模板 → 试发 → 样本试跑 → 上线 → �
   await page.getByRole('link', { name: '返回模板列表' }).click()
   const row = page.getByRole('row').filter({ hasText: title })
   await expect(row).toContainText('第 1 版已上线')
-  await expect(row).toContainText('2 条全部成功')
+  await expect(row).toContainText('2 条全部解析成功')
 
   // 4. 批量任务：选上线的模板，上传这次的数据（3 行，其中一行模拟调用失败），跑全部。
   await page.goto('/ai/batch-runs')
@@ -132,8 +132,11 @@ test('AI提问主流程：写模板 → 试发 → 样本试跑 → 上线 → �
   // 清理：先下线再删模板。
   await page.goto('/ai/prompts')
   await page.getByRole('link', { name: title }).click()
-  await flow.getByRole('button', { name: '上线记录' }).click()
-  await page.getByRole('dialog', { name: `上线「${title}」` }).getByRole('button', { name: '下线' }).click()
+  await flow.getByRole('button', { name: '上线管理' }).click()
+  const online = page.getByRole('dialog', { name: `「${title}」线上版本` })
+  await expect(online).toContainText('没有要上线的改动')
+  await expect(online.getByRole('button', { name: /^上线第/ })).toHaveCount(0)
+  await online.getByRole('button', { name: '下线' }).click()
   await page.getByRole('dialog', { name: '下线模板？' }).getByRole('button', { name: '下线' }).click()
   await expect(flow).toContainText('未上线')
   await page.getByRole('button', { name: '删除模板' }).click()
@@ -165,6 +168,14 @@ test('批量任务只能选上线的模板；多轮对话能问能答', async ({
   await page.getByRole('textbox', { name: '输入问题' }).fill('你好')
   await page.getByRole('button', { name: '发送' }).click()
   await expect(page.getByRole('log')).toContainText('模拟回答', { timeout: 20_000 })
+  // 对话不保存：清空前先确认，取消就什么都不动。
+  await page.getByRole('button', { name: '新对话' }).click()
+  const confirm = page.getByRole('dialog', { name: '开始新对话？' })
+  await confirm.getByRole('button', { name: '取消' }).click()
+  await expect(page.getByRole('log')).toContainText('模拟回答')
+  await page.getByRole('button', { name: '新对话' }).click()
+  await confirm.getByRole('button', { name: '清空并开始' }).click()
+  await expect(page.getByRole('log')).not.toContainText('模拟回答')
 })
 
 test('政策类模板：按草稿提示能不能用于三个打标任务，从数据库取测试数据说清楚取不到的原因', async ({ page }) => {
