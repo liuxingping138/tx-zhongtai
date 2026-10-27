@@ -53,7 +53,8 @@ def _remark_starts(*prefixes: str) -> ColumnElement[bool]:
     return or_(*(or_(BaseTag.remark.like(f"{p}%"), BaseTag.remark.like(f"%；{p}%")) for p in prefixes))
 
 
-# 「打标状态」精确筛选：AI 打标失败待重打的、排着队的待办。它不是一列，不在 FILTER_COLUMNS 里。
+# 「打标状态」精确筛选：AI 打标失败待重打的、排着队的待办。它不是库里的一列，不在 FILTER_COLUMNS 里；
+# 列表上的「打标状态」列由 domain.fields.ai_status 按同样的条件算，改这里要一起改。
 AI_STATUS: dict[str, Callable[[], ColumnElement[bool]]] = {
     "类型判断失败": lambda: _remark_starts(AI_NOTE_TYPE_FAILED, AI_NOTE_TYPE_UNKNOWN, AI_NOTE_TYPE_EMPTY),
     "解读失败": lambda: _remark_starts(AI_NOTE_INTERPRET_FAILED),

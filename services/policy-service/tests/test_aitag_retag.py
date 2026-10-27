@@ -143,3 +143,24 @@ def test_ai_status_filter_finds_failures_and_queues() -> None:
     assert base_tags._conditions({"ai_status": []}) == []
     with pytest.raises(KeyError):
         base_tags._conditions({"ai_status": ["不存在"]})
+
+
+def test_ai_status_column_uses_the_filter_rules_failures_first() -> None:
+    """列表「打标状态」列和筛选同一套条件：同时符合时先报失败、再报排队；手工录入的行为空。"""
+
+    from app.policy.domain.fields import AI_NOTE_INTERPRET_FAILED, AI_NOTE_TYPE_UNKNOWN, ai_status
+
+    now = datetime.now(UTC)
+    ai = {"source_content_id": "c1", "need_interpret": "是", "type_retag_at": None, "remark": ""}
+
+    def status(**overrides: Any) -> str:
+        return ai_status(**{**ai, "interpreted_at": now, "opportunity_at": now, **overrides})
+
+    assert status() == "已完成"
+    assert status(source_content_id=None) == ""
+    assert status(interpreted_at=None, opportunity_at=None) == "待解读"
+    assert status(need_interpret="否", interpreted_at=None, opportunity_at=None) == "已完成"
+    assert status(opportunity_at=None) == "待补市场机会"
+    assert status(type_retag_at=now, interpreted_at=None) == "等待重新判断类型"
+    assert status(remark=f"人工备注；{AI_NOTE_INTERPRET_FAILED}：超时", interpreted_at=None) == "解读失败"
+    assert status(remark=f"{AI_NOTE_TYPE_UNKNOWN}：数字经济；{AI_NOTE_INTERPRET_FAILED}：超时") == "类型判断失败"

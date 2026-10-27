@@ -31,6 +31,8 @@ export interface SourceItem {
 export interface BaseTagItem {
   id: string
   policy_name: string
+  /** 类型判断失败 / 待解读 / 已完成…；手工录入的为空 */
+  ai_status: string
   issuing_dept: string
   issuer_industry: string
   policy_level: string

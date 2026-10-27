@@ -22,7 +22,7 @@ from app.policy.application.importing import (
     missing_area_reason,
     rejected_result,
 )
-from app.policy.domain.fields import BASE_TAG_COLUMNS
+from app.policy.domain.fields import BASE_TAG_COLUMNS, ai_status
 from app.policy.domain.models import BASE_TAG_FIELDS, BaseTag, content_hash
 from app.policy.repositories import base_tags as repo
 from app.policy.repositories import options as options_repo
@@ -38,6 +38,15 @@ def _to_out(row: BaseTag) -> dict[str, Any]:
     data["created_by_name"] = row.created_by_name
     data["updated_at"] = format_beijing(row.updated_at)
     data["updated_by_name"] = row.updated_by_name
+    # 只给列表看，不进 Excel：导出、导入的列仍是 BASE_TAG_COLUMNS。
+    data["ai_status"] = ai_status(
+        remark=row.remark,
+        source_content_id=row.source_content_id,
+        need_interpret=row.need_interpret,
+        type_retag_at=row.type_retag_at,
+        interpreted_at=row.interpreted_at,
+        opportunity_at=row.opportunity_at,
+    )
     return data
 
 

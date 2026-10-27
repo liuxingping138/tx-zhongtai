@@ -204,8 +204,8 @@ test('基础标签：按打标状态筛出来，勾选后重新打标，跳过�
   let payload: Record<string, unknown> | undefined
   await page.route('**/api/v1/policy/base-tags?**', route => respond(route, {
     items: [
-      { id: 't1', policy_name: '解读失败的政策', remark: 'AI 解读失败：限流', need_interpret: '是', version: 1 },
-      { id: 't2', policy_name: '手工录入的政策', remark: '', need_interpret: '是', version: 1 },
+      { id: 't1', policy_name: '解读失败的政策', remark: 'AI 解读失败：限流', need_interpret: '是', ai_status: '解读失败', version: 1 },
+      { id: 't2', policy_name: '手工录入的政策', remark: '', need_interpret: '是', ai_status: '', version: 1 },
     ],
     total: 2,
   }))
@@ -215,6 +215,8 @@ test('基础标签：按打标状态筛出来，勾选后重新打标，跳过�
   })
   await page.goto('/policy/base-tags')
   await expect(page.locator('.el-form-item').filter({ hasText: '打标状态' })).toBeVisible()
+  // 表里也有一列打标状态：哪条卡在哪一步，不用先筛选才知道。
+  await expect(page.getByRole('row').filter({ hasText: '解读失败的政策' })).toContainText('解读失败')
   const retag = page.getByRole('button', { name: /^重新打标/ })
   await expect(retag).toBeDisabled()
   // 表头的全选框：样式化的可见替身，点它。
@@ -252,6 +254,34 @@ test('政策解读：勾选多条一次改成人工验证', async ({ page }) => 
   await dialog.getByRole('button', { name: '确定' }).click()
   await expect(page.getByText('已改 2 条')).toBeVisible()
   expect(payload).toEqual({ ids: ['i1', 'i2'], data_status: '人工验证' })
+})
+
+test('政策解读：在详情里读完直接标为人工验证', async ({ page }) => {
+  let payload: Record<string, unknown> | undefined
+  await page.route('**/api/v1/policy/interpretations?**', route => respond(route, {
+    items: [
+      { id: 'i1', policy_title: '待核对的政策', data_status: '待验证', version: 1 },
+      { id: 'i2', policy_title: '核对过的政策', data_status: '人工验证', version: 1 },
+    ],
+    total: 2,
+  }))
+  await page.route('**/api/v1/policy/interpretations/data-status', route => {
+    payload = route.request().postDataJSON()
+    return respond(route, { updated: 1, unchanged: 0 })
+  })
+  await page.goto('/policy/interpretations')
+  const detail = page.getByRole('dialog', { name: '政策解读详情' })
+  // 已经人工验证的不再给这个按钮。
+  await page.getByRole('row').filter({ hasText: '核对过的政策' }).getByRole('button', { name: '查看' }).click()
+  await expect(detail.getByRole('button', { name: '编辑记录' })).toBeVisible()
+  await expect(detail.getByRole('button', { name: '标为人工验证' })).toHaveCount(0)
+  await detail.getByRole('button', { name: '关闭', exact: true }).click()
+  await expect(detail).toBeHidden()
+  await page.getByRole('row').filter({ hasText: '待核对的政策' }).getByRole('button', { name: '查看' }).click()
+  await detail.getByRole('button', { name: '标为人工验证' }).click()
+  await expect(page.getByText('已标为人工验证')).toBeVisible()
+  await expect(detail).toBeHidden()
+  expect(payload).toEqual({ ids: ['i1'], data_status: '人工验证' })
 })
 
 test('信源管理：列表显示网站编码和内部唯一id', async ({ page }) => {

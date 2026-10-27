@@ -53,6 +53,7 @@ function link(row: T, col: DataColumn) {
 }
 function open(row: T) { detail.value = row; detailOpen.value = true }
 function editDetail() { if (detail.value) { emit('edit', detail.value); detailOpen.value = false } }
+function closeDetail() { detailOpen.value = false }
 </script>
 <template>
   <div
@@ -238,7 +239,14 @@ function editDetail() { if (detail.value) { emit('edit', detail.value); detailOp
       <template #footer>
         <el-button @click="detailOpen = false">
           关闭
-        </el-button><el-button
+        </el-button>
+        <!-- 看完就能做的动作（如标为人工验证）放在这里，不用回列表勾选。 -->
+        <slot
+          v-if="detail"
+          name="detail-actions"
+          :row="detail"
+          :close="closeDetail"
+        /><el-button
           v-if="canWrite"
           type="primary"
           @click="editDetail"

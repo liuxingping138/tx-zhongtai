@@ -3,6 +3,8 @@ import type { EditorGroup } from '@/components/editorGroups'
 
 export const TABLE_COLUMNS: DataColumn[] = [
   { prop: 'policy_name', label: '政策名称', minWidth: 320, grow: 2 },
+  // 后端按备注里的失败说明和三步的完成时间算出来的，只读，不进 Excel；和「打标状态」筛选同一套条件。
+  { prop: 'ai_status', label: '打标状态', width: 130 },
   { prop: 'issuing_dept', label: '出台部门', width: 220 },
   { prop: 'issuer_industry', label: '发文机构行业', minWidth: 140 },
   { prop: 'policy_level', label: '政策层级', width: 110 },

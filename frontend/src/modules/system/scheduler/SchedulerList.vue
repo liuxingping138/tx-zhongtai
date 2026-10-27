@@ -23,6 +23,12 @@ const canManage = computed(() => auth.canFull('system.scheduler'))
 const overview = ref<SchedulerOverview | null>(null)
 // 任务分散在各服务的执行进程里：哪个服务离线或取不到就点名，不影响看其他服务的任务。
 const offline = computed(() => overview.value?.workers.filter(worker => !worker.online) ?? [])
+/** 顶部写的是执行进程在不在线；每个任务启没启用另算，不然任务全停着也显示「运行中」。 */
+const planText = computed(() => {
+  const items = overview.value?.items ?? []
+  const enabled = items.filter(job => job.enabled).length
+  return enabled === items.length ? `${enabled} 个任务都已启用` : `已启用 ${enabled} 个任务，${items.length - enabled} 个停用`
+})
 const latestHeartbeat = computed(() =>
   overview.value?.workers.map(worker => worker.heartbeat_at ?? '').sort().at(-1) || null)
 function offlineText(worker: WorkerStatus): string {
@@ -57,6 +63,14 @@ function progress(job: ScheduledJob): string {
   if (task.code !== 'type') return task.pending ? `待${task.code === 'interpret' ? '解读' : '补'} ${task.pending} 条` : '没有待办'
   const read = task.cursor_date ? `读到 ${task.cursor_date}` : '—'
   return task.pending ? `${read} · 待重判 ${task.pending}` : read
+}
+/** 待办点进基础标签表、按「打标状态」筛好，看的就是这几条；没有基础标签查看权限时只显示文字。 */
+const PENDING_STATUS: Record<string, string> = { type: '等待重新判断类型', interpret: '待解读', opportunity: '待补市场机会' }
+function pendingLink(job: ScheduledJob) {
+  const task = aiTask(job)
+  const status = task?.pending ? PENDING_STATUS[task.code] : undefined
+  if (!status || !auth.canRead('policy.base_tags')) return null
+  return { name: 'policy-base-tags', query: { ai_status: status } }
 }
 function cost(job: ScheduledJob): string {
   const task = aiTask(job)
@@ -175,9 +189,9 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
           :type="overview && !offline.length ? 'success' : 'warning'"
           effect="plain"
         >
-          {{ !overview ? '正在检查调度状态' : !offline.length ? '自动调度运行中' : `${offline.length} 个服务的执行进程离线` }}
+          {{ !overview ? '正在检查调度状态' : !offline.length ? '执行进程在线' : `${offline.length} 个服务的执行进程离线` }}
         </el-tag>
-        <span>每日按北京时间执行 · 自动补齐缺失增量</span>
+        <span>{{ overview ? `${planText} · ` : '' }}每日按北京时间执行 · 自动补齐缺失增量</span>
       </div>
       <span v-if="latestHeartbeat && !offline.length">最近心跳 {{ formatTime(latestHeartbeat) }}</span>
     </div>
@@ -261,6 +275,13 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
               </el-tag>
               <span class="job-cell__note">{{ runNote(row) }}</span>
             </span>
+            <router-link
+              v-else-if="col.prop === 'watermark' && pendingLink(row)"
+              class="job-cell__link"
+              :to="pendingLink(row)!"
+            >
+              {{ cell(row, col.prop) }}
+            </router-link>
             <span v-else>{{ cell(row, col.prop) }}</span>
           </template>
         </el-table-column>
@@ -316,6 +337,8 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
 .scheduler-strip { padding: 14px 16px; border: 1px solid var(--zt-border); background: var(--zt-panel); border-radius: var(--zt-radius); color: var(--zt-ink-500); font-size: 13px; }
 .job-cell { display: inline-flex; align-items: center; gap: 8px; }
 .job-cell__note { color: var(--zt-ink-500); font-size: 12px; font-variant-numeric: tabular-nums; }
+.job-cell__link { color: var(--zt-blue-600); text-decoration: none; }
+.job-cell__link:hover { text-decoration: underline; }
 .scheduler-note { color: var(--zt-ink-500); font-size: 13px; line-height: 1.8; margin: 16px 0; }
 .scheduler-page :deep(.list-page) { min-height: 0; max-height: none; }
 /*

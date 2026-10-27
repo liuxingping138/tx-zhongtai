@@ -98,3 +98,36 @@ AI_STATUS_CHOICES: tuple[str, ...] = (
     "待解读",
     "待补市场机会",
 )
+AI_STATUS_DONE = "已完成"
+_TYPE_NOTES = (AI_NOTE_TYPE_FAILED, AI_NOTE_TYPE_UNKNOWN, AI_NOTE_TYPE_EMPTY)
+
+
+def ai_status(
+    *,
+    remark: str,
+    source_content_id: str | None,
+    need_interpret: str,
+    type_retag_at: object,
+    interpreted_at: object,
+    opportunity_at: object,
+) -> str:
+    """列表「打标状态」列：一行走到哪一步。和 repositories.base_tags.AI_STATUS 的筛选条件一一对应，
+    同时符合几种时按 AI_STATUS_CHOICES 的顺序取第一个（先失败、再排队）。手工录入、没经过 AI 的行为空。"""
+
+    notes = [part for part in (remark or "").split("；") if part]
+
+    def noted(*prefixes: str) -> bool:
+        return any(note.startswith(prefixes) for note in notes)
+
+    checks = (
+        ("类型判断失败", noted(*_TYPE_NOTES)),
+        ("解读失败", noted(AI_NOTE_INTERPRET_FAILED)),
+        ("市场机会失败", noted(AI_NOTE_OPPORTUNITY_FAILED)),
+        ("等待重新判断类型", type_retag_at is not None),
+        ("待解读", need_interpret == "是" and source_content_id is not None and interpreted_at is None),
+        ("待补市场机会", interpreted_at is not None and opportunity_at is None),
+    )
+    hit = next((name for name, matched in checks if matched), "")
+    if hit:
+        return hit
+    return AI_STATUS_DONE if source_content_id is not None else ""

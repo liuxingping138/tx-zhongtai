@@ -83,6 +83,21 @@ async function afterStatus() {
   selection.clear()
   await refresh()
 }
+// 在详情里读完就能标：不用关掉抽屉再回列表勾选。
+const verifying = ref(false)
+async function markVerified(row: InterpretationItem, close: () => void) {
+  verifying.value = true
+  try {
+    await setInterpretationsDataStatus([row.id], '人工验证')
+    ElMessage.success('已标为人工验证')
+    close()
+    await refresh()
+  } catch (error) {
+    ElMessage.error(errorMessage(error, '没能改成人工验证，请重试'))
+  } finally {
+    verifying.value = false
+  }
+}
 
 const editor = useRecordEditor<InterpretationItem>({
   noun: '政策解读',
@@ -256,7 +271,17 @@ onMounted(() => {
         @reset="listQuery.resetFilters"
         @edit="editor.openEdit"
         @selection-change="checked = $event"
-      />
+      >
+        <template #detail-actions="{ row, close }">
+          <el-button
+            v-if="canWrite && row.data_status !== '人工验证'"
+            :loading="verifying"
+            @click="markVerified(row, close)"
+          >
+            标为人工验证
+          </el-button>
+        </template>
+      </BusinessTable>
     </ListPage>
     <BatchChoiceDialog
       v-model="statusOpen"
