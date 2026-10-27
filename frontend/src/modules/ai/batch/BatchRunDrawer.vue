@@ -45,10 +45,11 @@ async function loadRows(): Promise<void> {
   }
 }
 
-// 换任务从头看；跑完、停止、重跑（状态变了）或切换「只看失败」马上重读。
+// 换任务从头看；同一个任务跑完、停止、重跑（状态变了）或切换「只看失败」马上重读。
+// 换任务时状态也跟着变，只认同一个任务，否则一打开就读两次。
 watch(() => run.value?.id, () => { failedOnly.value = false; rows.value = null; rowsError.value = ''; void loadRows() })
-watch(() => [run.value?.status, failedOnly.value], (next, previous) => {
-  if (run.value && previous && next.join() !== previous.join()) void loadRows()
+watch(() => [run.value?.id, run.value?.status, failedOnly.value], (next, previous) => {
+  if (run.value && next[0] === previous[0] && next.join() !== previous.join()) void loadRows()
 })
 // 跑着的任务列表每 2 秒刷新一次进度，逐行结果不跟着每次重读：这里只列前 50 行，这几行都有结果了，
 // 再往后跑也不变；只看失败时跟着失败数走。至少隔 10 秒读一次，几十万行的任务读结果文件不便宜。
