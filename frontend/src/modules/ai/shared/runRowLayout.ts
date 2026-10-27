@@ -10,6 +10,8 @@ export interface RowLayout {
 }
 
 const SUMMARY_FIELDS = 3
+/** 模型没内容时常填「-」：摘要里当空值跳过，免得写成「互联网行业一部 · - · -」 */
+const BLANKS = new Set(['', '-', '—', '－'])
 
 export function rowLayout(items: Record<string, string>[], fields: string[]): RowLayout {
   const first = items[0]
@@ -19,5 +21,5 @@ export function rowLayout(items: Record<string, string>[], fields: string[]): Ro
 }
 
 export function itemSummary(item: Record<string, string>, own: string[]): string {
-  return own.slice(0, SUMMARY_FIELDS).map(field => item[field]?.trim()).filter(Boolean).join(' · ') || '和上面相同'
+  return own.slice(0, SUMMARY_FIELDS).map(field => item[field]?.trim() ?? '').filter(value => !BLANKS.has(value)).join(' · ') || '和上面相同'
 }
