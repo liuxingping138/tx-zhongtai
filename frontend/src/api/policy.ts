@@ -206,6 +206,23 @@ export function importInterpretations(
 }
 
 
+/** 政策正文：平台库里不存，点开详情时按源政策 ID 现读源库，文字和打标发给模型的同一口径。 */
+export interface PolicyContent {
+  title: string
+  text: string
+  source_url: string
+  issued_at: string
+  chars: number
+}
+
+export function getBaseTagContent(id: string): Promise<PolicyContent> {
+  return request(http.get(`/policy/base-tags/${id}/content`))
+}
+
+export function getInterpretationContent(id: string): Promise<PolicyContent> {
+  return request(http.get(`/policy/interpretations/${id}/content`))
+}
+
 /** 人工验证过、还没同步进行业场景码表的新增场景条数 */
 export function pendingNewScenarios(): Promise<{ pending: number }> {
   return request(http.get('/policy/interpretations/new-scenarios'))

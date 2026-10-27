@@ -139,6 +139,18 @@ async def get_item(
     return success_json(await service.get_base_tag(session, item_id))
 
 
+@router.get("/{item_id}/content")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def get_item_content(
+    item_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    _: Actor = Depends(require_policy_permission(RESOURCE, "read")),
+) -> JSONResponse:
+    """正文按需从源库取，不进平台库。"""
+
+    return success_json(await service.base_tag_content(session, item_id))
+
+
 @router.patch("/{item_id}")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def update_item(

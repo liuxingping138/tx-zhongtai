@@ -16,6 +16,7 @@ from app.common import internal_clients
 from app.common.audit_emit import enqueue_event
 from app.core.config import get_settings
 from app.policy.application.importing import add_in_batches
+from app.policy.application.policy_content import policy_content
 from app.policy.application.region import make_policy_uid, make_relation_key
 from app.policy.domain.fields import DATA_STATUS_CHOICES, DATA_STATUS_PENDING, INTERPRETATION_COLUMNS
 from app.policy.domain.models import INTERPRETATION_WRITE_FIELDS, Interpretation
@@ -139,6 +140,13 @@ async def get_interpretation(session: AsyncSession, item_id: uuid.UUID) -> dict[
     if row is None:
         raise NotFoundError("政策解读不存在")
     return _to_out(row)
+
+
+async def interpretation_content(session: AsyncSession, item_id: uuid.UUID) -> dict[str, Any]:
+    row = await repo.get_by_id(session, item_id)
+    if row is None:
+        raise NotFoundError("政策解读不存在")
+    return await policy_content(row.source_content_id)
 
 
 async def create_interpretation(session: AsyncSession, actor: Actor, data: dict[str, str]) -> dict[str, Any]:

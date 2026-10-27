@@ -1804,6 +1804,48 @@
         }
       }
     },
+    "/api/v1/policy/base-tags/{item_id}/content": {
+      "get": {
+        "tags": [
+          "policy-base-tags"
+        ],
+        "summary": "Get Item Content",
+        "description": "正文按需从源库取，不进平台库。",
+        "operationId": "get_item_content_api_v1_policy_base_tags__item_id__content_get",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/policy/crawler-monitoring/overview": {
       "get": {
         "tags": [
@@ -3131,6 +3173,48 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/interpretations/{item_id}/content": {
+      "get": {
+        "tags": [
+          "policy-interpretations"
+        ],
+        "summary": "Get Item Content",
+        "description": "正文按需从源库取，不进平台库。",
+        "operationId": "get_item_content_api_v1_policy_interpretations__item_id__content_get",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",

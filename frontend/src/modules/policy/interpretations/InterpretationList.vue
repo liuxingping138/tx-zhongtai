@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 
 import {
   createInterpretation,
+  getInterpretationContent,
   importInterpretations,
   listInterpretations,
   setInterpretationsDataStatus,
@@ -17,6 +18,7 @@ import AuditLogButton from '@/components/AuditLogButton.vue'
 import BatchChoiceDialog from '@/components/BatchChoiceDialog.vue'
 import SyncScenariosButton from './SyncScenariosButton.vue'
 import BusinessTable from '@/components/BusinessTable.vue'
+import PolicyContent from '../shared/PolicyContent.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
 import ExportButton from '@/components/ExportButton.vue'
 import FilterBar from '@/components/FilterBar.vue'
@@ -272,6 +274,12 @@ onMounted(() => {
         @edit="editor.openEdit"
         @selection-change="checked = $event"
       >
+        <template #detail-extra="{ row }">
+          <PolicyContent
+            :key="row.id"
+            :load="() => getInterpretationContent(row.id)"
+          />
+        </template>
         <template #detail-actions="{ row, close }">
           <el-button
             v-if="canWrite && row.data_status !== '人工验证'"

@@ -5,12 +5,13 @@ import { ElMessage } from 'element-plus'
 
 import { importAfterAreaResolve } from '@/api/codebook'
 import { requestRetag, type AiTaskCode } from '@/api/aiTagging'
-import { createBaseTag, importBaseTags, listBaseTags, updateBaseTag, type BaseTagItem } from '@/api/policy'
+import { createBaseTag, getBaseTagContent, importBaseTags, listBaseTags, updateBaseTag, type BaseTagItem } from '@/api/policy'
 import { errorMessage } from '@/api/errors'
 import { reportImportResult, runExcelImport } from '@/api/excelImport'
 import AuditLogButton from '@/components/AuditLogButton.vue'
 import BatchChoiceDialog from '@/components/BatchChoiceDialog.vue'
 import BusinessTable from '@/components/BusinessTable.vue'
+import PolicyContent from '../shared/PolicyContent.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
 import ExportButton from '@/components/ExportButton.vue'
 import FilterBar from '@/components/FilterBar.vue'
@@ -229,7 +230,14 @@ onMounted(() => {
         @reset="listQuery.resetFilters"
         @edit="editor.openEdit"
         @selection-change="checked = $event"
-      />
+      >
+        <template #detail-extra="{ row }">
+          <PolicyContent
+            :key="row.id"
+            :load="() => getBaseTagContent(row.id)"
+          />
+        </template>
+      </BusinessTable>
     </ListPage>
     <BatchChoiceDialog
       v-model="retagOpen"

@@ -88,7 +88,7 @@ ColumnPicker 按用户ID和route.path保存字段键（存储键 `zt:columns:v2:
    - `TABLE_COLUMNS: DataColumn[]`：按业务字段顺序的表格列，宽度按下文「列宽配置」；
    - `SUMMARY_KEYS`：窄屏摘要字段；
    - `EDITOR_GROUPS: EditorGroup[]`：编辑抽屉的字段分组，必填、长度、提示都写在这里。
-3. 页面组件按 `BaseTagList.vue` 的结构组装：`useListQuery` + `useListLoader` 负责查询与加载，`useFilterOptions` 提供筛选候选，`useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)` 给出列设置与表格共用的完整列，`useRecordEditor` + `RecordEditorDrawer` 负责新增编辑，`useExcelExport` + `ExportButton`、`ImportButton`、`AuditLogButton` 组成工具栏。页面只写本模块的接口调用、筛选字段和导入说明，不复制公共组件内部布局。
+3. 页面组件按 `BaseTagList.vue` 的结构组装：`useListQuery` + `useListLoader` 负责查询与加载，`useFilterOptions` 提供筛选候选，`useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)` 给出列设置与表格共用的完整列，`useRecordEditor` + `RecordEditorDrawer` 负责新增编辑，`useExcelExport` + `ExportButton`、`ImportButton`、`AuditLogButton` 组成工具栏。页面只写本模块的接口调用、筛选字段和导入说明，不复制公共组件内部布局。政策两张表的详情里用 `modules/policy/shared/PolicyContent.vue` 放在 `#detail-extra` 槽位显示正文（传 `load`，按行 ID 加 `key`），段落和折叠规则在 `policyContent.ts`（有单测）。
 4. 新菜单依现有路由/发布/权限体系接入顶部一级模块和左侧子菜单，不能只添加一个不受权限约束的链接。
 5. 按第6节验收，并确认用户访问的实际服务已更新。
 

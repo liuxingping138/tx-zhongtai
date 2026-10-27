@@ -269,15 +269,32 @@ test('政策解读：在详情里读完直接标为人工验证', async ({ page 
     payload = route.request().postDataJSON()
     return respond(route, { updated: 1, unchanged: 0 })
   })
+  // 正文点开详情才去源库取：手工录入的行说明没有正文，长正文先给前 8 段。
+  await page.route('**/api/v1/policy/interpretations/i2/content', route =>
+    route.fulfill({ status: 404, json: { code: 'RESOURCE_NOT_FOUND', message: '这条不是从源库打标的，没有正文' } }))
+  await page.route('**/api/v1/policy/interpretations/i1/content', route => respond(route, {
+    title: '待核对的政策',
+    text: Array.from({ length: 10 }, (_, index) => `第 ${index + 1} 段正文`).join('\n'),
+    source_url: 'https://example.gov.cn/p/1',
+    issued_at: '2026-10-01',
+    chars: 60,
+  }))
   await page.goto('/policy/interpretations')
   const detail = page.getByRole('dialog', { name: '政策解读详情' })
   // 已经人工验证的不再给这个按钮。
   await page.getByRole('row').filter({ hasText: '核对过的政策' }).getByRole('button', { name: '查看' }).click()
   await expect(detail.getByRole('button', { name: '编辑记录' })).toBeVisible()
   await expect(detail.getByRole('button', { name: '标为人工验证' })).toHaveCount(0)
+  await expect(detail.getByText('这条不是从源库打标的，没有正文')).toBeVisible()
   await detail.getByRole('button', { name: '关闭', exact: true }).click()
   await expect(detail).toBeHidden()
   await page.getByRole('row').filter({ hasText: '待核对的政策' }).getByRole('button', { name: '查看' }).click()
+  const content = detail.getByRole('region', { name: '政策正文' })
+  await expect(content).toContainText('第 8 段正文')
+  await expect(content).not.toContainText('第 9 段正文')
+  await expect(content.getByRole('link', { name: '打开原网页' })).toHaveAttribute('href', 'https://example.gov.cn/p/1')
+  await content.getByRole('button', { name: '展开全文（还有 2 段）' }).click()
+  await expect(content).toContainText('第 10 段正文')
   await detail.getByRole('button', { name: '标为人工验证' }).click()
   await expect(page.getByText('已标为人工验证')).toBeVisible()
   await expect(detail).toBeHidden()

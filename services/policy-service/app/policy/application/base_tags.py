@@ -23,6 +23,7 @@ from app.policy.application.importing import (
     missing_area_reason,
     rejected_result,
 )
+from app.policy.application.policy_content import policy_content
 from app.policy.domain.fields import BASE_TAG_COLUMNS, ai_status
 from app.policy.domain.models import BASE_TAG_FIELDS, BaseTag, content_hash
 from app.policy.repositories import base_tags as repo
@@ -96,6 +97,13 @@ async def get_base_tag(session: AsyncSession, item_id: uuid.UUID) -> dict[str, A
     if row is None:
         raise NotFoundError("政策基础标签不存在")
     return _to_out(row)
+
+
+async def base_tag_content(session: AsyncSession, item_id: uuid.UUID) -> dict[str, Any]:
+    row = await repo.get_by_id(session, item_id)
+    if row is None:
+        raise NotFoundError("政策基础标签不存在")
+    return await policy_content(row.source_content_id)
 
 
 def _require_lengths(values: dict[str, str]) -> None:
