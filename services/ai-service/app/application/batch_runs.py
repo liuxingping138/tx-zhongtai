@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.application import releases
 from app.application.asking import RELEASE_MODEL_DISABLED, resolve_model
 from app.application.audit_emit import enqueue_event
-from app.application.batch_inputs import inspect_upload, snapshot_input
+from app.application.batch_inputs import blank_input, inspect_upload, snapshot_input
 from app.application.prompts import require_editable as require_editable_prompt
 from app.application.run_rows import preview as run_rows_preview
 from app.application.sheets import has_run_input
@@ -200,6 +200,15 @@ async def preview_input(
 
     _, release, model, summary = await _plan(session, access, prompt_id, upload, lock=False)
     return {**summary, "release_no": release.release_no, "model_name": model.name}
+
+
+async def input_template(session: AsyncSession, access: CategoryAccess, prompt_id: str) -> tuple[bytes, str]:
+    """新建任务时下载的空白数据表：按上线版本要的列，业务人员照着填好再上传。不看模型和是否在跑，只是一张表头。"""
+
+    template = await require_editable_prompt(session, access, prompt_id)
+    release = await releases.current(session, template, "批量任务")
+    title = template.title.replace("/", "_")[:60]
+    return await blank_input(release.content), f"{title}-第{release.release_no}版数据模板.xlsx"
 
 
 async def start_run(

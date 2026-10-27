@@ -100,6 +100,20 @@ async def preview_input(
     return success_json(await service.preview_input(session, access, prompt_id, (filename, content)))
 
 
+@router.get("/input-template")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def input_template(
+    prompt_id: str = Query(max_length=32),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    access: CategoryAccess = Depends(get_category_access),
+    _: Actor = Depends(require_ai_permission(RESOURCE, "run")),
+) -> Response:
+    """要跑任务的人才需要：和发起同一个权限。必须在 /{run_id} 之前声明，否则会被当成任务 ID。"""
+
+    content, filename = await service.input_template(session, access, prompt_id)
+    return file_response(content, filename)
+
+
 @router.post("")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def start_run(

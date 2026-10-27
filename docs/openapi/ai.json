@@ -1044,6 +1044,48 @@
         }
       }
     },
+    "/api/v1/ai/batch-runs/input-template": {
+      "get": {
+        "tags": [
+          "ai-batch-runs"
+        ],
+        "summary": "Input Template",
+        "description": "要跑任务的人才需要：和发起同一个权限。必须在 /{run_id} 之前声明，否则会被当成任务 ID。",
+        "operationId": "input_template_api_v1_ai_batch_runs_input_template_get",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 32,
+              "title": "Prompt Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/ai/batch-runs/{run_id}": {
       "get": {
         "tags": [

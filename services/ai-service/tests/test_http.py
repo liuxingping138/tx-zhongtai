@@ -213,11 +213,19 @@ def test_batch_file_routes_read_the_upload_after_auth(client: TestClient, monkey
         seen.append(("rows", run_id, failed_only))
         return {"items": []}
 
+    async def blank(_session: Any, _access: Any, prompt_id: str) -> tuple[bytes, str]:
+        seen.append(("template", prompt_id))
+        return b"xlsx", "企业行业-第3版数据模板.xlsx"
+
     monkeypatch.setattr(batch_runs, "preview_input", preview)
     monkeypatch.setattr(batch_runs, "start_run", start)
     monkeypatch.setattr(batch_runs, "run_rows", rows)
+    monkeypatch.setattr(batch_runs, "input_template", blank)
     files = {"file": ("本次数据.xlsx", xlsx([["名称"], ["甲"], ["乙"]]))}
     params = {"prompt_id": PROMPT_ID}
+    # 下载数据模板不能被 /{run_id} 当成查任务。
+    template_file = client.get("/api/v1/ai/batch-runs/input-template", params=params)
+    assert template_file.status_code == 200 and template_file.content == b"xlsx"
     assert client.post("/api/v1/ai/batch-runs/input-preview", params=params, files=files).status_code == 200
     started = client.post("/api/v1/ai/batch-runs", params={**params, "limit": 5, "thinking": True}, files=files)
     assert started.status_code == 201
@@ -227,6 +235,7 @@ def test_batch_file_routes_read_the_upload_after_auth(client: TestClient, monkey
     # 样本试跑不进批量任务列表：来源只能筛页面发起和定时任务。
     assert client.get("/api/v1/ai/batch-runs", params={"source": "sample"}).status_code == 422
     assert seen == [
+        ("template", PROMPT_ID),
         ("preview", PROMPT_ID, "本次数据.xlsx"),
         ("start", 5, True, "本次数据.xlsx"),
         ("rows", RUN_ID, True),

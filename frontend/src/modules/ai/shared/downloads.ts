@@ -12,3 +12,8 @@ export function downloadSampleFile(promptId: string, runId: string, kind: RunFil
 export function downloadBatchFile(id: string, kind: RunFileKind, filename: string): Promise<void> {
   return downloadFile(`${AI_BASE}/batch-runs/${id}/files/${kind}`, filename)
 }
+
+/** 按模板上线版本引用的列生成、只有表头的空白数据表 */
+export function downloadBatchInputTemplate(promptId: string, filename: string): Promise<void> {
+  return downloadFile(`${AI_BASE}/batch-runs/input-template`, filename, { prompt_id: promptId })
+}

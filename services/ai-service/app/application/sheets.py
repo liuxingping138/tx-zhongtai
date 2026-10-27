@@ -161,12 +161,12 @@ def excel_cell(value: str) -> str:
     return value if len(value) <= CELL_MAX else value[: CELL_MAX - len(CELL_CUT)] + CELL_CUT
 
 
-def rows_workbook(headers: list[str], rows: list[list[str]]) -> bytes:
-    """表头 + 行生成测试数据 Excel（第一行表头），和用户自己上传的 Excel 一个样子。"""
+def rows_workbook(headers: list[str], rows: list[list[str]], title: str = "测试数据") -> bytes:
+    """表头 + 行生成 Excel（第一行表头），和用户自己上传的 Excel 一个样子。"""
 
     book = Workbook()
     sheet = active_worksheet(book)
-    sheet.title = "测试数据"
+    sheet.title = title
     append_text_row(sheet, headers)
     for row in rows:
         append_text_row(sheet, [excel_cell(str(value or "")) for value in row])

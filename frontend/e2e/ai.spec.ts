@@ -101,6 +101,13 @@ test('AI提问主流程：写模板 → 试发 → 样本试跑 → 上线 → �
   await choose(page, drawer, new RegExp(title))
   await expect(drawer).toContainText('第 1 版')
   await expect(drawer.locator('.new-task__columns')).toContainText('企业名称')
+  // 不知道要哪些列的人先下载数据模板，表头就是上线版本引用的列。
+  const [blank] = await Promise.all([
+    page.waitForEvent('download'),
+    drawer.getByRole('button', { name: '下载数据模板' }).click(),
+  ])
+  expect(blank.suggestedFilename()).toBe(`${title}-第1版数据模板.xlsx`)
+  expect(await blank.failure()).toBeNull()
   const checked = page.waitForResponse(r => r.url().includes('/input-preview') && r.request().method() === 'POST')
   await drawer.locator('input[type=file]').setInputFiles(batchBook)
   expect((await checked).status()).toBe(200)

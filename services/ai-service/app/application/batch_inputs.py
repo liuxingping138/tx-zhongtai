@@ -8,13 +8,22 @@ from typing import Any
 from platform_common.errors import ApiError, ErrorCode
 from platform_common.excel import run_excel_parse
 
-from app.application.sheets import sheet_summary
+from app.application.sheets import rows_workbook, sheet_summary
 from app.core import storage
 from app.domain.releases import input_columns
 
 
 def _invalid(message: str) -> ApiError:
     return ApiError(message, code=ErrorCode.VALIDATION_ERROR, http_status=422)
+
+
+async def blank_input(content: str) -> bytes:
+    """content 是任务要跑的提示词：只有它引用的列做表头的空白 Excel，和 inspect_upload 按同一份列检查。"""
+
+    columns = input_columns(content)
+    if not columns:
+        raise _invalid("这个模板不引用任何列，任意 .xlsx 都能上传")
+    return await run_excel_parse(rows_workbook, columns, [], "数据")
 
 
 async def inspect_upload(content: str, upload: tuple[str, bytes]) -> dict[str, Any]:

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { CircleCheckFilled, Upload } from '@element-plus/icons-vue'
+import { CircleCheckFilled, Download, Upload } from '@element-plus/icons-vue'
 
 import { previewBatchInput, startBatchRun, type AiModel, type BatchInputSummary, type PromptTemplate } from '@/api/ai'
 import { errorMessage } from '@/api/errors'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
+import { downloadBatchInputTemplate } from '../shared/downloads'
 
 /**
  * 新建批量任务：选一个已上线的模板，上传这次的数据，选跑全部还是先跑几条。
@@ -19,6 +20,7 @@ const thinking = ref(false)
 const file = ref<File | null>(null)
 const summary = ref<BatchInputSummary | null>(null)
 const previewing = ref(false)
+const downloading = ref(false)
 const starting = ref(false)
 const failure = ref('')
 const scope = ref<'all' | 'test'>('all')
@@ -33,6 +35,9 @@ const options = computed(() => props.templates
 const template = computed(() => props.templates.find(item => item.id === templateId.value))
 const release = computed(() => template.value?.release ?? null)
 const model = computed(() => props.models.find(item => item.id === release.value?.model_id))
+const uploadHint = computed(() => (release.value?.variables.length
+  ? '先下载数据模板，表头就是这一版要的列，不要改名；每行填一条数据，可以加别的列，会原样留在结果里。选好后先检查列，不会调用模型。'
+  : '第一行是表头，每行问一次。选好后先检查列，不会调用模型。'))
 const count = computed(() => (scope.value === 'test' ? Math.min(testRows.value || 1, summary.value?.rows ?? 0) : summary.value?.rows ?? 0))
 const modelProblem = computed(() => {
   if (!release.value) return ''
@@ -90,6 +95,19 @@ async function pick(event: Event): Promise<void> {
     if (current === sequence) failure.value = errorMessage(error, '这份数据没通过检查，请换一个文件')
   } finally {
     if (current === sequence) previewing.value = false
+  }
+}
+
+/** 表头就是上线版本要的列：照着填好再传，不用对着页面上的列名自己建表。 */
+async function downloadTemplate(): Promise<void> {
+  if (!template.value || !release.value || downloading.value) return
+  downloading.value = true
+  try {
+    await downloadBatchInputTemplate(template.value.id, `${template.value.title}-第${release.value.release_no}版数据模板.xlsx`)
+  } catch (error) {
+    ElMessage.error(errorMessage(error, '下载失败，请重试'))
+  } finally {
+    downloading.value = false
   }
 }
 
@@ -243,20 +261,33 @@ function close(done: () => void): void {
             换一个
           </el-button>
         </div>
-        <el-button
+        <div
           v-else
-          :icon="Upload"
-          :loading="previewing"
-          :disabled="!release || Boolean(modelProblem) || starting"
-          @click="picker?.click()"
+          class="new-task__upload"
         >
-          选择 .xlsx 文件
-        </el-button>
+          <el-button
+            :icon="Upload"
+            :loading="previewing"
+            :disabled="!release || Boolean(modelProblem) || starting"
+            @click="picker?.click()"
+          >
+            选择 .xlsx 文件
+          </el-button>
+          <el-button
+            v-if="release?.variables.length"
+            :icon="Download"
+            :loading="downloading"
+            :disabled="starting"
+            @click="downloadTemplate"
+          >
+            下载数据模板
+          </el-button>
+        </div>
         <p
           v-if="!summary"
           class="new-task__hint"
         >
-          第一行是表头，每行问一次。选好后先检查列，不会调用模型。
+          {{ uploadHint }}
         </p>
       </section>
 
@@ -351,6 +382,8 @@ function close(done: () => void): void {
 .new-task__release summary { margin-top: 10px; color: var(--zt-blue-600); cursor: pointer; }
 .new-task__release pre { max-height: 260px; overflow: auto; margin: 8px 0 0; padding: 10px 12px; border-radius: 6px; background: var(--zt-panel); font: inherit; font-size: 13px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
 .new-task__problem { margin: 10px 0 0; color: var(--el-color-danger); font-size: 13px; }
+.new-task__upload { display: flex; flex-wrap: wrap; gap: 8px; }
+.new-task__upload .el-button { margin: 0; }
 .new-task__file { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid #bfdccf; border-radius: 6px; background: #f2f9f5; }
 .new-task__file > .el-icon { flex: none; color: #3d8c6e; font-size: 20px; }
 .new-task__file div { display: flex; flex: 1; flex-direction: column; min-width: 0; }

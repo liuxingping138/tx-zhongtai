@@ -6,6 +6,7 @@ import pytest
 from platform_common.errors import ApiError, PermissionDeniedError
 
 from app.application import batch_runs, releases
+from app.application.sheets import read_sheet
 from app.core import storage
 from app.core.config import get_settings
 from app.domain.categories import FULL_ACCESS, CategoryAccess
@@ -138,6 +139,39 @@ async def test_invalid_input_is_rejected(
     _online(monkeypatch, release())
     with pytest.raises(ApiError, match=message):
         await batch_runs.preview_input(FakeSession(), FULL_ACCESS, PROMPT_ID, (name, xlsx(rows)))  # type: ignore[arg-type]
+
+
+async def test_blank_template_lists_the_release_columns(monkeypatch: pytest.MonkeyPatch) -> None:
+    content = "@【名称】在@【地区】，对照@【上传码表】再看一遍@【名称】"
+    _online(monkeypatch, release(content=content))
+    data, filename = await batch_runs.input_template(FakeSession(), FULL_ACCESS, PROMPT_ID)  # type: ignore[arg-type]
+    # 草稿引用的「草稿列」不算；码表不是列；重复引用只出一列。
+    assert read_sheet(data) == (["名称", "地区"], [])
+    assert filename == "企业行业-第3版数据模板.xlsx"
+    # 照模板填一行就能通过发起前的列检查。
+    filled = xlsx([["名称", "地区"], ["甲", "北京"]])
+    summary = await batch_runs.preview_input(FakeSession(), FULL_ACCESS, PROMPT_ID, ("填好的.xlsx", filled))  # type: ignore[arg-type]
+    assert summary["rows"] == 1
+
+
+@pytest.mark.parametrize(
+    "item,access,error,message",
+    [
+        (None, FULL_ACCESS, ApiError, "还没有上线"),
+        (release(content="不引用列"), FULL_ACCESS, ApiError, "任意 .xlsx"),
+        (release(), CategoryAccess(readable=frozenset({"policy"}), editable=frozenset()), PermissionDeniedError, None),
+    ],
+)
+async def test_blank_template_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+    item: TemplateRelease | None,
+    access: CategoryAccess,
+    error: type[Exception],
+    message: str | None,
+) -> None:
+    _online(monkeypatch, item)
+    with pytest.raises(error, match=message):
+        await batch_runs.input_template(FakeSession(), access, PROMPT_ID)  # type: ignore[arg-type]
 
 
 async def test_read_only_category_cannot_preview(monkeypatch: pytest.MonkeyPatch) -> None:
