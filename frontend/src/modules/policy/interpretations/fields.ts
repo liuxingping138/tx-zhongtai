@@ -7,22 +7,19 @@ export const DATA_STATUS_CHOICES = ['待验证', '人工验证']
 /** 新录入默认待验证。 */
 export const EDITOR_DEFAULTS = { data_status: '待验证' }
 
+// 列的先后按业务人员核对的顺序：先是政策和它解读出的行业、场景、客户、机会，再是数据状态和备注，
+// 编码、唯一标识、关联主键这类对人没意义的放后面，留痕列最后。详情抽屉按同一顺序列字段。
 export const TABLE_COLUMNS: DataColumn[] = [
-  { prop: 'policy_uid', label: '政策唯一标识', width: 300 },
   { prop: 'policy_title', label: '政策原文名称', minWidth: 340, grow: 2 },
-  { prop: 'industry_scenario_code', label: '行业场景编码', width: 220 },
-  { prop: 'industry_code', label: '行业编码', width: 120 },
   { prop: 'industry_l1', label: '一级行业', width: 120 },
   { prop: 'industry_l2', label: '二级行业', width: 120 },
   { prop: 'industry_l3', label: '三级行业', width: 120 },
-  { prop: 'scenario_code', label: '场景编码', width: 140 },
   { prop: 'scenario_l1_name', label: '一级场景名称', minWidth: 140 },
   { prop: 'scenario_l2_name', label: '二级场景名称', minWidth: 140 },
   { prop: 'scenario_l3_name', label: '三级场景名称', minWidth: 140 },
   { prop: 'target_customers', label: '目标客户', fullLabel: '目标客户当前政策影响客户群', minWidth: 260, grow: 1, wrap: true },
   { prop: 'adapted_products', label: '适配产品', minWidth: 180 },
   { prop: 'purchase_reason', label: '采买理由', fullLabel: '目标客户采买理由', minWidth: 200 },
-  { prop: 'relation_key', label: '关联主键', minWidth: 200 },
   { prop: 'opportunity_type', label: '机会类型', width: 110 },
   { prop: 'policy_summary', label: '政策要文', width: 320, wrap: true },
   { prop: 'has_subsidy', label: '有无政府补贴', width: 120 },
@@ -31,8 +28,13 @@ export const TABLE_COLUMNS: DataColumn[] = [
   { prop: 'info_level', label: '信息化等级', width: 110 },
   { prop: 'is_new_scenario', label: '是否新增场景', width: 120 },
   { prop: 'new_scenario_level', label: '新增场景级别', width: 120 },
-  { prop: 'remark', label: '备注', minWidth: 200 },
   { prop: 'data_status', label: '数据状态', width: 110 },
+  { prop: 'remark', label: '备注', minWidth: 200 },
+  { prop: 'industry_scenario_code', label: '行业场景编码', width: 220 },
+  { prop: 'industry_code', label: '行业编码', width: 120 },
+  { prop: 'scenario_code', label: '场景编码', width: 140 },
+  { prop: 'policy_uid', label: '政策唯一标识', width: 300 },
+  { prop: 'relation_key', label: '关联主键', minWidth: 200 },
   { prop: 'scenario_synced_at', label: '场景同步时间', width: 190, time: true },
   { prop: 'created_at', label: '入库时间', width: 190, time: true },
   { prop: 'created_by_name', label: '入库人', width: 110 },

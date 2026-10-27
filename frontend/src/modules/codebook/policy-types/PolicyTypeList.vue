@@ -1,127 +1,62 @@
 <script setup lang="ts">
-import { Plus, Upload, Download, Clock } from '@element-plus/icons-vue'
-import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { Plus } from '@element-plus/icons-vue'
+import { computed, onMounted, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
 
-import {
-  createPolicyType,
-  importPolicyTypes,
-  listPolicyTypes,
-  updatePolicyType,
-  type PolicyTypeItem,
-} from '@/api/codebook'
-import { errorMessage, isApiError } from '@/api/errors'
-import { importUi, reportImportResult, runExcelImport } from '@/api/excelImport'
-import FilterSelect from '@/components/FilterSelect.vue'
-import ListPage from '@/components/ListPage.vue'
-import FilterBar from '@/components/FilterBar.vue'
-import { useFilterOptions } from '@/composables/useFilterOptions'
-import { useExcelExport } from '@/composables/useExcelExport'
-import { useListLoader } from '@/composables/useListLoader'
-import { filtersForExport, useListQuery } from '@/composables/useListQuery'
+import { createPolicyType, importPolicyTypes, listPolicyTypes, updatePolicyType, type PolicyTypeItem } from '@/api/codebook'
+import { errorMessage } from '@/api/errors'
+import { reportImportResult, runExcelImport } from '@/api/excelImport'
+import AuditLogButton from '@/components/AuditLogButton.vue'
 import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
-import type { EditorGroup } from '@/components/editorGroups'
-import GroupedFields from '@/components/GroupedFields.vue'
-import { useUnsavedForm } from '@/composables/useUnsavedForm'
+import ExportButton from '@/components/ExportButton.vue'
+import FilterBar from '@/components/FilterBar.vue'
+import FilterSelect from '@/components/FilterSelect.vue'
+import ImportButton from '@/components/ImportButton.vue'
+import ListPage from '@/components/ListPage.vue'
+import RecordEditorDrawer from '@/components/RecordEditorDrawer.vue'
+import { useDetailColumns } from '@/composables/useDetailColumns'
+import { useExcelExport } from '@/composables/useExcelExport'
+import { useFilterOptions } from '@/composables/useFilterOptions'
+import { useListLoader } from '@/composables/useListLoader'
+import { filtersForExport, useListQuery } from '@/composables/useListQuery'
+import { useRecordEditor } from '@/composables/useRecordEditor'
 import { useAuthStore } from '@/stores/auth'
+import { EDITOR_GROUPS, SUMMARY_KEYS, TABLE_COLUMNS } from './fields'
 
+/** 和政策三张表同一套组装（见 BaseTagList.vue），交互口径一致：抽屉编辑、409 保留草稿、上传下载按钮共用。 */
+const RESOURCE = 'codebook.policy_types'
 const auth = useAuthStore()
-/** 导出单独一档：只读角色能看不能导，按钮保留但禁用并说明原因。 */
-const canExport = computed(() => auth.canExport('codebook.policy_types'))
-const router = useRouter()
-const canWrite = computed(() => auth.canFull('codebook.policy_types'))
-const canAudit = computed(() => auth.canRead('system.audit'))
+const canWrite = computed(() => auth.canFull(RESOURCE))
 
 const query = reactive({ keyword: [] as string[], page: 1, page_size: 20 })
 const filters = useFilterOptions('/codebook/policy-types')
-const visible = ref(false)
-const saving = ref(false)
-const saveError = ref('')
-const editing = ref<PolicyTypeItem | null>(null)
-const form = reactive({ seq_no: '', type_name: '', definition: '', priority: '' })
-
-
 const listQuery = useListQuery(query, (): Promise<void> => load())
-
 const { items, total, loading, loadError, resultFiltered, load } = useListLoader({
   requested: () => listQuery.requested(),
   commitPage: () => listQuery.commitPage(),
-  fetch: (params) => listPolicyTypes({
-      keyword: params.keyword || undefined,
-      page: params.page,
-      page_size: params.page_size,
-  }),
+  fetch: listPolicyTypes,
   errorText: '加载政策类型失败',
 })
+const { columns, defaults, selected } = useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)
 
-function onResetFilters() {
-  query.keyword = []
-  onSearch()
+async function refresh() {
+  await Promise.all([load(), filters.load()])
 }
 
-function onSearch() {
-  query.page = 1
-  listQuery.captureApplied()
-  void load()
-}
-
-function openCreate() {
-  saveError.value = ''
-  editing.value = null
-  form.seq_no = ''
-  form.type_name = ''
-  form.definition = ''
-  form.priority = ''
-  visible.value = true
-}
-
-function openEdit(row: PolicyTypeItem) {
-  saveError.value = ''
-  editing.value = row
-  form.seq_no = row.seq_no
-  form.type_name = row.type_name
-  form.definition = row.definition
-  form.priority = row.priority
-  visible.value = true
-}
-
-async function onSave() {
-  if (saving.value) return
-  saveError.value = ''
-  if (!await editorFields.value?.validate()) return
-  if (!form.type_name.trim()) {
-    ElMessage.warning('请填写政策类型')
-    return
-  }
-  saving.value = true
-  try {
-    if (editing.value) {
-      await updatePolicyType(editing.value.id, { ...form, version: editing.value.version })
-    } else {
-      await createPolicyType(form)
-    }
-    ElMessage.success('已保存')
-    visible.value = false
-    await Promise.all([load(), filters.load()])
-  } catch (error) {
-    if (isApiError(error) && error.status === 409) {
-      saveError.value = '数据已被他人修改或内容重复。请保留需要的内容，关闭后重新打开最新记录再修改。'
-      await load()
-    } else {
-      saveError.value = errorMessage(error, '保存失败，请检查后重试')
-    }
-  } finally {
-    saving.value = false
-  }
-}
+const editor = useRecordEditor<PolicyTypeItem>({
+  noun: '政策类型',
+  groups: EDITOR_GROUPS,
+  create: form => createPolicyType({ ...form, type_name: form.type_name ?? '' }),
+  update: (row, form) => updatePolicyType(row.id, { ...form, type_name: form.type_name ?? '', version: row.version }),
+  refresh,
+})
 
 async function onImport(file: File) {
   try {
-    const result = await runExcelImport(file, (onProgress) => importPolicyTypes(file, onProgress))
+    const result = await runExcelImport(file, onProgress => importPolicyTypes(file, onProgress))
     reportImportResult(result, '政策类型-跳过明细.xlsx')
-    await Promise.all([load(), filters.load()])
+    await refresh()
   } catch (error) {
     ElMessage.error(errorMessage(error, '导入失败'))
   }
@@ -134,63 +69,10 @@ const { exporting, onExport } = useExcelExport({
   filters: () => filtersForExport(listQuery.applied),
 })
 
-function openLogs() {
-  void router.push({ name: 'system-audit', query: { module_code: 'codebook.policy_types' } })
-}
-
 onMounted(() => {
   void load()
   void filters.load()
 })
-
-const editorGroups: EditorGroup[] = [
-  {
-    "title": "类型信息",
-    "hint": "政策类型为必填项，序号可按现有码表约定填写。",
-    "fields": [
-      {
-        "key": "seq_no",
-        "label": "序号",
-        "maxLength": 32
-      },
-      {
-        "key": "type_name",
-        "label": "政策类型",
-        "required": true,
-        "maxLength": 64
-      },
-      {
-        "key": "priority",
-        "label": "优先级",
-        "maxLength": 8,
-        "hint": "如 P0、P1、P2，P0 最先。AI 给政策打类型时，多个类型同时命中按它排序。"
-      },
-      {
-        "key": "definition",
-        "label": "定义",
-        "long": true,
-        "hint": "说明此类型的含义和适用范围，方便团队统一理解。"
-      }
-    ]
-  }
-]
-const editorFields = ref<InstanceType<typeof GroupedFields>>()
-const editorGuard = useUnsavedForm(visible, () => form, saving)
-const tableColumns = [
- { prop: 'seq_no', label: '序号', width: 80 },
- { prop: 'type_name', label: '政策类型', width: 160 },
- { prop: 'priority', label: '优先级', width: 80 },
- { prop: 'definition', label: '定义', minWidth: 360, grow: 1, wrap: true },
- { prop: 'created_at', label: '入库时间', time: true, width: 190 },
- { prop: 'created_by_name', label: '入库人', width: 120 },
- { prop: 'updated_at', label: '更新时间', time: true, width: 190 },
- { prop: 'updated_by_name', label: '操作人', width: 120 },
-]
-const legacyDefaults = ['type_name', 'definition', 'updated_at']
-const detailColumns = tableColumns
-const defaultColumns = detailColumns.map(col => col.prop)
-const selectedColumns = ref([...defaultColumns])
-const NO_EXPORT_HINT = '你的角色没有导出权限，如需下载 Excel 请联系管理员开通「导出」。'
 </script>
 
 <template>
@@ -213,57 +95,28 @@ const NO_EXPORT_HINT = '你的角色没有导出权限，如需下载 Excel 请�
           v-if="canWrite"
           type="primary"
           :icon="Plus"
-          @click="openCreate"
+          @click="editor.openCreate"
         >
           新增
         </el-button>
-        <el-upload
+        <ImportButton
           v-if="canWrite"
-          :show-file-list="false"
-          accept=".xlsx"
-          :before-upload="onImport"
-        >
-          <el-tooltip
-            content="上传 .xlsx 文件，重复或校验不通过的记录会跳过，详情见导入结果。"
-            placement="bottom"
-          >
-            <el-button
-              :icon="Upload"
-              :disabled="importUi.visible"
-            >
-              上传 Excel
-            </el-button>
-          </el-tooltip>
-        </el-upload>
-        <el-tooltip
-          :content="canExport ? '按当前已生效的筛选条件导出；未筛选时导出全表。' : NO_EXPORT_HINT"
-          placement="bottom"
-        >
-          <span>
-            <el-button
-              :icon="Download"
-              :loading="exporting"
-              :disabled="!canExport"
-              @click="onExport"
-            >
-              下载 Excel
-            </el-button>
-          </span>
-        </el-tooltip>
-        <el-button
-          v-if="canAudit"
-          :icon="Clock"
-          @click="openLogs"
-        >
-          操作记录
-        </el-button>
+          hint="上传 .xlsx 文件，重复或校验不通过的记录会跳过，详情见导入结果。"
+          :upload="onImport"
+        />
+        <ExportButton
+          :allowed="auth.canExport(RESOURCE)"
+          :loading="exporting"
+          @click="onExport"
+        />
+        <AuditLogButton :module="RESOURCE" />
       </template>
       <template #filters>
         <FilterBar
           :query="query"
           :applied="listQuery.applied"
-          @search="onSearch"
-          @reset="onResetFilters"
+          @search="listQuery.search"
+          @reset="listQuery.resetFilters"
         >
           <el-form-item label="关键字">
             <FilterSelect
@@ -276,70 +129,29 @@ const NO_EXPORT_HINT = '你的角色没有导出权限，如需下载 Excel 请�
       </template>
       <template #tools>
         <ColumnPicker
-          v-model="selectedColumns"
-          :columns="detailColumns"
-          :defaults="defaultColumns"
-          :legacy-defaults="legacyDefaults"
+          v-model="selected"
+          :columns="columns"
+          :defaults="defaults"
+          :legacy-defaults="SUMMARY_KEYS"
         />
       </template>
       <BusinessTable
         :items="items"
-        :columns="detailColumns"
-        :selected="selectedColumns"
-        :summary-keys="legacyDefaults"
+        :columns="columns"
+        :selected="selected"
+        :summary-keys="SUMMARY_KEYS"
         title-key="type_name"
         detail-title="政策类型详情"
         :can-write="canWrite"
         :loading="loading"
         :filtered="resultFiltered"
-        @reset="onResetFilters"
-        @edit="openEdit"
+        @reset="listQuery.resetFilters"
+        @edit="editor.openEdit"
       />
     </ListPage>
-    <el-dialog
-      v-model="visible"
-      class="editor-overlay"
-      destroy-on-close
-      :before-close="editorGuard.beforeClose"
-      :close-on-click-modal="!saving"
-      :close-on-press-escape="!saving"
-      :show-close="!saving"
-      :title="editing ? '编辑政策类型' : '新增政策类型'"
-      width="560px"
-    >
-      <el-form
-        novalidate
-        :disabled="saving"
-        label-position="top"
-        @submit.prevent="onSave"
-      >
-        <GroupedFields
-          ref="editorFields"
-          :model-value="form"
-          :groups="editorGroups"
-          :submit-error="saveError"
-        />
-      </el-form>
-      <template #footer>
-        <span
-          v-if="editorGuard.dirty.value"
-          class="editor-dirty"
-          role="status"
-        >有未保存的修改</span>
-        <el-button
-          :disabled="saving"
-          @click="editorGuard.close"
-        >
-          取消
-        </el-button>
-        <el-button
-          type="primary"
-          :loading="saving"
-          @click="onSave"
-        >
-          保存
-        </el-button>
-      </template>
-    </el-dialog>
+    <RecordEditorDrawer
+      :editor="editor"
+      :groups="EDITOR_GROUPS"
+    />
   </div>
 </template>
