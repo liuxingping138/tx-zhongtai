@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 
 from platform_common.filters import Filters, ilike_any
 from sqlalchemy import ColumnElement, and_, func, or_, select
@@ -33,10 +33,20 @@ async def get_by_hash(session: AsyncSession, digest: str) -> BaseTag | None:
     return result.scalar_one_or_none()
 
 
-async def list_hashes(session: AsyncSession) -> set[str]:
-    result = await session.execute(select(BaseTag.content_hash))
-    return set(result.scalars())
+async def existing_hashes(session: AsyncSession, digests: Collection[str]) -> set[str]:
+    """文件里这些内容哈希哪些库里已有。按文件分片查，不把几百万行的哈希整表拉进内存。"""
 
+    found: set[str] = set()
+    wanted = list(set(digests))
+    for start in range(0, len(wanted), IN_CHUNK):
+        chunk = wanted[start : start + IN_CHUNK]
+        result = await session.execute(select(BaseTag.content_hash).where(BaseTag.content_hash.in_(chunk)))
+        found.update(result.scalars())
+    return found
+
+
+# IN (...) 一次最多带这么多个值。
+IN_CHUNK = 1000
 
 # 列表与导出共用同一份筛选定义，避免两边条件逐渐走偏。
 FILTER_COLUMNS: dict[str, InstrumentedAttribute[str]] = {

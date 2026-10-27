@@ -157,7 +157,9 @@ def tag_env(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(base_tags, "parse_sheet_async", parse)
     monkeypatch.setattr(importing, "encode_skipped_file_async", encode)
     monkeypatch.setattr(base_tags, "enqueue_event", AsyncMock())
-    monkeypatch.setattr(base_tags.repo, "list_hashes", AsyncMock(side_effect=lambda _s: env["hashes"]))
+    monkeypatch.setattr(
+        base_tags.repo, "existing_hashes", AsyncMock(side_effect=lambda _s, digests: env["hashes"] & set(digests))
+    )
     return env
 
 

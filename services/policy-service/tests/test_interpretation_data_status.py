@@ -181,13 +181,13 @@ def _workbook(rows: list[list[str]]) -> bytes:
 
 
 def test_import_defaults_and_validates_status(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def no_keys(_session: object) -> set[str]:
+    async def no_keys(_session: object, _keys: object) -> set[str]:
         return set()
 
     async def fake_enqueue(*_args: object, **_kwargs: object) -> None:
         return None
 
-    monkeypatch.setattr(service.repo, "list_relation_keys", no_keys)
+    monkeypatch.setattr(service.repo, "existing_relation_keys", no_keys)
     monkeypatch.setattr(service, "enqueue_event", fake_enqueue)
 
     session = _ImportSession()
@@ -212,13 +212,13 @@ def test_import_defaults_and_validates_status(monkeypatch: pytest.MonkeyPatch) -
 def test_import_without_status_column_defaults_to_pending(monkeypatch: pytest.MonkeyPatch) -> None:
     """旧模板没有「数据状态」列，也要能导入，且全部按待验证入库。"""
 
-    async def no_keys(_session: object) -> set[str]:
+    async def no_keys(_session: object, _keys: object) -> set[str]:
         return set()
 
     async def fake_enqueue(*_args: object, **_kwargs: object) -> None:
         return None
 
-    monkeypatch.setattr(service.repo, "list_relation_keys", no_keys)
+    monkeypatch.setattr(service.repo, "existing_relation_keys", no_keys)
     monkeypatch.setattr(service, "enqueue_event", fake_enqueue)
 
     session = _ImportSession()

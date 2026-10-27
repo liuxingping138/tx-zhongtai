@@ -25,6 +25,7 @@ from app.policy.application.importing import (
     rejected_result,
 )
 from app.policy.application.region import (
+    SiteCodeAllocator,
     digits_only,
     make_internal_id,
     next_site_code,
@@ -308,7 +309,7 @@ def _check_rows(staged: list[_StagedSource], db_internal: set[str], db_site: set
 def _build_rows(actor: Actor, staged: list[_StagedSource], db_site: set[str]) -> list[Source]:
     now = utcnow()
     today = beijing_today()
-    taken = db_site | {row.site_code for row in staged if row.site_code}
+    allocator = SiteCodeAllocator(db_site | {row.site_code for row in staged if row.site_code})
     built: list[Source] = []
     for row in staged:
         normalized = _normalized_values(row.values)
@@ -316,10 +317,9 @@ def _build_rows(actor: Actor, staged: list[_StagedSource], db_site: set[str]) ->
         normalized["online_date"] = online_date_after(
             "", normalized["crawler_status"], "", normalized["online_date"], today
         )
-        site_code = row.site_code or next_site_code(
-            site_code_prefix(normalized["province_code"], normalized["city_code"], normalized["district_code"]), taken
+        site_code = row.site_code or allocator.allocate(
+            site_code_prefix(normalized["province_code"], normalized["city_code"], normalized["district_code"])
         )
-        taken.add(site_code)
         built.append(
             Source(
                 internal_id=row.internal_id,

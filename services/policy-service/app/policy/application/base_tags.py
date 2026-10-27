@@ -210,7 +210,7 @@ async def import_base_tags(session: AsyncSession, actor: Actor, content: bytes) 
     for item in parsed:
         values = _values(item)
         staged.append((values, content_hash(values, BASE_TAG_FIELDS), (item.get("skip_reason") or "").strip()))
-    checked = _check_rows(staged, await repo.list_hashes(session))
+    checked = _check_rows(staged, await repo.existing_hashes(session, [digest for _values, digest, _reason in staged]))
     blocked = sum(1 for reasons in checked if reasons)
     if blocked:
         marked = [mark(values, reasons) for (values, _digest, _reason), reasons in zip(staged, checked, strict=True)]

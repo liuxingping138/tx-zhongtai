@@ -294,6 +294,11 @@ async def test_abandon_marks_failed_and_stops_the_ai_run(
     run_id = uuid.uuid4()
     run_store[str(run_id)] = SimpleNamespace(
         status="running",
+        stage="typing",
+        cost=Decimal(0),
+        type_cost=Decimal(0),
+        interpret_cost=Decimal(0),
+        opportunity_cost=Decimal(0),
         type_run_id="r" * 32,
         interpret_run_id="i" * 32,
         opportunity_run_id="",
@@ -531,3 +536,30 @@ async def test_retag_keeps_manual_edits_and_does_not_duplicate_another_row(monke
     assert failed.type_retag_at is None and failed.remark == rules.DUPLICATE_NOTE and failed.policy_types == ""
     assert manual.type_retag_at is None and manual.policy_types == "信息化建设类"
     assert (manual.is_penetrate, manual.penetrate_words, manual.remark) == ("是", "数字政府", "领导关注")
+
+
+async def test_abandon_books_the_interrupted_stage_cost(
+    monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]
+) -> None:
+    """中断时那一步的花费只在 cost 里：收尾要补到步骤费用列，当日上限按步骤列算才不会漏掉这笔钱。"""
+
+    async def quiet(_ai_run_id: str) -> None:
+        return None
+
+    monkeypatch.setattr(tagging, "stop_quietly", quiet)
+    run_id = uuid.uuid4()
+    run = SimpleNamespace(
+        id=run_id,
+        status="running",
+        stage="interpreting",
+        cost=Decimal("3"),
+        type_cost=Decimal("1"),
+        interpret_cost=Decimal(0),
+        opportunity_cost=Decimal(0),
+        type_run_id="a",
+        interpret_run_id="b",
+        opportunity_run_id=None,
+    )
+    run_store[str(run_id)] = run
+    await tagging.abandon(run_id, "进程中断")
+    assert (run.status, run.interpret_cost, run.type_cost) == ("failed", Decimal("2"), Decimal("1"))

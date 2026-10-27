@@ -42,6 +42,9 @@ from app.policy.domain.models import BASE_TAG_FIELDS, BaseTag, content_hash
 __all__ = ["abandon", "day_start", "policy_type_names", "run_batch", "run_summary", "summary", "today"]
 
 
+STAGE_COLUMN = {"typing": "type_cost", "interpreting": "interpret_cost", "opportunity": "opportunity_cost"}
+
+
 async def policy_type_names() -> list[str]:
     return await internal_clients.policy_type_names()
 
@@ -252,6 +255,11 @@ async def abandon(run_id: uuid.UUID, message: str) -> None:
         if run is None or run.status != "running":
             return
         run.status, run.error_message, run.finished_at = "failed", message[:2000], utcnow()
+        # 中断那一步的花费只记在 cost 里，步骤费用列还是 0：补上，当日上限才算得到这笔钱。
+        column = STAGE_COLUMN.get(run.stage)
+        booked = run.type_cost + run.interpret_cost + run.opportunity_cost
+        if column is not None and run.cost > booked:
+            setattr(run, column, getattr(run, column) + (run.cost - booked))
         ai_runs = [run.type_run_id, run.interpret_run_id, run.opportunity_run_id]
         await session.commit()
     for ai_run_id in filter(None, ai_runs):

@@ -76,6 +76,24 @@ def site_code_prefix(province_code: str, city_code: str, district_code: str) -> 
     return ""
 
 
+class SiteCodeAllocator:
+    """导入一批时用：已有编码按区县前缀只扫一遍，之后每行 O(1) 取号。
+    逐行调 next_site_code 是行数 × 库里编码数次正则，2 万行库 + 2 千行文件要跑几十秒，还占着事件循环。"""
+
+    def __init__(self, existing_codes: Iterable[str]) -> None:
+        self._max: dict[str, int] = {}
+        for code in existing_codes:
+            digits = digits_only(code)
+            prefix, seq = digits[:DISTRICT_CODE_LENGTH], digits[DISTRICT_CODE_LENGTH:]
+            if len(prefix) == DISTRICT_CODE_LENGTH and seq.isdigit():
+                self._max[prefix] = max(self._max.get(prefix, 0), int(seq))
+
+    def allocate(self, district_code: str) -> str:
+        prefix = _fit(digits_only(district_code), DISTRICT_CODE_LENGTH)
+        self._max[prefix] = self._max.get(prefix, 0) + 1
+        return f"{prefix}{self._max[prefix]:05d}"
+
+
 def next_site_code(district_code: str, existing_codes: Iterable[str]) -> str:
     """同区县取当前网站编码最大序号再 +1。"""
 

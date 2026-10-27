@@ -184,7 +184,7 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
 - 主线是业务人员写模板、样本试跑 → 管理员上线 → 定时任务和批量任务都只跑上线版本（`releases.current`）。页面发起的批量任务单独上传本次 Excel，按上线版本引用的列检查（`input-preview` 预检不调模型），把输入文件、上线版本的提示词 / 输出字段 / 模型 / 码表冻结进任务目录和任务行（`release_no`、`input_name`）：之后改模板、重新上线、删模板都不影响排队中、运行中和已完成的任务
 - 样本试跑（`app/application/sample_runs.py`，`/api/v1/ai/prompts/{id}/sample-run`，权限同试发 `ai.prompts:ask`）：草稿 × 模板测试样本前 N 条（最多 50），也是一条 `ai_batch_runs`，`source=sample`，不进批量任务列表（`repositories/batch_runs.TASK_SOURCES`），和正式任务互不阻挡；模板列表带最近一次试跑（`sample`，`current` 表示跑的就是现在的草稿）。逐行结果预览 `run_rows.preview` 样本试跑和批量详情共用，任务可能几十万行，只读要列的那几行：输入读逐行副本 `input.jsonl`（第一次打开时由快照生成，快照大小或修改时间变了就重建），原始返回不留提问原文，前 50 行都成功就不往下读（重跑只重问失败的行，成功那次就是最终结果）。跑完的结果 Excel 在模板页下载（`/sample-run/{run_id}/files/{kind}`），挂模板的导出档 `ai.prompts:export` 而不是批量任务的，只给这个模板自己 `source=sample` 的任务
 - `ai-worker` 持 Postgres 全局锁，用 `SKIP LOCKED` 认领排队任务，最多同时跑 `AI_BATCH_MAX_RUNNING` 个，每个任务
-  `AI_BATCH_CONCURRENCY` 路并发。每行完成立即追加 `temp.csv`；进程被停时把已跑部分收尾成「中断」并生成结果。
+  `AI_BATCH_CONCURRENCY` 路并发。提示词轮到哪行才拼哪行、成功行写完 CSV 就不再留提问原文、结果 Excel 用 `xlsx_writer` 流式写：10 万行乘上码表全文一次拼好要几个 G，worker 会被 OOM 杀掉。每行完成立即追加 `temp.csv`；进程被停时把已跑部分收尾成「中断」并生成结果。
   运行中超过 `AI_BATCH_STALE_SECONDS` 没心跳的任务，列表和进度接口会把它纠正为「中断」
 - 每行自动补救（`app/application/batch_execute.py` 的 `ask_row`）：限流、5xx、超时、截断按 `RETRY_DELAYS` 退避重发，
  400、密钥错误不重发；回答解析不出输出字段时重问一次，仍不行记为「格式不对」（error 列以 `返回格式不对` 开头，原始返回 CSV 不加列）。
@@ -324,6 +324,7 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
 - 导出前用 `count_filtered` 校验 `export_max_rows`（默认 10 万），超限不执行查询
 - 导入、新建、编辑前用 `platform_common.columns.string_lengths(Model)` + `overlong_reasons` 按模型列宽校验，超长的写进校验说明 / 422；
   不校验的话撞到库里是 DataError，用户只看到「服务器内部错误」。信源的爬虫状态只收 `CRAWLER_STATUS_CHOICES`，别的写法会让配置统计分省合计对不上
+- 导入查重按文件里的键分片查库（`existing_hashes` / `existing_relation_keys`），不整表拉哈希；信源导入分配网站编码用 `SiteCodeAllocator`，已有编码只扫一遍
 - `build_workbook` 不经 openpyxl，由 `platform_common/xlsx_writer.py` 直接写只含文本的 xlsx（内联字符串，不会成公式）：
   2 万行信源 3.3 秒降到 0.5 秒。业务导出走它，不要为加样式改回逐格建对象
 - 自己拼 Excel 时逐行用 `platform_common.excel.append_text_row`，别直接 `sheet.append`：openpyxl 会把 `=` 开头的

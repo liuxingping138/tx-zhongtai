@@ -261,9 +261,9 @@ async def import_interpretations(session: AsyncSession, actor: Actor, content: b
     parsed = await parse_sheet_async(content, INTERPRETATION_COLUMNS, subject="政策")
     skipped_rows: list[dict[str, str]] = []
     accepted: list[dict[str, str]] = []
-    seen = await repo.list_relation_keys(session)
-    for item in parsed:
-        values = _values(item)
+    rows = [_values(item) for item in parsed]
+    seen = await repo.existing_relation_keys(session, [values["relation_key"] for values in rows])
+    for values in rows:
         reason = _import_skip_reason(values, seen)
         if reason:
             skipped_rows.append({**values, "skip_reason": reason})
