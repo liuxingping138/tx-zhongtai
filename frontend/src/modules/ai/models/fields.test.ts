@@ -40,8 +40,8 @@ describe('模型配置表单转换', () => {
     for (const key of Object.keys(body) as (keyof typeof body)[]) expect(body[key]).toEqual(flash[key])
   })
 
-  it('「不传」和「停用」换回空串和 false', () => {
-    const body = toBody({ ...CREATE_DEFAULTS, id: 'm', name: 'm', endpoint: 'ep', reasoning_effort: '不传', enabled: '停用' })
+  it('「按模型默认」和「停用」换回空串和 false', () => {
+    const body = toBody({ ...CREATE_DEFAULTS, id: 'm', name: 'm', endpoint: 'ep', reasoning_effort: '按模型默认', enabled: '停用' })
     expect([body.service_tier, body.reasoning_effort, body.enabled, body.web_search, body.sort_order]).toEqual(['', '', false, false, 100])
   })
 

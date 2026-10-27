@@ -11,7 +11,8 @@ const props = withDefaults(defineProps<{ modelValue: string[]; placeholder?: str
   placeholder: '输入关键词',
   label: undefined,
 })
-const emit = defineEmits<{ 'update:modelValue': [value: string[]]; search: [] }>()
+// 回车不自己发查询：它在 FilterBar 的表单里，表单提交已经会查一次，再 emit 就是两次请求，还绕过了输入法组合的判断。
+const emit = defineEmits<{ 'update:modelValue': [value: string[]] }>()
 const text = computed({
   get: () => props.modelValue[0] ?? '',
   set: (value: string | undefined) => emit('update:modelValue', value?.trim() ? [value] : []),
@@ -25,6 +26,5 @@ const text = computed({
     clearable
     :placeholder="placeholder"
     :aria-label="label"
-    @keyup.enter="emit('search')"
   />
 </template>

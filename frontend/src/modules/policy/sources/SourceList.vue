@@ -30,6 +30,10 @@ import { EDITOR_GROUPS, SUMMARY_KEYS, TABLE_COLUMNS } from './fields'
 const RESOURCE = 'policy.sources'
 const auth = useAuthStore()
 const canWrite = computed(() => auth.canFull(RESOURCE))
+// 上传要先经省市区编码表补地区编码（codebook.area_codes:resolve 是它的查看档）：没这项权限的角色点了只会报「没有权限」，提前说清。
+const importBlocked = computed(() =>
+  auth.canRead('codebook.area_codes') ? '' : '上传要靠省市区编码表补地区编码，当前角色没有它的查看权限，请找管理员开通',
+)
 const canPurge = computed(() => auth.canFull(RESOURCE) && auth.isSuperadmin)
 const clearing = ref(false)
 const selection = useTableSelection<SourceItem>()
@@ -171,6 +175,17 @@ onMounted(() => {
         >
           新增
         </el-button>
+        <ImportButton
+          v-if="canWrite"
+          hint="上传后自动补齐地区编码；存在重复或地区编码缺失时整批退回，并下载校验报告。"
+          :upload="onImport"
+          :blocked="importBlocked"
+        />
+        <ExportButton
+          :allowed="auth.canExport(RESOURCE)"
+          :loading="exporting"
+          @click="onExport"
+        />
         <el-button
           v-if="canWrite"
           :disabled="!checked.length"
@@ -178,16 +193,6 @@ onMounted(() => {
         >
           批量改爬虫状态{{ checked.length ? `（${checked.length}）` : '' }}
         </el-button>
-        <ImportButton
-          v-if="canWrite"
-          hint="上传后自动补齐地区编码；存在重复或地区编码缺失时整批退回，并下载校验报告。"
-          :upload="onImport"
-        />
-        <ExportButton
-          :allowed="auth.canExport(RESOURCE)"
-          :loading="exporting"
-          @click="onExport"
-        />
         <el-button
           v-if="canPurge"
           type="danger"

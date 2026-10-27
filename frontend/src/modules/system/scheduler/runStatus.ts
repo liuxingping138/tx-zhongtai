@@ -4,7 +4,7 @@ export type RunStatus = ScheduledRun['status']
 
 export const STATUS_TEXT: Record<RunStatus, string> = {
   queued: '排队中',
-  running: '执行中',
+  running: '运行中',
   retrying: '等待重试',
   success: '成功',
   failed: '失败',

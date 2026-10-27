@@ -74,7 +74,7 @@ async function onLogoutAll() {
   }
 }
 
-const STATUS_TEXT: Record<string, string> = { active: '启用', disabled: '禁用' }
+const STATUS_TEXT: Record<string, string> = { active: '启用', disabled: '停用' }
 </script>
 
 <template>

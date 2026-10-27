@@ -25,6 +25,7 @@ export const MODULE_LABELS: Record<string, string> = {
   'ai.chat': '多轮对话',
   'ai.models': '模型配置',
   'ai.billing': '费用账单',
+  'ai.releases': '模板上线',
 }
 
 export const ACTION_LABELS: Record<string, string> = {
@@ -53,6 +54,9 @@ export const ACTION_LABELS: Record<string, string> = {
   purge: '清空',
   run: '运行',
   stop: '停止',
+  ask: '试发 / 样本试跑',
+  publish: '上线 / 下线',
+  sync_scenarios: '同步新增场景',
   resolve: '补码',
   sync: '同步',
 }

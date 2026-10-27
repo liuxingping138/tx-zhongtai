@@ -32,6 +32,10 @@ import { AI_STATUS_CHOICES, EDITOR_GROUPS, RETAG_CHOICES, SUMMARY_KEYS, TABLE_CO
 const RESOURCE = 'policy.base_tags'
 const auth = useAuthStore()
 const canWrite = computed(() => auth.canFull(RESOURCE))
+// 上传要先经省市区编码表补地区编码（codebook.area_codes:resolve 是它的查看档）：没这项权限的角色点了只会报「没有权限」，提前说清。
+const importBlocked = computed(() =>
+  auth.canRead('codebook.area_codes') ? '' : '上传要靠省市区编码表补地区编码，当前角色没有它的查看权限，请找管理员开通',
+)
 
 const query = reactive({
   policy_name: [] as string[],
@@ -134,6 +138,7 @@ onMounted(() => {
           v-if="canWrite"
           hint="上传后关联省市区编码，任一条记录关联失败则整批退回，详情见校验报告。"
           :upload="onImport"
+          :blocked="importBlocked"
         />
         <ExportButton
           :allowed="auth.canExport(RESOURCE)"

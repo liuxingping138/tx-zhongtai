@@ -381,7 +381,7 @@ test('users: excel import shows initial-password note; export carries the applie
   await expect(result).toHaveCount(0)
 
   await page.locator('.filter-bar .el-form-item').filter({ hasText: '状态' }).locator('.el-select').click()
-  await page.getByRole('option', { name: '禁用' }).click()
+  await page.getByRole('option', { name: '停用' }).click()
   await page.getByRole('button', { name: '查询', exact: true }).click()
   await page.getByRole('button', { name: '下载 Excel' }).click()
   await expect.poll(() => exports.length).toBe(1)

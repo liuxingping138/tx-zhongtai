@@ -38,7 +38,7 @@ const form = reactive({ display_name: '', phone: '', email: '' })
 const draft = ref<string[]>([])
 const saving = ref(false)
 
-const STATUS_TEXT: Record<string, string> = { active: '启用', disabled: '禁用' }
+const STATUS_TEXT: Record<string, string> = { active: '启用', disabled: '停用' }
 const guard = useUnsavedForm(visible, () => ({ ...form, roles: [...draft.value].sort() }), saving)
 
 const rolesDirty = computed(() => {

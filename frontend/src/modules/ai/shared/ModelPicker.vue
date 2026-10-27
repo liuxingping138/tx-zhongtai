@@ -27,7 +27,7 @@ const current = computed(() => props.models.find(item => item.id === model.value
     <el-select
       v-model="model"
       :aria-label="label"
-      :placeholder="allowEmpty ? '模型：运行时再选' : '选择模型'"
+      :placeholder="allowEmpty ? '选择模型（上线前必选）' : '选择模型'"
       :clearable="allowEmpty"
       :size="size"
       :disabled="disabled"

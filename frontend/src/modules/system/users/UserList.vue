@@ -231,7 +231,6 @@ onMounted(() => {
               v-model="query.keyword"
               clearable
               placeholder="用户名、姓名、电话或邮箱"
-              @keyup.enter="listQuery.search"
             />
           </el-form-item>
           <el-form-item
@@ -273,7 +272,7 @@ onMounted(() => {
                 value="active"
               />
               <el-option
-                label="禁用"
+                label="停用"
                 value="disabled"
               />
             </el-select>

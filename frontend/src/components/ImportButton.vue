@@ -8,6 +8,8 @@ defineProps<{
   hint: string
   /** 交给 el-upload 的 before-upload，自己发请求并返回 false 阻止默认上传。 */
   upload: (file: File) => Promise<boolean> | boolean
+  /** 当前角色上传必定失败的原因（如缺另一个模块的权限）：按钮禁用，悬停显示原因而不是用法。 */
+  blocked?: string
 }>()
 </script>
 
@@ -16,14 +18,15 @@ defineProps<{
     :show-file-list="false"
     accept=".xlsx"
     :before-upload="upload"
+    :disabled="Boolean(blocked)"
   >
     <el-tooltip
-      :content="hint"
+      :content="blocked || hint"
       placement="bottom"
     >
       <el-button
         :icon="Upload"
-        :disabled="importUi.visible"
+        :disabled="importUi.visible || Boolean(blocked)"
       >
         上传 Excel
       </el-button>

@@ -31,7 +31,7 @@
 |---|---|---|
 | 页面结构、总数、分页、加载失败 | `frontend/src/components/ListPage.vue` | title/hint、total/page/pageSize/loading/error，retry/change处理；结果区必须用 ScrollPort；概览区走 `summary` 插槽（筛选之前，不参与拉伸） |
 | 结果区滚动 | `frontend/src/components/ScrollPort.vue` | 常显横/纵滑槽；两指分轴；默认每页 20 条时未露出的行必须能上下滚到 |
-| 查询 | `frontend/src/components/FilterBar.vue`、`FilterSelect.vue` | query 与 applied；桌面展开全部字段，advanced 只作字段分组，桌面不折叠。`FilterSelect` 一律多选，query 里筛选字段默认值是 `[]`（不是 `''`），重置也赋 `[]`；状态卡片这类「点一下筛选、再点取消」的入口用 `toggleValue`。几百万行的名称、标题字段用 `FilterKeyword.vue`（关键词输入框，同样以 `string[]` 做 v-model，回车 emit search），后端照旧 `ilike_any`，并给该列建 pg_trgm 的 GIN 索引；不要再放进 `*_OPTION_COLUMNS` 去重取候选 |
+| 查询 | `frontend/src/components/FilterBar.vue`、`FilterSelect.vue` | query 与 applied；桌面展开全部字段，advanced 只作字段分组，桌面不折叠。`FilterSelect` 一律多选，query 里筛选字段默认值是 `[]`（不是 `''`），重置也赋 `[]`；状态卡片这类「点一下筛选、再点取消」的入口用 `toggleValue`。几百万行的名称、标题字段用 `FilterKeyword.vue`（关键词输入框，同样以 `string[]` 做 v-model；回车交给 FilterBar 的表单提交，组件里不要再绑 `keyup.enter`，否则一次回车查两次、还绕过输入法组合判断），后端照旧 `ilike_any`，并给该列建 pg_trgm 的 GIN 索引；不要再放进 `*_OPTION_COLUMNS` 去重取候选 |
 | 业务表格/详情/手机摘要 | `frontend/src/components/BusinessTable.vue` | items、完整columns、selected、titleKey、可选summaryKeys、canWrite/loading/filtered，edit/reset；详情抽屉底部的动作用 `#detail-actions="{ row, close }"` 插槽；批量操作传 `selectable`，用 `useTableSelection`：`:ref="selection.bindTable"`、`@selection-change="checked = $event"`，操作完 `selection.clear()`；选一个选项的批量操作用 `BatchChoiceDialog`（选项带后果说明，跳过的原因弹窗列出） |
 | 账号菜单 | `frontend/src/layouts/UserAccountMenu.vue` | 侧栏底部；显示名 + `/me.roles` |
 | 浮层焦点 | `frontend/src/layouts/AdminLayout.vue` | 打开时把焦点送进浮层、关闭后送回触发按钮；落回 body 会让键盘用户从头 Tab |
@@ -46,6 +46,7 @@
 | 系统字段验证 | `frontend/src/composables/useFieldValidation.ts` | 字段错误、提交验证，不覆盖业务规则 |
 | 未保存保护 | `frontend/src/composables/useUnsavedForm.ts` | visible、表单快照、saving；接close/beforeClose。业务记录抽屉已由 useRecordEditor 接好，系统表单单独用 |
 | 上传入口 | `frontend/src/components/ImportButton.vue` | `hint` 写去重口径和失败时整批退回还是逐行跳过；`upload` 自己调导入接口并返回 false |
+| 上传入口 | `frontend/src/components/ImportButton.vue` | `hint` 写去重口径和失败时整批退回还是逐行跳过；当前角色上传必定失败时传 `blocked="原因"`（信源、基础标签上传要靠省市区编码表补编码，没 `codebook.area_codes` 查看权就传），按钮禁用、悬停显示原因 |
 | 下载入口 | `frontend/src/components/ExportButton.vue` + `composables/useExcelExport.ts` | `useExcelExport({ path, filename, filters: () => filtersForExport(listQuery.applied) })` 给出 `exporting/onExport`；按钮 `:allowed="auth.canExport(资源)"`，没有导出档时保留但禁用并悬停说明（工具栏入口必须保留） |
 | 操作记录入口 | `frontend/src/components/AuditLogButton.vue` | `module` 填资源编码，点击跳到操作日志并按该模块筛选；没有操作日志查看权限时自动隐藏 |
 | Excel 下载底层 | `frontend/src/api/download.ts` | `downloadFile` 负责 401 续期和统一中文错误；页面一般经 useExcelExport 调用，不要用裸 fetch。导出传 applied 不传 query |

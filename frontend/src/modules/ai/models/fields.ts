@@ -7,9 +7,9 @@ import type { RecordForm } from '@/composables/useRecordEditor'
 const LABELS = {
   provider: { ark: '字节方舟', baidu: '百度千帆' },
   web_search: { true: '联网', false: '不联网' },
-  thinking: { enabled: '开启', disabled: '关闭', switch: '提问时可选', '': '不传' },
-  reasoning_effort: { low: '低（low）', high: '高（high）', max: '最高（max）', '': '不传' },
-  service_tier: { flex: '低优（flex）', auto: '常规（auto）', '': '不传' },
+  thinking: { enabled: '开启', disabled: '关闭', switch: '提问时可选', '': '按模型默认' },
+  reasoning_effort: { low: '低（low）', high: '高（high）', max: '最高（max）', '': '按模型默认' },
+  service_tier: { flex: '低优（flex）', auto: '常规（auto）', '': '按模型默认' },
   enabled: { true: '启用', false: '停用' },
 } as const satisfies Record<string, Record<string, string>>
 

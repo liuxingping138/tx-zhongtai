@@ -21,7 +21,7 @@ async function confirm(message: string, title: string, options: Record<string, u
 export function useUserActions(options: UserActionsOptions) {
   async function toggleStatus(user: UserItem): Promise<void> {
     const next = user.status === 'active' ? 'disabled' : 'active'
-    const label = next === 'disabled' ? '禁用' : '启用'
+    const label = next === 'disabled' ? '停用' : '启用'
     if (!await confirm(`确认${label}用户 ${user.username} ？`, '请确认')) return
     try {
       await updateUser(user.id, { status: next, version: user.version })

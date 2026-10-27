@@ -122,7 +122,7 @@ async function onImport(file: File) {
 
 const { exporting, onExport } = useExcelExport({
   path: '/policy/interpretations/export',
-  filename: '政策解读表.xlsx',
+  filename: '政策解读列表.xlsx',
   filters: () => filtersForExport(listQuery.applied),
 })
 
@@ -135,7 +135,7 @@ onMounted(() => {
 <template>
   <div>
     <ListPage
-      title="政策解读表"
+      title="政策解读列表"
       hint="关联行业场景，整理政策解读与业务机会。"
       :total="total"
       :page="query.page"

@@ -21,7 +21,7 @@ const candidates = ref<UserItem[]>([])
 const searching = ref(false)
 const picker = ref<{ blur: () => void }>()
 
-const STATUS_TEXT: Record<string, string> = { active: '启用', disabled: '禁用' }
+const STATUS_TEXT: Record<string, string> = { active: '启用', disabled: '停用' }
 const memberIds = computed(() => new Set(members.value.map(member => member.id)))
 
 let sequence = 0
@@ -233,7 +233,7 @@ defineExpose({ reload: load })
           :disabled="user.status !== 'active'"
         >
           <span>{{ user.display_name }}</span>
-          <span class="members__option-meta">{{ user.username }}{{ user.status !== 'active' ? ' · 已禁用' : '' }}</span>
+          <span class="members__option-meta">{{ user.username }}{{ user.status !== 'active' ? ' · 已停用' : '' }}</span>
         </el-option>
       </el-select>
       <template #footer>

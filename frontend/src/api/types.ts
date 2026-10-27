@@ -89,7 +89,7 @@ export interface RoleItem {
   code: string
   name: string
   description?: string
-  /** 角色分给了几个人（含已禁用账号）。 */
+  /** 角色分给了几个人（含已停用账号）。 */
   member_count?: number
   /** 已发布模块上各档的数量：仅查看 / 查看和导出 / 可管理。 */
   grant_counts?: { read: number; export: number; full: number }

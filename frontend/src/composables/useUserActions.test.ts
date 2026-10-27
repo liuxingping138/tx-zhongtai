@@ -45,16 +45,16 @@ describe('useUserActions', () => {
     expect(reload).not.toHaveBeenCalled()
   })
 
-  it('启用的账号点开关是禁用，并带着版本号提交', async () => {
+  it('启用的账号点开关是停用，并带着版本号提交', async () => {
     api.updateUser.mockResolvedValue({})
     const { actions, reload } = setup()
     await actions.toggleStatus(user)
     expect(api.updateUser).toHaveBeenCalledWith('u1', { status: 'disabled', version: 4 })
-    expect(ui.success).toHaveBeenCalledWith('已禁用')
+    expect(ui.success).toHaveBeenCalledWith('已停用')
     expect(reload).toHaveBeenCalledOnce()
   })
 
-  it('禁用的账号点开关是启用', async () => {
+  it('停用的账号点开关是启用', async () => {
     api.updateUser.mockResolvedValue({})
     const { actions } = setup()
     await actions.toggleStatus({ ...user, status: 'disabled' })

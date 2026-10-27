@@ -149,14 +149,14 @@ function roleNames(user: UserItem): string {
             :aria-label="`${row.username} 的账号启用`"
             @change="$emit('toggle', row)"
           />
-          <span class="status-text">{{ row.status === 'active' ? '启用' : '禁用' }}</span>
+          <span class="status-text">{{ row.status === 'active' ? '启用' : '停用' }}</span>
         </template>
         <el-tag
           v-else
           :type="row.status === 'active' ? 'success' : 'warning'"
           size="small"
         >
-          {{ row.status === 'active' ? '启用' : '禁用' }}
+          {{ row.status === 'active' ? '启用' : '停用' }}
         </el-tag>
       </template>
     </el-table-column>
