@@ -2,7 +2,8 @@
 
 <data_dir>/prompts/<模板ID>/source.xlsx   模板 Excel
 <data_dir>/prompts/<模板ID>/code.txt      码表
-<data_dir>/runs/<任务ID>/...              批量产物（见 RUN_FILES）；输入快照是 source.xlsx，流水线任务是 rows.json
+<data_dir>/runs/<任务ID>/...              批量产物（见 RUN_FILES）；输入快照是 source.xlsx，流水线任务是 rows.json，
+                                         逐行结果预览另存一份 input.jsonl
 <data_dir>/releases/<版本ID>/code.txt    上线时冻结的上传码表（用系统码表的版本没有这个文件）
 """
 
@@ -11,6 +12,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import uuid
 from pathlib import Path
 
 from app.core.config import get_settings
@@ -20,6 +22,8 @@ ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 PROMPT_FILES = {"excel": "source.xlsx", "code": "code.txt"}
 # 流水线任务的输入：调用方传来的行原样存 JSON。政策正文可能十几万字，超过 Excel 单元格上限，不能存成 xlsx。
 ROWS_FILE = "rows.json"
+# 输入快照按行另存的副本：逐行结果预览只看前几十行，不用每次把整个 Excel 解析一遍。第一次预览时生成。
+INPUT_LINES_FILE = "input.jsonl"
 # 下载名用中文，落盘名固定，避免中文路径和用户文件名带来的路径问题。
 RUN_FILES = {
     "result": ("ask_result.xlsx", "结果.xlsx"),
@@ -63,9 +67,14 @@ def write_atomic(path: Path, content: bytes) -> None:
     """先写临时文件再改名：批量 worker 同时读这个文件时，读到的要么是旧的、要么是完整的新的。"""
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".tmp")
-    temporary.write_bytes(content)
-    os.replace(temporary, path)
+    # 临时文件名各不相同：两个请求同时写同一个文件（如同时第一次打开预览）时不会写进同一个临时文件。
+    temporary = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        temporary.write_bytes(content)
+        os.replace(temporary, path)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
 
 
 def remove_tree(path: Path) -> None:

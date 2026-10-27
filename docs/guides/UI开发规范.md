@@ -180,5 +180,5 @@ ColumnPicker 按用户ID和route.path保存字段键（存储键 `zt:columns:v2:
 - 流式回答统一用 `shared/useAnswerStream.ts`（底层 `api/eventStream.ts`：带令牌和 CSRF、401 续期重试一次、错误还原成中文提示），消息列表 `AnswerTranscript.vue`，用量和费用 `StreamStatsBar.vue`，模型选择 `ModelPicker.vue`（未配密钥的模型可见但不可选）。事件处理是 `shared/streamEvents.ts` 里的纯函数，加新事件先改它和单测。
 - 下载走 `shared/downloads.ts`（底层 `downloadFile`），不放在 `api/ai.ts`：契约测试会逐个调用 api 目录导出的函数。
 - 模板编辑用 `useUnsavedForm`：返回列表、离开页面前提示未保存的修改；有未保存的修改时不能样本试跑、不能上线。附件上传、删除、上线、试跑状态变化只更新模板信息，不动表单草稿。
-- 批量任务列表有任务在排队或运行时每 2 秒刷新，全部结束后停止轮询；详情抽屉跟着列表里的进度变化刷新逐行结果。
+- 批量任务列表有任务在排队或运行时每 2 秒刷新，全部结束后停止轮询。详情抽屉的逐行结果不跟着每次进度刷新：只列前 50 行，这几行都有结果后再跑也不变，所以只在还有没跑到的行（只看失败时是失败数变了）时重读，至少隔 10 秒；状态变化马上重读。
 

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import csv
+from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -72,17 +73,22 @@ def start_raw(path: Path) -> None:
 def read_raw(path: Path) -> dict[str, RowResult]:
     """读回已跑的结果。同一行跑过多次（续跑）以最后一次为准。"""
 
+    return {result.myid: result for result in iter_raw(path)}
+
+
+def iter_raw(path: Path, *, with_prompt: bool = True) -> Generator[RowResult]:
+    """按写入顺序逐条读。with_prompt=False 不留提问原文：每行的提问带着整段正文甚至码表，几十万行整份留下能占几个 G。"""
+
     if not path.is_file():
-        return {}
-    results: dict[str, RowResult] = {}
+        return
     with path.open(encoding="utf-8-sig", newline="") as handle:
         for row in csv.DictReader(handle):
             myid = (row.get("myid") or "").strip()
             if not myid:
                 continue
-            results[myid] = RowResult(
+            yield RowResult(
                 myid=myid,
-                prompt=row.get("提问") or "",
+                prompt=(row.get("提问") or "") if with_prompt else "",
                 text=row.get("content") or "",
                 input_tokens=_int(row.get("input_tokens")),
                 output_tokens=_int(row.get("output_tokens")),
@@ -90,7 +96,6 @@ def read_raw(path: Path) -> dict[str, RowResult]:
                 error=row.get("error") or "",
                 elapsed=0.0,
             )
-    return results
 
 
 def _int(value: str | None) -> int:

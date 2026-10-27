@@ -15,7 +15,10 @@ const rows = ref<Rows | null>(null)
 const rowsError = ref('')
 const loadingRows = ref(false)
 const failedOnly = ref(false)
+const PROGRESS_RELOAD_MS = 10_000
 let sequence = 0
+let loadedAt = 0
+let loadedFailed = 0
 
 const open = computed({ get: () => props.run !== null, set: value => { if (!value) emit('close') } })
 const run = computed(() => props.run)
@@ -30,6 +33,8 @@ async function loadRows(): Promise<void> {
   if (!current) return
   const ticket = ++sequence
   loadingRows.value = true
+  loadedAt = Date.now()
+  loadedFailed = current.failed_count
   try {
     const data = await getBatchRunRows(current.id, failedOnly.value)
     if (ticket === sequence) { rows.value = data; rowsError.value = '' }
@@ -40,10 +45,20 @@ async function loadRows(): Promise<void> {
   }
 }
 
-// 换任务从头看；同一个任务进度变了（列表在轮询）就刷新结果。
+// 换任务从头看；跑完、停止、重跑（状态变了）或切换「只看失败」马上重读。
 watch(() => run.value?.id, () => { failedOnly.value = false; rows.value = null; rowsError.value = ''; void loadRows() })
-watch(() => [run.value?.done_count, run.value?.status, failedOnly.value], (next, previous) => {
+watch(() => [run.value?.status, failedOnly.value], (next, previous) => {
   if (run.value && previous && next.join() !== previous.join()) void loadRows()
+})
+// 跑着的任务列表每 2 秒刷新一次进度，逐行结果不跟着每次重读：这里只列前 50 行，这几行都有结果了，
+// 再往后跑也不变；只看失败时跟着失败数走。至少隔 10 秒读一次，几十万行的任务读结果文件不便宜。
+watch(() => run.value?.done_count, () => {
+  const current = run.value
+  if (!current || loadingRows.value || Date.now() - loadedAt < PROGRESS_RELOAD_MS) return
+  const stale = failedOnly.value
+    ? current.failed_count !== loadedFailed
+    : rows.value?.items.some(item => item.status === 'pending') ?? true
+  if (stale) void loadRows()
 })
 
 async function act(action: (current: BatchRun) => Promise<boolean>, close = false): Promise<void> {

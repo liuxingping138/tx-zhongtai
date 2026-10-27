@@ -5,8 +5,11 @@ openpyxl 是同步 CPU 计算，调用方一律经 run_excel_parse 放到线程�
 
 from __future__ import annotations
 
+import contextlib
 import io
+import itertools
 import json
+from collections.abc import Collection
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -15,7 +18,7 @@ from openpyxl import Workbook
 from platform_common.errors import ApiError, ErrorCode
 from platform_common.excel import active_worksheet, append_text_row, iter_workbook_rows
 
-from app.core.storage import PROMPT_FILES, ROWS_FILE
+from app.core.storage import INPUT_LINES_FILE, PROMPT_FILES, ROWS_FILE, write_atomic
 
 CODE_ENCODINGS = ("utf-8-sig", "gbk")
 
@@ -83,21 +86,70 @@ def decode_code_table(content: bytes) -> str:
     raise ApiError("码表编码无法识别，请另存为 UTF-8 文本", code=ErrorCode.VALIDATION_ERROR, http_status=422)
 
 
+def _input_snapshot(run_dir: Path) -> Path:
+    rows_file = run_dir / ROWS_FILE
+    return rows_file if rows_file.is_file() else run_dir / PROMPT_FILES["excel"]
+
+
 def read_run_input(run_dir: Path) -> tuple[list[str], list[dict[str, str]]]:
     """任务的输入快照：流水线任务是 rows.json（不受 Excel 单元格上限限制），页面发起的是 source.xlsx。"""
 
-    rows_file = run_dir / ROWS_FILE
-    if rows_file.is_file():
-        data = json.loads(rows_file.read_text(encoding="utf-8"))
-        return list(data["headers"]), [dict(row) for row in data["rows"]]
-    excel = run_dir / PROMPT_FILES["excel"]
-    if not excel.is_file():
+    snapshot = _input_snapshot(run_dir)
+    if not snapshot.is_file():
         raise RuntimeError("任务的输入快照不存在")
-    return read_sheet(excel.read_bytes())
+    if snapshot.name == ROWS_FILE:
+        data = json.loads(snapshot.read_text(encoding="utf-8"))
+        return list(data["headers"]), [dict(row) for row in data["rows"]]
+    return read_sheet(snapshot.read_bytes())
 
 
 def has_run_input(run_dir: Path) -> bool:
-    return (run_dir / ROWS_FILE).is_file() or (run_dir / PROMPT_FILES["excel"]).is_file()
+    return _input_snapshot(run_dir).is_file()
+
+
+def _input_lines(run_dir: Path) -> tuple[Path, dict[str, Any]]:
+    """输入快照的逐行副本和它的首行（表头、行数）。首行记着快照的大小和修改时间，快照换了就重新生成。
+
+    10 万行的用户 Excel 整个解析要 3 秒多，单是加载共享字符串表就近 2 秒；逐行副本取前 50 行不到 1 毫秒。
+    """
+
+    snapshot = _input_snapshot(run_dir)
+    if not snapshot.is_file():
+        raise RuntimeError("任务的输入快照不存在")
+    stat = snapshot.stat()
+    stamp = [stat.st_size, stat.st_mtime_ns]
+    path = run_dir / INPUT_LINES_FILE
+    head: dict[str, Any] | None = None
+    with contextlib.suppress(OSError, ValueError), path.open(encoding="utf-8") as handle:
+        head = json.loads(handle.readline())
+    if head is None or head.get("snapshot") != stamp:
+        headers, rows = read_run_input(run_dir)
+        head = {"snapshot": stamp, "headers": headers, "rows": len(rows)}
+        # json.dumps 把值里的换行转义成 \n：一条数据一定只占一行。
+        lines = "".join(json.dumps(item, ensure_ascii=False) + "\n" for item in (head, *rows))
+        write_atomic(path, lines.encode("utf-8"))
+    return path, head
+
+
+def run_input_head(run_dir: Path) -> tuple[list[str], int]:
+    """(表头, 数据行数)。"""
+
+    _, head = _input_lines(run_dir)
+    return list(head["headers"]), int(head["rows"])
+
+
+def run_input_rows(run_dir: Path, indexes: Collection[int]) -> dict[int, dict[str, str]]:
+    """按数据行序号（从 0 起）取这几行，读到最大的序号就停；跳过的行不解析。"""
+
+    path, _ = _input_lines(run_dir)
+    wanted = set(indexes)
+    found: dict[int, dict[str, str]] = {}
+    with path.open(encoding="utf-8") as handle:
+        handle.readline()
+        for index, line in enumerate(itertools.islice(handle, max(wanted, default=-1) + 1)):
+            if index in wanted:
+                found[index] = json.loads(line)
+    return found
 
 
 # Excel 单元格最多 32767 字，超了文件打不开：截断并标明。
