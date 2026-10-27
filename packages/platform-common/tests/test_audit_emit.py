@@ -138,11 +138,11 @@ def _leased(event_type: str, payload: Any) -> _Event:
     return event
 
 
-def _wired(repo: _Repo, monkeypatch: pytest.MonkeyPatch) -> AuditEmitter:
+def _wired(repo: _Repo, monkeypatch: pytest.MonkeyPatch, *, status: int = 201) -> AuditEmitter:
     emitter = _emitter()
     emitter._sessions = _Session  # type: ignore[assignment]
     emitter._repo = repo
-    transport = httpx.MockTransport(lambda _request: httpx.Response(201, json={"code": "OK"}))
+    transport = httpx.MockTransport(lambda _request: httpx.Response(status, json={"code": "OK"}))
     real_client = httpx.AsyncClient
 
     def _client(**kwargs: Any) -> httpx.AsyncClient:
@@ -165,6 +165,19 @@ async def test_bad_event_is_retried_and_rest_of_batch_still_delivered(monkeypatc
     assert delivered == 2
     assert repo.delivered == [good.event_id, later.event_id]
     assert repo.retried == [(bad.event_id, "error:AttributeError", 1)]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("status", "attempts"), [(422, 3), (401, 3), (503, 1)])
+async def test_rejected_events_are_parked_at_once_but_outages_retry(
+    monkeypatch: pytest.MonkeyPatch, status: int, attempts: int
+) -> None:
+    """审计服务明确拒收（4xx）的事件重试多少次都一样，直接停放；服务不可用（5xx）才按次数退避重试。"""
+
+    event = _leased("policy.source.created", {})
+    repo = _Repo([event])
+    assert await _wired(repo, monkeypatch, status=status).deliver_pending(_Settings()) == 0
+    assert repo.retried == [(event.event_id, f"http:{status}", attempts)]
 
 
 @pytest.mark.asyncio

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -77,3 +78,14 @@ def test_request_id_passthrough_from_header() -> None:
     resp = client.get("/boom-404", headers={"X-Request-Id": "client-supplied-id"})
     assert resp.headers["X-Request-Id"] == "client-supplied-id"
     assert resp.json()["request_id"] == "client-supplied-id"
+
+
+@pytest.mark.parametrize("bad", ["x" * 65, "has space", "", "a;b"])
+def test_unacceptable_request_id_is_replaced_not_echoed(bad: str) -> None:
+    """审计事件的 request_id 最长 64 字：客户端塞个超长或带空格的 ID，审计服务会拒收这次操作的事件。
+    不合格的不透传，自己生成一个。"""
+
+    client = TestClient(_build_test_app(), raise_server_exceptions=False)
+    resp = client.get("/boom-404", headers={"X-Request-Id": bad})
+    generated = resp.headers["X-Request-Id"]
+    assert generated != bad and len(generated) == 32 and resp.json()["request_id"] == generated

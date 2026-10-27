@@ -134,6 +134,7 @@ class AuditEmitter:
 
         expected_lease = event.lease_until
         error: str | None = None
+        attempts = event.attempts
         try:
             response = await client.post(
                 "/internal/v1/audit/events",
@@ -145,6 +146,9 @@ class AuditEmitter:
             )
             if not response.is_success:
                 error = f"http:{response.status_code}"
+                # 4xx 是审计服务明确拒收（鉴权错、内容不合格），重试 8 次也不会变：直接置 dead，错误日志里能看到。
+                if response.is_client_error:
+                    attempts = settings.worker_max_attempts
         except httpx.HTTPError as exc:
             error = f"network:{exc.__class__.__name__}"
         except Exception as exc:  # 组装投递体等本地异常，按失败重试到上限后置 dead
@@ -159,13 +163,15 @@ class AuditEmitter:
                     session,
                     event.event_id,
                     expected_lease,
-                    attempts=event.attempts,
+                    attempts=attempts,
                     error=error,
                     max_attempts=settings.worker_max_attempts,
                 )
             await session.commit()
         if not ok:
             self._logger.warning(f"{self._log_name}_outbox_lease_lost", event_id=str(event.event_id))
+        elif error is not None and attempts >= settings.worker_max_attempts:
+            self._logger.error(f"{self._log_name}_audit_event_parked", event_id=str(event.event_id), error=error)
         elif error is not None:
             self._logger.warning(f"{self._log_name}_audit_deliver_failed", event_id=str(event.event_id), error=error)
         return ok and error is None

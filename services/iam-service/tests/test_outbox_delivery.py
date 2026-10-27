@@ -116,7 +116,7 @@ async def test_server_error_retries_until_the_attempt_budget_then_parks(env: Sim
     assert (DeliveryCounters.retried, DeliveryCounters.parked) == (1, 1)
 
 
-@pytest.mark.parametrize("status", [401, 403])
+@pytest.mark.parametrize("status", [401, 403, 422])
 async def test_auth_rejection_parks_immediately(env: SimpleNamespace, status: int) -> None:
     await module._deliver_one(SETTINGS, _Client(httpx.Response(status)), _event(attempts=1))  # type: ignore[arg-type]
     assert env.retry_args["status"] == "dead"

@@ -81,7 +81,8 @@ async def _deliver_one(settings: Settings, client: httpx.AsyncClient, event: Out
             logger.warning("outbox_lease_lost", event_id=str(event.event_id), phase="delivered")
         return
 
-    if response.status_code in {401, 403}:
+    # 4xx 是审计服务明确拒收（鉴权错、内容不合格），重试也不会变：直接停放，错误日志里能看到。
+    if response.is_client_error:
         await _mark_failure(
             settings,
             event.event_id,

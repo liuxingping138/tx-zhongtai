@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import contextvars
+import re
 import uuid
 from collections.abc import Awaitable, Callable
 
@@ -15,6 +16,9 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 REQUEST_ID_HEADER = "X-Request-Id"
+# 审计事件的 request_id 最长 64 字；客户端传来的 ID 不合格就自己生成，
+# 否则这次操作的审计事件会被审计服务拒收，等于谁都能让自己的操作不进操作日志。
+REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
 _request_id_ctx: contextvars.ContextVar[str | None] = contextvars.ContextVar("request_id", default=None)
 
@@ -33,8 +37,8 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
     """为每个请求生成/透传请求 ID，写入上下文变量并回填响应头。"""
 
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
-        incoming = request.headers.get(REQUEST_ID_HEADER)
-        request_id = incoming if incoming else new_request_id()
+        incoming = request.headers.get(REQUEST_ID_HEADER, "")
+        request_id = incoming if REQUEST_ID_PATTERN.match(incoming) else new_request_id()
         token = _request_id_ctx.set(request_id)
         try:
             request.state.request_id = request_id
