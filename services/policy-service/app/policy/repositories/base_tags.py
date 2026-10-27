@@ -17,6 +17,10 @@ from app.policy.domain.fields import (
 )
 from app.policy.domain.models import BaseTag
 
+# 列表、导出共用的排序。最后按 ID 兜底：同名的记录每次查询先后一致，翻页不重复不漏，
+# 详情页按位置取上一条、下一条也不会跳乱。
+_ORDER = (BaseTag.province_code, BaseTag.policy_name, BaseTag.id)
+
 
 async def get_by_id(session: AsyncSession, item_id: uuid.UUID) -> BaseTag | None:
     return await session.get(BaseTag, item_id)
@@ -103,11 +107,7 @@ async def list_items(
     conds = _conditions(filters)
     total = int(await session.scalar(select(func.count()).select_from(BaseTag).where(*conds)) or 0)
     result = await session.execute(
-        select(BaseTag)
-        .where(*conds)
-        .order_by(BaseTag.province_code, BaseTag.policy_name)
-        .offset((page - 1) * page_size)
-        .limit(page_size)
+        select(BaseTag).where(*conds).order_by(*_ORDER).offset((page - 1) * page_size).limit(page_size)
     )
     return list(result.scalars()), total
 
@@ -121,9 +121,7 @@ async def count_filtered(session: AsyncSession, filters: Filters) -> int:
 async def list_filtered(session: AsyncSession, filters: Filters) -> list[BaseTag]:
     """导出用：与列表一致的筛选和排序，不分页。"""
 
-    result = await session.execute(
-        select(BaseTag).where(*_conditions(filters)).order_by(BaseTag.province_code, BaseTag.policy_name)
-    )
+    result = await session.execute(select(BaseTag).where(*_conditions(filters)).order_by(*_ORDER))
     return list(result.scalars())
 
 
