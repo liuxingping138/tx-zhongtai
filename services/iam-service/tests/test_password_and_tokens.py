@@ -13,7 +13,9 @@ def test_password_hash_and_verify() -> None:
 
 def test_password_policy() -> None:
     assert validate_password_policy("short") is not None
-    assert validate_password_policy("long-enough") is None
+    assert validate_password_policy("long-enough") is not None  # 没有数字
+    assert validate_password_policy("11111111") is not None  # 没有字母
+    assert validate_password_policy("long-enough1") is None
 
 
 def test_refresh_token_hash_is_stable_and_not_raw() -> None:

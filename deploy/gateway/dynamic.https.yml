@@ -11,6 +11,9 @@ tls:
   certificates:
     - certFile: /certs/fullchain.pem
       keyFile: /certs/privkey.pem
+  options:
+    default:
+      minVersion: VersionTLS12
 
 http:
   routers:
@@ -18,42 +21,42 @@ http:
       rule: "PathPrefix(`/api/v1/auth`)"
       entryPoints: ["websecure"]
       service: iam-service
-      middlewares: ["compress", "request-limit"]
+      middlewares: ["secure-headers", "compress", "request-limit"]
       priority: 100
       tls: {}
     iam-system:
       rule: "PathPrefix(`/api/v1/system`)"
       entryPoints: ["websecure"]
       service: iam-service
-      middlewares: ["compress", "request-limit"]
+      middlewares: ["secure-headers", "compress", "request-limit"]
       priority: 100
       tls: {}
     audit:
       rule: "PathPrefix(`/api/v1/audit`)"
       entryPoints: ["websecure"]
       service: audit-service
-      middlewares: ["compress", "request-limit"]
+      middlewares: ["secure-headers", "compress", "request-limit"]
       priority: 100
       tls: {}
     codebook:
       rule: "PathPrefix(`/api/v1/codebook`)"
       entryPoints: ["websecure"]
       service: codebook-service
-      middlewares: ["compress", "request-limit"]
+      middlewares: ["secure-headers", "compress", "request-limit"]
       priority: 100
       tls: {}
     policy:
       rule: "PathPrefix(`/api/v1/policy`)"
       entryPoints: ["websecure"]
       service: policy-service
-      middlewares: ["compress", "request-limit"]
+      middlewares: ["secure-headers", "compress", "request-limit"]
       priority: 100
       tls: {}
     ai:
       rule: "PathPrefix(`/api/v1/ai`)"
       entryPoints: ["websecure"]
       service: ai-service
-      middlewares: ["compress", "request-limit"]
+      middlewares: ["secure-headers", "compress", "request-limit"]
       priority: 100
       tls: {}
     # 流式回答：不挂压缩和请求缓冲（buffering 会把整个响应攒满才下发），请求体上限由服务自己限制。
@@ -61,24 +64,33 @@ http:
       rule: "PathPrefix(`/api/v1/ai/stream`)"
       entryPoints: ["websecure"]
       service: ai-service
+      middlewares: ["secure-headers"]
       priority: 110
       tls: {}
     api-fallback:
       rule: "PathPrefix(`/api/v1`)"
       entryPoints: ["websecure"]
       service: api-fallback
-      middlewares: ["compress", "request-limit"]
+      middlewares: ["secure-headers", "compress", "request-limit"]
       priority: 50
       tls: {}
     frontend:
       rule: "PathPrefix(`/`)"
       entryPoints: ["websecure"]
       service: frontend
-      middlewares: ["compress", "request-limit"]
+      middlewares: ["secure-headers", "compress", "request-limit"]
       priority: 1
       tls: {}
 
   middlewares:
+    # 浏览器侧的加固：一年内只走 HTTPS、不猜内容类型、不许被别的站 iframe 进去。
+    secure-headers:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        contentTypeNosniff: true
+        frameDeny: true
+        referrerPolicy: "strict-origin-when-cross-origin"
     compress:
       compress:
         excludedContentTypes:

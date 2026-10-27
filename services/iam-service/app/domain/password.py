@@ -15,6 +15,9 @@ def validate_password_policy(password: str) -> str | None:
 
     if len(password) < MIN_PASSWORD_LENGTH:
         return f"密码长度不能少于 {MIN_PASSWORD_LENGTH} 位"
+    # 只查长度时 11111111 也能过。
+    if not (any(ch.isalpha() for ch in password) and any(ch.isdigit() for ch in password)):
+        return "密码要同时包含字母和数字"
     return None
 
 

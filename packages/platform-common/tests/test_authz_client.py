@@ -16,8 +16,13 @@ def _handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(401, json={"code": "INTERNAL_CALLER_REJECTED", "message": "no", "data": None})
         if payload.get("access_token") == "expired":
             return httpx.Response(401, json={"code": "AUTH_UNAUTHENTICATED", "message": "no", "data": None})
-        if payload.get("resource") == "down":
-            return httpx.Response(503, json={"code": "DEPENDENCY_UNAVAILABLE", "message": "down", "data": None})
+        broken = {
+            "down": (503, {"code": "DEPENDENCY_UNAVAILABLE", "message": "down", "data": None}),
+            "misrouted": (404, {"detail": "Not Found"}),
+        }
+        if payload.get("resource") in broken:
+            status, body = broken[payload["resource"]]
+            return httpx.Response(status, json=body)
         if payload.get("resource") == "deny":
             return httpx.Response(
                 200,
@@ -64,6 +69,21 @@ async def test_authz_client_dependency_failure_is_503() -> None:
     )
     with pytest.raises(DependencyUnavailableError):
         await client.authorize(access_token="t", resource="down", action="list")
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_authz_client_unexpected_response_is_503_not_forbidden() -> None:
+    """部署错路由、版本不配时 IAM 回 404/422：这不是用户没权限，报成 403 会把排障引到授权上去。"""
+
+    client = AuthzClient(
+        base_url="http://iam",
+        service_name="audit-service",
+        service_secret="secret",
+        transport=httpx.MockTransport(_handler),
+    )
+    with pytest.raises(DependencyUnavailableError, match="HTTP 404"):
+        await client.authorize(access_token="t", resource="misrouted", action="list")
     await client.aclose()
 
 

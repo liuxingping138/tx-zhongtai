@@ -84,6 +84,10 @@ class AuthzClient:
             raise UnauthenticatedError()
         if response.status_code == HTTPStatus.FORBIDDEN:
             raise PermissionDeniedError()
+        if not response.is_success:
+            # 404、422 这类是部署错路由或版本不配，不是用户没权限：当成「无权限」会把排障引到授权上去。
+            logger.error("authz_unexpected_response", service=self._service_name, status=response.status_code)
+            raise DependencyUnavailableError(f"鉴权服务响应异常（HTTP {response.status_code}）")
 
         try:
             raw: Any = response.json()

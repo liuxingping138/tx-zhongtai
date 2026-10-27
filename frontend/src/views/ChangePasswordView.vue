@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
+import { passwordError } from '@/utils/passwordPolicy'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
@@ -26,7 +27,7 @@ async function onSubmit() {
   saveError.value = ''
   if (!await validate({
     oldPassword: form.oldPassword ? '' : '请填写原密码',
-    newPassword: form.newPassword.length >= 8 ? '' : '新密码至少 8 位',
+    newPassword: passwordError(form.newPassword),
     confirm: form.confirm && form.confirm === form.newPassword ? '' : '两次输入的新密码不一致',
   })) return
   loading.value = true

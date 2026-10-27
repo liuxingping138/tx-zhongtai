@@ -67,7 +67,7 @@
 
 ## 表单、异步与权限
 
-使用 novalidate + 提交时验证 + 首错误焦点。业务必填/长度依现有字段定义；后端为最终校验者。错误具备文字及 aria-invalid / describedby；字段改动清除对应错误。密码默认遮蔽、可粘贴、autocomplete 按原/新密码区分，值不写 URL 或持久缓存。
+使用 novalidate + 提交时验证 + 首错误焦点。业务必填/长度依现有字段定义；后端为最终校验者。错误具备文字及 aria-invalid / describedby；字段改动清除对应错误。密码默认遮蔽、可粘贴、autocomplete 按原/新密码区分，值不写 URL 或持久缓存。新密码规则前后端同一套（`utils/passwordPolicy.ts` 与 iam `validate_password_policy`）：至少 8 位，同时有字母和数字。
 
 悲观提交，loading 和处理函数防重复。保存冲突保留草稿、提示刷新核对，不自动覆盖。没有自动保存或后台离线写入。会话失效沿用 auth/API 拦截逻辑。超时、导入主键识别及去重沿用 API，不在 UI 中改变。
 

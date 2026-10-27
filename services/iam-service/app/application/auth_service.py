@@ -29,6 +29,10 @@ def normalize_username(username: str) -> str:
     return login_key_username(username)
 
 
+# 给不存在的账号用的哈希，让登录失败的耗时和真账号一样。
+_TIMING_HASH = hash_password("timing-equalizer-not-a-real-password")
+
+
 class AuthService:
     def __init__(self, session: AsyncSession, settings: Settings) -> None:
         self.session = session
@@ -37,7 +41,11 @@ class AuthService:
     async def authenticate_password(self, username: str, password: str) -> User:
         normalized = normalize_username(username)
         user = await user_repo.get_user_by_username(self.session, normalized)
-        if user is None or user.status == UserStatus.DELETED or not verify_password(user.password_hash, password):
+        if user is None or user.status == UserStatus.DELETED:
+            # 账号不存在也跑一次同样的哈希校验：否则按响应快慢就能试出哪些用户名是真的。
+            verify_password(_TIMING_HASH, password)
+            raise UnauthenticatedError(UNIFIED_LOGIN_FAILURE)
+        if not verify_password(user.password_hash, password):
             raise UnauthenticatedError(UNIFIED_LOGIN_FAILURE)
         if user.status != UserStatus.ACTIVE:
             raise UnauthenticatedError("账号不可用")
