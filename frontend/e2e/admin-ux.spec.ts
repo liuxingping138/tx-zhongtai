@@ -226,6 +226,9 @@ test('基础标签：按打标状态筛出来，勾选后重新打标，跳过�
     return respond(route, { step: 'interpret', task: '政策解读', queued: 1, skipped: [{ reason: '手工录入或导入的政策没有源政策，不能重新打标', count: 1 }] })
   })
   await page.goto('/policy/base-tags')
+  // 打标状态排在第六个，一行放不下时收在「展开」里。
+  const expand = page.getByRole('button', { name: /^展开筛选条件/ })
+  if (await expand.count()) await expand.click()
   await expect(page.locator('.el-form-item').filter({ hasText: '打标状态' })).toBeVisible()
   // 表里也有一列打标状态：哪条卡在哪一步，不用先筛选才知道。
   await expect(page.getByRole('row').filter({ hasText: '解读失败的政策' })).toContainText('解读失败')
