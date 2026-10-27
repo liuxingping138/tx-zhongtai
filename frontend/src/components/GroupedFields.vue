@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { nextTick, ref, useId, watch } from 'vue'
 import type { EditorGroup } from './editorGroups'
-const props = defineProps<{ groups: EditorGroup[]; submitError?: string }>()
+// bare：只要输入框，组标题和说明由外面给（如核对页按组编辑时，标题就在组的表头上）。
+const props = defineProps<{ groups: EditorGroup[]; submitError?: string; bare?: boolean }>()
 const model = defineModel<Record<string, string>>({ required: true })
 const root = ref<HTMLElement>()
 const prefix = useId()
@@ -45,18 +46,25 @@ defineExpose({ validate, setError })
       :closable="false"
       class="editor-submit-error"
     />
-    <p class="editor-intro">
+    <p
+      v-if="!bare"
+      class="editor-intro"
+    >
       按分组填写信息，带 <span>*</span> 的为必填项。
     </p>
     <fieldset
       v-for="(group, index) in groups"
       :key="group.title"
       class="editor-section"
+      :class="{ 'editor-section--bare': bare }"
+      :aria-label="bare ? group.title : undefined"
     >
-      <legend><span>{{ String(index + 1).padStart(2, '0') }}</span>{{ group.title }}</legend>
-      <p class="editor-section__hint">
-        {{ group.hint }}
-      </p>
+      <template v-if="!bare">
+        <legend><span>{{ String(index + 1).padStart(2, '0') }}</span>{{ group.title }}</legend>
+        <p class="editor-section__hint">
+          {{ group.hint }}
+        </p>
+      </template>
       <div class="editor-section__grid">
         <el-form-item
           v-for="field in group.fields"
@@ -137,6 +145,7 @@ defineExpose({ validate, setError })
 .editor-intro span { color: var(--el-color-danger); }
 .editor-section { min-width: 0; margin: 0 0 26px; padding: 20px; border: 1px solid var(--zt-border); border-radius: 10px; background: #fff; }
 .editor-section:last-child { margin-bottom: 0; }
+.editor-section--bare { margin: 0; padding: 0; border: 0; background: none; }
 .editor-section legend { padding: 0 8px; color: var(--zt-ink-900); font-size: 14px; font-weight: 650; }
 .editor-section legend span { margin-right: 9px; color: #7891b3; font-size: 11px; font-weight: 500; }
 .editor-section__hint { margin: -3px 0 20px; color: var(--zt-ink-500); font-size: 12px; line-height: 1.7; }

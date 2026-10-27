@@ -8,7 +8,7 @@ export const DATA_STATUS_CHOICES = ['待验证', '人工验证']
 export const EDITOR_DEFAULTS = { data_status: '待验证' }
 
 // 列的先后按业务人员核对的顺序：先是政策和它解读出的行业、场景、客户、机会，再是数据状态和备注，
-// 编码、唯一标识、关联主键这类对人没意义的放后面，留痕列最后。详情抽屉按同一顺序列字段。
+// 编码、唯一标识、关联主键这类对人没意义的放后面，留痕列最后。详情按下面的 EDITOR_GROUPS 分组展示。
 export const TABLE_COLUMNS: DataColumn[] = [
   { prop: 'policy_title', label: '政策原文名称', minWidth: 340, grow: 2 },
   { prop: 'industry_l1', label: '一级行业', width: 120 },
@@ -45,10 +45,12 @@ export const TABLE_COLUMNS: DataColumn[] = [
 /** 窄屏卡片的摘要字段，也是列设置早期「精简默认列」的识别依据。 */
 export const SUMMARY_KEYS = ['policy_title', 'opportunity_type', 'target_customers', 'has_subsidy']
 
+// 分组按核对的顺序：基本信息，行业与场景（同级的行业和场景并排，方便对照层级），AI 写的解读内容，最后是机会与补贴。
+// 新增、编辑和详情用同一套分组；表单里没有的政策唯一标识、关联主键和入库更新记录，详情里归到「系统信息」。
 export const EDITOR_GROUPS: EditorGroup[] = [
   {
-    title: '政策与行业',
-    hint: '填写政策名称并关联行业场景，编码请与场景码表保持一致。',
+    title: '基本信息',
+    hint: '政策原文名称必填；新录入默认待验证。',
     fields: [
       { key: 'policy_title', label: '政策原文名称', long: true, required: true },
       {
@@ -59,38 +61,44 @@ export const EDITOR_GROUPS: EditorGroup[] = [
         choices: DATA_STATUS_CHOICES,
       },
       { key: 'tenant_id', label: '租户标识', hint: '对应数据所属租户，无租户标识时可留空。', maxLength: 64 },
-      { key: 'industry_scenario_code', label: '行业场景编码', maxLength: 128 },
-      { key: 'industry_code', label: '行业编码', maxLength: 32 },
-      { key: 'industry_l1', label: '一级行业', maxLength: 128 },
-      { key: 'industry_l2', label: '二级行业', maxLength: 128 },
-      { key: 'industry_l3', label: '三级行业', maxLength: 128 },
     ],
   },
   {
-    title: '场景信息',
-    hint: '补充场景层级；新增场景时填写相应级别。',
+    title: '行业与场景',
+    hint: '行业和场景按级别对照填写，编码请与场景码表保持一致；新增场景时填写相应级别。',
     fields: [
-      { key: 'scenario_code', label: '场景编码', maxLength: 64 },
+      { key: 'industry_l1', label: '一级行业', maxLength: 128 },
       { key: 'scenario_l1_name', label: '一级场景名称', maxLength: 255 },
+      { key: 'industry_l2', label: '二级行业', maxLength: 128 },
       { key: 'scenario_l2_name', label: '二级场景名称', maxLength: 255 },
+      { key: 'industry_l3', label: '三级行业', maxLength: 128 },
       { key: 'scenario_l3_name', label: '三级场景名称', maxLength: 255 },
+      { key: 'industry_code', label: '行业编码', maxLength: 32 },
+      { key: 'scenario_code', label: '场景编码', maxLength: 64 },
+      { key: 'industry_scenario_code', label: '行业场景编码', maxLength: 128 },
       { key: 'is_new_scenario', label: '是否新增场景', maxLength: 32 },
       { key: 'new_scenario_level', label: '新增场景级别', maxLength: 64 },
     ],
   },
   {
-    title: '解读与业务机会',
-    hint: '先概括政策内容，再描述目标客户、补贴及市场机会。',
+    title: '解读内容',
+    hint: '先概括政策内容，再写目标客户、适配产品、采买理由和市场机会。',
     fields: [
       { key: 'policy_summary', label: '政策要文', long: true },
       { key: 'target_customers', label: '目标客户当前政策影响客户群', long: true },
       { key: 'adapted_products', label: '适配产品', long: true },
       { key: 'purchase_reason', label: '目标客户采买理由', long: true },
+      { key: 'market_opportunity', label: '政策市场机会', long: true },
+    ],
+  },
+  {
+    title: '机会与补贴',
+    hint: '机会类型、补贴和信息化等级用于筛选和统计。',
+    fields: [
       { key: 'opportunity_type', label: '机会类型', maxLength: 64 },
       { key: 'has_subsidy', label: '有无政府补贴', maxLength: 32 },
-      { key: 'subsidy_content', label: '补贴内容', long: true },
-      { key: 'market_opportunity', label: '政策市场机会', long: true },
       { key: 'info_level', label: '信息化等级', maxLength: 32 },
+      { key: 'subsidy_content', label: '补贴内容', long: true },
       { key: 'remark', label: '备注', long: true },
     ],
   },

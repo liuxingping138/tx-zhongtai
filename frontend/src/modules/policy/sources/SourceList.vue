@@ -293,6 +293,7 @@ onMounted(() => {
         :items="items"
         :selectable="canWrite"
         :columns="columns"
+        :groups="EDITOR_GROUPS"
         :selected="selected"
         :summary-keys="SUMMARY_KEYS"
         title-key="site_name"

@@ -3,11 +3,16 @@ import { computed, ref, shallowRef, onMounted, onBeforeUnmount, type ShallowRef 
 import { useNarrowViewport } from '@/composables/useNarrowViewport'
 import { layoutDataColumns } from './dataColumnLayout'
 import type { DataColumn } from './dataColumns'
+import { fieldLink, fieldText, fieldValue } from './cellValue'
+import { buildDetailSections } from './detailSections'
+import DetailSections from './DetailSections.vue'
+import type { EditorGroup } from './editorGroups'
 import ListEmpty from './ListEmpty.vue'
-import { formatTime } from '@/utils/time'
 const props = defineProps<{
   items: T[]; columns: readonly DataColumn[]; selected: string[]; titleKey: string; summaryKeys?: string[];
   canWrite: boolean; loading: boolean; filtered: boolean; detailTitle?: string;
+  /** 编辑表单的分组：详情按它分类展示，表单里没有的列归到「系统信息」。 */
+  groups?: readonly EditorGroup[];
   /** 首列加勾选框，用于批量操作；只勾当前页。 */
   selectable?: boolean;
 }>()
@@ -40,17 +45,10 @@ onMounted(() => {
   resizeObserver.observe(root.value)
 })
 onBeforeUnmount(() => resizeObserver?.disconnect())
-// 单元格只展示标量；对象和数组不应该出现在业务列里，显示为空而不是「[object Object]」。
-function cellText(raw: unknown): string {
-  return typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean' ? String(raw) : ''
-}
-function value(row: T, key: string) { return cellText((row as Record<string, unknown>)[key]) }
-function text(row: T, col: DataColumn) { const val = value(row, col.prop); return val ? col.time ? formatTime(val) : val : '—' }
-function link(row: T, col: DataColumn) {
-  const val = value(row, col.prop).trim()
-  if (!val) return undefined
-  try { const url = new URL(/^https?:\/\//i.test(val) ? val : `https://${val}`); return ['https:', 'http:'].includes(url.protocol) ? url.href : undefined } catch { return undefined }
-}
+const value = fieldValue
+const text = fieldText
+const link = fieldLink
+const sections = computed(() => buildDetailSections(props.columns, props.groups))
 function open(row: T) { detail.value = row; detailOpen.value = true }
 function editDetail() { if (detail.value) { emit('edit', detail.value); detailOpen.value = false } }
 function closeDetail() { detailOpen.value = false }
@@ -206,30 +204,16 @@ function closeDetail() { detailOpen.value = false }
     <el-drawer
       v-model="detailOpen"
       :title="detailTitle || '记录详情'"
-      size="min(720px, 100vw)"
+      size="min(880px, 100vw)"
       class="record-detail"
       destroy-on-close
     >
       <template v-if="detail">
         <h2>{{ value(detail, titleKey) || '未命名记录' }}</h2>
-        <dl>
-          <template
-            v-for="col in columns"
-            :key="col.prop"
-          >
-            <dt>{{ col.fullLabel || col.label }}</dt><dd>
-              <a
-                v-if="col.link && link(detail, col)"
-                :href="link(detail, col)"
-                target="_blank"
-                rel="noopener noreferrer"
-              >{{ text(detail, col) }}</a>
-              <template v-else>
-                {{ text(detail, col) }}
-              </template>
-            </dd>
-          </template>
-        </dl>
+        <DetailSections
+          :row="detail"
+          :sections="sections"
+        />
         <!-- 模块可在详情里补自己的内容（如趋势图），不必另造一个平行抽屉。 -->
         <slot
           name="detail-extra"
@@ -274,10 +258,7 @@ function closeDetail() { detailOpen.value = false }
 .record-boolean { padding: 2px 9px; background: var(--zt-soft); border: 1px solid var(--zt-border); border-radius: 4px; }
 a { color: var(--zt-blue-600); }
 
-.record-detail h2 { margin: 0 0 24px; line-height: 1.6; font-size: 20px; overflow-wrap: anywhere; }
-.record-detail dl { display: grid; grid-template-columns: 145px minmax(0, 1fr); margin: 0; }
-.record-detail dt, .record-detail dd { margin: 0; padding: 12px 0; border-bottom: 1px solid var(--zt-border); font-size: 14px; line-height: 1.7; overflow-wrap: anywhere; white-space: pre-wrap; }
-.record-detail dt { padding-right: 16px; color: var(--zt-ink-500); }
+.record-detail h2 { margin: 0 0 20px; line-height: 1.6; font-size: 20px; overflow-wrap: anywhere; }
 @media (max-width: 767px) {
  .business-table__desktop { display: none; }
  .business-table__mobile { display: block; }
@@ -288,6 +269,5 @@ a { color: var(--zt-blue-600); }
  .mobile-record dt { color: var(--zt-ink-500); }
  .mobile-record dd { margin: 0; overflow-wrap: anywhere; }
  .mobile-record__actions { display: flex; justify-content: flex-end; }
- .record-detail dl { grid-template-columns: 110px minmax(0, 1fr); }
 }
 </style>

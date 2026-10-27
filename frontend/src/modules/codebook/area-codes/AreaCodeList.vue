@@ -163,6 +163,7 @@ onMounted(() => {
       <BusinessTable
         :items="items"
         :columns="columns"
+        :groups="EDITOR_GROUPS"
         :selected="selected"
         :summary-keys="SUMMARY_KEYS"
         title-key="county_name"
