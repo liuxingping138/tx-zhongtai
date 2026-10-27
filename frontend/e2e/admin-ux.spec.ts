@@ -94,13 +94,16 @@ test('source creation sends visible region codes and closes without a discard pr
   expect(payload?.site_name).toBe('测试信源')
 })
 
-test('desktop keeps every filter visible and distinguishes draft from applied query', async ({ page }) => {
+test('desktop shows one row of filters, expands the rest, and distinguishes draft from applied query', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto('/policy/sources')
   await expect(page.getByRole('combobox', { name: '网站名称', exact: true })).toBeVisible()
+  // 一行放不下的条件先收起，点「展开」才出来。
+  await expect(page.getByRole('combobox', { name: '网站优先级', exact: true })).toBeHidden()
+  await page.getByRole('button', { name: /^展开筛选条件/ }).click()
   await expect(page.getByRole('combobox', { name: '标签', exact: true })).toBeVisible()
   await expect(page.getByRole('combobox', { name: '网站优先级', exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: '更多筛选' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '收起筛选条件' })).toBeVisible()
   await expect(page.getByRole('button', { name: '重置', exact: true })).toBeDisabled()
   await page.getByRole('combobox', { name: '网站名称', exact: true }).fill('北京日报')
   await page.getByRole('option', { name: '北京日报', exact: true }).click()
@@ -112,7 +115,7 @@ test('desktop keeps every filter visible and distinguishes draft from applied qu
 // 适配范围是电脑端 1024px 起（见 DESIGN.md「适配范围」）。
 // 1024 是下限，最容易出问题：列多、容器窄，既不能让整页横向溢出，
 // 也不能因为窄就退化成移动端摘要卡片，上传下载入口还必须留着。
-test('1024px 下限：无整页横溢出、工具栏入口齐全、筛选全展开、横滑到末列仍能操作', async ({ page }) => {
+test('1024px 下限：无整页横溢出、工具栏入口齐全、筛选可展开、横滑到末列仍能操作', async ({ page }) => {
   await page.route('**/api/v1/policy/sources?**', route => respond(route, {
     items: [{ id: 'row-1', site_name: '北京日报', province_name: '北京市', department: '宣传部' }],
     total: 1,
@@ -134,7 +137,8 @@ test('1024px 下限：无整页横溢出、工具栏入口齐全、筛选全展�
     expect(box!.x + box!.width).toBeLessThanOrEqual(1024)
   }
 
-  // 桌面一次展开全部筛选，1024 也不许退化成手机的「更多筛选」。
+  // 放不下的条件收进「展开」，不出现手机的「更多筛选」。
+  await expect(page.getByRole('button', { name: /^展开筛选条件/ })).toBeVisible()
   await expect(page.getByRole('button', { name: '更多筛选' })).toHaveCount(0)
   // 也不许退化成移动端摘要卡片。
   await expect(page.locator('.mobile-record')).toHaveCount(0)
