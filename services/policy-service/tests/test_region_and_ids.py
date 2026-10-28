@@ -58,6 +58,10 @@ def test_interpretation_keys() -> None:
     uid = make_policy_uid("某政策")
     assert uid == make_policy_uid("某政策")
     assert make_relation_key(uid, "010000", "TO_G") == f"{uid}010000TO_G"
+    # 还没有编码的新增场景用六级名称区分，和 AI 写入时一样；同一条政策的两个新增场景不会撞。
+    names = ["党政行业", "政务", "", "数字政府", "一网统管", ""]
+    assert make_relation_key(uid, "", "TO_G", names) == f"{uid}新:党政行业/政务//数字政府/一网统管/TO_G"
+    assert make_relation_key(uid, "010000", "TO_G", names) == f"{uid}010000TO_G"
 
 
 def test_parse_uses_first_sheet_only() -> None:

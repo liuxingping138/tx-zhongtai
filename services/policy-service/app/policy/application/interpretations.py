@@ -83,7 +83,10 @@ def _values(data: dict[str, str]) -> dict[str, str]:
     if not values["data_status"]:
         values["data_status"] = DATA_STATUS_PENDING
     values["relation_key"] = make_relation_key(
-        values["policy_uid"], values["industry_scenario_code"], values["opportunity_type"]
+        values["policy_uid"],
+        values["industry_scenario_code"],
+        values["opportunity_type"],
+        [values[field] for field in SCENARIO_NAME_FIELDS],
     )
     return values
 

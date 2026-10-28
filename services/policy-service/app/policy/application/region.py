@@ -57,8 +57,15 @@ def make_policy_uid(policy_title: str) -> str:
     return hashlib.md5((policy_title or "").encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
-def make_relation_key(policy_uid: str, industry_scenario_code: str, opportunity_type: str) -> str:
-    return f"{policy_uid}{industry_scenario_code}{opportunity_type}"
+def make_relation_key(
+    policy_uid: str, industry_scenario_code: str, opportunity_type: str, scenario_names: Iterable[str] = ()
+) -> str:
+    """政策 + 行业场景编码 + 机会类型。新增场景还没有编码时用六级名称代替（同 AI 写入的规则
+    ``aitag.domain.interpret_rules.relation_key``），否则同一条政策的几个新增场景会撞成同一个主键。"""
+
+    names = list(scenario_names)
+    code = industry_scenario_code or ("新:" + "/".join(names) if any(names) else "")
+    return f"{policy_uid}{code}{opportunity_type}"
 
 
 def site_code_prefix(province_code: str, city_code: str, district_code: str) -> str:
