@@ -7,7 +7,7 @@ from platform_common.errors import ApiError
 from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
 
-from app.application.user_fields import normalize_email, normalize_phone
+from app.application.user_fields import normalize_email, normalize_phone, validate_username
 from app.domain.filters import UserFilters
 from app.domain.models import User
 from app.repositories.users import NO_ROLE, _apply_user_filters
@@ -15,6 +15,14 @@ from app.repositories.users import NO_ROLE, _apply_user_filters
 
 def _sql(stmt: object) -> str:
     return str(stmt.compile(dialect=postgresql.dialect()))  # type: ignore[attr-defined]
+
+
+def test_company_email_can_be_the_username_and_case_does_not_matter() -> None:
+    assert validate_username("xiaoyu.Z@telelands.com") == "xiaoyu.z@telelands.com"
+    with pytest.raises(ApiError, match="仅允许字母、数字、点、下划线、连字符和 @"):
+        validate_username("zhang三@telelands.com")
+    with pytest.raises(ApiError, match="字母开头"):
+        validate_username("@telelands.com")
 
 
 def test_phone_keeps_digits_only() -> None:

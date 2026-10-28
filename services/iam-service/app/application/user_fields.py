@@ -11,7 +11,8 @@ from platform_common.errors import ApiError
 
 from app.application.auth_service import normalize_username
 
-USERNAME_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789._-")
+# 带 @：公司邮箱直接当登录账号。登录前统一转小写（normalize_username），大小写不影响。
+USERNAME_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789._-@")
 USERNAME_MIN_LENGTH = 3
 USERNAME_MAX_LENGTH = 64
 
@@ -51,7 +52,7 @@ def validate_username(username: str) -> str:
     if normalized[0] not in set("abcdefghijklmnopqrstuvwxyz"):
         raise ApiError("用户名须以字母开头")
     if any(ch not in USERNAME_CHARS for ch in normalized):
-        raise ApiError("用户名仅允许字母、数字、点、下划线和连字符")
+        raise ApiError("用户名仅允许字母、数字、点、下划线、连字符和 @")
     return normalized
 
 
