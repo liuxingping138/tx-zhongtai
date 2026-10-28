@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.schemas import FileKind, PromptBody, RunFileKind, SampleRunBody, TestRowsBody, file_response
 from app.api.security import CategoryAccess, SecurityClass, classified, get_category_access, require_ai_permission
 from app.application import prompts as service
-from app.application import releases, sample_runs
+from app.application import releases, sample_runs, test_rows
 from app.application.asking import available_models
 from app.core.config import get_settings
 from app.core.database import get_db_session
@@ -150,15 +150,30 @@ async def preview_uploaded_code(
     return success_json(await service.preview_uploaded_code(session, access, prompt_id))
 
 
-@router.get("/{prompt_id}/sample-run")
+@router.get("/{prompt_id}/test-rows")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
-async def latest_sample_run(
+async def test_rows_preview(
     prompt_id: str,
     session: AsyncSession = Depends(get_db_session, scope="function"),
     access: CategoryAccess = Depends(get_category_access),
     _: Actor = Depends(require_ai_permission(RESOURCE, "list")),
 ) -> JSONResponse:
-    return success_json(await sample_runs.latest(session, access, prompt_id))
+    """测试样本前几行，每格只给开头一段和总字数：试发选第几行、发之前先看这一行的数据。"""
+
+    return success_json(await test_rows.preview(session, access, prompt_id))
+
+
+@router.get("/{prompt_id}/sample-run")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def view_sample_run(
+    prompt_id: str,
+    run_id: str | None = Query(default=None, max_length=32, description="看哪一次，默认最近一次"),
+    compare_id: str | None = Query(default=None, max_length=32, description="和哪一次比，默认前一次；none 不比"),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    access: CategoryAccess = Depends(get_category_access),
+    _: Actor = Depends(require_ai_permission(RESOURCE, "list")),
+) -> JSONResponse:
+    return success_json(await sample_runs.view(session, access, prompt_id, run_id=run_id, compare_id=compare_id))
 
 
 @router.post("/{prompt_id}/sample-run")
@@ -184,6 +199,20 @@ async def stop_sample_run(
     actor: Actor = Depends(require_ai_permission(RESOURCE, "ask")),
 ) -> JSONResponse:
     return success_json(await sample_runs.stop(session, actor, access, prompt_id))
+
+
+@router.post("/{prompt_id}/sample-run/{run_id}/retry")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def retry_sample_run(
+    prompt_id: str,
+    run_id: str,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    access: CategoryAccess = Depends(get_category_access),
+    actor: Actor = Depends(require_ai_permission(RESOURCE, "ask")),
+) -> JSONResponse:
+    """只重问失败和没跑到的行，会花钱，和试跑同一个权限。"""
+
+    return success_json(await sample_runs.retry(session, actor, access, prompt_id, run_id))
 
 
 @router.get("/{prompt_id}/sample-run/{run_id}/files/{kind}")

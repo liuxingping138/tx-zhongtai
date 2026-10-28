@@ -60,25 +60,49 @@ test('AI提问主流程：写模板 → 试发 → 样本试跑 → 上线 → �
   await expect(page.getByText('未保存')).toHaveCount(0)
   await expect(flow.getByRole('listitem').filter({ hasText: '样本试跑' })).toHaveAttribute('aria-current', 'step')
 
-  // 2. 试发一条：模拟模型按输出字段回 JSON。
-  await page.getByRole('button', { name: /^试发/ }).click()
-  await expect(page.getByRole('log')).toContainText('行业-', { timeout: 20_000 })
+  // 2. 试发一条：先看第 1 行要发出去的数据，模拟模型按输出字段回 JSON，页面按字段列出解析结果。
+  const trialPane = page.getByRole('tabpanel', { name: '试发一条' })
+  await expect(trialPane).toContainText('甲公司')
+  await trialPane.getByRole('button', { name: /^试发这一行/ }).click()
+  const trialResult = trialPane.getByRole('region', { name: '试发结果' })
+  await expect(trialResult).toContainText('按输出字段解析成功', { timeout: 20_000 })
+  await expect(trialResult).toContainText('行业-')
 
   // 样本试跑：从流程条进去，样本 2 行全部跑完，逐行看到解析出的字段。
   await flow.getByRole('button', { name: '去试跑' }).click()
   const sample = page.getByRole('tabpanel', { name: '样本试跑' })
   await sample.getByRole('button', { name: '开始试跑' }).click()
   await expect(sample.getByText('已完成')).toBeVisible({ timeout: 60_000 })
-  await expect(sample.getByRole('listitem').filter({ hasText: '第 1 行' })).toContainText('成功')
-  await expect(sample.getByRole('listitem').filter({ hasText: '第 2 行' })).toContainText('乙公司')
+  // 一格一行：两行都成功。
+  await expect(sample.getByRole('button', { name: '第 1 行 成功' })).toBeVisible()
+  await expect(sample.getByRole('button', { name: '第 2 行 成功' })).toBeVisible()
+  await expect(sample).toContainText('第 1 次试跑')
   await expect(flow.getByRole('listitem').filter({ hasText: '样本试跑' })).toContainText('2 条全部解析成功')
-  // 跑完能下载结果 Excel，文件名写明是样本试跑，和正式任务的结果分得开。
+  // 逐行看结果：每个输出字段一列。
+  await sample.getByRole('button', { name: '逐行看结果' }).click()
+  const results = page.getByRole('dialog', { name: '样本试跑结果' })
+  await expect(results.getByRole('row').filter({ hasText: '乙公司' })).toContainText('成功')
+  await expect(results.getByRole('columnheader', { name: '规模' })).toBeVisible()
+  // 跑完能下载结果 Excel，文件名写明是第几次样本试跑，和正式任务的结果分得开。
   const [sampleFile] = await Promise.all([
     page.waitForEvent('download'),
-    sample.getByRole('button', { name: '下载结果' }).click(),
+    results.getByRole('button', { name: '下载结果' }).click(),
   ])
-  expect(sampleFile.suggestedFilename()).toBe(`${title}-样本试跑结果.xlsx`)
+  expect(sampleFile.suggestedFilename()).toBe(`${title}-第1次样本试跑结果.xlsx`)
   expect(await sampleFile.failure()).toBeNull()
+  await results.getByRole('button', { name: '关闭此对话框' }).click()
+  // 再跑一次：默认和上一次逐行对比；提示词没改，结果都一样。
+  await sample.getByRole('button', { name: '再跑一次' }).click()
+  await expect(sample).toContainText('第 2 次试跑', { timeout: 20_000 })
+  await expect(sample).toContainText('和第 1 次试跑', { timeout: 60_000 })
+  await expect(sample).toContainText('跑到的行结果都一样')
+  // 试发选第 2 行：拿这一行的试跑结果对照。
+  await page.getByRole('tab', { name: '试发一条' }).click()
+  await trialPane.getByRole('button', { name: '下一行' }).click()
+  await expect(trialPane).toContainText('乙公司')
+  await trialPane.getByRole('button', { name: /^试发这一行/ }).click()
+  await expect(trialResult).toContainText('按输出字段解析成功', { timeout: 20_000 })
+  await expect(trialPane).toContainText('和这一行在第 2 次样本试跑里的结果一样')
 
   // 3. 上线：管理员在上线抽屉里看检查项，上线第 1 版。
   await flow.getByRole('button', { name: '上线', exact: true }).click()
@@ -102,7 +126,7 @@ test('AI提问主流程：写模板 → 试发 → 样本试跑 → 上线 → �
   const drawer = page.getByRole('dialog', { name: '新建批量任务' })
   await choose(page, drawer, new RegExp(title))
   await expect(drawer).toContainText('第 1 版')
-  await expect(drawer.locator('.new-task__columns')).toContainText('企业名称')
+  await expect(drawer.locator('.pick__columns')).toContainText('企业名称')
   // 不知道要哪些列的人先下载数据模板，表头就是上线版本引用的列。
   const [blank] = await Promise.all([
     page.waitForEvent('download'),
@@ -154,8 +178,9 @@ test('AI提问主流程：写模板 → 试发 → 样本试跑 → 上线 → �
   await expect(page.getByRole('link', { name: title })).toHaveCount(0)
 })
 
-test('批量任务只能选上线的模板；多轮对话能问能答', async ({ page }) => {
+test('批量任务不用等上线，能跑当前草稿；多轮对话能问能答', async ({ page }) => {
   test.skip(!currentAdminPassword(), '缺少 ADMIN_PASSWORD')
+  test.setTimeout(120_000)
   const title = `e2e 草稿 ${Date.now()}`
   await loginAdmin(page, '/ai/prompts/new')
   await page.getByRole('textbox', { name: '模板名称' }).fill(title)
@@ -168,10 +193,21 @@ test('批量任务只能选上线的模板；多轮对话能问能答', async ({
   const drawer = page.getByRole('dialog', { name: '新建批量任务' })
   await drawer.locator('.el-select__wrapper').first().click()
   const option = page.getByRole('option', { name: new RegExp(title) })
-  await expect(option).toContainText('未上线')
-  await expect(option).toHaveClass(/is-disabled/)
-  await page.keyboard.press('Escape')
-  await expect(drawer.getByRole('button', { name: /^开始运行/ })).toBeDisabled()
+  await expect(option).toContainText('未上线，可跑草稿')
+  await expect(option).not.toHaveClass(/is-disabled/)
+  await option.click()
+  // 没上线：只能选当前草稿，提醒还没做过样本试跑，但不拦着。
+  await expect(drawer.getByRole('radio', { name: /线上版本/ })).toBeDisabled()
+  await expect(drawer.getByRole('radio', { name: /当前草稿/ })).toBeChecked()
+  await expect(drawer).toContainText('还没做过样本试跑')
+  await expect(drawer).toContainText('不引用列，任意 .xlsx 都行')
+  await drawer.locator('input[type=file]').setInputFiles(batchBook)
+  await expect(drawer).toContainText('3 行数据')
+  await drawer.getByRole('button', { name: /^开始运行/ }).click()
+  await page.getByRole('dialog', { name: '开始运行？' }).getByRole('button', { name: '开始运行' }).click()
+  const task = page.getByRole('row').filter({ hasText: title }).first()
+  await expect(task).toContainText('已完成', { timeout: 60_000 })
+  await expect(task).toContainText('草稿 ')
 
   await page.goto('/ai/chat')
   await page.getByRole('textbox', { name: '输入问题' }).fill('你好')

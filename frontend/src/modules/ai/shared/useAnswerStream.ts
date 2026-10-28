@@ -14,6 +14,8 @@ export interface ChatMessage {
   tip: string
   error: string
   time: string
+  /** 试发带了输出字段时，答完按字段解析的结果；null 表示格式不对，没有这一项表示没解析 */
+  parsed?: Record<string, string>[] | null
 }
 
 export interface StreamStats {

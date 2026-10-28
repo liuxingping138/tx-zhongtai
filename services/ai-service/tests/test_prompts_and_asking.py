@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 from platform_common.errors import ApiError, NotFoundError, PermissionDeniedError
 
-from app.application import asking
+from app.application import asking, test_rows
 from app.application import prompts as service
 from app.core import storage
 from app.core.config import get_settings
@@ -263,7 +263,54 @@ async def test_stream_answer_echoes_prompt_then_model_events_then_done(monkeypat
     _with_keys(monkeypatch, ark="k")
     monkeypatch.setattr(asking, "stream_responses", fake_stream([{"text": "答"}, {"response_id": "r1"}]))
     model, message = await asking.prepare_chat(FakeSession(), "deepseek-v4-flash", "问")
-    chunks = [chunk async for chunk in asking.stream_answer(model, message, thinking=False, echo_prompt=True)]
+    chunks = [chunk async for chunk in asking.stream_answer(model, message, thinking=False, trial_fields=[])]
     assert chunks[0] == 'data: {"prompt": "问"}\n\n'
     assert chunks[1].startswith('data: {"model": {"id": "deepseek-v4-flash"')
     assert chunks[2:] == ['data: {"text": "答"}\n\n', 'data: {"response_id": "r1"}\n\n', "data: [DONE]\n\n"]
+
+
+async def test_trial_can_pick_any_row_of_the_sample(monkeypatch: pytest.MonkeyPatch) -> None:
+    _with_keys(monkeypatch, baidu="k")
+    _use(monkeypatch, template(excel_name="a.xlsx"))
+    storage.write_atomic(storage.prompt_file(PROMPT_ID, "excel"), xlsx([["名称"], ["甲公司"], ["乙公司"]]))
+    ask = {"content": "@【名称】", "model_id": "baidu-deepseek-v3.2", "prompt_id": PROMPT_ID}
+    _, prompt = await asking.prepare_trial(FakeSession(), FULL_ACCESS, row=1, **ask)  # type: ignore[arg-type]
+    assert prompt == "乙公司"
+    with pytest.raises(ApiError, match="只有 2 行，没有第 3 行"):
+        await asking.prepare_trial(FakeSession(), FULL_ACCESS, row=2, **ask)  # type: ignore[arg-type]
+
+
+async def test_trial_answer_is_parsed_by_the_output_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+    """试发答完按输出字段解析，和批量任务同一套规则：页面不用自己猜这一行能不能解析。"""
+
+    _with_keys(monkeypatch, ark="k")
+    model, message = await asking.prepare_chat(FakeSession(), "deepseek-v4-flash", "问")
+    answers = {
+        '[{"行业": "制造"}]': 'data: {"parsed": [{"行业": "制造"}]}\n\n',
+        "说不清": 'data: {"parsed": null}\n\n',
+    }
+    for text, parsed in answers.items():
+        monkeypatch.setattr(asking, "stream_responses", fake_stream([{"text": text}]))
+        chunks = [chunk async for chunk in asking.stream_answer(model, message, thinking=False, trial_fields=["行业"])]
+        assert chunks[-2:] == [parsed, "data: [DONE]\n\n"]
+    # 出错的回答没有解析的意义；对话不传输出字段，也不解析。
+    monkeypatch.setattr(asking, "stream_responses", fake_stream([{"text": "半"}, {"error": "超时"}]))
+    chunks = [chunk async for chunk in asking.stream_answer(model, message, thinking=False, trial_fields=["行业"])]
+    assert not any('"parsed"' in chunk for chunk in chunks)
+    monkeypatch.setattr(asking, "stream_responses", fake_stream([{"text": '[{"行业": "制造"}]'}]))
+    chunks = [chunk async for chunk in asking.stream_answer(model, message, thinking=False)]
+    assert not any('"parsed"' in chunk or '"prompt"' in chunk for chunk in chunks)
+
+
+async def test_test_rows_give_the_head_of_each_cell_and_its_length(monkeypatch: pytest.MonkeyPatch) -> None:
+    _use(monkeypatch, template(excel_name="a.xlsx", excel_rows=2))
+    storage.write_atomic(
+        storage.prompt_file(PROMPT_ID, "excel"), xlsx([["名称", "正文"], ["甲", "长" * 500], ["乙", ""]])
+    )
+    data = await test_rows.preview(FakeSession(), FULL_ACCESS, PROMPT_ID)  # type: ignore[arg-type]
+    assert (data["headers"], data["total"]) == (["名称", "正文"], 2)
+    first, second = data["rows"]
+    assert (first["row"], first["values"]["正文"], first["lengths"]["正文"]) == (1, "长" * 200, 500)
+    assert second["values"] == {"名称": "乙", "正文": ""}
+    _use(monkeypatch, template(excel_name=""))
+    assert await test_rows.preview(FakeSession(), FULL_ACCESS, PROMPT_ID) == {"headers": [], "total": 0, "rows": []}  # type: ignore[arg-type]

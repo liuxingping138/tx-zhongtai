@@ -181,8 +181,8 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
   只取名称列、去重（原表按客群重复，8370 行只有 3348 条路径）；六级码表按三级行业分组输出（「一级行业 > 二级行业 > 三级行业：场景；场景」，保留上级场景），约 3.8 万字，原样六列要 10.6 万字
 - 模板「上线」由 `ai.releases`（只给管理员）把提示词、输出字段、模型、码表冻结成 `ai_template_releases` 一版，模板 `release_id` 指向生效版本。
   上线后再改模板只改草稿，页面列出与上线版本不同的项；已上线的模板要先下线才能删，删模板连它的样本试跑记录和产物一起删，试跑没结束的先拦下。定时任务只用上线版本
-- 主线是业务人员写模板、样本试跑 → 管理员上线 → 定时任务和批量任务都只跑上线版本（`releases.current`）。页面发起的批量任务单独上传本次 Excel，按上线版本引用的列检查（`input-preview` 预检不调模型；`input-template` 按同一份列给出只有表头的数据模板下载），把输入文件、上线版本的提示词 / 输出字段 / 模型 / 码表冻结进任务目录和任务行（`release_no`、`input_name`）：之后改模板、重新上线、删模板都不影响排队中、运行中和已完成的任务
-- 样本试跑（`app/application/sample_runs.py`，`/api/v1/ai/prompts/{id}/sample-run`，权限同试发 `ai.prompts:ask`）：草稿 × 模板测试样本前 N 条（最多 50），也是一条 `ai_batch_runs`，`source=sample`，不进批量任务列表（`repositories/batch_runs.TASK_SOURCES`），和正式任务互不阻挡；模板列表带最近一次试跑（`sample`，`current` 表示跑的就是现在的草稿）。逐行结果预览 `run_rows.preview` 样本试跑和批量详情共用，任务可能几十万行，只读要列的那几行：输入读逐行副本 `input.jsonl`（第一次打开时由快照生成，快照大小或修改时间变了就重建），原始返回不留提问原文，前 50 行都成功就不往下读（重跑只重问失败的行，成功那次就是最终结果）。跑完的结果 Excel 在模板页下载（`/sample-run/{run_id}/files/{kind}`），挂模板的导出档 `ai.prompts:export` 而不是批量任务的，只给这个模板自己 `source=sample` 的任务
+- 主线是业务人员写模板、样本试跑 → 管理员上线 → 定时任务只跑上线版本（`releases.current`）。页面发起的批量任务（`app/application/batch_start.py`）用 `version` 选跑上线版本还是已保存的草稿：人自己传 Excel、当场看结果，不用等上线。单独上传本次 Excel，按要跑那一版引用的列检查（`input-preview` 预检不调模型；`input-template` 按同一份列给出只有表头的数据模板下载），把输入文件、那一版的提示词 / 输出字段 / 模型 / 码表冻结进任务目录和任务行（跑上线版本记 `release_no`，跑草稿记 `draft_saved_at`，以及 `input_name`）：之后改模板、重新上线、删模板都不影响排队中、运行中和已完成的任务
+- 样本试跑（`app/application/sample_runs.py`，`/api/v1/ai/prompts/{id}/sample-run`，权限同试发 `ai.prompts:ask`）：草稿 × 模板测试样本前 N 条（最多 50），也是一条 `ai_batch_runs`，`source=sample`，不进批量任务列表（`repositories/batch_runs.TASK_SOURCES`），和正式任务互不阻挡；按先后叫「第 N 次」，`view` 默认看最近一次、和前一次逐行对比（`run_compare`：按发起时复制进任务目录的样本内容判断是不是同一份，同一份才按行号对上，标 fixed / broke / changed），`run_id` / `compare_id` 能换着看最近 20 次；`/sample-run/{run_id}/retry` 只重问失败的行，用的是那次冻结的提示词；模板列表带最近一次试跑（`sample`，`current` 表示跑的就是现在的草稿）。逐行结果预览 `run_rows.preview` 样本试跑和批量详情共用，任务可能几十万行，只读要列的那几行：输入读逐行副本 `input.jsonl`（第一次打开时由快照生成，快照大小或修改时间变了就重建），原始返回不留提问原文，前 50 行都成功就不往下读（重跑只重问失败的行，成功那次就是最终结果）。跑完的结果 Excel 在模板页下载（`/sample-run/{run_id}/files/{kind}`），挂模板的导出档 `ai.prompts:export` 而不是批量任务的，只给这个模板自己 `source=sample` 的任务
 - `ai-worker` 持 Postgres 全局锁，用 `SKIP LOCKED` 认领排队任务，最多同时跑 `AI_BATCH_MAX_RUNNING` 个，每个任务
   `AI_BATCH_CONCURRENCY` 路并发。提示词轮到哪行才拼哪行、成功行写完 CSV 就不再留提问原文、结果 Excel 用 `xlsx_writer` 流式写：10 万行乘上码表全文一次拼好要几个 G，worker 会被 OOM 杀掉。每行完成立即追加 `temp.csv`；进程被停时把已跑部分收尾成「中断」并生成结果。
   运行中超过 `AI_BATCH_STALE_SECONDS` 没心跳的任务，列表和进度接口会把它纠正为「中断」
@@ -191,6 +191,7 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
  「重跑失败」把已结束的任务重新排队：worker 读回原始返回，已成功的行沿用，只问失败和没跑到的行，token 和费用累加。
  旧系统迁来的任务没有 Excel 快照，不能重跑；定时任务的批次也不能重跑（政策服务已取走结果，重跑只会再花钱，要补的政策在基础标签里「重新打标」）。
  原始返回 CSV 的「提问」列是整段提示词，政策全文加码表能到十几万字，`batch_output` 放开了 csv 单格上限，别再按默认值读
+- 试发（`/api/v1/ai/stream/ask`）带 `row` 选测试样本第几条（`app/application/test_rows.py`，`/prompts/{id}/test-rows` 给前 100 行每格开头 200 字供页面选行和预览），带 `output_fields` 时答完多推一块 `{"parsed": [...] | null}`，按和批量任务同一套 `parse_fields` 解析，页面据此说这一行能不能解析、和样本试跑比修好了没有
 - 流式接口都在 `/api/v1/ai/stream/*`：网关对这个前缀不挂压缩和请求缓冲（buffering 会把整段回答攒满才下发），
   新加流式接口必须放在这个前缀下，`test_stream_routes_live_under_the_unbuffered_prefix` 会拦
 - 模板附件和批量产物在 `ai-data` 卷（`/data/ai`），不在库里；业务备份脚本会一起打包

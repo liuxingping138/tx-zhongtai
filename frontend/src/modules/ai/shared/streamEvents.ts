@@ -3,7 +3,7 @@ import type { Usage } from './aiText'
 
 export interface StreamTarget {
   user: { text: string }
-  reply: { text: string; reasoning: string; tip: string; error: string }
+  reply: { text: string; reasoning: string; tip: string; error: string; parsed?: Record<string, string>[] | null }
   stats: { model: AiModel | null; usage: Usage }
   setResponseId: (id: string) => void
 }
@@ -37,6 +37,8 @@ const HANDLERS: Record<string, { type: 'string' | 'object'; apply: Handler }> = 
 }
 
 export function applyStreamEvent(target: StreamTarget, event: Record<string, unknown>): void {
+  // 试发答完按输出字段解析的结果：null 也有意义（格式不对），不能像别的事件一样跳过。
+  if ('parsed' in event) target.reply.parsed = Array.isArray(event.parsed) ? event.parsed as Record<string, string>[] : null
   for (const [key, value] of Object.entries(event)) {
     const handler = HANDLERS[key]
     if (handler && value !== null && typeof value === handler.type) handler.apply(target, value)

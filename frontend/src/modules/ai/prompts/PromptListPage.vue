@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, Search } from '@element-plus/icons-vue'
 
@@ -7,7 +7,9 @@ import { listPrompts, type PromptTemplate, type TemplateCategory } from '@/api/a
 import { errorMessage } from '@/api/errors'
 import { useAuthStore } from '@/stores/auth'
 import { ALL_CATEGORIES, defaultCategory, inCategory } from '../shared/categories'
+import { sampleBars } from './sampleView'
 import { releaseState, sampleState, type ReleaseKind } from './templateStatus'
+import { useTaskFit } from './useTaskFit'
 import '../shared/ai.css'
 
 /**
@@ -22,6 +24,12 @@ const loadError = ref('')
 const category = ref(ALL_CATEGORIES)
 const status = ref<ReleaseKind | ''>('')
 const keyword = ref('')
+const onlyScheduled = ref(false)
+// 哪些模板正被定时任务用：只有政策类会被选用；看不到政策打标约定（没权限）时这一列和筛选都不显示。
+const taskFit = useTaskFit(reactive({ category: 'policy', content: '', output_fields: '', code_table: '' }))
+const showTasks = computed(() => taskFit.usedBy('') !== null)
+const tasksOf = (item: PromptTemplate) => (item.category === 'policy' ? taskFit.usedBy(item.id) ?? [] : [])
+const scheduled = computed(() => inScope.value.filter(item => tasksOf(item).length).length)
 const canCreate = computed(() => auth.canFull('ai.prompts') && categories.value.some(item => item.editable))
 
 const STATUS_OPTIONS: { value: ReleaseKind | ''; label: string }[] = [
@@ -38,7 +46,8 @@ const counts = computed(() => {
 })
 const visible = computed(() => {
   const needle = keyword.value.trim()
-  return inScope.value.filter(item => (!status.value || releaseState(item).kind === status.value) && (!needle || item.title.includes(needle)))
+  return inScope.value.filter(item => (!status.value || releaseState(item).kind === status.value) && (!needle || item.title.includes(needle))
+    && (!onlyScheduled.value || tasksOf(item).length > 0))
 })
 const emptyText = computed(() => {
   if (loading.value) return ' '
@@ -60,7 +69,7 @@ async function load(): Promise<void> {
     loading.value = false
   }
 }
-onMounted(load)
+onMounted(() => { void load(); void taskFit.load() })
 
 function open(template: PromptTemplate): void {
   void router.push({ name: 'ai-prompt-edit', params: { id: template.id } })
@@ -116,6 +125,14 @@ function create(): void {
             {{ item.label }}<span class="prompt-list__count">{{ counts[item.value] }}</span>
           </el-radio-button>
         </el-radio-group>
+        <el-checkbox
+          v-if="showTasks"
+          v-model="onlyScheduled"
+          border
+          class="prompt-list__scheduled"
+        >
+          定时任务在用<span class="prompt-list__count">{{ scheduled }}</span>
+        </el-checkbox>
         <el-input
           v-model="keyword"
           class="prompt-list__search"
@@ -171,6 +188,24 @@ function create(): void {
           width="70"
         />
         <el-table-column
+          v-if="showTasks"
+          label="定时任务"
+          min-width="130"
+        >
+          <template #default="{ row }">
+            <span
+              v-for="task in tasksOf(row)"
+              :key="task"
+              class="prompt-list__task"
+              :title="`政策 AI 打标的「${task}」任务每天按这个模板的线上版本跑`"
+            >{{ task }}</span>
+            <span
+              v-if="!tasksOf(row).length"
+              class="prompt-list__none"
+            >不在用</span>
+          </template>
+        </el-table-column>
+        <el-table-column
           label="上线状态"
           min-width="200"
         >
@@ -211,7 +246,16 @@ function create(): void {
               class="prompt-list__sample"
               :class="`is-${sampleState(row).kind}`"
               :title="sampleState(row).detail"
-            >{{ sampleState(row).text }}</span>
+            >
+              <span
+                v-if="row.sample"
+                class="prompt-list__bars"
+                aria-hidden="true"
+              ><i
+                v-for="(tone, index) in sampleBars(row.sample)"
+                :key="index"
+                :class="`is-${tone}`"
+              /></span>{{ sampleState(row).text }}</span>
           </template>
         </el-table-column>
         <el-table-column
@@ -277,4 +321,13 @@ function create(): void {
 .prompt-list__sample.is-passed { color: var(--zt-success-text); }
 .prompt-list__sample.is-failed, .prompt-list__sample.is-stale { color: var(--zt-warning-text); }
 .prompt-list__sample.is-running { color: var(--zt-blue-600); }
+.prompt-list__bars { display: inline-flex; flex: none; gap: 2px; }
+.prompt-list__bars i { width: 5px; height: 16px; border-radius: 1px; background: var(--zt-success); }
+.prompt-list__bars i.is-failed { background: var(--zt-danger-text); }
+.prompt-list__bars i.is-format { background: repeating-linear-gradient(180deg, var(--zt-warning) 0 2px, var(--zt-warning-border) 2px 4px); }
+.prompt-list__bars i.is-pending { background: var(--zt-border-strong); }
+.prompt-list__sample.is-stale .prompt-list__bars { opacity: .4; }
+.prompt-list__task { display: inline-flex; align-items: center; height: 22px; margin: 2px 6px 2px 0; padding: 0 8px; border: 1px solid var(--el-color-primary-light-7); border-radius: 4px; background: var(--el-color-primary-light-9); color: var(--zt-blue-700); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.prompt-list__none { color: var(--zt-ink-400); font-size: 13px; }
+.prompt-list__scheduled { margin: 0; }
 </style>

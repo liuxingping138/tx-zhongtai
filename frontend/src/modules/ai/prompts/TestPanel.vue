@@ -1,22 +1,40 @@
 <script setup lang="ts">
+import { toRef } from 'vue'
+
 import type { AiModel, BatchRun, PromptTemplate } from '@/api/ai'
 import type { useAnswerStream } from '../shared/useAnswerStream'
 import SampleRunPanel from './SampleRunPanel.vue'
 import TrialPanel from './TrialPanel.vue'
+import { useSampleRun } from './useSampleRun'
 
-/** 编辑页右栏：先「试发一条」边写边看，再「样本试跑」整批验一遍。两种都用左边的草稿。 */
-defineProps<{
+/**
+ * 编辑页右栏：先「试发一条」边写边看，再「样本试跑」整批验一遍。两种都用左边的草稿。
+ * 样本试跑里有问题的行能直接跳到试发、单独改到对；试发也拿这一行的试跑结果对照。
+ */
+const props = defineProps<{
   answer: ReturnType<typeof useAnswerStream>
   template: PromptTemplate | null
   model: AiModel | undefined
+  content: string
+  fields: string[]
+  codeName: string
   canRun: boolean
   canExport: boolean
   dirty: boolean
 }>()
-const emit = defineEmits<{ run: []; upload: []; 'sample-changed': [run: BatchRun] }>()
+const emit = defineEmits<{ run: []; upload: []; edit: []; 'sample-changed': [run: BatchRun] }>()
 const tab = defineModel<'trial' | 'sample'>('tab', { required: true })
 const thinking = defineModel<boolean>('thinking', { default: false })
+/** 试发测试样本的第几条，从 0 数 */
+const row = defineModel<number>('row', { required: true })
 const TABS = [{ key: 'trial', label: '试发一条' }, { key: 'sample', label: '样本试跑' }] as const
+const sample = useSampleRun(toRef(props, 'template'), run => emit('sample-changed', run))
+
+/** 样本试跑里点「试发这一行」：换到试发，选好那一行（试跑的行号从 1 数）。 */
+function trialRow(number: number): void {
+  row.value = number - 1
+  tab.value = 'trial'
+}
 </script>
 
 <template>
@@ -53,27 +71,36 @@ const TABS = [{ key: 'trial', label: '试发一条' }, { key: 'sample', label: '
     <TrialPanel
       v-show="tab === 'trial'"
       id="test-pane-trial"
+      v-model:row="row"
       role="tabpanel"
       aria-labelledby="test-tab-trial"
       :answer="answer"
       :model="model"
       :can-run="canRun"
-      :has-excel="Boolean(template?.excel_name)"
+      :template="template"
+      :content="content"
+      :fields="fields"
+      :code-name="codeName"
+      :sample="sample"
       @run="emit('run')"
+      @upload="emit('upload')"
+      @sample="tab = 'sample'"
     />
     <SampleRunPanel
       v-show="tab === 'sample'"
       id="test-pane-sample"
       role="tabpanel"
       aria-labelledby="test-tab-sample"
+      :sample="sample"
       :template="template"
       :model="model"
       :thinking="thinking"
       :can-run="canRun"
       :can-export="canExport"
       :dirty="dirty"
-      @changed="run => emit('sample-changed', run)"
       @upload="emit('upload')"
+      @trial="trialRow"
+      @edit="emit('edit')"
     />
   </aside>
 </template>

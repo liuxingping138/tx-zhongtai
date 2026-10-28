@@ -1,8 +1,9 @@
 """流式提问：提问配置页的试发、多轮对话。
 
 返回 SSE 文本块：每块 `data: {json}\\n\\n`，最后一块 `data: [DONE]`。事件见 app.core.llm，另加：
-    {"prompt": 实际发出的提示词}   试发时第一块，变量已替换成 Excel 第一行的值
+    {"prompt": 实际发出的提示词}   试发时第一块，变量已替换成测试样本所选那一行的值
     {"model": {...}}               本次使用的模型，前端据此算费用
+    {"parsed": [{字段: 值}] | null} 试发带了输出字段时最后一块：按输出字段解析的结果，null 表示格式不对
 """
 
 from __future__ import annotations
@@ -11,22 +12,18 @@ import json
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
-import anyio
 from platform_common.clock import utcnow
 from platform_common.errors import ApiError, ErrorCode, PermissionDeniedError
-from platform_common.excel import run_excel_parse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application import model_configs
+from app.application import model_configs, test_rows
 from app.application.billing import CallTally
 from app.application.prompts import code_text, require, require_editable
-from app.application.sheets import read_sheet
-from app.core import storage
 from app.core.config import get_settings
 from app.core.llm import LlmRequest, stream_responses
 from app.domain.categories import CategoryAccess
 from app.domain.llm_models import LlmModel, build_body
-from app.domain.templating import CODE_TABLE_FIELD, fill_template, template_variables
+from app.domain.templating import CODE_TABLE_FIELD, fill_template, parse_fields, template_variables
 
 MESSAGE_MAX = 200_000
 
@@ -105,17 +102,11 @@ def _check_message(message: str) -> str:
     return text
 
 
-async def _first_row_values(session: AsyncSession, prompt_id: str) -> dict[str, str]:
-    """模板 Excel 第一条数据 + 码表全文（上传的或系统码表），用来把 @【列名】@【上传码表】替换成真实值。"""
+async def _row_values(session: AsyncSession, prompt_id: str, row: int) -> dict[str, str]:
+    """测试样本第 row 条数据（从 0 数）+ 码表全文（上传的或系统码表），用来把 @【列名】@【上传码表】替换成真实值。"""
 
     template = await require(session, prompt_id)
-    values: dict[str, str] = {}
-    excel = storage.prompt_file(prompt_id, "excel")
-    if template.excel_name and await anyio.Path(excel).is_file():
-        _, rows = await run_excel_parse(
-            lambda content: read_sheet(content, limit=1), await anyio.Path(excel).read_bytes()
-        )
-        values.update(rows[0] if rows else {})
+    values = dict(await test_rows.row_values(template, row))
     code = await code_text(template)
     if code is not None:
         values[CODE_TABLE_FIELD] = code
@@ -123,7 +114,13 @@ async def _first_row_values(session: AsyncSession, prompt_id: str) -> dict[str, 
 
 
 async def prepare_trial(
-    session: AsyncSession, access: CategoryAccess, *, content: str, model_id: str, prompt_id: str | None
+    session: AsyncSession,
+    access: CategoryAccess,
+    *,
+    content: str,
+    model_id: str,
+    prompt_id: str | None,
+    row: int = 0,
 ) -> tuple[LlmModel, str]:
     """在开始推流前做完全部校验和取数：一旦开始推流就没法再返回 4xx 了。
 
@@ -137,7 +134,7 @@ async def prepare_trial(
     model = await resolve_model(session, model_id)
     text = _check_message(content)
     if prompt_id and template_variables(text):
-        values = await _first_row_values(session, prompt_id)
+        values = await _row_values(session, prompt_id, row)
         text = fill_template(text, values, values.get(CODE_TABLE_FIELD, ""))
     return model, text
 
@@ -148,19 +145,30 @@ async def stream_answer(
     *,
     thinking: bool,
     previous_response_id: str | None = None,
-    echo_prompt: bool = False,
+    trial_fields: list[str] | None = None,
     on_done: Callable[[CallTally], Awaitable[None]] | None = None,
 ) -> AsyncIterator[str]:
-    """推流回答。答完把这次的用量交给 on_done 记账；用户中途停止时模型还没给用量，这次不记。"""
+    """推流回答。答完把这次的用量交给 on_done 记账；用户中途停止时模型还没给用量，这次不记。
 
-    if echo_prompt:
+    trial_fields 只在试发时给（模板的输出字段，可以为空）：先回显实际发出的提示词，答完按和批量任务同一套规则解析，
+    页面直接看出这一行能不能解析、解析成什么。
+    """
+
+    fields = trial_fields or []
+    if trial_fields is not None:
         yield _sse({"prompt": message})
     yield _sse({"model": model_info(model)})
     body = build_body(model, message, previous_response_id=previous_response_id, thinking=thinking)
     tally = CallTally()
+    parts: list[str] = []
+    failed = False
     async for event in stream_responses(llm_request(model, body)):
         tally.add(event)
+        parts.append(str(event.get("text") or ""))
+        failed = failed or bool(event.get("error"))
         yield _sse(event)
+    if fields and not failed:
+        yield _sse({"parsed": parse_fields("".join(parts), fields)})
     if on_done is not None:
         await on_done(tally)
     yield _sse("[DONE]")

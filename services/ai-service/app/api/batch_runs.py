@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.schemas import RunFileKind, file_response
 from app.api.security import CategoryAccess, SecurityClass, classified, get_category_access, require_ai_permission
 from app.application import batch_runs as service
-from app.application import prompts
+from app.application import batch_start, prompts
 from app.application.asking import available_models
 from app.core.config import get_settings
 from app.core.database import get_db_session
@@ -24,6 +24,7 @@ _MISSING_FILE = "请选择本次任务的数据文件"
 
 RunMode = Literal["test", "all"]
 RunSource = Literal["manual", "pipeline"]
+RunVersion = Literal["release", "draft"]
 
 
 def run_filters(
@@ -90,6 +91,7 @@ async def options(
 async def preview_input(
     request: Request,
     prompt_id: str = Query(max_length=32),
+    version: RunVersion = Query(default="release", description="跑上线版本还是已保存的草稿"),
     session: AsyncSession = Depends(get_db_session, scope="function"),
     access: CategoryAccess = Depends(get_category_access),
     _: Actor = Depends(require_ai_permission(RESOURCE, "run")),
@@ -97,20 +99,23 @@ async def preview_input(
     """选好文件先检查：不调用模型、不建任务。文件在权限依赖通过之后才读，边读边限流。"""
 
     content, filename = await read_named_upload(request, get_settings().upload_max_bytes, missing=_MISSING_FILE)
-    return success_json(await service.preview_input(session, access, prompt_id, (filename, content)))
+    return success_json(
+        await batch_start.preview_input(session, access, prompt_id, (filename, content), version=version)
+    )
 
 
 @router.get("/input-template")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def input_template(
     prompt_id: str = Query(max_length=32),
+    version: RunVersion = Query(default="release", description="跑上线版本还是已保存的草稿"),
     session: AsyncSession = Depends(get_db_session, scope="function"),
     access: CategoryAccess = Depends(get_category_access),
     _: Actor = Depends(require_ai_permission(RESOURCE, "run")),
 ) -> Response:
     """要跑任务的人才需要：和发起同一个权限。必须在 /{run_id} 之前声明，否则会被当成任务 ID。"""
 
-    content, filename = await service.input_template(session, access, prompt_id)
+    content, filename = await batch_start.input_template(session, access, prompt_id, version=version)
     return file_response(content, filename)
 
 
@@ -122,6 +127,7 @@ async def start_run(
     model_id: str = Query(default="", max_length=100),
     thinking: bool = Query(default=False),
     limit: int = Query(default=0, ge=0, le=100_000),
+    version: RunVersion = Query(default="release", description="跑上线版本还是已保存的草稿"),
     session: AsyncSession = Depends(get_db_session, scope="function"),
     access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission(RESOURCE, "run")),
@@ -129,9 +135,9 @@ async def start_run(
     """带文件的 multipart，其余参数在 query 里。0 条表示跑全部。"""
 
     content, filename = await read_named_upload(request, get_settings().upload_max_bytes, missing=_MISSING_FILE)
-    values = {"prompt_id": prompt_id, "model_id": model_id, "thinking": thinking, "limit": limit}
+    values = {"prompt_id": prompt_id, "model_id": model_id, "thinking": thinking, "limit": limit, "version": version}
     return success_json(
-        await service.start_run(session, actor, access, values, upload=(filename, content)), status_code=201
+        await batch_start.start_run(session, actor, access, values, upload=(filename, content)), status_code=201
     )
 
 

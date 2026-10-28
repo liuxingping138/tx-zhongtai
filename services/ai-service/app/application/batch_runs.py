@@ -1,7 +1,4 @@
-"""批量任务：发起、列表、进度、停止、重跑、删除、下载。真正的执行在 app.worker（独立进程）。
-
-页面发起的批量任务和定时任务一样，只跑模板的上线版本：业务人员在模板页用样本试好，管理员上线后才用于正式数据。
-"""
+"""批量任务：列表、进度、停止、重跑、删除、下载；发起在 batch_start。真正的执行在 app.worker（独立进程）。"""
 
 from __future__ import annotations
 
@@ -16,29 +13,22 @@ from platform_common.errors import ApiError, ErrorCode, NotFoundError
 from platform_common.filters import Filters
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application import releases
-from app.application.asking import RELEASE_MODEL_DISABLED, resolve_model
+from app.application.asking import resolve_model
 from app.application.audit_emit import enqueue_event
-from app.application.batch_inputs import blank_input, inspect_upload, snapshot_input
-from app.application.prompts import require_editable as require_editable_prompt
 from app.application.run_rows import preview as run_rows_preview
 from app.application.sheets import has_run_input
 from app.core import storage
 from app.core.config import get_settings
 from app.domain.categories import CategoryAccess, category_name
-from app.domain.llm_models import LlmModel
 from app.domain.models import (
     ACTIVE_STATUSES,
     RUN_CANCELLED,
     RUN_DONE,
     RUN_QUEUED,
-    RUN_SOURCE_MANUAL,
     RUN_SOURCE_PIPELINE,
+    RUN_SOURCE_SAMPLE,
     RUN_STOPPING,
     BatchRun,
-    PromptTemplate,
-    TemplateRelease,
-    new_id,
 )
 from app.repositories import batch_runs as repo
 
@@ -89,6 +79,7 @@ def to_dict(run: BatchRun) -> dict[str, Any]:
         "input_name": run.input_name,
         "source": run.source,
         "release_no": run.release_no,
+        "draft_saved_at": format_beijing(run.draft_saved_at) if run.draft_saved_at else "",
         "prompt_category": run.prompt_category,
         "prompt_category_name": category_name(run.prompt_category),
         "prompt_content": run.prompt_content,
@@ -171,112 +162,16 @@ async def get_run(session: AsyncSession, access: CategoryAccess, run_id: str) ->
     return to_dict(run)
 
 
-async def _plan(
-    session: AsyncSession, access: CategoryAccess, prompt_id: str, upload: tuple[str, bytes] | None, *, lock: bool
-) -> tuple[PromptTemplate, TemplateRelease, LlmModel, dict[str, Any]]:
-    """发起前的全部检查，预检和发起共用：先查不用读文件的（上线、模型、是否在跑），再解析 Excel。"""
-
-    template = await require_editable_prompt(session, access, prompt_id, lock=lock)
-    release = await releases.current(session, template, "批量任务")
-    model = await resolve_model(session, release.model_id, frozen=RELEASE_MODEL_DISABLED)
-    # 同一模板同时只跑一个正式任务。发起时模板行已加锁，两个人同时点运行只有一个能建出任务。
-    await reconcile_stale(session)
-    running = await repo.active_for_prompt(session, template.id)
-    if running is not None:
-        raise ApiError(
-            f"这个模板已有任务在运行（{running.done_count}/{running.total_count or '?'} 条），请等它结束或先停止",
-            code=ErrorCode.VERSION_CONFLICT,
-            http_status=409,
-        )
-    if upload is None:
-        raise ApiError("请选择本次任务的数据文件", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    return template, release, model, await inspect_upload(release.content, upload)
-
-
-async def preview_input(
-    session: AsyncSession, access: CategoryAccess, prompt_id: str, upload: tuple[str, bytes]
-) -> dict[str, Any]:
-    """只检查不发起：不调用模型、不建任务、不动模板的测试样本。"""
-
-    _, release, model, summary = await _plan(session, access, prompt_id, upload, lock=False)
-    return {**summary, "release_no": release.release_no, "model_name": model.name}
-
-
-async def input_template(session: AsyncSession, access: CategoryAccess, prompt_id: str) -> tuple[bytes, str]:
-    """新建任务时下载的空白数据表：按上线版本要的列，业务人员照着填好再上传。不看模型和是否在跑，只是一张表头。"""
-
-    template = await require_editable_prompt(session, access, prompt_id)
-    release = await releases.current(session, template, "批量任务")
-    title = template.title.replace("/", "_")[:60]
-    return await blank_input(release.content), f"{title}-第{release.release_no}版数据模板.xlsx"
-
-
-async def start_run(
+async def retry_run(
     session: AsyncSession,
     actor: Actor,
     access: CategoryAccess,
-    values: dict[str, Any],
+    run_id: str,
     *,
-    upload: tuple[str, bytes] | None = None,
+    event_type: str = "ai.batch_run.retried",
 ) -> dict[str, Any]:
-    template, release, model, summary = await _plan(
-        session, access, str(values.get("prompt_id") or ""), upload, lock=True
-    )
-    # 先取码表：码表服务不可用就不建任务，免得排进队列才发现没有码表。
-    code = await releases.release_code(release)
-    limit = max(int(values.get("limit") or 0), 0)
-    run = BatchRun(
-        id=new_id(),
-        prompt_id=template.id,
-        prompt_title=release.title,
-        prompt_category=release.category,
-        prompt_content=release.content,
-        output_fields=release.output_fields,
-        model_id=model.id,
-        model_name=model.name,
-        thinking=bool(values.get("thinking")) and model.supports_thinking,
-        row_limit=limit if 0 < limit < summary["rows"] else 0,
-        status=RUN_QUEUED,
-        **dict.fromkeys(("done_count", "failed_count", "format_failed_count", "input_tokens", "output_tokens"), 0),
-        total_count=min(limit, summary["rows"]) if limit else summary["rows"],
-        search_calls=0,
-        inference_cost=Decimal(0),
-        search_cost=Decimal(0),
-        cancel_requested=False,
-        error_message="",
-        created_at=utcnow(),
-        created_by_id=actor.id,
-        created_by_name=actor.name,
-        source=RUN_SOURCE_MANUAL,
-        release_no=release.release_no,
-        input_name=summary["name"],
-    )
-    repo.add(session, run)
-    await session.flush()
-    await anyio.to_thread.run_sync(snapshot_input, run.id, upload[1] if upload else b"")
-    # 码表也按发起时的内容冻结：之后系统码表再改，也不影响这个任务和它的重跑。
-    if code is not None:
-        await anyio.to_thread.run_sync(
-            storage.write_atomic, storage.run_dir(run.id) / storage.PROMPT_FILES["code"], code.encode("utf-8")
-        )
-    await enqueue_event(
-        session,
-        event_type="ai.batch_run.started",
-        actor=actor,
-        target_id=run.id,
-        changes={
-            "prompt_id": template.id,
-            "release_no": release.release_no,
-            "model_id": model.id,
-            "input": summary["name"],
-            "rows": run.total_count,
-        },
-    )
-    return to_dict(run)
-
-
-async def retry_run(session: AsyncSession, actor: Actor, access: CategoryAccess, run_id: str) -> dict[str, Any]:
-    """把已结束的任务重新排队：worker 沿用已成功的行，只问失败和没跑到的，结果合并回本任务，费用累加。"""
+    """把已结束的任务重新排队：worker 沿用已成功的行，只问失败和没跑到的，结果合并回本任务，费用累加。
+    样本试跑也能重跑，和正式任务各管各的：试跑在跑不挡正式任务重跑，反之亦然。"""
 
     await reconcile_stale(session)
     run = await require_editable(session, access, run_id, lock=True)
@@ -288,15 +183,18 @@ async def retry_run(session: AsyncSession, actor: Actor, access: CategoryAccess,
             reason = _PIPELINE_NO_RETRY
         raise ApiError(reason, code=ErrorCode.VALIDATION_ERROR, http_status=422)
     await resolve_model(session, run.model_id, frozen="它是任务发起时冻结的模型，重新启用它或新建任务")
-    running = await repo.active_for_prompt(session, run.prompt_id)
+    sources = (RUN_SOURCE_SAMPLE,) if run.source == RUN_SOURCE_SAMPLE else repo.TASK_SOURCES
+    running = await repo.active_for_prompt(session, run.prompt_id, sources=sources)
     if running is not None:
         raise ApiError("该模板已有任务在运行，请等它结束或先停止", code=ErrorCode.VERSION_CONFLICT, http_status=409)
     pending = pending_rows(run)
     run.status, run.cancel_requested, run.error_message = RUN_QUEUED, False, ""
     run.finished_at, run.heartbeat_at = None, None
-    await enqueue_event(
-        session, event_type="ai.batch_run.retried", actor=actor, target_id=run.id, changes={"rows": pending}
-    )
+    target = run.prompt_id if run.source == RUN_SOURCE_SAMPLE else run.id
+    changes: dict[str, Any] = {"rows": pending}
+    if run.source == RUN_SOURCE_SAMPLE:
+        changes["run_id"] = run.id
+    await enqueue_event(session, event_type=event_type, actor=actor, target_id=target, changes=changes)
     return to_dict(run)
 
 

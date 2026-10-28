@@ -13,6 +13,7 @@ from app.api.security import CategoryAccess, SecurityClass, classified, get_cate
 from app.application import asking, billing
 from app.core.database import get_db_session
 from app.domain.models import CALL_CHAT, CALL_TRIAL
+from app.domain.templating import split_fields
 
 router = APIRouter(prefix="/api/v1/ai", tags=["ai-stream"])
 
@@ -25,17 +26,17 @@ async def ask(
     access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission("ai.prompts", "ask")),
 ) -> StreamingResponse:
-    """试发：@【列名】替换成模板 Excel 第一行的值后提问。替换和校验都在推流前完成，出错照常返回 4xx。"""
+    """试发：@【列名】替换成测试样本所选那一行的值后提问。替换和校验都在推流前完成，出错照常返回 4xx。"""
 
     model, prompt = await asking.prepare_trial(
-        session, access, content=body.content, model_id=body.model_id, prompt_id=body.prompt_id
+        session, access, content=body.content, model_id=body.model_id, prompt_id=body.prompt_id, row=body.row
     )
     return sse_response(
         asking.stream_answer(
             model,
             prompt,
             thinking=body.thinking,
-            echo_prompt=True,
+            trial_fields=split_fields(body.output_fields),
             on_done=lambda tally: billing.record_call(CALL_TRIAL, model, tally, actor),
         )
     )

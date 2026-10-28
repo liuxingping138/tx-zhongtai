@@ -1,57 +1,275 @@
 <script setup lang="ts">
-import type { AiModel } from '@/api/ai'
-import AnswerTranscript from '../shared/AnswerTranscript.vue'
-import StreamStatsBar from '../shared/StreamStatsBar.vue'
-import type { useAnswerStream } from '../shared/useAnswerStream'
+import { computed, ref, watch } from 'vue'
+import { ArrowLeft, ArrowRight, CircleCheckFilled, WarningFilled } from '@element-plus/icons-vue'
 
-/** 试发一条：变量换成测试样本第 1 行，流式看回答。编辑器里 Ctrl/⌘ + Enter 同效。 */
-defineProps<{ answer: ReturnType<typeof useAnswerStream>; model: AiModel | undefined; canRun: boolean; hasExcel: boolean }>()
-const emit = defineEmits<{ run: [] }>()
+import type { AiModel, PromptTemplate } from '@/api/ai'
+import { getTestRows, type TestRows } from '@/api/aiSamples'
+import { formatYuan, priceText } from '../shared/aiText'
+import type { useAnswerStream } from '../shared/useAnswerStream'
+import { usedVariables } from './promptVariables'
+import { ROW_STATUS_TEXT, isProblem, trialVerdict } from './sampleView'
+import type { SampleRun } from './useSampleRun'
+
+/**
+ * 试发一条：选测试样本的第几行，先看这一行要替换进提示词的数据，发出去后按输出字段列出解析结果。
+ * 从样本试跑里有问题的行点过来，改完提示词再发，直接说这一行修好了没有。编辑器里 Ctrl/⌘ + Enter 同效。
+ */
+const props = defineProps<{
+  answer: ReturnType<typeof useAnswerStream>
+  model: AiModel | undefined
+  canRun: boolean
+  template: PromptTemplate | null
+  content: string
+  fields: string[]
+  codeName: string
+  sample: SampleRun
+}>()
+const emit = defineEmits<{ run: []; upload: []; sample: [] }>()
+/** 测试样本第几条数据，从 0 数 */
+const row = defineModel<number>('row', { required: true })
+
+const data = ref<TestRows>({ headers: [], total: 0, rows: [] })
+/** 最近一次试发问的是哪一行：换了行就先看新一行的数据，不拿上一行的回答冒充 */
+const askedRow = ref<number | null>(null)
+
+const running = computed(() => props.answer.running.value)
+const messages = computed(() => props.answer.messages.value)
+const sent = computed(() => messages.value.at(-2))
+const reply = computed(() => messages.value.at(-1))
+const showResult = computed(() => Boolean(reply.value && askedRow.value === row.value))
+const current = computed(() => data.value.rows[row.value])
+const variables = computed(() => usedVariables(props.content, data.value.headers, Boolean(props.codeName)))
+const sampleRow = computed(() => props.sample.state.value.rows?.items.find(item => item.row === row.value + 1))
+const sampleNo = computed(() => props.sample.run.value?.no ?? 0)
+const verdict = computed(() => (showResult.value && !running.value
+  ? trialVerdict(sampleRow.value, reply.value?.parsed, sampleNo.value, props.fields) : null))
+const label = (index: number) => {
+  const item = data.value.rows[index]
+  const first = item ? Object.values(item.values).find(Boolean) : ''
+  return `${index + 1}：${first || '（空行）'}`
+}
+
+watch(() => [props.template?.id, props.template?.excel_name, props.template?.excel_rows], async () => {
+  const template = props.template
+  data.value = { headers: [], total: 0, rows: [] }
+  if (!template?.excel_name) return
+  try {
+    data.value = await getTestRows(template.id)
+  } catch {
+    // 读不到样本时照样能试发，只是看不到这一行的数据。
+  }
+  if (row.value >= data.value.rows.length) row.value = 0
+}, { immediate: true })
+watch(running, value => { if (value) askedRow.value = row.value })
+
+/** 这一格太长、只给了开头时，写明整格多少字。 */
+function cut(name: string): string {
+  const full = current.value?.lengths[name] ?? 0
+  return full > (current.value?.values[name] ?? '').length ? `共 ${full.toLocaleString()} 字，这里只列开头` : ''
+}
+
+function move(step: number): void {
+  const next = row.value + step
+  if (next >= 0 && next < data.value.rows.length) row.value = next
+}
 </script>
 
 <template>
   <div class="trial">
-    <div class="trial__bar">
-      <span>{{ hasExcel ? '变量取测试样本第 1 行' : '没有测试样本，变量原样发出' }}</span>
+    <div
+      v-if="data.rows.length"
+      class="trial__pick"
+    >
       <el-button
-        v-if="answer.running.value"
         size="small"
+        :icon="ArrowLeft"
+        aria-label="上一行"
+        title="上一行"
+        :disabled="row <= 0 || running"
+        @click="move(-1)"
+      />
+      <el-select
+        v-model="row"
+        size="small"
+        filterable
+        class="trial__rows"
+        aria-label="试发哪一行"
+        :disabled="running"
+      >
+        <el-option
+          v-for="(_, index) in data.rows"
+          :key="index"
+          :value="index"
+          :label="label(index)"
+        />
+      </el-select>
+      <el-button
+        size="small"
+        :icon="ArrowRight"
+        aria-label="下一行"
+        title="下一行"
+        :disabled="row >= data.rows.length - 1 || running"
+        @click="move(1)"
+      />
+      <span class="trial__total">共 {{ data.total }} 行</span>
+    </div>
+    <p
+      v-if="!showResult && sampleRow && isProblem(sampleRow)"
+      class="trial__from"
+    >
+      这一行在第 {{ sampleNo }} 次样本试跑里{{ ROW_STATUS_TEXT[sampleRow.status] }}，改完提示词在这里单独试，确认修好了再整批跑。
+    </p>
+    <div class="trial__content">
+      <template v-if="!showResult">
+        <template v-if="template?.excel_name">
+          <p class="trial__cap">
+            发出去时，提示词里的变量换成这一行的数据
+          </p>
+          <dl
+            v-if="variables.length"
+            class="trial__data"
+          >
+            <template
+              v-for="item in variables"
+              :key="item.name"
+            >
+              <dt>{{ item.name }}</dt>
+              <dd v-if="item.state === 'code'">
+                {{ codeName }}<small>码表全文整份放进去</small>
+              </dd>
+              <dd
+                v-else-if="item.state === 'column'"
+                :title="current?.values[item.name]"
+              >
+                {{ current?.values[item.name] || '（空）' }}
+                <small v-if="cut(item.name)">{{ cut(item.name) }}</small>
+              </dd>
+              <dd
+                v-else
+                class="is-missing"
+              >
+                {{ item.state === 'nocode' ? '还没选码表，会原样发出' : '测试样本里没有这一列，会原样发出' }}
+              </dd>
+            </template>
+          </dl>
+          <p
+            v-else
+            class="trial__cap"
+          >
+            提示词里还没有引用列，写 @ 插入变量。
+          </p>
+        </template>
+        <p
+          v-else
+          class="trial__cap"
+        >
+          没有测试样本，变量会原样发出。
+          <el-button
+            link
+            type="primary"
+            size="small"
+            @click="emit('upload')"
+          >
+            上传测试样本
+          </el-button>
+        </p>
+      </template>
+      <template v-else-if="reply">
+        <section
+          class="trial__result"
+          :class="{ 'is-ok': reply.parsed, 'is-bad': reply.parsed === null || reply.error }"
+          aria-label="试发结果"
+        >
+          <div class="trial__head">
+            <template v-if="running">
+              {{ reply.tip || (reply.text ? '正在回答…' : '等模型回答…') }}
+            </template>
+            <template v-else-if="reply.error">
+              <el-icon><WarningFilled /></el-icon>{{ reply.error }}
+            </template>
+            <template v-else-if="reply.parsed">
+              <el-icon><CircleCheckFilled /></el-icon>按输出字段解析成功{{ reply.parsed.length > 1 ? `，${reply.parsed.length} 条` : '' }}
+            </template>
+            <template v-else-if="reply.parsed === null">
+              <el-icon><WarningFilled /></el-icon>没按输出字段返回，批量时这一行会记成「格式不对」
+            </template>
+            <template v-else>
+              模型的回答
+            </template>
+            <span class="trial__stat">{{ reply.time }}，输入 {{ answer.stats.usage.input.toLocaleString() }}、输出 {{ answer.stats.usage.output.toLocaleString() }} token，{{ formatYuan(answer.cost.value.inference + answer.cost.value.search) }}</span>
+          </div>
+          <dl
+            v-for="(entry, index) in reply.parsed ?? []"
+            :key="index"
+            class="trial__fields"
+          >
+            <template
+              v-for="field in fields"
+              :key="field"
+            >
+              <dt>{{ field }}</dt><dd>{{ entry[field] || '—' }}</dd>
+            </template>
+          </dl>
+          <pre
+            v-if="running || !reply.parsed"
+            class="trial__text"
+          >{{ reply.text || reply.reasoning }}</pre>
+        </section>
+        <p
+          v-if="verdict"
+          class="trial__verdict"
+        >
+          <span :class="`is-${verdict.tone}`">{{ verdict.label }}</span>{{ verdict.text }}
+        </p>
+        <details v-if="reply.parsed && reply.text">
+          <summary>原始回答</summary>
+          <pre>{{ reply.text }}</pre>
+        </details>
+        <details v-if="sent?.text">
+          <summary>发出去的整段提示词<small>{{ sent.text.length.toLocaleString() }} 字</small></summary>
+          <pre>{{ sent.text }}</pre>
+        </details>
+        <div
+          v-if="!running"
+          class="trial__next"
+        >
+          <el-button
+            v-if="row < data.rows.length - 1"
+            size="small"
+            @click="move(1)"
+          >
+            试下一行
+          </el-button>
+          <el-button
+            size="small"
+            @click="emit('sample')"
+          >
+            整批去样本试跑
+          </el-button>
+        </div>
+      </template>
+    </div>
+    <footer class="trial__run">
+      <div
+        class="trial__model"
+        :class="{ 'is-missing': !model?.available }"
+      >
+        <b>{{ !model ? '没选模型，先在左边「模型」里选' : model.available ? model.name : `${model.name} 现在不可用` }}</b>
+        <span v-if="model?.available">{{ priceText(model) }}</span>
+      </div>
+      <el-button
+        v-if="running"
         @click="answer.stop"
       >
         停止
       </el-button>
       <el-button
-        v-else
-        size="small"
-        text
-        :disabled="!answer.messages.value.length"
-        @click="answer.clear"
-      >
-        清空
-      </el-button>
-    </div>
-    <AnswerTranscript
-      :messages="answer.messages.value"
-      :running="answer.running.value"
-      empty="写好提示词按 Ctrl/⌘ + Enter 试发一条，回答出现在这里。&#10;整批效果用「样本试跑」看。"
-    />
-    <StreamStatsBar
-      :stats="answer.stats"
-      :cost="answer.cost.value"
-    />
-    <footer class="trial__run">
-      <span
-        class="trial__model"
-        :class="{ 'is-missing': !model?.available }"
-      >{{ !model ? '没选模型，先在左边「模型」里选' : model.available ? model.name : `${model.name} 现在不可用` }}</span>
-      <el-button
-        v-if="canRun"
+        v-else-if="canRun"
         type="primary"
-        :disabled="answer.running.value || !model?.available"
-        :loading="answer.running.value"
+        :disabled="!model?.available"
         @click="emit('run')"
       >
-        试发 <kbd>Ctrl ↵</kbd>
+        {{ showResult ? '再试一次' : data.rows.length ? '试发这一行' : '试发' }} <kbd>Ctrl ↵</kbd>
       </el-button>
     </footer>
   </div>
@@ -59,10 +277,45 @@ const emit = defineEmits<{ run: [] }>()
 
 <style scoped>
 .trial { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.trial__bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 16px; color: var(--zt-ink-500); font-size: 12px; }
-.trial__bar .el-button { margin: 0; }
+.trial__pick { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--zt-divider); }
+.trial__pick .el-button { margin: 0; }
+.trial__rows { flex: 1; min-width: 0; }
+.trial__total { flex: none; color: var(--zt-ink-500); font-size: 12px; }
+.trial__from { margin: 12px 16px 0; padding: 8px 12px; border-radius: 6px; background: var(--zt-warning-soft); color: var(--zt-warning-text); font-size: 12px; line-height: 1.6; }
+.trial__content { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px; }
+.trial__cap { margin: 0; color: var(--zt-ink-500); font-size: 12px; }
+.trial__data, .trial__fields { display: grid; grid-template-columns: 88px minmax(0, 1fr); margin: 0; font-size: 13px; line-height: 1.7; }
+.trial__data { overflow: hidden; border: 1px solid var(--zt-border); border-radius: 6px; }
+.trial__data dt, .trial__fields dt { padding: 8px 10px; border-bottom: 1px solid var(--zt-divider); color: var(--zt-ink-500); word-break: break-all; }
+.trial__data dt { background: var(--zt-surface-subtle); }
+.trial__data dd, .trial__fields dd { margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--zt-divider); color: var(--zt-ink-900); word-break: break-all; }
+.trial__data dt:last-of-type, .trial__data dd:last-of-type, .trial__fields dt:last-of-type, .trial__fields dd:last-of-type { border-bottom: 0; }
+.trial__data small { display: block; color: var(--zt-ink-500); font-size: 12px; }
+.trial__data .is-missing { color: var(--zt-warning-text); }
+.trial__fields dd { font-weight: 600; }
+.trial__result { overflow: hidden; border: 1px solid var(--zt-border); border-radius: 6px; }
+.trial__result.is-ok { border-color: var(--zt-success-border); }
+.trial__result.is-bad { border-color: var(--zt-warning-border); }
+.trial__head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 9px 12px; background: var(--zt-surface-subtle); color: var(--zt-ink-700); font-size: 13px; font-weight: 600; }
+.is-ok .trial__head { background: var(--zt-success-soft); color: var(--zt-success-text); }
+.is-bad .trial__head { background: var(--zt-warning-soft); color: var(--zt-warning-text); }
+.trial__stat { margin-left: auto; color: var(--zt-ink-500); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.trial__text { margin: 0; padding: 10px 12px; color: var(--zt-ink-900); font: 13px/1.7 var(--zt-font); white-space: pre-wrap; word-break: break-all; }
+.trial__verdict { margin: 0; color: var(--zt-ink-700); font-size: 12px; line-height: 1.7; }
+.trial__verdict span { display: inline-block; margin-right: 6px; padding: 0 5px; border-radius: 3px; font-weight: 600; line-height: 18px; }
+.trial__verdict .is-good { background: var(--zt-success-soft); color: var(--zt-success-text); }
+.trial__verdict .is-bad { background: var(--zt-warning-soft); color: var(--zt-warning-text); }
+.trial__verdict .is-chg { background: var(--el-color-primary-light-9); color: var(--zt-blue-700); }
+.trial__verdict .is-same { background: var(--zt-soft); color: var(--zt-ink-700); }
+details { border: 1px solid var(--zt-border); border-radius: 6px; font-size: 13px; }
+summary { padding: 9px 12px; color: var(--zt-ink-900); cursor: pointer; }
+summary small { margin-left: 6px; color: var(--zt-ink-500); font-size: 12px; }
+details pre { max-height: 320px; margin: 0; padding: 0 12px 12px; overflow: auto; color: var(--zt-ink-700); font: 12px/1.7 var(--zt-font); white-space: pre-wrap; word-break: break-all; }
+.trial__next { display: flex; flex-wrap: wrap; gap: 8px; }
+.trial__next .el-button { margin: 0; }
 .trial__run { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--zt-border); background: var(--zt-surface-subtle); }
-.trial__model { min-width: 0; overflow: hidden; color: var(--zt-ink-500); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.trial__model.is-missing { color: var(--zt-warning-text); }
+.trial__model { display: flex; flex-direction: column; min-width: 0; color: var(--zt-ink-500); font-size: 12px; }
+.trial__model b { overflow: hidden; color: var(--zt-ink-900); font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.trial__model.is-missing b { color: var(--zt-warning-text); }
 .trial__run kbd { margin-left: 6px; padding: 0 4px; border-radius: 3px; background: color-mix(in srgb, var(--el-color-white) 22%, transparent); font: 11px/16px var(--zt-font); }
 </style>

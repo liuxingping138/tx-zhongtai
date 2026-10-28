@@ -187,6 +187,10 @@ class BatchRun(Base):
         comment="发起来源",
     )
     release_no: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="上线版本号")
+    # 跑模板草稿时记下那次保存的时间（批量任务可以不等上线）；跑上线版本时为空，看上线版本号。
+    draft_saved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="草稿保存时间"
+    )
     input_name: Mapped[str] = mapped_column(
         String(255), nullable=False, default="", server_default="", comment="输入文件名"
     )

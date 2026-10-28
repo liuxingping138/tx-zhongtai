@@ -9,7 +9,8 @@ from fastapi.testclient import TestClient
 from platform_common.route_audit import iter_api_routes
 
 from app.api.security import get_category_access
-from app.application import asking, batch_runs, billing, prompts, sample_runs
+from app.application import asking, batch_runs, batch_start, billing, prompts, sample_runs
+from app.application import test_rows as test_rows_service
 from app.core.config import get_settings
 from app.core.database import get_db_session
 from app.domain.categories import FULL_ACCESS
@@ -97,7 +98,7 @@ def test_batch_routes_delegate_to_application(client: TestClient, monkeypatch: p
             calls.append(name)
             return value
 
-        monkeypatch.setattr(batch_runs, name, fake)
+        monkeypatch.setattr(batch_start if name == "start_run" else batch_runs, name, fake)
 
     stub("list_runs", {"items": [], "total": 0})
     stub("filter_options", {"prompt_title": [], "created_by_name": []})
@@ -201,43 +202,48 @@ def test_test_data_route_validates_and_saves(client: TestClient, monkeypatch: py
 def test_batch_file_routes_read_the_upload_after_auth(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[tuple[Any, ...]] = []
 
-    async def preview(_session: Any, _access: Any, prompt_id: str, upload: tuple[str, bytes]) -> dict[str, Any]:
-        seen.append(("preview", prompt_id, upload[0]))
+    async def preview(
+        _session: Any, _access: Any, prompt_id: str, upload: tuple[str, bytes], *, version: str
+    ) -> dict[str, Any]:
+        seen.append(("preview", prompt_id, upload[0], version))
         return {"name": upload[0], "rows": 2}
 
     async def start(_session: Any, _actor: Any, _access: Any, values: dict[str, Any], *, upload: Any) -> Any:
-        seen.append(("start", values["limit"], values["thinking"], upload[0]))
+        seen.append(("start", values["limit"], values["thinking"], upload[0], values["version"]))
         return {"id": RUN_ID}
 
     async def rows(_session: Any, _access: Any, run_id: str, *, failed_only: bool) -> dict[str, Any]:
         seen.append(("rows", run_id, failed_only))
         return {"items": []}
 
-    async def blank(_session: Any, _access: Any, prompt_id: str) -> tuple[bytes, str]:
-        seen.append(("template", prompt_id))
+    async def blank(_session: Any, _access: Any, prompt_id: str, *, version: str) -> tuple[bytes, str]:
+        seen.append(("template", prompt_id, version))
         return b"xlsx", "企业行业-第3版数据模板.xlsx"
 
-    monkeypatch.setattr(batch_runs, "preview_input", preview)
-    monkeypatch.setattr(batch_runs, "start_run", start)
+    monkeypatch.setattr(batch_start, "preview_input", preview)
+    monkeypatch.setattr(batch_start, "start_run", start)
     monkeypatch.setattr(batch_runs, "run_rows", rows)
-    monkeypatch.setattr(batch_runs, "input_template", blank)
+    monkeypatch.setattr(batch_start, "input_template", blank)
     files = {"file": ("本次数据.xlsx", xlsx([["名称"], ["甲"], ["乙"]]))}
     params = {"prompt_id": PROMPT_ID}
     # 下载数据模板不能被 /{run_id} 当成查任务。
     template_file = client.get("/api/v1/ai/batch-runs/input-template", params=params)
     assert template_file.status_code == 200 and template_file.content == b"xlsx"
-    assert client.post("/api/v1/ai/batch-runs/input-preview", params=params, files=files).status_code == 200
+    draft = {**params, "version": "draft"}
+    assert client.post("/api/v1/ai/batch-runs/input-preview", params=draft, files=files).status_code == 200
     started = client.post("/api/v1/ai/batch-runs", params={**params, "limit": 5, "thinking": True}, files=files)
     assert started.status_code == 201
+    wrong = client.post("/api/v1/ai/batch-runs", params={**params, "version": "latest"}, files=files)
+    assert wrong.status_code == 422
     missing = client.post("/api/v1/ai/batch-runs", params=params)
     assert missing.status_code == 422 and "数据文件" in missing.json()["message"]
     assert client.get(f"/api/v1/ai/batch-runs/{RUN_ID}/rows", params={"failed_only": True}).status_code == 200
     # 样本试跑不进批量任务列表：来源只能筛页面发起和定时任务。
     assert client.get("/api/v1/ai/batch-runs", params={"source": "sample"}).status_code == 422
     assert seen == [
-        ("template", PROMPT_ID),
-        ("preview", PROMPT_ID, "本次数据.xlsx"),
-        ("start", 5, True, "本次数据.xlsx"),
+        ("template", PROMPT_ID, "release"),
+        ("preview", PROMPT_ID, "本次数据.xlsx", "draft"),
+        ("start", 5, True, "本次数据.xlsx", "release"),
         ("rows", RUN_ID, True),
     ]
 
@@ -249,16 +255,26 @@ def test_sample_run_routes(client: TestClient, monkeypatch: pytest.MonkeyPatch) 
         calls.append(("start", prompt_id, values["limit"]))
         return {"run": {"id": RUN_ID}, "rows": None}
 
-    async def latest(_s: Any, _access: Any, prompt_id: str) -> Any:
-        calls.append(("latest", prompt_id))
+    async def view(_s: Any, _access: Any, prompt_id: str, *, run_id: Any, compare_id: Any) -> Any:
+        calls.append(("view", prompt_id, run_id, compare_id))
         return {"run": None, "rows": None}
+
+    async def retry(_s: Any, _actor: Any, _access: Any, prompt_id: str, run_id: str) -> Any:
+        calls.append(("retry", prompt_id, run_id))
+        return {"run": None, "rows": None}
+
+    async def test_rows(_s: Any, _access: Any, prompt_id: str) -> Any:
+        calls.append(("test-rows", prompt_id))
+        return {"headers": [], "total": 0, "rows": []}
 
     async def stop(_s: Any, _actor: Any, _access: Any, prompt_id: str) -> Any:
         calls.append(("stop", prompt_id))
         return {"run": None, "rows": None}
 
     monkeypatch.setattr(sample_runs, "start", start)
-    monkeypatch.setattr(sample_runs, "latest", latest)
+    monkeypatch.setattr(sample_runs, "view", view)
+    monkeypatch.setattr(sample_runs, "retry", retry)
+    monkeypatch.setattr(test_rows_service, "preview", test_rows)
 
     async def download(_s: Any, _actor: Any, _access: Any, prompt_id: str, run_id: str, kind: str) -> Any:
         calls.append(("download", prompt_id, run_id, kind))
@@ -270,12 +286,18 @@ def test_sample_run_routes(client: TestClient, monkeypatch: pytest.MonkeyPatch) 
     assert client.post(url, json={"limit": 5}).status_code == 201
     assert client.post(url, json={"limit": 51}).status_code == 422
     assert client.get(url).status_code == 200
+    assert client.get(url, params={"run_id": RUN_ID, "compare_id": "none"}).status_code == 200
     assert client.post(f"{url}/stop").status_code == 200
+    assert client.post(f"{url}/{RUN_ID}/retry").status_code == 200
+    assert client.get(f"/api/v1/ai/prompts/{PROMPT_ID}/test-rows").status_code == 200
     assert client.get(f"{url}/{RUN_ID}/files/result").content == b"xlsx"
     assert client.get(f"{url}/{RUN_ID}/files/source").status_code == 422
     assert calls == [
         ("start", PROMPT_ID, 5),
-        ("latest", PROMPT_ID),
+        ("view", PROMPT_ID, None, None),
+        ("view", PROMPT_ID, RUN_ID, "none"),
         ("stop", PROMPT_ID),
+        ("retry", PROMPT_ID, RUN_ID),
+        ("test-rows", PROMPT_ID),
         ("download", PROMPT_ID, RUN_ID, "result"),
     ]

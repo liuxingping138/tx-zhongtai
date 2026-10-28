@@ -112,6 +112,17 @@ async def latest_samples(session: AsyncSession, prompt_ids: Collection[str]) -> 
     return {row.prompt_id: row for row in rows}
 
 
+async def sample_history(session: AsyncSession, prompt_id: str, *, limit: int) -> tuple[list[BatchRun], int]:
+    """这个模板最近的几次样本试跑（新的在前）和一共试跑过几次，页面按次数叫「第 N 次」。"""
+
+    condition = (BatchRun.prompt_id == prompt_id, BatchRun.source == RUN_SOURCE_SAMPLE)
+    total = int(await session.scalar(select(func.count()).select_from(BatchRun).where(*condition)) or 0)
+    rows = await session.scalars(
+        select(BatchRun).where(*condition).order_by(BatchRun.created_at.desc(), BatchRun.id.desc()).limit(limit)
+    )
+    return list(rows), total
+
+
 async def sample_runs_for_prompt(session: AsyncSession, prompt_id: str) -> list[BatchRun]:
     """这个模板自己的样本试跑记录（删模板时一起清掉）。"""
 

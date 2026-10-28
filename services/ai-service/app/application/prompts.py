@@ -44,6 +44,8 @@ def sample_summary(template: PromptTemplate, run: BatchRun | None) -> dict[str, 
         "done_count": run.done_count,
         "failed_count": run.failed_count,
         "format_failed_count": run.format_failed_count,
+        # 新建批量任务按它估费用：这份样本每条大概花多少。
+        "cost": float(run.inference_cost + run.search_cost),
         "created_at": format_beijing(run.created_at),
         "created_by_name": run.created_by_name,
         "current": run.prompt_content == template.content
@@ -269,7 +271,7 @@ async def save_test_rows(
 ) -> dict[str, Any]:
     """从数据库取来的测试数据（file_name、headers、rows）存成模板的测试 Excel。
 
-    之后和上传的测试样本一样用：试发取第一行，样本试跑取前几行；正式的批量任务另外上传数据。
+    之后和上传的测试样本一样用：试发选其中一行，样本试跑取前几行；正式的批量任务另外上传数据。
     """
 
     content = await run_excel_parse(rows_workbook, list(data["headers"]), list(data["rows"]))

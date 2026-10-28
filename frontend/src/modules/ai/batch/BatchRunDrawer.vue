@@ -152,7 +152,7 @@ async function act(action: (current: BatchRun) => Promise<boolean>, close = fals
       />
 
       <dl class="run-detail__facts">
-        <dt>模板版本</dt><dd>{{ run.release_no ? `第 ${run.release_no} 版` : '发起时的草稿' }}</dd>
+        <dt>模板版本</dt><dd>{{ run.release_no !== null ? `第 ${run.release_no} 版` : run.draft_saved_at ? `${run.draft_saved_at.slice(0, 16)} 保存的草稿` : '发起时的草稿' }}</dd>
         <dt>来源</dt><dd>{{ RUN_SOURCE_TEXT[run.source as 'manual' | 'pipeline'] ?? '页面发起' }}</dd>
         <dt>输入文件</dt><dd>{{ run.input_name || '—' }}</dd>
         <dt>运行范围</dt><dd>{{ runModeText(run) }}</dd>

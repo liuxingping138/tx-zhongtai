@@ -130,9 +130,16 @@ export function sampleFromRun(run: BatchRun, template: Pick<PromptTemplate, 'con
     done_count: run.done_count,
     failed_count: run.failed_count,
     format_failed_count: run.format_failed_count,
+    cost: run.inference_cost + run.search_cost,
     created_at: run.created_at,
     created_by_name: run.created_by_name,
     current: run.prompt_content === template.content && run.output_fields === template.output_fields
       && (!template.model_id || run.model_id === template.model_id),
   }
+}
+
+/** 试跑开始、结束后把模板上的「最近一次试跑」换成这一次；没变化就原样返回，页面不用重画。 */
+export function withSample(template: PromptTemplate, run: BatchRun): PromptTemplate {
+  const sample = sampleFromRun(run, template)
+  return JSON.stringify(sample) === JSON.stringify(template.sample) ? template : { ...template, sample }
 }

@@ -69,10 +69,14 @@ class ModelBody(_Body):
 
 
 class AskBody(_Body):
+    """row：测试样本第几条数据（从 0 数）；output_fields：编辑页上现在的输出字段，答完按它解析。"""
+
     content: str = Field(max_length=200_000)
     model_id: str = Field(max_length=100)
     thinking: bool = False
     prompt_id: str | None = Field(default=None, max_length=32)
+    row: int = Field(default=0, ge=0, le=100_000)
+    output_fields: str = Field(default="", max_length=2000)
 
 
 class ChatBody(_Body):

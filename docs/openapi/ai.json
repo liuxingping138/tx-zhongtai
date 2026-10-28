@@ -484,13 +484,14 @@
         }
       }
     },
-    "/api/v1/ai/prompts/{prompt_id}/sample-run": {
+    "/api/v1/ai/prompts/{prompt_id}/test-rows": {
       "get": {
         "tags": [
           "ai-prompts"
         ],
-        "summary": "Latest Sample Run",
-        "operationId": "latest_sample_run_api_v1_ai_prompts__prompt_id__sample_run_get",
+        "summary": "Test Rows Preview",
+        "description": "测试样本前几行，每格只给开头一段和总字数：试发选第几行、发之前先看这一行的数据。",
+        "operationId": "test_rows_preview_api_v1_ai_prompts__prompt_id__test_rows_get",
         "parameters": [
           {
             "name": "prompt_id",
@@ -500,6 +501,84 @@
               "type": "string",
               "title": "Prompt Id"
             }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/prompts/{prompt_id}/sample-run": {
+      "get": {
+        "tags": [
+          "ai-prompts"
+        ],
+        "summary": "View Sample Run",
+        "operationId": "view_sample_run_api_v1_ai_prompts__prompt_id__sample_run_get",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prompt Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 32
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "看哪一次，默认最近一次",
+              "title": "Run Id"
+            },
+            "description": "看哪一次，默认最近一次"
+          },
+          {
+            "name": "compare_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 32
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "和哪一次比，默认前一次；none 不比",
+              "title": "Compare Id"
+            },
+            "description": "和哪一次比，默认前一次；none 不比"
           }
         ],
         "responses": {
@@ -588,6 +667,56 @@
             "schema": {
               "type": "string",
               "title": "Prompt Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/prompts/{prompt_id}/sample-run/{run_id}/retry": {
+      "post": {
+        "tags": [
+          "ai-prompts"
+        ],
+        "summary": "Retry Sample Run",
+        "description": "只重问失败和没跑到的行，会花钱，和试跑同一个权限。",
+        "operationId": "retry_sample_run_api_v1_ai_prompts__prompt_id__sample_run__run_id__retry_post",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prompt Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
             }
           }
         ],
@@ -1024,6 +1153,22 @@
               "default": 0,
               "title": "Limit"
             }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "release",
+                "draft"
+              ],
+              "type": "string",
+              "description": "跑上线版本还是已保存的草稿",
+              "default": "release",
+              "title": "Version"
+            },
+            "description": "跑上线版本还是已保存的草稿"
           }
         ],
         "responses": {
@@ -1105,6 +1250,22 @@
               "maxLength": 32,
               "title": "Prompt Id"
             }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "release",
+                "draft"
+              ],
+              "type": "string",
+              "description": "跑上线版本还是已保存的草稿",
+              "default": "release",
+              "title": "Version"
+            },
+            "description": "跑上线版本还是已保存的草稿"
           }
         ],
         "responses": {
@@ -1147,6 +1308,22 @@
               "maxLength": 32,
               "title": "Prompt Id"
             }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "release",
+                "draft"
+              ],
+              "type": "string",
+              "description": "跑上线版本还是已保存的草稿",
+              "default": "release",
+              "title": "Version"
+            },
+            "description": "跑上线版本还是已保存的草稿"
           }
         ],
         "responses": {
@@ -1602,7 +1779,7 @@
           "ai-stream"
         ],
         "summary": "Ask",
-        "description": "试发：@【列名】替换成模板 Excel 第一行的值后提问。替换和校验都在推流前完成，出错照常返回 4xx。",
+        "description": "试发：@【列名】替换成测试样本所选那一行的值后提问。替换和校验都在推流前完成，出错照常返回 4xx。",
         "operationId": "ask_api_v1_ai_stream_ask_post",
         "requestBody": {
           "content": {
@@ -1926,6 +2103,19 @@
               }
             ],
             "title": "Prompt Id"
+          },
+          "row": {
+            "type": "integer",
+            "maximum": 100000.0,
+            "minimum": 0.0,
+            "title": "Row",
+            "default": 0
+          },
+          "output_fields": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Output Fields",
+            "default": ""
           }
         },
         "additionalProperties": false,
@@ -1934,7 +2124,8 @@
           "content",
           "model_id"
         ],
-        "title": "AskBody"
+        "title": "AskBody",
+        "description": "row：测试样本第几条数据（从 0 数）；output_fields：编辑页上现在的输出字段，答完按它解析。"
       },
       "ChatBody": {
         "properties": {

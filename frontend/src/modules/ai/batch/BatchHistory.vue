@@ -3,6 +3,7 @@ import { ArrowDown } from '@element-plus/icons-vue'
 
 import type { BatchRun, RunFileKind } from '@/api/ai'
 import { RUN_SOURCE_TEXT, RUN_STATUS_TEXT, formatYuan, isActive, runModeText, runStatusType } from '../shared/aiText'
+import { versionLabel } from '../prompts/sampleView'
 import { RUN_FILES, deleteRun, downloadRunFile, retryRun, stopRun } from './runActions'
 
 /** 批量任务列表。点一行看详情（逐行结果、冻结的提示词）；常用的下载、停止、重跑、删除也留在操作列。 */
@@ -83,11 +84,14 @@ function progressText(run: BatchRun): string {
         </template>
       </el-table-column>
       <el-table-column
-        label="版本"
-        width="80"
+        label="跑的版本"
+        width="130"
       >
         <template #default="{ row }">
-          {{ row.release_no ? `第 ${row.release_no} 版` : '—' }}
+          <span
+            class="history__version"
+            :class="{ 'is-draft': row.release_no === null && row.draft_saved_at }"
+          >{{ versionLabel(row) }}</span>
         </template>
       </el-table-column>
       <el-table-column
@@ -247,4 +251,6 @@ function progressText(run: BatchRun): string {
 .history__ops { display: flex; align-items: center; gap: 10px; }
 .history__ops .el-button { margin: 0; }
 .history__pager { justify-content: flex-end; padding: 10px 16px; }
+.history__version { color: var(--zt-blue-700); font-variant-numeric: tabular-nums; }
+.history__version.is-draft { color: var(--zt-ink-700); }
 </style>

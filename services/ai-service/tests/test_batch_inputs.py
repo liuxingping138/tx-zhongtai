@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 from platform_common.errors import ApiError, PermissionDeniedError
 
-from app.application import batch_runs, releases
+from app.application import batch_start, releases
 from app.application.sheets import read_sheet
 from app.core import storage
 from app.core.config import get_settings
@@ -14,7 +14,7 @@ from app.domain.models import TemplateRelease
 from app.repositories import batch_runs as repo
 from app.repositories import prompts as prompt_repo
 from app.repositories import releases as release_repo
-from tests.helpers import ACTOR, PROMPT_ID, RELEASE_ID, FakeSession, noop, release, run, template, xlsx
+from tests.helpers import ACTOR, NOW, PROMPT_ID, RELEASE_ID, FakeSession, noop, release, run, template, xlsx
 
 
 def _online(monkeypatch: pytest.MonkeyPatch, item: TemplateRelease | None, **draft: Any) -> list[Any]:
@@ -34,7 +34,7 @@ def _online(monkeypatch: pytest.MonkeyPatch, item: TemplateRelease | None, **dra
     monkeypatch.setattr(repo, "active_for_prompt", noop)
     monkeypatch.setattr(repo, "mark_stale_interrupted", noop)
     monkeypatch.setattr(repo, "add", lambda _session, row: added.append(row))
-    monkeypatch.setattr(batch_runs, "enqueue_event", noop)
+    monkeypatch.setattr(batch_start, "enqueue_event", noop)
     monkeypatch.setattr(get_settings(), "baidu_api_key", "test")
     return added
 
@@ -44,7 +44,7 @@ async def test_start_runs_the_release_with_its_own_file(monkeypatch: pytest.Monk
     sample = xlsx([["草稿列"], ["样本"]])
     storage.write_atomic(storage.prompt_file(PROMPT_ID, "excel"), sample)
     upload = (r"C:\fakepath\正式.xlsx", xlsx([["名称"], ["甲"], ["乙"], ["丙"]]))
-    data = await batch_runs.start_run(
+    data = await batch_start.start_run(
         FakeSession(),  # type: ignore[arg-type]
         ACTOR,
         FULL_ACCESS,
@@ -61,7 +61,7 @@ async def test_start_runs_the_release_with_its_own_file(monkeypatch: pytest.Monk
 
 async def test_limit_covering_every_row_is_a_full_run(monkeypatch: pytest.MonkeyPatch) -> None:
     _online(monkeypatch, release())
-    data = await batch_runs.start_run(
+    data = await batch_start.start_run(
         FakeSession(),  # type: ignore[arg-type]
         ACTOR,
         FULL_ACCESS,
@@ -74,12 +74,12 @@ async def test_limit_covering_every_row_is_a_full_run(monkeypatch: pytest.Monkey
 async def test_unreleased_template_cannot_start_a_batch(monkeypatch: pytest.MonkeyPatch) -> None:
     _online(monkeypatch, None)
     with pytest.raises(ApiError, match="还没有上线"):
-        await batch_runs.preview_input(FakeSession(), FULL_ACCESS, PROMPT_ID, ("a.xlsx", xlsx([["名称"], ["甲"]])))  # type: ignore[arg-type]
+        await batch_start.preview_input(FakeSession(), FULL_ACCESS, PROMPT_ID, ("a.xlsx", xlsx([["名称"], ["甲"]])))  # type: ignore[arg-type]
 
 
 async def test_preview_reports_release_and_model_without_creating_anything(monkeypatch: pytest.MonkeyPatch) -> None:
     added = _online(monkeypatch, release())
-    summary = await batch_runs.preview_input(
+    summary = await batch_start.preview_input(
         FakeSession(),  # type: ignore[arg-type]
         FULL_ACCESS,
         PROMPT_ID,
@@ -89,6 +89,7 @@ async def test_preview_reports_release_and_model_without_creating_anything(monke
         "name": "数据.xlsx",
         "rows": 2,
         "headers": ["名称", "备注"],
+        "version": "release",
         "release_no": 3,
         "model_name": "百度-DeepSeek-V3.2",
     }
@@ -103,7 +104,7 @@ async def test_running_task_is_reported_before_the_file_is_read(monkeypatch: pyt
 
     monkeypatch.setattr(repo, "active_for_prompt", busy)
     with pytest.raises(ApiError) as conflict:
-        await batch_runs.preview_input(FakeSession(), FULL_ACCESS, PROMPT_ID, ("坏文件.xlsx", b"not excel"))  # type: ignore[arg-type]
+        await batch_start.preview_input(FakeSession(), FULL_ACCESS, PROMPT_ID, ("坏文件.xlsx", b"not excel"))  # type: ignore[arg-type]
     assert conflict.value.http_status == 409 and "3/9" in conflict.value.message
 
 
@@ -114,7 +115,7 @@ async def test_release_code_table_is_frozen_into_the_run(monkeypatch: pytest.Mon
         return "一级行业\t一级场景\n教育行业\t智慧校园"
 
     monkeypatch.setattr(releases, "fetch_code_table", fetch)
-    data = await batch_runs.start_run(
+    data = await batch_start.start_run(
         FakeSession(),  # type: ignore[arg-type]
         ACTOR,
         FULL_ACCESS,
@@ -138,19 +139,19 @@ async def test_invalid_input_is_rejected(
 ) -> None:
     _online(monkeypatch, release())
     with pytest.raises(ApiError, match=message):
-        await batch_runs.preview_input(FakeSession(), FULL_ACCESS, PROMPT_ID, (name, xlsx(rows)))  # type: ignore[arg-type]
+        await batch_start.preview_input(FakeSession(), FULL_ACCESS, PROMPT_ID, (name, xlsx(rows)))  # type: ignore[arg-type]
 
 
 async def test_blank_template_lists_the_release_columns(monkeypatch: pytest.MonkeyPatch) -> None:
     content = "@【名称】在@【地区】，对照@【上传码表】再看一遍@【名称】"
     _online(monkeypatch, release(content=content))
-    data, filename = await batch_runs.input_template(FakeSession(), FULL_ACCESS, PROMPT_ID)  # type: ignore[arg-type]
+    data, filename = await batch_start.input_template(FakeSession(), FULL_ACCESS, PROMPT_ID)  # type: ignore[arg-type]
     # 草稿引用的「草稿列」不算；码表不是列；重复引用只出一列。
     assert read_sheet(data) == (["名称", "地区"], [])
     assert filename == "企业行业-第3版数据模板.xlsx"
     # 照模板填一行就能通过发起前的列检查。
     filled = xlsx([["名称", "地区"], ["甲", "北京"]])
-    summary = await batch_runs.preview_input(FakeSession(), FULL_ACCESS, PROMPT_ID, ("填好的.xlsx", filled))  # type: ignore[arg-type]
+    summary = await batch_start.preview_input(FakeSession(), FULL_ACCESS, PROMPT_ID, ("填好的.xlsx", filled))  # type: ignore[arg-type]
     assert summary["rows"] == 1
 
 
@@ -171,11 +172,54 @@ async def test_blank_template_is_refused(
 ) -> None:
     _online(monkeypatch, item)
     with pytest.raises(error, match=message):
-        await batch_runs.input_template(FakeSession(), access, PROMPT_ID)  # type: ignore[arg-type]
+        await batch_start.input_template(FakeSession(), access, PROMPT_ID)  # type: ignore[arg-type]
 
 
 async def test_read_only_category_cannot_preview(monkeypatch: pytest.MonkeyPatch) -> None:
     _online(monkeypatch, release())
     access = CategoryAccess(readable=frozenset({"policy"}), editable=frozenset())
     with pytest.raises(PermissionDeniedError):
-        await batch_runs.preview_input(FakeSession(), access, PROMPT_ID, ("data.xlsx", xlsx([["名称"], ["甲"]])))  # type: ignore[arg-type]
+        await batch_start.preview_input(FakeSession(), access, PROMPT_ID, ("data.xlsx", xlsx([["名称"], ["甲"]])))  # type: ignore[arg-type]
+
+
+async def test_draft_runs_without_waiting_for_a_release(monkeypatch: pytest.MonkeyPatch) -> None:
+    """批量任务可以跑已保存的草稿：按草稿引用的列检查数据，提示词冻结进任务，记下是哪次保存的草稿。"""
+
+    added = _online(monkeypatch, None)
+    upload = ("a.xlsx", xlsx([["草稿列"], ["甲"]]))
+    values = {"prompt_id": PROMPT_ID, "version": "draft"}
+    data = await batch_start.start_run(FakeSession(), ACTOR, FULL_ACCESS, values, upload=upload)  # type: ignore[arg-type]
+    created = added[0]
+    assert (created.prompt_content, created.release_no, created.draft_saved_at) == ("草稿：@【草稿列】", None, NOW)
+    assert (data["release_no"], data["draft_saved_at"]) == (None, "2026-10-15 11:00:00")
+    with pytest.raises(ApiError, match="缺少模板引用的列：草稿列"):
+        await batch_start.preview_input(
+            FakeSession(),  # type: ignore[arg-type]
+            FULL_ACCESS,
+            PROMPT_ID,
+            ("b.xlsx", xlsx([["名称"], ["甲"]])),
+            version="draft",
+        )
+    content, name = await batch_start.input_template(FakeSession(), FULL_ACCESS, PROMPT_ID, version="draft")  # type: ignore[arg-type]
+    assert name == "企业行业-草稿数据模板.xlsx" and read_sheet(content)[0] == ["草稿列"]
+
+
+@pytest.mark.parametrize(("draft", "message"), [({"content": " "}, "提示词还是空的"), ({"model_id": ""}, "还没选模型")])
+async def test_draft_needs_a_prompt_and_a_model(
+    monkeypatch: pytest.MonkeyPatch, draft: dict[str, str], message: str
+) -> None:
+    _online(monkeypatch, None, **draft)
+    with pytest.raises(ApiError, match=message):
+        await batch_start.preview_input(
+            FakeSession(),  # type: ignore[arg-type]
+            FULL_ACCESS,
+            PROMPT_ID,
+            ("a.xlsx", xlsx([["草稿列"], ["甲"]])),
+            version="draft",
+        )
+
+
+async def test_unreleased_template_suggests_running_the_draft(monkeypatch: pytest.MonkeyPatch) -> None:
+    _online(monkeypatch, None)
+    with pytest.raises(ApiError, match="可以选「当前草稿」跑"):
+        await batch_start.preview_input(FakeSession(), FULL_ACCESS, PROMPT_ID, ("a.xlsx", xlsx([["名称"], ["甲"]])))  # type: ignore[arg-type]

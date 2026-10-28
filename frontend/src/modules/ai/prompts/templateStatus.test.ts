@@ -8,7 +8,7 @@ const release = (changes: string[] = []): TemplateReleaseInfo => ({
   title: '政策解读', category_name: '政策', content: '', fields: [], variables: [], model_id: 'm', model_name: '模型', code: '',
 })
 const sample = (overrides: Partial<SampleSummary> = {}): SampleSummary => ({
-  id: 's', status: 'done', total_count: 10, done_count: 10, failed_count: 0, format_failed_count: 0,
+  id: 's', status: 'done', total_count: 10, done_count: 10, failed_count: 0, format_failed_count: 0, cost: 0,
   created_at: '2026-10-26 15:20', created_by_name: '张三', current: true, ...overrides,
 })
 const template = (overrides: Partial<PromptTemplate> = {}): PromptTemplate => ({

@@ -58,6 +58,8 @@ export interface SampleSummary {
   done_count: number
   failed_count: number
   format_failed_count: number
+  /** 这次试跑一共花了多少（元），新建批量任务按它估每条的费用 */
+  cost: number
   created_at: string
   created_by_name: string
   current: boolean
@@ -128,8 +130,10 @@ export interface BatchRun {
   input_name: string
   /** manual：批量任务页发起；pipeline：定时任务；sample：模板页的样本试跑 */
   source: 'manual' | 'pipeline' | 'sample'
-  /** 跑的是第几版上线版本；样本试跑和旧任务为空 */
+  /** 跑的是第几版上线版本；跑草稿、样本试跑和旧任务为空 */
   release_no: number | null
+  /** 跑的是哪次保存的草稿（批量任务可以不等上线；样本试跑也记）；跑上线版本时为空串 */
+  draft_saved_at: string
   prompt_content: string
   output_fields: string
   model_id: string
@@ -233,17 +237,20 @@ export function batchOptions(): Promise<{ templates: PromptTemplate[]; models: A
   return request(http.get(`${BASE}/batch-runs/options`))
 }
 
-/** 选好数据文件后的检查结果：按哪一版、哪个模型跑多少行 */
-export interface BatchInputSummary { name: string; rows: number; headers: string[]; release_no: number; model_name: string }
+/** release：跑模板的上线版本；draft：跑已保存的草稿（批量任务不用等上线，定时任务只跑上线版本） */
+export type RunVersion = 'release' | 'draft'
 
-export function previewBatchInput(promptId: string, file: File): Promise<BatchInputSummary> {
+/** 选好数据文件后的检查结果：按哪一版、哪个模型跑多少行 */
+export interface BatchInputSummary { name: string; rows: number; headers: string[]; version: RunVersion; release_no: number | null; model_name: string }
+
+export function previewBatchInput(promptId: string, version: RunVersion, file: File): Promise<BatchInputSummary> {
   const form = new FormData()
   form.append('file', file)
-  return request(http.post(`${BASE}/batch-runs/input-preview`, form, { params: { prompt_id: promptId }, timeout: 300_000 }))
+  return request(http.post(`${BASE}/batch-runs/input-preview`, form, { params: { prompt_id: promptId, version }, timeout: 300_000 }))
 }
 
 /** limit 为 0 跑全部；其余参数放 query，文件放 multipart。 */
-export function startBatchRun(payload: { prompt_id: string; thinking: boolean; limit: number }, file: File): Promise<BatchRun> {
+export function startBatchRun(payload: { prompt_id: string; version: RunVersion; thinking: boolean; limit: number }, file: File): Promise<BatchRun> {
   const form = new FormData()
   form.append('file', file)
   return request(http.post(`${BASE}/batch-runs`, form, { params: payload, timeout: 300_000 }))
@@ -260,7 +267,13 @@ export interface RunRow {
   items: Record<string, string>[]
   /** 没设输出字段或格式不对时，模型的原话 */
   answer: string
+  /** 样本试跑和上一次对比时才有：上一次这一行的结果 */
+  previous?: Pick<RunRow, 'status' | 'items' | 'error' | 'answer'> | null
+  /** fixed：上次有问题这次成功；broke：上次成功这次有问题；changed：两次都成功但字段不同 */
+  change?: RowChange
 }
+
+export type RowChange = 'fixed' | 'broke' | 'changed' | ''
 
 export interface RunRows {
   columns: string[]
@@ -274,8 +287,6 @@ export interface RunRows {
 export function getBatchRunRows(id: string, failedOnly = false): Promise<RunRows> {
   return request(http.get(`${BASE}/batch-runs/${id}/rows`, { params: { failed_only: failedOnly } }))
 }
-
-export interface SampleRunState { run: BatchRun | null; rows: RunRows | null }
 
 /** 码表预览：名称、整份多少字多少行、前 200 行。每次提问都把整份放进 @【上传码表】。 */
 export interface CodePreview {
@@ -294,19 +305,6 @@ export function previewSystemCode(key: string): Promise<CodePreview> {
 /** 模板上传的码表文件。 */
 export function previewUploadedCode(promptId: string): Promise<CodePreview> {
   return request(http.get(`${BASE}/prompts/${promptId}/code-preview`))
-}
-
-export function getSampleRun(promptId: string): Promise<SampleRunState> {
-  return request(http.get(`${BASE}/prompts/${promptId}/sample-run`))
-}
-
-/** 用模板上选定的模型跑，不另外传：试跑和上线后跑的是同一个模型。 */
-export function startSampleRun(promptId: string, body: { thinking: boolean; limit: number }): Promise<SampleRunState> {
-  return request(http.post(`${BASE}/prompts/${promptId}/sample-run`, body))
-}
-
-export function stopSampleRun(promptId: string): Promise<SampleRunState> {
-  return request(http.post(`${BASE}/prompts/${promptId}/sample-run/stop`))
 }
 
 export function listPromptReleases(promptId: string): Promise<TemplateRelease[]> {

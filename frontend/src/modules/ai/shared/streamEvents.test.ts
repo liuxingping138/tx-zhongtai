@@ -44,4 +44,16 @@ describe('流式事件', () => {
     expect(t.reply.error).toBe('限流')
     expect(t.reply.text).toBe('')
   })
+
+  it('试发按输出字段解析的结果：解析出的列表，或者 null（格式不对），都要记下', () => {
+    const ok = target()
+    applyStreamEvent(ok, { parsed: [{ 行业: '制造' }] })
+    expect(ok.reply.parsed).toEqual([{ 行业: '制造' }])
+    const bad = target()
+    applyStreamEvent(bad, { parsed: null })
+    expect(bad.reply.parsed).toBeNull()
+    const none = target()
+    applyStreamEvent(none, { text: '答' })
+    expect(none.reply.parsed).toBeUndefined()
+  })
 })

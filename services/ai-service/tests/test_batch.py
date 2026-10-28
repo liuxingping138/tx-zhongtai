@@ -7,7 +7,7 @@ import pytest
 from openpyxl import load_workbook
 from platform_common.errors import ApiError, PermissionDeniedError
 
-from app.application import batch_execute, batch_queue
+from app.application import batch_execute, batch_queue, batch_start
 from app.application import batch_runs as service
 from app.core import storage
 from app.core.config import get_settings
@@ -351,7 +351,7 @@ async def test_read_only_category_can_view_runs_but_not_run_or_stop(monkeypatch:
     reader = CategoryAccess(readable=frozenset({"policy"}), editable=frozenset())
     assert (await service.get_run(FakeSession(), reader, RUN_ID))["prompt_category_name"] == "政策"  # type: ignore[arg-type]
     for call in (
-        service.start_run(FakeSession(), ACTOR, reader, {"prompt_id": PROMPT_ID}),  # type: ignore[arg-type]
+        batch_start.start_run(FakeSession(), ACTOR, reader, {"prompt_id": PROMPT_ID}),  # type: ignore[arg-type]
         service.stop_run(FakeSession(), ACTOR, reader, RUN_ID),  # type: ignore[arg-type]
         service.retry_run(FakeSession(), ACTOR, reader, RUN_ID),  # type: ignore[arg-type]
         service.delete_run(FakeSession(), ACTOR, reader, RUN_ID),  # type: ignore[arg-type]

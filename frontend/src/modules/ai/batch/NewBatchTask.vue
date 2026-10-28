@@ -3,19 +3,24 @@ import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { CircleCheckFilled, Download, Upload } from '@element-plus/icons-vue'
 
-import { previewBatchInput, startBatchRun, type AiModel, type BatchInputSummary, type PromptTemplate } from '@/api/ai'
+import { previewBatchInput, startBatchRun, type AiModel, type BatchInputSummary, type PromptTemplate, type RunVersion } from '@/api/ai'
 import { errorMessage } from '@/api/errors'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
+import { estimateCost } from '../prompts/sampleView'
+import { formatYuan } from '../shared/aiText'
 import { downloadBatchInputTemplate } from '../shared/downloads'
+import BatchVersionPick from './BatchVersionPick.vue'
+import { defaultVersion, runSpec } from './batchVersion'
 
 /**
- * 新建批量任务：选一个已上线的模板，上传这次的数据，选跑全部还是先跑几条。
- * 任务按上线版本跑（和定时任务一样），模板草稿上没上线的改动、模板的测试样本都不参与。
+ * 新建批量任务：选模板和跑哪一版（线上版本或当前草稿），上传这次的数据，选跑全部还是先跑几条。
+ * 发起时把这一版的提示词、输出字段、模型和码表冻结进任务，之后改模板、上线新版本都不影响它；模板的测试样本不参与。
  */
 const props = defineProps<{ templates: PromptTemplate[]; models: AiModel[] }>()
 const open = defineModel<boolean>({ required: true })
 const emit = defineEmits<{ created: [] }>()
 const templateId = ref('')
+const version = ref<RunVersion>('release')
 const thinking = ref(false)
 const file = ref<File | null>(null)
 const summary = ref<BatchInputSummary | null>(null)
@@ -29,26 +34,17 @@ const testRows = ref(10)
 const picker = ref<HTMLInputElement>()
 let sequence = 0
 
-/** 能选的排前面；不能选的也列出来，写清原因，免得找不到模板以为丢了。 */
-const options = computed(() => props.templates
-  .map(item => ({ item, reason: !item.release ? '未上线' : !item.editable ? '只能查看' : '' }))
-  .sort((a, b) => Number(Boolean(a.reason)) - Number(Boolean(b.reason))))
 const template = computed(() => props.templates.find(item => item.id === templateId.value))
-const release = computed(() => template.value?.release ?? null)
-const model = computed(() => props.models.find(item => item.id === release.value?.model_id))
-const uploadHint = computed(() => (release.value?.variables.length
+const spec = computed(() => runSpec(template.value, version.value, props.models))
+const model = computed(() => spec.value?.model)
+const uploadHint = computed(() => (spec.value?.columns.length
   ? '先下载数据模板，表头就是这一版要的列，不要改名；每行填一条数据，可以加别的列，会原样留在结果里。选好后先检查列，不会调用模型。'
   : '第一行是表头，每行问一次。选好后先检查列，不会调用模型。'))
 const count = computed(() => (scope.value === 'test' ? Math.min(testRows.value || 1, summary.value?.rows ?? 0) : summary.value?.rows ?? 0))
-const modelProblem = computed(() => {
-  if (!release.value) return ''
-  if (!model.value) return `第 ${release.value.release_no} 版用的模型「${release.value.model_name}」已停用，请在模板里换模型并重新上线`
-  if (!model.value.available) return `「${model.value.name}」的接口密钥还没配置，暂时不能跑`
-  return ''
-})
+const estimate = computed(() => (summary.value ? estimateCost(template.value?.sample, count.value) : null))
 const blocker = computed(() => {
-  if (!template.value) return '选一个已上线的模板'
-  if (modelProblem.value) return modelProblem.value
+  if (!template.value || !spec.value) return '选一个模板'
+  if (spec.value.problem) return spec.value.problem
   if (previewing.value) return '正在检查数据…'
   if (!summary.value || !file.value) return '上传这次要跑的数据'
   return ''
@@ -67,7 +63,9 @@ watch(open, value => {
 }, { flush: 'sync' })
 // 只选了模板不算没保存的工作；选好的数据文件丢了要重新找，离开前提醒。
 useUnsavedForm(open, () => file.value?.name ?? '', starting)
-watch(templateId, () => {
+watch(templateId, () => { version.value = defaultVersion(template.value) })
+// 换了模板或版本，要的列可能不同：已选的数据要重新检查。
+watch([templateId, version], () => {
   sequence++
   file.value = null
   summary.value = null
@@ -86,7 +84,7 @@ async function pick(event: Event): Promise<void> {
   failure.value = ''
   previewing.value = true
   try {
-    const result = await previewBatchInput(template.value.id, chosen)
+    const result = await previewBatchInput(template.value.id, version.value, chosen)
     if (current !== sequence) return
     file.value = chosen
     summary.value = result
@@ -99,12 +97,13 @@ async function pick(event: Event): Promise<void> {
   }
 }
 
-/** 表头就是上线版本要的列：照着填好再传，不用对着页面上的列名自己建表。 */
+/** 表头就是这一版要的列：照着填好再传，不用对着页面上的列名自己建表。 */
 async function downloadTemplate(): Promise<void> {
-  if (!template.value || !release.value || downloading.value) return
+  if (!template.value || !spec.value || downloading.value) return
   downloading.value = true
   try {
-    await downloadBatchInputTemplate(template.value.id, `${template.value.title}-第${release.value.release_no}版数据模板.xlsx`)
+    const label = version.value === 'draft' ? '草稿' : spec.value.label.replaceAll(' ', '')
+    await downloadBatchInputTemplate(template.value.id, version.value, `${template.value.title}-${label}数据模板.xlsx`)
   } catch (error) {
     ElMessage.error(errorMessage(error, '下载失败，请重试'))
   } finally {
@@ -118,8 +117,9 @@ async function start(): Promise<void> {
   const input = file.value!
   const data = summary.value!
   const rows = count.value
+  const cost = estimate.value ? `，预计约 ${formatYuan(estimate.value.total)}` : ''
   const ok = await ElMessageBox.confirm(
-    `用「${model.value!.name}」按「${selected.title}」第 ${data.release_no} 版处理「${data.name}」${rows === data.rows ? '全部' : '前'} ${rows} 条，会产生模型费用。`,
+    `用「${model.value!.name}」按「${selected.title}」${spec.value!.label}处理「${data.name}」${rows === data.rows ? '全部' : '前'} ${rows} 条，会产生模型费用${cost}。`,
     '开始运行？',
     { confirmButtonText: '开始运行', cancelButtonText: '取消', type: 'warning' },
   ).then(() => true, () => false)
@@ -127,7 +127,7 @@ async function start(): Promise<void> {
   starting.value = true
   try {
     const useThinking = thinking.value && Boolean(model.value?.supports_thinking)
-    await startBatchRun({ prompt_id: selected.id, thinking: useThinking, limit: rows === data.rows ? 0 : rows }, input)
+    await startBatchRun({ prompt_id: selected.id, version: version.value, thinking: useThinking, limit: rows === data.rows ? 0 : rows }, input)
     ElMessage.success(`已加入队列，共 ${rows} 条`)
     open.value = false
     emit('created')
@@ -161,82 +161,16 @@ function close(done: () => void): void {
       :disabled="starting"
       :aria-busy="starting"
     >
+      <BatchVersionPick
+        v-model:template-id="templateId"
+        v-model:version="version"
+        :templates="templates"
+        :template="template"
+        :spec="spec"
+        :disabled="starting"
+      />
       <section class="new-task__step">
-        <h3><span>1</span>选模板</h3>
-        <el-select
-          v-model="templateId"
-          filterable
-          placeholder="搜索模板名称"
-          aria-label="任务模板"
-          :disabled="starting"
-        >
-          <el-option
-            v-for="{ item, reason } in options"
-            :key="item.id"
-            :value="item.id"
-            :label="item.title"
-            :disabled="Boolean(reason)"
-          >
-            <span class="new-task__option">
-              <span>{{ item.title }}</span>
-              <small>{{ reason || `${item.category_name} · 第 ${item.release?.release_no} 版` }}</small>
-            </span>
-          </el-option>
-        </el-select>
-        <p class="new-task__hint">
-          只能选已上线的模板，任务按上线版本跑；还在调的模板请先在「提示词模板」试跑、上线。
-        </p>
-        <div
-          v-if="release"
-          class="new-task__release"
-        >
-          <p class="new-task__release-title">
-            第 {{ release.release_no }} 版 · {{ release.released_by_name }} {{ release.released_at }} 上线
-          </p>
-          <dl>
-            <dt>数据要有</dt>
-            <dd class="new-task__columns">
-              <template v-if="release.variables.length">
-                <span
-                  v-for="column in release.variables"
-                  :key="column"
-                >{{ column }}</span>
-              </template>
-              <template v-else>
-                不引用列，任意 .xlsx 都行
-              </template>
-            </dd>
-            <dt>模型</dt><dd>{{ release.model_name }}</dd>
-            <dt>输出字段</dt>
-            <dd
-              class="new-task__fields"
-              :title="release.fields.join('、')"
-            >
-              {{ release.fields.length ? `${release.fields.length} 个：${release.fields.join('、')}` : '未设置，保留模型原话' }}
-            </dd>
-            <dt>码表</dt><dd>{{ release.code || '不用码表' }}</dd>
-          </dl>
-          <p
-            v-if="release.unreleased_changes.length"
-            class="new-task__note"
-          >
-            模板草稿改了{{ release.unreleased_changes.join('、') }}，还没上线；这次按第 {{ release.release_no }} 版跑。
-          </p>
-          <details>
-            <summary>看第 {{ release.release_no }} 版的提示词</summary>
-            <pre>{{ release.content }}</pre>
-          </details>
-        </div>
-        <p
-          v-if="modelProblem"
-          class="new-task__problem"
-        >
-          {{ modelProblem }}
-        </p>
-      </section>
-
-      <section class="new-task__step">
-        <h3><span>2</span>上传这次的数据</h3>
+        <h3><span>3</span>上传这次的数据</h3>
         <input
           ref="picker"
           type="file"
@@ -269,13 +203,13 @@ function close(done: () => void): void {
           <el-button
             :icon="Upload"
             :loading="previewing"
-            :disabled="!release || Boolean(modelProblem) || starting"
+            :disabled="!spec || Boolean(spec.problem) || starting"
             @click="picker?.click()"
           >
             选择 .xlsx 文件
           </el-button>
           <el-button
-            v-if="release?.variables.length"
+            v-if="spec?.columns.length"
             :icon="Download"
             :loading="downloading"
             :disabled="starting"
@@ -293,7 +227,7 @@ function close(done: () => void): void {
       </section>
 
       <section class="new-task__step">
-        <h3><span>3</span>跑多少</h3>
+        <h3><span>4</span>跑多少</h3>
         <el-radio-group
           v-model="scope"
           class="new-task__scope"
@@ -348,6 +282,13 @@ function close(done: () => void): void {
         >
           {{ blocker }}
         </p>
+        <p
+          v-else-if="estimate"
+          class="new-task__estimate"
+        >
+          <b>预计约 {{ formatYuan(estimate.total) }}</b>
+          <span>按最近一次样本试跑平均每条 {{ formatYuan(estimate.perRow) }} 估算，实际以账单为准</span>
+        </p>
         <span v-else />
         <el-button
           type="primary"
@@ -368,22 +309,7 @@ function close(done: () => void): void {
 .new-task__step:last-child { margin-bottom: 0; border-bottom: 0; }
 .new-task__step h3 { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; color: var(--zt-ink-900); font-size: 15px; font-weight: 650; }
 .new-task__step h3 span { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--zt-blue-600); color: var(--el-color-white); font-size: 12px; }
-.new-task__step .el-select { width: 100%; }
-.new-task__option { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.new-task__option small { color: var(--zt-ink-500); font-size: 12px; }
 .new-task__hint { margin: 8px 0 0; color: var(--zt-ink-500); font-size: 12px; line-height: 1.6; }
-.new-task__release { margin-top: 12px; padding: 14px 16px; border-radius: 6px; background: var(--zt-soft); font-size: 13px; }
-.new-task__release-title { margin: 0 0 10px; color: var(--zt-ink-700); font-weight: 600; }
-.new-task__release dl { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 8px 12px; margin: 0; }
-.new-task__release dt { color: var(--zt-ink-500); }
-.new-task__release dd { margin: 0; overflow-wrap: anywhere; }
-.new-task__columns { display: flex; flex-wrap: wrap; gap: 6px; }
-.new-task__fields { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.new-task__columns span { padding: 0 8px; border-radius: 4px; background: var(--el-color-primary-light-9); color: var(--zt-blue-700); line-height: 22px; }
-.new-task__note { margin: 10px 0 0; color: var(--zt-warning-text); }
-.new-task__release summary { margin-top: 10px; color: var(--zt-blue-600); cursor: pointer; }
-.new-task__release pre { max-height: 260px; overflow: auto; margin: 8px 0 0; padding: 10px 12px; border-radius: 6px; background: var(--zt-panel); font: inherit; font-size: 13px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
-.new-task__problem { margin: 10px 0 0; color: var(--el-color-danger); font-size: 13px; }
 .new-task__upload { display: flex; flex-wrap: wrap; gap: 8px; }
 .new-task__upload .el-button { margin: 0; }
 .new-task__file { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--zt-success-border); border-radius: 6px; background: var(--zt-success-soft); }
@@ -396,5 +322,7 @@ function close(done: () => void): void {
 .new-task__test-rows .el-input-number { width: 100px; }
 .new-task__footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .new-task__footer p { margin: 0; color: var(--zt-ink-500); font-size: 13px; text-align: left; }
+.new-task__footer .new-task__estimate { display: flex; flex-direction: column; font-size: 12px; }
+.new-task__estimate b { color: var(--zt-ink-900); font-size: 16px; font-variant-numeric: tabular-nums; }
 .new-task__footer .el-button { margin: 0; }
 </style>

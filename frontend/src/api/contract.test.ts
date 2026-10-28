@@ -19,6 +19,7 @@ vi.mock('./excelImport', () => ({
 }))
 
 import * as ai from './ai'
+import * as aiSamples from './aiSamples'
 import * as audit from './audit'
 import * as auth from './auth'
 import * as codebook from './codebook'
@@ -41,7 +42,7 @@ const operations = Object.values(specs).flatMap((spec) =>
   ),
 )
 
-const modules = { ai, audit, auth, codebook, crawler, policy, scheduler, system }
+const modules = { ai, aiSamples, audit, auth, codebook, crawler, policy, scheduler, system }
 
 const wrappers = Object.entries(modules).flatMap(([module, exports]) =>
   Object.entries(exports)

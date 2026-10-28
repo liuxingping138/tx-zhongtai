@@ -122,6 +122,9 @@ function onKeydown(event: KeyboardEvent): void {
     event.preventDefault()
   }
 }
+
+/** 样本试跑抽屉里点「回去改提示词」：光标放回编辑框。 */
+defineExpose({ focus: () => area.value?.focus() })
 </script>
 
 <template>

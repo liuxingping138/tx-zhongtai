@@ -1,7 +1,9 @@
 """样本试跑：用模板草稿把测试样本的前几条整批跑一遍，结果在模板页逐行看，也能下载结果 Excel。
 
-和试发（只问第一行）互补，确认整批效果后再请管理员上线。执行复用批量任务那一套（worker、重试、计费），
+和试发（一次问一行）互补，确认整批效果后再请管理员上线。执行复用批量任务那一套（worker、重试、计费），
 来源记为 sample：不进批量任务列表，费用账单里用途是「样本试跑」。
+
+每次试跑按先后叫「第 N 次」，默认和前一次逐行对比（run_compare）：改了提示词之后哪些行修好了、哪些弄坏了，一眼看出。
 """
 
 from __future__ import annotations
@@ -12,11 +14,11 @@ from typing import Any
 
 import anyio
 from platform_common.actors import Actor
-from platform_common.clock import utcnow
+from platform_common.clock import format_beijing, utcnow
 from platform_common.errors import ApiError, ErrorCode, NotFoundError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application import batch_runs
+from app.application import batch_runs, run_compare
 from app.application.asking import resolve_model
 from app.application.audit_emit import enqueue_event
 from app.application.prompts import code_text, require, require_editable
@@ -29,6 +31,9 @@ from app.repositories import batch_runs as repo
 
 ROWS_MAX = 50
 ROWS_DEFAULT = 10
+# 页面上能挑着看、挑着比的最近几次。
+HISTORY_MAX = 20
+NO_COMPARE = "none"
 
 
 def _copy_sample(prompt_id: str, run_id: str, code: str | None) -> None:
@@ -86,6 +91,7 @@ async def start(
         created_by_id=actor.id,
         created_by_name=actor.name,
         source=RUN_SOURCE_SAMPLE,
+        draft_saved_at=template.updated_at,
         input_name=template.excel_name,
     )
     repo.add(session, run)
@@ -98,21 +104,98 @@ async def start(
         target_id=template.id,
         changes={"run_id": run.id, "rows": rows, "model_id": model.id},
     )
-    return {"run": batch_runs.to_dict(run), "rows": None}
+    return await view(session, access, template.id)
 
 
-async def latest(session: AsyncSession, access: CategoryAccess, prompt_id: str) -> dict[str, Any]:
-    """最近一次样本试跑和它已经跑出来的行；运行中也给，页面边跑边看。"""
+def _brief(run: BatchRun, no: int) -> dict[str, Any]:
+    return {
+        "no": no,
+        "id": run.id,
+        "status": run.status,
+        "total_count": run.total_count,
+        "done_count": run.done_count,
+        "failed_count": run.failed_count,
+        "format_failed_count": run.format_failed_count,
+        "created_at": format_beijing(run.created_at),
+    }
+
+
+def _rows(run: BatchRun) -> dict[str, Any] | None:
+    return preview(run) if has_run_input(storage.run_dir(run.id)) else None
+
+
+def _compared(run: BatchRun, rows: dict[str, Any] | None, previous: BatchRun, no: int) -> dict[str, Any]:
+    """和 previous 逐行对比；测试样本换过、或某一次还没有结果时只给出比的是哪一次。"""
+
+    result: dict[str, Any] = {
+        "run": _brief(previous, no),
+        "same_input": run_compare.same_input(run.id, previous.id),
+        "fields_changed": run.output_fields != previous.output_fields,
+    }
+    earlier = _rows(previous) if rows and result["same_input"] else None
+    if rows and earlier:
+        result.update(run_compare.compare(rows, earlier))
+    return result
+
+
+async def view(
+    session: AsyncSession,
+    access: CategoryAccess,
+    prompt_id: str,
+    *,
+    run_id: str | None = None,
+    compare_id: str | None = None,
+) -> dict[str, Any]:
+    """一次样本试跑和它已经跑出来的行（默认最近一次，运行中也给，页面边跑边看），默认和它前一次对比。
+
+    compare_id 指定和哪一次比，NO_COMPARE 表示不比。只能在最近 HISTORY_MAX 次里挑。
+    """
 
     template = await require(session, prompt_id)
     access.require_read(template.category)
     await batch_runs.reconcile_stale(session)
-    run = (await repo.latest_samples(session, [template.id])).get(template.id)
+    history, total = await repo.sample_history(session, template.id, limit=HISTORY_MAX)
+    numbers = {item.id: total - index for index, item in enumerate(history)}
+    if not history:
+        return {"run": None, "rows": None, "history": [], "compare": None}
+    run = next((item for item in history if item.id == run_id), None) if run_id else history[0]
     if run is None:
-        return {"run": None, "rows": None}
-    ready = await anyio.to_thread.run_sync(has_run_input, storage.run_dir(run.id))
-    rows = await anyio.to_thread.run_sync(lambda: preview(run)) if ready else None
-    return {"run": batch_runs.to_dict(run), "rows": rows}
+        raise NotFoundError("试跑记录不存在，或者太早了已不在最近的记录里")
+    previous: BatchRun | None = None
+    if compare_id and compare_id != NO_COMPARE:
+        previous = next((item for item in history if item.id == compare_id and item.id != run.id), None)
+        if previous is None:
+            raise NotFoundError("要对比的那次试跑不存在")
+    elif compare_id != NO_COMPARE:
+        older = history[history.index(run) + 1 :]
+        previous = older[0] if older else None
+    rows = await anyio.to_thread.run_sync(_rows, run)
+    compared = (
+        await anyio.to_thread.run_sync(_compared, run, rows, previous, numbers[previous.id]) if previous else None
+    )
+    return {
+        "run": {**batch_runs.to_dict(run), "no": numbers[run.id]},
+        "rows": rows,
+        "history": [_brief(item, numbers[item.id]) for item in history],
+        "compare": compared,
+    }
+
+
+async def retry(
+    session: AsyncSession, actor: Actor, access: CategoryAccess, prompt_id: str, run_id: str
+) -> dict[str, Any]:
+    """只重问这次试跑里失败和没跑到的行，用的还是这次冻结的提示词；改过草稿要看新效果，应该重新试跑。"""
+
+    run = await _own_run(session, prompt_id, run_id)
+    await batch_runs.retry_run(session, actor, access, run.id, event_type="ai.prompt.sample_retried")
+    return await view(session, access, prompt_id, run_id=run.id)
+
+
+async def _own_run(session: AsyncSession, prompt_id: str, run_id: str) -> BatchRun:
+    run = await batch_runs.require(session, run_id)
+    if run.prompt_id != prompt_id or run.source != RUN_SOURCE_SAMPLE:
+        raise NotFoundError("试跑记录不存在")
+    return run
 
 
 async def download(
@@ -120,9 +203,7 @@ async def download(
 ) -> tuple[bytes, str]:
     """按试跑 ID 下载而不是「最近一次」：点下载的同时有人开了新一轮，拿到的也还是页面上那一轮。"""
 
-    run = await batch_runs.require(session, run_id)
-    if run.prompt_id != prompt_id or run.source != RUN_SOURCE_SAMPLE:
-        raise NotFoundError("试跑记录不存在")
+    run = await _own_run(session, prompt_id, run_id)
     access.require_read(run.prompt_category)
     content, filename = await batch_runs.read_run_file(run, kind, label="样本试跑")
     await enqueue_event(
@@ -141,4 +222,4 @@ async def stop(session: AsyncSession, actor: Actor, access: CategoryAccess, prom
     if running is None:
         raise ApiError("没有正在进行的样本试跑", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     await batch_runs.stop_run(session, actor, access, running.id, event_type="ai.prompt.sample_stopped")
-    return await latest(session, access, prompt_id)
+    return await view(session, access, prompt_id)

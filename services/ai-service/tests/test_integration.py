@@ -14,7 +14,7 @@ from platform_common.clock import utcnow
 from platform_common.errors import ApiError
 from sqlalchemy import delete
 
-from app.application import batch_execute, batch_queue, batch_runs, billing, prompts, releases, sample_runs
+from app.application import batch_execute, batch_queue, batch_runs, batch_start, billing, prompts, releases, sample_runs
 from app.core import storage
 from app.core.config import get_settings
 from app.core.database import SessionLocal, engine
@@ -66,7 +66,7 @@ async def _template_with_excel(rows: int = 3) -> str:
 
 async def _start(prompt_id: str) -> dict[str, Any]:
     async with SessionLocal() as session:
-        run = await batch_runs.start_run(
+        run = await batch_start.start_run(
             session,
             ACTOR,
             FULL_ACCESS,
@@ -144,7 +144,7 @@ async def test_stop_running_run_sets_flag_and_queued_run_cancels() -> None:
 async def test_history_filters_on_real_rows() -> None:
     prompt_id = await _template_with_excel()
     async with SessionLocal() as session:
-        await batch_runs.start_run(
+        await batch_start.start_run(
             session,
             ACTOR,
             FULL_ACCESS,
@@ -238,10 +238,32 @@ async def test_sample_runs_stay_on_the_template_page() -> None:
         await session.commit()
     async with SessionLocal() as session:
         listed = await batch_runs.list_runs(session, FULL_ACCESS, page=1, page_size=15)
-        latest = await sample_runs.latest(session, FULL_ACCESS, prompt_id)
+        latest = await sample_runs.view(session, FULL_ACCESS, prompt_id)
         template = next(item for item in await prompts.list_prompts(session, FULL_ACCESS) if item["id"] == prompt_id)
     assert [item["id"] for item in listed["items"]] == [formal["id"]]
     assert formal["release_no"] == 1 and first["run"]["id"] != second["run"]["id"]
     assert latest["run"]["id"] == second["run"]["id"] and latest["rows"]["total"] == 3
+    # 第 2 次默认和第 1 次比；两次复制的是同一份测试样本。
+    assert [item["no"] for item in latest["history"]] == [2, 1]
+    assert latest["compare"]["run"]["id"] == first["run"]["id"] and latest["compare"]["same_input"] is True
     assert template["sample"]["id"] == second["run"]["id"] and template["sample"]["current"] is True
     assert template["release"]["unreleased_changes"] == ["提示词内容"]
+
+
+async def test_batch_can_run_the_saved_draft() -> None:
+    """批量任务可以不等上线：跑草稿的任务记下草稿保存时间，没有上线版本号。"""
+
+    prompt_id = await _template_with_excel()
+    async with SessionLocal() as session:
+        run = await batch_start.start_run(
+            session,
+            ACTOR,
+            FULL_ACCESS,
+            {"prompt_id": prompt_id, "version": "draft"},
+            upload=("本次.xlsx", storage.prompt_file(prompt_id, "excel").read_bytes()),
+        )
+        await session.commit()
+    async with SessionLocal() as session:
+        listed = await batch_runs.list_runs(session, FULL_ACCESS, page=1, page_size=15)
+    item = listed["items"][0]
+    assert (item["id"], item["release_no"]) == (run["id"], None) and item["draft_saved_at"]

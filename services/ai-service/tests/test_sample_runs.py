@@ -7,13 +7,13 @@ from typing import Any
 import pytest
 from platform_common.errors import ApiError, NotFoundError
 
-from app.application import batch_runs, prompts, sample_runs
+from app.application import batch_runs, prompts, run_compare, sample_runs
 from app.application.batch_output import FORMAT_ERROR_PREFIX, RowResult, append_raw, start_raw
 from app.application.run_rows import preview
 from app.core import storage
 from app.core.config import get_settings
 from app.domain.categories import FULL_ACCESS
-from app.domain.models import RUN_SOURCE_SAMPLE
+from app.domain.models import RUN_SOURCE_SAMPLE, BatchRun
 from app.domain.templating import build_myid
 from app.repositories import batch_runs as repo
 from app.repositories import prompts as prompt_repo
@@ -36,7 +36,13 @@ def created(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
     monkeypatch.setattr(prompt_repo, "get", get)
     monkeypatch.setattr(repo, "active_for_prompt", idle)
     monkeypatch.setattr(repo, "mark_stale_interrupted", noop)
+
+    async def history(_session: Any, _prompt_id: str, *, limit: int) -> tuple[list[Any], int]:
+        runs = [row for row in added if isinstance(row, BatchRun)][::-1]
+        return runs[:limit], len(runs)
+
     monkeypatch.setattr(repo, "add", lambda _session, row: added.append(row))
+    monkeypatch.setattr(repo, "sample_history", history)
     monkeypatch.setattr(sample_runs, "enqueue_event", noop)
     monkeypatch.setattr(get_settings(), "baidu_api_key", "k")
     storage.write_atomic(storage.prompt_file(PROMPT_ID, "excel"), SAMPLE)
@@ -55,6 +61,7 @@ async def test_sample_run_uses_the_saved_draft_and_caps_rows(created: list[Any])
         50,
     )
     assert (sample.input_name, sample.thinking, data["run"]["status"]) == ("样本.xlsx", True, "queued")
+    assert (data["run"]["no"], data["compare"], sample.draft_saved_at) == (1, None, template().updated_at)
     assert (storage.run_dir(sample.id) / "source.xlsx").read_bytes() == SAMPLE
 
 
@@ -183,3 +190,94 @@ async def test_download_only_serves_this_templates_sample_runs(monkeypatch: pyte
     with pytest.raises(NotFoundError):
         await sample_runs.download(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID, sample_id, "log")  # type: ignore[arg-type]
     assert len(events) == 1
+
+
+def test_rows_compare_by_row_number() -> None:
+    def item(row: int, status: str, items: list[dict[str, str]] | None = None) -> dict[str, Any]:
+        return {"row": row, "status": status, "items": items or [], "error": "", "answer": ""}
+
+    a, b = [{"行业": "制造"}], [{"行业": "零售"}]
+    rows = {
+        "items": [item(1, "done", a), item(2, "done", a), item(3, "format"), item(4, "done", b), item(5, "pending")]
+    }
+    earlier = {
+        "items": [item(1, "format"), item(2, "done", a), item(3, "done", a), item(4, "done", a), item(5, "done")]
+    }
+    counts = run_compare.compare(rows, earlier)
+    assert [row["change"] for row in rows["items"]] == ["fixed", "", "broke", "changed", ""]
+    assert counts == {"fixed": 1, "broke": 1, "changed": 1, "same": 1}  # 第 5 行这次还没跑到，不算
+    assert rows["items"][2]["previous"] == {"status": "done", "items": a, "error": "", "answer": ""}
+    assert run_compare.change_of(item(1, "failed"), None) == ""
+
+
+def _sample(run_id: str, minute: int, answers: list[tuple[int, str, str]], source: bytes = SAMPLE) -> Any:
+    storage.write_atomic(storage.run_dir(run_id) / "source.xlsx", source)
+    _answers(run_id, answers)
+    created = run(id=run_id, source=RUN_SOURCE_SAMPLE, row_limit=2, total_count=2, output_fields="行业|规模")
+    created.created_at = created.created_at.replace(minute=minute)
+    return created
+
+
+def _history(monkeypatch: pytest.MonkeyPatch, runs: list[Any]) -> None:
+    async def get(*_: Any, **__: Any) -> Any:
+        return template()
+
+    async def history(_session: Any, _prompt_id: str, *, limit: int) -> tuple[list[Any], int]:
+        return runs[:limit], len(runs) + 5  # 更早的还有 5 次，不在最近的记录里
+
+    monkeypatch.setattr(prompt_repo, "get", get)
+    monkeypatch.setattr(repo, "sample_history", history)
+    monkeypatch.setattr(repo, "mark_stale_interrupted", noop)
+
+
+async def test_view_compares_with_the_run_before_on_the_same_sample(monkeypatch: pytest.MonkeyPatch) -> None:
+    ok, bad = '[{"行业":"制造","规模":"大"}]', f"{FORMAT_ERROR_PREFIX}：没有解析出输出字段"
+    newer = _sample("e" * 32, 30, [(0, ok, ""), (1, "说不清", bad)])
+    older = _sample("f" * 32, 10, [(0, "说不清", bad), (1, ok, "")])
+    _history(monkeypatch, [newer, older])
+    data = await sample_runs.view(FakeSession(), FULL_ACCESS, PROMPT_ID)  # type: ignore[arg-type]
+    assert (data["run"]["id"], data["run"]["no"]) == (newer.id, 7)
+    assert [item["no"] for item in data["history"]] == [7, 6]
+    compare = data["compare"]
+    assert (compare["run"]["no"], compare["same_input"], compare["fixed"], compare["broke"]) == (6, True, 1, 1)
+    assert [item["change"] for item in data["rows"]["items"]] == ["fixed", "broke"]
+
+    alone = await sample_runs.view(FakeSession(), FULL_ACCESS, PROMPT_ID, compare_id="none")  # type: ignore[arg-type]
+    assert alone["compare"] is None and "change" not in alone["rows"]["items"][0]
+    first = await sample_runs.view(FakeSession(), FULL_ACCESS, PROMPT_ID, run_id=older.id)  # type: ignore[arg-type]
+    assert (first["run"]["no"], first["compare"]) == (6, None)  # 最早的一次没有可比的
+    with pytest.raises(NotFoundError):
+        await sample_runs.view(FakeSession(), FULL_ACCESS, PROMPT_ID, run_id="9" * 32)  # type: ignore[arg-type]
+    with pytest.raises(NotFoundError):
+        await sample_runs.view(FakeSession(), FULL_ACCESS, PROMPT_ID, compare_id=newer.id)  # type: ignore[arg-type]
+
+
+async def test_view_does_not_line_up_rows_of_a_different_sample(monkeypatch: pytest.MonkeyPatch) -> None:
+    newer = _sample("e" * 32, 30, [(0, '[{"行业":"制造"}]', "")])
+    older = _sample("f" * 32, 10, [(0, '[{"行业":"零售"}]', "")], source=xlsx([["名称"], ["别的企业"]]))
+    _history(monkeypatch, [newer, older])
+    compare = (await sample_runs.view(FakeSession(), FULL_ACCESS, PROMPT_ID))["compare"]  # type: ignore[arg-type]
+    assert (compare["same_input"], "changed" in compare) == (False, False)
+
+
+async def test_retry_only_takes_this_templates_sample_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[Any] = []
+    rows = {RUN_ID: run(source=RUN_SOURCE_SAMPLE), "formal": run(id="formal", source="manual")}
+
+    async def get(_session: Any, run_id: str, **_: Any) -> Any:
+        return rows[run_id]
+
+    async def retry_run(*args: Any, **kwargs: Any) -> Any:
+        calls.append((args[3], kwargs))
+
+    async def view(*_: Any, **kwargs: Any) -> Any:
+        return kwargs
+
+    monkeypatch.setattr(batch_runs, "require", get)
+    monkeypatch.setattr(batch_runs, "retry_run", retry_run)
+    monkeypatch.setattr(sample_runs, "view", view)
+    data = await sample_runs.retry(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID, RUN_ID)  # type: ignore[arg-type]
+    assert data == {"run_id": RUN_ID}
+    assert calls == [(RUN_ID, {"event_type": "ai.prompt.sample_retried"})]
+    with pytest.raises(NotFoundError):
+        await sample_runs.retry(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID, "formal")  # type: ignore[arg-type]

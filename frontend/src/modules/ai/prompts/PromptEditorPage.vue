@@ -8,6 +8,7 @@ import { createPrompt, deletePrompt, listPrompts, updatePrompt, type AiModel, ty
 import { errorMessage } from '@/api/errors'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import { useAuthStore } from '@/stores/auth'
+import { splitFields } from '../shared/aiText'
 import { defaultCategory } from '../shared/categories'
 import { useAnswerStream } from '../shared/useAnswerStream'
 import FlowBar from './FlowBar.vue'
@@ -16,14 +17,13 @@ import PromptSettings from './PromptSettings.vue'
 import ReleaseDrawer from './ReleaseDrawer.vue'
 import TestPanel from './TestPanel.vue'
 import { fitSummary } from './taskFit'
-import { flowSteps, sampleFromRun, stepActions, type StepKey } from './templateStatus'
+import { flowSteps, stepActions, withSample, type StepKey } from './templateStatus'
 import { useTaskFit } from './useTaskFit'
 import { useTemplateFiles } from './useTemplateFiles'
 import '../shared/ai.css'
 
 /**
- * 编辑一个模板：顶部三步（写提示词 → 样本试跑 → 上线）告诉人现在到哪一步、下一步做什么；
- * 左边写提示词和设置，右边试发一条、样本试跑。上线由管理员在上线抽屉里审核。
+ * 编辑一个模板：顶部三步（写提示词 → 样本试跑 → 上线）告诉人到哪一步；左边写提示词和设置，右边试发一条、样本试跑，上线由管理员审核。
  * 新模板不用先点保存就能传测试样本、码表：起了名字，上传时顺便存成模板，先传样本再照着列名写提示词。
  */
 const route = useRoute()
@@ -41,6 +41,8 @@ const loadError = ref('')
 const saving = ref(false)
 const thinking = ref(false)
 const testTab = ref<'trial' | 'sample'>('trial')
+const trialRow = ref(0)
+const editor = ref<{ focus: () => void } | null>(null)
 const releasing = ref(false)
 const form = reactive({ title: '', category: '', content: '', output_fields: '', model_id: '', code_table: '' })
 const unsaved = useUnsavedForm(ref(true), () => ({ ...form }), saving)
@@ -122,10 +124,7 @@ function replace(template: PromptTemplate): void {
 }
 
 function sampleChanged(run: BatchRun): void {
-  const template = selected.value
-  if (!template) return
-  const sample = sampleFromRun(run, template)
-  if (JSON.stringify(sample) !== JSON.stringify(template.sample)) selected.value = { ...template, sample }
+  if (selected.value) selected.value = withSample(selected.value, run)
 }
 
 /** 能不能存成模板：要有名字和类型；提示词可以先空着（先传样本再照着列名写）。不行就说明原因，名字空着就把光标放过去。 */
@@ -196,12 +195,14 @@ async function trial(): Promise<void> {
     model_id: trialModel.value.id,
     thinking: useThinking,
     prompt_id: selected.value?.id ?? null,
+    row: trialRow.value,
+    output_fields: form.output_fields,
   }, shown, useThinking)
 }
 
 function onStep(key: StepKey): void {
   if (key === 'test') testTab.value = 'sample'
-  if (key === 'release') releasing.value = true
+  else if (key === 'release') releasing.value = true
 }
 </script>
 
@@ -288,7 +289,6 @@ function onStep(key: StepKey): void {
       :closable="false"
       show-icon
     />
-
     <div
       v-loading="loading"
       class="prompt-page__body"
@@ -300,6 +300,7 @@ function onStep(key: StepKey): void {
       >
         <div class="prompt-page__scroll">
           <PromptEditor
+            ref="editor"
             v-model="form.content"
             :headers="selected?.excel_headers ?? []"
             :code-name="codeName"
@@ -332,19 +333,23 @@ function onStep(key: StepKey): void {
       <TestPanel
         v-model:tab="testTab"
         v-model:thinking="thinking"
+        v-model:row="trialRow"
         class="prompt-page__test"
         :answer="answer"
         :template="selected"
         :model="trialModel"
+        :content="form.content"
+        :fields="splitFields(form.output_fields)"
+        :code-name="codeName"
         :can-run="canEdit"
         :can-export="canExport"
         :dirty="unsaved.dirty.value"
         @run="trial"
         @upload="files.pick('excel')"
+        @edit="editor?.focus()"
         @sample-changed="sampleChanged"
       />
     </div>
-
     <!-- 两个附件的文件框：编辑器、试跑区、设置区的「上传」都点这里，新模板上传时顺便保存。 -->
     <input
       v-for="kind in FILE_KINDS"
