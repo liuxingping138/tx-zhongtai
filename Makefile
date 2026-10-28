@@ -3,11 +3,10 @@ SHELL := /bin/bash
 
 COMPOSE := docker compose -f deploy/compose/docker-compose.yml --env-file .env
 P6_ENV := deploy/compose/.p6.env
-# 服务器上跑 P6（scripts/p6-on-server.sh 传 P6_SERVER=1）：那里只有 docker-compose 且要 sudo。
-# -A 经 askpass 取密码；-E 保留环境变量，p6-admin 的 `exec -e ADMIN_*` 靠它把账号传进容器。
+# 服务器上跑 P6（scripts/p6-on-server.sh 传 P6_SERVER=1）：那里只有独立的 docker-compose，没有 docker compose 插件。
 ifeq ($(P6_SERVER),1)
-P6_DOCKER := sudo -A -E docker
-P6_DOCKER_COMPOSE := sudo -A -E docker-compose
+P6_DOCKER := docker
+P6_DOCKER_COMPOSE := docker-compose
 else
 P6_DOCKER := docker
 P6_DOCKER_COMPOSE := docker compose
