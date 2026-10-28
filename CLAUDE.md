@@ -17,7 +17,7 @@ AI提问已接入（独立的 ai-service：提示词模板、样本试跑与上�
 
 ## 常用命令
 
-当前运行环境是 `https://1.119.196.77`（8091 HTTP 自动跳转）。在 Mac 上改代码并推送到 GitLab，再用 `scripts/sync-to-server.sh` 同步到服务器构建。不要在服务器 `git pull`，不要在本机 `make dev-up`。步骤见 `docs/guides/部署与维护.md`。
+当前运行环境是 `https://36.134.128.137:8443`（8091 HTTP 自动跳转；443 被同机其他站点占用）。在 Mac 上改代码并推送到 GitLab，再用 `scripts/sync-to-server.sh` 同步到服务器构建。不要在服务器 `git pull`，不要在本机 `make dev-up`。步骤见 `docs/guides/部署与维护.md`。
 服务器 `.env` 是 `ENVIRONMENT=production`：新增内部密钥类变量（compose 里默认 `dev-only-…`）必须先写进服务器 `.env`，否则服务拒绝启动。
 
 ```bash
@@ -52,16 +52,16 @@ cd frontend && pnpm exec playwright test --grep "date range"
 
 ### 前端改动必须在服务器上重建
 
-入口是 `https://1.119.196.77`，页面来自服务器上的 frontend 镜像，不是热更新。改了前端源码后按 `docs/guides/部署与维护.md` 同步并重建 `frontend`，只刷新浏览器不会生效。
+入口是 `https://36.134.128.137:8443`，页面来自服务器上的 frontend 镜像，不是热更新。改了前端源码后按 `docs/guides/部署与维护.md` 同步并重建 `frontend`，只刷新浏览器不会生效。
 
 ### 开发部署机 vs 本机 / P6
 
-日常只使用 `1.119.196.77`。本机 Docker 栈已停止。分工：`make check` / `make test-unit` 在 Mac 上跑（不要 Docker）；
+日常只使用 `36.134.128.137`。本机 Docker 栈已停止。分工：`make check` / `make test-unit` 在 Mac 上跑（不要 Docker）；
 集成和 e2e 在服务器上跑 P6：`bash scripts/p6-on-server.sh`（同步 → 集成 + e2e → 一定 `p6-down`）。P6 的模型调用经 `AI_LLM_BASE_URL` 全部发到模拟模型服务 `llm-mock`（`deploy/compose/p6/llm_mock.py`，生产环境配了这个变量会拒绝启动），e2e 能不花钱跑通试发、样本试跑、上线和批量任务，
 Mac 不用开 Docker。P6 与业务栈同机但隔离（项目名 `tx-zhongtai-p6`、独立卷与库，网关只绑 `127.0.0.1:8090`），
 不要把 Playwright 打到 8091 的业务库。同步一律用 `scripts/sync-to-server.sh`，排除列表只维护那一份。脚本带 `--delete`，
 服务器上独有的文件（`.env`、密钥、P6 运行时文件等）全靠排除列表保护，新增服务器独有文件前先加进去。
-Navicat 连 `1.119.196.77:5433`。
+Navicat 连 `36.134.128.137:5433`。
 
 ## 架构
 

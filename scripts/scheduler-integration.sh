@@ -25,6 +25,10 @@ $compose exec -T \
 
 url="postgresql+asyncpg://$POLICY_DB_USER:$POLICY_DB_PASSWORD@127.0.0.1:$POSTGRES_HOST_PORT/$db"
 if [ "${P6_SERVER:-}" = "1" ]; then
+  # 按 uv.lock 的版本和哈希装 dev 依赖，从镜像里的 UV_DEFAULT_INDEX 下载；uv sync --frozen 只认锁文件里记的地址。
+  install_dev='uv venv --quiet /tmp/venv && uv export --quiet --frozen --extra dev --no-emit-project --no-emit-package platform-common -o /tmp/req.txt \
+    && uv pip install --quiet --python /tmp/venv/bin/python --require-hashes -r /tmp/req.txt \
+    && uv pip install --quiet --python /tmp/venv/bin/python --no-deps -e ../../packages/platform-common -e .'
   # 源码只读挂载、依赖装在容器内临时目录，不往宿主机写任何文件；下载缓存放命名卷，下次只下载新增的包。
   # shellcheck disable=SC2086
   $docker_cmd run --rm --network host --user 0 \
@@ -35,7 +39,7 @@ if [ "${P6_SERVER:-}" = "1" ]; then
     -v "$root/packages:/work/packages:ro" -v "$root/services/policy-service:/work/services/policy-service:ro" \
     -w /work/services/policy-service \
     tx-zhongtai-p6-policy-service:latest \
-    sh -c "uv sync --frozen --extra dev --quiet && uv run --no-sync pytest -q -p no:cacheprovider tests/test_scheduler_integration.py tests/test_aitag_integration.py tests/test_crawlconfig_integration.py"
+    sh -c "$install_dev && uv run --no-sync pytest -q -p no:cacheprovider tests/test_scheduler_integration.py tests/test_aitag_integration.py tests/test_crawlconfig_integration.py"
 else
   (cd "$root/services/policy-service" && SCHEDULER_INTEGRATION=1 POLICY_DATABASE_URL="$url" \
     uv run pytest -q -p no:cacheprovider tests/test_scheduler_integration.py tests/test_aitag_integration.py tests/test_crawlconfig_integration.py)

@@ -41,13 +41,6 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["platform_common"]
 
-[[tool.uv.index]]
-# 锁文件按这里记录下载地址，uv sync --frozen 只认锁文件里的地址（UV_DEFAULT_INDEX 对锁定的包无效）。
-# 阿里云在服务器上实测 8.6MB/s，官方 CDN 只有几十 KB/s。
-name = "aliyun"
-url = "https://mirrors.aliyun.com/pypi/simple"
-default = true
-
 [tool.ruff]
 # 规则在仓库根目录 ruff.toml，这里只写本包特有的例外。
 extend = "../../ruff.toml"

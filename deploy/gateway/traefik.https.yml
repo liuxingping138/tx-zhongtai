@@ -1,5 +1,6 @@
 # 文件 Provider 的 HTTPS 入口。和本地 traefik.yml 使用同一套动态路由，不启用 Docker Provider。
 # HTTP 入口只做跳转。证书文件由续期脚本写到 /certs，动态配置变更后 Traefik 会重新加载。
+# 宿主机 443 被同机其他站点占用，HTTPS 用 8443；容器内外同一个端口，跳转目标才不会错。
 
 entryPoints:
   web:
@@ -7,10 +8,10 @@ entryPoints:
     http:
       redirections:
         entryPoint:
-          to: ":443"
+          to: ":8443"
           scheme: https
   websecure:
-    address: ":443"
+    address: ":8443"
 
 providers:
   file:

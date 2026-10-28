@@ -1,5 +1,5 @@
 # 在现有文件 Provider 上增加 HTTPS。只在证书文件已经放进 deploy/secrets/tls 之后叠加使用。
-# 宿主机 8091 仍是 HTTP，由 Traefik 跳到 HTTPS 443。不要占用宿主机 80/8080/8443。
+# 宿主机 8091 仍是 HTTP，由 Traefik 跳到 HTTPS 8443（443 被同机其他站点占用）。改端口要连同 traefik.https.yml 的入口和跳转一起改。
 
 services:
   gateway:
@@ -8,7 +8,7 @@ services:
     volumes:
       - ../../deploy/secrets/tls:/certs:ro
     ports:
-      - "443:443"
+      - "8443:8443"
   iam-service:
     environment:
       IAM_COOKIE_SECURE: "true"

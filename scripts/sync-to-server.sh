@@ -9,7 +9,8 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 env_value() { grep -E "^$1=" "$root/.env" | cut -d= -f2- | tr -d "\"'"; }
 host="${DEPLOY_HOST:-$(env_value DEPLOY_HOST)}"
 user="${DEPLOY_USER:-$(env_value DEPLOY_USER)}"
-dest="${DEPLOY_DIR:-/home/$user/tx-zhongtai}"
+dest="${DEPLOY_DIR:-$(env_value DEPLOY_DIR)}"
+dest="${dest:-/home/$user/tx-zhongtai}"
 
 # 依赖与缓存在服务器上各自生成；后半段是服务器独有或含密码的文件。
 rsync -az --delete -e "ssh -i $HOME/.ssh/tx-zhongtai-deploy -o IdentitiesOnly=yes" \

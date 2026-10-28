@@ -10,6 +10,8 @@ env_value() { grep -E "^$1=" "$root/.env" | cut -d= -f2- | tr -d "\"'"; }
 host="${DEPLOY_HOST:-$(env_value DEPLOY_HOST)}"
 user="${DEPLOY_USER:-$(env_value DEPLOY_USER)}"
 sudo_pass="${DEPLOY_SUDO_PASSWORD:-$(env_value DEPLOY_SUDO_PASSWORD)}"
+dest="${DEPLOY_DIR:-$(env_value DEPLOY_DIR)}"
+dest="${dest:-/home/$user/tx-zhongtai}"
 targets="test-integration test-e2e"
 [ "${1:-}" = "integration" ] && targets="test-integration"
 
@@ -17,7 +19,7 @@ bash "$root/scripts/sync-to-server.sh"
 
 # 密码经 stdin 交给远端，再由 askpass 脚本交给 sudo；不出现在命令行参数和磁盘上。
 printf '%s\n' "$sudo_pass" | ssh -i "$HOME/.ssh/tx-zhongtai-deploy" -o IdentitiesOnly=yes "$user@$host" \
-  "cd /home/$user/tx-zhongtai && IFS= read -r P6_SUDO_PASSWORD && export P6_SUDO_PASSWORD \
+  "cd $dest && IFS= read -r P6_SUDO_PASSWORD && export P6_SUDO_PASSWORD \
    SUDO_ASKPASS=\$PWD/scripts/sudo-askpass-env.sh && \
    chmod +x scripts/sudo-askpass-env.sh && \
    sudo -A install -d -o \$(id -u) -g \$(id -g) deploy/secrets/jwt-p6 && \

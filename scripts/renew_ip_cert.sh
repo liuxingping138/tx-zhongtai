@@ -1,24 +1,32 @@
 #!/usr/bin/env bash
-# Certbot >=5.4 的 webroot 模式支持短期 IP 证书；不占用或重启宿主机 Web 服务。
+# Certbot >=5.4 支持短期 IP 证书。设了 ACME_WEBROOT 就把校验文件放进已有 HTTP 站点的目录，不占用或重启宿主机 Web 服务；
+# 没设时宿主机 80 必须空着，certbot 校验期间自己临时监听 80。
 set -euo pipefail
 umask 077
 : "${PUBLIC_IP:?请设置 PUBLIC_IP}"
-: "${ACME_WEBROOT:?请设置已有 HTTP 站点的 ACME_WEBROOT}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEST="${CERT_DIR:-$ROOT/deploy/secrets/tls}"
 STATE="${ACME_STATE_DIR:-/var/lib/tx-zhongtai-acme}"
-mkdir -p "$DEST" "$STATE" "$ACME_WEBROOT/.well-known/acme-challenge"
-# 校验目录必须允许现有 Nginx worker 读取；私钥目录保持 700。
-chmod 755 "$ACME_WEBROOT/.well-known" "$ACME_WEBROOT/.well-known/acme-challenge"
+mkdir -p "$DEST" "$STATE"
 chmod 700 "$DEST" "$STATE"
+if [ -n "${ACME_WEBROOT:-}" ]; then
+  mkdir -p "$ACME_WEBROOT/.well-known/acme-challenge"
+  # 校验目录必须允许现有 Nginx worker 读取；私钥目录保持 700。
+  chmod 755 "$ACME_WEBROOT/.well-known" "$ACME_WEBROOT/.well-known/acme-challenge"
+  challenge=(-v "$ACME_WEBROOT:/webroot")
+  mode=(--webroot --webroot-path /webroot)
+else
+  challenge=(-p 80:80)
+  mode=(--standalone)
+fi
 exec 9>"$STATE/renew.lock"
 flock -n 9 || exit 0
 CERTBOT_IMAGE="${CERTBOT_IMAGE:-certbot/certbot:v5.4.0}"
 email_args=(--register-unsafely-without-email)
 if [ -n "${ACME_EMAIL:-}" ]; then email_args=(-m "$ACME_EMAIL"); fi
-docker run --rm -v "$STATE:/etc/letsencrypt" -v "$ACME_WEBROOT:/webroot" "$CERTBOT_IMAGE" \
+docker run --rm -v "$STATE:/etc/letsencrypt" "${challenge[@]}" "$CERTBOT_IMAGE" \
   certonly --non-interactive --agree-tos --preferred-profile shortlived \
-  --webroot --webroot-path /webroot --ip-address "$PUBLIC_IP" \
+  "${mode[@]}" --ip-address "$PUBLIC_IP" \
   --cert-name tx-zhongtai-ip "${email_args[@]}" --keep-until-expiring
 src="$STATE/live/tx-zhongtai-ip"
 # 只有证书发生变化才发布；同目录 rename 避免读取写到一半的文件。

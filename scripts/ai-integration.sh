@@ -24,6 +24,10 @@ $compose exec -T \
 
 url="postgresql+asyncpg://$AI_DB_USER:$AI_DB_PASSWORD@127.0.0.1:$POSTGRES_HOST_PORT/$db"
 if [ "${P6_SERVER:-}" = "1" ]; then
+  # 按 uv.lock 的版本和哈希装 dev 依赖，从镜像里的 UV_DEFAULT_INDEX 下载；uv sync --frozen 只认锁文件里记的地址。
+  install_dev='uv venv --quiet /tmp/venv && uv export --quiet --frozen --extra dev --no-emit-project --no-emit-package platform-common -o /tmp/req.txt \
+    && uv pip install --quiet --python /tmp/venv/bin/python --require-hashes -r /tmp/req.txt \
+    && uv pip install --quiet --python /tmp/venv/bin/python --no-deps -e ../../packages/platform-common -e .'
   # shellcheck disable=SC2086
   $docker_cmd run --rm --network host --user 0 \
     -e PYTHONDONTWRITEBYTECODE=1 -e UV_CACHE_DIR=/uv-cache -e UV_PROJECT_ENVIRONMENT=/tmp/venv \
@@ -33,7 +37,7 @@ if [ "${P6_SERVER:-}" = "1" ]; then
     -v "$root/packages:/work/packages:ro" -v "$root/services/ai-service:/work/services/ai-service:ro" \
     -w /work/services/ai-service \
     tx-zhongtai-p6-ai-service:latest \
-    sh -c "uv sync --frozen --extra dev --quiet && uv run --no-sync pytest -q -p no:cacheprovider tests/test_integration.py"
+    sh -c "$install_dev && uv run --no-sync pytest -q -p no:cacheprovider tests/test_integration.py"
 else
   (cd "$root/services/ai-service" && AI_INTEGRATION=1 AI_DATABASE_URL="$url" \
     uv run pytest -q -p no:cacheprovider tests/test_integration.py)
