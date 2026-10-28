@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from platform_common.filters import Filters, ilike_any
+from platform_common.filters import Filters, ilike_any, in_any
 from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
@@ -31,14 +31,17 @@ FILTER_COLUMNS: dict[str, InstrumentedAttribute[str]] = {
     "industry_l1": Scenario.industry_l1,
     "scenario_tag": Scenario.scenario_tag,
     "customer_group_name": Scenario.customer_group_name,
+    "is_new_scenario": Scenario.is_new_scenario,
 }
+# 取值固定（是 / 否）的列精确匹配，其余按关键词模糊匹配。
+EXACT_FILTERS = {"is_new_scenario"}
 
 
 def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
     conds: list[ColumnElement[bool]] = []
     for key, value in filters.items():
         column = FILTER_COLUMNS[key]  # 未知字段直接报错，避免筛选被静默忽略
-        cond = ilike_any(column, value)
+        cond = in_any(column, value) if key in EXACT_FILTERS else ilike_any(column, value)
         if cond is not None:
             conds.append(cond)
     return conds

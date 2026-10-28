@@ -269,7 +269,10 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
   非新增场景到码表查编码，名称对不上的写备注）；解读过、`opportunity_at` 为空的做市场机会，按一级行业 + 一级场景回填。
   费用到上限没轮到的不记时间，下批接着做；AI 行只要人工验证过或改过就不再覆盖（`app/aitag/application/interpreting.py`）
 - 解读列表「同步新增场景」：是否新增场景 = 是、人工验证、未同步的行，经 codebook `/internal/v1/scenarios/sync` 按编码规则
-  （`app/domain/scenario_codes.py`：各级号全局最大 + 1，已有上级沿用，行业只查不建）写进场景码表并回填编码；动作 `policy.interpretations:sync_scenarios`
+  （`app/domain/scenario_codes.py`：各级号全局最大 + 1，已有上级沿用，行业只查不建）写进场景码表并回填编码；动作 `policy.interpretations:sync_scenarios`。
+  码表里同步进来的行标「是否新增场景 = 是」、记「来源政策」（这两列不在 Excel 导入列和内容哈希里），不写业务自己的「场景来源」「三级场景描述」。
+  码表有约 700 行通用场景只挂在一级行业下，查编码时六级对不上就按「一级行业 + 场景」再找；名称带「（新增）」标记的拦下不同步（AI 写入时已去掉）。
+  解读表单保存时六级名称改了（或编码还空着）按名称重查编码，同步过的改了名称清掉同步时间（`policy/application/interpretations._refresh_codes`）
 - 费用：批次记 `task` 和各步费用列（`type_cost` 等），任务列表的「今日已花」按费用列（`tasks.TASK_COST`）算，拆分前三步合跑的旧批次也能各归各的任务；
   `/tasks` 的 `current` 给出每个任务正在跑的那批和 AI 已答条数。按天账单不在政策服务里做，统一看 AI提问 → 费用账单
 - 内部调用密钥：`AI_POLICY_CALLER_SECRET`（政策→AI）、`CODEBOOK_POLICY_CALLER_SECRET`（政策→码表），compose 把同一个值传给两边

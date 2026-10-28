@@ -72,7 +72,7 @@ async def test_sync_fills_codes_back_and_explains_failures(monkeypatch: pytest.M
     assert (good.industry_scenario_code, good.version, good.updated_by_name) == ("01010300234569262000", 2, "张三")
     assert good.scenario_synced_at is not None and bad.scenario_synced_at is None
     item = sent[0]["items"][0]
-    assert (item["scenario_l3_name"], item["source_note"]) == ("隧道智能巡检", "来源政策：隧道巡检方案")
+    assert (item["scenario_l3_name"], item["source_policy"]) == ("隧道智能巡检", "隧道巡检方案")
     assert events[0]["extra"] == {"synced": 1, "created": 1, "failed": 1}
 
 

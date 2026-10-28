@@ -76,6 +76,9 @@ export const TABLE_COLUMNS: DataColumn[] = [
       : field.key === 'product_l1_name' ? { minWidth: 180, grow: 1 }
       : { width: 160 }),
   })),
+  // 「同步新增场景」写的两列：政策解读里人工确认后进码表的场景标「是」，记下第一次提出它的政策。
+  { prop: 'is_new_scenario', label: '是否新增场景', width: 120 },
+  { prop: 'source_policy', label: '来源政策', minWidth: 260 },
   { prop: 'created_at', label: '入库时间', width: 190, time: true },
   { prop: 'created_by_name', label: '入库人', width: 110 },
   { prop: 'updated_at', label: '更新时间', width: 190, time: true },

@@ -18,7 +18,13 @@ from app.core.config import get_settings
 from app.policy.application.importing import add_in_batches
 from app.policy.application.policy_content import policy_content
 from app.policy.application.region import make_policy_uid, make_relation_key
-from app.policy.domain.fields import DATA_STATUS_CHOICES, DATA_STATUS_PENDING, INTERPRETATION_COLUMNS
+from app.policy.domain.fields import (
+    DATA_STATUS_CHOICES,
+    DATA_STATUS_PENDING,
+    INTERPRETATION_COLUMNS,
+    SCENARIO_CODE_FIELDS,
+    SCENARIO_NAME_FIELDS,
+)
 from app.policy.domain.models import INTERPRETATION_WRITE_FIELDS, Interpretation
 from app.policy.repositories import interpretations as repo
 from app.policy.repositories import options as options_repo
@@ -80,6 +86,33 @@ def _values(data: dict[str, str]) -> dict[str, str]:
         values["policy_uid"], values["industry_scenario_code"], values["opportunity_type"]
     )
     return values
+
+
+async def _refresh_codes(payload: dict[str, str], row: Interpretation | None) -> bool:
+    """六级行业场景名称改了，或编码还空着，就按名称去码表查编码：查到填上，查不到清空，不留旧场景的编码。
+
+    只在保存表单时查（新建、编辑），导入按文件里的编码。返回名称是否改过，改过的已同步行要清掉同步时间。
+    """
+
+    names = {field: (payload.get(field) or "").strip() for field in SCENARIO_NAME_FIELDS}
+    renamed = row is not None and any(names[field] != (getattr(row, field) or "") for field in SCENARIO_NAME_FIELDS)
+    codeless = not any((payload.get(field) or "").strip() for field in SCENARIO_CODE_FIELDS)
+    if not (renamed or codeless):
+        return False
+    found: list[dict[str, Any]] = []
+    if any(names.values()):
+        try:
+            found = await internal_clients.codebook(
+                "POST", "/internal/v1/scenarios/lookup", json={"items": [{"key": "0", **names}]}
+            )
+        except DependencyUnavailableError as exc:
+            if not renamed:
+                return False  # 只是顺手补查，码表连不上不耽误保存，下次保存再补
+            raise DependencyUnavailableError("改了行业场景名称要重查编码，码表服务暂时连不上，请稍后再保存") from exc
+    codes = found[0] if found else {}
+    for field in SCENARIO_CODE_FIELDS:
+        payload[field] = str(codes.get(field) or "")
+    return renamed
 
 
 def _write_error(values: dict[str, str]) -> str | None:
@@ -150,6 +183,8 @@ async def interpretation_content(session: AsyncSession, item_id: uuid.UUID) -> d
 
 
 async def create_interpretation(session: AsyncSession, actor: Actor, data: dict[str, str]) -> dict[str, Any]:
+    data = dict(data)
+    await _refresh_codes(data, None)
     values = _values(data)
     if not values["policy_title"]:
         raise ApiError("政策原文名称不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
@@ -183,6 +218,20 @@ async def create_interpretation(session: AsyncSession, actor: Actor, data: dict[
     return _to_out(row)
 
 
+def _apply_changes(row: Interpretation, values: dict[str, str], *, renamed: bool) -> dict[str, Any]:
+    changes: dict[str, Any] = {}
+    for field, new in values.items():
+        old = getattr(row, field) or ""
+        if old != new:
+            changes[field] = {"from": old[:80], "to": new[:80]}
+            setattr(row, field, new)
+    # 同步过的新增场景改了名称，码表里那个场景已经不是它了：清掉同步时间，可以按新名称再同步一次。
+    if renamed and row.scenario_synced_at is not None:
+        changes["scenario_synced_at"] = {"from": format_beijing(row.scenario_synced_at), "to": ""}
+        row.scenario_synced_at = None
+    return changes
+
+
 async def update_interpretation(
     session: AsyncSession, actor: Actor, item_id: uuid.UUID, data: dict[str, Any]
 ) -> dict[str, Any]:
@@ -195,6 +244,7 @@ async def update_interpretation(
     # 请求没带数据状态时沿用原值，避免旧客户端保存一次就把「人工验证」冲回「待验证」。
     if not payload["data_status"].strip():
         payload["data_status"] = row.data_status
+    renamed = await _refresh_codes(payload, row)
     values = _values(payload)
     if not values["policy_title"]:
         raise ApiError("政策原文名称不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
@@ -203,12 +253,7 @@ async def update_interpretation(
     existing = await repo.get_by_relation_key(session, values["relation_key"])
     if existing and existing.id != row.id:
         raise ApiError("已存在相同的关联主键", code=ErrorCode.VERSION_CONFLICT, http_status=409)
-    changes: dict[str, Any] = {}
-    for field, new in values.items():
-        old = getattr(row, field) or ""
-        if old != new:
-            changes[field] = {"from": old[:80], "to": new[:80]}
-            setattr(row, field, new)
+    changes = _apply_changes(row, values, renamed=renamed)
     if not changes:
         return _to_out(row)
     row.version += 1

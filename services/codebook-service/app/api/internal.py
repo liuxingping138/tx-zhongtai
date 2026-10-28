@@ -37,7 +37,7 @@ async def code_table(
 class ScenarioItems(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    # 每条：key（调用方用来对回结果）、三级行业名、三级场景名，可带 source_note（写进三级场景描述，注明来源政策）。
+    # 每条：key（调用方用来对回结果）、三级行业名、三级场景名，可带 source_policy（来源政策名称，新建的场景记下它）。
     items: list[dict[str, Any]] = Field(max_length=5000)
     caller_name: str = Field(default="政策解读同步", max_length=100)
 

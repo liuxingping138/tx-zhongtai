@@ -110,3 +110,15 @@ def test_the_longest_path_wins_and_leftover_paths_are_cleared() -> None:
 def test_long_paths_are_split_before_columns_are_truncated() -> None:
     values = rules.interpretation_values({"一级行业": "行" * 100 + " > " + "业" * 100})
     assert (values["industry_l1"], values["industry_l2"]) == ("行" * 100, "业" * 100)
+
+
+def test_new_marks_are_dropped_from_scenario_names() -> None:
+    # 模型把「标识新增的是哪一级」写进了名称；哪级是新的看「新增场景级别」，名称里不留标记，否则会原样进码表。
+    values = rules.interpretation_values(
+        {"一级场景": "中医药数智化（新增）", "二级场景": "国际交流平台 (新增)", "三级场景": "【新增】算水协同"}
+    )
+    assert _scenarios(values) == ("中医药数智化", "国际交流平台", "算水协同")
+
+
+def _scenarios(values: dict[str, str]) -> tuple[str, str, str]:
+    return values["scenario_l1_name"], values["scenario_l2_name"], values["scenario_l3_name"]

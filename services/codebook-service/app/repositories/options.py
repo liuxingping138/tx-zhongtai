@@ -14,6 +14,7 @@ SCENARIO_OPTION_COLUMNS: OptionColumns = {
     "industry_l1": Scenario.industry_l1,
     "scenario_tag": Scenario.scenario_tag,
     "customer_group_name": Scenario.customer_group_name,
+    "is_new_scenario": Scenario.is_new_scenario,
 }
 
 POLICY_TYPE_OPTION_COLUMNS: OptionColumns = {

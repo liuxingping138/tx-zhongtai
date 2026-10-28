@@ -39,6 +39,7 @@ const query = reactive({
   industry_l1: [] as string[],
   scenario_tag: [] as string[],
   customer_group_name: [] as string[],
+  is_new_scenario: [] as string[],
   page: 1,
   page_size: 20,
 })
@@ -154,6 +155,13 @@ onMounted(() => {
               <FilterSelect
                 v-model="query.customer_group_name"
                 v-bind="filters.bind('customer_group_name')"
+              />
+            </el-form-item>
+            <el-form-item label="是否新增场景">
+              <FilterSelect
+                v-model="query.is_new_scenario"
+                v-bind="filters.bind('is_new_scenario')"
+                size="short"
               />
             </el-form-item>
           </template>

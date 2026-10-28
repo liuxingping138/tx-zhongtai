@@ -4,15 +4,21 @@
 - 场景编码 12 位 = 一级 3 位 + 二级 3 位 + 三级 3 位 + 000；某级为空记 000。
   每一级的号全局递增、不重复：已有的（同一上级路径下同名）沿用，新的一级取该级当前最大号 + 1。
 - 行业场景编码 20 位 = 行业编码 + 场景编码。
+
+码表里有一批通用场景只挂在一级行业下（二三级行业为空，如「医卫行业 → 视联网 > 千里眼」），AI 解读时
+会按政策把行业填到三级。六级对不上时退一步按「一级行业 + 场景」找，编码用那一行的。
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 EMPTY = "000"
 LEVEL_MAX = 999
+# 模型有时在新场景名称后面标「（新增）」，这种名称写进码表就永远留下了。
+NEW_MARK = re.compile(r"[（(【\[]\s*新增\s*[）)】\]]")
 
 Names = tuple[str, str, str]
 
@@ -62,7 +68,10 @@ class CodeBook:
         return book
 
     def lookup(self, item: ScenarioItem) -> Codes | None:
-        return self.existing.get(item.key())
+        found = self.existing.get(item.key())
+        if found or not (item.industry[1] or item.industry[2]):
+            return found
+        return self.existing.get(((item.industry[0], "", ""), item.scenario))
 
     def _segment(self, level: int, path: tuple[str, ...]) -> str:
         if not path[-1]:
@@ -83,6 +92,8 @@ class CodeBook:
         found = self.lookup(item)
         if found:
             return found, False
+        if any(NEW_MARK.search(name) for name in item.scenario):
+            raise ValueError("场景名称里带「（新增）」这类标记，去掉后再同步")
         industry_code = self.industries.get(item.industry)
         if not industry_code:
             path = "/".join(name for name in item.industry if name)

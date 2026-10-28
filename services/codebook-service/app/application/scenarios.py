@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.audit_emit import enqueue_event
 from app.core.config import get_settings
-from app.domain.fields import SCENARIO_COLUMNS
+from app.domain.fields import SCENARIO_COLUMNS, SCENARIO_SYNC_COLUMNS
 from app.domain.models import SCENARIO_FIELDS, Scenario, content_hash
 from app.repositories import options as options_repo
 from app.repositories import scenarios as repo
@@ -20,6 +20,8 @@ from app.repositories import scenarios as repo
 
 def _to_out(row: Scenario) -> dict[str, Any]:
     data: dict[str, Any] = row.business_values()
+    data["is_new_scenario"] = row.is_new_scenario
+    data["source_policy"] = row.source_policy
     data["id"] = str(row.id)
     data["version"] = row.version
     data["created_at"] = format_beijing(row.created_at)
@@ -206,4 +208,4 @@ async def export_scenarios(session: AsyncSession, actor: Actor, filters: Filters
         actor=actor,
         extra={"count": len(rows)},
     )
-    return await build_workbook_async(SCENARIO_COLUMNS, rows, sheet_name="行业场景字典表")
+    return await build_workbook_async(SCENARIO_COLUMNS + SCENARIO_SYNC_COLUMNS, rows, sheet_name="行业场景字典表")

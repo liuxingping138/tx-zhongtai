@@ -14,10 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common import internal_clients
 from app.common.audit_emit import enqueue_event
+from app.policy.domain.fields import SCENARIO_NAME_FIELDS
 from app.policy.domain.models import Interpretation
 from app.policy.repositories import interpretations as repo
 
-LEVELS = ("industry_l1", "industry_l2", "industry_l3", "scenario_l1_name", "scenario_l2_name", "scenario_l3_name")
 MAX_ITEMS = 5000
 
 
@@ -28,8 +28,8 @@ async def pending(session: AsyncSession) -> dict[str, Any]:
 def _item(row: Interpretation) -> dict[str, str]:
     return {
         "key": str(row.id),
-        **{level: getattr(row, level) for level in LEVELS},
-        "source_note": f"来源政策：{row.policy_title}"[:500],
+        **{level: getattr(row, level) for level in SCENARIO_NAME_FIELDS},
+        "source_policy": row.policy_title[:500],
     }
 
 

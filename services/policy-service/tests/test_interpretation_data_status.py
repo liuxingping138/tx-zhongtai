@@ -13,7 +13,7 @@ import pytest
 # 与 test_route_security_class.py 一致：导入 app 模块前必须先给出数据库配置。
 from openpyxl import Workbook
 from platform_common.columns import header_to_field
-from platform_common.errors import ApiError
+from platform_common.errors import ApiError, DependencyUnavailableError
 from sqlalchemy.dialects import postgresql
 
 from app.policy.application import interpretations as service
@@ -227,3 +227,94 @@ def test_import_without_status_column_defaults_to_pending(monkeypatch: pytest.Mo
 
     assert result["inserted"] == 1
     assert session.added[0].data_status == "待验证"
+
+
+def _named(row: Interpretation, **codes: str) -> Interpretation:
+    row.industry_l1, row.industry_l2, row.industry_l3 = "医卫行业", "卫生、社会保障和社会福利业", "卫生"
+    row.scenario_l1_name, row.scenario_l2_name = "视联网", "千里眼"
+    for field, value in codes.items():
+        setattr(row, field, value)
+    return row
+
+
+def _form(row: Interpretation, **changes: Any) -> dict[str, Any]:
+    return {**{field: getattr(row, field) or "" for field in INTERPRETATION_WRITE_FIELDS}, "version": 3, **changes}
+
+
+def _codebook(monkeypatch: pytest.MonkeyPatch, answer: dict[str, str] | Exception) -> list[dict[str, Any]]:
+    asked: list[dict[str, Any]] = []
+
+    async def lookup(_method: str, _path: str, **kwargs: Any) -> list[dict[str, str]]:
+        asked.append(kwargs["json"]["items"][0])
+        if isinstance(answer, Exception):
+            raise answer
+        return [{"key": "0", **answer}]
+
+    monkeypatch.setattr(service.internal_clients, "codebook", lookup)
+    return asked
+
+
+GENERAL_CODES = {
+    "industry_code": "03000000",
+    "scenario_code": "221549000000",
+    "industry_scenario_code": "03000000221549000000",
+}
+
+
+def test_renaming_the_scenario_looks_the_codes_up_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    """改了场景名称，旧编码就是别的场景的了：按新名称重查，查不到清空。"""
+
+    row = _named(
+        _row("待验证"), industry_code="03010100", scenario_code="100000000000", industry_scenario_code="0301010010"
+    )
+    events = _patch_update(monkeypatch, row)
+    asked = _codebook(monkeypatch, {"industry_code": "", "scenario_code": "", "industry_scenario_code": ""})
+    out = asyncio.run(
+        service.update_interpretation(object(), _FakeActor(), row.id, _form(row, scenario_l2_name="顺风耳"))
+    )
+    assert asked[0]["scenario_l2_name"] == "顺风耳"
+    assert (out["industry_code"], out["industry_scenario_code"]) == ("", "")
+    assert events[0]["changes"]["industry_scenario_code"]["to"] == ""
+
+
+def test_saving_a_row_without_codes_fills_them_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    row = _named(_row("待验证"))
+    _patch_update(monkeypatch, row)
+    _codebook(monkeypatch, GENERAL_CODES)
+    out = asyncio.run(service.update_interpretation(object(), _FakeActor(), row.id, _form(row, remark="核对过")))
+    assert out["industry_scenario_code"] == "03000000221549000000"
+
+
+def test_rows_that_have_codes_and_keep_their_names_do_not_ask_the_codebook(monkeypatch: pytest.MonkeyPatch) -> None:
+    row = _named(_row("待验证"), **GENERAL_CODES)
+    _patch_update(monkeypatch, row)
+    asked = _codebook(monkeypatch, {})
+    asyncio.run(service.update_interpretation(object(), _FakeActor(), row.id, _form(row, remark="核对过")))
+    assert asked == []
+
+
+def test_renaming_a_synced_new_scenario_lets_it_sync_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    row = _named(_row("人工验证"), **GENERAL_CODES)
+    row.is_new_scenario, row.scenario_synced_at = "是", datetime.now(UTC)
+    events = _patch_update(monkeypatch, row)
+    _codebook(monkeypatch, {"industry_code": "", "scenario_code": "", "industry_scenario_code": ""})
+    asyncio.run(
+        service.update_interpretation(object(), _FakeActor(), row.id, _form(row, scenario_l1_name="视联网二期"))
+    )
+    assert row.scenario_synced_at is None
+    assert "scenario_synced_at" in events[0]["changes"]
+
+
+def test_codebook_outage_blocks_only_a_rename(monkeypatch: pytest.MonkeyPatch) -> None:
+    row = _named(_row("待验证"))
+    _patch_update(monkeypatch, row)
+    _codebook(monkeypatch, DependencyUnavailableError())
+    # 只是顺手补查编码：码表连不上照样保存。
+    out = asyncio.run(service.update_interpretation(object(), _FakeActor(), row.id, _form(row, remark="核对过")))
+    assert out["remark"] == "核对过"
+    with pytest.raises(DependencyUnavailableError, match="改了行业场景名称"):
+        asyncio.run(
+            service.update_interpretation(
+                object(), _FakeActor(), row.id, _form(row, version=4, scenario_l1_name="别的")
+            )
+        )

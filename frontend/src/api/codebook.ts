@@ -56,6 +56,9 @@ export interface ScenarioItem {
   branch_count: string
   product_l1_sort: string
   product_l2_sort: string
+  /** 同步新增场景时写：政策解读里人工确认后进码表的标「是」。 */
+  is_new_scenario: string
+  source_policy: string
 }
 
 export type { ImportResult } from './excelImport'
@@ -87,6 +90,7 @@ export function listScenarios(params: {
   industry_l1?: FilterParam
   scenario_tag?: FilterParam
   customer_group_name?: FilterParam
+  is_new_scenario?: FilterParam
   page?: number
   page_size?: number
 }): Promise<Page<ScenarioItem>> {

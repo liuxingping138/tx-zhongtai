@@ -483,6 +483,25 @@
               ],
               "title": "Customer Group Name"
             }
+          },
+          {
+            "name": "is_new_scenario",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is New Scenario"
+            }
           }
         ],
         "responses": {
@@ -705,6 +724,25 @@
                 }
               ],
               "title": "Customer Group Name"
+            }
+          },
+          {
+            "name": "is_new_scenario",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is New Scenario"
             }
           }
         ],

@@ -13,8 +13,6 @@ from app.domain.models import SCENARIO_FIELDS, Scenario, content_hash
 from app.domain.scenario_codes import CodeBook, Codes, ScenarioItem
 from app.repositories import code_tables as repo
 
-SOURCE_LABEL = "政策解读新增"
-
 
 def _item(raw: dict[str, Any]) -> ScenarioItem:
     def names(*keys: str) -> tuple[str, str, str]:
@@ -38,13 +36,13 @@ def _codes_out(key: str, codes: Codes | None, **extra: Any) -> dict[str, Any]:
 
 
 async def lookup(session: AsyncSession, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """只查不建：六级名称完全对上已有场景才返回编码。"""
+    """只查不建：六级名称对上已有场景，或按一级行业对上通用场景，才返回编码。"""
 
     book = CodeBook.from_rows(await repo.scenario_codes(session))
     return [_codes_out(str(raw.get("key") or ""), book.lookup(_item(raw))) for raw in items]
 
 
-def _new_row(item: ScenarioItem, codes: Codes, caller: Actor, source_note: str) -> Scenario:
+def _new_row(item: ScenarioItem, codes: Codes, caller: Actor, source_policy: str) -> Scenario:
     values = dict.fromkeys(SCENARIO_FIELDS, "")
     values.update(
         industry_scenario_code=codes.industry_scenario_code,
@@ -56,12 +54,12 @@ def _new_row(item: ScenarioItem, codes: Codes, caller: Actor, source_note: str) 
         scenario_l1_name=item.scenario[0],
         scenario_l2_name=item.scenario[1],
         scenario_l3_name=item.scenario[2],
-        scenario_source=SOURCE_LABEL,
-        scenario_l3_desc=source_note[:500],
     )
     now = utcnow()
     return Scenario(
         content_hash=content_hash(values, SCENARIO_FIELDS),
+        is_new_scenario="是",
+        source_policy=source_policy[:500],
         version=1,
         created_at=now,
         created_by_id=caller.id,
@@ -89,7 +87,7 @@ async def sync(session: AsyncSession, caller: Actor, items: list[dict[str, Any]]
             results.append(_codes_out(key, None, created=False, error=str(exc)))
             continue
         if is_new:
-            session.add(_new_row(item, codes, caller, str(raw.get("source_note") or "")))
+            session.add(_new_row(item, codes, caller, str(raw.get("source_policy") or "")))
             created += 1
         results.append(_codes_out(key, codes, created=is_new, error=""))
     await session.flush()

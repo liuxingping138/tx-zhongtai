@@ -92,6 +92,17 @@ DATA_STATUS_PENDING = "待验证"
 DATA_STATUS_VERIFIED = "人工验证"
 DATA_STATUS_CHOICES: tuple[str, ...] = (DATA_STATUS_PENDING, DATA_STATUS_VERIFIED)
 
+# 政策解读的六级行业场景名称和按名称查出的三个编码。名称改了，编码要跟着按码表重查。
+SCENARIO_NAME_FIELDS = (
+    "industry_l1",
+    "industry_l2",
+    "industry_l3",
+    "scenario_l1_name",
+    "scenario_l2_name",
+    "scenario_l3_name",
+)
+SCENARIO_CODE_FIELDS = ("industry_code", "scenario_code", "industry_scenario_code")
+
 # AI 打标失败时写进基础标签备注的说明开头（app.aitag 写），基础标签列表的「打标状态」按它筛出要重打的政策。
 AI_NOTE_TYPE_FAILED = "AI 类型判断失败"
 AI_NOTE_TYPE_UNKNOWN = "AI 返回的类型不在码表里"

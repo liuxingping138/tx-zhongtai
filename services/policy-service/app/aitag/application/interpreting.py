@@ -51,7 +51,7 @@ async def _prompt_rows(tags: list[BaseTag], max_chars: int) -> list[dict[str, st
 
 
 async def _codes(results: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
-    """模型说「不是新增」的场景去码表查编码，六级名称完全对上才算。"""
+    """模型说「不是新增」的场景去码表查编码：六级名称对上，或按一级行业对上通用场景。"""
 
     items = []
     for index, result in enumerate(results):

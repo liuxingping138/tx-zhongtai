@@ -26,12 +26,14 @@ def scenario_filters(
     industry_l1: list[str] | None = Query(default=None),
     scenario_tag: list[str] | None = Query(default=None),
     customer_group_name: list[str] | None = Query(default=None),
+    is_new_scenario: list[str] | None = Query(default=None),
 ) -> Filters:
     return {
         "industry_scenario_code": industry_scenario_code,
         "industry_l1": industry_l1,
         "scenario_tag": scenario_tag,
         "customer_group_name": customer_group_name,
+        "is_new_scenario": is_new_scenario,
     }
 
 

@@ -89,6 +89,13 @@ class Scenario(Base):
     branch_count: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="下属分支机构数")
     product_l1_sort: Mapped[str] = mapped_column(String(32), nullable=False, default="", comment="一级产品排序（正序）")
     product_l2_sort: Mapped[str] = mapped_column(String(32), nullable=False, default="", comment="二级产品排序（正序）")
+    # 下面两列由「同步新增场景」写，不在 Excel 导入列和内容哈希里：原有的和人工维护的都是「否」。
+    is_new_scenario: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="否", server_default="否", comment="是否新增场景"
+    )
+    source_policy: Mapped[str] = mapped_column(
+        String(500), nullable=False, default="", server_default="", comment="来源政策"
+    )
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, comment="版本号")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="入库时间")
     created_by_id: Mapped[str] = mapped_column(String(64), nullable=False, comment="入库人ID")

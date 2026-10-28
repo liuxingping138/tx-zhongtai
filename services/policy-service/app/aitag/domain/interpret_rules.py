@@ -56,6 +56,9 @@ def _clean(value: Any) -> str:
 # 系统码表把层级连写成「交通行业 > 交通运输业 > 多式联运」（见 codebook 的 code_tables）。码表名称里没有「>」。
 _LEVEL_SEP = re.compile(r"\s*[>＞]\s*")
 _LEVEL_GROUPS = (LEVEL_FIELDS[:3], LEVEL_FIELDS[3:])
+# 模板让模型「标识新增的是哪一级场景」，它有时直接在名称后面写「（新增）」。哪级是新的看「新增场景级别」，
+# 名称里不留标记，否则同步进码表后码表里就多了带「（新增）」的场景。
+_NEW_MARK = re.compile(r"\s*[（(【\[]\s*新增\s*[）)】\]]\s*")
 
 
 def _split_levels(values: dict[str, str]) -> None:
@@ -83,6 +86,8 @@ def interpretation_values(item: dict[str, Any]) -> dict[str, str]:
         if text and not values[column]:
             values[column] = text
     _split_levels(values)
+    for field in LEVEL_FIELDS:
+        values[field] = _NEW_MARK.sub("", values[field]).strip()
     for column, width in _WIDTHS.items():
         values[column] = values[column][:width]
     # 模型偶尔答「是的」「新增」，统一成表里的是 / 否。
