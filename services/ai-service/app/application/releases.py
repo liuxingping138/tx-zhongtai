@@ -30,6 +30,8 @@ def _invalid(message: str) -> ApiError:
 async def _check_publishable(session: AsyncSession, template: PromptTemplate) -> None:
     """定时任务没人盯着：上线前把会让它整批跑废的情况挡住。"""
 
+    if not template.content.strip():
+        raise _invalid("上线前要写好提示词")
     if not split_fields(template.output_fields):
         raise _invalid("上线前要设置新增输出字段，否则结果解析不出任何字段")
     if not template.model_id:

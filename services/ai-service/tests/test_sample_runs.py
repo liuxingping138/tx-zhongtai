@@ -77,6 +77,24 @@ async def test_sample_run_needs_a_sample_and_waits_for_the_previous_one(
         await sample_runs.start(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID, {})  # type: ignore[arg-type]
 
 
+@pytest.mark.parametrize(
+    ("draft", "message"),
+    [({"content": " "}, "提示词还是空的"), ({"model_id": ""}, "先在模板上选好模型")],
+)
+async def test_sample_run_needs_a_written_prompt_and_the_templates_own_model(
+    created: list[Any], monkeypatch: pytest.MonkeyPatch, draft: dict[str, str], message: str
+) -> None:
+    """试跑用模板上定好的模型：和上线后跑的是同一个，不拿页面上临时挑的顶替。"""
+
+    async def unfinished(*_: Any, **__: Any) -> Any:
+        return template(excel_name="样本.xlsx", excel_rows=60, **draft)
+
+    monkeypatch.setattr(prompt_repo, "get", unfinished)
+    with pytest.raises(ApiError, match=message):
+        await sample_runs.start(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID, {})  # type: ignore[arg-type]
+    assert created[1:] == []
+
+
 def _answers(run_id: str, results: list[tuple[int, str, str]]) -> None:
     path = storage.run_file(run_id, "raw")
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -14,6 +14,11 @@ export function checkTemplate(task: ContractTask, variables: string[], fields: s
   const missing = task.required_fields.filter(name => !fields.includes(name))
   if (missing.length) errors.push(`输出字段缺少：${missing.join('、')}，结果写不回表`)
   const warnings: string[] = []
+  const empty = task.optional_fields.filter(group => !group.some(name => fields.includes(name))).map(group => group[0] ?? '')
+  if (empty.length) {
+    const names = empty.slice(0, 4).join('、') + (empty.length > 4 ? `等 ${empty.length} 个字段` : '')
+    warnings.push(`没有输出${names}，写回时这些列会空着`)
+  }
   if (!variables.includes(BODY)) warnings.push(`没有用 @【${BODY}】，模型只看得到标题，判断会不准`)
   if (task.code === 'opportunity' && !variables.includes(SCENES)) {
     warnings.push(`没有用 @【${SCENES}】，模型不知道这条政策解读出了哪些行业场景，市场机会可能对不上解读行`)
@@ -51,12 +56,18 @@ export function fitResults(tasks: ContractTask[], variables: string[], fields: s
   }))
 }
 
-/** 上线确认里的一句话：能用于哪些任务、哪些想用但还有问题。不适用的不提。 */
-export function fitSummary(results: Pick<TaskFitResult, 'name' | 'check' | 'skip'>[]): string {
-  const usable = results.filter(item => !item.skip && !item.check.errors.length).map(item => item.name)
-  const unusable = results.filter(item => !item.skip && item.check.errors.length).map(item => item.name)
-  const parts = [usable.length ? `可用于${usable.join('、')}` : '', unusable.length ? `不能用于${unusable.join('、')}` : '']
-  return parts.filter(Boolean).join('；')
+export interface FitSummary { level: 'ok' | 'warn'; text: string }
+
+/** 上线确认里的一句话：能用于哪些任务；有问题、有提醒的把第一条写出来，免得以为能直接顶替正在用的模板。不适用的不提。 */
+export function fitSummary(results: Pick<TaskFitResult, 'name' | 'check' | 'skip'>[]): FitSummary | null {
+  const relevant = results.filter(item => !item.skip)
+  if (!relevant.length) return null
+  const parts = relevant.map(({ name, check }) => {
+    if (check.errors.length) return `不能用于${name}：${check.errors[0]}`
+    return check.warnings.length ? `可用于${name}，但${check.warnings[0]}` : `可用于${name}`
+  })
+  const clean = relevant.every(({ check }) => !check.errors.length && !check.warnings.length)
+  return { level: clean ? 'ok' : 'warn', text: parts.join('；') }
 }
 
 /** 按输出字段猜模板是给哪个任务用的，取测试数据时默认选它；猜不出就是类型判断。 */

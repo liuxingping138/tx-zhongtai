@@ -47,7 +47,12 @@ async def start(
     template = await require_editable(session, access, prompt_id, lock=True)
     if not template.excel_name or not await anyio.Path(storage.prompt_file(template.id, "excel")).is_file():
         raise ApiError("先上传测试样本，再试跑", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    model = await resolve_model(session, template.model_id or str(values.get("model_id") or ""))
+    if not template.content.strip():
+        raise ApiError("提示词还是空的，写好保存后再试跑", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    # 试跑用模板上选定的模型：和上线后定时任务、批量任务用的是同一个，结果才有参考价值。
+    if not template.model_id:
+        raise ApiError("先在模板上选好模型并保存，再试跑", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    model = await resolve_model(session, template.model_id)
     await batch_runs.reconcile_stale(session)
     running = await repo.active_for_prompt(session, template.id, sources=(RUN_SOURCE_SAMPLE,))
     if running is not None:

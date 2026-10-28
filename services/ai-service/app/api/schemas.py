@@ -83,8 +83,6 @@ class ChatBody(_Body):
 
 
 class SampleRunBody(_Body):
-    # 模板没选模型时，用页面试发区当前的模型
-    model_id: str = Field(default="", max_length=100)
     thinking: bool = False
     limit: int = Field(default=10, ge=1, le=50)
 

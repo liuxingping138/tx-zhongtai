@@ -92,8 +92,7 @@ def _validated(values: dict[str, Any]) -> dict[str, str]:
         raise ApiError("提示词标题不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     if len(title) > TITLE_MAX:
         raise ApiError("标题过长（上限 255 字）", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    if not content:
-        raise ApiError("提示词内容不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    # 提示词可以先空着保存：新模板常常先传测试样本、选码表，再照着列名写提示词。试跑和上线时再要求写好。
     return {
         "title": title,
         "category": checked_category(values.get("category")),

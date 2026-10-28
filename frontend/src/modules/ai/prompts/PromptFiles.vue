@@ -1,136 +1,73 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
 
-import { deletePromptFile, uploadPromptFile, type PromptFileKind, type PromptTemplate } from '@/api/ai'
+import type { PromptFileKind, PromptTemplate } from '@/api/ai'
 import type { ContractTask } from '@/api/aiTagging'
-import { errorMessage } from '@/api/errors'
-import { downloadPromptFile } from '../shared/downloads'
 import SampleDialog from './SampleDialog.vue'
+import type { TemplateFiles } from './useTemplateFiles'
 
-/** 模板的一个附件：测试样本（.xlsx）或上传的码表（.txt）。
+/** 模板的一个附件：测试样本（.xlsx）或上传的码表（.txt）。上传、删除、下载都交给编辑页的 files；新模板上传时顺便保存。
  * sampleTasks：政策类模板能从数据库取测试样本（和正式打标的输入一致），空数组就不显示这个入口。 */
 const props = defineProps<{
   template: PromptTemplate | null
   kind: PromptFileKind
+  files: TemplateFiles
   canEdit: boolean
   canExport: boolean
   sampleTasks?: ContractTask[]
 }>()
-const sampling = ref(false)
 const emit = defineEmits<{ changed: [template: PromptTemplate] }>()
-const busy = ref<PromptFileKind | null>(null)
-const pickers = ref<Record<PromptFileKind, HTMLInputElement | null>>({ excel: null, code: null })
+const sampling = ref(false)
 
-const SLOTS: Record<PromptFileKind, { kind: PromptFileKind; accept: string; empty: string }> = {
-  excel: { kind: 'excel', accept: '.xlsx', empty: '未上传，.xlsx 第一行是表头' },
-  code: { kind: 'code', accept: '.txt', empty: '未上传码表 .txt' },
-}
+const EMPTY: Record<PromptFileKind, string> = { excel: '未上传，.xlsx 第一行是表头', code: '还没上传码表 .txt' }
+const name = computed(() => (props.kind === 'excel' ? props.template?.excel_name : props.template?.code_name) ?? '')
 
-const slots = computed(() => [SLOTS[props.kind]])
-
-function fileName(kind: PromptFileKind): string {
-  if (!props.template) return ''
-  return kind === 'excel' ? props.template.excel_name : props.template.code_name
-}
-
-async function upload(kind: PromptFileKind, event: Event): Promise<void> {
-  const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-  target.value = ''
-  if (!file || !props.template) return
-  busy.value = kind
-  try {
-    emit('changed', await uploadPromptFile(props.template.id, kind, file))
-    ElMessage.success(kind === 'excel' ? '测试样本已上传' : '码表已上传')
-  } catch (error) {
-    ElMessage.error(errorMessage(error, '上传失败，请重试'))
-  } finally {
-    busy.value = null
-  }
-}
-
-async function remove(kind: PromptFileKind): Promise<void> {
-  if (!props.template) return
-  const ok = await ElMessageBox.confirm(kind === 'excel' ? '删除后试发和样本试跑就没有数据可用，批量任务不受影响。' : '删除后模板不再提供这个码表，已发起的任务和线上版本不受影响。', '删除已上传的文件？', {
-    type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消',
-  }).then(() => true, () => false)
-  if (!ok) return
-  busy.value = kind
-  try {
-    emit('changed', await deletePromptFile(props.template.id, kind))
-  } catch (error) {
-    ElMessage.error(errorMessage(error, '删除失败，请重试'))
-  } finally {
-    busy.value = null
-  }
-}
-
-async function download(kind: PromptFileKind): Promise<void> {
-  if (!props.template) return
-  try {
-    await downloadPromptFile(props.template.id, kind, fileName(kind))
-  } catch (error) {
-    ElMessage.error(errorMessage(error, '下载失败，请重试'))
-  }
+async function openSampling(): Promise<void> {
+  if (await props.files.ensure()) sampling.value = true
 }
 </script>
 
 <template>
   <div class="prompt-files">
-    <div
-      v-for="slot in slots"
-      :key="slot.kind"
-      class="prompt-files__row"
-    >
+    <div class="prompt-files__row">
       <span
-        v-if="fileName(slot.kind) || slot.kind === 'excel' || !template"
         class="prompt-files__name"
-        :class="{ 'is-empty': !fileName(slot.kind) }"
+        :class="{ 'is-empty': !name }"
       >
-        {{ fileName(slot.kind) || (template ? slot.empty : '保存模板后可上传') }}
-        <template v-if="slot.kind === 'excel' && template?.excel_name">（{{ template.excel_rows }} 行数据）</template>
+        {{ name || EMPTY[kind] }}
+        <template v-if="kind === 'excel' && name">（{{ template?.excel_rows }} 行数据）</template>
       </span>
-      <input
-        :ref="el => (pickers[slot.kind] = el as HTMLInputElement | null)"
-        type="file"
-        :accept="slot.accept"
-        hidden
-        @change="upload(slot.kind, $event)"
-      >
       <el-button
         v-if="canEdit"
         link
         type="primary"
-        :disabled="!template"
-        :loading="busy === slot.kind"
-        @click="pickers[slot.kind]?.click()"
+        :loading="files.busy.value === kind"
+        @click="files.pick(kind)"
       >
-        {{ fileName(slot.kind) ? '重新上传' : slot.kind === 'code' ? '上传码表 .txt' : '上传' }}
+        {{ name ? '重新上传' : kind === 'code' ? '上传码表 .txt' : '上传 Excel' }}
       </el-button>
       <el-button
-        v-if="slot.kind === 'excel' && canEdit && sampleTasks?.length"
+        v-if="kind === 'excel' && canEdit && sampleTasks?.length"
         link
         type="primary"
-        :disabled="!template"
-        @click="sampling = true"
+        @click="openSampling"
       >
         从数据库取
       </el-button>
       <el-button
-        v-if="canExport && fileName(slot.kind)"
+        v-if="canExport && name"
         link
         type="primary"
-        @click="download(slot.kind)"
+        @click="files.download(kind)"
       >
         下载
       </el-button>
       <el-button
-        v-if="canEdit && fileName(slot.kind)"
+        v-if="canEdit && name"
         link
         type="danger"
-        :disabled="busy !== null"
-        @click="remove(slot.kind)"
+        :disabled="files.busy.value !== null"
+        @click="files.remove(kind)"
       >
         删除
       </el-button>

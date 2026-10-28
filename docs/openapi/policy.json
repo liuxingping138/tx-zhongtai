@@ -360,7 +360,7 @@
           "政策AI打标"
         ],
         "summary": "Contract",
-        "description": "三个打标任务各给模板哪些列（@【列名】能引用的）、要模板输出哪些字段。",
+        "description": "三个打标任务各给模板哪些列（@【列名】能引用的）、要模板输出哪些字段、现在用的哪个模板。",
         "operationId": "contract_api_v1_policy_ai_tagging_contract_get",
         "responses": {
           "200": {

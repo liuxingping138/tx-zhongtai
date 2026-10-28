@@ -63,6 +63,9 @@ async def test_publish_requires_output_fields_and_a_fixed_model(monkeypatch: pyt
     """定时任务没人盯：没有输出字段、没定模型的模板上线就会整批跑废。"""
 
     saved: list[TemplateRelease] = []
+    _tables(monkeypatch, template(content=" "), saved)
+    with pytest.raises(ApiError, match="写好提示词"):
+        await releases.publish(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID)  # type: ignore[arg-type]
     _tables(monkeypatch, template(output_fields=""), saved)
     with pytest.raises(ApiError, match="输出字段"):
         await releases.publish(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID)  # type: ignore[arg-type]

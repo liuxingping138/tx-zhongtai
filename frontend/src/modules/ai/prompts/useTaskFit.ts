@@ -43,6 +43,12 @@ export function useTaskFit(form: Draft) {
     return fitResults(tasks.value, variables, fields, Boolean(form.code_table))
   })
   const sampleTasks = computed(() => (isPolicy.value ? tasks.value : []))
+  /** 哪些定时任务在用这个模板：只有政策类会被定时任务选用；政策类但约定没取到（没权限、服务暂时不可用）时是 null，说不清就不乱说。 */
+  function usedBy(promptId: string): string[] | null {
+    if (!isPolicy.value) return []
+    if (!tasks.value.length) return null
+    return tasks.value.filter(task => promptId && task.prompt_id === promptId).map(task => task.name)
+  }
 
-  return { load, visible, results, sampleTasks }
+  return { load, visible, results, sampleTasks, usedBy }
 }

@@ -2136,12 +2136,6 @@
       },
       "SampleRunBody": {
         "properties": {
-          "model_id": {
-            "type": "string",
-            "maxLength": 100,
-            "title": "Model Id",
-            "default": ""
-          },
           "thinking": {
             "type": "boolean",
             "title": "Thinking",

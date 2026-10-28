@@ -18,7 +18,7 @@ from platform_common.errors import ApiError, DependencyUnavailableError, ErrorCo
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.aitag.domain import interpret_rules, rules
-from app.aitag.domain.contract import COLUMNS, REQUIRED_FIELDS
+from app.aitag.domain.contract import COLUMNS, OPTIONAL_FIELDS, REQUIRED_FIELDS
 from app.aitag.domain.tasks import TASKS
 from app.aitag.repositories import source
 from app.aitag.repositories import tagging as repo
@@ -26,12 +26,20 @@ from app.aitag.repositories import tagging as repo
 LIMIT_RANGE = (1, 50)
 
 
-def contract() -> dict[str, Any]:
-    """三个任务各给模板哪些列、要模板输出哪些字段。"""
+async def contract(session: AsyncSession) -> dict[str, Any]:
+    """三个任务各给模板哪些列、要模板输出哪些字段，以及现在用的是哪个模板（模板页据此说清上线影响谁）。"""
 
+    configured = await repo.tasks(session)
     return {
         "tasks": [
-            {"code": code, "name": name, "columns": list(COLUMNS[code]), "required_fields": list(REQUIRED_FIELDS[code])}
+            {
+                "code": code,
+                "name": name,
+                "columns": list(COLUMNS[code]),
+                "required_fields": list(REQUIRED_FIELDS[code]),
+                "optional_fields": [list(group) for group in OPTIONAL_FIELDS[code]],
+                "prompt_id": task.prompt_id if (task := configured.get(code)) else "",
+            }
             for code, name in TASKS.items()
         ]
     }

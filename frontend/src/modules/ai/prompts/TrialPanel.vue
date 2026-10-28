@@ -40,7 +40,10 @@ const emit = defineEmits<{ run: [] }>()
       :cost="answer.cost.value"
     />
     <footer class="trial__run">
-      <span class="trial__model">{{ model ? model.name : '没有可用的模型' }}</span>
+      <span
+        class="trial__model"
+        :class="{ 'is-missing': !model?.available }"
+      >{{ !model ? '没选模型，先在左边「模型」里选' : model.available ? model.name : `${model.name} 现在不可用` }}</span>
       <el-button
         v-if="canRun"
         type="primary"
@@ -60,5 +63,6 @@ const emit = defineEmits<{ run: [] }>()
 .trial__bar .el-button { margin: 0; }
 .trial__run { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--zt-border); background: var(--zt-surface-subtle); }
 .trial__model { min-width: 0; overflow: hidden; color: var(--zt-ink-500); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.trial__model.is-missing { color: var(--zt-warning-text); }
 .trial__run kbd { margin-left: 6px; padding: 0 4px; border-radius: 3px; background: color-mix(in srgb, var(--el-color-white) 22%, transparent); font: 11px/16px var(--zt-font); }
 </style>

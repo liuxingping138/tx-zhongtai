@@ -84,6 +84,8 @@ test('AI提问主流程：写模板 → 试发 → 样本试跑 → 上线 → �
   await flow.getByRole('button', { name: '上线', exact: true }).click()
   const review = page.getByRole('dialog', { name: `上线「${title}」` })
   await expect(review).toContainText('样本试跑：2 条全部解析成功')
+  // 上线影响谁要写准：新模板没有定时任务在用。
+  await expect(review).toContainText('目前没有定时任务用这个模板')
   await review.getByRole('button', { name: '上线第 1 版' }).click()
   await expect(page.getByText('第 1 版已上线').first()).toBeVisible()
   await expect(flow.getByRole('listitem').filter({ hasText: '上线' }).last()).toContainText('第 1 版已上线')
@@ -183,6 +185,51 @@ test('批量任务只能选上线的模板；多轮对话能问能答', async ({
   await page.getByRole('button', { name: '新对话' }).click()
   await confirm.getByRole('button', { name: '清空并开始' }).click()
   await expect(page.getByRole('log')).not.toContainText('模拟回答')
+})
+
+test('新模板先传样本再写提示词：上传时顺便保存，码表三选一，变量说清换成什么', async ({ page }) => {
+  test.skip(!currentAdminPassword(), '缺少 ADMIN_PASSWORD')
+  const title = `e2e 先传样本 ${Date.now()}`
+  await loginAdmin(page, '/ai/prompts')
+  await expect(page.getByRole('navigation', { name: '一级模块' }).getByText('AI提问')).toBeVisible({ timeout: 20_000 })
+  await page.getByRole('button', { name: '新建模板' }).click()
+  const vars = page.getByLabel('提示词里的变量')
+  // 还没起名字：不弹文件框，先提示起名字。
+  await vars.getByRole('button', { name: '上传测试样本 Excel' }).click()
+  await expect(page.getByText('先给模板起个名字，上传时会顺便保存模板')).toBeVisible()
+  await page.getByRole('textbox', { name: '模板名称' }).fill(title)
+  // 提示词还空着也能先传样本：上传时顺便存成模板，地址换成模板 ID。
+  const created = page.waitForResponse(r => r.url().endsWith('/api/v1/ai/prompts') && r.request().method() === 'POST')
+  const chooser = page.waitForEvent('filechooser')
+  await vars.getByRole('button', { name: '上传测试样本 Excel' }).click()
+  await (await chooser).setFiles(sampleBook)
+  expect((await created).status()).toBe(201)
+  await expect(page.getByText('模板已保存，测试样本已上传')).toBeVisible()
+  await expect(page).toHaveURL(/\/ai\/prompts\/[0-9a-f]{32}$/)
+  await expect(page.getByRole('list', { name: '模板进度' })).toContainText('还没写提示词')
+  // 列名出现在变量栏，点一下插进提示词。
+  await vars.getByRole('button', { name: '+ 企业名称' }).click()
+  const content = page.getByRole('textbox', { name: '提示词内容' })
+  await expect(content).toHaveValue('@【企业名称】')
+
+  // 码表三选一：系统码表每次取最新的，@ 弹框写明 @【上传码表】换成哪份码表。
+  const codeSource = page.getByRole('radiogroup', { name: '码表来源' })
+  await codeSource.getByText('系统码表').click()
+  await expect(page.getByText('每次运行都从「码表管理」取最新的')).toBeVisible()
+  await content.press('End')
+  await content.pressSequentially(' @')
+  await page.getByRole('option', { name: /@【上传码表】\s*码表全文 · 政策类型码表/ }).click()
+  await expect(content).toHaveValue('@【企业名称】 @【上传码表】')
+  // 换成上传文件还是这个变量；选「不用码表」时变量标出没选码表。
+  await codeSource.getByText('上传文件').click()
+  await expect(page.getByRole('button', { name: '上传码表 .txt' })).toBeVisible()
+  await codeSource.getByText('不用码表').click()
+  await expect(vars).toContainText('没选码表')
+  await expect(vars).toContainText('用了码表变量，但还没选码表')
+
+  await page.getByRole('button', { name: '删除模板' }).click()
+  await page.getByRole('dialog', { name: '删除模板？' }).getByRole('button', { name: '删除' }).click()
+  await expect(page).toHaveURL(/\/ai\/prompts$/)
 })
 
 test('政策类模板：按草稿提示能不能用于三个打标任务，从数据库取测试数据说清楚取不到的原因', async ({ page }) => {

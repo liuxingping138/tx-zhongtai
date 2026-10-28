@@ -47,8 +47,14 @@ async def test_create_validates_and_normalizes_fields(_quiet_audit: list[dict[st
     assert _quiet_audit[0]["event_type"] == "ai.prompt.created"
     with pytest.raises(ApiError, match="标题不能为空"):
         await service.create_prompt(session, ACTOR, FULL_ACCESS, {"title": "", "category": "policy", "content": "x"})  # type: ignore[arg-type]
-    with pytest.raises(ApiError, match="内容不能为空"):
-        await service.create_prompt(session, ACTOR, FULL_ACCESS, {"title": "t", "category": "policy", "content": " "})  # type: ignore[arg-type]
+    # 提示词可以先空着：新模板先传测试样本、选码表，再照着列名写；试跑和上线时才要求写好。
+    draft = await service.create_prompt(
+        session,
+        ACTOR,
+        FULL_ACCESS,
+        {"title": "t", "category": "policy", "content": " "},  # type: ignore[arg-type]
+    )
+    assert draft["content"] == ""
 
 
 async def test_update_rejects_stale_version_and_records_changed_fields(

@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 
-import { createPrompt, deletePrompt, listPrompts, updatePrompt, type AiModel, type BatchRun, type PromptTemplate, type SystemCodeTable, type TemplateCategory } from '@/api/ai'
+import { createPrompt, deletePrompt, listPrompts, updatePrompt, type AiModel, type BatchRun, type PromptFileKind, type PromptTemplate, type SystemCodeTable, type TemplateCategory } from '@/api/ai'
 import { errorMessage } from '@/api/errors'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import { useAuthStore } from '@/stores/auth'
@@ -17,13 +17,15 @@ import PromptSettings from './PromptSettings.vue'
 import ReleaseDrawer from './ReleaseDrawer.vue'
 import TestPanel from './TestPanel.vue'
 import { fitSummary } from './taskFit'
-import { flowSteps, sampleFromRun, type StepKey } from './templateStatus'
+import { flowSteps, sampleFromRun, stepActions, type StepKey } from './templateStatus'
 import { useTaskFit } from './useTaskFit'
+import { useTemplateFiles } from './useTemplateFiles'
 import '../shared/ai.css'
 
 /**
  * 编辑一个模板：顶部三步（写提示词 → 样本试跑 → 上线）告诉人现在到哪一步、下一步做什么；
  * 左边写提示词和设置，右边试发一条、样本试跑。上线由管理员在上线抽屉里审核。
+ * 新模板不用先点保存就能传测试样本、码表：起了名字，上传时顺便存成模板，先传样本再照着列名写提示词。
  */
 const route = useRoute()
 const router = useRouter()
@@ -48,6 +50,9 @@ const answer = useAnswerStream()
 const taskFit = useTaskFit(form)
 watch(() => form.category, category => { if (category === 'policy') void taskFit.load() }, { immediate: true })
 const releaseFit = computed(() => fitSummary(taskFit.results.value))
+const titleInput = ref<HTMLInputElement | null>(null)
+const FILE_KINDS: PromptFileKind[] = ['excel', 'code']
+const files = useTemplateFiles({ template: selected, canCreate: canCreateDraft, create: () => persist(true), changed: replace })
 
 // 新建的地址是 /ai/prompts/new，保存后换成模板 ID：同一条路由，页面不重建，试发记录也还在。
 const routeId = computed(() => (typeof route.params.id === 'string' && route.params.id !== 'new' ? route.params.id : ''))
@@ -59,33 +64,19 @@ const categoryOptions = computed(() => {
   const own = categories.value.find(item => item.code === selected.value?.category)
   return own && !own.editable ? [own, ...editableCategories.value] : editableCategories.value
 })
-const trialModelId = computed(() => form.model_id || models.value.find(item => item.available)?.id || '')
-const trialModel = computed(() => models.value.find(item => item.id === trialModelId.value))
+// 试发、试跑都用模板上选的模型，和上线后跑的是同一个；没选就提示去选，不拿别的模型顶替。
+const trialModel = computed(() => models.value.find(item => item.id === form.model_id))
 const dirty = computed(() => unsaved.dirty.value || !selected.value)
+/** 提示词里 @【上传码表】换成的是哪份码表：系统码表名或上传的文件名，空表示没选 */
+const codeName = computed(() => (form.code_table
+  ? codeTables.value.find(item => item.key === form.code_table)?.name ?? form.code_table
+  : selected.value?.code_name ?? ''))
 
 const steps = computed(() => flowSteps(selected.value, dirty.value, canRelease.value))
-const toneOf = (key: StepKey) => steps.value.find(step => step.key === key)?.tone
-/** 流程条上的按钮：试跑那一步是下一步时给「去试跑」；上线那一步给管理员「上线第 N 版」，别人只能看。 */
-const stepActions = computed<Partial<Record<StepKey, string>>>(() => {
-  const template = selected.value
-  if (!template) return {}
-  // 只能看的模板：不引导去试跑，上线那一步只给「查看上线内容」。
-  if (!canEdit.value) return template.release ? { release: '查看上线内容' } : {}
-  const actions: Partial<Record<StepKey, string>> = {}
-  const testTone = toneOf('test')
-  if ((testTone === 'current' || testTone === 'warn') && testTab.value !== 'sample') actions.test = '去试跑'
-  const label = releaseAction(template, toneOf('release') === 'current')
-  if (label) actions.release = label
-  return actions
-})
-
-function releaseAction(template: PromptTemplate, isNext: boolean): string {
-  if (!canRelease.value) return isNext || template.release ? '查看上线内容' : ''
-  // 版本号只增不减：线上那一版就是最新的；下线后不知道下一个号，抽屉里按上线记录写准。
-  if (isNext) return template.release ? `上线第 ${template.release.release_no + 1} 版` : '上线'
-  // 不是下一步时（没有要上线的改动、或前面还有步骤没做）：看线上版本、上线记录，在里面下线。
-  return template.release ? '上线管理' : ''
-}
+/** 流程条上的按钮：去试跑、上线第 N 版、看改动、上线管理……按身份和状态给，规则在 templateStatus。 */
+const actions = computed(() => stepActions(selected.value, steps.value, {
+  canEdit: canEdit.value, canRelease: canRelease.value, sampleOpen: testTab.value === 'sample',
+}))
 
 async function load(): Promise<void> {
   loading.value = true
@@ -97,6 +88,7 @@ async function load(): Promise<void> {
     const found = routeId.value ? data.items.find(item => item.id === routeId.value) : null
     loadError.value = routeId.value && !found ? '模板不存在或已被删除' : ''
     fill(found ?? null)
+    openReviewFromLink()
   } catch (error) {
     loadError.value = errorMessage(error, '模板加载失败，请刷新重试')
   } finally {
@@ -104,14 +96,23 @@ async function load(): Promise<void> {
   }
 }
 onMounted(load)
+
+/** 列表上点「看改动」带 ?review=1 进来：直接打开上线抽屉看草稿和线上的对比，地址里去掉这个参数。 */
+function openReviewFromLink(): void {
+  if (route.query.review !== '1') return
+  void router.replace({ query: { ...route.query, review: undefined } })
+  if (selected.value?.release) releasing.value = true
+}
 watch(routeId, id => { if (id !== (selected.value?.id ?? '')) void load() })
 onBeforeUnmount(answer.stop)
 
 function fill(template: PromptTemplate | null): void {
   selected.value = template
   const wanted = typeof route.query.category === 'string' ? route.query.category : ''
+  // 新模板先选好一个不联网的模型：联网更贵更慢，要用再自己换。
+  const model = models.value.find(item => item.available && !item.web_search) ?? models.value.find(item => item.available)
   const { title, category, content, output_fields, model_id, code_table } = template
-    ?? { title: '', category: defaultCategory(editableCategories.value, wanted), content: '', output_fields: '', model_id: '', code_table: '' }
+    ?? { title: '', category: defaultCategory(editableCategories.value, wanted), content: '', output_fields: '', model_id: model?.id ?? '', code_table: '' }
   Object.assign(form, { title, category, content, output_fields, model_id, code_table })
   unsaved.markSaved()
 }
@@ -132,26 +133,35 @@ function appendFields(): void {
   form.content = appendBlock(form.content, outputFormatBlock(splitFields(form.output_fields)))
 }
 
-async function save(): Promise<void> {
-  if (!canEdit.value) return
-  if (!form.title.trim() || !form.content.trim()) {
-    ElMessage.warning('请填写模板名称和提示词')
-    return
+/** 能不能存成模板：要有名字和类型；提示词可以先空着（先传样本再照着列名写）。不行就说明原因，名字空着就把光标放过去。 */
+function canCreateDraft(): boolean {
+  if (!form.title.trim()) {
+    ElMessage.warning(selected.value ? '请填写模板名称' : '先给模板起个名字，上传时会顺便保存模板')
+    titleInput.value?.focus()
+    return false
   }
   if (!form.category) {
     ElMessage.warning('请选择模板类型')
-    return
+    return false
   }
+  return true
+}
+
+/** 存下草稿并返回模板；quiet 时不弹「已保存」（上传时顺便保存，由上传那边一起提示）。 */
+async function persist(quiet = false): Promise<PromptTemplate | null> {
+  if (!canEdit.value || !canCreateDraft()) return null
   saving.value = true
   try {
     const creating = !selected.value
     const payload = { ...form, version: selected.value?.version }
     const saved = selected.value ? await updatePrompt(selected.value.id, payload) : await createPrompt(payload)
     fill(saved)
-    ElMessage.success('模板已保存')
+    if (!quiet) ElMessage.success('模板已保存')
     if (creating) await router.replace({ name: 'ai-prompt-edit', params: { id: saved.id } })
+    return saved
   } catch (error) {
     ElMessage.error(errorMessage(error, '保存失败，请重试'))
+    return null
   } finally {
     saving.value = false
   }
@@ -179,12 +189,16 @@ async function trial(): Promise<void> {
     ElMessage.warning('提示词内容不能为空')
     return
   }
+  if (!trialModel.value) {
+    ElMessage.warning('先在左边「模型」里选一个模型')
+    return
+  }
   testTab.value = 'trial'
   const useThinking = thinking.value && Boolean(trialModel.value?.supports_thinking)
   const shown = selected.value ? `［${selected.value.title}］\n${form.content}` : form.content
   await answer.send('/ai/stream/ask', {
     content: form.content,
-    model_id: trialModelId.value,
+    model_id: trialModel.value.id,
     thinking: useThinking,
     prompt_id: selected.value?.id ?? null,
   }, shown, useThinking)
@@ -211,6 +225,7 @@ function onStep(key: StepKey): void {
           <el-icon><ArrowLeft /></el-icon>提示词模板
         </router-link>
         <input
+          ref="titleInput"
           v-model="form.title"
           class="prompt-page__title"
           maxlength="255"
@@ -256,15 +271,16 @@ function onStep(key: StepKey): void {
           v-if="canEdit"
           type="primary"
           :loading="saving"
+          :disabled="Boolean(selected) && !unsaved.dirty.value"
           title="Ctrl/⌘ + S"
-          @click="save"
+          @click="persist()"
         >
           保存
         </el-button>
       </div>
       <FlowBar
         :steps="steps"
-        :actions="stepActions"
+        :actions="actions"
         :primary="canEdit || canRelease"
         @step="onStep"
       />
@@ -285,16 +301,17 @@ function onStep(key: StepKey): void {
       <form
         class="ai-panel prompt-page__main"
         aria-label="编写模板"
-        @submit.prevent="save"
+        @submit.prevent="persist()"
       >
         <div class="prompt-page__scroll">
           <PromptEditor
             v-model="form.content"
             :headers="selected?.excel_headers ?? []"
-            :has-code="Boolean(form.code_table || selected?.code_name)"
+            :code-name="codeName"
             :disabled="!canEdit"
             @run="trial"
-            @save="save"
+            @save="persist()"
+            @upload="files.pick('excel')"
           />
           <PromptSettings
             v-model:category="form.category"
@@ -305,6 +322,7 @@ function onStep(key: StepKey): void {
             :categories="categoryOptions"
             :models="models"
             :code-tables="codeTables"
+            :files="files"
             :can-edit="canEdit"
             :can-export="canExport"
             :sample-tasks="taskFit.sampleTasks.value"
@@ -327,9 +345,21 @@ function onStep(key: StepKey): void {
         :can-export="canExport"
         :dirty="unsaved.dirty.value"
         @run="trial"
+        @upload="files.pick('excel')"
         @sample-changed="sampleChanged"
       />
     </div>
+
+    <!-- 两个附件的文件框：编辑器、试跑区、设置区的「上传」都点这里，新模板上传时顺便保存。 -->
+    <input
+      v-for="kind in FILE_KINDS"
+      :key="kind"
+      :ref="files.bind(kind)"
+      type="file"
+      :accept="files.accept[kind]"
+      hidden
+      @change="files.received(kind, $event)"
+    >
 
     <ReleaseDrawer
       v-if="selected"
@@ -337,7 +367,8 @@ function onStep(key: StepKey): void {
       :template="selected"
       :can-release="canRelease"
       :dirty="unsaved.dirty.value"
-      :fit="form.category === 'policy' ? releaseFit : ''"
+      :fit="form.category === 'policy' ? releaseFit : null"
+      :used-by="taskFit.usedBy(selected.id)"
       @changed="replace"
     />
   </section>

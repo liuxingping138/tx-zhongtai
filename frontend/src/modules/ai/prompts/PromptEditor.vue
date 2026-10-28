@@ -6,7 +6,8 @@ import { promptSegments, unusedColumns, usedVariables, type PromptSegment, type 
 
 /**
  * 写提示词的编辑器：@【列名】在文字底下直接画成标记——能替换的蓝色、码表青色、Excel 里找不到的琥珀色，
- * 写错列名不用等试发就能看出来。输入 @ 在光标处弹出列名；Ctrl/⌘ + Enter 试发，Ctrl/⌘ + S 保存。
+ * 还没传测试样本时列名标灰（没法核对，不算错）。写错列名不用等试发就能看出来。
+ * 输入 @ 在光标处弹出列名；还没传样本时弹框和变量栏里直接给上传入口。Ctrl/⌘ + Enter 试发，Ctrl/⌘ + S 保存。
  *
  * 做法是常见的「背景层 + 透明 textarea」：背景层和 textarea 同字体、同内边距、同换行规则，
  * 文字透明只画标记底色，textarea 在上面负责输入和光标，滚动时同步背景层。
@@ -17,8 +18,9 @@ const MirrorText: FunctionalComponent<{ parts: PromptSegment[] }> = ({ parts }) 
   parts.map(part => (part.state ? h('mark', { class: `is-${part.state}` }, part.text) : part.text))
 MirrorText.props = ['parts']
 
-const props = withDefaults(defineProps<{ headers: string[]; hasCode: boolean; disabled?: boolean }>(), { disabled: false })
-const emit = defineEmits<{ run: []; save: [] }>()
+/** codeName：模板现在用的码表（系统码表名或上传的文件名），空表示没选码表 */
+const props = withDefaults(defineProps<{ headers: string[]; codeName: string; disabled?: boolean }>(), { disabled: false })
+const emit = defineEmits<{ run: []; save: []; upload: [] }>()
 const text = defineModel<string>({ required: true })
 
 const area = ref<HTMLTextAreaElement | null>(null)
@@ -28,13 +30,24 @@ const trigger = ref<{ at: number; keyword: string; caret: number } | null>(null)
 const active = ref(0)
 const popup = ref({ top: 0, left: 0 })
 
-const options = computed(() => (trigger.value ? mentionOptions(props.headers, props.hasCode, trigger.value.keyword) : []))
-const before = computed(() => promptSegments(trigger.value ? text.value.slice(0, trigger.value.caret) : text.value, props.headers, props.hasCode))
-const after = computed(() => (trigger.value ? promptSegments(text.value.slice(trigger.value.caret), props.headers, props.hasCode) : []))
-const used = computed(() => usedVariables(text.value, props.headers, props.hasCode))
+const hasCode = computed(() => Boolean(props.codeName))
+const options = computed(() => (trigger.value ? mentionOptions(props.headers, hasCode.value, trigger.value.keyword) : []))
+const before = computed(() => promptSegments(trigger.value ? text.value.slice(0, trigger.value.caret) : text.value, props.headers, hasCode.value))
+const after = computed(() => (trigger.value ? promptSegments(text.value.slice(trigger.value.caret), props.headers, hasCode.value) : []))
+const used = computed(() => usedVariables(text.value, props.headers, hasCode.value))
 const candidates = computed(() => unusedColumns(text.value, props.headers))
 const missing = computed(() => used.value.filter(item => item.state === 'missing').length)
-const STATE_TEXT: Record<VariableState, string> = { column: 'Excel 列', code: '码表全文', missing: '找不到' }
+const noCode = computed(() => used.value.some(item => item.state === 'nocode'))
+const titles = computed<Record<VariableState, string>>(() => ({
+  column: 'Excel 列，逐行换成该行的值',
+  code: `码表全文：${props.codeName}`,
+  pending: '还没传测试样本，传了才能核对这一列',
+  missing: 'Excel 里没有这一列，提问时会原样留在提示词里',
+  nocode: '还没选码表：在下面「码表」里选系统码表或上传文件',
+}))
+const BADGES: Partial<Record<VariableState, string>> = { missing: '找不到', nocode: '没选码表' }
+/** 弹框最宽多少（和样式里的 max-width 一致）：靠右输入 @ 时往左挪，不伸出编辑区 */
+const MENU_WIDTH = 380
 
 function syncScroll(): void {
   if (backdrop.value && area.value) backdrop.value.scrollTop = area.value.scrollTop
@@ -50,7 +63,7 @@ async function detect(): Promise<void> {
   await nextTick()
   // 背景层在光标处放了一个空标记，取它的位置就是光标位置。
   const mark = caretMark.value
-  if (mark) popup.value = { top: mark.offsetTop - element.scrollTop + 24, left: Math.min(mark.offsetLeft, element.clientWidth - 260) }
+  if (mark) popup.value = { top: mark.offsetTop - element.scrollTop + 24, left: Math.max(0, Math.min(mark.offsetLeft, element.clientWidth - MENU_WIDTH)) }
 }
 
 async function place(next: { text: string; caret: number }): Promise<void> {
@@ -133,7 +146,7 @@ function onKeydown(event: KeyboardEvent): void {
         v-model="text"
         class="prompt-editor__input"
         aria-label="提示词内容"
-        placeholder="写下要让模型做的事。输入 @ 插入 Excel 列名，跑的时候逐行替换成该行的值；@【上传码表】替换成码表全文。"
+        placeholder="写下要让模型做的事。输入 @ 插入测试样本 Excel 的列名，跑的时候逐行换成该行的值；@【上传码表】插入码表全文，系统码表和上传的码表都用它。"
         spellcheck="false"
         :readonly="disabled"
         @input="detect"
@@ -150,10 +163,10 @@ function onKeydown(event: KeyboardEvent): void {
         :style="{ top: `${popup.top}px`, left: `${popup.left}px` }"
       >
         <li
-          v-if="!options.length"
+          v-if="!options.length && headers.length"
           class="prompt-editor__menu-hint"
         >
-          {{ headers.length || hasCode ? '没有匹配的列名' : '先上传 Excel 或选码表，才有变量可插' }}
+          没有匹配的列名
         </li>
         <li
           v-for="(option, index) in options"
@@ -163,7 +176,16 @@ function onKeydown(event: KeyboardEvent): void {
           :class="{ 'is-active': index === active }"
           @mousedown.prevent="choose(option)"
         >
-          @【{{ option }}】<small v-if="option === CODE_TABLE_FIELD">码表全文</small>
+          <span class="prompt-editor__menu-token">@【{{ option }}】</span><small v-if="option === CODE_TABLE_FIELD">码表全文 · {{ codeName }}</small>
+        </li>
+        <li
+          v-if="!headers.length"
+          class="prompt-editor__menu-action"
+          role="option"
+          aria-selected="false"
+          @mousedown.prevent="emit('upload')"
+        >
+          上传测试样本 Excel，列名就能插
         </li>
       </ul>
     </div>
@@ -173,16 +195,12 @@ function onKeydown(event: KeyboardEvent): void {
     >
       <span class="prompt-editor__vars-label">变量</span>
       <span
-        v-if="!used.length && !candidates.length"
-        class="prompt-editor__vars-hint"
-      >上传 Excel 后，这里列出可插入的列名</span>
-      <span
         v-for="item in used"
         :key="item.name"
         class="prompt-editor__var"
         :class="`is-${item.state}`"
-        :title="item.state === 'missing' ? 'Excel 里没有这一列，提问时会原样留在提示词里' : STATE_TEXT[item.state]"
-      >{{ item.name }}<small>{{ item.state === 'missing' ? '找不到' : item.count > 1 ? `×${item.count}` : '' }}</small></span>
+        :title="titles[item.state]"
+      >{{ item.name }}<small>{{ BADGES[item.state] ?? (item.count > 1 ? `×${item.count}` : '') }}</small></span>
       <button
         v-for="column in candidates"
         :key="column"
@@ -194,11 +212,23 @@ function onKeydown(event: KeyboardEvent): void {
       >
         + {{ column }}
       </button>
+      <template v-if="!headers.length">
+        <el-button
+          v-if="!disabled"
+          link
+          type="primary"
+          size="small"
+          @click="emit('upload')"
+        >
+          上传测试样本 Excel
+        </el-button>
+        <span class="prompt-editor__vars-hint">{{ disabled ? '还没有测试样本' : '列名会出现在这里，点一下就插进提示词' }}</span>
+      </template>
       <span
-        v-if="missing"
+        v-if="missing || noCode"
         class="prompt-editor__warn"
         role="status"
-      >{{ missing }} 个变量在 Excel 里找不到</span>
+      >{{ [noCode ? '用了码表变量，但还没选码表' : '', missing ? `${missing} 个变量在 Excel 里找不到` : ''].filter(Boolean).join('；') }}</span>
     </div>
   </div>
 </template>
@@ -216,16 +246,19 @@ function onKeydown(event: KeyboardEvent): void {
 .prompt-editor__backdrop :deep(mark) { color: transparent; border-radius: 4px; padding: 1px 0; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .prompt-editor__backdrop :deep(mark.is-column) { background: var(--el-color-primary-light-8); box-shadow: inset 0 -1.5px 0 var(--el-color-primary-light-5); }
 .prompt-editor__backdrop :deep(mark.is-code) { background: var(--zt-teal-soft); box-shadow: inset 0 -1.5px 0 var(--zt-teal-line); }
-.prompt-editor__backdrop :deep(mark.is-missing) { background: var(--zt-warning-soft); box-shadow: inset 0 -1.5px 0 var(--zt-warning); }
+.prompt-editor__backdrop :deep(mark.is-missing), .prompt-editor__backdrop :deep(mark.is-nocode) { background: var(--zt-warning-soft); box-shadow: inset 0 -1.5px 0 var(--zt-warning); }
+.prompt-editor__backdrop :deep(mark.is-pending) { background: var(--zt-soft); box-shadow: inset 0 -1.5px 0 var(--zt-border-strong); }
 .prompt-editor__input { position: absolute; inset: 0; width: 100%; height: 100%; resize: none; background: transparent; color: var(--zt-ink-900); caret-color: var(--zt-blue-600); overflow: hidden; outline: none; }
 .prompt-editor__input::placeholder { color: var(--zt-ink-400); }
 .prompt-editor__input:focus-visible { box-shadow: inset 0 0 0 2px var(--el-color-primary-light-7); }
-.prompt-editor__menu { position: absolute; z-index: 30; min-width: 220px; max-width: 320px; max-height: 260px; overflow: auto; margin: 0; padding: 4px; list-style: none; border: 1px solid var(--zt-border); border-radius: 8px; background: var(--zt-panel); box-shadow: 0 10px 28px var(--zt-shadow-float); }
+.prompt-editor__menu { position: absolute; z-index: 30; min-width: 220px; max-width: 380px; max-height: 260px; overflow: auto; margin: 0; padding: 4px; list-style: none; border: 1px solid var(--zt-border); border-radius: 8px; background: var(--zt-panel); box-shadow: 0 10px 28px var(--zt-shadow-float); }
 .prompt-editor__menu li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 10px; border-radius: 5px; font-size: 13px; cursor: pointer; }
-.prompt-editor__menu li small { color: var(--zt-ink-500); }
+.prompt-editor__menu li small { min-width: 0; color: var(--zt-ink-500); text-align: right; }
+.prompt-editor__menu-token { flex: none; white-space: nowrap; }
 .prompt-editor__menu li.is-active, .prompt-editor__menu li:hover { background: var(--el-color-primary-light-9); color: var(--zt-blue-600); }
 .prompt-editor__menu .prompt-editor__menu-hint { color: var(--zt-ink-500); cursor: default; }
 .prompt-editor__menu .prompt-editor__menu-hint:hover { background: none; color: var(--zt-ink-500); }
+.prompt-editor__menu .prompt-editor__menu-action { color: var(--zt-blue-600); }
 /* 提示词很长、往下滚时变量这一行贴在可见区域底部，随时能插。 */
 .prompt-editor__vars { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 10px 22px; border-top: 1px solid var(--zt-border); background: var(--zt-surface-subtle); font-size: 12px; }
 .prompt-editor__vars-label { margin-right: 4px; color: var(--zt-ink-500); }
@@ -234,7 +267,9 @@ function onKeydown(event: KeyboardEvent): void {
 .prompt-editor__var small { font-size: 11px; opacity: 0.8; }
 .prompt-editor__var.is-column { background: var(--el-color-primary-light-8); color: var(--zt-blue-700); }
 .prompt-editor__var.is-code { background: var(--zt-teal-soft); color: var(--zt-teal-text); }
-.prompt-editor__var.is-missing { background: var(--zt-warning-soft); color: var(--zt-warning-text); }
+.prompt-editor__var.is-missing, .prompt-editor__var.is-nocode { background: var(--zt-warning-soft); color: var(--zt-warning-text); }
+.prompt-editor__var.is-pending { background: var(--zt-soft); color: var(--zt-ink-500); }
+.prompt-editor__vars .el-button { margin: 0; }
 .prompt-editor__add { padding: 1px 8px; border: 1px dashed var(--zt-border-strong); border-radius: 999px; background: transparent; color: var(--zt-ink-500); font: inherit; line-height: 18px; cursor: pointer; }
 .prompt-editor__add:hover:not(:disabled), .prompt-editor__add:focus-visible { border-color: var(--zt-blue-600); color: var(--zt-blue-600); }
 .prompt-editor__add:disabled { cursor: not-allowed; opacity: 0.5; }

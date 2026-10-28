@@ -5,11 +5,13 @@ import { promptSegments, unusedColumns, usedVariables, variableState } from './p
 const HEADERS = ['政策标题', '政策正文']
 
 describe('提示词变量', () => {
-  it('按能否替换分三种：Excel 列、码表、找不到', () => {
+  it('按能否替换分：Excel 列、码表、找不到、没选码表；还没传样本的列名先不算错', () => {
     expect(variableState('政策标题', HEADERS, false)).toBe('column')
     expect(variableState('上传码表', HEADERS, true)).toBe('code')
-    expect(variableState('上传码表', HEADERS, false)).toBe('missing')
+    expect(variableState('上传码表', HEADERS, false)).toBe('nocode')
     expect(variableState('政策名称', HEADERS, true)).toBe('missing')
+    expect(variableState('政策名称', [], true)).toBe('pending')
+    expect(variableState('上传码表', [], true)).toBe('code')
   })
 
   it('切出变量片段，拼回去和原文一字不差', () => {

@@ -278,7 +278,8 @@ export function getSampleRun(promptId: string): Promise<SampleRunState> {
   return request(http.get(`${BASE}/prompts/${promptId}/sample-run`))
 }
 
-export function startSampleRun(promptId: string, body: { model_id: string; thinking: boolean; limit: number }): Promise<SampleRunState> {
+/** 用模板上选定的模型跑，不另外传：试跑和上线后跑的是同一个模型。 */
+export function startSampleRun(promptId: string, body: { thinking: boolean; limit: number }): Promise<SampleRunState> {
   return request(http.post(`${BASE}/prompts/${promptId}/sample-run`, body))
 }
 

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from app.aitag.domain.interpret_rules import SCENES_COLUMN
+from app.aitag.domain.interpret_rules import ANSWER_FIELDS, SCENES_COLUMN
 from app.aitag.domain.rules import PROMPT_COLUMNS, SOURCE_ID, TYPE_FIELD
 
 # 模板里引用码表全文的变量，三个任务都能用。
@@ -25,6 +25,26 @@ REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "type": (TYPE_FIELD,),
     "interpret": ("一级行业", "一级场景"),
     "opportunity": ("市场机会",),
+}
+
+
+def _optional_interpret_fields() -> tuple[tuple[str, ...], ...]:
+    """解读表除了一级行业、一级场景还能写回的列。同一列的几种写法放一组，第一种是提示里说的名字。"""
+
+    groups: dict[str, list[str]] = {}
+    for name, column in ANSWER_FIELDS.items():
+        groups.setdefault(column, []).append(name)
+    required = set(REQUIRED_FIELDS["interpret"])
+    return tuple(tuple(names) for names in groups.values() if not required & set(names))
+
+
+# 提醒里最多点名几个没输出的字段，其余说「等 N 个」。
+SHOWN_EMPTY_FIELDS = 4
+# 没输出这些字段也能跑、能写回，只是表里对应的列空着：上线前说清楚，免得以为能顶替正在用的模板。
+OPTIONAL_FIELDS: dict[str, tuple[tuple[str, ...], ...]] = {
+    "type": (),
+    "interpret": _optional_interpret_fields(),
+    "opportunity": (),
 }
 
 
@@ -46,6 +66,11 @@ def check_template(
     if missing:
         errors.append(f"输出字段缺少：{'、'.join(missing)}，结果写不回表")
     warnings: list[str] = []
+    empty = [group[0] for group in OPTIONAL_FIELDS[task] if not set(group) & set(output_fields)]
+    if empty:
+        more = len(empty) > SHOWN_EMPTY_FIELDS
+        names = "、".join(empty[:SHOWN_EMPTY_FIELDS]) + (f"等 {len(empty)} 个字段" if more else "")
+        warnings.append(f"没有输出{names}，写回时这些列会空着")
     if BODY_COLUMN not in variables:
         warnings.append(f"没有用 @【{BODY_COLUMN}】，模型只看得到标题，判断会不准")
     if task == "opportunity" and SCENES_COLUMN not in variables:

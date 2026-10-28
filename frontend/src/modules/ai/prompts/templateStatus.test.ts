@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { BatchRun, PromptTemplate, SampleSummary, TemplateReleaseInfo } from '@/api/ai'
-import { flowSteps, releaseState, sampleFromRun, sampleState } from './templateStatus'
+import { flowSteps, releaseState, sampleFromRun, sampleState, stepActions } from './templateStatus'
 
 const release = (changes: string[] = []): TemplateReleaseInfo => ({
   id: 'r', release_no: 2, released_at: '2026-10-22 16:24', released_by_name: '管理员', unreleased_changes: changes,
@@ -22,7 +22,7 @@ describe('上线状态', () => {
   it('分未上线、有改动未上线、已上线', () => {
     expect(releaseState(template()).kind).toBe('offline')
     expect(releaseState(template({ release: release(['提示词内容', '码表']) }))).toMatchObject({
-      kind: 'changed', detail: '草稿改了提示词内容、码表',
+      kind: 'changed', text: '第 2 版在线，草稿改了提示词内容、码表',
     })
     expect(releaseState(template({ release: release() }))).toMatchObject({ kind: 'online', text: '第 2 版已上线' })
   })
@@ -45,6 +45,12 @@ describe('流程条', () => {
 
   it('新模板：第一步是下一步，后两步还轮不到', () => {
     expect(tones(flowSteps(null, true, false))).toEqual(['current', 'todo', 'todo'])
+  })
+
+  it('先传了样本、提示词还空着：第一步还没完成', () => {
+    const steps = flowSteps(template({ content: '' }), false, true)
+    expect(tones(steps)).toEqual(['current', 'todo', 'todo'])
+    expect(steps[0]?.text).toBe('还没写提示词')
   })
 
   it('有未保存的修改时先保存', () => {
@@ -71,6 +77,34 @@ describe('流程条', () => {
 
   it('已上线且草稿没再改：三步都完成', () => {
     expect(tones(flowSteps(template({ sample: sample(), release: release() }), false, true))).toEqual(['done', 'done', 'done'])
+  })
+})
+
+describe('流程条上的按钮', () => {
+  const admin = { canEdit: true, canRelease: true, sampleOpen: false }
+  const actionsOf = (item: PromptTemplate, context = admin) => stepActions(item, flowSteps(item, false, context.canRelease), context)
+
+  it('试跑是下一步时给「去试跑」，右栏已经在试跑上就不给', () => {
+    expect(actionsOf(template())).toEqual({ test: '去试跑' })
+    expect(actionsOf(template(), { ...admin, sampleOpen: true })).toEqual({})
+  })
+
+  it('管理员：该上线时给版本号；上线后改了草稿但还要重新试跑时给「看改动」；没有改动给「上线管理」', () => {
+    expect(actionsOf(template({ sample: sample() }))).toEqual({ release: '上线' })
+    expect(actionsOf(template({ sample: sample(), release: release(['提示词内容']) }))).toEqual({ release: '上线第 3 版' })
+    expect(actionsOf(template({ sample: sample({ current: false }), release: release(['提示词内容']) })))
+      .toEqual({ test: '去试跑', release: '看改动' })
+    expect(actionsOf(template({ sample: sample(), release: release() }))).toEqual({ release: '上线管理' })
+  })
+
+  it('业务人员和只读的人：有改动都能「看改动」，否则只能查看上线内容', () => {
+    const staff = { canEdit: true, canRelease: false, sampleOpen: true }
+    expect(actionsOf(template({ sample: sample(), release: release(['码表']) }), staff)).toEqual({ release: '看改动' })
+    expect(actionsOf(template({ sample: sample() }), staff)).toEqual({ release: '查看上线内容' })
+    const reader = { canEdit: false, canRelease: false, sampleOpen: false }
+    expect(actionsOf(template({ release: release(['码表']) }), reader)).toEqual({ release: '看改动' })
+    expect(actionsOf(template({ release: release() }), reader)).toEqual({ release: '查看上线内容' })
+    expect(actionsOf(template(), reader)).toEqual({})
   })
 })
 

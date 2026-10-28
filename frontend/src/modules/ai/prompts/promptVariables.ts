@@ -3,7 +3,8 @@ import { CODE_TABLE_FIELD } from '../shared/aiText'
 /** 变量写法与后端 templating 一致：@【列名】。 */
 const VARIABLE = /@【([^【】\n]+)】/g
 
-export type VariableState = 'column' | 'code' | 'missing'
+/** column 能换成 Excel 列；code 换成码表全文；pending 还没传测试样本、没法核对；missing 样本里没有这一列；nocode 用了码表变量但没选码表 */
+export type VariableState = 'column' | 'code' | 'pending' | 'missing' | 'nocode'
 
 export interface PromptSegment {
   text: string
@@ -17,9 +18,11 @@ export interface UsedVariable {
   count: number
 }
 
-/** 能替换成什么：Excel 有这一列、码表（有码表时）、或者哪都找不到——批量时会原样留在提示词里。 */
+/** 能替换成什么：Excel 有这一列、码表（有码表时）、或者哪都找不到——批量时会原样留在提示词里。
+ * 还没传测试样本时列名没法核对，标成 pending，不当成写错。 */
 export function variableState(name: string, headers: readonly string[], hasCode: boolean): VariableState {
-  if (name === CODE_TABLE_FIELD) return hasCode ? 'code' : 'missing'
+  if (name === CODE_TABLE_FIELD) return hasCode ? 'code' : 'nocode'
+  if (!headers.length) return 'pending'
   return headers.includes(name) ? 'column' : 'missing'
 }
 

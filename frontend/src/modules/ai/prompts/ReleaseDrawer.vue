@@ -6,6 +6,7 @@ import { CircleCheckFilled, CircleCloseFilled, WarningFilled } from '@element-pl
 import { listPromptReleases, offlinePrompt, publishPrompt, type PromptTemplate, type TemplateRelease } from '@/api/ai'
 import { errorMessage } from '@/api/errors'
 import { foldUnchanged, lineDiff } from './lineDiff'
+import type { FitSummary } from './taskFit'
 import { sampleState } from './templateStatus'
 
 /**
@@ -13,7 +14,8 @@ import { sampleState } from './templateStatus'
  * 业务人员也能打开看（只读），知道这次要请管理员上线什么。
  * 草稿和线上版本一样时没有要上线的东西：只看线上这一版的内容和上线记录，管理员可以下线。
  */
-const props = defineProps<{ template: PromptTemplate; canRelease: boolean; dirty: boolean; fit?: string }>()
+/** usedBy：哪些定时任务正在用这个模板；null 是说不清（没权限看任务设置、或政策服务暂时取不到） */
+const props = defineProps<{ template: PromptTemplate; canRelease: boolean; dirty: boolean; fit?: FitSummary | null; usedBy: string[] | null }>()
 const emit = defineEmits<{ changed: [template: PromptTemplate] }>()
 const open = defineModel<boolean>({ required: true })
 const busy = ref(false)
@@ -35,10 +37,20 @@ const shown = computed(() => {
   return { model: template.model_name, code: draftCode.value, fields: template.fields, content: template.content }
 })
 
+/** 上线影响谁：写准是哪个定时任务在用，没人用就说没人用，说不清就按两种情况都说。 */
+const users = computed(() => (props.usedBy?.length ? `「${props.usedBy.join('、')}」` : ''))
+const impact = computed(() => {
+  if (props.usedBy === null) return '上线后，新发起的批量任务用这一版；如果有定时任务选了这个模板，它下一批也按这一版跑。'
+  if (users.value) return `${users.value}定时任务正在用这个模板：上线后它下一批就按这一版跑，新发起的批量任务也用这一版。`
+  const how = props.template.category === 'policy' ? '要让定时任务用它，到「系统管理 › 任务调度」里对应任务的设置中选它。' : ''
+  return `目前没有定时任务用这个模板，上线后可以用它发起批量任务。${how}`
+})
+
 const checks = computed(() => {
   const template = props.template
   const items: { level: Level; text: string }[] = []
   items.push(props.dirty ? { level: 'error', text: '有未保存的修改，先保存再上线' } : { level: 'ok', text: '草稿已保存' })
+  if (!template.content.trim()) items.push({ level: 'error', text: '提示词还是空的' })
   items.push(template.fields.length
     ? { level: 'ok', text: `输出 ${template.fields.length} 个字段` }
     : { level: 'error', text: '没设输出字段，结果解析不出任何字段' })
@@ -50,7 +62,7 @@ const checks = computed(() => {
   else if (sample.kind === 'failed') items.push({ level: 'warn', text: `样本试跑：${sample.text}，确认可以接受再上线` })
   else if (sample.kind === 'running') items.push({ level: 'warn', text: '样本试跑还没结束' })
   else items.push({ level: 'warn', text: '当前草稿还没用测试样本整批试跑过' })
-  if (props.fit) items.push({ level: 'ok', text: `定时任务适配：${props.fit}` })
+  if (props.fit) items.push({ level: props.fit.level, text: `定时任务适配：${props.fit.text}` })
   return items
 })
 const blocked = computed(() => upToDate.value || checks.value.some(item => item.level === 'error'))
@@ -100,7 +112,8 @@ async function publish(): Promise<void> {
 }
 
 async function takeOffline(): Promise<void> {
-  const ok = await ElMessageBox.confirm('下线后定时任务不再用这个模板，也不能用它新建批量任务；已有任务和历史版本保留，可以重新上线。', '下线模板？', {
+  const tasks = users.value ? `${users.value}定时任务正在用它，下线后这个任务就跑不了，要先在任务设置里换一个模板。` : ''
+  const ok = await ElMessageBox.confirm(`${tasks}下线后也不能用它新建批量任务；已有任务和历史版本保留，可以重新上线。`, '下线模板？', {
     type: 'warning', confirmButtonText: '下线', cancelButtonText: '取消',
   }).then(() => true, () => false)
   if (!ok) return
@@ -126,8 +139,8 @@ async function takeOffline(): Promise<void> {
   >
     <p class="release__intro">
       {{ upToDate
-        ? `线上是第 ${release?.release_no} 版，草稿和它一样，没有要上线的改动。定时任务和批量任务都按这一版运行。`
-        : '上线后，定时任务和批量任务都按这一版运行；之后再改模板只改草稿，重新上线才生效。' }}
+        ? `线上是第 ${release?.release_no} 版，草稿和它一样，没有要上线的改动。${users ? `${users}定时任务和` : ''}批量任务都按这一版运行。`
+        : `${impact}之后再改模板只改草稿，重新上线才生效。` }}
     </p>
 
     <section

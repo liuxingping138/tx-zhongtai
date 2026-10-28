@@ -95,10 +95,13 @@ TEMPLATE_RESOURCE = "policy.base_tags"
 
 @router.get("/contract")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
-async def contract(_: Actor = Depends(require_policy_permission(TEMPLATE_RESOURCE, "list"))) -> JSONResponse:
-    """三个打标任务各给模板哪些列（@【列名】能引用的）、要模板输出哪些字段。"""
+async def contract(
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    _: Actor = Depends(require_policy_permission(TEMPLATE_RESOURCE, "list")),
+) -> JSONResponse:
+    """三个打标任务各给模板哪些列（@【列名】能引用的）、要模板输出哪些字段、现在用的哪个模板。"""
 
-    return success_json(samples.contract())
+    return success_json(await samples.contract(session))
 
 
 @router.get("/samples")

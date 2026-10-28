@@ -1,20 +1,22 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import type { AiModel, PromptTemplate, SystemCodeTable, TemplateCategory } from '@/api/ai'
 import type { ContractTask } from '@/api/aiTagging'
 import ModelPicker from '../shared/ModelPicker.vue'
-import { splitFields } from '../shared/aiText'
+import { CODE_TABLE_FIELD, splitFields } from '../shared/aiText'
 import PromptFiles from './PromptFiles.vue'
 import TaskFit from './TaskFit.vue'
 import type { TaskFitResult } from './taskFit'
+import type { TemplateFiles } from './useTemplateFiles'
 
 /** 编辑器下方的模板设置：常驻显示，不收起——输出字段、模型、码表决定结果长什么样，写提示词时要一直看得到。 */
-defineProps<{
+const props = defineProps<{
   template: PromptTemplate | null
   categories: TemplateCategory[]
   models: AiModel[]
   codeTables: SystemCodeTable[]
+  files: TemplateFiles
   canEdit: boolean
   canExport: boolean
   /** 政策类模板：三个打标任务的约定（取测试样本用）和按草稿的适配检查；不是政策类时不显示 */
@@ -34,12 +36,42 @@ const fields = computed({
   get: () => splitFields(outputFields.value),
   set: (value: string[] | undefined) => { outputFields.value = (value ?? []).join('|') },
 })
-// 「上传的码表文件」在库里存空串；下拉框把空串当成没选，页面上换一个值表示它。
-const UPLOADED_CODE = 'uploaded'
-const codeSource = computed({
-  get: () => codeTable.value || UPLOADED_CODE,
-  set: (value: string) => { codeTable.value = value === UPLOADED_CODE ? '' : value },
+
+/**
+ * 码表三选一。库里只有两样：code_table 存系统码表的键，空串时用上传的 .txt（有的话）。
+ * 「上传文件」选了还没传时库里仍是空，先记在页面上；「不用码表」要把已上传的文件删掉才真的不用。
+ */
+type CodeMode = 'none' | 'system' | 'upload'
+const wantUpload = ref(false)
+watch(() => props.template?.id, () => { wantUpload.value = false })
+const codeMode = computed<CodeMode>(() => {
+  if (codeTable.value) return 'system'
+  return props.template?.code_name || wantUpload.value ? 'upload' : 'none'
 })
+const CODE_TIPS: Record<CodeMode, string> = {
+  none: '提示词里要用码表时，选系统码表或上传 .txt',
+  system: `每次运行都从「码表管理」取最新的；提示词里写 @【${CODE_TABLE_FIELD}】插入码表全文`,
+  upload: `上线时冻结这一份，码表更新了要重新上传；提示词里同样写 @【${CODE_TABLE_FIELD}】插入码表全文`,
+}
+
+function onCodeMode(value: string | number | boolean | undefined): void {
+  void setCodeMode(value as CodeMode)
+}
+
+async function setCodeMode(next: CodeMode): Promise<void> {
+  if (next === codeMode.value) return
+  if (next === 'system') {
+    wantUpload.value = false
+    codeTable.value = props.codeTables[0]?.key ?? ''
+    return
+  }
+  codeTable.value = ''
+  wantUpload.value = next === 'upload'
+  const uploaded = props.template?.code_name
+  if (next === 'none' && uploaded) {
+    await props.files.remove('code', `不用码表要删掉已上传的「${uploaded}」。已发起的任务和线上版本不受影响。`)
+  }
+}
 </script>
 
 <template>
@@ -82,32 +114,52 @@ const codeSource = computed({
     <div class="config__row">
       <span class="config__label">码表</span>
       <div class="config__code">
-        <el-select
-          v-model="codeSource"
-          class="config__code-select"
-          aria-label="码表来源"
-          :disabled="!canEdit"
-        >
-          <el-option
-            :label="template?.code_name ? '上传的码表文件' : '不用码表或上传文件'"
-            :value="UPLOADED_CODE"
+        <div class="config__code-line">
+          <el-radio-group
+            :model-value="codeMode"
+            size="small"
+            aria-label="码表来源"
+            :disabled="!canEdit"
+            @change="onCodeMode"
+          >
+            <el-radio-button value="none">
+              不用码表
+            </el-radio-button>
+            <el-radio-button value="system">
+              系统码表
+            </el-radio-button>
+            <el-radio-button value="upload">
+              上传文件
+            </el-radio-button>
+          </el-radio-group>
+          <el-select
+            v-if="codeMode === 'system'"
+            v-model="codeTable"
+            class="config__code-select"
+            size="small"
+            aria-label="系统码表"
+            :disabled="!canEdit"
+          >
+            <el-option
+              v-for="item in codeTables"
+              :key="item.key"
+              :label="item.name"
+              :value="item.key"
+            />
+          </el-select>
+          <PromptFiles
+            v-else-if="codeMode === 'upload'"
+            kind="code"
+            class="config__code-file"
+            :template="template"
+            :files="files"
+            :can-edit="canEdit"
+            :can-export="canExport"
           />
-          <el-option
-            v-for="item in codeTables"
-            :key="item.key"
-            :label="`系统${item.name}`"
-            :value="item.key"
-          />
-        </el-select>
-        <PromptFiles
-          v-if="!codeTable"
-          kind="code"
-          class="config__code-file"
-          :template="template"
-          :can-edit="canEdit"
-          :can-export="canExport"
-          @changed="item => emit('files-changed', item)"
-        />
+        </div>
+        <p class="config__tip">
+          {{ CODE_TIPS[codeMode] }}
+        </p>
       </div>
     </div>
 
@@ -144,13 +196,14 @@ const codeSource = computed({
         <PromptFiles
           kind="excel"
           :template="template"
+          :files="files"
           :can-edit="canEdit"
           :can-export="canExport"
           :sample-tasks="sampleTasks"
           @changed="item => emit('files-changed', item)"
         />
         <p class="config__tip">
-          只给试发和样本试跑用，正式的批量任务另外上传数据
+          列名就是提示词里能插的变量；只给试发和样本试跑用，正式的批量任务另外上传数据
         </p>
       </div>
     </div>
@@ -175,8 +228,9 @@ const codeSource = computed({
 .config__item--grow > :last-child { flex: 1; min-width: 0; }
 .config__category { width: 120px; }
 .config__item--grow :deep(.model-picker__select) { width: 100%; }
-.config__code { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; min-width: 0; }
-.config__code-select { width: 220px; }
+.config__code { display: grid; gap: 4px; min-width: 0; }
+.config__code-line { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; min-height: 32px; min-width: 0; }
+.config__code-select { width: 260px; }
 .config__code-file { flex: 1; min-width: 200px; }
 /* 十几个输出字段时标签框最多三行，再多在框里滚动，不把测试样本挤出视野。 */
 .config__fields { display: grid; gap: 4px; min-width: 0; }

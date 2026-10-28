@@ -55,12 +55,16 @@ export interface OnlineTemplate {
   checks: Record<AiTaskCode, TemplateCheck>
 }
 
-/** 打标任务给模板哪些列（@【列名】能引用的）、要模板输出哪些字段。 */
+/** 打标任务给模板哪些列（@【列名】能引用的）、要模板输出哪些字段、现在用的哪个模板。 */
 export interface ContractTask {
   code: AiTaskCode
   name: string
   columns: string[]
   required_fields: string[]
+  /** 不输出也能写回、只是对应列空着的字段；同一列的几种写法放一组，第一种是提示里说的名字 */
+  optional_fields: string[][]
+  /** 任务设置里选的模板 ID，没选是空串 */
+  prompt_id: string
 }
 
 /** 从数据库取的测试数据：和正式打标交给模板的一模一样。 */

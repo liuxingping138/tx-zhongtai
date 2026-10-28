@@ -175,7 +175,26 @@ function create(): void {
           min-width="200"
         >
           <template #default="{ row }">
+            <!-- 有改动没上线：第二行写改了什么，「看改动」直接打开逐行对比。 -->
+            <div
+              v-if="row.release?.unreleased_changes.length"
+              class="prompt-list__changed"
+            >
+              <span
+                class="prompt-list__state is-changed"
+                :title="releaseState(row).detail"
+              >第 {{ row.release.release_no }} 版在线，有改动未上线</span>
+              <span class="prompt-list__change">
+                改了{{ row.release.unreleased_changes.join('、') }} ·
+                <router-link
+                  class="prompt-list__diff"
+                  :to="{ name: 'ai-prompt-edit', params: { id: row.id }, query: { review: '1' } }"
+                  @click.stop
+                >看改动</router-link>
+              </span>
+            </div>
             <span
+              v-else
               class="prompt-list__state"
               :class="`is-${releaseState(row).kind}`"
               :title="releaseState(row).detail"
@@ -250,6 +269,10 @@ function create(): void {
 .prompt-list__state.is-online::before { background: var(--zt-success); }
 .prompt-list__state.is-changed { color: var(--zt-warning-text); }
 .prompt-list__state.is-changed::before { background: var(--zt-warning); }
+.prompt-list__changed { display: grid; gap: 2px; padding: 2px 0; }
+.prompt-list__change { padding-left: 13px; color: var(--zt-ink-500); font-size: 12px; white-space: nowrap; }
+.prompt-list__diff { color: var(--zt-blue-600); text-decoration: none; }
+.prompt-list__diff:hover { text-decoration: underline; }
 .prompt-list__sample { color: var(--zt-ink-500); }
 .prompt-list__sample.is-passed { color: var(--zt-success-text); }
 .prompt-list__sample.is-failed, .prompt-list__sample.is-stale { color: var(--zt-warning-text); }

@@ -11,6 +11,7 @@ from platform_common.errors import ApiError, DependencyUnavailableError, NotFoun
 
 from app.aitag.application import samples
 from app.aitag.domain.contract import COLUMNS, check_template
+from app.aitag.domain.interpret_rules import ANSWER_FIELDS
 
 
 def test_template_checks_split_must_fix_from_worth_knowing() -> None:
@@ -24,6 +25,19 @@ def test_template_checks_split_must_fix_from_worth_knowing() -> None:
     # 行业场景只有市场机会这一步才有。
     assert check_template("type", ["政策正文", "行业场景"], ["政策类型名称"], True)["errors"]
     assert "行业场景" in COLUMNS["opportunity"] and "源ID" in COLUMNS["type"]
+
+
+def test_interpret_template_with_only_the_required_fields_warns_which_columns_stay_empty() -> None:
+    """只输出一级行业、一级场景也能写回，但别让人以为能顶替正在用的解读模板。"""
+
+    thin = check_template("interpret", ["政策正文"], ["一级行业", "一级场景", "判断理由"], system_code=True)
+    assert thin["errors"] == []
+    assert thin["warnings"] == ["没有输出政策要文、二级行业、三级行业、二级场景等 15 个字段，写回时这些列会空着"]
+    full = [*ANSWER_FIELDS]
+    assert check_template("interpret", ["政策正文"], full, system_code=True) == {"errors": [], "warnings": []}
+    # 同一列的另一种写法也算输出了：「政策概览」就是「政策要文」。
+    almost = [name for name in full if name not in ("政策要文", "备注")]
+    assert check_template("interpret", ["政策正文"], almost, True)["warnings"] == ["没有输出备注，写回时这些列会空着"]
 
 
 @pytest.fixture
@@ -76,7 +90,15 @@ async def test_opportunity_samples_carry_the_interpreted_scenes(monkeypatch: pyt
     assert row["行业场景"] == "党政行业/数字政府" and row["政策正文"] == "正文"
     with pytest.raises(NotFoundError, match="还没有被判为「需要解读」的政策"):
         await samples.samples(None, "interpret", None, 5)  # type: ignore[arg-type]
-    assert [task["code"] for task in samples.contract()["tasks"]] == ["type", "interpret", "opportunity"]
+
+    async def configured(*_: Any) -> dict[str, Any]:
+        return {"interpret": SimpleNamespace(prompt_id="p-interpret")}
+
+    monkeypatch.setattr(samples.repo, "tasks", configured)
+    tasks = (await samples.contract(None))["tasks"]  # type: ignore[arg-type]
+    assert [task["code"] for task in tasks] == ["type", "interpret", "opportunity"]
+    assert [task["prompt_id"] for task in tasks] == ["", "p-interpret", ""]
+    assert ["二级行业"] in tasks[1]["optional_fields"] and tasks[0]["optional_fields"] == []
 
 
 async def test_source_outage_says_what_to_do(monkeypatch: pytest.MonkeyPatch, config: None) -> None:

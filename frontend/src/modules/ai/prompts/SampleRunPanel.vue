@@ -20,7 +20,7 @@ const props = defineProps<{
   canExport: boolean
   dirty: boolean
 }>()
-const emit = defineEmits<{ changed: [run: BatchRun] }>()
+const emit = defineEmits<{ changed: [run: BatchRun]; upload: [] }>()
 
 const MAX_ROWS = 50
 const POLL_MS = 2000
@@ -41,11 +41,14 @@ const stale = computed(() => {
   if (!current || !template) return false
   return current.prompt_content !== template.content || current.output_fields !== template.output_fields
 })
+// 试跑用模板上选定的模型：和上线后跑的是同一个，没选就先选，不拿别的顶替。
 const blocker = computed(() => {
-  if (!props.template) return '先保存模板，再上传测试样本'
-  if (!props.template.excel_name) return '先在左侧「测试样本」上传 Excel 或从数据库取数据'
+  const template = props.template
+  if (!template?.excel_name) return '先上传测试样本 Excel（政策类也可以在左边「测试样本」里从数据库取）'
   if (props.dirty) return '有未保存的修改，保存后再试跑'
-  if (!props.model?.available) return '没有可用的模型'
+  if (!template.content.trim()) return '提示词还是空的，写好保存后再试跑'
+  if (!template.model_id) return '先在左边「模型」里选好模型并保存'
+  if (!props.model?.available) return `「${template.model_name}」现在不可用，换一个模型再试跑`
   return ''
 })
 
@@ -92,7 +95,7 @@ async function start(): Promise<void> {
   if (!template || blocker.value || busy.value) return
   busy.value = true
   try {
-    state.value = await startSampleRun(template.id, { model_id: props.model?.id ?? '', thinking: props.thinking, limit: limit.value })
+    state.value = await startSampleRun(template.id, { thinking: props.thinking, limit: limit.value })
     if (state.value.run) emit('changed', state.value.run)
     failedOnly.value = false
     await load(true)
@@ -182,6 +185,15 @@ async function stop(): Promise<void> {
       :class="{ 'is-blocked': blocker }"
     >
       {{ blocker || `用保存的草稿和「${model?.name}」逐条提问，按条计费，最多 ${MAX_ROWS} 条` }}
+      <el-button
+        v-if="!template?.excel_name"
+        link
+        type="primary"
+        size="small"
+        @click="emit('upload')"
+      >
+        上传测试样本
+      </el-button>
     </p>
 
     <div

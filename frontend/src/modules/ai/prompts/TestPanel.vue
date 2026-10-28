@@ -13,7 +13,7 @@ defineProps<{
   canExport: boolean
   dirty: boolean
 }>()
-const emit = defineEmits<{ run: []; 'sample-changed': [run: BatchRun] }>()
+const emit = defineEmits<{ run: []; upload: []; 'sample-changed': [run: BatchRun] }>()
 const tab = defineModel<'trial' | 'sample'>('tab', { required: true })
 const thinking = defineModel<boolean>('thinking', { default: false })
 const TABS = [{ key: 'trial', label: '试发一条' }, { key: 'sample', label: '样本试跑' }] as const
@@ -73,6 +73,7 @@ const TABS = [{ key: 'trial', label: '试发一条' }, { key: 'sample', label: '
       :can-export="canExport"
       :dirty="dirty"
       @changed="run => emit('sample-changed', run)"
+      @upload="emit('upload')"
     />
   </aside>
 </template>
