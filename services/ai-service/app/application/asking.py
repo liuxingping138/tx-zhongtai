@@ -44,7 +44,8 @@ def api_key_for(model: LlmModel) -> str:
 def model_info(model: LlmModel) -> dict[str, Any]:
     """单价按此刻算：分时计价的模型，前端据此估算这次对话的费用。"""
 
-    input_price, output_price = model.prices_at(utcnow())
+    now = utcnow()
+    input_price, output_price = model.prices_at(now)
     return {
         "id": model.id,
         "name": model.name,
@@ -55,6 +56,7 @@ def model_info(model: LlmModel) -> dict[str, Any]:
         "input_price": str(input_price),
         "output_price": str(output_price),
         "search_price": str(model.search_price),
+        "price_note": model.price_note(now),
     }
 
 

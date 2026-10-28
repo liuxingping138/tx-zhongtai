@@ -5,6 +5,7 @@ import { CircleCheckFilled, CircleCloseFilled, WarningFilled } from '@element-pl
 
 import { listPromptReleases, offlinePrompt, publishPrompt, type PromptTemplate, type TemplateRelease } from '@/api/ai'
 import { errorMessage } from '@/api/errors'
+import { formatState } from '../shared/aiText'
 import { foldUnchanged, lineDiff } from './lineDiff'
 import type { FitSummary } from './taskFit'
 import { sampleState } from './templateStatus'
@@ -54,6 +55,9 @@ const checks = computed(() => {
   items.push(template.fields.length
     ? { level: 'ok', text: `输出 ${template.fields.length} 个字段` }
     : { level: 'error', text: '没设输出字段，结果解析不出任何字段' })
+  if (formatState(template.content, template.fields) === 'stale') {
+    items.push({ level: 'warn', text: '提示词里写的返回字段和输出字段对不上，模型会按旧字段回；先在编辑页更新格式要求' })
+  }
   items.push(template.model_id
     ? { level: 'ok', text: `模型：${template.model_name}` }
     : { level: 'error', text: '模板上没选定模型；定时任务和批量任务不会替你挑' })

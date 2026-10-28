@@ -19,7 +19,7 @@ const props = defineProps<{
 const emit = defineEmits<{ changed: [template: PromptTemplate] }>()
 const sampling = ref(false)
 
-const EMPTY: Record<PromptFileKind, string> = { excel: '未上传，.xlsx 第一行是表头', code: '还没上传码表 .txt' }
+const EMPTY: Record<PromptFileKind, string> = { excel: '未上传，.xlsx 第一行是表头', code: '还没上传码表（.txt、.csv 或 .xlsx）' }
 const name = computed(() => (props.kind === 'excel' ? props.template?.excel_name : props.template?.code_name) ?? '')
 
 async function openSampling(): Promise<void> {
@@ -44,7 +44,7 @@ async function openSampling(): Promise<void> {
         :loading="files.busy.value === kind"
         @click="files.pick(kind)"
       >
-        {{ name ? '重新上传' : kind === 'code' ? '上传码表 .txt' : '上传 Excel' }}
+        {{ name ? '重新上传' : kind === 'code' ? '上传码表' : '上传 Excel' }}
       </el-button>
       <el-button
         v-if="kind === 'excel' && canEdit && sampleTasks?.length"

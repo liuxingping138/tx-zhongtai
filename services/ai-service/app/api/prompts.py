@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, Response
 from platform_common.actors import Actor
 from platform_common.http_utils import read_named_upload, success_json
@@ -124,6 +124,30 @@ async def download_file(
 ) -> Response:
     content, filename = await service.download_file(session, actor, access, prompt_id, kind)
     return file_response(content, filename)
+
+
+@router.get("/code-preview")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def preview_system_code(
+    code_table: str = Query(max_length=32, description="系统码表的键"),
+    _: Actor = Depends(require_ai_permission(RESOURCE, "list")),
+) -> JSONResponse:
+    """系统码表的字数和前几行：选码表时看一眼内容，不用先保存模板。"""
+
+    return success_json(await service.preview_system_code(code_table))
+
+
+@router.get("/{prompt_id}/code-preview")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def preview_uploaded_code(
+    prompt_id: str,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    access: CategoryAccess = Depends(get_category_access),
+    _: Actor = Depends(require_ai_permission(RESOURCE, "list")),
+) -> JSONResponse:
+    """上传的码表文件的字数和前几行；看内容不算导出，下载整份才要导出权限。"""
+
+    return success_json(await service.preview_uploaded_code(session, access, prompt_id))
 
 
 @router.get("/{prompt_id}/sample-run")

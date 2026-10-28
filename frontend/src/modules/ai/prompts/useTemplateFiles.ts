@@ -5,7 +5,8 @@ import { deletePromptFile, uploadPromptFile, type PromptFileKind, type PromptTem
 import { errorMessage } from '@/api/errors'
 import { downloadPromptFile } from '../shared/downloads'
 
-const ACCEPT: Record<PromptFileKind, string> = { excel: '.xlsx', code: '.txt' }
+// 码表文本直接用，Excel 由后端转成一行一条、Tab 分隔的文字。
+const ACCEPT: Record<PromptFileKind, string> = { excel: '.xlsx', code: '.txt,.csv,.xlsx' }
 const UPLOADED: Record<PromptFileKind, string> = { excel: '测试样本已上传', code: '码表已上传' }
 
 interface Options {
@@ -22,6 +23,11 @@ interface Options {
  * 新模板不用先点保存：选好文件时顺便把草稿存成模板再上传，先传样本、照着列名写提示词才顺手。
  * 文件框挂在编辑页上（bind / received），编辑器、试跑区、设置区的「上传」都走这里。
  */
+/** 码表存的是转好的文字：Excel 上传的下载回来叫 .txt（和后端一致），免得用 Excel 打开一个文本文件。 */
+export function codeDownloadName(name: string): string {
+  return /\.(txt|csv)$/i.test(name) ? name : `${name.replace(/\.[^.]*$/, '')}.txt`
+}
+
 export function useTemplateFiles(options: Options) {
   const busy = ref<PromptFileKind | null>(null)
   const inputs: Partial<Record<PromptFileKind, HTMLInputElement | null>> = {}
@@ -87,7 +93,7 @@ export function useTemplateFiles(options: Options) {
     const template = options.template.value
     if (!template) return
     try {
-      await downloadPromptFile(template.id, kind, kind === 'excel' ? template.excel_name : template.code_name)
+      await downloadPromptFile(template.id, kind, kind === 'excel' ? template.excel_name : codeDownloadName(template.code_name))
     } catch (error) {
       ElMessage.error(errorMessage(error, '下载失败，请重试'))
     }

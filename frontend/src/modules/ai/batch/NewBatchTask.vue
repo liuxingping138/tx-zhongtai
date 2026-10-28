@@ -19,6 +19,7 @@ const templateId = ref('')
 const thinking = ref(false)
 const file = ref<File | null>(null)
 const summary = ref<BatchInputSummary | null>(null)
+const testRowsMax = computed(() => (summary.value ? Math.max(summary.value.rows - 1, 1) : 100000)) // 输入框按它做 key：Element Plus 只在挂载时写 aria-valuemax
 const previewing = ref(false)
 const downloading = ref(false)
 const starting = ref(false)
@@ -316,10 +317,11 @@ function close(done: () => void): void {
           <label for="batch-test-rows">先跑前</label>
           <el-input-number
             id="batch-test-rows"
+            :key="testRowsMax"
             v-model="testRows"
             size="small"
             :min="1"
-            :max="summary ? Math.max(summary.rows - 1, 1) : 100000"
+            :max="testRowsMax"
             controls-position="right"
           />
           <span>条，满意了再跑全部</span>

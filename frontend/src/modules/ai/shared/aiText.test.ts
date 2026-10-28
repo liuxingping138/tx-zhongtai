@@ -4,12 +4,16 @@ import {
   CODE_TABLE_FIELD,
   appendBlock,
   costOf,
+  formatState,
   formatYuan,
   insertMention,
   isActive,
   mentionAt,
   mentionOptions,
   outputFormatBlock,
+  priceText,
+  promptFields,
+  refreshFormatBlock,
   runModeText,
   runStatusType,
   splitFields,
@@ -68,5 +72,43 @@ describe('运行范围', () => {
   it('只跑前几条写条数，不限条数写全部', () => {
     expect(runModeText({ row_limit: 10 })).toBe('前 10 条')
     expect(runModeText({ row_limit: 0 })).toBe('全部')
+  })
+})
+
+describe('提示词里的格式要求和输出字段对不对得上', () => {
+  const block = outputFormatBlock(['行业', '场景'])
+
+  it('读出「返回字段」那一行；没写标准格式要求时不比', () => {
+    expect(promptFields(`判断行业\n\n${block}`)).toEqual(['行业', '场景'])
+    expect(promptFields('3. 返回字段: 行业，场景')).toEqual(['行业', '场景'])
+    expect(promptFields('只说了返回 JSON')).toBeNull()
+    expect(formatState('只说了返回 JSON', ['行业'])).toBe('none')
+    expect(formatState(block, [])).toBe('none')
+  })
+
+  it('字段一样就算对上，顺序不论；加了、删了字段算过时', () => {
+    expect(formatState(block, ['场景', '行业'])).toBe('match')
+    expect(formatState(block, ['行业', '场景', '理由'])).toBe('stale')
+    expect(formatState(block, ['行业'])).toBe('stale')
+  })
+
+  it('更新只换返回字段和例如两行，前后的提示词和其余措辞不动；没有格式要求就追加整段', () => {
+    const content = `判断行业\n\n${block}\n补充：理由不超过 50 字`
+    const next = refreshFormatBlock(content, ['行业', '场景', '理由'])
+    expect(next).toBe(content
+      .replace('2、返回字段：行业、场景', '2、返回字段：行业、场景、理由')
+      .replace('例如：[{"行业":"xx","场景":"xx"}]', '例如：[{"行业":"xx","场景":"xx","理由":"xx"}]'))
+    expect(formatState(next, ['行业', '场景', '理由'])).toBe('match')
+    expect(refreshFormatBlock('判断行业', ['行业'])).toBe(appendBlock('判断行业', outputFormatBlock(['行业'])))
+  })
+})
+
+describe('模型下拉的参考价', () => {
+  it('每千 token 的价换成每百万 token，去掉多余小数；写明是哪一档，联网另写按次的搜索费', () => {
+    const flash = { input_price: '0.0015', output_price: '0.0045', search_price: '0.000000', web_search: false, price_note: '低优档' }
+    expect(priceText(flash)).toBe('输入 ¥1.5 · 输出 ¥4.5 /百万 token · 低优档')
+    expect(priceText({ ...flash, input_price: '0.000800', output_price: '0.003200', price_note: '' })).toBe('输入 ¥0.8 · 输出 ¥3.2 /百万 token')
+    expect(priceText({ ...flash, web_search: true, search_price: '0.004000' }))
+      .toBe('输入 ¥1.5 · 输出 ¥4.5 /百万 token · 低优档 · 联网搜索 ¥0.004/次')
   })
 })

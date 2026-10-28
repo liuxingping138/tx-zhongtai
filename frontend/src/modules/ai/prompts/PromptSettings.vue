@@ -4,7 +4,8 @@ import { computed, ref, watch } from 'vue'
 import type { AiModel, PromptTemplate, SystemCodeTable, TemplateCategory } from '@/api/ai'
 import type { ContractTask } from '@/api/aiTagging'
 import ModelPicker from '../shared/ModelPicker.vue'
-import { CODE_TABLE_FIELD, splitFields } from '../shared/aiText'
+import { CODE_TABLE_FIELD, formatState, promptFields, refreshFormatBlock, splitFields } from '../shared/aiText'
+import CodePreviewDialog from './CodePreviewDialog.vue'
 import PromptFiles from './PromptFiles.vue'
 import TaskFit from './TaskFit.vue'
 import type { TaskFitResult } from './taskFit'
@@ -24,11 +25,13 @@ const props = defineProps<{
   showFit: boolean
   fit: TaskFitResult[]
 }>()
-const emit = defineEmits<{ 'append-format': []; 'files-changed': [template: PromptTemplate] }>()
+const emit = defineEmits<{ 'files-changed': [template: PromptTemplate] }>()
 const category = defineModel<string>('category', { required: true })
 const modelId = defineModel<string>('modelId', { required: true })
 const outputFields = defineModel<string>('outputFields', { required: true })
 const codeTable = defineModel<string>('codeTable', { required: true })
+/** 编辑器里的提示词：看里面的格式要求和输出字段对不对得上，需要时由这里写进去 */
+const content = defineModel<string>('content', { required: true })
 
 // 输出字段在库里按「a|b」存，标签输入框按数组编辑；敲竖线、逗号、顿号也会断开成一个字段。
 const FIELD_DELIMITER = /[|｜,，、]/
@@ -36,6 +39,13 @@ const fields = computed({
   get: () => splitFields(outputFields.value),
   set: (value: string[] | undefined) => { outputFields.value = (value ?? []).join('|') },
 })
+// 「追加格式要求」是一次性的：之后改了输出字段，提示词里的「返回字段」不会跟着变，模型按旧字段回就解析不出来。
+const format = computed(() => formatState(content.value, fields.value))
+const writtenFields = computed(() => promptFields(content.value)?.join('、') ?? '')
+/** 提示词里还没有格式要求就追加整段；有了只改「返回字段」和「例如」两行。 */
+function writeFormat(): void {
+  content.value = refreshFormatBlock(content.value, fields.value)
+}
 
 /**
  * 码表三选一。库里只有两样：code_table 存系统码表的键，空串时用上传的 .txt（有的话）。
@@ -49,14 +59,18 @@ const codeMode = computed<CodeMode>(() => {
   return props.template?.code_name || wantUpload.value ? 'upload' : 'none'
 })
 const CODE_TIPS: Record<CodeMode, string> = {
-  none: '提示词里要用码表时，选系统码表或上传 .txt',
+  none: '提示词里要用码表时，选系统码表或上传文件（.txt、.csv、.xlsx）',
   system: `每次运行都从「码表管理」取最新的；提示词里写 @【${CODE_TABLE_FIELD}】插入码表全文`,
-  upload: `上线时冻结这一份，码表更新了要重新上传；提示词里同样写 @【${CODE_TABLE_FIELD}】插入码表全文`,
+  upload: `Excel 只读第一个工作表，每行各格用 Tab 连成一行；上线时冻结这一份，码表更新了要重新上传。提示词里同样写 @【${CODE_TABLE_FIELD}】`,
 }
 
 function onCodeMode(value: string | number | boolean | undefined): void {
   void setCodeMode(value as CodeMode)
 }
+
+// 选了系统码表、或者已经传了文件，就能看一眼码表内容和大小。
+const previewing = ref(false)
+const previewable = computed(() => (codeMode.value === 'system' ? Boolean(codeTable.value) : codeMode.value === 'upload' && Boolean(props.template?.code_name)))
 
 async function setCodeMode(next: CodeMode): Promise<void> {
   if (next === codeMode.value) return
@@ -156,7 +170,21 @@ async function setCodeMode(next: CodeMode): Promise<void> {
             :can-edit="canEdit"
             :can-export="canExport"
           />
+          <el-button
+            v-if="previewable"
+            link
+            type="primary"
+            size="small"
+            @click="previewing = true"
+          >
+            预览码表
+          </el-button>
         </div>
+        <CodePreviewDialog
+          v-model="previewing"
+          :system-key="codeMode === 'system' ? codeTable : ''"
+          :prompt-id="template?.id ?? ''"
+        />
         <p class="config__tip">
           {{ CODE_TIPS[codeMode] }}
         </p>
@@ -177,14 +205,20 @@ async function setCodeMode(next: CodeMode): Promise<void> {
           draggable
         />
         <div class="config__fields-foot">
-          <span>{{ fields.length ? `共 ${fields.length} 个，` : '' }}模型按这些字段返回 JSON</span>
+          <span
+            v-if="format === 'stale'"
+            class="config__stale"
+            role="status"
+          >提示词里写的返回字段还是「{{ writtenFields }}」，和这里对不上，模型会按旧字段回</span>
+          <span v-else>{{ fields.length ? `共 ${fields.length} 个，` : '' }}模型按这些字段返回 JSON{{ format === 'match' ? '，提示词里的格式要求已对上' : '' }}</span>
           <el-button
+            v-if="format !== 'match'"
             link
-            type="primary"
+            :type="format === 'stale' ? 'warning' : 'primary'"
             :disabled="!canEdit || !fields.length"
-            @click="emit('append-format')"
+            @click="writeFormat"
           >
-            把格式要求追加到提示词
+            {{ format === 'stale' ? '更新提示词里的格式要求' : '把格式要求追加到提示词' }}
           </el-button>
         </div>
       </div>
@@ -236,4 +270,5 @@ async function setCodeMode(next: CodeMode): Promise<void> {
 .config__fields { display: grid; gap: 4px; min-width: 0; }
 .config__fields-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; color: var(--zt-ink-500); font-size: 12px; }
 .config__tip { margin: 4px 0 0; color: var(--zt-ink-500); font-size: 12px; }
+.config__stale { color: var(--zt-warning-text); }
 </style>

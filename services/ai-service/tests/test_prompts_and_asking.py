@@ -122,6 +122,35 @@ async def test_excel_and_code_uploads_are_stored_and_summarized(monkeypatch: pyt
         await service.download_file(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID, "code")  # type: ignore[arg-type]
 
 
+async def test_code_table_can_be_an_excel_or_csv(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Excel 码表转成和系统码表一样的文字：一行一条、Tab 分隔、空行跳过；下载回去是 .txt。"""
+
+    _use(monkeypatch, template())
+    book = xlsx([["一级行业", "一级场景", None], ["交通行业", "智慧航空"], [None, None], ["能源行业", "智慧水务", " "]])
+    data = await service.upload_file(
+        FakeSession(),  # type: ignore[arg-type]
+        ACTOR,
+        FULL_ACCESS,
+        PROMPT_ID,
+        "code",
+        ("行业场景.xlsx", book),
+    )
+    assert data["code_name"] == "行业场景.xlsx"
+    expected = "一级行业\t一级场景\n交通行业\t智慧航空\n能源行业\t智慧水务"
+    assert storage.prompt_file(PROMPT_ID, "code").read_text(encoding="utf-8") == expected
+    content, name = await service.download_file(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID, "code")  # type: ignore[arg-type]
+    assert (content.decode(), name) == (expected, "行业场景.txt")
+
+    await service.upload_file(
+        FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID, "code", ("码表.csv", "行业,场景".encode("gbk"))
+    )  # type: ignore[arg-type]
+    assert storage.prompt_file(PROMPT_ID, "code").read_text(encoding="utf-8") == "行业,场景"
+    with pytest.raises(ApiError, match=r"只支持 \.txt、\.csv 或 \.xlsx"):
+        await service.upload_file(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID, "code", ("码表.xls", b"x"))  # type: ignore[arg-type]
+    with pytest.raises(ApiError, match="第一个工作表是空的"):
+        await service.upload_file(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID, "code", ("空.xlsx", xlsx([[None]])))  # type: ignore[arg-type]
+
+
 async def test_delete_removes_template_files_and_its_sample_runs(monkeypatch: pytest.MonkeyPatch) -> None:
     """样本试跑只属于这个模板：记录和产物一起删，不留孤儿文件；还在跑的先拦下。"""
 

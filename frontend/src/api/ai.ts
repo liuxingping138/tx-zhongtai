@@ -8,9 +8,12 @@ export interface AiModel {
   supports_thinking: boolean
   /** 服务端配了这家厂商的密钥才可用 */
   available: boolean
+  /** 此刻适用的单价（每千 token）：低优档、分时计价的模型会随时段变 */
   input_price: string
   output_price: string
   search_price: string
+  /** 上面的价是哪一档：低优档、高峰价（工作日几点到几点）、平时价，单一价为空 */
+  price_note: string
 }
 
 /** 模板类型（政策、客户、招投标），也是授权单位：只返回当前用户能看到的类型。 */
@@ -273,6 +276,25 @@ export function getBatchRunRows(id: string, failedOnly = false): Promise<RunRows
 }
 
 export interface SampleRunState { run: BatchRun | null; rows: RunRows | null }
+
+/** 码表预览：名称、整份多少字多少行、前 200 行。每次提问都把整份放进 @【上传码表】。 */
+export interface CodePreview {
+  name: string
+  chars: number
+  lines: number
+  head: string
+  truncated: boolean
+}
+
+/** 系统码表现在的内容，不用先保存模板。 */
+export function previewSystemCode(key: string): Promise<CodePreview> {
+  return request(http.get(`${BASE}/prompts/code-preview`, { params: { code_table: key } }))
+}
+
+/** 模板上传的码表文件。 */
+export function previewUploadedCode(promptId: string): Promise<CodePreview> {
+  return request(http.get(`${BASE}/prompts/${promptId}/code-preview`))
+}
 
 export function getSampleRun(promptId: string): Promise<SampleRunState> {
   return request(http.get(`${BASE}/prompts/${promptId}/sample-run`))

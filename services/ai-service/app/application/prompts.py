@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application import model_configs
 from app.application.audit_emit import enqueue_event
-from app.application.sheets import decode_code_table, rows_workbook, sheet_summary
+from app.application.sheets import code_table_from_sheet, decode_code_table, rows_workbook, sheet_summary
 from app.core import storage
 from app.core.codebook import fetch_code_table
 from app.domain.categories import CategoryAccess, category_name, checked_category
@@ -27,7 +27,8 @@ from app.repositories import prompts as repo
 from app.repositories import releases as release_repo
 
 EXCEL_SUFFIX = ".xlsx"
-CODE_SUFFIX = ".txt"
+# 码表：文本直接用；Excel 转成一行一条、Tab 分隔的文字再存，运行时和 .txt 一样整份放进 @【上传码表】。
+CODE_TEXT_SUFFIXES = (".txt", ".csv")
 TITLE_MAX = 255
 
 
@@ -213,6 +214,21 @@ def _check_suffix(filename: str, suffix: str, label: str) -> None:
         raise ApiError(f"{label}只支持 {suffix} 文件", code=ErrorCode.VALIDATION_ERROR, http_status=422)
 
 
+async def _code_table_text(name: str, content: bytes) -> str:
+    lower = name.lower()
+    if lower.endswith(EXCEL_SUFFIX):
+        return await run_excel_parse(code_table_from_sheet, content)
+    if lower.endswith(CODE_TEXT_SUFFIXES):
+        return decode_code_table(content)
+    raise ApiError("码表只支持 .txt、.csv 或 .xlsx 文件", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+
+
+def code_download_name(name: str) -> str:
+    """码表存的是转好的文字：Excel 上传的下载回去叫 .txt，免得拿 Excel 打开一个文本文件。"""
+
+    return name if name.lower().endswith(CODE_TEXT_SUFFIXES) else f"{PureWindowsPath(name).stem}.txt"
+
+
 async def upload_file(
     session: AsyncSession,
     actor: Actor,
@@ -233,8 +249,7 @@ async def upload_file(
         template.excel_name, template.excel_headers, template.excel_rows = name, headers, count
         payload = content
     else:
-        _check_suffix(name, CODE_SUFFIX, "码表")
-        payload = decode_code_table(content).encode("utf-8")
+        payload = (await _code_table_text(name, content)).encode("utf-8")
         template.code_name = name
     _touch(template, actor)
     await enqueue_event(
@@ -287,10 +302,46 @@ async def download_file(
     name = template.excel_name if kind == "excel" else template.code_name
     if not name or not await path.is_file():
         raise NotFoundError("文件不存在或已删除")
+    if kind == "code":
+        name = code_download_name(name)
     await enqueue_event(
         session, event_type="ai.prompt.file_exported", actor=actor, target_id=prompt_id, changes={"kind": kind}
     )
     return await path.read_bytes(), name
+
+
+CODE_PREVIEW_LINES = 200
+
+
+def _code_preview(name: str, text: str) -> dict[str, Any]:
+    """码表预览：名称、总字数、总行数和前几行。每次提问都把整份放进 @【上传码表】，字数就是每次多送给模型的输入。"""
+
+    lines = text.splitlines()
+    return {
+        "name": name,
+        "chars": len(text),
+        "lines": len(lines),
+        "head": "\n".join(lines[:CODE_PREVIEW_LINES]),
+        "truncated": len(lines) > CODE_PREVIEW_LINES,
+    }
+
+
+async def preview_system_code(key: str) -> dict[str, Any]:
+    """系统码表现在的内容（实时从码表服务取）；选码表时就能看，不用先保存模板。"""
+
+    checked = checked_code_table(key)
+    if not checked:
+        raise ApiError("先选一个系统码表", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    return _code_preview(code_table_name(checked), await fetch_code_table(checked))
+
+
+async def preview_uploaded_code(session: AsyncSession, access: CategoryAccess, prompt_id: str) -> dict[str, Any]:
+    template = await require(session, prompt_id)
+    access.require_read(template.category)
+    path = anyio.Path(storage.prompt_file(template.id, "code"))
+    if not template.code_name or not await path.is_file():
+        raise NotFoundError("这个模板还没上传码表")
+    return _code_preview(template.code_name, await path.read_text(encoding="utf-8"))
 
 
 async def code_text(template: PromptTemplate) -> str | None:

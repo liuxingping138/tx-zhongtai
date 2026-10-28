@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 
 import type { AiModel } from '@/api/ai'
+import { priceText } from './aiText'
 
 const props = withDefaults(defineProps<{
   models: AiModel[]
@@ -41,11 +42,17 @@ const current = computed(() => props.models.find(item => item.id === model.value
         :value="item.id"
         :disabled="!item.available"
       >
-        <span>{{ item.name }}</span>
-        <span
-          v-if="!item.available"
-          class="model-picker__off"
-        >未配置密钥</span>
+        <span class="model-picker__option">
+          <span>{{ item.name }}</span>
+          <span
+            v-if="!item.available"
+            class="model-picker__off"
+          >未配置密钥</span>
+          <span
+            v-else
+            class="model-picker__price"
+          >{{ priceText(item) }}</span>
+        </span>
       </el-option>
     </el-select>
     <el-switch
@@ -65,4 +72,7 @@ const current = computed(() => props.models.find(item => item.id === model.value
 .model-picker__select { width: 280px; }
 .model-picker__select--small { width: 200px; }
 .model-picker__off { margin-left: 8px; color: var(--el-color-warning); font-size: 12px; }
+/* 下拉项：名称在左、参考价在右；下拉框按内容变宽，不截断价格。 */
+.model-picker__option { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.model-picker__price { color: var(--zt-ink-500); font-size: 12px; font-variant-numeric: tabular-nums; }
 </style>

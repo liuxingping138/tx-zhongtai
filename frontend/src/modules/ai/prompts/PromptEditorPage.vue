@@ -8,7 +8,6 @@ import { createPrompt, deletePrompt, listPrompts, updatePrompt, type AiModel, ty
 import { errorMessage } from '@/api/errors'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import { useAuthStore } from '@/stores/auth'
-import { appendBlock, outputFormatBlock, splitFields } from '../shared/aiText'
 import { defaultCategory } from '../shared/categories'
 import { useAnswerStream } from '../shared/useAnswerStream'
 import FlowBar from './FlowBar.vue'
@@ -127,10 +126,6 @@ function sampleChanged(run: BatchRun): void {
   if (!template) return
   const sample = sampleFromRun(run, template)
   if (JSON.stringify(sample) !== JSON.stringify(template.sample)) selected.value = { ...template, sample }
-}
-
-function appendFields(): void {
-  form.content = appendBlock(form.content, outputFormatBlock(splitFields(form.output_fields)))
 }
 
 /** 能不能存成模板：要有名字和类型；提示词可以先空着（先传样本再照着列名写）。不行就说明原因，名字空着就把光标放过去。 */
@@ -318,6 +313,7 @@ function onStep(key: StepKey): void {
             v-model:model-id="form.model_id"
             v-model:output-fields="form.output_fields"
             v-model:code-table="form.code_table"
+            v-model:content="form.content"
             :template="selected"
             :categories="categoryOptions"
             :models="models"
@@ -328,7 +324,6 @@ function onStep(key: StepKey): void {
             :sample-tasks="taskFit.sampleTasks.value"
             :show-fit="taskFit.visible.value"
             :fit="taskFit.results.value"
-            @append-format="appendFields"
             @files-changed="replace"
           />
         </div>

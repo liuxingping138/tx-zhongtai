@@ -105,7 +105,7 @@ async def test_page_shows_prices_at_this_moment(model_table: list[Any], monkeypa
     monkeypatch.setattr(get_settings(), "ark_api_key", "k")
     info = (await asking.available_models(FakeSession()))[0]  # type: ignore[arg-type]
     # Flash 在低优档：前端估算对话费用用低优价。
-    assert (info["input_price"], info["output_price"]) == ("0.0015", "0.0045")
+    assert (info["input_price"], info["output_price"], info["price_note"]) == ("0.0015", "0.0045", "低优档")
 
 
 async def _db() -> Any:

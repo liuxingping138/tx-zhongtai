@@ -9,19 +9,57 @@ export function splitFields(value: string): string[] {
 
 /** 「新增输出字段」拼成返回格式要求，追加到提示词末尾。措辞与旧系统一致，批量解析靠它约束模型输出。 */
 export function outputFormatBlock(fields: string[]): string {
-  const example = `[{${fields.map(field => `"${field}":"xx"`).join(',')}}]`
   return [
     '# 返回格式要求：',
     '1、不要编虚假信息，没有相关内容，用-填充。',
     `2、返回字段：${fields.join('、')}`,
     '3、最后以json格式返回给我，返回1条数据，不会要有多余的字段，严格按照我给的',
-    `例如：${example}`,
+    `例如：${formatExample(fields)}`,
     '注意两边有中括号！',
   ].join('\n')
 }
 
+function formatExample(fields: string[]): string {
+  return `[{${fields.map(field => `"${field}":"xx"`).join(',')}}]`
+}
+
 export function appendBlock(content: string, block: string): string {
   return content.trim() ? `${content.replace(/\s+$/, '')}\n\n${block}` : block
+}
+
+// 格式要求里写字段的两行：「2、返回字段：a、b」和「例如：[{"a":"xx","b":"xx"}]」。编号、冒号全半角都认，人手改过的旧模板也能对上。
+const FIELDS_LINE = /^(\s*(?:\d+[、.．]\s*)?返回字段[：:]\s*)(.*)$/
+const EXAMPLE_LINE = /^(\s*例如[：:]\s*)\[\{.*\}\]\s*$/
+
+/** 提示词里「返回字段」那一行写的字段；没有这一行时是 null：模板没用标准的格式要求，不拿来比。 */
+export function promptFields(content: string): string[] | null {
+  for (const line of content.split('\n')) {
+    const match = FIELDS_LINE.exec(line)
+    if (match) return (match[2] ?? '').split(/[、,，|]/).map(item => item.trim()).filter(Boolean)
+  }
+  return null
+}
+
+export type FormatState = 'none' | 'match' | 'stale'
+
+/** 提示词里的格式要求和输出字段对不对得上：none 没写格式要求，match 字段一致（顺序不论），stale 改了输出字段没跟着改。 */
+export function formatState(content: string, fields: string[]): FormatState {
+  const written = promptFields(content)
+  if (!written || !fields.length) return 'none'
+  const same = written.length === fields.length && fields.every(field => written.includes(field))
+  return same ? 'match' : 'stale'
+}
+
+/** 按现在的输出字段改写格式要求：只换「返回字段」和「例如」两行，其余措辞、位置不动；没有这两行就在末尾追加整段。 */
+export function refreshFormatBlock(content: string, fields: string[]): string {
+  if (!promptFields(content)) return appendBlock(content, outputFormatBlock(fields))
+  const example = formatExample(fields)
+  return content.split('\n').map(line => {
+    const head = FIELDS_LINE.exec(line)?.[1]
+    if (head !== undefined) return `${head}${fields.join('、')}`
+    const sample = EXAMPLE_LINE.exec(line)?.[1]
+    return sample === undefined ? line : `${sample}${example}`
+  }).join('\n')
 }
 
 /** 光标前最近的 @ 到光标之间没有空白时，返回 @ 位置和已输入的过滤词。 */
@@ -60,6 +98,20 @@ export function costOf(model: Pick<AiModel, 'input_price' | 'output_price' | 'se
 }
 
 /** 费用保留到小数点后 4 位：单次提问常在千分之一元量级。 */
+/** 去掉多余的小数位：3.0000000004 → 3，0.80 → 0.8 */
+function plain(value: number): string {
+  return String(Number(value.toFixed(4)))
+}
+
+/** 下拉里的价：此刻适用的单价，库里按每千 token 存、这里换成每百万 token 好读；写明是哪一档，联网另按次计。 */
+export function priceText(model: Pick<AiModel, 'input_price' | 'output_price' | 'search_price' | 'web_search' | 'price_note'>): string {
+  const perMillion = (value: string) => plain(Number(value) * 1000)
+  const parts = [`输入 ¥${perMillion(model.input_price)} · 输出 ¥${perMillion(model.output_price)} /百万 token`]
+  if (model.price_note) parts.push(model.price_note)
+  if (model.web_search && Number(model.search_price)) parts.push(`联网搜索 ¥${plain(Number(model.search_price))}/次`)
+  return parts.join(' · ')
+}
+
 export function formatYuan(value: number): string {
   return `¥${value.toFixed(4)}`
 }

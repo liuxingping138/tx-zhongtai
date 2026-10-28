@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
 
@@ -114,6 +115,14 @@ def test_time_of_day_prices_switch_between_peak_and_idle() -> None:
     assert economy.prices_at(busy) == (Decimal("0.0016"), Decimal("0.0064"))
     assert economy.prices_at(idle) == (Decimal("0.0008"), Decimal("0.0032"))
     assert calc_costs(economy, 1000, 1000, 0, busy)[0] == 2 * calc_costs(economy, 1000, 1000, 0, idle)[0]
+    # 页面价格旁边写清是哪一档：高峰、平时；低优档的不看时段。
+    assert economy.price_note(busy) == "高峰价（工作日 09:00-12:00、14:00-18:00）"
+    assert economy.price_note(idle) == "平时价（工作日 09:00-12:00、14:00-18:00 涨价）"
+    flex = replace(
+        economy, service_tier="flex", flex_input_price=Decimal("0.0004"), flex_output_price=Decimal("0.0016")
+    )
+    assert flex.price_note(busy) == "低优档"
+    assert replace(economy, peak_input_price=None).price_note(busy) == ""
 
 
 def test_parse_fields_tolerates_wrapping_nesting_and_single_objects() -> None:

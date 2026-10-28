@@ -118,6 +118,32 @@ async def test_system_code_table_is_fetched_live(monkeypatch: pytest.MonkeyPatch
     assert await prompts.code_text(item) == "上传的旧码表"
 
 
+async def test_code_preview_says_how_big_and_shows_the_first_lines(monkeypatch: pytest.MonkeyPatch) -> None:
+    """选码表时就能看内容：系统码表实时取、上传的读文件；整份多大写清楚，只回前 200 行。"""
+
+    table = "\n".join(f"行业{index}\t场景{index}" for index in range(250))
+    _codebook(monkeypatch, table)
+    data = await prompts.preview_system_code("scenario_l1")
+    assert (data["name"], data["lines"], data["chars"], data["truncated"]) == (
+        "行业场景码表（一级行业 + 一级场景）",
+        250,
+        len(table),
+        True,
+    )
+    assert data["head"].splitlines() == table.splitlines()[:200]
+    for key, message in (("", "先选一个系统码表"), ("nope", "不认识的系统码表")):
+        with pytest.raises(ApiError, match=message):
+            await prompts.preview_system_code(key)
+
+    _tables(monkeypatch, template(code_name="码表.txt"), [])
+    storage.write_atomic(storage.prompt_file(PROMPT_ID, "code"), b"A\tB\nC\tD")
+    uploaded = await prompts.preview_uploaded_code(FakeSession(), FULL_ACCESS, PROMPT_ID)  # type: ignore[arg-type]
+    assert (uploaded["name"], uploaded["lines"], uploaded["chars"], uploaded["truncated"]) == ("码表.txt", 2, 7, False)
+    _tables(monkeypatch, template(code_name=""), [])
+    with pytest.raises(ApiError, match="还没上传码表"):
+        await prompts.preview_uploaded_code(FakeSession(), FULL_ACCESS, PROMPT_ID)  # type: ignore[arg-type]
+
+
 async def test_codebook_client_never_falls_back_to_an_empty_table(monkeypatch: pytest.MonkeyPatch) -> None:
     """取不到码表就报错：拿空码表提问，模型照样回答，结果全错还看不出来。"""
 

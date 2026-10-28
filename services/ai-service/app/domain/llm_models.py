@@ -70,6 +70,16 @@ class LlmModel:
             return self.peak_input_price, self.peak_output_price
         return self.input_price, self.output_price
 
+    def price_note(self, when: datetime) -> str:
+        """prices_at 给的是哪一档：页面价格旁边写清，免得同一个模型上午下午看到的价不一样，以为价格乱跳。"""
+
+        if self.service_tier == "flex" and self.flex_input_price is not None and self.flex_output_price is not None:
+            return "低优档"
+        if self.peak_input_price is None or self.peak_output_price is None:
+            return ""
+        hours = (self.peak_hours or DEFAULT_PEAK_HOURS).replace(",", "、")
+        return f"高峰价（工作日 {hours}）" if in_peak(when, self.peak_hours) else f"平时价（工作日 {hours} 涨价）"
+
 
 def parse_peak_hours(text: str) -> list[tuple[time, time]]:
     """「09:00-12:00,14:00-18:00」→ 时段列表。格式不对抛 ValueError，由调用方转成中文提示。"""

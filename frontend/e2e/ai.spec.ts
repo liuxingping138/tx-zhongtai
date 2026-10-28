@@ -212,18 +212,44 @@ test('新模板先传样本再写提示词：上传时顺便保存，码表三�
   const content = page.getByRole('textbox', { name: '提示词内容' })
   await expect(content).toHaveValue('@【企业名称】')
 
-  // 码表三选一：系统码表每次取最新的，@ 弹框写明 @【上传码表】换成哪份码表。
+  // 格式要求是一次性追加的：之后加了输出字段，提示「还是旧的」，一键只改返回字段和例如两行。
+  const fields = page.getByRole('textbox', { name: '输出字段' })
+  await fields.fill('行业')
+  await fields.press('Enter')
+  await page.getByRole('button', { name: '把格式要求追加到提示词' }).click()
+  await expect(page.getByText('提示词里的格式要求已对上')).toBeVisible()
+  await fields.fill('规模')
+  await fields.press('Enter')
+  await expect(page.getByText('提示词里写的返回字段还是「行业」')).toBeVisible()
+  await page.getByRole('button', { name: '更新提示词里的格式要求' }).click()
+  await expect(content).toHaveValue(/2、返回字段：行业、规模/)
+  await expect(page.getByText('提示词里的格式要求已对上')).toBeVisible()
+  await content.fill('@【企业名称】')
+
+  // 码表三选一：系统码表每次取最新的，能先看一眼内容和大小；@ 弹框写明 @【上传码表】换成哪份码表。
   const codeSource = page.getByRole('radiogroup', { name: '码表来源' })
   await codeSource.getByText('系统码表').click()
   await expect(page.getByText('每次运行都从「码表管理」取最新的')).toBeVisible()
+  await page.getByRole('button', { name: '预览码表' }).click()
+  const preview = page.getByRole('dialog', { name: /码表预览/ })
+  await expect(preview).toBeVisible()
+  await preview.getByRole('button', { name: /关闭/ }).click()
   await content.press('End')
   await content.pressSequentially(' @')
   await page.getByRole('option', { name: /@【上传码表】\s*码表全文 · 政策类型码表/ }).click()
   await expect(content).toHaveValue('@【企业名称】 @【上传码表】')
-  // 换成上传文件还是这个变量；选「不用码表」时变量标出没选码表。
+  // 换成上传文件还是这个变量；Excel 码表转成一行一条、Tab 分隔的文字，预览里看得到。
   await codeSource.getByText('上传文件').click()
-  await expect(page.getByRole('button', { name: '上传码表 .txt' })).toBeVisible()
+  const codeChooser = page.waitForEvent('filechooser')
+  await page.getByRole('button', { name: '上传码表', exact: true }).click()
+  await (await codeChooser).setFiles(sampleBook)
+  await expect(page.getByText('码表已上传')).toBeVisible()
+  await page.getByRole('button', { name: '预览码表' }).click()
+  await expect(preview.getByLabel('码表内容')).toContainText('企业名称')
+  await preview.getByRole('button', { name: /关闭/ }).click()
+  // 选「不用码表」要把已上传的文件删掉才真的不用：先确认；删完变量标出没选码表。
   await codeSource.getByText('不用码表').click()
+  await page.getByRole('dialog', { name: '删除已上传的文件？' }).getByRole('button', { name: '删除' }).click()
   await expect(vars).toContainText('没选码表')
   await expect(vars).toContainText('用了码表变量，但还没选码表')
 

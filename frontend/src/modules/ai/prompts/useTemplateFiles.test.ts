@@ -11,7 +11,7 @@ vi.mock('element-plus', () => ({ ElMessage: message, ElMessageBox: { confirm } }
 vi.mock('@/api/ai', () => api)
 vi.mock('../shared/downloads', () => ({ downloadPromptFile: download }))
 
-import { useTemplateFiles } from './useTemplateFiles'
+import { codeDownloadName, useTemplateFiles } from './useTemplateFiles'
 
 const saved = { id: 't1', excel_name: '样本.xlsx', code_name: '码表.txt' } as PromptTemplate
 
@@ -122,5 +122,13 @@ describe('模板附件：新模板上传时顺便保存', () => {
     expect(message.error).toHaveBeenCalledWith('下载失败，请重试')
     await setup().files.download('excel')
     expect(download).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('码表下载的文件名', () => {
+  it('文本照旧；Excel 上传的存的是转好的文字，下载回来叫 .txt', () => {
+    expect(codeDownloadName('码表.txt')).toBe('码表.txt')
+    expect(codeDownloadName('码表.CSV')).toBe('码表.CSV')
+    expect(codeDownloadName('行业场景.xlsx')).toBe('行业场景.txt')
   })
 })

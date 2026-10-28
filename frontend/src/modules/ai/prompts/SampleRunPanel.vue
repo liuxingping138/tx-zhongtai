@@ -35,6 +35,7 @@ let sequence = 0
 const run = computed(() => state.value.run)
 const running = computed(() => Boolean(run.value && isActive(run.value.status)))
 const maxRows = computed(() => Math.min(MAX_ROWS, props.template?.excel_rows ?? 0))
+const limitLocked = computed(() => running.value || !maxRows.value)
 const stale = computed(() => {
   const current = run.value
   const template = props.template
@@ -148,13 +149,15 @@ async function stop(): Promise<void> {
         class="sample__controls"
       >
         <label for="sample-limit">跑前</label>
+        <!-- Element Plus 只在挂载时写 aria-valuemax / aria-disabled：上限、能不能改变了就重新挂载，读屏和自动化测试才不会读到旧状态。 -->
         <el-input-number
           id="sample-limit"
+          :key="`${maxRows}:${limitLocked}`"
           v-model="limit"
           size="small"
           :min="1"
           :max="maxRows || 1"
-          :disabled="running || !maxRows"
+          :disabled="limitLocked"
           controls-position="right"
         />
         <span>条</span>

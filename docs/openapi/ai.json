@@ -399,6 +399,91 @@
         }
       }
     },
+    "/api/v1/ai/prompts/code-preview": {
+      "get": {
+        "tags": [
+          "ai-prompts"
+        ],
+        "summary": "Preview System Code",
+        "description": "系统码表的字数和前几行：选码表时看一眼内容，不用先保存模板。",
+        "operationId": "preview_system_code_api_v1_ai_prompts_code_preview_get",
+        "parameters": [
+          {
+            "name": "code_table",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 32,
+              "description": "系统码表的键",
+              "title": "Code Table"
+            },
+            "description": "系统码表的键"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/prompts/{prompt_id}/code-preview": {
+      "get": {
+        "tags": [
+          "ai-prompts"
+        ],
+        "summary": "Preview Uploaded Code",
+        "description": "上传的码表文件的字数和前几行；看内容不算导出，下载整份才要导出权限。",
+        "operationId": "preview_uploaded_code_api_v1_ai_prompts__prompt_id__code_preview_get",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prompt Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/ai/prompts/{prompt_id}/sample-run": {
       "get": {
         "tags": [

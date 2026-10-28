@@ -75,6 +75,25 @@ def sheet_summary(content: bytes) -> tuple[list[str], int]:
     return headers, len(data)
 
 
+def code_table_from_sheet(content: bytes) -> str:
+    """Excel 码表转成文字：只读第一个工作表，一行一条、各格用 Tab 连起来（和系统码表发给模型的样子一样），空行跳过。"""
+
+    rows = iter_workbook_rows(content)
+    try:
+        lines: list[str] = []
+        for values in rows:
+            texts = [_text(value).strip() for value in values]
+            while texts and not texts[-1]:
+                texts.pop()
+            if texts:
+                lines.append("\t".join(texts))
+    finally:
+        rows.close()
+    if not lines:
+        raise ApiError("Excel 码表的第一个工作表是空的", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    return "\n".join(lines)
+
+
 def decode_code_table(content: bytes) -> str:
     """码表常是 Windows 下另存的 txt，依次试 UTF-8 和 GBK。"""
 
