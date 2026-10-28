@@ -22,13 +22,13 @@
 | 筛选项候选值 | `composables/useFilterOptions.ts` | `v-bind="filters.bind('字段')"`；候选少的字段整份预发、本地过滤，候选多的自动转服务端搜索。不要再自己 reactive 一份 options |
 | 查询与 URL 恢复 | `composables/useListQuery.ts` | `useListQuery(query, load, 私有字段?)`，人名等个人信息放私有字段，不写 URL；FilterBar 直接接 `@search="listQuery.search"`（回第一页、生效草稿、加载）和 `@reset="listQuery.resetFilters"`（筛选恢复初始值，每页条数不变）。状态卡片这类单列切换用 `replaceApplied` + `toggleValue` |
 | 列表加载 | `composables/useListLoader.ts` | 传 `requested/commitPage`（来自 useListQuery）、`fetch`、`errorText`；返回 items/total/loading/loadError/resultFiltered/load。只采用最后一次请求的结果，不要在页面里再写请求序号 |
-| 业务表格、详情 | `components/BusinessTable.vue` | items、完整 columns、selected、titleKey、可选 summaryKeys、canWrite/loading/filtered，edit/reset；传 `groups`（即 EDITOR_GROUPS）后详情按表单分组分类展示；有独立详情页的模块传 `detailRoute(row, index)`，标题和「查看」改成链接跳过去，行尾不再放「编辑」。详情抽屉在字段后追加内容用 `#detail-extra`，底部动作用 `#detail-actions="{ row, close }"`，不要另造平行抽屉。批量操作传 `selectable`，用 `useTableSelection`：`:ref="selection.bindTable"`、`@selection-change="checked = $event"`，操作完 `selection.clear()`；选一个选项的批量操作用 `BatchChoiceDialog`（选项带后果说明，跳过的原因弹窗列出） |
-| 分类详情 | `components/DetailSections.vue`、`DetailFieldTable.vue`、`detailSections.ts` | `buildDetailSections(columns, groups)` 按表单分组排、其余列归「系统信息」，`detailRows` 决定两个一行还是独占一行（有单测）；组标题右侧用 `#actions`，某一组换成编辑表单用 `#body` |
+| 业务表格、详情 | `components/BusinessTable.vue` | items、完整 columns、selected、titleKey、可选 summaryKeys、canWrite/loading/filtered，edit/reset；传 `groups`（即 EDITOR_GROUPS）后详情按表单分组分类展示；有独立详情页的模块传 `detailRoute(row, index)`，标题、「查看」「编辑」都改成链接跳过去，「编辑」在地址上加 `edit=1`，详情页打开就进编辑状态。详情抽屉在字段后追加内容用 `#detail-extra`，底部动作用 `#detail-actions="{ row, close }"`，不要另造平行抽屉。批量操作传 `selectable`，用 `useTableSelection`：`:ref="selection.bindTable"`、`@selection-change="checked = $event"`，操作完 `selection.clear()`；选一个选项的批量操作用 `BatchChoiceDialog`（选项带后果说明，跳过的原因弹窗列出） |
+| 分类详情 | `components/DetailSections.vue`、`DetailFieldTable.vue`、`detailSections.ts` | `buildDetailSections(columns, groups)` 按表单分组排、其余列归「系统信息」，`detailRows` 决定两个一行还是独占一行（有单测）；组标题右侧用 `#actions`，把字段表换成编辑表单用 `#body` |
 | 表格列 + 编辑字段合成完整列 | `composables/useDetailColumns.ts` | `useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)` 返回 `columns/defaults/selected`：编辑表单里有、表格里没有的字段追加到列设置和详情，ColumnPicker 与 BusinessTable 共用这一份 |
 | 显示列与浏览器记忆 | `components/ColumnPicker.vue`、`components/columnSelection.ts` | 与表格共享 selected，传完整 columns 和 defaults。按用户和 route.path 存字段键（`zt:columns:v2:…`），同时记住当时页面有哪些列，之后新加的列默认显示，不会被当成用户隐藏的列。新模块不传 legacyDefaults，六个老业务表留着它只为迁移旧偏好 |
 | 字段列类型 | `components/dataColumns.ts` | prop 与 API 字段对应；label 简明、fullLabel 保留原名；可选 width/minWidth/grow/wrap/time/link |
 | 列顺序与宽度计算 | `components/dataColumnLayout.ts` | layoutDataColumns 固定短字段、让长字段吸收余量；不按首列特殊处理 |
-| 分组业务表单 | `components/GroupedFields.vue` | 完整字段 groups、表单 model、submitError，保存前 validate；字段可设 `choices`（下拉单选）、`date`（日期选择器，值为 YYYY-MM-DD）或 `disabled`（只读，如编辑时不能改的编号）；`bare` 只出输入框，组标题由外面给（核对页按组编辑） |
+| 分组业务表单 | `components/GroupedFields.vue` | 完整字段 groups、表单 model、submitError，保存前 validate；字段可设 `choices`（下拉单选）、`date`（日期选择器，值为 YYYY-MM-DD）或 `disabled`（只读，如编辑时不能改的编号）；`bare` 只出输入框，组标题由外面给（核对页编辑时每组一份） |
 | 业务记录新增/编辑 | `components/RecordEditorDrawer.vue` + `composables/useRecordEditor.ts` | `useRecordEditor({ noun, groups, defaults?, create, update, check?, refresh })`，`update` 自己带上 `version`；列表行 `@edit="editor.openEdit"`、新增按钮 `editor.openCreate`。抽屉内置分组表单、必填与跨字段校验（`check`）、409 冲突保留草稿并提示、未保存离开确认，页面不自己拼抽屉 |
 | 系统表单校验 | `composables/useFieldValidation.ts` | 字段错误、提交验证，不覆盖业务规则 |
 | 未保存保护 | `composables/useUnsavedForm.ts` | visible、表单快照、saving；接 close/beforeClose。业务记录抽屉已由 useRecordEditor 接好，系统表单单独用 |
@@ -138,10 +138,10 @@ frontend 目录运行 `pnpm run type-check`、`pnpm run lint`、`pnpm run test`�
 
 ## 核对页（政策基础标签、政策解读）
 
-`modules/policy/shared/`：`PolicyReviewPage.vue` 是页面骨架（概要、按分组的字段表、右栏正文），`useReviewRecord.ts` 管取记录、翻条和按组编辑，两张表的 `BaseTagReview.vue`、`InterpretationReview.vue` 只给字段、概要字段、状态标签和右上角动作。
+`modules/policy/shared/`：`PolicyReviewPage.vue` 是页面骨架（概要、按分组的字段表、右栏正文），`useReviewRecord.ts` 管取记录、翻条和编辑，两张表的 `BaseTagReview.vue`、`InterpretationReview.vue` 只给字段、概要字段、状态标签和右上角动作。
 
 - 列表经 BusinessTable 的 `detailRoute` 跳过来，地址带上已生效的筛选、这条在结果里的位置 `pos` 和列表每页条数 `ps`（`reviewQuery.ts`，有单测）。上一条、下一条用列表接口按位置取一条（`page=pos+1&page_size=1`），所以两张表的列表排序最后按 ID 兜底，顺序才固定。没有 `pos`（直接打开链接）就不显示翻条
-- 按组编辑：组标题右侧「编辑」把这一组换成 `GroupedFields`（`bare`），保存时整张表单连同版本号提交，和列表页的编辑抽屉一致；409 保留草稿并提示。一次只能改一组，改了没保存就翻条、离开都走 `useUnsavedForm` 的确认
+- 编辑：分组导航右边一个「编辑」，各组的字段表一起换成 `GroupedFields`（`bare`，每组一份，保存前倒着逐组校验，焦点停在最靠前的错误上），底部操作条一个「保存」，整张表单连同版本号提交，和列表页的编辑抽屉一致；409 保留草稿并提示。列表的「编辑」带 `edit=1` 进来，`useReviewRecord` 加载完先把它从地址栏去掉（不重新加载），再按 `canEdit` 打开编辑。改了没保存就翻条、离开都走 `useUnsavedForm` 的确认
 - 正文用 `PolicyContent` 的 `panel` 模式：直接给全文，表头右侧放「收起」；收起状态存在本浏览器
 - 政策解读「核对无误，标为人工验证」后调 `advance()`：同一位置换成了别的记录（这条出了筛选）就打开它，否则往后一条，最后一条就停在原页
 

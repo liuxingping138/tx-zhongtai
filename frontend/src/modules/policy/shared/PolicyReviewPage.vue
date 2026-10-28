@@ -1,6 +1,6 @@
 <script setup lang="ts" generic="T extends { id: string }">
 import { computed, ref, type ComponentPublicInstance } from 'vue'
-import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, EditPen } from '@element-plus/icons-vue'
 
 import type { PolicyContent as PolicyContentData } from '@/api/policy'
 import { fieldText, fieldValue } from '@/components/cellValue'
@@ -15,8 +15,8 @@ import PolicyContent from './PolicyContent.vue'
 import type { useReviewRecord } from './useReviewRecord'
 
 /**
- * 政策核对页：上面是概要，左边按分组的字段表（一次改一组），右边是政策正文，可收起。
- * 先看结论再翻原文，所以字段在左、正文在右。
+ * 政策核对页：上面是概要，左边按分组的字段表，右边是政策正文，可收起。
+ * 先看结论再翻原文，所以字段在左、正文在右。点「编辑」各组一起变成输入框，底部一次保存，改的时候正文还在右边对照。
  */
 const props = defineProps<{
   review: ReturnType<typeof useReviewRecord<T>>
@@ -38,10 +38,29 @@ const {
 } = props.review
 
 const sections = computed(() => buildDetailSections(props.columns, props.groups))
-const editable = (title: string) => props.canWrite && props.groups.some(group => group.title === title)
 const groupOf = (title: string) => props.groups.filter(group => group.title === title)
-function bindFields(instance: Element | ComponentPublicInstance | null) {
-  fields.value = (instance ?? undefined) as EditorFieldsHandle | undefined
+
+// 编辑时每组一份输入框，保存前逐组校验。倒着校验：每组校验失败都会把焦点移到自己的错误上，最后停在最靠前的那组。
+const handles = new Map<string, EditorFieldsHandle>()
+function bindFields(title: string) {
+  return (instance: Element | ComponentPublicInstance | null) => {
+    if (instance) handles.set(title, instance as unknown as EditorFieldsHandle)
+    else handles.delete(title)
+  }
+}
+fields.value = {
+  async validate() {
+    let ok = true
+    for (const group of [...props.groups].reverse()) {
+      const handle = handles.get(group.title)
+      if (handle && !await handle.validate()) ok = false
+    }
+    return ok
+  },
+  async setError(key, message) {
+    const group = props.groups.find(item => item.fields.some(field => field.key === key))
+    if (group) await handles.get(group.title)?.setError(key, message)
+  },
 }
 
 const facts = computed(() => {
@@ -171,7 +190,7 @@ function setContentOpen(open: boolean) {
             <slot
               name="actions"
               :row="record"
-              :editing="editing !== null"
+              :editing="editing"
             />
           </div>
         </div>
@@ -207,76 +226,80 @@ function setContentOpen(open: boolean) {
             >
               {{ section.title }}
             </button>
+            <el-button
+              v-if="canWrite && !editing"
+              class="review__edit"
+              :icon="EditPen"
+              @click="startEdit"
+            >
+              编辑
+            </el-button>
           </nav>
           <div
             ref="scroller"
             class="review__scroll"
             @scroll.passive="syncActive"
           >
-            <DetailSections
-              :row="record"
-              :sections="sections"
+            <el-form
+              novalidate
+              label-position="top"
+              :disabled="saving"
+              @submit.prevent="saveEdit"
             >
-              <template #actions="{ section }">
-                <div
-                  v-if="editable(section.title)"
-                  class="review__section-actions"
-                >
-                  <template v-if="editing === section.title">
-                    <span
-                      v-if="dirty"
-                      class="review__dirty"
-                      role="status"
-                    >有未保存的修改</span>
-                    <el-button
-                      :disabled="saving"
-                      @click="cancelEdit"
-                    >
-                      取消
-                    </el-button>
-                    <el-button
-                      type="primary"
-                      :loading="saving"
-                      @click="saveEdit"
-                    >
-                      保存这一组
-                    </el-button>
-                  </template>
-                  <el-button
-                    v-else
-                    link
-                    type="primary"
-                    :disabled="editing !== null"
-                    @click="startEdit(section.title)"
+              <DetailSections
+                :row="record"
+                :sections="sections"
+              >
+                <template #body="{ section }">
+                  <div
+                    v-if="editing && groupOf(section.title).length"
+                    class="review__editor"
                   >
-                    编辑
-                  </el-button>
-                </div>
-              </template>
-              <template #body="{ section }">
-                <el-form
-                  v-if="editing === section.title"
-                  class="review__editor"
-                  novalidate
-                  :disabled="saving"
-                  label-position="top"
-                  @submit.prevent="saveEdit"
-                >
-                  <GroupedFields
-                    :ref="bindFields"
-                    :model-value="draft"
-                    :groups="groupOf(section.title)"
-                    :submit-error="saveError"
-                    bare
+                    <GroupedFields
+                      :ref="bindFields(section.title)"
+                      :model-value="draft"
+                      :groups="groupOf(section.title)"
+                      bare
+                    />
+                  </div>
+                  <DetailFieldTable
+                    v-else
+                    :row="record"
+                    :fields="section.fields"
                   />
-                </el-form>
-                <DetailFieldTable
-                  v-else
-                  :row="record"
-                  :fields="section.fields"
-                />
-              </template>
-            </DetailSections>
+                </template>
+              </DetailSections>
+            </el-form>
+          </div>
+          <div
+            v-if="editing"
+            class="review__edit-bar"
+          >
+            <p
+              v-if="saveError"
+              class="review__save-error"
+              role="alert"
+            >
+              {{ saveError }}
+            </p>
+            <span
+              v-else-if="dirty"
+              class="review__dirty"
+              role="status"
+            >有未保存的修改</span>
+            <el-button
+              :disabled="saving"
+              @click="cancelEdit"
+            >
+              取消
+            </el-button>
+            <el-button
+              type="primary"
+              :loading="saving"
+              @click="saveEdit"
+            >
+              保存
+            </el-button>
           </div>
         </section>
 
@@ -340,9 +363,11 @@ function setContentOpen(open: boolean) {
 .review__tabs button { height: 44px; padding: 0; border: 0; background: none; color: var(--zt-ink-700); font: inherit; font-size: 14px; cursor: pointer; }
 .review__tabs button.is-active { color: var(--zt-blue-600); font-weight: 600; box-shadow: inset 0 -2px 0 var(--zt-blue-600); }
 .review__scroll { position: relative; flex: 1; min-height: 0; overflow-y: auto; padding: 16px 20px 24px; }
-.review__section-actions { display: flex; align-items: center; gap: 8px; }
-.review__section-actions :deep(.el-button + .el-button) { margin-left: 0; }
-.review__dirty { color: var(--el-color-warning-dark-2); font-size: 12px; }
+.review__edit { align-self: center; margin-left: auto; }
+.review__edit-bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--zt-border); }
+.review__edit-bar :deep(.el-button + .el-button) { margin-left: 0; }
+.review__dirty { margin-right: auto; color: var(--el-color-warning-dark-2); font-size: 12px; }
+.review__save-error { flex: 1 1 280px; margin: 0 auto 0 0; color: var(--el-color-danger); font-size: 13px; line-height: 1.5; }
 .review__editor { padding: 14px 16px; border-radius: var(--zt-radius); background: var(--el-color-primary-light-9); box-shadow: inset 0 0 0 1px var(--el-color-primary-light-7); }
 .review__content { overflow-y: auto; padding: 0 20px 20px; }
 .review__content :deep(.policy-content__head) { padding-top: 14px; }

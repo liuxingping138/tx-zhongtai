@@ -33,6 +33,7 @@ const review = useReviewRecord<InterpretationItem>({
   list: listInterpretations,
   // 政策唯一标识不在表单里，按原值提交。
   update: (row, form) => updateInterpretation(row.id, { ...form, policy_uid: row.policy_uid, version: row.version }),
+  canEdit: () => canWrite.value,
 })
 
 const status = computed(() => {
@@ -48,7 +49,9 @@ async function verify(row: InterpretationItem) {
   try {
     await setInterpretationsDataStatus([row.id], '人工验证')
     const moved = await review.advance()
-    ElMessage.success(moved ? '已标为人工验证，打开了下一条' : '已标为人工验证')
+    // 新增场景标完还要同步才进码表，顺带提醒入口在哪。
+    const sync = row.is_new_scenario === '是' ? '。新增场景回列表点「同步新增场景」写进码表' : ''
+    ElMessage.success(`${moved ? '已标为人工验证，打开了下一条' : '已标为人工验证'}${sync}`)
   } catch (error) {
     ElMessage.error(errorMessage(error, '没能改成人工验证，请重试'))
   } finally {

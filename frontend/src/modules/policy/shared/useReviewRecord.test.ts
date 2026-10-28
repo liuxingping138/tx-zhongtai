@@ -31,7 +31,7 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-function setup(id: string, query: Record<string, string | string[]> = {}, initial?: Row[]) {
+function setup(id: string, query: Record<string, string | string[]> = {}, initial?: Row[], canEdit = true) {
   const rows: Row[] = initial ?? [
     { id: 'a', title: '甲', note: '一', version: 1 },
     { id: 'b', title: '乙', note: '二', version: 1 },
@@ -57,7 +57,7 @@ function setup(id: string, query: Record<string, string | string[]> = {}, initia
   const scope = effectScope()
   scopes.push(scope)
   const review = scope.run(() => useReviewRecord<Row>({
-    routeName: 'review', listName: 'list', filterKeys: ['status'], groups, get, list, update,
+    routeName: 'review', listName: 'list', filterKeys: ['status'], groups, get, list, update, canEdit: () => canEdit,
   }))!
   review.fields.value = fieldsHandle(true)
   return { review, route, rows, get, list, update }
@@ -147,27 +147,27 @@ describe('moving through the list', () => {
   })
 })
 
-describe('editing one group', () => {
-  it('fills only that group and saves the whole form with the change', async () => {
+describe('editing the record', () => {
+  it('fills every group and saves them together', async () => {
     const { review, update } = setup('a')
     await flush()
-    await review.startEdit('解读内容')
-    expect(review.editing.value).toBe('解读内容')
-    expect({ ...review.draft }).toEqual({ note: '一' })
+    review.startEdit()
+    expect(review.editing.value).toBe(true)
+    expect({ ...review.draft }).toEqual({ title: '甲', note: '一' })
     review.draft.note = '改过'
     expect(review.dirty.value).toBe(true)
     await review.saveEdit()
     expect(update).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }), { title: '甲', note: '改过' })
     expect(review.record.value).toMatchObject({ note: '改过', version: 2 })
     await nextTick()
-    expect(review.editing.value).toBeNull()
+    expect(review.editing.value).toBe(false)
     expect(message.success).toHaveBeenCalledWith('已保存')
   })
 
   it('does not save when a required field is empty', async () => {
     const { review, update } = setup('a')
     await flush()
-    await review.startEdit('基本信息')
+    review.startEdit()
     review.fields.value = fieldsHandle(false)
     await review.saveEdit()
     expect(update).not.toHaveBeenCalled()
@@ -176,7 +176,7 @@ describe('editing one group', () => {
   it('keeps the draft on a conflict and reloads the latest record after cancelling', async () => {
     const { review, update, get } = setup('a')
     await flush()
-    await review.startEdit('解读内容')
+    review.startEdit()
     review.draft.note = '我的修改'
     update.mockRejectedValueOnce(apiError(409, 'VERSION_CONFLICT', '版本冲突'))
     await review.saveEdit()
@@ -191,9 +191,23 @@ describe('editing one group', () => {
   it('shows the server reason for other save failures', async () => {
     const { review, update } = setup('a')
     await flush()
-    await review.startEdit('解读内容')
+    review.startEdit()
     update.mockRejectedValueOnce(apiError(422, 'VALIDATION_FAILED', '备注超过长度'))
     await review.saveEdit()
     expect(review.saveError.value).toBe('备注超过长度')
+  })
+
+  it('opens the editor when the list\'s edit link asks for it, without reloading the record', async () => {
+    const { review, get } = setup('a', { pos: '0', edit: '1' })
+    await flush()
+    expect(state.replace).toHaveBeenCalledWith({ name: 'review', params: { id: 'a' }, query: { pos: '0' } })
+    expect(review.editing.value).toBe(true)
+    expect(get).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not open the editor from a link for someone who cannot edit', async () => {
+    const { review } = setup('a', { edit: '1' }, undefined, false)
+    await flush()
+    expect(review.editing.value).toBe(false)
   })
 })

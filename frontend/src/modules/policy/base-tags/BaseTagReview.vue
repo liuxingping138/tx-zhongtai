@@ -23,6 +23,7 @@ const review = useReviewRecord<BaseTagItem>({
   get: getBaseTag,
   list: listBaseTags,
   update: (row, form) => updateBaseTag(row.id, { ...form, version: row.version }),
+  canEdit: () => canWrite.value,
 })
 
 // 打标状态：失败的标红，还在排队的标黄，做完的标绿；手工录入的没有状态。

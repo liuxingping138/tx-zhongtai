@@ -1,5 +1,5 @@
 import { computed, reactive, ref, shallowRef, watch, type ShallowRef } from 'vue'
-import { onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteUpdate, useRoute, useRouter, type LocationQuery } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 import { errorMessage, isApiError } from '@/api/errors'
@@ -20,9 +20,16 @@ export interface ReviewOptions<Row> {
   list: (params: Record<string, unknown>) => Promise<Page<Row>>
   /** 由调用方带上版本号等额外字段，和列表页编辑抽屉的保存一致。 */
   update: (row: Row, form: RecordForm) => Promise<Row>
+  /** 有没有编辑权限：列表点「编辑」进来（地址栏带 edit=1）时据此直接打开编辑。 */
+  canEdit?: () => boolean
 }
 
 const STALE_TEXT = '这条记录刚被别人改过，你的修改还在。复制需要保留的内容后点「取消」，会载入最新内容再改。'
+
+/** 地址栏里不影响取哪条记录的参数：只是「打开就编辑」的标记。 */
+function withoutEdit(query: LocationQuery): LocationQuery {
+  return Object.fromEntries(Object.entries(query).filter(([key]) => key !== 'edit'))
+}
 
 function formText(value: unknown): string {
   if (value === null || value === undefined) return ''
@@ -31,7 +38,7 @@ function formText(value: unknown): string {
 
 /**
  * 核对页的数据和动作：按地址栏的 ID 取记录，按列表的筛选和位置翻上一条、下一条，
- * 一次只编辑一组字段，改了没保存就离开、翻条都要确认。
+ * 点「编辑」所有分组一起改、一次保存，改了没保存就离开、翻条都要确认。
  */
 export function useReviewRecord<Row extends { id: string }>(options: ReviewOptions<Row>) {
   const route = useRoute()
@@ -48,25 +55,21 @@ export function useReviewRecord<Row extends { id: string }>(options: ReviewOptio
 
   const pageAt = (position: number) => ({ ...context.value.filters, page: position + 1, page_size: 1 })
 
-  // 按组编辑：editing 是正在改的组名，草稿只放这一组的字段。
-  const editing = ref<string | null>(null)
-  const editorOpen = ref(false)
+  // 整条一起编辑：草稿放所有分组的字段，一次保存。
+  const editing = ref(false)
   const draft = reactive<RecordForm>({})
   const saving = ref(false)
   const saveError = ref('')
   const stale = ref(false)
   const fields = ref<EditorFieldsHandle>()
-  const guard = useUnsavedForm(editorOpen, () => ({ ...draft }), saving)
-  watch(editorOpen, (open) => {
-    if (!open) editing.value = null
-  })
+  const guard = useUnsavedForm(editing, () => ({ ...draft }), saving)
   onBeforeRouteUpdate(guard.canLeave)
 
   async function load() {
     const current = ++ticket
     loading.value = true
     loadError.value = ''
-    editorOpen.value = false
+    editing.value = false
     try {
       const position = context.value.position
       const [row, page] = await Promise.all([
@@ -76,6 +79,7 @@ export function useReviewRecord<Row extends { id: string }>(options: ReviewOptio
       if (current !== ticket) return
       record.value = row
       total.value = page ? page.total : null
+      await openEditorFromLink()
     } catch (error) {
       if (current !== ticket) return
       record.value = null
@@ -86,8 +90,10 @@ export function useReviewRecord<Row extends { id: string }>(options: ReviewOptio
       if (current === ticket) loading.value = false
     }
   }
-  watch(() => route.fullPath, () => {
-    if (route.name === options.routeName) void load()
+  // 去掉 edit=1 时地址变了但还是同一条，不重新加载，免得刚打开的编辑又被关上。
+  const loadKey = computed(() => route.name === options.routeName ? JSON.stringify([id.value, withoutEdit(route.query)]) : '')
+  watch(loadKey, (key) => {
+    if (key) void load()
   }, { immediate: true })
 
   const position = computed(() => context.value.position)
@@ -156,23 +162,26 @@ export function useReviewRecord<Row extends { id: string }>(options: ReviewOptio
     return Object.fromEntries(options.groups.flatMap(group => group.fields.map(field => [field.key, formText(values[field.key])])))
   }
 
-  async function startEdit(title: string) {
-    const group = options.groups.find(item => item.title === title)
-    if (!group || !record.value || !await guard.canLeave()) return
+  function startEdit() {
+    if (!record.value || editing.value) return
     for (const key of Object.keys(draft)) delete draft[key]
-    const values = record.value as Record<string, unknown>
-    for (const field of group.fields) draft[field.key] = formText(values[field.key])
+    Object.assign(draft, formOf(record.value))
     saveError.value = ''
     stale.value = false
-    editorOpen.value = false
-    editing.value = title
     // 先填好草稿再打开：未保存保护在打开的那一刻记下基线。
-    editorOpen.value = true
+    editing.value = true
+  }
+
+  // 列表点「编辑」进来：先把 edit=1 从地址栏去掉（刷新、翻条不再自动进编辑），有权限再打开。
+  async function openEditorFromLink() {
+    if (route.query.edit !== '1') return
+    await router.replace({ name: options.routeName, params: route.params, query: withoutEdit(route.query) })
+    if (options.canEdit?.()) startEdit()
   }
 
   async function cancelEdit() {
     await guard.close()
-    if (!editorOpen.value && stale.value) {
+    if (!editing.value && stale.value) {
       stale.value = false
       await load()
     }
@@ -187,7 +196,7 @@ export function useReviewRecord<Row extends { id: string }>(options: ReviewOptio
     try {
       record.value = await options.update(row, { ...formOf(row), ...draft })
       guard.markSaved()
-      editorOpen.value = false
+      editing.value = false
       ElMessage.success('已保存')
     } catch (error) {
       if (isApiError(error) && error.status === 409) {

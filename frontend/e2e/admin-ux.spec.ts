@@ -187,9 +187,10 @@ test('import results persist and include updated counts alongside skipped rows',
   await expect(dialog).toHaveCount(0)
 })
 
-test('核对页按组编辑：政策唯一标识和租户标识原样提交', async ({ page }) => {
+test('列表点编辑进核对页就能改，各组一起保存，政策唯一标识和租户标识原样提交', async ({ page }) => {
   let payload: Record<string, unknown> | undefined
   const row = { id: 'one', policy_title: '已有政策', policy_uid: 'custom-policy-uid', tenant_id: 'tenant-a', data_status: '待验证', version: 2 }
+  await page.route('**/api/v1/policy/interpretations?**', route => respond(route, { items: [row], total: 1 }))
   await page.route('**/api/v1/policy/interpretations/one', route => {
     if (route.request().method() !== 'PATCH') return respond(route, row)
     payload = route.request().postDataJSON()
@@ -197,19 +198,22 @@ test('核对页按组编辑：政策唯一标识和租户标识原样提交', as
   })
   await page.route('**/api/v1/policy/interpretations/one/content', route =>
     route.fulfill({ status: 404, json: { code: 'RESOURCE_NOT_FOUND', message: '这条不是从源库打标的，没有正文' } }))
-  await page.goto('/policy/interpretations/one')
-  // 一次只改一组：别的组的「编辑」在改完之前点不了。
+  await page.goto('/policy/interpretations')
+  await page.getByRole('row').filter({ hasText: '已有政策' }).getByRole('link', { name: '编辑', exact: true }).click()
+  // 打开就是编辑状态：所有分组一起变成输入框，只有底部一个保存。
   const basic = page.getByRole('region', { name: '基本信息' })
-  await basic.getByRole('button', { name: '编辑', exact: true }).click()
-  await expect(page.getByRole('region', { name: '解读内容' }).getByRole('button', { name: '编辑', exact: true })).toBeDisabled()
   await expect(basic.getByLabel('租户标识', { exact: true })).toHaveValue('tenant-a')
+  await expect(page.getByRole('region', { name: '解读内容' }).getByRole('textbox').first()).toBeEditable()
+  await expect(page.getByRole('button', { name: '编辑', exact: true })).toHaveCount(0)
+  await expect(page).not.toHaveURL(/edit=1/)
   await basic.getByLabel('政策原文名称', { exact: true }).fill('修改后的政策')
-  await basic.getByRole('button', { name: '保存这一组' }).click()
+  await page.getByRole('button', { name: '保存', exact: true }).click()
   await expect(page.getByText('已保存')).toBeVisible()
   expect(payload?.policy_uid).toBe('custom-policy-uid')
   expect(payload?.tenant_id).toBe('tenant-a')
   expect(payload?.version).toBe(2)
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('修改后的政策')
+  await expect(page.getByRole('button', { name: '编辑', exact: true })).toBeVisible()
 })
 
 test('基础标签：按打标状态筛出来，勾选后重新打标，跳过的逐条说明原因', async ({ page }) => {

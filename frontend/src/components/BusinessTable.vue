@@ -14,7 +14,7 @@ const props = defineProps<{
   canWrite: boolean; loading: boolean; filtered: boolean; detailTitle?: string;
   /** 编辑表单的分组：详情按它分类展示，表单里没有的列归到「系统信息」。 */
   groups?: readonly EditorGroup[];
-  /** 有独立详情页的模块：标题和「查看」跳过去（编辑也在那里做），不再开抽屉。index 是行在当前页的位置。 */
+  /** 有独立详情页的模块：标题、「查看」「编辑」都跳过去，不再开抽屉；「编辑」打开就是编辑状态。index 是行在当前页的位置。 */
   detailRoute?: (row: T, index: number) => RouteLocationRaw;
   /** 首列加勾选框，用于批量操作；只勾当前页。 */
   selectable?: boolean;
@@ -33,7 +33,7 @@ const summaryColumns = computed(() => (props.summaryKeys ?? props.selected)
   .slice(0, 3))
 const root = ref<HTMLElement>()
 const availableWidth = ref(0)
-const actionWidth = computed(() => props.canWrite && !props.detailRoute ? 116 : 72)
+const actionWidth = computed(() => props.canWrite ? 116 : 72)
 const fixedWidth = computed(() => actionWidth.value + (props.selectable ? SELECTION_WIDTH : 0))
 const laidOut = computed(() => layoutDataColumns(displayed.value, availableWidth.value - 2, fixedWidth.value))
 const totalWidth = computed(() => laidOut.value.reduce((sum, col) => sum + col.width, fixedWidth.value) + 2)
@@ -55,6 +55,11 @@ const sections = computed(() => buildDetailSections(props.columns, props.groups)
 function open(row: T) { detail.value = row; detailOpen.value = true }
 function editDetail() { if (detail.value) { emit('edit', detail.value); detailOpen.value = false } }
 function closeDetail() { detailOpen.value = false }
+// 详情页按地址栏的 edit=1 直接进编辑状态。
+function editRoute(row: T, index: number): RouteLocationRaw {
+  const to = props.detailRoute!(row, index)
+  return typeof to === 'string' ? { path: to, query: { edit: '1' } } : { ...to, query: { ...to.query, edit: '1' } }
+}
 </script>
 <template>
   <div
@@ -151,8 +156,15 @@ function closeDetail() { detailOpen.value = false }
           >
             查看
           </RouterLink>
+          <RouterLink
+            v-if="detailRoute && canWrite"
+            class="table-link"
+            :to="editRoute(row, $index)"
+          >
+            编辑
+          </RouterLink>
           <el-button
-            v-else
+            v-if="!detailRoute"
             link
             type="primary"
             @click="open(row)"
@@ -219,8 +231,15 @@ function closeDetail() { detailOpen.value = false }
           >
             查看详情
           </RouterLink>
+          <RouterLink
+            v-if="detailRoute && canWrite"
+            class="table-link"
+            :to="editRoute(row, index)"
+          >
+            编辑
+          </RouterLink>
           <el-button
-            v-else
+            v-if="!detailRoute"
             text
             type="primary"
             @click="open(row)"
@@ -293,6 +312,7 @@ function closeDetail() { detailOpen.value = false }
 .record-title:hover { color: var(--zt-blue-600); text-decoration: underline; }
 a.record-title { text-decoration: none; }
 .table-link { color: var(--zt-blue-600); font-size: 14px; text-decoration: none; }
+.table-link + .table-link { margin-left: 12px; }
 .table-link:hover { text-decoration: underline; }
 .record-boolean { padding: 2px 9px; background: var(--zt-soft); border: 1px solid var(--zt-border); border-radius: 4px; }
 a { color: var(--zt-blue-600); }
