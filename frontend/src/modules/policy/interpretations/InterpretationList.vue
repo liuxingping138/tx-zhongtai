@@ -215,17 +215,17 @@ onMounted(() => {
                 size="short"
               />
             </el-form-item>
-            <el-form-item label="信息化等级">
-              <FilterSelect
-                v-model="query.info_level"
-                v-bind="filters.bind('info_level')"
-                size="short"
-              />
-            </el-form-item>
             <el-form-item label="数据状态">
               <FilterSelect
                 v-model="query.data_status"
                 v-bind="filters.bind('data_status')"
+                size="short"
+              />
+            </el-form-item>
+            <el-form-item label="信息化等级">
+              <FilterSelect
+                v-model="query.info_level"
+                v-bind="filters.bind('info_level')"
                 size="short"
               />
             </el-form-item>
