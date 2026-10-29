@@ -68,6 +68,19 @@ async def base_tags_by_source(session: AsyncSession, source_ids: list[str]) -> d
     return {str(row.source_content_id): row for row in rows}
 
 
+async def tagged_source_ids(session: AsyncSession, source_ids: list[str]) -> set[str]:
+    """这些源政策里已经打过类型标的。读取进度往回调、重读同一天时跳过它们，不再花钱问一遍。"""
+
+    if not source_ids:
+        return set()
+    rows = await session.scalars(
+        select(BaseTag.source_content_id).where(
+            BaseTag.source_content_id.in_(source_ids), BaseTag.tagged_at.is_not(None)
+        )
+    )
+    return {str(value) for value in rows}
+
+
 async def base_tag_by_hash(session: AsyncSession, digest: str) -> BaseTag | None:
     return (await session.scalars(select(BaseTag).where(BaseTag.content_hash == digest))).first()
 

@@ -14,8 +14,9 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def _no_previous_ai_run(monkeypatch: pytest.MonkeyPatch) -> None:
-    """打标每一步发起前会查上一批失败的 AI 任务（要连库）；单测默认没有，测沿用的用例自己覆盖。"""
+def _no_previous_ai_run(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> None:
+    """打标每批会连库查上一批失败的 AI 任务、读到的政策打没打过标，还会去 ai-service 复核模板：
+    单测默认都没有、都通过，测这些的用例自己覆盖。"""
 
     from app.aitag.repositories import tagging
 
@@ -23,3 +24,15 @@ def _no_previous_ai_run(monkeypatch: pytest.MonkeyPatch) -> None:
         return ""
 
     monkeypatch.setattr(tagging, "failed_ai_run", none)
+
+    async def no_tagged(*_: object, **__: object) -> set[str]:
+        return set()
+
+    async def template_ok(*_: object, **__: object) -> None:
+        return None
+
+    from app.aitag.application import tagging as tagging_app
+
+    monkeypatch.setattr(tagging, "tagged_source_ids", no_tagged)
+    if not request.node.get_closest_marker("real_template_check"):
+        monkeypatch.setattr(tagging_app, "check_template_now", template_ok)

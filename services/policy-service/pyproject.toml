@@ -113,6 +113,7 @@ allow_indirect_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+markers = ["real_template_check: 不替换打标每批开始前的模板复核，测它本身"]
 
 [tool.mypy]
 python_version = "3.12"

@@ -27,7 +27,7 @@ from app.policy.domain.fields import DATA_STATUS_PENDING
 from app.policy.domain.models import BaseTag, Interpretation
 
 
-def _untouched(row: Interpretation) -> bool:
+def untouched(row: Interpretation) -> bool:
     """AI 写的、还没人核对或改过的行，可以被重新解读替换或回填。"""
 
     return (
@@ -123,7 +123,7 @@ async def _save_interpretations(
                 _append_remark(tag, f"{INTERPRET_FAILED}：{str(result.get('error') or '没有解读出内容')[:200]}")
                 continue
             rows = old.get(str(tag.source_content_id), [])
-            await repo.delete_rows(session, [row for row in rows if _untouched(row)])
+            await repo.delete_rows(session, [row for row in rows if untouched(row)])
             planned = []
             for position, item in enumerate(result["items"]):
                 values = _row_values(item, codes.get(f"{index}:{position}"))
@@ -193,9 +193,14 @@ async def _save_opportunities(run_id: uuid.UUID, tags: list[BaseTag], results: l
                 result.get("items") or [],
                 [{"industry_l1": row.industry_l1, "scenario_l1_name": row.scenario_l1_name} for row in rows],
             )
+            if not matches:
+                # 钱花了一条也没写回：记成失败，列表上筛得出来，不能悄悄当成补完了。
+                failed += 1
+                _append_remark(tag, f"{OPPORTUNITY_FAILED}：回答里的行业、场景和这条政策的解读行一条也对不上")
+                continue
             for index, text in matches.items():
                 row = rows[index]
-                if _untouched(row):
+                if untouched(row):
                     row.market_opportunity = text
                     row.updated_at = row.tagged_at = utcnow()
                     # 有人正在核对页编辑这行（那时市场机会还空着），不加版本号的话他一保存，空值就把这次结果冲掉，

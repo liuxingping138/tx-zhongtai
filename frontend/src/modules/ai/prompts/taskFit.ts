@@ -13,20 +13,43 @@ export function checkTemplate(task: ContractTask, variables: string[], fields: s
   if (unknown.length) errors.push(`用了这个任务不提供的列：${quoted(unknown)}。能用的列：${quoted(task.columns)}`)
   const missing = task.required_fields.filter(name => !fields.includes(name))
   if (missing.length) errors.push(`输出字段缺少：${missing.join('、')}，结果写不回表`)
-  const warnings: string[] = []
+  // 顺序、说法和政策服务 aitag.domain.contract 一致。
+  const warnings = [
+    ...emptyFieldWarnings(task, fields),
+    ...bodyWarnings(variables),
+    ...opportunityWarnings(task, variables, fields),
+    ...codeWarnings(variables, systemCode),
+  ]
+  return { errors, warnings }
+}
+
+function bodyWarnings(variables: string[]): string[] {
+  return variables.includes(BODY) ? [] : [`没有用 @【${BODY}】，模型只看得到标题，判断会不准`]
+}
+
+function codeWarnings(variables: string[], systemCode: boolean): string[] {
+  if (!variables.includes(CODE_TABLE_FIELD) || systemCode) return []
+  return ['码表用的是上传的文件，定时任务按上线时冻结的那份跑；要和系统码表口径一致，请改选系统码表']
+}
+
+function emptyFieldWarnings(task: ContractTask, fields: string[]): string[] {
   const empty = task.optional_fields.filter(group => !group.some(name => fields.includes(name))).map(group => group[0] ?? '')
-  if (empty.length) {
-    const names = empty.slice(0, 4).join('、') + (empty.length > 4 ? `等 ${empty.length} 个字段` : '')
-    warnings.push(`没有输出${names}，写回时这些列会空着`)
+  if (!empty.length) return []
+  const names = empty.slice(0, 4).join('、') + (empty.length > 4 ? `等 ${empty.length} 个字段` : '')
+  return [`没有输出${names}，写回时这些列会空着`]
+}
+
+/** 市场机会这一步特有的提醒。 */
+function opportunityWarnings(task: ContractTask, variables: string[], fields: string[]): string[] {
+  if (task.code !== 'opportunity') return []
+  const warnings: string[] = []
+  if (!fields.some(name => name === '行业' || name === '一级行业')) {
+    warnings.push('没有输出「行业」「场景」：一条政策有几条市场机会时，分不清各是哪条解读行的')
   }
-  if (!variables.includes(BODY)) warnings.push(`没有用 @【${BODY}】，模型只看得到标题，判断会不准`)
-  if (task.code === 'opportunity' && !variables.includes(SCENES)) {
+  if (!variables.includes(SCENES)) {
     warnings.push(`没有用 @【${SCENES}】，模型不知道这条政策解读出了哪些行业场景，市场机会可能对不上解读行`)
   }
-  if (variables.includes(CODE_TABLE_FIELD) && !systemCode) {
-    warnings.push('码表用的是上传的文件，定时任务按上线时冻结的那份跑；要和系统码表口径一致，请改选系统码表')
-  }
-  return { errors, warnings }
+  return warnings
 }
 
 export type FitLevel = 'ok' | 'warn' | 'error' | 'skip'

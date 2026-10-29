@@ -477,17 +477,68 @@ async def test_each_stage_records_its_own_cost(monkeypatch: pytest.MonkeyPatch, 
     assert (stored.interpret_cost, stored.cost, spend.run) == (Decimal("0.5"), Decimal("0.7"), Decimal("0.7"))
 
 
-async def test_type_step_reads_only_through_yesterday(
+async def test_type_step_reads_only_through_the_day_before_yesterday(
     monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]
 ) -> None:
-    """源政策 ID 是哈希，不按入库先后排：当天读过一批后再入库的会漏，所以只读到昨天整天，当天留到明天。"""
+    """源政策 ID 是哈希、不按入库先后排，读过一天后再入库的会漏；源库每个采集日的数据第二天才入库完
+    （实测最晚到第二天晚上），所以只读到前天整天。"""
 
     _use_config(monkeypatch, _config(cursor_date=None))
     windows: list[tuple[Any, ...]] = []
     monkeypatch.setattr(source, "read_batch", lambda *args: windows.append(args) or [])
     await tagging.run_batch(uuid.uuid4(), "type")
-    yesterday = tagging.today() - timedelta(days=1)
-    assert windows == [(yesterday, "", 10, yesterday)]
+    until = tagging.today() - timedelta(days=2)
+    assert windows == [(until, "", 10, until)]
+
+
+async def test_rereading_days_skips_policies_already_tagged(
+    monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]
+) -> None:
+    """读取进度往回调、重扫几天补漏时，已经打好标的不能再问一遍模型；全都打过就只把进度往前挪。"""
+
+    config = _config()
+    _use_config(monkeypatch, config)
+    rows = [{"content_id": f"c{index}", "collect_date": DAY} for index in range(3)]
+    monkeypatch.setattr(source, "read_batch", lambda *_: rows)
+
+    async def all_tagged(_session: Any, ids: list[str]) -> set[str]:
+        return set(ids)
+
+    monkeypatch.setattr(repo, "tagged_source_ids", all_tagged)
+    asked: list[Any] = []
+
+    async def ai(*args: Any, **_: Any) -> Any:
+        asked.append(args)
+        return {}
+
+    monkeypatch.setattr(internal_clients, "ai", ai)
+    run_id = uuid.uuid4()
+    await tagging.run_batch(run_id, "type")
+    assert asked == []
+    assert (config.cursor_date, config.cursor_content_id) == (DAY, "c2")
+    assert "都已经打过类型标" in run_store[str(run_id)].note
+
+
+@pytest.mark.real_template_check
+async def test_a_template_that_lost_its_required_field_stops_the_batch(monkeypatch: pytest.MonkeyPatch) -> None:
+    """同一模板重新上线去掉了「政策类型名称」：每批开始前复核，不然每条都记成没判断出类型、进度照常前移。"""
+
+    async def ai(*_: Any, **__: Any) -> Any:
+        return [
+            {
+                "prompt_id": "p",
+                "title": "类型判断",
+                "release_no": 3,
+                "variables": ["政策正文"],
+                "output_fields": ["理由"],
+            }
+        ]
+
+    monkeypatch.setattr(internal_clients, "ai", ai)
+    with pytest.raises(UserFacingError, match="第 3 版不能用于"):
+        await tagging.check_template_now("type", "p")
+    with pytest.raises(UserFacingError, match="已下线"):
+        await tagging.check_template_now("type", "gone")
 
 
 async def test_retag_keeps_manual_edits_and_does_not_duplicate_another_row(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -735,3 +786,68 @@ async def test_an_ai_run_that_never_started_fails_the_batch(
     spend = pipeline.Spend(limit=Decimal(10), before=Decimal(0))
     with pytest.raises(UserFacingError, match="未知模型"):
         await pipeline.ask(run_id, spend, prompt_id="p", rows=[], caller="c", run_field="interpret_run_id")
+
+
+async def test_retag_only_redoes_interpretation_when_the_type_changed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """用新模板重判一千条类型没变的政策，不能把最贵的解读整批重跑；改成非信息化的，没人核对过的 AI 解读行清掉；
+    这一批跑的时候有人改了起始日期，收尾也不能把它改回去。"""
+
+    from app.policy.domain.models import BASE_TAG_FIELDS, BaseTag, content_hash
+
+    done_at = datetime(2026, 10, 1, tzinfo=UTC)
+
+    def tag(content_id: str, types: list[str]) -> BaseTag:
+        values = rules.base_tag_values({"name": f"政策{content_id}"}, types, "")
+        row = BaseTag(source_content_id=content_id, version=1, interpreted_at=done_at, opportunity_at=done_at, **values)
+        row.content_hash = content_hash(values, BASE_TAG_FIELDS)
+        return row
+
+    same, changed = tag("c1", ["信息化建设类"]), tag("c2", ["信息化建设类"])
+    untouched_row = SimpleNamespace(data_status="待验证", tagged_at=done_at, updated_at=done_at, source_content_id="c2")
+    verified_row = SimpleNamespace(
+        data_status="人工验证", tagged_at=done_at, updated_at=done_at, source_content_id="c2"
+    )
+    deleted: list[Any] = []
+    config = SimpleNamespace(cursor_date=date(2026, 9, 1), cursor_content_id="")  # 有人刚改了起始日期
+
+    async def by_source(_session: Any, _ids: list[str]) -> dict[str, BaseTag]:
+        return {"c1": same, "c2": changed}
+
+    async def none_by_hash(*_: Any) -> None:
+        return None
+
+    async def interpretations(_session: Any, ids: list[str]) -> dict[str, list[Any]]:
+        return {"c2": [untouched_row, verified_row]} if "c2" in ids else {}
+
+    async def delete_rows(_session: Any, rows: list[Any]) -> None:
+        deleted.extend(rows)
+
+    async def task(*_: Any, **__: Any) -> Any:
+        return config
+
+    async def noop(*_: Any, **__: Any) -> None:
+        return None
+
+    monkeypatch.setattr(repo, "base_tags_by_source", by_source)
+    monkeypatch.setattr(repo, "base_tag_by_hash", none_by_hash)
+    monkeypatch.setattr(repo, "ai_interpretations", interpretations)
+    monkeypatch.setattr(repo, "delete_rows", delete_rows)
+    monkeypatch.setattr(repo, "task", task)
+    monkeypatch.setattr(tagging, "enqueue_event", noop)
+    monkeypatch.setattr(tagging, "SessionLocal", FakeSession)
+    rows = [{"content_id": cid, "name": f"政策{cid}", "collect_date": DAY} for cid in ("c1", "c2")]
+    results = [
+        {"error": "", "items": [{"政策类型名称": "信息化建设类"}]},
+        {"error": "", "items": [{"政策类型名称": "产业发展类"}]},
+    ]
+    known = ["信息化建设类", "产业发展类"]
+    await tagging._save_types(uuid.uuid4(), rows, results, known, retag=True, start=(DAY, ""))
+    assert same.interpreted_at == done_at and same.opportunity_at == done_at
+    assert changed.interpreted_at is None and changed.need_interpret == "否"
+    assert deleted == [untouched_row]
+    # 按天读的这一批开始时进度是（DAY, ""），收尾时已经被人改成 9-1：不能按这一批读到的位置改回去。
+    await tagging._save_types(uuid.uuid4(), rows, results, known, retag=False, start=(DAY, ""))
+    assert (config.cursor_date, config.cursor_content_id) == (date(2026, 9, 1), "")
+    config.cursor_date = DAY
+    await tagging._save_types(uuid.uuid4(), rows, results, known, retag=False, start=(DAY, ""))
+    assert (config.cursor_date, config.cursor_content_id) == (DAY, "c2")

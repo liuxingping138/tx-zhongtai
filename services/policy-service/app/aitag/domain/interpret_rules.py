@@ -125,7 +125,9 @@ def match_opportunities(items: list[dict[str, Any]], rows: list[dict[str, str]])
     texts = [(item, _clean(item.get("市场机会"))) for item in items]
     texts = [(item, text) for item, text in texts if text]
     for item, text in texts:
-        industry, scene = _clean(item.get("行业")), _clean(item.get("场景"))
+        # 「一级行业 / 一级场景」是解读那一步的写法，业务人员照着写市场机会模板也很常见，两种都认。
+        industry = _clean(item.get("行业") or item.get("一级行业"))
+        scene = _clean(item.get("场景") or item.get("一级场景"))
         hits = [i for i, row in enumerate(rows) if row["industry_l1"] == industry and row["scenario_l1_name"] == scene]
         hits = hits or [i for i, row in enumerate(rows) if industry and row["industry_l1"] == industry]
         if not hits and len(texts) == 1:

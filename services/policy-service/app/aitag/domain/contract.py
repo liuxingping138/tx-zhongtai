@@ -73,6 +73,8 @@ def check_template(
         warnings.append(f"没有输出{names}，写回时这些列会空着")
     if BODY_COLUMN not in variables:
         warnings.append(f"没有用 @【{BODY_COLUMN}】，模型只看得到标题，判断会不准")
+    if task == "opportunity" and not {"行业", "一级行业"} & set(output_fields):
+        warnings.append("没有输出「行业」「场景」：一条政策有几条市场机会时，分不清各是哪条解读行的")
     if task == "opportunity" and SCENES_COLUMN not in variables:
         warnings.append(
             f"没有用 @【{SCENES_COLUMN}】，模型不知道这条政策解读出了哪些行业场景，市场机会可能对不上解读行"

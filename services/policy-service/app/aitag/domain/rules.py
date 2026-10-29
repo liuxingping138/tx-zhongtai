@@ -33,6 +33,7 @@ PROMPT_COLUMNS = ("政策标题", "政策正文", "省份", "地市", "出台时
 # 源库的「正文」是整页网页源码（实测 60 条全是，文字只占 6% 左右，其余是标签、样式和脚本）。
 _HTML_START = re.compile(r"<\s*(?:!doctype|html|head|body|div|p|span|br|table|meta|script)\b", re.IGNORECASE)
 # 这些标签里的内容不是给人看的。
+_TAGS = re.compile(r"<[^>]*>")
 _HIDDEN_TAGS = {"script", "style", "head", "noscript", "template", "svg", "iframe"}
 # 块级标签前后断行，保留段落；行内标签（span、a、strong…）不断，免得把一句话拆成好几行。
 _BLOCK_TAGS = {
@@ -47,6 +48,8 @@ _BLOCK_TAGS = {
 _CHROME_TAGS = {"nav", "header", "footer", "aside"}
 _CHROME_WORDS = {"header", "footer", "foot", "nav", "navbar", "menu", "submenu", "topbar", "breadcrumb", "crumb"}
 _NEGATIONS = {"no", "not", "non", "without"}
+# 名字里带这些词的是正文里的块：「article-header」「content_head」放着文号、发布日期，不是网页导航。
+_CONTENT_WORDS = {"article", "content", "detail", "text", "body", "doc", "zw", "news", "info", "title", "con"}
 _NAME_PARTS = re.compile(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])|\d+")
 
 
@@ -56,7 +59,8 @@ def _is_chrome(tag: str, attrs: list[tuple[str, str | None]]) -> bool:
     for key, value in attrs:
         for name in (value or "").split() if key in ("class", "id") else ():
             parts = [part.lower() for part in _NAME_PARTS.findall(name)]
-            if parts and parts[0] not in _NEGATIONS and _CHROME_WORDS.intersection(parts):
+            negated = parts and parts[0] in _NEGATIONS
+            if parts and not negated and _CHROME_WORDS.intersection(parts) and not _CONTENT_WORDS.intersection(parts):
                 return True
     return False
 
@@ -65,18 +69,26 @@ class _PageText(HTMLParser):
     def __init__(self, *, skip_chrome: bool) -> None:
         super().__init__(convert_charrefs=True)
         self.parts: list[str] = []
-        self._hidden = 0
+        # 还没闭合的隐藏标签。按名字记：HTML5 允许省略 </head>，见到 <body> 或正文块就算 head 结束，
+        # 只记个数的话 head 永远关不上，整页正文提取成空串，模型照样拿空正文打标、照样收钱。
+        self._hidden_open: list[str] = []
         self._skip_chrome = skip_chrome
         # 正在跳过的导航块：标签名和同名标签的嵌套层数，回到 0 时这一块结束。
         self._chrome = ""
         self._chrome_depth = 0
 
+    @property
+    def _hidden(self) -> bool:
+        return bool(self._hidden_open)
+
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if "head" in self._hidden_open and (tag == "body" or tag in _BLOCK_TAGS):
+            self._hidden_open = [name for name in self._hidden_open if name != "head"]
         if self._chrome:
             if tag == self._chrome:
                 self._chrome_depth += 1
         elif tag in _HIDDEN_TAGS:
-            self._hidden += 1
+            self._hidden_open.append(tag)
         elif self._skip_chrome and not self._hidden and _is_chrome(tag, attrs):
             self._chrome, self._chrome_depth = tag, 1
         elif tag in _BLOCK_TAGS:
@@ -94,7 +106,9 @@ class _PageText(HTMLParser):
                     self._chrome = ""
                     self.parts.append("\n")
         elif tag in _HIDDEN_TAGS:
-            self._hidden = max(0, self._hidden - 1)
+            if tag in self._hidden_open:
+                index = len(self._hidden_open) - 1 - self._hidden_open[::-1].index(tag)
+                del self._hidden_open[index:]
         elif tag in _BLOCK_TAGS:
             self.parts.append("\n")
 
@@ -129,6 +143,9 @@ def page_text(text: str) -> str:
     if not _HTML_START.search(text[:5000]):
         return text
     full = _visible_text(text, skip_chrome=False) or ""
+    if not full.strip():
+        # 网页写得太不规整、一个字都没提取出来：退回只去标签的纯文字，不能让模型拿空正文打标。
+        return _TAGS.sub(" ", text)
     body = _visible_text(text, skip_chrome=True)
     # 去导航出了岔子就退回整页文字：宁可多几行导航，也不能丢正文。
     return body if body is not None and _keeps_body(full, body) else full

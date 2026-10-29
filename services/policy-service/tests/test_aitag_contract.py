@@ -21,7 +21,11 @@ def test_template_checks_split_must_fix_from_worth_knowing() -> None:
     assert bad["errors"][0].startswith("用了这个任务不提供的列：@【企业名称】")
     assert bad["errors"][1] == "输出字段缺少：一级行业、一级场景，结果写不回表"
     chance = check_template("opportunity", ["政策标题", "上传码表"], ["市场机会"], system_code=False)
-    assert chance["errors"] == [] and len(chance["warnings"]) == 3  # 没用正文、没用行业场景、上传码表
+    # 没用正文、没输出行业场景、没用行业场景、上传码表
+    assert chance["errors"] == [] and len(chance["warnings"]) == 4
+    # 输出写成「一级行业 / 一级场景」也认：解读那一步的写法，照着写市场机会模板很常见。
+    named = check_template("opportunity", ["政策正文", "行业场景"], ["一级行业", "一级场景", "市场机会"], True)
+    assert named == {"errors": [], "warnings": []}
     # 行业场景只有市场机会这一步才有。
     assert check_template("type", ["政策正文", "行业场景"], ["政策类型名称"], True)["errors"]
     assert "行业场景" in COLUMNS["opportunity"] and "源ID" in COLUMNS["type"]

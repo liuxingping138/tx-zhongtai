@@ -156,3 +156,35 @@ def test_retag_keeps_manual_columns_and_hand_written_remarks() -> None:
     stale = rules.base_tag_values({"name": "政策甲"}, ["信息化建设类"], "")
     existing.remark = f"{note}；{rules.MISSING_NOTE}；领导关注"
     assert rules.keep_manual_edits(stale, existing)["remark"] == "领导关注"
+
+
+def test_page_text_survives_a_page_without_closing_head() -> None:
+    """HTML5 允许省略 </head>：原来 head 永远关不上，整页正文提取成空串，模型拿空正文照样打标收费。"""
+
+    page = "<html><head><title>标题</title><body><p>正文第一段，内容很长很长。</p><p>第二段。</p></body></html>"
+    assert "正文第一段" in rules.page_text(page) and "第二段" in rules.page_text(page)
+
+
+def test_page_text_keeps_header_blocks_inside_the_article() -> None:
+    """「article-header」这类正文里的块放着文号、发布日期，不是网页导航，不能当导航去掉。"""
+
+    page = (
+        "<html><head><title>t</title></head><body><div class='nav'>首页 | 新闻中心</div>"
+        "<div class='article-header'>文号：京政发〔2026〕1号</div><p>正文内容很长很长很长很长。</p></body></html>"
+    )
+    text = rules.page_text(page)
+    assert "京政发" in text and "正文内容" in text and "新闻中心" not in text
+
+
+def test_opportunities_match_whether_the_template_says_industry_or_first_level_industry() -> None:
+    from app.aitag.domain.interpret_rules import match_opportunities
+
+    rows = [
+        {"industry_l1": "党政行业", "scenario_l1_name": "数字政府"},
+        {"industry_l1": "交通行业", "scenario_l1_name": "车路云"},
+    ]
+    items = [
+        {"一级行业": "交通行业", "一级场景": "车路云", "市场机会": "机会B"},
+        {"一级行业": "党政行业", "一级场景": "数字政府", "市场机会": "机会A"},
+    ]
+    assert match_opportunities(items, rows) == {0: "机会A", 1: "机会B"}

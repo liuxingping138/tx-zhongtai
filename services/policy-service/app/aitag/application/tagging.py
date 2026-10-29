@@ -19,6 +19,7 @@ from platform_common.clock import utcnow
 from platform_common.errors import ApiError
 
 from app.aitag.application import interpreting, retag
+from app.aitag.application.interpreting import untouched
 from app.aitag.application.pipeline import (
     NOT_RUN,
     ROBOT,
@@ -31,6 +32,7 @@ from app.aitag.application.pipeline import (
     update_run,
 )
 from app.aitag.domain import rules
+from app.aitag.domain.contract import check_template
 from app.aitag.domain.models import PolicyAiRun, PolicyAiTask
 from app.aitag.domain.tasks import TASKS
 from app.aitag.repositories import source
@@ -45,6 +47,8 @@ __all__ = ["abandon", "day_start", "policy_type_names", "run_batch", "run_summar
 
 
 STAGE_COLUMN = {"typing": "type_cost", "interpreting": "interpret_cost", "opportunity": "opportunity_cost"}
+# 读取源库只读到这么多天以前（含）：源库每个采集日的数据第二天才入库完。
+SOURCE_SETTLE_DAYS = 2
 
 
 async def policy_type_names() -> list[str]:
@@ -64,13 +68,16 @@ def _write_base_tag(
         if not force and existing.tagged_at is not None and existing.updated_at > existing.tagged_at:
             return False
         existing.type_retag_at = None
+        # 只有类型或「是否解读」变了，后面两步才按新类型重做：用新模板重判一千条类型没变的政策，
+        # 不能把最贵的解读整批重跑一遍。
+        changed = (existing.policy_types, existing.need_interpret) != (values["policy_types"], values["need_interpret"])
         for key, value in values.items():
             setattr(existing, key, value)
         existing.refresh_hash()
         existing.version += 1
         existing.tagged_at = existing.updated_at = now
-        # 类型变了，后面两步要按新类型重做。
-        existing.interpreted_at = existing.opportunity_at = None
+        if changed:
+            existing.interpreted_at = existing.opportunity_at = None
         existing.updated_by_id, existing.updated_by_name = ROBOT.id, ROBOT.name
         return True
     session.add(
@@ -92,12 +99,20 @@ def _write_base_tag(
 
 
 async def _save_types(
-    run_id: uuid.UUID, rows: list[dict[str, Any]], results: list[dict[str, Any]], known: list[str], *, retag: bool
+    run_id: uuid.UUID,
+    rows: list[dict[str, Any]],
+    results: list[dict[str, Any]],
+    known: list[str],
+    *,
+    retag: bool,
+    start: tuple[Any, str] | None = None,
 ) -> dict[str, int]:
     processed = rules.resume_point(results, NOT_RUN)
     done_rows, done_results = rows[:processed], results[:processed]
     tagged = failed = duplicate = 0
     seen: set[str] = set()
+    # 重判后不再是信息化建设类的：它没人核对过的 AI 解读行要清掉，不然解读列表里一直挂着不该有的解读。
+    no_longer_interpreted: list[str] = []
     async with SessionLocal() as session:
         existing = await repo.base_tags_by_source(session, [str(row["content_id"]) for row in done_rows])
         for row, result in zip(done_rows, done_results, strict=True):
@@ -118,10 +133,19 @@ async def _save_types(
                     duplicate += 1
                 continue
             seen.add(digest)
-            tagged += 1 if _write_base_tag(session, current, row, values, force=retag) else 0
+            was_interpreted = current is not None and current.need_interpret == "是"
+            if _write_base_tag(session, current, row, values, force=retag):
+                tagged += 1
+                if was_interpreted and values["need_interpret"] != "是":
+                    no_longer_interpreted.append(str(row["content_id"]))
+        if no_longer_interpreted:
+            stale = await repo.ai_interpretations(session, no_longer_interpreted)
+            await repo.delete_rows(session, [item for rows_ in stale.values() for item in rows_ if untouched(item)])
         locked = await repo.task(session, "type", lock=True)
-        # 重新判断的是列表上点名的旧政策，不动按天读取的进度。
-        if done_rows and not retag:
+        # 重新判断的是列表上点名的旧政策，不动按天读取的进度；这一批跑的时候有人在设置里改了起始日期，
+        # 也不能按这一批读到的位置把它改回去。
+        moved = start is not None and (locked.cursor_date, locked.cursor_content_id) != start
+        if done_rows and not retag and not moved:
             last = done_rows[-1]
             locked.cursor_date, locked.cursor_content_id = last["collect_date"], str(last["content_id"])
         await enqueue_event(
@@ -158,18 +182,39 @@ async def _type_step(run_id: uuid.UUID, config: PolicyAiTask, spend: Spend) -> s
         rows, missing = await retag.read_queued(queued)
         prefix = f"重新判断类型 {len(queued)} 条" + (f"（{missing} 条源库里已找不到，已跳过）" if missing else "")
         return f"{prefix}：{await _tag(run_id, config, spend, rows, retag=True)}" if rows else prefix
-    # 只读到昨天整天：源政策 ID 是哈希，不按入库先后排，当天读过一批后再入库、ID 更小的就永远读不到了。
-    yesterday = today() - timedelta(days=1)
-    rows = await anyio.to_thread.run_sync(
-        source.read_batch, config.cursor_date or yesterday, config.cursor_content_id, config.batch_size, yesterday
-    )
+    # 只读到前天整天：源库每个采集日的数据第二天才入库，最晚到第二天晚上（实测 10-22 的数据最后一条 10-23 19:48 入库）。
+    # 源政策 ID 是哈希、不按入库先后排，读过一天之后再入库、ID 更小的就永远读不到了。
+    until = today() - timedelta(days=SOURCE_SETTLE_DAYS)
+    start = (config.cursor_date or until, config.cursor_content_id)
+    rows = await anyio.to_thread.run_sync(source.read_batch, start[0], start[1], config.batch_size, until)
     if not rows:
         return "没有新的源政策"
-    return await _tag(run_id, config, spend, rows, retag=False)
+    # 打过类型标的跳过：读取进度往回调、重扫某几天补漏时，不能把已经打好的再问一遍模型。
+    async with SessionLocal() as session:
+        tagged = await repo.tagged_source_ids(session, [str(row["content_id"]) for row in rows])
+    fresh = [row for row in rows if str(row["content_id"]) not in tagged]
+    if not fresh:
+        await _advance_cursor(rows[-1], start)
+        return f"读取 {len(rows)} 条，都已经打过类型标，读取进度前移"
+    return await _tag(run_id, config, spend, fresh, retag=False, start=start)
+
+
+async def _advance_cursor(last: dict[str, Any], start: tuple[Any, str]) -> None:
+    async with SessionLocal() as session:
+        locked = await repo.task(session, "type", lock=True)
+        if (locked.cursor_date, locked.cursor_content_id) == start:
+            locked.cursor_date, locked.cursor_content_id = last["collect_date"], str(last["content_id"])
+        await session.commit()
 
 
 async def _tag(
-    run_id: uuid.UUID, config: PolicyAiTask, spend: Spend, rows: list[dict[str, Any]], *, retag: bool
+    run_id: uuid.UUID,
+    config: PolicyAiTask,
+    spend: Spend,
+    rows: list[dict[str, Any]],
+    *,
+    retag: bool,
+    start: tuple[Any, str] | None = None,
 ) -> str:
     contents = await anyio.to_thread.run_sync(source.read_contents, [str(row["content_id"]) for row in rows])
     limit = config.content_max_chars
@@ -184,7 +229,7 @@ async def _tag(
         caller="政策AI打标·类型判断",
         run_field="type_run_id",
     )
-    counts = await _save_types(run_id, rows, results, known, retag=retag)
+    counts = await _save_types(run_id, rows, results, known, retag=retag, start=start)
     last = rows[counts["processed"] - 1] if counts["processed"] and not retag else None
     await update_run(
         run_id,
@@ -265,11 +310,27 @@ async def _fail(run_id: uuid.UUID, message: str) -> None:
     await _close(run_id, message, only_running=False)
 
 
+async def check_template_now(task: str, prompt_id: str) -> None:
+    """每批开始前按模板现在的上线版本复核一次。换模板时核对过，但同一模板重新上线可能去掉了要写回的字段
+    （比如「政策类型名称」），不复核的话每条都记成「没判断出类型」、读取进度照常前移，这批政策就白跑了。"""
+
+    items = await internal_clients.ai("GET", "/internal/v1/online-templates", params={"category": "policy"})
+    found = next((item for item in items if item["prompt_id"] == prompt_id), None)
+    if found is None:
+        raise UserFacingError(f"「{TASKS[task]}」选的模板已下线或不再是政策类，请在任务调度页这个任务的设置里重选")
+    variables, fields = list(found.get("variables") or []), list(found.get("output_fields") or [])
+    errors = check_template(task, variables, fields, bool(found.get("system_code")))["errors"]
+    if errors:
+        title = f"「{found['title']}」第 {found.get('release_no')} 版"
+        raise UserFacingError(f"{title}不能用于{TASKS[task]}：{'；'.join(errors)}。请改好模板重新上线，或换一个模板")
+
+
 async def _run(run_id: uuid.UUID, task: str, config: PolicyAiTask, spend: Spend) -> str:
     if not config.prompt_id:
         raise UserFacingError(f"还没有选「{TASKS[task]}」用的上线模板，请在任务调度页这个任务的设置里选")
     if spend.remaining() <= 0:
         return f"今日已花 {spend.before:.2f} 元，达到每日上限 {spend.limit:.2f} 元，留到明天"
+    await check_template_now(task, config.prompt_id)
     return await STEPS[task](run_id, config, spend)
 
 

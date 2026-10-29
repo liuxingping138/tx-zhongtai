@@ -30,11 +30,13 @@ describe('模板放进打标任务前的检查', () => {
     expect(fitLevel({ check, skip: false })).toBe('error')
   })
 
-  it('能跑但可能不理想的给提醒：没用正文、市场机会没用行业场景、码表不是系统的', () => {
+  it('能跑但可能不理想的给提醒：没用正文、市场机会没输出和没用行业场景、码表不是系统的', () => {
     const check = checkTemplate(CHANCE, ['政策标题', '上传码表'], ['市场机会'], false)
     expect(check.errors).toEqual([])
-    expect(check.warnings).toHaveLength(3)
+    expect(check.warnings).toHaveLength(4)
     expect(fitLevel({ check, skip: false })).toBe('warn')
+    // 输出写成「一级行业 / 一级场景」也认，和政策服务的规则一致。
+    expect(checkTemplate(CHANCE, ['政策正文', '行业场景'], ['一级行业', '一级场景', '市场机会'], true).warnings).toEqual([])
   })
 
   it('一个必需字段都没有的任务算不适用，不标红；上线确认只提用得上和想用但有问题的', () => {
