@@ -11,13 +11,14 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi.testclient import TestClient
 from platform_common.config import Environment
-from platform_common.errors import RateLimitedError, UnauthenticatedError
+from platform_common.errors import UnauthenticatedError
 
 from app.api import auth as auth_api
 from app.api import security
 from app.api.security import CurrentPrincipal, get_principal
 from app.core.config import get_settings
 from app.core.database import get_db_session
+from app.core.rate_limit import LoginLockedError
 from app.main import app
 
 SETTINGS = get_settings()
@@ -35,9 +36,10 @@ class _Limiter:
     instances: ClassVar[list[_Limiter]] = []
 
     def __init__(self, *_: Any) -> None:
-        self.assert_allowed = AsyncMock()
-        self.clear = AsyncMock()
-        self.record_failure = AsyncMock()
+        self.reserve = AsyncMock()
+        self.succeeded = AsyncMock()
+        self.release = AsyncMock()
+        self.first_notice = AsyncMock(return_value=True)
         _Limiter.instances.append(self)
 
 
@@ -103,7 +105,7 @@ def test_login_sets_refresh_cookie_and_clears_rate_limit(client: TestClient) -> 
     assert response.status_code == 200
     assert response.json()["data"]["access_token"] == "access-1"
     assert response.cookies[SETTINGS.refresh_cookie_name] == "refresh-1"
-    _Limiter.instances[0].clear.assert_awaited_once()
+    _Limiter.instances[0].succeeded.assert_awaited_once()
 
 
 def test_failed_login_counts_failure_and_writes_audit_in_its_own_session(
@@ -116,7 +118,9 @@ def test_failed_login_counts_failure_and_writes_audit_in_its_own_session(
     service.authenticate_password.side_effect = UnauthenticatedError()
     response = client.post("/api/v1/auth/login", json={"username": "zhangsan", "password": "bad"})
     assert response.status_code == 401
-    _Limiter.instances[0].record_failure.assert_awaited_once()
+    # 占的名额留着就是一次失败，不退回。
+    _Limiter.instances[0].release.assert_not_awaited()
+    _Limiter.instances[0].succeeded.assert_not_awaited()
     service.record_login_failure.assert_awaited_once()
     fail_session.commit.assert_awaited_once()
 
@@ -124,20 +128,50 @@ def test_failed_login_counts_failure_and_writes_audit_in_its_own_session(
 def test_attempt_while_locked_is_logged_as_locked(
     client: TestClient, service: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """锁定期间的尝试也进登录日志，原因是 locked，并且照样拒绝。"""
+    """锁定期间的尝试也进登录日志，账号被锁和出口 IP 被限制分开写；同一窗口里只记第一次，照样拒绝。"""
 
     monkeypatch.setattr(auth_api, "SessionLocal", _FailSession)
+    blocked = {"by_ip": False}
 
     class _Locked(_Limiter):
         def __init__(self, *args: Any) -> None:
             super().__init__(*args)
-            self.assert_allowed = AsyncMock(side_effect=RateLimitedError("登录失败次数过多，请稍后重试"))
+            self.reserve = AsyncMock(side_effect=LoginLockedError(by_ip=blocked["by_ip"], retry_after_seconds=60))
 
     monkeypatch.setattr(auth_api, "LoginRateLimiter", _Locked)
     response = client.post("/api/v1/auth/login", json={"username": "zhangsan", "password": "pw"})
     assert response.status_code == 429
     service.authenticate_password.assert_not_awaited()
-    assert service.record_login_failure.await_args.kwargs["reason"] == "locked"
+    assert service.record_login_failure.await_args.kwargs["reason"] == "locked_account"
+    blocked["by_ip"] = True
+    client.post("/api/v1/auth/login", json={"username": "zhangsan", "password": "pw"})
+    assert service.record_login_failure.await_args.kwargs["reason"] == "locked_ip"
+
+
+def test_locked_attempts_after_the_first_are_not_logged_again(
+    client: TestClient, service: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(auth_api, "SessionLocal", _FailSession)
+
+    class _Quiet(_Limiter):
+        def __init__(self, *args: Any) -> None:
+            super().__init__(*args)
+            self.reserve = AsyncMock(side_effect=LoginLockedError(by_ip=False, retry_after_seconds=60))
+            self.first_notice = AsyncMock(return_value=False)
+
+    monkeypatch.setattr(auth_api, "LoginRateLimiter", _Quiet)
+    response = client.post("/api/v1/auth/login", json={"username": "zhangsan", "password": "pw"})
+    assert response.status_code == 429
+    service.record_login_failure.assert_not_awaited()
+
+
+def test_unexpected_errors_give_the_try_back(client: TestClient, service: MagicMock) -> None:
+    """库出错之类没走到验密码结果，不能算一次失败。"""
+
+    service.authenticate_password.side_effect = RuntimeError("db down")
+    with pytest.raises(RuntimeError):
+        client.post("/api/v1/auth/login", json={"username": "zhangsan", "password": "pw"})
+    _Limiter.instances[-1].release.assert_awaited_once()
 
 
 def test_disabled_account_failure_has_its_own_reason(

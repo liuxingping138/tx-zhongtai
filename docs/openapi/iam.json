@@ -911,6 +911,46 @@
         }
       }
     },
+    "/api/v1/system/login-limits/unlock-ip": {
+      "post": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Unlock Ip",
+        "description": "出口 IP 输错太多次被暂时限制，同一出口的人都登不上。锁的是一整个出口，只给超级管理员解除。",
+        "operationId": "unlock_ip_api_v1_system_login_limits_unlock_ip_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnlockIpRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/system/users/{user_id}/grants": {
       "get": {
         "tags": [
@@ -2137,6 +2177,22 @@
           "version"
         ],
         "title": "RoleUpdateRequest"
+      },
+      "UnlockIpRequest": {
+        "properties": {
+          "ip": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Ip"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ip"
+        ],
+        "title": "UnlockIpRequest"
       },
       "UserCreateRequest": {
         "properties": {

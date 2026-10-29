@@ -7,7 +7,7 @@ from datetime import timedelta
 from typing import Any
 
 from platform_common.clock import utcnow
-from platform_common.errors import ApiError, UnauthenticatedError
+from platform_common.errors import ApiError, ErrorCode, UnauthenticatedError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
@@ -15,7 +15,13 @@ from app.core.jwt_tokens import issue_access_token
 from app.core.rate_limit import login_key_username
 from app.domain.enums import UserStatus
 from app.domain.models import RefreshToken, Session, User
-from app.domain.password import hash_password, needs_rehash, validate_password_policy, verify_password
+from app.domain.password import (
+    hash_password,
+    hash_password_async,
+    needs_rehash,
+    validate_password_policy,
+    verify_password_async,
+)
 from app.domain.tokens import generate_refresh_token, hash_refresh_token
 from app.repositories import outbox as outbox_repo
 from app.repositories import sessions as session_repo
@@ -56,14 +62,14 @@ class AuthService:
         user = await user_repo.get_user_by_username(self.session, normalized)
         if user is None or user.status == UserStatus.DELETED:
             # 账号不存在也跑一次同样的哈希校验：否则按响应快慢就能试出哪些用户名是真的。
-            verify_password(_TIMING_HASH, password)
+            await verify_password_async(_TIMING_HASH, password)
             raise UnauthenticatedError(UNIFIED_LOGIN_FAILURE)
-        if not verify_password(user.password_hash, password):
+        if not await verify_password_async(user.password_hash, password):
             raise UnauthenticatedError(UNIFIED_LOGIN_FAILURE)
         if user.status != UserStatus.ACTIVE:
             raise UnauthenticatedError(ACCOUNT_UNAVAILABLE)
         if needs_rehash(user.password_hash):
-            user.password_hash = hash_password(password)
+            user.password_hash = await hash_password_async(password)
         return user
 
     async def issue_session(
@@ -240,15 +246,16 @@ class AuthService:
     async def change_password(
         self, user: User, old_password: str, new_password: str, *, client: ClientInfo | None = None
     ) -> tuple[str, str, Session]:
-        if not verify_password(user.password_hash, old_password):
-            raise UnauthenticatedError("原密码不正确")
+        if not await verify_password_async(user.password_hash, old_password):
+            # 不能回 401：前端会当成会话过期，先续期再重发，每输错一次多跑两遍 Argon2。
+            raise ApiError("原密码不正确", code=ErrorCode.VALIDATION_ERROR, http_status=422)
         policy_error = validate_password_policy(new_password)
         if policy_error:
             raise ApiError(policy_error)
         if old_password == new_password:
             raise ApiError("新密码不能与原密码相同")
         now = utcnow()
-        user.password_hash = hash_password(new_password)
+        user.password_hash = await hash_password_async(new_password)
         user.must_change_password = False
         user.password_changed_at = now
         user.updated_at = now

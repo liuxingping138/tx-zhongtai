@@ -12,7 +12,7 @@ from platform_common.clock import utcnow
 from platform_common.errors import UnauthenticatedError
 
 from app.core.config import Settings
-from app.core.jwt_keys import ensure_jwt_keys, load_private_pem, load_public_pem
+from app.core.jwt_keys import ensure_jwt_keys, load_private_key, load_public_pem
 
 
 def issue_access_token(*, user_id: uuid.UUID, session_id: uuid.UUID, settings: Settings) -> str:
@@ -30,7 +30,7 @@ def issue_access_token(*, user_id: uuid.UUID, session_id: uuid.UUID, settings: S
     }
     return jwt.encode(
         payload,
-        load_private_pem(settings.jwt_keys_path, kid),
+        load_private_key(settings.jwt_keys_path, kid),
         algorithm=settings.jwt_algorithm,
         headers={"kid": kid},
     )

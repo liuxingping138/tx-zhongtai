@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, Response
-from platform_common.errors import RateLimitedError, UnauthenticatedError
+from platform_common.errors import UnauthenticatedError
 from platform_common.request_context import get_request_id
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,7 +24,7 @@ from app.application.authorization import visible_permissions
 from app.core.config import Settings, get_settings
 from app.core.database import SessionLocal, get_db_session
 from app.core.http_utils import client_ip, client_user_agent, success_json
-from app.core.rate_limit import LoginRateLimiter
+from app.core.rate_limit import LoginLockedError, LoginRateLimiter
 from app.core.redis_client import redis_client
 from app.domain.enums import SecurityClass
 from app.domain.tokens import generate_csrf_token
@@ -74,10 +74,13 @@ async def login(
     user_agent = client_user_agent(request)
     username = body.username
     try:
-        await limiter.assert_allowed(username, ip)
-    except RateLimitedError:
-        # 锁定期间的尝试也进登录日志：管理员要能看到「有人还在试」。
-        await _record_failure(settings, username, ip, user_agent, "locked")
+        await limiter.reserve(username, ip)
+    except LoginLockedError as exc:
+        # 锁定期间的尝试也进登录日志，管理员要能看到「有人还在试」；但每个锁定窗口只记一次。
+        # 账号被锁和出口 IP 被限制分开写：后者是同一出口的所有人都登不上，处理办法不一样。
+        reason = "locked_ip" if exc.by_ip else "locked_account"
+        if await limiter.first_notice(username, ip, reason, exc.retry_after_seconds or 1):
+            await _record_failure(settings, username, ip, user_agent, reason)
         raise
     service = AuthService(session, settings)
     try:
@@ -88,13 +91,17 @@ async def login(
             client_ip=ip,
             user_agent=user_agent,
         )
-        await limiter.clear(username, ip)
-        return _token_response(access, refresh, must_change_password=user.must_change_password, settings=settings)
     except UnauthenticatedError as exc:
-        await limiter.record_failure(username, ip)
+        # 占的这一次名额留着，就是一次失败。
         reason = "disabled" if exc.message == auth_service.ACCOUNT_UNAVAILABLE else "unauthenticated"
         await _record_failure(settings, username, ip, user_agent, reason)
-        raise exc
+        raise
+    except Exception:
+        # 库出错之类没走到验密码结果：不算一次失败。
+        await limiter.release(username, ip)
+        raise
+    await limiter.succeeded(username, ip)
+    return _token_response(access, refresh, must_change_password=user.must_change_password, settings=settings)
 
 
 def _client(request: Request) -> dict[str, str]:

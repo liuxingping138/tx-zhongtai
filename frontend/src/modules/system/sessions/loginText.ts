@@ -50,7 +50,10 @@ export function lockText(seconds: number): string {
 const FAILURE_REASONS: Record<string, string> = {
   unauthenticated: '密码错误或账号不存在',
   disabled: '账号已停用',
+  // 旧记录：没分账号还是出口 IP。
   locked: '输错次数过多，已锁定',
+  locked_account: '这个账号输错次数过多，已锁定',
+  locked_ip: '这个网络出口输错次数过多，已暂时限制（同一出口的人都登不上）',
 }
 
 /** 登录日志一行的结果：成功、退出，或者失败及原因。 */

@@ -21,6 +21,7 @@ _EVENT_META: dict[str, tuple[str, str, str, str]] = {
     "iam.user.sessions_revoked": ("system.users", "revoke_sessions", "user", "强制下线"),
     "iam.session.revoked": ("system.users", "revoke_session", "user", "下线一台设备"),
     "iam.user.unlocked": ("system.users", "unlock", "user", "解除登录锁定"),
+    "iam.login_ip.unlocked": ("system.users", "unlock_ip", "ip", "解除出口 IP 登录限制"),
     "iam.user.grants_replaced": ("system.permissions", "grant", "user", "单独授权"),
     "iam.user.roles_replaced": ("system.users", "assign_roles", "user", "分配用户角色"),
     "iam.user.protect_denied": ("system.users", "protect", "user", "拒绝管理受保护用户"),

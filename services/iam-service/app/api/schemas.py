@@ -102,6 +102,10 @@ class UserGrantsReplaceRequest(StrictModel):
     grants: list[GrantItem]
 
 
+class UnlockIpRequest(StrictModel):
+    ip: str = Field(min_length=1, max_length=64)
+
+
 class AuthorizeRequest(StrictModel):
     access_token: str = Field(min_length=1)
     resource: str = Field(min_length=1, max_length=128)

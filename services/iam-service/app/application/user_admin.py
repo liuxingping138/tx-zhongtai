@@ -24,7 +24,7 @@ from app.domain.catalog import SUPERADMIN_ROLE_CODE
 from app.domain.enums import UserStatus
 from app.domain.filters import UserFilters
 from app.domain.models import Role, User
-from app.domain.password import hash_password, validate_password_policy
+from app.domain.password import hash_password_async, validate_password_policy
 from app.repositories import outbox as outbox_repo
 from app.repositories import resources as resource_repo
 from app.repositories import roles as role_repo
@@ -151,7 +151,7 @@ async def create_user(session: AsyncSession, actor: User, data: NewUser) -> tupl
         policy_error = validate_password_policy(raw_password)
         if policy_error:
             raise ApiError(policy_error)
-        password_hash = hash_password(raw_password)
+        password_hash = await hash_password_async(raw_password)
     now = utcnow()
     user = User(
         id=uuid.uuid4(),
@@ -226,7 +226,7 @@ async def reset_password(session: AsyncSession, actor: User, user_id: uuid.UUID)
     user = _require_live(await user_repo.get_user_for_update(session, user_id))
     await assert_can_manage_target(session, actor, user)
     temporary = generate_temporary_password()
-    user.password_hash = hash_password(temporary)
+    user.password_hash = await hash_password_async(temporary)
     user.must_change_password = True
     user.password_changed_at = utcnow()
     user.updated_at = utcnow()

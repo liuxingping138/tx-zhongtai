@@ -10,7 +10,13 @@ from platform_common.http_utils import IMPORT_FILE_OPENAPI, read_import_upload
 from platform_common.responses import paginate
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas import UserCreateRequest, UserGrantsReplaceRequest, UserRolesReplaceRequest, UserUpdateRequest
+from app.api.schemas import (
+    UnlockIpRequest,
+    UserCreateRequest,
+    UserGrantsReplaceRequest,
+    UserRolesReplaceRequest,
+    UserUpdateRequest,
+)
 from app.api.security import CurrentPrincipal, classified, require_permission
 from app.application import session_admin, user_admin, user_excel, user_grants
 from app.application.authorization import assert_allowed, is_allowed
@@ -236,6 +242,18 @@ async def unlock_user(
     """密码连续输错被锁的账号，不等到期直接解锁。"""
 
     return success_json({"unlocked": await session_admin.unlock(session, principal.user, user_id, _lockouts())})
+
+
+@router.post("/login-limits/unlock-ip")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def unlock_ip(
+    body: UnlockIpRequest,
+    principal: CurrentPrincipal = Depends(require_permission("system.permissions", "grant")),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+) -> JSONResponse:
+    """出口 IP 输错太多次被暂时限制，同一出口的人都登不上。锁的是一整个出口，只给超级管理员解除。"""
+
+    return success_json({"unlocked": await session_admin.unlock_ip(session, principal.user, body.ip, _lockouts())})
 
 
 @router.get("/users/{user_id}/grants")

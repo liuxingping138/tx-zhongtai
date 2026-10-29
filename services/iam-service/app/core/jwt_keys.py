@@ -69,6 +69,29 @@ def load_private_pem(directory: Path, kid: str) -> bytes:
     return path.read_bytes()
 
 
+# 私钥文件 -> （修改时间, 解析好的私钥）。
+_PRIVATE_KEYS: dict[Path, tuple[int, Any]] = {}
+
+
+def load_private_key(directory: Path, kid: str) -> Any:
+    """解析好的私钥对象，按文件修改时间缓存。
+
+    每次签令牌都重新解析 PEM 要约 70 毫秒（cryptography 加载私钥时做一致性校验），签名本身只要 1 毫秒；
+    登录、每次刷新页面都要签，这 70 毫秒全压在 IAM 唯一的事件循环上。换了密钥文件，修改时间变了就重新解析。
+    """
+
+    path = directory / f"{kid}{_PRIVATE_SUFFIX}"
+    if not path.exists():
+        raise JwtKeyError(f"缺少私钥 kid={kid}")
+    stamp = path.stat().st_mtime_ns
+    cached = _PRIVATE_KEYS.get(path)
+    if cached is not None and cached[0] == stamp:
+        return cached[1]
+    key = serialization.load_pem_private_key(path.read_bytes(), password=None)
+    _PRIVATE_KEYS[path] = (stamp, key)
+    return key
+
+
 def load_public_pem(directory: Path, kid: str) -> bytes:
     path = directory / f"{kid}{_PUBLIC_SUFFIX}"
     if not path.exists():

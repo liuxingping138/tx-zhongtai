@@ -75,3 +75,16 @@ async def unlock(session: AsyncSession, actor: User, user_id: uuid.UUID, lockout
             payload={"actor_id": str(actor.id), "target_id": str(user.id), "outcome": "success"},
         )
     return unlocked
+
+
+async def unlock_ip(session: AsyncSession, actor: User, ip: str, lockouts: LoginLockouts) -> bool:
+    """解除一个出口 IP 的登录限制：同一出口（常是全公司）输错太多次时，所有人都登不上，不必等它到期。"""
+
+    unlocked = await lockouts.unlock_ip(ip)
+    if unlocked:
+        await outbox_repo.enqueue(
+            session,
+            event_type="iam.login_ip.unlocked",
+            payload={"actor_id": str(actor.id), "target_id": ip, "outcome": "success"},
+        )
+    return unlocked

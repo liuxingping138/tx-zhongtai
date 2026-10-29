@@ -206,8 +206,10 @@ class TestLogoutAndPassword:
 
     async def test_change_password_rules(self, env: SimpleNamespace) -> None:
         user = _user()
-        with pytest.raises(UnauthenticatedError, match="原密码"):
+        # 原密码错回 422 不回 401：401 会让前端当成会话过期，先续期再重发。
+        with pytest.raises(ApiError, match="原密码") as wrong:
             await _service().change_password(user, "wrong-password-1", "brand-new-pass-9")  # type: ignore[arg-type]
+        assert wrong.value.http_status == 422
         with pytest.raises(ApiError):
             await _service().change_password(user, GOOD_LOGIN, "1")  # type: ignore[arg-type]
         with pytest.raises(ApiError, match="不能与原密码相同"):
