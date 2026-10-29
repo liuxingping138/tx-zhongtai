@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 
 from platform_common.filters import Filters, contains_ilike, filter_values
-from sqlalchemy import ColumnElement, Integer, case, cast, func, or_, select
+from sqlalchemy import ColumnElement, Numeric, case, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import PolicyType
@@ -39,8 +39,10 @@ KEYWORD_COLUMNS = (PolicyType.type_name, PolicyType.definition, PolicyType.seq_n
 # 都不限格式）。曾经直接 CAST(... AS INTEGER)，只要有一行填了「A1」，
 # 整个列表和导出就永久 500，且页面打不开、用户无法自行改回来。
 # 改成只对纯数字取值，非数字排在后面按文本排，排序结果对全数字数据与原来一致。
+# 转成 NUMERIC 而不是 INTEGER：填「20261029001」这种 10 位以上的数字，转整数会溢出，同样整页 500，
+# 连带给 AI 的政策类型码表、基础标签的政策类型筛选项一起挂。
 _NUMERIC_SEQ_NO = case(
-    (PolicyType.seq_no.op("~")("^[0-9]+$"), cast(PolicyType.seq_no, Integer)),
+    (PolicyType.seq_no.op("~")("^[0-9]+$"), cast(PolicyType.seq_no, Numeric)),
     else_=None,
 )
 ORDER_BY = (

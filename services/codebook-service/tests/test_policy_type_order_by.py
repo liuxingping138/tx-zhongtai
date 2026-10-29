@@ -42,3 +42,10 @@ def test_non_numeric_rows_sort_last_and_stay_deterministic() -> None:
     # 非数字之间要有稳定次序，否则分页会来回跳。
     assert "seq_no" in order_clause.split("NULLS LAST", 1)[1]
     assert "type_name" in order_clause
+
+
+def test_long_numbers_do_not_overflow() -> None:
+    """序号填「20261029001」这种 10 位以上的数字：转 INTEGER 会溢出、整页 500，要转 NUMERIC。"""
+
+    sql = _order_by_sql()
+    assert "AS NUMERIC" in sql and "AS INTEGER" not in sql
