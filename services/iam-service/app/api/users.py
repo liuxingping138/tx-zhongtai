@@ -12,12 +12,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import UserCreateRequest, UserRolesReplaceRequest, UserUpdateRequest
 from app.api.security import CurrentPrincipal, classified, require_permission
-from app.application import user_admin, user_excel
+from app.application import session_admin, user_admin, user_excel
 from app.application.authorization import assert_allowed, is_allowed
 from app.application.user_fields import NewUser, UserChanges
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
 from app.core.http_utils import success_json
+from app.core.rate_limit import LoginLockouts
+from app.core.redis_client import redis_client
 from app.domain.enums import SecurityClass
 from app.domain.filters import UserFilters
 
@@ -46,7 +48,12 @@ async def list_users(
     sort: str = "created_at",
 ) -> JSONResponse:
     items, total = await user_admin.list_users_page(session, filters, page=page, page_size=page_size, sort=sort)
+    items = await session_admin.with_lockouts(items, _lockouts())
     return success_json(paginate(items, total, page=page, page_size=page_size).model_dump())
+
+
+def _lockouts() -> LoginLockouts:
+    return LoginLockouts(redis_client, get_settings())
 
 
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -108,7 +115,8 @@ async def get_user(
     _principal: CurrentPrincipal = Depends(require_permission("system.users", "read")),
     session: AsyncSession = Depends(get_db_session, scope="function"),
 ) -> JSONResponse:
-    return success_json(await user_admin.get_user(session, user_id))
+    [item] = await session_admin.with_lockouts([await user_admin.get_user(session, user_id)], _lockouts())
+    return success_json(item)
 
 
 @router.get("/users/{user_id}/permissions")
@@ -216,3 +224,15 @@ async def replace_user_roles(
     return success_json(
         await user_admin.replace_roles(session, principal.user, user_id, body.role_ids, version=body.version)
     )
+
+
+@router.post("/users/{user_id}/unlock")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def unlock_user(
+    user_id: uuid.UUID,
+    principal: CurrentPrincipal = Depends(require_permission("system.users", "update")),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+) -> JSONResponse:
+    """密码连续输错被锁的账号，不等到期直接解锁。"""
+
+    return success_json({"unlocked": await session_admin.unlock(session, principal.user, user_id, _lockouts())})

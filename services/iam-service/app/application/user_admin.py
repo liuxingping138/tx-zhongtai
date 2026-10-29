@@ -41,13 +41,15 @@ def user_public(user: User) -> dict[str, object]:
         "email": user.email,
         "status": user.status,
         "must_change_password": user.must_change_password,
+        "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
+        "last_login_ip": user.last_login_ip,
         "version": user.version,
         "created_at": user.created_at.isoformat(),
         "updated_at": user.updated_at.isoformat(),
     }
 
 
-async def _assert_can_manage_target(session: AsyncSession, actor: User, target: User) -> None:
+async def assert_can_manage_target(session: AsyncSession, actor: User, target: User) -> None:
     actor_is_super = await user_repo.user_has_builtin_superadmin(session, actor.id)
     target_is_super = await user_repo.user_has_builtin_superadmin(session, target.id)
     if target_is_super and not actor_is_super:
@@ -185,7 +187,7 @@ async def update_user(
     user = _require_live(await user_repo.get_user_for_update(session, user_id))
     if user.version != changes.version:
         raise VersionConflictError()
-    await _assert_can_manage_target(session, actor, user)
+    await assert_can_manage_target(session, actor, user)
     status = changes.status
     if status is not None and status != user.status:
         if status not in {UserStatus.ACTIVE, UserStatus.DISABLED}:
@@ -218,7 +220,7 @@ async def update_user(
 
 async def reset_password(session: AsyncSession, actor: User, user_id: uuid.UUID) -> str:
     user = _require_live(await user_repo.get_user_for_update(session, user_id))
-    await _assert_can_manage_target(session, actor, user)
+    await assert_can_manage_target(session, actor, user)
     temporary = generate_temporary_password()
     user.password_hash = hash_password(temporary)
     user.must_change_password = True
@@ -236,7 +238,7 @@ async def reset_password(session: AsyncSession, actor: User, user_id: uuid.UUID)
 
 async def revoke_sessions(session: AsyncSession, actor: User, user_id: uuid.UUID) -> int:
     user = _require_live(await user_repo.get_user_by_id(session, user_id))
-    await _assert_can_manage_target(session, actor, user)
+    await assert_can_manage_target(session, actor, user)
     count = await session_repo.revoke_user_sessions(session, user.id)
     await outbox_repo.enqueue(
         session,
@@ -252,7 +254,7 @@ async def delete_user(session: AsyncSession, actor: User, user_id: uuid.UUID) ->
     user = _require_live(await user_repo.get_user_for_update(session, user_id))
     if actor.id == user.id:
         raise PermissionDeniedError("不能删除当前登录的账号")
-    await _assert_can_manage_target(session, actor, user)
+    await assert_can_manage_target(session, actor, user)
     await _guard_last_superadmin(session, user, new_status=UserStatus.DELETED)
     user.status = UserStatus.DELETED
     user.updated_at = utcnow()
@@ -338,7 +340,7 @@ async def effective_permissions(session: AsyncSession, user_id: uuid.UUID) -> di
 
 
 async def _set_roles(session: AsyncSession, actor: User, user: User, role_ids: list[uuid.UUID]) -> dict[str, object]:
-    await _assert_can_manage_target(session, actor, user)
+    await assert_can_manage_target(session, actor, user)
     unique_ids = list(dict.fromkeys(role_ids))
     roles = await role_repo.get_roles_by_ids(session, unique_ids)
     if len(roles) != len(unique_ids):

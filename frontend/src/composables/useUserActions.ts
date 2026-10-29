@@ -1,7 +1,7 @@
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { errorMessage } from '@/api/errors'
-import { deleteUser, resetUserPassword, revokeUserSessions, updateUser } from '@/api/system'
+import { deleteUser, resetUserPassword, revokeUserSessions, unlockUser, updateUser } from '@/api/system'
 import type { UserItem } from '@/api/types'
 
 interface UserActionsOptions {
@@ -71,5 +71,15 @@ export function useUserActions(options: UserActionsOptions) {
     }
   }
 
-  return { toggleStatus, remove, resetPassword, revokeSessions }
+  async function unlock(user: UserItem): Promise<void> {
+    try {
+      await unlockUser(user.id)
+      ElMessage.success(`已解锁，${user.username} 现在可以重新登录`)
+      await options.reload()
+    } catch (error) {
+      ElMessage.error(errorMessage(error, '解锁失败'))
+    }
+  }
+
+  return { toggleStatus, remove, resetPassword, revokeSessions, unlock }
 }

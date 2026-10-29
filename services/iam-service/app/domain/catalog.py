@@ -187,8 +187,11 @@ MENU_SPECS: tuple[MenuSpec, ...] = (
         "menu.system",
         enabled=False,
     ),
-    MenuSpec("menu.system.scheduler", "任务调度", 15, "system-scheduler", "system.scheduler", "menu.system"),
-    MenuSpec("menu.system.audit", "操作日志", 14, "system-audit", "system.audit", "menu.system"),
+    # 在线用户、登录日志不另设权限：看在线用户跟着用户管理，看登录日志跟着操作日志。
+    MenuSpec("menu.system.sessions", "在线用户", 14, "system-sessions", "system.users", "menu.system"),
+    MenuSpec("menu.system.login_logs", "登录日志", 15, "system-login-logs", "system.audit", "menu.system"),
+    MenuSpec("menu.system.audit", "操作日志", 16, "system-audit", "system.audit", "menu.system"),
+    MenuSpec("menu.system.scheduler", "任务调度", 17, "system-scheduler", "system.scheduler", "menu.system"),
     MenuSpec("menu.policy", "政策", 20, enabled=True),
     MenuSpec("menu.policy.sources", "信源管理", 21, "policy-sources", "policy.sources", "menu.policy", enabled=True),
     MenuSpec(

@@ -30,6 +30,8 @@ def _user(**overrides: Any) -> SimpleNamespace:
         "email": "",
         "status": UserStatus.ACTIVE,
         "must_change_password": True,
+        "last_login_at": None,
+        "last_login_ip": "",
         "version": 1,
         "created_at": NOW,
         "updated_at": NOW,

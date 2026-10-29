@@ -115,7 +115,9 @@ class TestIssue:
         assert env.events == ["auth.login.succeeded"]
 
     async def test_failure_is_recorded_with_the_normalised_username(self, env: SimpleNamespace) -> None:
-        await _service().record_login_failure(username=" ZhangSan ", request_id=None, client_ip="1.1.1.1", reason="bad")
+        await _service().record_login_failure(
+            username=" ZhangSan ", request_id=None, client_ip="1.1.1.1", user_agent="ua", reason="bad"
+        )
         assert env.events == ["auth.login.failed"]
 
 

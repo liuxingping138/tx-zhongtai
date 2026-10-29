@@ -40,6 +40,8 @@ export const ACTION_LABELS: Record<string, string> = {
   export: '导出',
   reset_password: '重置密码',
   revoke_sessions: '强制下线',
+  revoke_session: '下线一台设备',
+  unlock: '解除登录锁定',
   delete: '删除',
   assign_roles: '分配角色',
   protect: '保护校验',

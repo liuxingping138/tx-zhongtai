@@ -48,6 +48,12 @@ class User(Base):
     password_changed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, comment="最近改密时间"
     )
+    last_login_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="最近登录时间"
+    )
+    last_login_ip: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="", server_default="", comment="最近登录IP"
+    )
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, comment="版本号")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="创建时间")
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="更新时间")

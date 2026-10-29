@@ -4,6 +4,7 @@ import type {
   EffectivePermission,
   FilterParam,
   GrantItem,
+  OnlineSession,
   Page,
   ResourceNode,
   RoleItem,
@@ -65,6 +66,20 @@ export function resetUserPassword(userId: string): Promise<{ temporary_password:
 
 export function revokeUserSessions(userId: string): Promise<{ revoked: number }> {
   return request(http.post(`/system/users/${userId}/revoke-sessions`))
+}
+
+/** 密码连续输错被锁的账号，不等到期直接解锁。 */
+export function unlockUser(userId: string): Promise<{ unlocked: boolean }> {
+  return request(http.post(`/system/users/${userId}/unlock`))
+}
+
+/** 在线用户：没撤销、没过期的登录会话，每台设备一行。 */
+export function listOnlineSessions(): Promise<{ items: OnlineSession[] }> {
+  return request(http.get('/system/sessions'))
+}
+
+export function revokeOnlineSession(sessionId: string): Promise<{ revoked: boolean }> {
+  return request(http.delete(`/system/sessions/${sessionId}`))
 }
 
 export function replaceUserRoles(userId: string, payload: { role_ids: string[]; version: number }): Promise<UserItem> {

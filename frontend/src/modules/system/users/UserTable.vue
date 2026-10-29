@@ -5,7 +5,8 @@ import type { UserItem } from '@/api/types'
 import ListEmpty from '@/components/ListEmpty.vue'
 import { useAuthStore } from '@/stores/auth'
 import { formatTime } from '@/utils/time'
-import { avatarText, avatarTone } from './userAvatar'
+import { lockText, sinceText } from '../sessions/loginText'
+import UserAvatar from './UserAvatar.vue'
 
 defineProps<{ users: UserItem[]; loading: boolean; filtered: boolean }>()
 defineEmits<{
@@ -14,6 +15,7 @@ defineEmits<{
   remove: [user: UserItem]
   'reset-password': [user: UserItem]
   revoke: [user: UserItem]
+  unlock: [user: UserItem]
   audit: [user: UserItem]
   reset: []
 }>()
@@ -49,11 +51,7 @@ function roleNames(user: UserItem): string {
     >
       <template #default="{ row }">
         <span class="user-cell">
-          <span
-            class="user-avatar"
-            :class="`is-tone-${avatarTone(row.id)}`"
-            aria-hidden="true"
-          >{{ avatarText(row) }}</span>
+          <UserAvatar :user="row" />
           <el-button
             link
             type="primary"
@@ -71,31 +69,6 @@ function roleNames(user: UserItem): string {
       min-width="140"
       show-overflow-tooltip
     />
-    <el-table-column
-      label="电话"
-      width="130"
-    >
-      <template #default="{ row }">
-        <span v-if="row.phone">{{ row.phone }}</span>
-        <span
-          v-else
-          class="muted"
-        >—</span>
-      </template>
-    </el-table-column>
-    <el-table-column
-      label="邮箱"
-      min-width="200"
-      show-overflow-tooltip
-    >
-      <template #default="{ row }">
-        <span v-if="row.email">{{ row.email }}</span>
-        <span
-          v-else
-          class="muted"
-        >—</span>
-      </template>
-    </el-table-column>
     <el-table-column
       label="角色"
       min-width="200"
@@ -148,24 +121,83 @@ function roleNames(user: UserItem): string {
     </el-table-column>
     <el-table-column
       label="启用"
-      width="120"
+      width="160"
     >
       <template #default="{ row }">
-        <template v-if="canEditUsers && row.id !== auth.user?.id">
+        <span class="status-line">
           <el-switch
+            v-if="canEditUsers && row.id !== auth.user?.id"
             :model-value="row.status === 'active'"
             :aria-label="`${row.username} 的账号启用`"
             @change="$emit('toggle', row)"
           />
-          <span class="status-text">{{ row.status === 'active' ? '启用' : '停用' }}</span>
-        </template>
-        <el-tag
+          <el-tag
+            v-else
+            :type="row.status === 'active' ? 'success' : 'warning'"
+            size="small"
+          >
+            {{ row.status === 'active' ? '启用' : '停用' }}
+          </el-tag>
+          <!-- 密码连续输错被锁：账号仍是启用，但这几分钟登不进来，直接给「解锁」。只占一行，行高不变。 -->
+          <template v-if="row.locked_seconds">
+            <span
+              class="status-locked"
+              :title="lockText(row.locked_seconds)"
+            >已锁定</span>
+            <el-button
+              v-if="canEditUsers"
+              link
+              type="primary"
+              @click="$emit('unlock', row)"
+            >
+              解锁
+            </el-button>
+          </template>
+          <span
+            v-else-if="canEditUsers && row.id !== auth.user?.id"
+            class="status-text"
+          >{{ row.status === 'active' ? '启用' : '停用' }}</span>
+        </span>
+      </template>
+    </el-table-column>
+    <el-table-column
+      label="最近登录"
+      width="150"
+    >
+      <template #default="{ row }">
+        <span
+          v-if="row.last_login_at"
+          :title="`${formatTime(row.last_login_at)}${row.last_login_ip ? `，IP ${row.last_login_ip}` : ''}`"
+        >{{ sinceText(row.last_login_at) }}</span>
+        <span
           v-else
-          :type="row.status === 'active' ? 'success' : 'warning'"
-          size="small"
-        >
-          {{ row.status === 'active' ? '启用' : '停用' }}
-        </el-tag>
+          class="muted"
+        >从未登录</span>
+      </template>
+    </el-table-column>
+    <el-table-column
+      label="电话"
+      width="130"
+    >
+      <template #default="{ row }">
+        <span v-if="row.phone">{{ row.phone }}</span>
+        <span
+          v-else
+          class="muted"
+        >—</span>
+      </template>
+    </el-table-column>
+    <el-table-column
+      label="邮箱"
+      min-width="200"
+      show-overflow-tooltip
+    >
+      <template #default="{ row }">
+        <span v-if="row.email">{{ row.email }}</span>
+        <span
+          v-else
+          class="muted"
+        >—</span>
       </template>
     </el-table-column>
     <el-table-column
@@ -189,7 +221,7 @@ function roleNames(user: UserItem): string {
     </el-table-column>
     <el-table-column
       label="创建时间"
-      width="170"
+      width="190"
     >
       <template #default="{ row }">
         <span class="muted">{{ formatTime(row.created_at) }}</span>
@@ -259,16 +291,10 @@ function roleNames(user: UserItem): string {
   color: var(--zt-ink-500);
 }
 
+.status-line { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.status-line .el-button { margin-left: 0; }
+.status-locked { color: var(--zt-warning-text); font-size: 13px; }
 .user-cell { display: inline-flex; align-items: center; gap: 10px; max-width: 100%; vertical-align: middle; }
-.user-avatar { display: inline-grid; flex: none; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: var(--el-color-white); font-size: 13px; font-weight: 600; line-height: 1; }
-.user-avatar.is-tone-1 { background: var(--zt-avatar-1); }
-.user-avatar.is-tone-2 { background: var(--zt-avatar-2); }
-.user-avatar.is-tone-3 { background: var(--zt-avatar-3); }
-.user-avatar.is-tone-4 { background: var(--zt-avatar-4); }
-.user-avatar.is-tone-5 { background: var(--zt-avatar-5); }
-.user-avatar.is-tone-6 { background: var(--zt-avatar-6); }
-.user-avatar.is-tone-7 { background: var(--zt-avatar-7); }
-.user-avatar.is-tone-8 { background: var(--zt-avatar-8); }
 .user-link { overflow: hidden; min-width: 0; font-weight: 500; }
 .user-link :deep(span) { overflow: hidden; text-overflow: ellipsis; }
 
@@ -301,7 +327,6 @@ function roleNames(user: UserItem): string {
 }
 
 .status-text {
-  margin-left: 6px;
   white-space: nowrap;
   font-size: 12px;
   color: var(--zt-ink-500);

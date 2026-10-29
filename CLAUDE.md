@@ -203,7 +203,8 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
 
 ### 系统管理：给人分配角色即授权
 
-菜单四项：用户管理、角色与权限（角色和权限分配在同一页）、操作日志、任务调度。给人分配角色的所有入口
+菜单六项：用户管理、角色与权限（角色和权限分配在同一页）、在线用户、登录日志、操作日志、任务调度。在线用户（`/system/sessions`，读会话表，可按设备下线）的权限跟着 `system.users`，登录日志（操作日志里 `auth` 模块的登录 / 退出事件）跟着 `system.audit`，都不另设资源。
+用户列表的「最近登录」读 `iam_users.last_login_at` / `last_login_ip`（登录成功时写），不靠会话表倒推：会话过期会被清理。密码连续输错被锁的账号在列表里显示「已锁定」，管理员可直接解锁（删 Redis 里账号维度的计数，IP 维度不动）。给人分配角色的所有入口
 （建人带角色、用户详情调角色、角色侧增删成员、复制角色）都要求 `system.permissions:grant`，
 而该资源只能授予超级管理员角色——这是防止「用户管理员给自己加超级管理员」的关键约束，改入口时不要放宽。
 权限页的模块分组、可选档位和中文说明都由 `frontend/src/permissions/catalog.ts` 从资源树推导。
@@ -380,8 +381,8 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
 
 - `pg_stat_user_tables.n_live_tup` 是过期统计会显示 0 行，判断数据量用 `count(*)`
 - mypy 有缓存假报错，改完文件结构先 `rm -rf .mypy_cache`
-- 登录失败按账号 5 次、IP 20 次 / 300 秒限流，账号键是小写后的用户名。探测后清理：
-  `docker exec tx-zhongtai-redis-1 redis-cli del 'iam:login:user:<账号>' 'iam:login:ip:<IP>'`
+- 登录失败按账号 5 次、IP 20 次 / 300 秒限流，账号键是小写后的用户名。账号被锁在用户管理里点「解锁」；
+  IP 维度的计数页面不管，探测后清理：`docker exec tx-zhongtai-redis-1 redis-cli del 'iam:login:ip:<IP>'`
 - Element Plus 的原生 checkbox 是 `opacity:0; 0x0` 隐藏元素，e2e 里 `check()` 会一直等可见，
   改点可见标签；hover 才出现的清除图标用 `dispatchEvent('click')`，
   `click({force:true})` 会静默失效（测试变绿但实际没点到）

@@ -3,6 +3,8 @@ export const ROUTE_BY_NAME: Record<string, string> = {
   'system-roles': '/system/roles',
   'system-permissions': '/system/permissions',
   'system-scheduler': '/system/scheduler',
+  'system-sessions': '/system/sessions',
+  'system-login-logs': '/system/login-logs',
   'system-audit': '/system/audit',
   'codebook-policy-types': '/codebook/policy-types',
   'codebook-scenarios': '/codebook/scenarios',

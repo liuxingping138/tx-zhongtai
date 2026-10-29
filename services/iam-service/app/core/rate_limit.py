@@ -23,13 +23,17 @@ def login_key_username(username: str) -> str:
     return username.strip().lower()
 
 
+def user_lock_key(username: str) -> str:
+    return f"iam:login:user:{login_key_username(username)}"
+
+
 class LoginRateLimiter:
     def __init__(self, redis: Redis, settings: Settings) -> None:
         self._redis = redis
         self._settings = settings
 
     def _keys(self, username: str, ip: str) -> tuple[str, str]:
-        return f"iam:login:user:{login_key_username(username)}", f"iam:login:ip:{ip}"
+        return user_lock_key(username), f"iam:login:ip:{ip}"
 
     async def assert_allowed(self, username: str, ip: str) -> None:
         user_key, ip_key = self._keys(username, ip)
@@ -71,5 +75,41 @@ class LoginRateLimiter:
         user_key, _ip_key = self._keys(username, ip)
         try:
             await self._redis.delete(user_key)
+        except RedisError as exc:
+            raise DependencyUnavailableError("登录限流组件暂时不可用，请稍后重试") from exc
+
+
+class LoginLockouts:
+    """管理端看「谁被锁了」和手动解锁。只管账号维度：IP 维度锁的是一个出口，不对应某个人。"""
+
+    def __init__(self, redis: Redis, settings: Settings) -> None:
+        self._redis = redis
+        self._settings = settings
+
+    async def remaining_seconds(self, usernames: list[str]) -> dict[str, int]:
+        """每个账号还要锁多少秒；没锁的不出现。Redis 不可用时当作都没锁，不拖垮用户列表。"""
+
+        keys = [user_lock_key(name) for name in usernames]
+        if not keys:
+            return {}
+        try:
+            counts = await self._redis.mget(keys)
+            locked = [
+                (name, key)
+                for name, key, count in zip(usernames, keys, counts, strict=True)
+                if int(count or 0) >= self._settings.login_max_failures
+            ]
+            result: dict[str, int] = {}
+            for name, key in locked:
+                ttl = int(await self._redis.ttl(key) or 0)
+                if ttl > 0:
+                    result[name] = ttl
+            return result
+        except RedisError:
+            return {}
+
+    async def unlock(self, username: str) -> bool:
+        try:
+            return bool(await self._redis.delete(user_lock_key(username)))
         except RedisError as exc:
             raise DependencyUnavailableError("登录限流组件暂时不可用，请稍后重试") from exc

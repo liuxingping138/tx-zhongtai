@@ -7,7 +7,8 @@ from platform_common.clock import utcnow
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.models import RefreshToken, Session
+from app.domain.enums import UserStatus
+from app.domain.models import RefreshToken, Session, User
 
 
 async def get_session(session: AsyncSession, session_id: uuid.UUID) -> Session | None:
@@ -46,3 +47,15 @@ def session_is_usable(session_row: Session, *, now: datetime | None = None) -> b
     if session_row.revoked_at is not None:
         return False
     return session_row.expires_at > stamp
+
+
+async def list_active_sessions(session: AsyncSession, *, now: datetime) -> list[tuple[Session, User]]:
+    """没撤销、没过期的会话，连同账号；已删除的账号不列。最近活跃的在前。"""
+
+    result = await session.execute(
+        select(Session, User)
+        .join(User, User.id == Session.user_id)
+        .where(Session.revoked_at.is_(None), Session.expires_at > now, User.status != UserStatus.DELETED)
+        .order_by(Session.last_seen_at.desc())
+    )
+    return [(row[0], row[1]) for row in result.all()]

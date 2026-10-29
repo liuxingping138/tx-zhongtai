@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, Response
-from platform_common.errors import UnauthenticatedError
+from platform_common.errors import RateLimitedError, UnauthenticatedError
 from platform_common.request_context import get_request_id
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -71,8 +71,14 @@ async def login(
 ) -> JSONResponse:
     limiter = LoginRateLimiter(redis_client, settings)
     ip = client_ip(request)
+    user_agent = client_user_agent(request)
     username = body.username
-    await limiter.assert_allowed(username, ip)
+    try:
+        await limiter.assert_allowed(username, ip)
+    except RateLimitedError:
+        # 锁定期间的尝试也进登录日志：管理员要能看到「有人还在试」。
+        await _record_failure(settings, username, ip, user_agent, "locked")
+        raise
     service = AuthService(session, settings)
     try:
         user = await service.authenticate_password(username, body.password)
@@ -80,22 +86,33 @@ async def login(
             user,
             request_id=get_request_id(),
             client_ip=ip,
-            user_agent=client_user_agent(request),
+            user_agent=user_agent,
         )
         await limiter.clear(username, ip)
         return _token_response(access, refresh, must_change_password=user.must_change_password, settings=settings)
     except UnauthenticatedError as exc:
         await limiter.record_failure(username, ip)
-        async with SessionLocal() as fail_session:
-            fail_service = AuthService(fail_session, settings)
-            await fail_service.record_login_failure(
-                username=username,
-                request_id=get_request_id(),
-                client_ip=ip,
-                reason="unauthenticated",
-            )
-            await fail_session.commit()
+        reason = "disabled" if exc.message == auth_service.ACCOUNT_UNAVAILABLE else "unauthenticated"
+        await _record_failure(settings, username, ip, user_agent, reason)
         raise exc
+
+
+def _client(request: Request) -> dict[str, str]:
+    return {"ip": client_ip(request), "user_agent": client_user_agent(request)}
+
+
+async def _record_failure(settings: Settings, username: str, ip: str, user_agent: str, reason: str) -> None:
+    """失败留痕放在独立会话里：请求本身的事务会因异常回滚。"""
+
+    async with SessionLocal() as fail_session:
+        await AuthService(fail_session, settings).record_login_failure(
+            username=username,
+            request_id=get_request_id(),
+            client_ip=ip,
+            user_agent=user_agent,
+            reason=reason,
+        )
+        await fail_session.commit()
 
 
 @router.post("/refresh")
@@ -133,7 +150,7 @@ async def logout(
     check_origin(request, settings)
     check_csrf(request, settings)
     service = AuthService(session, settings)
-    await service.logout(principal.session)
+    await service.logout(principal.session, actor_name=principal.user.display_name, client=_client(request))
     response = Response(status_code=204)
     clear_auth_cookies(response, settings)
     return response
@@ -150,7 +167,7 @@ async def logout_all(
     check_origin(request, settings)
     check_csrf(request, settings)
     service = AuthService(session, settings)
-    count = await service.logout_all(principal.user)
+    count = await service.logout_all(principal.user, client=_client(request))
     response = success_json({"revoked": count})
     clear_auth_cookies(response, settings)
     return response
@@ -190,10 +207,13 @@ async def permissions(
 @classified(SecurityClass.RESTRICTED_SESSION)
 async def change_password(
     body: PasswordChangeRequest,
+    request: Request,
     principal: CurrentPrincipal = Depends(require_restricted_or_authenticated),
     session: AsyncSession = Depends(get_db_session, scope="function"),
     settings: Settings = Depends(get_settings),
 ) -> JSONResponse:
     service = AuthService(session, settings)
-    access, refresh, _session_row = await service.change_password(principal.user, body.old_password, body.new_password)
+    access, refresh, _session_row = await service.change_password(
+        principal.user, body.old_password, body.new_password, client=_client(request)
+    )
     return _token_response(access, refresh, must_change_password=False, settings=settings)

@@ -1,5 +1,5 @@
 import { computed, type Component } from 'vue'
-import { ChatDotRound, Collection, Connection, Cpu, DataAnalysis, EditPen, Files, Key, Link, MapLocation, Menu, Money, Monitor, PriceTag, Reading, Tickets, Timer, User } from '@element-plus/icons-vue'
+import { ChatDotRound, Collection, Connection, Cpu, DataAnalysis, EditPen, Files, Key, Link, MapLocation, Menu, Money, Monitor, PriceTag, Reading, Tickets, Timer, User, UserFilled, Unlock } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { pathForRouteName } from '@/router/menu'
 
@@ -38,6 +38,8 @@ const entryIcons: Record<string, Component> = {
   '/codebook/area-codes': MapLocation,
   '/system/users': User,
   '/system/roles': Key,
+  '/system/sessions': UserFilled,
+  '/system/login-logs': Unlock,
   '/system/audit': Tickets,
   '/system/scheduler': Timer,
   '/ai/prompts': EditPen,

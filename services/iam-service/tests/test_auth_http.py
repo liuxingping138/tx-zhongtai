@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi.testclient import TestClient
 from platform_common.config import Environment
-from platform_common.errors import UnauthenticatedError
+from platform_common.errors import RateLimitedError, UnauthenticatedError
 
 from app.api import auth as auth_api
 from app.api import security
@@ -121,6 +121,34 @@ def test_failed_login_counts_failure_and_writes_audit_in_its_own_session(
     fail_session.commit.assert_awaited_once()
 
 
+def test_attempt_while_locked_is_logged_as_locked(
+    client: TestClient, service: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """锁定期间的尝试也进登录日志，原因是 locked，并且照样拒绝。"""
+
+    monkeypatch.setattr(auth_api, "SessionLocal", _FailSession)
+
+    class _Locked(_Limiter):
+        def __init__(self, *args: Any) -> None:
+            super().__init__(*args)
+            self.assert_allowed = AsyncMock(side_effect=RateLimitedError("登录失败次数过多，请稍后重试"))
+
+    monkeypatch.setattr(auth_api, "LoginRateLimiter", _Locked)
+    response = client.post("/api/v1/auth/login", json={"username": "zhangsan", "password": "pw"})
+    assert response.status_code == 429
+    service.authenticate_password.assert_not_awaited()
+    assert service.record_login_failure.await_args.kwargs["reason"] == "locked"
+
+
+def test_disabled_account_failure_has_its_own_reason(
+    client: TestClient, service: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(auth_api, "SessionLocal", _FailSession)
+    service.authenticate_password.side_effect = UnauthenticatedError("账号不可用")
+    client.post("/api/v1/auth/login", json={"username": "zhangsan", "password": "pw"})
+    assert service.record_login_failure.await_args.kwargs["reason"] == "disabled"
+
+
 def test_refresh_requires_matching_csrf(client: TestClient) -> None:
     client.cookies.set(SETTINGS.csrf_cookie_name, CSRF)
     response = client.post("/api/v1/auth/refresh", headers={SETTINGS.csrf_header_name: "other"})
@@ -157,7 +185,9 @@ def test_logout_revokes_current_session_and_clears_cookies(client: TestClient, s
     principal = _signed_in()
     response = client.post("/api/v1/auth/logout", headers=_with_csrf(client))
     assert response.status_code == 204
-    service.logout.assert_awaited_once_with(principal.session)
+    service.logout.assert_awaited_once()
+    assert service.logout.await_args.args == (principal.session,)
+    assert service.logout.await_args.kwargs["actor_name"] == USER.display_name
     cleared = response.headers.get_list("set-cookie")
     assert any(item.startswith(f"{SETTINGS.refresh_cookie_name}=") and "Max-Age=0" in item for item in cleared)
 

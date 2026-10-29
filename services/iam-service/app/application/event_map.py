@@ -19,6 +19,8 @@ _EVENT_META: dict[str, tuple[str, str, str, str]] = {
     "iam.user.deleted": ("system.users", "delete", "user", "删除用户"),
     "iam.user.password_reset": ("system.users", "reset_password", "user", "重置密码"),
     "iam.user.sessions_revoked": ("system.users", "revoke_sessions", "user", "强制下线"),
+    "iam.session.revoked": ("system.users", "revoke_session", "user", "下线一台设备"),
+    "iam.user.unlocked": ("system.users", "unlock", "user", "解除登录锁定"),
     "iam.user.roles_replaced": ("system.users", "assign_roles", "user", "分配用户角色"),
     "iam.user.protect_denied": ("system.users", "protect", "user", "拒绝管理受保护用户"),
     "iam.superadmin.protect": ("system.users", "protect", "user", "保护最后超级管理员"),

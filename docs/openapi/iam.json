@@ -869,6 +869,48 @@
         }
       }
     },
+    "/api/v1/system/users/{user_id}/unlock": {
+      "post": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Unlock User",
+        "description": "密码连续输错被锁的账号，不等到期直接解锁。",
+        "operationId": "unlock_user_api_v1_system_users__user_id__unlock_post",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/system/roles": {
       "get": {
         "tags": [
@@ -1364,6 +1406,66 @@
               "type": "string",
               "format": "uuid",
               "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/sessions": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "List Sessions",
+        "operationId": "list_sessions_api_v1_system_sessions_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/sessions/{session_id}": {
+      "delete": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Revoke Session",
+        "operationId": "revoke_session_api_v1_system_sessions__session_id__delete",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Session Id"
             }
           }
         ],

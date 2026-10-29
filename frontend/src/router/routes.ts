@@ -70,6 +70,18 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '任务调度', resource: 'system.scheduler' },
       },
       {
+        path: 'system/sessions',
+        name: 'system-sessions',
+        component: () => import('@/modules/system/sessions/SessionList.vue'),
+        meta: { title: '在线用户', resource: 'system.users' },
+      },
+      {
+        path: 'system/login-logs',
+        name: 'system-login-logs',
+        component: () => import('@/modules/system/sessions/LoginLogList.vue'),
+        meta: { title: '登录日志', resource: 'system.audit' },
+      },
+      {
         path: 'system/audit',
         name: 'system-audit',
         component: () => import('@/modules/system/audit/AuditList.vue'),

@@ -288,6 +288,7 @@ onMounted(() => {
         @remove="actions.remove"
         @reset-password="actions.resetPassword"
         @revoke="actions.revokeSessions"
+        @unlock="actions.unlock"
         @audit="openAudit"
         @reset="listQuery.resetFilters"
       />

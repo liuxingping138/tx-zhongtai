@@ -69,12 +69,26 @@ export interface UserItem {
   email: string
   status: 'active' | 'disabled'
   must_change_password: boolean
+  /** 最近一次登录成功的时间和 IP；从没登录过是 null 和空串。 */
+  last_login_at: string | null
+  last_login_ip: string
+  /** 密码连续输错被锁，还要锁多少秒；没锁是 0。 */
+  locked_seconds?: number
   version: number
   created_at: string
   updated_at: string
   role_ids?: string[]
   /** 列表与详情都带上角色，页面不必再逐个请求。 */
   roles?: RoleBrief[]
+}
+
+export interface OnlineSession {
+  id: string
+  user: { id: string; username: string; display_name: string }
+  ip: string
+  user_agent: string
+  created_at: string
+  last_seen_at: string
 }
 
 export interface RoleBrief {

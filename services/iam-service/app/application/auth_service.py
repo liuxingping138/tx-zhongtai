@@ -22,11 +22,24 @@ from app.repositories import sessions as session_repo
 from app.repositories import users as user_repo
 
 UNIFIED_LOGIN_FAILURE = "用户名或密码错误"
+ACCOUNT_UNAVAILABLE = "账号不可用"
 
 
 def normalize_username(username: str) -> str:
     # 与登录限流的键共用一处规范化，两边不一致时换个大小写就能绕开账号锁定。
     return login_key_username(username)
+
+
+# 登录、退出时从请求里取的 IP 和浏览器标识：{"ip": ..., "user_agent": ...}。
+ClientInfo = dict[str, str]
+
+
+def _client_fields(client: ClientInfo | None) -> dict[str, str]:
+    """写进审计的 client_ip / user_agent，登录日志按这两个字段显示来源。"""
+
+    if not client:
+        return {}
+    return {"client_ip": client.get("ip", ""), "user_agent": client.get("user_agent", "")}
 
 
 # 给不存在的账号用的哈希，让登录失败的耗时和真账号一样。
@@ -48,7 +61,7 @@ class AuthService:
         if not verify_password(user.password_hash, password):
             raise UnauthenticatedError(UNIFIED_LOGIN_FAILURE)
         if user.status != UserStatus.ACTIVE:
-            raise UnauthenticatedError("账号不可用")
+            raise UnauthenticatedError(ACCOUNT_UNAVAILABLE)
         if needs_rehash(user.password_hash):
             user.password_hash = hash_password(password)
         return user
@@ -95,6 +108,9 @@ class AuthService:
             user,
             client_info={"ip": client_ip, "user_agent": user_agent},
         )
+        # 用户列表的「最近登录」读这两列：会话过期后会被清理，不能靠它倒推。
+        user.last_login_at = session_row.created_at
+        user.last_login_ip = client_ip[:64]
         await outbox_repo.enqueue(
             self.session,
             event_type="auth.login.succeeded",
@@ -105,6 +121,7 @@ class AuthService:
                 "session_id": str(session_row.id),
                 "request_id": request_id,
                 "client_ip": client_ip,
+                "user_agent": user_agent,
                 "outcome": "success",
             },
         )
@@ -116,6 +133,7 @@ class AuthService:
         username: str,
         request_id: str | None,
         client_ip: str,
+        user_agent: str,
         reason: str,
     ) -> None:
         await outbox_repo.enqueue(
@@ -125,6 +143,7 @@ class AuthService:
                 "username": normalize_username(username),
                 "request_id": request_id,
                 "client_ip": client_ip,
+                "user_agent": user_agent,
                 "reason": reason,
                 "outcome": "failure",
             },
@@ -148,7 +167,7 @@ class AuthService:
             ):
                 user = await user_repo.get_user_by_id(self.session, session_row.user_id)
                 if user is None or user.status != UserStatus.ACTIVE:
-                    raise UnauthenticatedError("账号不可用")
+                    raise UnauthenticatedError(ACCOUNT_UNAVAILABLE)
                 session_row.last_seen_at = now
                 access = issue_access_token(user_id=user.id, session_id=session_row.id, settings=self.settings)
                 return access, None, session_row, user
@@ -170,7 +189,7 @@ class AuthService:
             raise UnauthenticatedError("刷新凭据已过期")
         user = await user_repo.get_user_by_id(self.session, session_row.user_id)
         if user is None or user.status != UserStatus.ACTIVE:
-            raise UnauthenticatedError("账号不可用")
+            raise UnauthenticatedError(ACCOUNT_UNAVAILABLE)
 
         refresh_row.consumed_at = now
         new_raw = generate_refresh_token()
@@ -188,7 +207,7 @@ class AuthService:
         access = issue_access_token(user_id=user.id, session_id=session_row.id, settings=self.settings)
         return access, new_raw, session_row, user
 
-    async def logout(self, session_row: Session) -> None:
+    async def logout(self, session_row: Session, *, actor_name: str = "", client: ClientInfo | None = None) -> None:
         now = utcnow()
         await session_repo.revoke_session(self.session, session_row, now=now)
         await outbox_repo.enqueue(
@@ -196,21 +215,31 @@ class AuthService:
             event_type="auth.logout",
             payload={
                 "actor_id": str(session_row.user_id),
+                "actor_name": actor_name,
                 "session_id": str(session_row.id),
+                **_client_fields(client),
                 "outcome": "success",
             },
         )
 
-    async def logout_all(self, user: User) -> int:
+    async def logout_all(self, user: User, *, client: ClientInfo | None = None) -> int:
         count = await session_repo.revoke_user_sessions(self.session, user.id)
         await outbox_repo.enqueue(
             self.session,
             event_type="auth.logout_all",
-            payload={"actor_id": str(user.id), "revoked_count": count, "outcome": "success"},
+            payload={
+                "actor_id": str(user.id),
+                "actor_name": user.display_name,
+                "revoked_count": count,
+                **_client_fields(client),
+                "outcome": "success",
+            },
         )
         return count
 
-    async def change_password(self, user: User, old_password: str, new_password: str) -> tuple[str, str, Session]:
+    async def change_password(
+        self, user: User, old_password: str, new_password: str, *, client: ClientInfo | None = None
+    ) -> tuple[str, str, Session]:
         if not verify_password(user.password_hash, old_password):
             raise UnauthenticatedError("原密码不正确")
         policy_error = validate_password_policy(new_password)
@@ -227,7 +256,8 @@ class AuthService:
         await session_repo.revoke_user_sessions(self.session, user.id, now=now)
         access, refresh, session_row = await self.issue_session(
             user,
-            client_info={"reason": "password_changed"},
+            # 改密后换发的会话也记下 IP 和浏览器，在线用户里才认得出是哪台设备。
+            client_info={**(client or {}), "reason": "password_changed"},
         )
         await outbox_repo.enqueue(
             self.session,
