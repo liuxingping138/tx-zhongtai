@@ -14,7 +14,17 @@ from platform_common.clock import utcnow
 from platform_common.errors import ApiError
 from sqlalchemy import delete
 
-from app.application import batch_execute, batch_queue, batch_runs, batch_start, billing, prompts, releases, sample_runs
+from app.application import (
+    batch_execute,
+    batch_queue,
+    batch_runs,
+    batch_start,
+    billing,
+    prompts,
+    releases,
+    row_asking,
+    sample_runs,
+)
 from app.core import storage
 from app.core.config import get_settings
 from app.core.database import SessionLocal, engine
@@ -107,7 +117,7 @@ async def test_stale_running_runs_become_interrupted() -> None:
 async def test_full_flow_builds_result_from_real_tables(monkeypatch: pytest.MonkeyPatch) -> None:
     run = await _start(await _template_with_excel(rows=3))
     monkeypatch.setattr(
-        batch_execute,
+        row_asking,
         "stream_responses",
         fake_stream([{"text": '[{"行业":"制造"}]'}, {"usage": {"input_tokens": 100, "output_tokens": 50}}]),
     )

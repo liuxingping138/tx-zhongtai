@@ -533,9 +533,49 @@ async def test_retag_keeps_manual_edits_and_does_not_duplicate_another_row(monke
     counts = await tagging._save_types(uuid.uuid4(), rows, [ok, ok], ["信息化建设类"], retag=True)
 
     assert counts == {"processed": 2, "tagged": 1, "failed": 0, "duplicate": 1}
-    assert failed.type_retag_at is None and failed.remark == rules.DUPLICATE_NOTE and failed.policy_types == ""
+    assert failed.type_retag_at is None and failed.policy_types == ""
+    assert failed.remark == f"{rules.DUPLICATE_NOTE}（源政策ID c1）"
     assert manual.type_retag_at is None and manual.policy_types == "信息化建设类"
     assert (manual.is_penetrate, manual.penetrate_words, manual.remark) == ("是", "数字政府", "领导关注")
+
+
+async def test_retag_of_several_copies_of_one_page_does_not_collide(monkeypatch: pytest.MonkeyPatch) -> None:
+    """同一网页采了三条：甲成功，乙、丙失败原因不同。一起重判后乙、丙都和甲相同，
+    两条的备注要各不相同，否则彼此撞内容哈希、整批回滚，队列清不掉、每次执行都先花钱再失败。"""
+
+    from app.policy.domain.models import BASE_TAG_FIELDS, BaseTag, content_hash
+
+    def tag(content_id: str, remark: str) -> BaseTag:
+        values = rules.base_tag_values({"name": "政策甲"}, ["信息化建设类"] if not remark else [], remark)
+        row = BaseTag(source_content_id=content_id, version=1, **values)
+        row.content_hash = content_hash(values, BASE_TAG_FIELDS)
+        return row
+
+    done = tag("c0", "")
+    second, third = tag("c1", "AI 类型判断失败：限流"), tag("c2", "AI 类型判断失败：超时")
+
+    async def by_source(_session: Any, _ids: list[str]) -> dict[str, BaseTag]:
+        return {"c1": second, "c2": third}
+
+    async def by_hash(_session: Any, digest: str) -> BaseTag | None:
+        return {row.content_hash: row for row in (done, second, third)}.get(digest)
+
+    async def task(_session: Any, _code: str, lock: bool = False) -> Any:
+        return SimpleNamespace(cursor_date=DAY, cursor_content_id="")
+
+    async def noop(*_: Any, **__: Any) -> None:
+        return None
+
+    monkeypatch.setattr(repo, "base_tags_by_source", by_source)
+    monkeypatch.setattr(repo, "base_tag_by_hash", by_hash)
+    monkeypatch.setattr(repo, "task", task)
+    monkeypatch.setattr(tagging, "enqueue_event", noop)
+    monkeypatch.setattr(tagging, "SessionLocal", FakeSession)
+    rows = [{"content_id": cid, "name": "政策甲", "collect_date": DAY} for cid in ("c1", "c2")]
+    ok = {"error": "", "items": [{"政策类型名称": "信息化建设类"}]}
+    counts = await tagging._save_types(uuid.uuid4(), rows, [ok, ok], ["信息化建设类"], retag=True)
+    assert counts["duplicate"] == 2
+    assert len({done.content_hash, second.content_hash, third.content_hash}) == 3
 
 
 async def test_abandon_books_the_interrupted_stage_cost(
@@ -563,3 +603,135 @@ async def test_abandon_books_the_interrupted_stage_cost(
     run_store[str(run_id)] = run
     await tagging.abandon(run_id, "进程中断")
     assert (run.status, run.interpret_cost, run.type_cost) == ("failed", Decimal("2"), Decimal("1"))
+
+
+def _run_row(**values: Any) -> SimpleNamespace:
+    base = {
+        "status": "running",
+        "stage": "interpreting",
+        "cost": Decimal(0),
+        "type_cost": Decimal(0),
+        "interpret_cost": Decimal(0),
+        "opportunity_cost": Decimal(0),
+        "type_run_id": "",
+        "interpret_run_id": "",
+        "opportunity_run_id": "",
+        "error_message": "",
+        "finished_at": None,
+    }
+    return SimpleNamespace(**(base | values))
+
+
+async def test_a_few_missed_polls_do_not_fail_the_batch(
+    monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]
+) -> None:
+    """等一两个小时里 ai-service 重建一次很平常：问不到就再等等，不能为一次没问到让整批失败、下批再花一遍钱。"""
+
+    run_id = uuid.uuid4()
+    run_store[str(run_id)] = _run_row()
+    polls: list[int] = []
+
+    async def ai(method: str, path: str, **_: Any) -> Any:
+        if method == "POST":
+            return {"id": "r" * 32, "reused": 0}
+        if path.endswith("/results"):
+            return {"items": []}
+        polls.append(1)
+        if len(polls) < 3:
+            raise DependencyUnavailableError("ai-service 暂时不可用")
+        return {"status": "done", "done_count": 1, "inference_cost": "0.3"}
+
+    monkeypatch.setattr(internal_clients, "ai", ai)
+    monkeypatch.setattr(pipeline, "POLL_SECONDS", 0)
+    spend = pipeline.Spend(limit=Decimal(10), before=Decimal(0))
+    status, _ = await pipeline.ask(run_id, spend, prompt_id="p", rows=[], caller="c", run_field="interpret_run_id")
+    assert status["status"] == "done" and len(polls) == 3
+
+
+async def test_giving_up_on_the_ai_run_stops_it_and_books_what_it_spent(
+    monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]
+) -> None:
+    """一直问不到：先叫停 ai-service 那边，批次记失败时把已花的钱记到步骤费用列，重试时当日额度才算得到这笔钱。"""
+
+    run_id = uuid.uuid4()
+    run_store[str(run_id)] = _run_row()
+    calls: list[tuple[str, str]] = []
+
+    async def ai(method: str, path: str, **_: Any) -> Any:
+        calls.append((method, path))
+        if method == "POST" and path.endswith("pipeline-runs"):
+            return {"id": "r" * 32}
+        if path.endswith("/stop"):
+            return {}
+        if len(calls) == 2:
+            return {"status": "running", "inference_cost": "1.5"}
+        raise DependencyUnavailableError("ai-service 暂时不可用")
+
+    monkeypatch.setattr(internal_clients, "ai", ai)
+    monkeypatch.setattr(pipeline, "POLL_SECONDS", 0)
+    monkeypatch.setattr(pipeline, "POLL_MISSES", 2)
+    spend = pipeline.Spend(limit=Decimal(10), before=Decimal(0))
+    with pytest.raises(DependencyUnavailableError):
+        await pipeline.ask(run_id, spend, prompt_id="p", rows=[], caller="c", run_field="interpret_run_id")
+    assert ("POST", f"/internal/v1/pipeline-runs/{'r' * 32}/stop") in calls
+    await tagging._fail(run_id, "执行失败")
+    stored = run_store[str(run_id)]
+    assert (stored.status, stored.interpret_cost) == ("failed", Decimal("1.5"))
+
+
+async def test_the_next_batch_reuses_answers_from_the_failed_one(
+    monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]
+) -> None:
+    """上一批失败了，它在 ai-service 已答好的行这一批沿用：那批还在收尾就先叫停、等它停稳再发起。"""
+
+    run_id = uuid.uuid4()
+    run_store[str(run_id)] = _run_row()
+    old = "o" * 32
+
+    async def failed_ai_run(*_: Any, **__: Any) -> str:
+        return old
+
+    states = iter(["stopping", "cancelled"])
+    sent: list[dict[str, Any]] = []
+    calls: list[tuple[str, str]] = []
+
+    async def ai(method: str, path: str, **kwargs: Any) -> Any:
+        calls.append((method, path))
+        if path == f"/internal/v1/pipeline-runs/{old}":
+            return {"status": next(states)}
+        if path.endswith("/stop"):
+            return {}
+        if method == "POST":
+            sent.append(kwargs["json"])
+            return {"id": "r" * 32, "reused": 7}
+        if path.endswith("/results"):
+            return {"items": []}
+        return {"status": "done", "done_count": 9}
+
+    monkeypatch.setattr(repo, "failed_ai_run", failed_ai_run)
+    monkeypatch.setattr(internal_clients, "ai", ai)
+    monkeypatch.setattr(pipeline, "POLL_SECONDS", 0)
+    spend = pipeline.Spend(limit=Decimal(10), before=Decimal(0))
+    status, _ = await pipeline.ask(run_id, spend, prompt_id="p", rows=[], caller="c", run_field="interpret_run_id")
+    assert sent[0]["reuse_run_id"] == old and status["reused"] == 7
+    assert ("POST", f"/internal/v1/pipeline-runs/{old}/stop") in calls
+
+
+async def test_an_ai_run_that_never_started_fails_the_batch(
+    monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]
+) -> None:
+    """ai-service 一行都没跑就失败（模型不认识这类）：不能把整批记成「未执行」、批次却记成功，天天如此。"""
+
+    run_id = uuid.uuid4()
+    run_store[str(run_id)] = _run_row()
+
+    async def ai(method: str, path: str, **_: Any) -> Any:
+        if method == "POST":
+            return {"id": "r" * 32}
+        return {"status": "failed", "done_count": 0, "error_message": "未知模型：x"}
+
+    monkeypatch.setattr(internal_clients, "ai", ai)
+    monkeypatch.setattr(pipeline, "POLL_SECONDS", 0)
+    spend = pipeline.Spend(limit=Decimal(10), before=Decimal(0))
+    with pytest.raises(UserFacingError, match="未知模型"):
+        await pipeline.ask(run_id, spend, prompt_id="p", rows=[], caller="c", run_field="interpret_run_id")

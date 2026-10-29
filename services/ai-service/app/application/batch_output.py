@@ -8,14 +8,14 @@ from __future__ import annotations
 
 import csv
 import sys
-from collections.abc import Generator, Iterator
+from collections.abc import Callable, Generator, Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
 from platform_common.xlsx_writer import write_text_xlsx
 
 from app.application.sheets import excel_cell
-from app.domain.templating import extract_fields
+from app.domain.templating import extract_fields, parse_fields
 
 # 「提问」列是整段提示词：政策全文加六级码表能到十几万字，csv 默认 131072 字的单格上限会让整份结果读不回来，钱白花。
 csv.field_size_limit(sys.maxsize)
@@ -63,6 +63,12 @@ class RowResult:
         ]
 
 
+def answered(result: RowResult, fields: list[str]) -> bool:
+    """这一行算答好了：没报错，要解析输出字段的还得解析得出来。"""
+
+    return not result.error and (not fields or parse_fields(result.text, fields) is not None)
+
+
 def start_raw(path: Path) -> None:
     """已有文件（续跑）就接着追加，不清空。"""
 
@@ -74,12 +80,12 @@ def start_raw(path: Path) -> None:
 
 
 def read_raw(path: Path) -> dict[str, RowResult]:
-    """读回已跑的结果。同一行跑过多次（续跑）以最后一次为准。"""
+    """读回已跑的结果，不带提问原文。同一行跑过多次（续跑、多轮）以最后一次为准。"""
 
     return {result.myid: result for result in iter_raw(path)}
 
 
-def iter_raw(path: Path, *, with_prompt: bool = True) -> Generator[RowResult]:
+def iter_raw(path: Path, *, with_prompt: bool = False) -> Generator[RowResult]:
     """按写入顺序逐条读。with_prompt=False 不留提问原文：每行的提问带着整段正文甚至码表，几十万行整份留下能占几个 G。"""
 
     if not path.is_file():
@@ -118,11 +124,53 @@ def append_log(path: Path, line: str) -> None:
         handle.write(line + "\n")
 
 
-def write_failed(path: Path, rows: list[RowResult]) -> None:
+def write_failed(path: Path, rows: Iterable[RowResult], prompt_of: Callable[[str], str]) -> None:
+    """失败清单。提问原文逐行现拼现写（prompt_of），不在内存里攒着。"""
+
     with path.open("w", newline="", encoding="utf-8-sig") as handle:
         writer = csv.writer(handle)
         writer.writerow(FAILED_COLUMNS)
-        writer.writerows([[row.myid, row.prompt, row.failure_kind, row.error, f"{row.elapsed:.2f}"] for row in rows])
+        for row in rows:
+            writer.writerow([row.myid, prompt_of(row.myid), row.failure_kind, row.error, f"{row.elapsed:.2f}"])
+
+
+def copy_answers(source: Path, target: Path, mapping: dict[str, list[str]], fields: list[str]) -> int:
+    """把另一个任务里已经答好的行抄进新任务的原始返回（换成新行号），worker 续跑时就不再问它们，也不再计费。
+
+    mapping：源行号 -> 新任务里内容完全相同的行号（可能有几行）。源文件里同一行有几条（续跑、多轮）时以最后一条为准，
+    只抄答好的。先不带提问读一遍定下抄哪几条，再逐行流式抄：原始返回每行带着整段提问，不能整份读进内存。返回抄了几行。
+    """
+
+    final: dict[str, int] = {}
+    good: set[int] = set()
+    for index, result in enumerate(iter_raw(source)):
+        if result.myid not in mapping:
+            continue
+        final[result.myid] = index
+        if answered(result, fields):
+            good.add(index)
+    chosen = {index for index in final.values() if index in good}
+    if not chosen:
+        return 0
+    start_raw(target)
+    copied = 0
+    with (
+        source.open(encoding="utf-8-sig", newline="") as reader,
+        target.open("a", newline="", encoding="utf-8-sig") as writer_handle,
+    ):
+        writer = csv.writer(writer_handle)
+        index = -1
+        for row in csv.DictReader(reader):
+            myid = (row.get("myid") or "").strip()
+            if not myid:
+                continue
+            index += 1
+            if index not in chosen:
+                continue
+            for new_id in mapping[myid]:
+                writer.writerow([new_id if column == "myid" else row.get(column) or "" for column in RAW_COLUMNS])
+                copied += 1
+    return copied
 
 
 def _unique(name: str, taken: set[str], suffix: str) -> str:

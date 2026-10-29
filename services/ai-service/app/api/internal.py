@@ -29,6 +29,8 @@ class PipelineRunBody(BaseModel):
     cost_limit: str | None = Field(default=None, max_length=20)
     # 审计和批量历史里显示的发起方，如「政策 AI 打标·手动」。
     caller_name: str = Field(default="定时任务", max_length=100)
+    # 调用方上一批的任务ID：那批中断或失败后重读同一批数据时，已经答好、内容没变的行直接沿用，不再花钱重问。
+    reuse_run_id: str = Field(default="", max_length=32)
 
 
 def _caller(request: Request, settings: Settings) -> str:

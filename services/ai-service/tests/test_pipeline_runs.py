@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from platform_common.errors import ApiError
 from platform_common.internal_calls import internal_headers
 
-from app.application import batch_execute, pipeline_runs, prompts, releases
+from app.application import batch_execute, pipeline_runs, prompts, releases, row_asking
 from app.application.batch_output import RowResult, append_raw, build_result, start_raw
 from app.application.sheets import read_run_input
 from app.core import storage
@@ -141,7 +141,7 @@ async def test_execution_stops_itself_at_the_cost_limit(monkeypatch: pytest.Monk
     _prepare_execution(monkeypatch, recorder, run(output_fields="行业", cost_limit=Decimal("0.001")))
     monkeypatch.setattr(get_settings(), "batch_concurrency", 1)
     events = [{"text": '[{"行业":"制造"}]'}, {"usage": {"input_tokens": 1000, "output_tokens": 1000}}]
-    monkeypatch.setattr(batch_execute, "stream_responses", fake_stream(events))
+    monkeypatch.setattr(row_asking, "stream_responses", fake_stream(events))
     await batch_execute.execute(RUN_ID)
     final = recorder.updates[-1]
     assert (final["status"], final["done_count"]) == ("cancelled", 1)

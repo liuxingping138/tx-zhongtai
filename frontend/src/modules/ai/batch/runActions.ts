@@ -54,7 +54,7 @@ export async function retryRun(run: BatchRun): Promise<boolean> {
 }
 
 export async function deleteRun(run: BatchRun): Promise<boolean> {
-  if (!await confirm('记录和结果文件都会删除，不能恢复。', '删除这条记录？', '删除')) return false
+  if (!await confirm('记录和结果文件都会删除，不能恢复；花掉的费用仍算在费用账单里。', '删除这条记录？', '删除')) return false
   try {
     await deleteBatchRun(run.id)
     return true

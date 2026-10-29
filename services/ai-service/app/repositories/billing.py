@@ -28,6 +28,7 @@ def _day(column: Any) -> Any:
 
 async def daily(session: AsyncSession, since: datetime, until: datetime) -> list[dict[str, Any]]:
     """[since, until) 之间每天、每个模型、每种用途的次数、token 和费用。批量任务按发起时间算在那一天。
+    删除了的任务也算：删除只是不再列出，钱已经花出去了。
 
     按模型 ID 分组：任务上记的是发起当时的模型名，改过名（或旧系统导入）的同一个模型名字不一样。
     model_name 只是模型配置里已经没有这个 ID 时的备用名字。

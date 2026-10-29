@@ -10,8 +10,8 @@ import contextlib
 from pathlib import Path
 from typing import Any
 
-from app.application.batch_execute import needs_retry
 from app.application.batch_output import RowResult, iter_raw
+from app.application.row_asking import needs_retry
 from app.application.sheets import run_input_head, run_input_rows
 from app.core import storage
 from app.domain.models import BatchRun

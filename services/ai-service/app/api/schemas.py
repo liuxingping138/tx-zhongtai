@@ -39,6 +39,11 @@ class PromptBody(_Body):
     version: int | None = None
 
 
+class ReleaseBody(_Body):
+    # 管理员核对时看到的草稿版本号：这期间有人又保存了草稿或换了文件，就拒绝上线，免得上线一份没人核对过的内容。
+    version: int | None = None
+
+
 def _price() -> Any:
     return Field(default="", max_length=20)
 

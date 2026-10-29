@@ -4,7 +4,7 @@ import { ArrowDown } from '@element-plus/icons-vue'
 
 import { getBatchRunRows, type BatchRun, type RunFileKind, type RunRows as Rows } from '@/api/ai'
 import { errorMessage } from '@/api/errors'
-import { RUN_SOURCE_TEXT, RUN_STATUS_TEXT, formatYuan, isActive, runModeText, runStatusType } from '../shared/aiText'
+import { RUN_SOURCE_TEXT, RUN_STATUS_TEXT, formatYuan, isActive, roundText, runModeText, runStatusType } from '../shared/aiText'
 import RunRows from '../shared/RunRows.vue'
 import { RUN_FILES, deleteRun, downloadRunFile, retryRun, stopRun } from './runActions'
 
@@ -84,6 +84,7 @@ async function act(action: (current: BatchRun) => Promise<boolean>, close = fals
         </el-tag>
         <strong>{{ run.done_count }}/{{ run.total_count || '?' }} 条</strong>
         <span>{{ run.percent }}%</span>
+        <span v-if="roundText(run)">{{ roundText(run) }}</span>
         <span class="run-detail__spacer" />
         <el-dropdown
           v-if="canExport && Object.values(run.files).some(Boolean)"

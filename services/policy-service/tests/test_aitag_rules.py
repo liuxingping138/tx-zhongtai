@@ -149,5 +149,10 @@ def test_retag_keeps_manual_columns_and_hand_written_remarks() -> None:
     assert kept["policy_types"] == "信息化建设类" and fresh["is_penetrate"] == ""
     failed = rules.base_tag_values({"name": "政策甲"}, [], AI_NOTE_TYPE_EMPTY)
     assert rules.keep_manual_edits(failed, existing)["remark"] == f"{AI_NOTE_TYPE_EMPTY}；领导关注"
-    assert rules.note_duplicate("领导关注") == f"{rules.DUPLICATE_NOTE}；领导关注"
-    assert rules.note_duplicate(rules.note_duplicate("")) == rules.DUPLICATE_NOTE
+    note = f"{rules.DUPLICATE_NOTE}（源政策ID c1）"
+    assert rules.note_duplicate("领导关注", "c1") == f"{note}；领导关注"
+    assert rules.note_duplicate(rules.note_duplicate("", "c1"), "c1") == note
+    # 上次重判留下的「和另一条相同」「源库找不到」，这次判成功了一起去掉，人写的留着。
+    stale = rules.base_tag_values({"name": "政策甲"}, ["信息化建设类"], "")
+    existing.remark = f"{note}；{rules.MISSING_NOTE}；领导关注"
+    assert rules.keep_manual_edits(stale, existing)["remark"] == "领导关注"

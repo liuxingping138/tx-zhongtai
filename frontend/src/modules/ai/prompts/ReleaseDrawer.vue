@@ -41,10 +41,10 @@ const shown = computed(() => {
 /** 上线影响谁：写准是哪个定时任务在用，没人用就说没人用，说不清就按两种情况都说。 */
 const users = computed(() => (props.usedBy?.length ? `「${props.usedBy.join('、')}」` : ''))
 const impact = computed(() => {
-  if (props.usedBy === null) return '上线后，新发起的批量任务用这一版；如果有定时任务选了这个模板，它下一批也按这一版跑。'
-  if (users.value) return `${users.value}定时任务正在用这个模板：上线后它下一批就按这一版跑，新发起的批量任务也用这一版。`
+  if (props.usedBy === null) return '上线后，新发起的批量任务默认用这一版；如果有定时任务选了这个模板，它下一批也按这一版跑。'
+  if (users.value) return `${users.value}定时任务正在用这个模板：上线后它下一批就按这一版跑，新发起的批量任务也默认用这一版。`
   const how = props.template.category === 'policy' ? '要让定时任务用它，到「系统管理 › 任务调度」里对应任务的设置中选它。' : ''
-  return `目前没有定时任务用这个模板，上线后可以用它发起批量任务。${how}`
+  return `目前没有定时任务用这个模板，上线后定时任务才能选它，新发起的批量任务也默认用这一版。${how}`
 })
 
 const checks = computed(() => {
@@ -105,7 +105,7 @@ async function publish(): Promise<void> {
   const number = nextNo.value
   busy.value = true
   try {
-    emit('changed', await publishPrompt(props.template.id))
+    emit('changed', await publishPrompt(props.template.id, props.template.version))
     ElMessage.success(`第 ${number} 版已上线`)
     open.value = false
   } catch (error) {
@@ -117,7 +117,7 @@ async function publish(): Promise<void> {
 
 async function takeOffline(): Promise<void> {
   const tasks = users.value ? `${users.value}定时任务正在用它，下线后这个任务就跑不了，要先在任务设置里换一个模板。` : ''
-  const ok = await ElMessageBox.confirm(`${tasks}下线后也不能用它新建批量任务；已有任务和历史版本保留，可以重新上线。`, '下线模板？', {
+  const ok = await ElMessageBox.confirm(`${tasks}下线后定时任务不能再用它，批量任务仍可选当前草稿跑；已有任务和历史版本保留，可以重新上线。`, '下线模板？', {
     type: 'warning', confirmButtonText: '下线', cancelButtonText: '取消',
   }).then(() => true, () => false)
   if (!ok) return
@@ -143,7 +143,7 @@ async function takeOffline(): Promise<void> {
   >
     <p class="release__intro">
       {{ upToDate
-        ? `线上是第 ${release?.release_no} 版，草稿和它一样，没有要上线的改动。${users ? `${users}定时任务和` : ''}批量任务都按这一版运行。`
+        ? `线上是第 ${release?.release_no} 版，草稿和它一样，没有要上线的改动。${users ? `${users}定时任务和` : ''}批量任务默认都按这一版运行。`
         : `${impact}之后再改模板只改草稿，重新上线才生效。` }}
     </p>
 

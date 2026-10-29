@@ -4,20 +4,30 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import time
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, timedelta
+from datetime import time as day_time
 from decimal import Decimal
 from typing import Any
 
 from platform_common.actors import Actor
-from platform_common.clock import BEIJING
+from platform_common.clock import BEIJING, utcnow
+from platform_common.errors import ApiError, DependencyUnavailableError
 
 from app.aitag.repositories import tagging as repo
 from app.common import internal_clients
+from app.common.errors import UserFacingError
 from app.core.database import SessionLocal
 
 POLL_SECONDS = 10
+# 等 ai-service 跑完要一两个小时：中途它重建、某一次请求超时都很平常，连续这么多次问不到才算失败（约 5 分钟）。
+POLL_MISSES = 30
+# 沿用上一批答好的行之前，等那批 AI 任务停稳的最长时间。
+SETTLE_SECONDS = 300
+# 只沿用最近几天内失败的那批：再早的数据多半已经被后来的批次重新跑过了。
+REUSE_DAYS = 3
 FINISHED = {"done", "cancelled", "failed", "interrupted"}
 # ai-service 对没轮到的行写「未执行（任务停止或中断）」：费用到上限或任务被停。这些行下批重做。
 NOT_RUN = "未执行"
@@ -35,7 +45,7 @@ def today() -> date:
 
 
 def day_start(day: date) -> datetime:
-    return datetime.combine(day, time.min, tzinfo=BEIJING).astimezone(UTC)
+    return datetime.combine(day, day_time.min, tzinfo=BEIJING).astimezone(UTC)
 
 
 @dataclass
@@ -71,36 +81,87 @@ async def stop_quietly(ai_run_id: str) -> None:
 
 
 async def _wait(run_id: uuid.UUID, ai_run_id: str, spend: Spend) -> dict[str, Any]:
+    misses = 0
     while True:
-        status: dict[str, Any] = await internal_clients.ai("GET", f"/internal/v1/pipeline-runs/{ai_run_id}")
+        try:
+            status: dict[str, Any] = await internal_clients.ai("GET", f"/internal/v1/pipeline-runs/{ai_run_id}")
+        except DependencyUnavailableError:
+            # 一次没问到就让整批失败，下批会把同一批政策再问一遍、再花一遍钱。
+            misses += 1
+            if misses >= POLL_MISSES:
+                raise
+            await asyncio.sleep(POLL_SECONDS)
+            continue
+        misses = 0
         await update_run(run_id, cost=spend.run + cost_of(status))
         if status["status"] in FINISHED:
             return status
         await asyncio.sleep(POLL_SECONDS)
 
 
+async def _settled(ai_run_id: str) -> bool:
+    """那批 AI 任务停稳了没有：还在跑就叫停、等它收尾（在途的几行答完才写进文件）。问不到就当没停稳，不沿用。"""
+
+    deadline = time.monotonic() + SETTLE_SECONDS
+    stopped = False
+    while True:
+        try:
+            status = await internal_clients.ai("GET", f"/internal/v1/pipeline-runs/{ai_run_id}")
+        except (ApiError, DependencyUnavailableError):
+            return False
+        if status["status"] in FINISHED:
+            return True
+        if not stopped:
+            await stop_quietly(ai_run_id)
+            stopped = True
+        if time.monotonic() > deadline:
+            return False
+        await asyncio.sleep(POLL_SECONDS)
+
+
+async def _reusable(run_id: uuid.UUID, run_field: str) -> str:
+    """上一批失败了（中断、超时、轮询连不上、写库出错），它在 ai-service 那边已经答好的行这一批直接沿用，
+    不再花钱重问：这一批读到的还是那些数据（读取进度没前移、待办还在）。"""
+
+    async with SessionLocal() as session:
+        since = utcnow() - timedelta(days=REUSE_DAYS)
+        previous = await repo.failed_ai_run(session, run_field, current=run_id, since=since)
+    return previous if previous and await _settled(previous) else ""
+
+
 async def ask(
     run_id: uuid.UUID, spend: Spend, *, prompt_id: str, rows: list[dict[str, str]], caller: str, run_field: str
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """用上线模板跑一批行，返回（任务状态，逐行结果）。结果和 rows 同序，没轮到的行 error 以「未执行」开头。"""
+    """用上线模板跑一批行，返回（任务状态，逐行结果）。结果和 rows 同序，没轮到的行 error 以「未执行」开头。
 
-    created = await internal_clients.ai(
-        "POST",
-        "/internal/v1/pipeline-runs",
-        json={"prompt_id": prompt_id, "rows": rows, "cost_limit": str(spend.remaining()), "caller_name": caller},
-    )
+    ai-service 那边一行最多跑三轮：网络失败、格式不对的隔一会儿重问，这里拿到的已经是三轮之后的结果。
+    """
+
+    previous = await _reusable(run_id, run_field)
+    body = {"prompt_id": prompt_id, "rows": rows, "cost_limit": str(spend.remaining()), "caller_name": caller}
+    created = await internal_clients.ai("POST", "/internal/v1/pipeline-runs", json={**body, "reuse_run_id": previous})
     ai_run_id = str(created["id"])
     await update_run(run_id, **{run_field: ai_run_id})
     try:
         status = await _wait(run_id, ai_run_id, spend)
-    except asyncio.CancelledError:
+    except BaseException:
+        # 调度超时、进程停止、一直问不到：都先叫停那边，别让它在后台继续花钱。它已答好的行下一批沿用。
         await asyncio.shield(stop_quietly(ai_run_id))
         raise
     stage_cost = cost_of(status)
     spend.run += stage_cost
     await update_run(run_id, **{STAGE_COST[run_field]: stage_cost})
+    if status["status"] == "failed" and not status.get("done_count"):
+        # 一行都没跑就失败（模型不认识、快照丢了这类）：照常往下走会把整批记成「未执行」、批次却记成功，天天如此。
+        raise UserFacingError(f"AI 服务没能执行这一批：{status.get('error_message') or '没有说明原因'}")
     data = await internal_clients.ai("GET", f"/internal/v1/pipeline-runs/{ai_run_id}/results")
+    status["reused"] = int(created.get("reused") or 0)
     return status, list(data["items"])
+
+
+def reused_note(status: dict[str, Any]) -> str:
+    count = int(status.get("reused") or 0)
+    return f"（其中 {count} 条沿用上一批已答好的结果，没再花钱）" if count else ""
 
 
 def not_run(result: dict[str, Any]) -> bool:

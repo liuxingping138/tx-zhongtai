@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import timedelta
+from decimal import Decimal
 from http import HTTPStatus
 from typing import Any
 
@@ -24,6 +25,7 @@ from app.aitag.application.pipeline import (
     Spend,
     ask,
     day_start,
+    reused_note,
     stop_quietly,
     today,
     update_run,
@@ -137,7 +139,7 @@ def _note_duplicate(row: BaseTag) -> None:
     """重打后和另一条内容一样：出队、备注注明，不动其他字段。"""
 
     row.type_retag_at = None
-    row.remark = rules.note_duplicate(row.remark)
+    row.remark = rules.note_duplicate(row.remark, str(row.source_content_id))
     row.refresh_hash()
     row.version += 1
     row.tagged_at = row.updated_at = utcnow()
@@ -190,7 +192,8 @@ async def _tag(
         type_failed=counts["failed"],
         source_to=_cursor_text(last["collect_date"], str(last["content_id"])) if last else "",
     )
-    note = f"读取 {len(rows)} 条，写入基础标签 {counts['tagged']} 条，其中失败或没对上码表 {counts['failed']} 条"
+    note = f"读取 {len(rows)} 条{reused_note(status)}，写入基础标签 {counts['tagged']} 条，"
+    note += f"其中失败或没对上码表 {counts['failed']} 条"
     if counts["duplicate"]:
         note += f"，{counts['duplicate']} 条重打后和已有记录内容相同、未重复写入"
     if counts["processed"] < len(rows):
@@ -235,8 +238,31 @@ async def run_batch(run_id: uuid.UUID, task: str) -> None:
         raise
 
 
+async def _close(run_id: uuid.UUID, message: str, *, only_running: bool) -> list[str]:
+    """批次记成失败，返回它发起过的 AI 任务ID。
+
+    失败那一步的花费只记在 cost 里（每次轮询更新），步骤费用列还是 0：补上，当日上限才算得到这笔钱，
+    不然重试时额度还是满的，同一批政策再问一遍就超过了每日上限。
+    """
+
+    async with SessionLocal() as session:
+        run = await repo.get_run(session, run_id)
+        if run is None or (only_running and run.status != "running"):
+            return []
+        run.status, run.error_message, run.finished_at = "failed", message[:2000], utcnow()
+        column = STAGE_COLUMN.get(run.stage)
+        costs = [run.type_cost, run.interpret_cost, run.opportunity_cost]
+        booked = sum((value or Decimal(0) for value in costs), Decimal(0))
+        spent = run.cost or Decimal(0)
+        if column is not None and spent > booked:
+            setattr(run, column, (getattr(run, column) or Decimal(0)) + (spent - booked))
+        ai_runs = [run.type_run_id, run.interpret_run_id, run.opportunity_run_id]
+        await session.commit()
+    return [ai_run_id for ai_run_id in ai_runs if ai_run_id]
+
+
 async def _fail(run_id: uuid.UUID, message: str) -> None:
-    await update_run(run_id, status="failed", error_message=message[:2000], finished_at=utcnow())
+    await _close(run_id, message, only_running=False)
 
 
 async def _run(run_id: uuid.UUID, task: str, config: PolicyAiTask, spend: Spend) -> str:
@@ -248,21 +274,10 @@ async def _run(run_id: uuid.UUID, task: str, config: PolicyAiTask, spend: Spend)
 
 
 async def abandon(run_id: uuid.UUID, message: str) -> None:
-    """调度进程中断后收尾：批次记成失败，停掉还在 ai-service 跑的任务。进度没前移，下次从原处重读。"""
+    """调度进程中断后收尾：批次记成失败，停掉还在 ai-service 跑的任务。进度没前移，下次从原处重读，
+    那批已答好的行沿用（pipeline.ask），不再花钱重问。"""
 
-    async with SessionLocal() as session:
-        run = await repo.get_run(session, run_id)
-        if run is None or run.status != "running":
-            return
-        run.status, run.error_message, run.finished_at = "failed", message[:2000], utcnow()
-        # 中断那一步的花费只记在 cost 里，步骤费用列还是 0：补上，当日上限才算得到这笔钱。
-        column = STAGE_COLUMN.get(run.stage)
-        booked = run.type_cost + run.interpret_cost + run.opportunity_cost
-        if column is not None and run.cost > booked:
-            setattr(run, column, getattr(run, column) + (run.cost - booked))
-        ai_runs = [run.type_run_id, run.interpret_run_id, run.opportunity_run_id]
-        await session.commit()
-    for ai_run_id in filter(None, ai_runs):
+    for ai_run_id in await _close(run_id, message, only_running=True):
         await stop_quietly(ai_run_id)
 
 

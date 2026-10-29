@@ -54,6 +54,7 @@ def _tag(source_id: str) -> Any:
         remark="",
         interpreted_at=None,
         opportunity_at=None,
+        version=1,
     )
 
 
@@ -200,12 +201,15 @@ async def test_opportunities_fill_matching_untouched_rows(world: SimpleNamespace
             updated_at=now,
             source_content_id="c1",
             market_opportunity="",
+            version=1,
         )
 
     matched, other, verified = row("数字政府"), row("城市大脑"), row("数字政府", "人工验证")
     world.tags, world.rows = [_tag("c1")], {"c1": [matched, other, verified]}
     note = await interpreting.opportunity_step(uuid.uuid4(), CONFIG, Spend(limit=Decimal(10), before=Decimal(0)))  # type: ignore[arg-type]
     assert (matched.market_opportunity, other.market_opportunity, verified.market_opportunity) == ("机会A", "", "")
+    # 回填要加版本号：正开着这行编辑的人保存时会提示「被改过」，不会用空值把这次结果冲掉。
+    assert (matched.version, other.version) == (2, 1)
     assert "党政行业/数字政府" in world.created[0]["rows"][0]["行业场景"]
     assert world.tags[0].opportunity_at is not None and "回填 1 行" in note
 

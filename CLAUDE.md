@@ -180,14 +180,18 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
   codebook-service 的 `/internal/v1/code-tables/{name}` 实时取，取不到就报 503，绝不拿空码表去问；密钥 `CODEBOOK_AI_CALLER_SECRET` 两边共用。
   只取名称列、去重（原表按客群重复，8370 行只有 3348 条路径）；六级码表按三级行业分组输出（「一级行业 > 二级行业 > 三级行业：场景；场景」，保留上级场景），约 3.8 万字，原样六列要 10.6 万字
 - 模板「上线」由 `ai.releases`（只给管理员，只有管理档：看上线记录跟着模板的查看权限）把提示词、输出字段、模型、码表冻结成 `ai_template_releases` 一版，模板 `release_id` 指向生效版本。
-  上线后再改模板只改草稿，页面列出与上线版本不同的项；已上线的模板要先下线才能删，删模板连它的样本试跑记录和产物一起删，试跑没结束的先拦下。定时任务只用上线版本
+  上线后再改模板只改草稿，页面列出与上线版本不同的项；已上线的模板要先下线才能删，删模板连它的样本试跑记录和产物一起删，试跑没结束的先拦下。定时任务只用上线版本。
+  上线请求带管理员核对时看到的草稿 `version`：核对期间草稿又被保存、换了文件就 409，免得上线一份没人核对过的内容
 - 主线是业务人员写模板、样本试跑 → 管理员上线 → 定时任务只跑上线版本（`releases.current`）。页面发起的批量任务（`app/application/batch_start.py`）用 `version` 选跑上线版本还是已保存的草稿：人自己传 Excel、当场看结果，不用等上线。单独上传本次 Excel，按要跑那一版引用的列检查（`input-preview` 预检不调模型；`input-template` 按同一份列给出只有表头的数据模板下载），把输入文件、那一版的提示词 / 输出字段 / 模型 / 码表冻结进任务目录和任务行（跑上线版本记 `release_no`，跑草稿记 `draft_saved_at`，以及 `input_name`）：之后改模板、重新上线、删模板都不影响排队中、运行中和已完成的任务
 - 样本试跑（`app/application/sample_runs.py`，`/api/v1/ai/prompts/{id}/sample-run`，权限同试发 `ai.prompts:ask`）：草稿 × 模板测试样本前 N 条（最多 50），也是一条 `ai_batch_runs`，`source=sample`，不进批量任务列表（`repositories/batch_runs.TASK_SOURCES`），和正式任务互不阻挡；按先后叫「第 N 次」，`view` 默认看最近一次、和前一次逐行对比（`run_compare`：按发起时复制进任务目录的样本内容判断是不是同一份，同一份才按行号对上，标 fixed / broke / changed；changed 只比标签类短值，超过 `PROSE_CHARS` 字的说明文字措辞变了不算，前端 `sampleView.isProse` 同一规则），`run_id` / `compare_id` 能换着看最近 20 次；`/sample-run/{run_id}/retry` 只重问失败的行，用的是那次冻结的提示词；模板列表带最近一次试跑（`sample`，`current` 表示跑的就是现在的草稿）。逐行结果预览 `run_rows.preview` 样本试跑和批量详情共用，任务可能几十万行，只读要列的那几行：输入读逐行副本 `input.jsonl`（第一次打开时由快照生成，快照大小或修改时间变了就重建），原始返回不留提问原文，前 50 行都成功就不往下读（重跑只重问失败的行，成功那次就是最终结果）。跑完的结果 Excel 在模板页下载（`/sample-run/{run_id}/files/{kind}`），挂模板的导出档 `ai.prompts:export` 而不是批量任务的，只给这个模板自己 `source=sample` 的任务
 - `ai-worker` 持 Postgres 全局锁，用 `SKIP LOCKED` 认领排队任务，最多同时跑 `AI_BATCH_MAX_RUNNING` 个，每个任务
   `AI_BATCH_CONCURRENCY` 路并发。提示词轮到哪行才拼哪行、成功行写完 CSV 就不再留提问原文、结果 Excel 用 `xlsx_writer` 流式写：10 万行乘上码表全文一次拼好要几个 G，worker 会被 OOM 杀掉。每行完成立即追加 `temp.csv`；进程被停时把已跑部分收尾成「中断」并生成结果。
   运行中超过 `AI_BATCH_STALE_SECONDS` 没心跳的任务，列表和进度接口会把它纠正为「中断」
-- 每行自动补救（`app/application/batch_execute.py` 的 `ask_row`）：限流、5xx、超时、截断按 `RETRY_DELAYS` 退避重发，
- 400、密钥错误不重发；回答解析不出输出字段时重问一次，仍不行记为「格式不对」（error 列以 `返回格式不对` 开头，原始返回 CSV 不加列）。
+- 自动补救（`app/application/batch_execute.py`）分两层。当场（`ask_row`）：限流、5xx、超时、断连、空返回按 `RETRY_DELAYS` 退避重发，
+ 400、密钥错误、写到上限被截停不重发。按轮：批量任务和定时任务一次执行最多三轮（`ROUNDS`），一轮跑完隔 `ROUND_WAITS`（1 分钟、5 分钟）
+ 只重问网络失败和格式不对（解析不出输出字段，error 列以 `返回格式不对` 开头，原始返回 CSV 不加列）的行，哪轮全成功就提前结束，三轮后仍失败的留着失败原因；
+ 格式不对不当场再问（每问一次都带码表全文、按全价收钱），交给下一轮。样本试跑不分轮，格式不对当场再问一次，结果原样给人看提示词哪里要改。
+ 任务上的 `retry_round` / `round_rows` / `round_starts_at` 给页面显示「第 2 轮：重问 N 条」；轮与轮之间心跳照写，否则会被纠正成「中断」。
  「重跑失败」把已结束的任务重新排队：worker 读回原始返回，已成功的行沿用，只问失败和没跑到的行，token 和费用累加。
  旧系统迁来的任务没有 Excel 快照，不能重跑；定时任务的批次也不能重跑（政策服务已取走结果，重跑只会再花钱，要补的政策在基础标签里「重新打标」）。
  原始返回 CSV 的「提问」列是整段提示词，政策全文加码表能到十几万字，`batch_output` 放开了 csv 单格上限，别再按默认值读
@@ -199,7 +203,8 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
   `--update` 用旧库最新内容覆盖：模板只覆盖导入后没在新系统里保存过的，任务除排队中、运行中的都覆盖。导出目录结构见 `app/application/legacy_import.py`
 - 对话和试发的内容不进审计，只记谁对哪个模板、哪个任务做了什么。多轮对话的上下文由模型服务端按 response_id 保存，本服务不存
 - 费用账单（`ai.billing`，`/api/v1/ai/billing`）：批量任务、定时任务和样本试跑的费用在 `ai_batch_runs` 上（用途按 `source` 分成「批量任务」「样本试跑」，定时任务的用途是发起方名字，如「政策AI打标·类型判断」），
-  试发和多轮对话答完时在 `ai_call_usages` 记一行（不记内容，`app/application/billing.py`）。新增调模型的入口要么走批量任务，要么也记进 `ai_call_usages`，否则账单漏钱
+  试发和多轮对话答完时在 `ai_call_usages` 记一行（不记内容，`app/application/billing.py`）。新增调模型的入口要么走批量任务，要么也记进 `ai_call_usages`，否则账单漏钱。
+  删除批量任务、删模板连带的样本试跑只打 `deleted_at`（用户定的：删了的钱照样算）：除账单外的查询都要带 `repositories.batch_runs.LIVE`
 
 ### 系统管理：给人分配角色即授权，个别人可再单独授权
 
@@ -258,7 +263,10 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
 - 类型判断、政策解读、市场机会是三个独立的调度任务（`app/aitag/domain/tasks.py`），各有模板、每批条数、正文长度和每日上限（`policy_ai_tasks` 一任务一行），
   一次执行只跑一个任务的一批。后两个按待办取数据，前一个没跑后一个就没有待办，彼此不串联
 - 每批调 ai-service 的 `/internal/v1/pipeline-runs`：用模板**上线版本**、低优档、以这个任务当日剩余额度为费用上限跑，worker 到上限自停；
-  政策服务轮询到结束再取解析结果。调度超时或进程中断会停掉 ai-service 那边的任务
+  政策服务轮询到结束再取解析结果（ai-service 那边已跑过三轮）。轮询偶尔问不到不放弃（连续 `POLL_MISSES` 次才算失败）；
+  调度超时、进程中断、一直问不到都先停掉 ai-service 那边的任务，批次记失败时把已花的钱补进步骤费用列（`tagging._close`），重试时当日额度才算得到。
+  下一批发起时带上上一批失败的 AI 任务（`pipeline._reusable` → `reuse_run_id`）：同一上线版本、同一模型、同一码表、行数据一模一样且已答好的行，
+  ai-service 直接抄进新任务（`pipeline_runs._reuse_answers`），不再花钱重问
 - 类型判断结果用系统政策类型码表核对（缺「类」字的旧写法补上能对上就算），写进基础标签：按 `source_content_id` 更新，
   人工在打标后改过的行不覆盖；失败和没对上码表的写进备注。含「信息化建设类」的标「是否解读 = 是」
 - 重新打标（`app/aitag/application/retag.py`，`POST /api/v1/policy/ai-tagging/retag`）：基础标签勾选后放回某个任务的待办，不当场调模型。
@@ -276,6 +284,8 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
   费用到上限没轮到的不记时间，下批接着做；AI 行只要人工验证过或改过就不再覆盖（`app/aitag/application/interpreting.py`）
 - 解读列表「同步新增场景」：是否新增场景 = 是、人工验证、未同步的行，经 codebook `/internal/v1/scenarios/sync` 按编码规则
   （`app/domain/scenario_codes.py`：各级号全局最大 + 1，已有上级沿用，行业只查不建）写进场景码表并回填编码；动作 `policy.interpretations:sync_scenarios`，写的是码表所以还要 `codebook.scenarios:update`。
+  回填编码时关联主键换成编码形式（和导入、重新解读的算法一致，否则之后会插出重复行）；换完和同一政策已有的同场景、同机会类型的行撞上，
+  这行不回填、进失败清单让人核对（用户定的：不替人删、不自动合并）
   码表里同步进来的行标「是否新增场景 = 是」、记「来源政策」（这两列不在 Excel 导入列和内容哈希里），不写业务自己的「场景来源」「三级场景描述」。
   码表有约 700 行通用场景只挂在一级行业下，查编码时六级对不上就按「一级行业 + 场景」再找；名称带「（新增）」标记的拦下不同步（AI 写入时已去掉）。
   解读表单保存时六级名称改了（或编码还空着）按名称重查编码，同步过的改了名称清掉同步时间（`policy/application/interpretations._refresh_codes`）

@@ -45,6 +45,22 @@ async def get_run(session: AsyncSession, run_id: uuid.UUID) -> PolicyAiRun | Non
     return await session.get(PolicyAiRun, run_id)
 
 
+async def failed_ai_run(session: AsyncSession, run_field: str, *, current: uuid.UUID, since: datetime) -> str:
+    """这一步上一次发起的 AI 任务，前提是那一批失败了（中断、超时、轮询连不上、写库出错）：
+    它已经答好的行还没写进业务表，这一批重读同一批数据时可以沿用。上一批成功了就不用找，返回空串。"""
+
+    column: InstrumentedAttribute[str] = getattr(PolicyAiRun, run_field)
+    row = (
+        await session.execute(
+            select(PolicyAiRun.status, column)
+            .where(PolicyAiRun.id != current, column != "", PolicyAiRun.started_at >= since)
+            .order_by(PolicyAiRun.started_at.desc())
+            .limit(1)
+        )
+    ).first()
+    return str(row[1]) if row is not None and row[0] == "failed" else ""
+
+
 async def base_tags_by_source(session: AsyncSession, source_ids: list[str]) -> dict[str, BaseTag]:
     if not source_ids:
         return {}

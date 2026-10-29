@@ -109,7 +109,9 @@ class _StreamState:
             return [{"tool_event": {"stage": f"web_search_{stage}", "message": message}}]
         if kind in _FAILED:
             self.completed = True
-            return [{"error": f"模型未正常完成：{error_message(event)}"}]
+            # 写到输出上限被截停、内容被过滤时厂商照样按 token 收钱，用量要记上，不然账单少算。
+            usage = extract_usage(event.get("response"))
+            return [{"error": f"模型未正常完成：{error_message(event)}"}, *([{"usage": usage}] if usage else [])]
         if kind in _COMPLETED:
             self.completed = True
             return self._completed(event)

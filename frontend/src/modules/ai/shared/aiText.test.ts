@@ -14,6 +14,7 @@ import {
   priceText,
   promptFields,
   refreshFormatBlock,
+  roundText,
   runModeText,
   runStatusType,
   splitFields,
@@ -110,5 +111,18 @@ describe('模型下拉的参考价', () => {
     expect(priceText({ ...flash, input_price: '0.000800', output_price: '0.003200', price_note: '' })).toBe('输入 ¥0.8 · 输出 ¥3.2 /百万 token')
     expect(priceText({ ...flash, web_search: true, search_price: '0.004000' }))
       .toBe('输入 ¥1.5 · 输出 ¥4.5 /百万 token · 低优档 · 联网搜索 ¥0.004/次')
+  })
+})
+
+describe('自动重跑的轮次', () => {
+  const run = { status: 'running' as const, retry_round: 2, round_rows: 35, round_starts_at: '2026-10-29 14:05:00' }
+
+  it('第一轮不说，跑到第二轮写清重问几条、几点开始', () => {
+    expect(roundText({ ...run, retry_round: 1 })).toBe('')
+    expect(roundText(run)).toBe('第 2 轮：重问上一轮网络失败或格式不对的 35 条，14:05 开始')
+  })
+
+  it('结束后只说一共跑了几轮', () => {
+    expect(roundText({ ...run, status: 'done', retry_round: 3 })).toBe('共跑 3 轮')
   })
 })

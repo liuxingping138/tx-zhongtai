@@ -95,6 +95,10 @@ def to_dict(run: BatchRun) -> dict[str, Any]:
         "failed_count": run.failed_count,
         "format_failed_count": run.format_failed_count,
         "pending_count": 0 if active else pending_rows(run),
+        # 自动重跑到了第几轮、这一轮重问几条、等待中的话几点开始（见 batch_execute）。
+        "retry_round": run.retry_round,
+        "round_rows": run.round_rows,
+        "round_starts_at": format_beijing(run.round_starts_at) if run.round_starts_at else "",
         "can_retry": _can_retry(run),
         "percent": _percent(run),
         "total_tokens_kilo": _kilo_tokens(run),
@@ -230,13 +234,13 @@ async def run_rows(
 
 
 async def delete_run(session: AsyncSession, actor: Actor, access: CategoryAccess, run_id: str) -> None:
-    """运行中不能删：worker 还在写这个目录和这条记录。"""
+    """运行中不能删：worker 还在写这个目录和这条记录。删掉的是列表里的记录和产物文件，花的钱仍算在费用账单里。"""
 
     await reconcile_stale(session)
     run = await require_editable(session, access, run_id, lock=True)
     if run.status in ACTIVE_STATUSES:
         raise ApiError("任务仍在运行，请先停止或等它结束再删除", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    await repo.delete(session, run)
+    repo.mark_deleted(run, utcnow())
     await enqueue_event(session, event_type="ai.batch_run.deleted", actor=actor, target_id=run_id)
     await session.flush()
     await anyio.to_thread.run_sync(storage.remove_tree, storage.run_dir(run_id))

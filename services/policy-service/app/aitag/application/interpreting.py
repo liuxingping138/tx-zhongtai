@@ -14,7 +14,7 @@ from typing import Any
 import anyio
 from platform_common.clock import utcnow
 
-from app.aitag.application.pipeline import ROBOT, Spend, ask, not_run, update_run
+from app.aitag.application.pipeline import ROBOT, Spend, ask, not_run, reused_note, update_run
 from app.aitag.domain import interpret_rules as rules
 from app.aitag.domain.models import PolicyAiTask
 from app.aitag.domain.rules import INTERPRET_FAILED, NOTE_SEP, OPPORTUNITY_FAILED, clean_content
@@ -39,7 +39,11 @@ def _untouched(row: Interpretation) -> bool:
 
 
 def _append_remark(tag: BaseTag, message: str) -> None:
+    """备注里写上失败原因。版本号要加：有人正开着这条在核对页编辑，保存时才会提示「被改过」，不会把这句说明冲掉。
+    内容哈希不重算：同一网页采了几条时，加一句说明就可能和另一条一模一样，撞唯一约束、整批回滚。"""
+
     tag.remark = f"{tag.remark}{NOTE_SEP}{message}" if tag.remark else message
+    tag.version += 1
 
 
 async def _prompt_rows(tags: list[BaseTag], max_chars: int) -> list[dict[str, str]]:
@@ -164,7 +168,7 @@ async def interpret_step(run_id: uuid.UUID, config: PolicyAiTask, spend: Spend) 
     counts = await _save_interpretations(run_id, tags, results, await _codes(results))
     await update_run(run_id, interpret_rows=counts["rows"], interpret_failed=counts["failed"])
     left = sum(1 for result in results if not_run(result))
-    note = f"{len(tags)} 条政策写入解读 {counts['rows']} 行，解读失败 {counts['failed']} 条"
+    note = f"{len(tags)} 条政策{reused_note(status)}写入解读 {counts['rows']} 行，解读失败 {counts['failed']} 条"
     if left:
         note += f"；{status.get('error_message') or '任务提前停止'}，{left} 条下批接着解读"
     return note
@@ -194,6 +198,9 @@ async def _save_opportunities(run_id: uuid.UUID, tags: list[BaseTag], results: l
                 if _untouched(row):
                     row.market_opportunity = text
                     row.updated_at = row.tagged_at = utcnow()
+                    # 有人正在核对页编辑这行（那时市场机会还空着），不加版本号的话他一保存，空值就把这次结果冲掉，
+                    # 这行从此算人工改过，也不会再补。
+                    row.version += 1
                     filled += 1
         await enqueue_event(
             session,
@@ -239,7 +246,7 @@ async def opportunity_step(run_id: uuid.UUID, config: PolicyAiTask, spend: Spend
     counts = await _save_opportunities(run_id, tags, results)
     await update_run(run_id, opportunity_rows=counts["rows"], opportunity_failed=counts["failed"])
     left = sum(1 for result in results if not_run(result))
-    note = f"{len(tags)} 条政策回填 {counts['rows']} 行，失败 {counts['failed']} 条"
+    note = f"{len(tags)} 条政策{reused_note(status)}回填 {counts['rows']} 行，失败 {counts['failed']} 条"
     if left:
         note += f"；{status.get('error_message') or '任务提前停止'}，{left} 条下批接着补"
     return note

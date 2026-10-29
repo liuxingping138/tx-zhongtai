@@ -6,7 +6,15 @@ from platform_common.actors import Actor
 from platform_common.http_utils import read_named_upload, success_json
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas import FileKind, PromptBody, RunFileKind, SampleRunBody, TestRowsBody, file_response
+from app.api.schemas import (
+    FileKind,
+    PromptBody,
+    ReleaseBody,
+    RunFileKind,
+    SampleRunBody,
+    TestRowsBody,
+    file_response,
+)
 from app.api.security import CategoryAccess, SecurityClass, classified, get_category_access, require_ai_permission
 from app.application import prompts as service
 from app.application import releases, sample_runs, test_rows
@@ -246,13 +254,15 @@ async def list_releases(
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def publish(
     prompt_id: str,
+    body: ReleaseBody | None = None,
     session: AsyncSession = Depends(get_db_session, scope="function"),
     access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission(RELEASE_RESOURCE, "publish")),
 ) -> JSONResponse:
     """上线是管理员的事：业务人员能改模板，但不能让改动直接进定时任务。"""
 
-    return success_json(await releases.publish(session, actor, access, prompt_id))
+    version = body.version if body else None
+    return success_json(await releases.publish(session, actor, access, prompt_id, version=version))
 
 
 @router.post("/{prompt_id}/offline")

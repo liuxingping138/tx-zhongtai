@@ -100,7 +100,7 @@ def test_raw_log_and_failed_files(tmp_path: Path) -> None:
     append_log(log, "第一行")
     assert log.read_text(encoding="utf-8") == "第一行\n"
     failed = tmp_path / "failed.csv"
-    write_failed(failed, [_result("a2", "", "坏了")])
+    write_failed(failed, [_result("a2", "", "坏了")], lambda myid: f"问 {myid}")
     with failed.open(encoding="utf-8-sig") as handle:
         assert list(csv.reader(handle)) == [
             ["myid", "提问", "失败类型", "error", "耗时(秒)"],

@@ -156,9 +156,7 @@ async def test_delete_removes_template_files_and_its_sample_runs(monkeypatch: py
 
     _use(monkeypatch, template())
     sample = run(id="e" * 32, source=RUN_SOURCE_SAMPLE, status="done")
-    deleted: list[str] = []
     monkeypatch.setattr(repo, "delete", noop)
-    monkeypatch.setattr(run_repo, "delete", lambda _session, item: deleted.append(item.id) or noop())
     monkeypatch.setattr(run_repo, "sample_runs_for_prompt", lambda _session, _prompt_id: _async([sample]))
     monkeypatch.setattr(run_repo, "active_for_prompt", lambda _session, _prompt_id, sources=(): _async(sample))
     storage.write_atomic(storage.prompt_file(PROMPT_ID, "code"), b"x")
@@ -170,7 +168,8 @@ async def test_delete_removes_template_files_and_its_sample_runs(monkeypatch: py
     monkeypatch.setattr(run_repo, "active_for_prompt", lambda _session, _prompt_id, sources=(): _async(None))
     await service.delete_prompt(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID)  # type: ignore[arg-type]
     assert not storage.prompt_dir(PROMPT_ID).exists() and not storage.run_dir(sample.id).exists()
-    assert deleted == [sample.id]
+    # 试跑记录只打删除标记，花的钱仍算在费用账单里。
+    assert sample.deleted_at is not None
 
 
 async def _async(value: Any) -> Any:

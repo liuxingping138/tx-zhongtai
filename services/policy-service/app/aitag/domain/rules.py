@@ -275,6 +275,7 @@ AI_NOTES = (
     TITLE_SCRIPT_NOTE,
 )
 DUPLICATE_NOTE = "重新判断后内容和另一条基础标签相同，未重复写入"
+MISSING_NOTE = "源库里已经找不到这条政策，没有重新判断类型"
 
 
 def keep_manual_edits(values: dict[str, str], existing: Any) -> dict[str, str]:
@@ -283,10 +284,18 @@ def keep_manual_edits(values: dict[str, str], existing: Any) -> dict[str, str]:
     kept = dict(values)
     for field in MANUAL_FIELDS:
         kept[field] = getattr(existing, field) or ""
-    kept["remark"] = NOTE_SEP.join(part for part in (values["remark"], drop_notes(existing.remark, AI_NOTES)) if part)
+    # 上次重判留下的「和另一条相同」「源库找不到」也是那时的说明，这次判成功了就该去掉。
+    old = drop_notes(existing.remark, (*AI_NOTES, DUPLICATE_NOTE, MISSING_NOTE))
+    kept["remark"] = NOTE_SEP.join(part for part in (values["remark"], old) if part)
     return kept
 
 
-def note_duplicate(remark: str) -> str:
-    # 这次的结果不写了，上次 AI 留的失败说明也就过时了，一起去掉。
-    return NOTE_SEP.join(part for part in (DUPLICATE_NOTE, drop_notes(remark, (DUPLICATE_NOTE, *AI_NOTES))) if part)
+def note_duplicate(remark: str, source_id: str) -> str:
+    """这次的结果不写了，上次 AI 留的失败说明也就过时了，一起去掉。
+
+    备注带上本条的源政策ID：同一网页采了三条以上时，好几条重判后都和同一条相同，备注一样的话
+    它们彼此又撞内容哈希，整批回滚、队列清不掉，每次执行都先花钱再失败。源政策ID 一条一个，撞不上。
+    """
+
+    note = f"{DUPLICATE_NOTE}（源政策ID {source_id}）"
+    return NOTE_SEP.join(part for part in (note, drop_notes(remark, (DUPLICATE_NOTE, *AI_NOTES))) if part)

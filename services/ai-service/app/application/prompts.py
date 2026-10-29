@@ -200,10 +200,11 @@ async def delete_prompt(session: AsyncSession, actor: Actor, access: CategoryAcc
         raise ApiError(
             "这个模板的样本试跑还没结束，等它跑完或先停止再删除", code=ErrorCode.VALIDATION_ERROR, http_status=422
         )
-    # 样本试跑只属于这个模板，记录和产物一起清掉，不留孤儿文件。
+    # 样本试跑只属于这个模板，记录和产物一起清掉，不留孤儿文件；试跑花的钱仍算在费用账单里。
     samples = await run_repo.sample_runs_for_prompt(session, prompt_id)
+    now = utcnow()
     for sample in samples:
-        await run_repo.delete(session, sample)
+        run_repo.mark_deleted(sample, now)
     await repo.delete(session, template)
     await enqueue_event(session, event_type="ai.prompt.deleted", actor=actor, target_id=prompt_id)
     await session.flush()

@@ -3,7 +3,10 @@
 N 个协程从同一个队列取行并发提问；每完成一行立即追加到原始返回 CSV，进程中途被杀也保留已跑结果。
 另一个协程定时写进度和心跳，并检查停止标志：置位后不再取新行，等在途请求返回后收尾。
 
-每行自动补救：限流、超时这类可重试的错误退避后重发；回答解析不出输出字段时重问一次，仍不行记为「格式不对」。
+每行当场补救：限流、超时这类可重试的错误退避后重发。
+批量任务和定时任务一次执行最多跑三轮：一轮跑完，隔一会儿只重问网络失败（超时、断连、限流、空返回）和
+格式不对（解析不出输出字段）的行，哪一轮全部成功就提前结束，三轮后仍失败的留着失败原因。
+样本试跑不分轮：格式不对当场再问一次，结果原样给人看，好知道提示词哪里要改。
 任务目录里已有原始返回时是续跑：已成功的行直接沿用，只问失败和没跑到的行，结果合并回同一个任务。
 费用每行完成时按当时的单价累加：分时计价的模型跨高峰、空闲时段跑，也按各行实际时段算。
 """
@@ -13,22 +16,19 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import random
-import time
 from collections import deque
 from dataclasses import dataclass, field
+from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 
 import anyio
 import httpx
-from platform_common.clock import utcnow
+from platform_common.clock import BEIJING, utcnow
 from platform_common.excel import run_excel_parse
 
 from app.application import model_configs
-from app.application.asking import llm_request
 from app.application.batch_output import (
-    FORMAT_ERROR_PREFIX,
     RowResult,
     append_log,
     append_raw,
@@ -37,22 +37,29 @@ from app.application.batch_output import (
     start_raw,
     write_failed,
 )
+from app.application.row_asking import FORMAT_RETRIES, ask_row, needs_retry, round_retry
 from app.application.sheets import read_run_input
 from app.core import storage
 from app.core.config import get_settings
 from app.core.database import SessionLocal
-from app.core.llm import stream_responses
-from app.domain.llm_models import LlmModel, build_body, calc_costs, with_service_tier
-from app.domain.models import RUN_CANCELLED, RUN_DONE, RUN_FAILED, RUN_INTERRUPTED, BatchRun
-from app.domain.templating import build_myid, fill_template, parse_fields, split_fields
+from app.domain.llm_models import LlmModel, calc_costs, with_service_tier
+from app.domain.models import (
+    RUN_CANCELLED,
+    RUN_DONE,
+    RUN_FAILED,
+    RUN_INTERRUPTED,
+    RUN_SOURCE_SAMPLE,
+    BatchRun,
+)
+from app.domain.templating import build_myid, fill_template, split_fields
 from app.repositories import batch_runs as repo
 
 logger = logging.getLogger("ai.batch")
 PROGRESS_SECONDS = 2.0
 ERROR_MAX = 2000
-# 可重试错误的退避秒数，次数即重试次数；实际等待再乘 1~1.5 的随机系数，避免 20 路并发同时撞回去。
-RETRY_DELAYS = (3.0, 10.0)
-FORMAT_RETRIES = 1
+ROUNDS = 3
+# 第 2、3 轮开始前各等多久：网络抖动、限流常持续几十秒到几分钟，紧接着重发大概率还是失败。
+ROUND_WAITS = (60.0, 300.0)
 
 
 @dataclass
@@ -67,8 +74,11 @@ class Job:
     by_id: dict[str, dict[str, str]] = field(default_factory=dict)
     fields: list[str] = field(default_factory=list)
     results: dict[str, RowResult] = field(default_factory=dict)
-    # 续跑前失败的结果：重问后被新结果替换；中途停止没轮到的行仍用它出现在结果里。
+    # 续跑前、上一轮失败的结果：重问后被新结果替换；中途停止没轮到的行仍用它出现在结果里。
     previous: dict[str, RowResult] = field(default_factory=dict)
+    rounds: int = ROUNDS
+    format_retries: int = 0
+    round: int = 1
     stop: asyncio.Event = field(default_factory=asyncio.Event)
     # 不是用户点停止、而是任务自己停的原因（如到了费用上限），写进任务的错误信息。
     stop_reason: str = ""
@@ -84,71 +94,22 @@ class Job:
     def merged(self) -> dict[str, RowResult]:
         return {**self.previous, **self.results}
 
+    def prompt_of(self, myid: str) -> str:
+        """失败清单要写提问原文：写的时候现拼，不常驻内存（几万行失败乘上码表全文能占几个 G）。"""
 
-async def call_model_once(model: LlmModel, prompt: str, thinking: bool, client: httpx.AsyncClient) -> RowResult:
-    """消费整条流，只要最终文本、用量、错误和联网次数。联网次数优先用 usage 里的权威值，没有就数进度事件。"""
-
-    started = time.monotonic()
-    parts: list[str] = []
-    usage: dict[str, int] = {}
-    errors: list[dict[str, Any]] = []
-    search_events = 0
-    async for event in stream_responses(llm_request(model, build_body(model, prompt, thinking=thinking)), client):
-        if "text" in event:
-            parts.append(event["text"])
-        elif "usage" in event:
-            usage = event["usage"]
-        elif "error" in event:
-            errors.append(event)
-        elif event.get("tool_event", {}).get("stage") == "web_search_in_progress":
-            search_events += 1
-    return RowResult(
-        myid="",
-        prompt=prompt,
-        text="".join(parts),
-        input_tokens=usage.get("input_tokens", 0),
-        output_tokens=usage.get("output_tokens", 0),
-        search_calls=usage.get("web_search", search_events),
-        error=errors[-1]["error"] if errors else "",
-        elapsed=round(time.monotonic() - started, 2),
-        retryable=bool(errors and errors[-1].get("retryable")),
-    )
-
-
-def needs_retry(result: RowResult, fields: list[str]) -> bool:
-    return bool(result.error) or (bool(fields) and parse_fields(result.text, fields) is None)
-
-
-async def ask_row(
-    model: LlmModel, prompt: str, thinking: bool, fields: list[str], client: httpx.AsyncClient
-) -> RowResult:
-    """问一行，按规则自动补救。几次尝试的 token 和联网次数都算进这一行：钱已经花出去了。"""
-
-    delays = list(RETRY_DELAYS)
-    format_retries = FORMAT_RETRIES
-    spent = [0, 0, 0]
-    attempts = 0
-    while True:
-        result = await call_model_once(model, prompt, thinking, client)
-        attempts += 1
-        spent = [spent[0] + result.input_tokens, spent[1] + result.output_tokens, spent[2] + result.search_calls]
-        if result.error and result.retryable and delays:
-            await asyncio.sleep(delays.pop(0) * random.uniform(1.0, 1.5))  # noqa: S311  退避抖动，不涉及安全
-            continue
-        if not result.error and needs_retry(result, fields):
-            if format_retries:
-                format_retries -= 1
-                continue
-            result.error = f"{FORMAT_ERROR_PREFIX}：回答里没有解析出输出字段（{'、'.join(fields)}）"
-        break
-    result.input_tokens, result.output_tokens, result.search_calls = spent
-    result.attempts = attempts
-    return result
+        return fill_template(self.run.prompt_content, self.by_id[myid], self.code_text)
 
 
 def _log(job: Job, message: str) -> None:
-    stamp = utcnow().astimezone().strftime("%Y-%m-%d %H:%M:%S")
+    # 容器里没设时区，astimezone() 得到的是 UTC，和页面上的北京时间差 8 小时。
+    stamp = utcnow().astimezone(BEIJING).strftime("%Y-%m-%d %H:%M:%S")
     append_log(job.path("log"), f"{stamp} {message}")
+
+
+async def _save(job: Job, values: dict[str, Any]) -> None:
+    async with SessionLocal() as session:
+        await repo.update_fields(session, job.run.id, values)
+        await session.commit()
 
 
 async def _record(job: Job, result: RowResult) -> None:
@@ -172,18 +133,43 @@ async def _record(job: Job, result: RowResult) -> None:
         line = f"{head} 成功 耗时={result.elapsed}s{tries}"
     await anyio.to_thread.run_sync(append_raw, job.path("raw"), result.raw_row(job.model.name))
     await anyio.to_thread.run_sync(_log, job, line)
-    # 提问原文已经落在原始返回 CSV 里；成功的行不再留着它（失败清单要写失败行的提问，失败的留着）。
-    if not result.error:
-        result.prompt = ""
+    # 提问原文已经落在原始返回 CSV 里，不再留着它；失败清单要的提问写文件时现拼（Job.prompt_of）。
+    result.prompt = ""
 
 
 async def _consume(job: Job, client: httpx.AsyncClient) -> None:
     while job.pending and not job.stop.is_set():
         myid = job.pending.popleft()
         prompt = fill_template(job.run.prompt_content, job.by_id[myid], job.code_text)
-        result = await ask_row(job.model, prompt, job.run.thinking, job.fields, client)
+        result = await ask_row(
+            job.model, prompt, job.run.thinking, job.fields, client, format_retries=job.format_retries
+        )
         result.myid = myid
         await _record(job, result)
+
+
+async def _next_round(job: Job) -> bool:
+    """挑出上一轮网络失败、格式不对的行，等一会儿只重问它们。没有要重问的，或等的时候有人点了停止，返回 False。"""
+
+    again = [
+        row["myid"] for row in job.rows if (result := job.results.get(row["myid"])) is not None and round_retry(result)
+    ]
+    if not again:
+        return False
+    job.round += 1
+    wait = ROUND_WAITS[min(job.round - 2, len(ROUND_WAITS) - 1)]
+    starts = utcnow() + timedelta(seconds=wait)
+    await _save(job, {"retry_round": job.round, "round_rows": len(again), "round_starts_at": starts})
+    message = f"第 {job.round} 轮：上一轮 {len(again)} 条网络失败或格式不对，{wait:.0f} 秒后重问"
+    await anyio.to_thread.run_sync(_log, job, message)
+    with contextlib.suppress(TimeoutError):
+        await asyncio.wait_for(job.stop.wait(), timeout=wait)
+    if job.stop.is_set():
+        return False
+    for myid in again:
+        job.previous[myid] = job.results.pop(myid)
+    job.pending.extend(again)
+    return True
 
 
 def _progress(job: Job, *, final: bool = False) -> dict[str, Any]:
@@ -244,8 +230,7 @@ async def _load(run: BatchRun) -> Job:
     ids = {row["myid"] for row in rows}
     succeeded = {key: item for key, item in existing.items() if key in ids and not needs_retry(item, fields)}
     previous = {key: item for key, item in existing.items() if key in ids and key not in succeeded}
-    for item in succeeded.values():
-        item.prompt = ""
+    sample = run.source == RUN_SOURCE_SAMPLE
     return Job(
         run=run,
         model=model,
@@ -257,6 +242,8 @@ async def _load(run: BatchRun) -> Job:
         fields=fields,
         results=succeeded,
         previous=previous,
+        rounds=1 if sample else ROUNDS,
+        format_retries=FORMAT_RETRIES if sample else 0,
         input_tokens=run.input_tokens,
         output_tokens=run.output_tokens,
         search_calls=run.search_calls,
@@ -274,11 +261,13 @@ async def _finish(job: Job, status: str, message: str = "") -> None:
     failed = [item for item in merged.values() if item.error]
     failed_file = job.path("failed")
     if failed:
-        await anyio.to_thread.run_sync(write_failed, failed_file, failed)
+        await anyio.to_thread.run_sync(write_failed, failed_file, failed, job.prompt_of)
     elif await anyio.Path(failed_file).is_file():
         await anyio.Path(failed_file).unlink()
     formats = sum(1 for item in failed if item.format_error)
     summary = f"结束：{status}｜完成 {len(merged)}/{len(job.rows)}｜失败 {len(failed)}（格式不对 {formats}）"
+    if job.round > 1:
+        summary += f"｜共跑 {job.round} 轮"
     await anyio.to_thread.run_sync(_log, job, summary)
     values = {
         **_progress(job, final=True),
@@ -286,10 +275,9 @@ async def _finish(job: Job, status: str, message: str = "") -> None:
         "finished_at": utcnow(),
         "error_message": message,
         "cancel_requested": False,
+        "round_starts_at": None,
     }
-    async with SessionLocal() as session:
-        await repo.update_fields(session, job.run.id, values)
-        await session.commit()
+    await _save(job, values)
 
 
 async def _fail(run_id: str, message: str) -> None:
@@ -302,9 +290,8 @@ async def _fail(run_id: str, message: str) -> None:
 
 async def _run_job(job: Job) -> None:
     settings = get_settings()
-    async with SessionLocal() as session:
-        await repo.update_fields(session, job.run.id, {"total_count": len(job.rows), **_progress(job)})
-        await session.commit()
+    first = {"total_count": len(job.rows), "retry_round": 1, "round_rows": len(job.pending), "round_starts_at": None}
+    await _save(job, {**first, **_progress(job)})
     await anyio.to_thread.run_sync(start_raw, job.path("raw"))
     scope = f"{len(job.rows)} 条"
     if job.results or job.previous:
@@ -313,10 +300,15 @@ async def _run_job(job: Job) -> None:
         _log, job, f"开始：模型={job.model.name}｜{scope}｜并发={settings.batch_concurrency}"
     )
     limits = httpx.Limits(max_connections=settings.batch_concurrency)
+    # 心跳要盖住轮与轮之间的等待：等 5 分钟不写心跳，就会被当成执行进程不在了、纠正成「中断」。
     watcher = asyncio.create_task(_watch(job))
     try:
         async with httpx.AsyncClient(limits=limits) as client:
-            await asyncio.gather(*(_consume(job, client) for _ in range(settings.batch_concurrency)))
+            while True:
+                await asyncio.gather(*(_consume(job, client) for _ in range(settings.batch_concurrency)))
+                # 停止（含到了费用上限）就不再开下一轮；全部成功或跑满三轮也结束。
+                if job.stop.is_set() or job.round >= job.rounds or not await _next_round(job):
+                    break
     finally:
         watcher.cancel()
         with contextlib.suppress(asyncio.CancelledError):

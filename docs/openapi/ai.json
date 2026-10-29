@@ -866,6 +866,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ReleaseBody"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -2344,6 +2361,12 @@
             "maxLength": 100,
             "title": "Caller Name",
             "default": "定时任务"
+          },
+          "reuse_run_id": {
+            "type": "string",
+            "maxLength": 32,
+            "title": "Reuse Run Id",
+            "default": ""
           }
         },
         "additionalProperties": false,
@@ -2409,6 +2432,24 @@
           "content"
         ],
         "title": "PromptBody"
+      },
+      "ReleaseBody": {
+        "properties": {
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ReleaseBody"
       },
       "SampleRunBody": {
         "properties": {

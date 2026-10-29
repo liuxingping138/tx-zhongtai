@@ -150,6 +150,10 @@ export interface BatchRun {
   format_failed_count: number
   /** 重跑时要问的行：失败的 + 没跑到的 */
   pending_count: number
+  /** 自动重跑到了第几轮（一次执行最多三轮，样本试跑只跑一轮）、这一轮重问几条、等待中的话几点开始 */
+  retry_round: number
+  round_rows: number
+  round_starts_at: string
   can_retry: boolean
   percent: number
   total_tokens_kilo: number
@@ -193,8 +197,9 @@ export function deletePrompt(id: string): Promise<null> {
   return request(http.delete(`${BASE}/prompts/${id}`))
 }
 
-export function publishPrompt(id: string): Promise<PromptTemplate> {
-  return request(http.post(`${BASE}/prompts/${id}/release`))
+/** version 是管理员核对时看到的草稿版本号：这期间草稿又被改过，后端拒绝上线（409），免得上线一份没人核对过的内容。 */
+export function publishPrompt(id: string, version: number): Promise<PromptTemplate> {
+  return request(http.post(`${BASE}/prompts/${id}/release`, { version }))
 }
 
 export function offlinePrompt(id: string): Promise<PromptTemplate> {

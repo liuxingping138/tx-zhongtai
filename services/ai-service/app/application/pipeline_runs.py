@@ -1,13 +1,16 @@
 """流水线任务：政策服务定时打标时，用模板的上线版本跑一批数据，再把解析后的结果取回去写业务表。
 
-定时任务没人盯着，只跑上线版本（页面上的批量任务还能选跑草稿）；和批量任务共用同一套执行（worker、重试、计费、历史），区别只在：
+定时任务没人盯着，只跑上线版本（页面上的批量任务还能选跑草稿）；和批量任务共用同一套执行（worker、三轮重跑、计费、历史），
+区别只在：
 - 输入不是上传的 Excel，而是调用方传来的行，原样存成 rows.json（政策正文可能十几万字，Excel 单元格放不下）；
-- 按低优档跑，并带费用上限，到上限自动停。
+- 按低优档跑，并带费用上限，到上限自动停；
+- 调用方那一批中断、失败后重读同一批数据时，可以带上上一批的任务ID：已经答好、内容没变的行直接沿用，不再花钱重问。
 """
 
 from __future__ import annotations
 
 import json
+import logging
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -20,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.application import batch_runs, prompts, releases
 from app.application.asking import RELEASE_MODEL_DISABLED, resolve_model
 from app.application.audit_emit import enqueue_event
-from app.application.batch_output import read_raw
+from app.application.batch_output import append_log, copy_answers, read_raw
 from app.application.batch_runs import require as require_run
 from app.application.batch_runs import to_dict as run_to_dict
 from app.application.sheets import has_run_input, read_run_input
@@ -32,6 +35,7 @@ from app.domain.templating import build_myid, parse_fields, split_fields, templa
 from app.repositories import batch_runs as run_repo
 from app.repositories import releases as release_repo
 
+logger = logging.getLogger("ai.pipeline")
 # 每行带上它，结果按它对回调用方的数据，不依赖行号。
 SOURCE_ID = "源ID"
 ROWS_MAX = 20_000
@@ -84,11 +88,56 @@ def _write_snapshot(run_id: str, headers: list[str], rows: list[dict[str, str]],
         storage.write_atomic(target / storage.PROMPT_FILES["code"], code.encode("utf-8"))
 
 
+async def _reusable(session: AsyncSession, run_id: str, release: TemplateRelease, model_id: str) -> BatchRun | None:
+    """上一批能不能沿用：同一个模板的同一版上线版本、同一个模型，已经结束（还在跑的答案还没写完）。"""
+
+    if not storage.ID_PATTERN.fullmatch(run_id):
+        return None
+    previous = await run_repo.get(session, run_id)
+    if previous is None or previous.source != RUN_SOURCE_PIPELINE or previous.status in ACTIVE_STATUSES:
+        return None
+    same = (previous.prompt_id, previous.release_no, previous.model_id, previous.output_fields) == (
+        release.prompt_id,
+        release.release_no,
+        model_id,
+        release.output_fields,
+    )
+    return previous if same else None
+
+
+def _row_key(row: dict[str, str]) -> str:
+    return json.dumps(row, ensure_ascii=False, sort_keys=True)
+
+
+def _reuse_answers(previous: BatchRun, run_id: str, rows: list[dict[str, str]], code: str | None) -> int:
+    """把上一批里答好、而且这一批里内容一模一样的行抄过来。码表（系统码表是实时取的）也得一样，提问才一样。"""
+
+    source = storage.run_dir(previous.id)
+    code_file = source / storage.PROMPT_FILES["code"]
+    previous_code = code_file.read_text(encoding="utf-8") if code_file.is_file() else None
+    if previous_code != code or not has_run_input(source):
+        return 0
+    wanted: dict[str, list[str]] = {}
+    for index, row in enumerate(rows):
+        wanted.setdefault(_row_key(row), []).append(build_myid(index))
+    _, old_rows = read_run_input(source)
+    mapping = {build_myid(index): wanted[key] for index, row in enumerate(old_rows) if (key := _row_key(row)) in wanted}
+    if not mapping:
+        return 0
+    fields = split_fields(previous.output_fields)
+    copied = copy_answers(storage.run_file(previous.id, "raw"), storage.run_file(run_id, "raw"), mapping, fields)
+    if copied:
+        line = f"{format_beijing(utcnow())} 沿用上一批（任务 {previous.id}）已答好的 {copied} 条，不再重问"
+        append_log(storage.run_file(run_id, "log"), line)
+    return copied
+
+
 async def create(session: AsyncSession, caller: Actor, values: dict[str, Any]) -> dict[str, Any]:
     headers, rows = _checked_rows(values.get("rows"))
     release = await _release(session, str(values.get("prompt_id") or ""))
     model = await resolve_model(session, release.model_id, frozen=RELEASE_MODEL_DISABLED)
     code = await releases.release_code(release)
+    previous = await _reusable(session, str(values.get("reuse_run_id") or ""), release, model.id)
     run = BatchRun(
         id=new_id(),
         prompt_id=release.prompt_id,
@@ -120,14 +169,15 @@ async def create(session: AsyncSession, caller: Actor, values: dict[str, Any]) -
     run_repo.add(session, run)
     await session.flush()
     await anyio.to_thread.run_sync(_write_snapshot, run.id, headers, rows, code)
-    await enqueue_event(
-        session,
-        event_type="ai.batch_run.started",
-        actor=caller,
-        target_id=run.id,
-        changes={"prompt_id": release.prompt_id, "release_no": release.release_no, "rows": len(rows)},
-    )
-    return run_to_dict(run)
+    reused = 0
+    if previous is not None:
+        reused = await anyio.to_thread.run_sync(_reuse_answers, previous, run.id, rows, code)
+        logger.info("pipeline_run_reused run=%s previous=%s rows=%s", run.id, previous.id, reused)
+    changes: dict[str, Any] = {"prompt_id": release.prompt_id, "release_no": release.release_no, "rows": len(rows)}
+    if reused:
+        changes["reused_rows"] = reused
+    await enqueue_event(session, event_type="ai.batch_run.started", actor=caller, target_id=run.id, changes=changes)
+    return {**run_to_dict(run), "reused": reused}
 
 
 async def status(session: AsyncSession, run_id: str) -> dict[str, Any]:

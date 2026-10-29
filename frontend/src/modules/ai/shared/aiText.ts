@@ -146,3 +146,14 @@ export function runStatusType(status: RunStatus): 'primary' | 'success' | 'warni
 export function isActive(status: RunStatus): boolean {
   return status === 'queued' || status === 'running' || status === 'stopping'
 }
+
+/**
+ * 自动重跑的轮次（批量任务、定时任务一次最多跑三轮，第 2、3 轮隔一会儿只重问网络失败、格式不对的行）。
+ * 第 1 轮不说；运行中写「第 2 轮：重问 35 条，14:05 开始」，结束后写「共跑 3 轮」。
+ */
+export function roundText(run: Pick<BatchRun, 'status' | 'retry_round' | 'round_rows' | 'round_starts_at'>): string {
+  if (run.retry_round <= 1) return ''
+  if (!isActive(run.status)) return `共跑 ${run.retry_round} 轮`
+  const at = run.round_starts_at ? `，${run.round_starts_at.slice(11, 16)} 开始` : ''
+  return `第 ${run.retry_round} 轮：重问上一轮网络失败或格式不对的 ${run.round_rows} 条${at}`
+}

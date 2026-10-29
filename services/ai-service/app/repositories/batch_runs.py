@@ -23,6 +23,8 @@ from app.domain.models import (
 _RUNNING = (RUN_RUNNING, RUN_STOPPING)
 # 批量任务列表只列正式运行（页面发起、定时任务）；样本试跑在模板页看。
 TASK_SOURCES = (RUN_SOURCE_MANUAL, RUN_SOURCE_PIPELINE)
+# 删除的任务只是不再列出，费用账单（repositories.billing）照样算它花的钱；除账单外的查询都要带上这个条件。
+LIVE = BatchRun.deleted_at.is_(None)
 
 
 RUN_MODES = ("test", "all")
@@ -55,6 +57,7 @@ async def page(
 ) -> tuple[list[BatchRun], int]:
     conditions = [
         *_conditions(filters or {}),
+        LIVE,
         BatchRun.prompt_category.in_(list(categories)),
         BatchRun.source.in_(TASK_SOURCES),
     ]
@@ -73,7 +76,7 @@ async def distinct_values(session: AsyncSession, column: str, *, categories: Col
     field = {"prompt_title": BatchRun.prompt_title, "created_by_name": BatchRun.created_by_name}[column]
     rows = await session.scalars(
         select(field)
-        .where(field != "", BatchRun.prompt_category.in_(list(categories)), BatchRun.source.in_(TASK_SOURCES))
+        .where(LIVE, field != "", BatchRun.prompt_category.in_(list(categories)), BatchRun.source.in_(TASK_SOURCES))
         .distinct()
         .order_by(field)
     )
@@ -81,7 +84,7 @@ async def distinct_values(session: AsyncSession, column: str, *, categories: Col
 
 
 async def get(session: AsyncSession, run_id: str, *, lock: bool = False) -> BatchRun | None:
-    statement = select(BatchRun).where(BatchRun.id == run_id)
+    statement = select(BatchRun).where(BatchRun.id == run_id, LIVE)
     if lock:
         statement = statement.with_for_update()
     return (await session.scalars(statement)).first()
@@ -93,7 +96,10 @@ async def active_for_prompt(
     """样本试跑和正式运行各管各的：试跑草稿不挡正式任务，反之亦然。"""
 
     statement = select(BatchRun).where(
-        BatchRun.prompt_id == prompt_id, BatchRun.status.in_(ACTIVE_STATUSES), BatchRun.source.in_(list(sources))
+        LIVE,
+        BatchRun.prompt_id == prompt_id,
+        BatchRun.status.in_(ACTIVE_STATUSES),
+        BatchRun.source.in_(list(sources)),
     )
     return (await session.scalars(statement.limit(1))).first()
 
@@ -105,7 +111,7 @@ async def latest_samples(session: AsyncSession, prompt_ids: Collection[str]) -> 
         return {}
     rows = await session.scalars(
         select(BatchRun)
-        .where(BatchRun.prompt_id.in_(list(prompt_ids)), BatchRun.source == RUN_SOURCE_SAMPLE)
+        .where(LIVE, BatchRun.prompt_id.in_(list(prompt_ids)), BatchRun.source == RUN_SOURCE_SAMPLE)
         .order_by(BatchRun.prompt_id, BatchRun.created_at.desc())
         .distinct(BatchRun.prompt_id)
     )
@@ -115,7 +121,7 @@ async def latest_samples(session: AsyncSession, prompt_ids: Collection[str]) -> 
 async def sample_history(session: AsyncSession, prompt_id: str, *, limit: int) -> tuple[list[BatchRun], int]:
     """这个模板最近的几次样本试跑（新的在前）和一共试跑过几次，页面按次数叫「第 N 次」。"""
 
-    condition = (BatchRun.prompt_id == prompt_id, BatchRun.source == RUN_SOURCE_SAMPLE)
+    condition = (LIVE, BatchRun.prompt_id == prompt_id, BatchRun.source == RUN_SOURCE_SAMPLE)
     total = int(await session.scalar(select(func.count()).select_from(BatchRun).where(*condition)) or 0)
     rows = await session.scalars(
         select(BatchRun).where(*condition).order_by(BatchRun.created_at.desc(), BatchRun.id.desc()).limit(limit)
@@ -126,7 +132,7 @@ async def sample_history(session: AsyncSession, prompt_id: str, *, limit: int) -
 async def sample_runs_for_prompt(session: AsyncSession, prompt_id: str) -> list[BatchRun]:
     """这个模板自己的样本试跑记录（删模板时一起清掉）。"""
 
-    stmt = select(BatchRun).where(BatchRun.prompt_id == prompt_id, BatchRun.source == RUN_SOURCE_SAMPLE)
+    stmt = select(BatchRun).where(LIVE, BatchRun.prompt_id == prompt_id, BatchRun.source == RUN_SOURCE_SAMPLE)
     return list(await session.scalars(stmt))
 
 
@@ -134,8 +140,10 @@ def add(session: AsyncSession, run: BatchRun) -> None:
     session.add(run)
 
 
-async def delete(session: AsyncSession, run: BatchRun) -> None:
-    await session.delete(run)
+def mark_deleted(run: BatchRun, now: datetime) -> None:
+    """只打删除标记：行留着，费用账单里这笔钱不会因为删了任务就消失。"""
+
+    run.deleted_at = now
 
 
 async def mark_stale_interrupted(session: AsyncSession, *, cutoff: datetime, message: str) -> int:
@@ -161,7 +169,7 @@ async def claim_next(session: AsyncSession, *, now: datetime) -> BatchRun | None
 
     statement = (
         select(BatchRun)
-        .where(BatchRun.status == RUN_QUEUED)
+        .where(BatchRun.status == RUN_QUEUED, LIVE)
         .order_by(BatchRun.created_at, BatchRun.id)
         .limit(1)
         .with_for_update(skip_locked=True)

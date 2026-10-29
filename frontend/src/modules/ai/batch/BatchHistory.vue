@@ -2,7 +2,7 @@
 import { ArrowDown } from '@element-plus/icons-vue'
 
 import type { BatchRun, RunFileKind } from '@/api/ai'
-import { RUN_SOURCE_TEXT, RUN_STATUS_TEXT, formatYuan, isActive, runModeText, runStatusType } from '../shared/aiText'
+import { RUN_SOURCE_TEXT, RUN_STATUS_TEXT, formatYuan, isActive, roundText, runModeText, runStatusType } from '../shared/aiText'
 import { versionLabel } from '../prompts/sampleView'
 import { RUN_FILES, deleteRun, downloadRunFile, retryRun, stopRun } from './runActions'
 
@@ -74,6 +74,12 @@ function progressText(run: BatchRun): string {
             :show-text="false"
             :stroke-width="4"
           />
+          <p
+            v-if="roundText(row)"
+            class="history__round"
+          >
+            {{ roundText(row) }}
+          </p>
           <p
             v-if="row.error_message"
             class="history__error"
@@ -247,6 +253,7 @@ function progressText(run: BatchRun): string {
 .history__table :deep(.el-table__row) { cursor: pointer; }
 .history__status { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; font-size: 13px; }
 .history__status + .el-progress { margin-top: 6px; }
+.history__round { margin: 4px 0 0; color: var(--zt-ink-500); font-size: 12px; }
 .history__error { margin: 4px 0 0; color: var(--zt-danger-text); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .history__ops { display: flex; align-items: center; gap: 10px; }
 .history__ops .el-button { margin: 0; }

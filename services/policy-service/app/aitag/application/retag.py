@@ -21,7 +21,7 @@ from platform_common.clock import utcnow
 from platform_common.errors import ApiError, ErrorCode
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.aitag.domain.rules import INTERPRET_FAILED, OPPORTUNITY_FAILED, drop_notes
+from app.aitag.domain.rules import INTERPRET_FAILED, MISSING_NOTE, OPPORTUNITY_FAILED, drop_notes
 from app.aitag.domain.tasks import TASKS
 from app.aitag.repositories import source
 from app.aitag.repositories import tagging as repo
@@ -30,7 +30,6 @@ from app.core.database import SessionLocal
 from app.policy.domain.models import BaseTag
 
 BATCH_MAX = 500
-MISSING_NOTE = "源库里已经找不到这条政策，没有重新判断类型"
 _STEP_NOTES = {"interpret": (INTERPRET_FAILED, OPPORTUNITY_FAILED), "opportunity": (OPPORTUNITY_FAILED,)}
 
 
@@ -111,5 +110,6 @@ async def read_queued(source_ids: list[str]) -> tuple[list[dict[str, Any]], int]
                 tag.type_retag_at = None
                 tag.remark = drop_notes(tag.remark, (MISSING_NOTE,))
                 tag.remark = f"{tag.remark}；{MISSING_NOTE}" if tag.remark else MISSING_NOTE
+                tag.version += 1
             await session.commit()
     return rows, len(missing)

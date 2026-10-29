@@ -7,7 +7,7 @@ import pytest
 from openpyxl import load_workbook
 from platform_common.errors import ApiError, PermissionDeniedError
 
-from app.application import batch_execute, batch_queue, batch_start
+from app.application import batch_execute, batch_queue, batch_start, row_asking
 from app.application import batch_runs as service
 from app.core import storage
 from app.core.config import get_settings
@@ -49,11 +49,13 @@ async def test_delete_only_after_finish_and_removes_files(monkeypatch: pytest.Mo
     _returns(repo, "get", run(status="running"), monkeypatch)
     with pytest.raises(ApiError, match="仍在运行"):
         await service.delete_run(FakeSession(), ACTOR, FULL_ACCESS, RUN_ID)  # type: ignore[arg-type]
-    _returns(repo, "get", run(status="done"), monkeypatch)
-    monkeypatch.setattr(repo, "delete", noop)
+    finished = run(status="done")
+    _returns(repo, "get", finished, monkeypatch)
     storage.write_atomic(storage.run_file(RUN_ID, "log"), b"x")
     await service.delete_run(FakeSession(), ACTOR, FULL_ACCESS, RUN_ID)  # type: ignore[arg-type]
     assert not storage.run_dir(RUN_ID).exists()
+    # 只打删除标记：行还在，费用账单里这笔钱不会因为删了任务就消失。
+    assert finished.deleted_at is not None
 
 
 async def test_list_and_progress_and_download(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -98,7 +100,7 @@ async def test_execute_runs_rows_and_builds_result(monkeypatch: pytest.MonkeyPat
     recorder = _Recorder()
     _prepare_execution(monkeypatch, recorder, run(output_fields="行业", row_limit=2))
     events = [{"text": '[{"行业":"制造"}]'}, {"usage": {"input_tokens": 1000, "output_tokens": 1000}}]
-    monkeypatch.setattr(batch_execute, "stream_responses", fake_stream(events))
+    monkeypatch.setattr(row_asking, "stream_responses", fake_stream(events))
     await batch_execute.execute(RUN_ID)
     final = recorder.updates[-1]
     assert (final["status"], final["done_count"], final["failed_count"]) == ("done", 2, 0)
@@ -120,7 +122,7 @@ async def test_execute_records_failures_and_honors_stop(monkeypatch: pytest.Monk
         await asyncio.sleep(0.05)
         yield {"error": "限流"}
 
-    monkeypatch.setattr(batch_execute, "stream_responses", slow)
+    monkeypatch.setattr(row_asking, "stream_responses", slow)
     await batch_execute.execute(RUN_ID)
     final = recorder.updates[-1]
     assert final["status"] == "cancelled" and final["failed_count"] == final["done_count"] >= 1
@@ -141,9 +143,9 @@ async def test_call_counts_search_events_when_usage_has_none(monkeypatch: pytest
     from tests.helpers import ai_model
 
     events = [{"tool_event": {"stage": "web_search_in_progress"}}] * 2 + [{"text": "x"}]
-    monkeypatch.setattr(batch_execute, "stream_responses", fake_stream(events))
+    monkeypatch.setattr(row_asking, "stream_responses", fake_stream(events))
     model = to_model(ai_model())
-    result = await batch_execute.call_model_once(model, "问", False, None)  # type: ignore[arg-type]
+    result = await row_asking.call_model_once(model, "问", False, None)  # type: ignore[arg-type]
     assert (result.text, result.search_calls, result.error) == ("x", 2, "")
 
 
@@ -233,8 +235,8 @@ def _sequence(monkeypatch: pytest.MonkeyPatch, answers: list[list[dict[str, Any]
         for event in answers[min(len(calls), len(answers)) - 1]:
             yield event
 
-    monkeypatch.setattr(batch_execute, "stream_responses", stream)
-    monkeypatch.setattr(batch_execute, "RETRY_DELAYS", (0.0, 0.0))
+    monkeypatch.setattr(row_asking, "stream_responses", stream)
+    monkeypatch.setattr(row_asking, "RETRY_DELAYS", (0.0, 0.0))
     return calls
 
 
@@ -244,25 +246,25 @@ USAGE = {"usage": {"input_tokens": 100, "output_tokens": 10}}
 async def test_ask_row_backs_off_on_retryable_errors_and_sums_spent_tokens(monkeypatch: pytest.MonkeyPatch) -> None:
     limited = [{"error": "HTTP 429", "retryable": True}]
     calls = _sequence(monkeypatch, [limited, [USAGE, *limited], [{"text": '[{"行业":"制造"}]'}, USAGE]])
-    result = await batch_execute.ask_row(_model(), "问", False, ["行业"], None)  # type: ignore[arg-type]
+    result = await row_asking.ask_row(_model(), "问", False, ["行业"], None)  # type: ignore[arg-type]
     assert (result.error, result.attempts, result.input_tokens, len(calls)) == ("", 3, 200, 3)
     calls = _sequence(monkeypatch, [limited])
-    result = await batch_execute.ask_row(_model(), "问", False, ["行业"], None)  # type: ignore[arg-type]
+    result = await row_asking.ask_row(_model(), "问", False, ["行业"], None)  # type: ignore[arg-type]
     assert (result.error, result.failure_kind, len(calls)) == ("HTTP 429", "调用失败", 3)
     calls = _sequence(monkeypatch, [[{"error": "HTTP 400", "retryable": False}]])
-    result = await batch_execute.ask_row(_model(), "问", False, ["行业"], None)  # type: ignore[arg-type]
+    result = await row_asking.ask_row(_model(), "问", False, ["行业"], None)  # type: ignore[arg-type]
     assert (result.error, len(calls)) == ("HTTP 400", 1)
 
 
 async def test_ask_row_reasks_once_when_answer_has_no_output_fields(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _sequence(monkeypatch, [[{"text": "我觉得是制造业"}, USAGE], [{"text": '[{"行业":"制造"}]'}, USAGE]])
-    result = await batch_execute.ask_row(_model(), "问", False, ["行业"], None)  # type: ignore[arg-type]
+    result = await row_asking.ask_row(_model(), "问", False, ["行业"], None)  # type: ignore[arg-type]
     assert (result.error, result.attempts, result.output_tokens, len(calls)) == ("", 2, 20, 2)
     calls = _sequence(monkeypatch, [[{"text": "我觉得是制造业"}]])
-    result = await batch_execute.ask_row(_model(), "问", False, ["行业"], None)  # type: ignore[arg-type]
+    result = await row_asking.ask_row(_model(), "问", False, ["行业"], None)  # type: ignore[arg-type]
     assert result.format_error and "行业" in result.error and len(calls) == 2
     calls = _sequence(monkeypatch, [[{"text": "随便答"}]])
-    result = await batch_execute.ask_row(_model(), "问", False, [], None)  # type: ignore[arg-type]
+    result = await row_asking.ask_row(_model(), "问", False, [], None)  # type: ignore[arg-type]
     assert (result.error, len(calls)) == ("", 1)
 
 
@@ -310,7 +312,7 @@ async def test_execute_keeps_old_failures_for_rows_not_reached_after_stop(monkey
         await asyncio.sleep(0.05)
         yield {"text": '[{"行业":"制造"}]'}
 
-    monkeypatch.setattr(batch_execute, "stream_responses", slow)
+    monkeypatch.setattr(row_asking, "stream_responses", slow)
     await batch_execute.execute(RUN_ID)
     final = recorder.updates[-1]
     assert final["status"] == "cancelled" and final["done_count"] == 3

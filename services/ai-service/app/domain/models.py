@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Any
 
 from platform_common.orm_base import Base
-from sqlalchemy import Boolean, DateTime, Integer, Numeric, String, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -32,8 +32,8 @@ RUN_FAILED = "failed"
 RUN_CANCELLED = "cancelled"
 RUN_INTERRUPTED = "interrupted"
 ACTIVE_STATUSES = (RUN_QUEUED, RUN_RUNNING, RUN_STOPPING)
-# 发起来源：批量任务页（manual）、政策定时打标（pipeline）都跑上线版本；样本试跑（sample）跑草稿和模板的测试样本，
-# 只在模板页看，不进批量任务列表。
+# 发起来源：批量任务页（manual，上线版本或草稿）、政策定时打标（pipeline，只跑上线版本）；
+# 样本试跑（sample）跑草稿和模板的测试样本，只在模板页看，不进批量任务列表。
 RUN_SOURCE_MANUAL = "manual"
 RUN_SOURCE_PIPELINE = "pipeline"
 RUN_SOURCE_SAMPLE = "sample"
@@ -158,8 +158,9 @@ class BatchRun(Base):
     format_failed_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0", comment="格式不对条数"
     )
-    input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="输入token")
-    output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="输出token")
+    # 大任务每行带着码表全文，累计 token 会超过 int4 的 21 亿，写不进去整批就不落账。
+    input_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, comment="输入token")
+    output_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, comment="输出token")
     search_calls: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="联网次数")
     inference_cost: Mapped[Decimal] = mapped_column(
         Numeric(12, 6), nullable=False, default=Decimal(0), comment="推理费用(元)"
@@ -198,6 +199,16 @@ class BatchRun(Base):
         String(16), nullable=False, default="", server_default="", comment="服务档位"
     )
     cost_limit: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True, comment="费用上限(元)")
+    # 一次执行最多跑三轮：第 2、3 轮隔一会儿只重问上一轮网络失败、格式不对的行（见 batch_execute）。
+    retry_round: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1", comment="当前轮次")
+    round_rows: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0", comment="本轮重问条数"
+    )
+    round_starts_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="本轮开始时间"
+    )
+    # 删除只是不再列出：花掉的钱还要留在费用账单里。
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, comment="删除时间")
 
 
 # 试发、多轮对话一次调用记一行（批量任务的费用记在 BatchRun 上），费用账单把两边合起来。

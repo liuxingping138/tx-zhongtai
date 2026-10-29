@@ -69,9 +69,17 @@ def _copy_code_file(prompt_id: str, release_id: str) -> None:
         shutil.copyfile(source, target)
 
 
-async def publish(session: AsyncSession, actor: Actor, access: CategoryAccess, prompt_id: str) -> dict[str, Any]:
+async def publish(
+    session: AsyncSession, actor: Actor, access: CategoryAccess, prompt_id: str, *, version: int | None = None
+) -> dict[str, Any]:
     template = await prompts.require(session, prompt_id, lock=True)
     access.require_read(template.category)
+    if version is not None and version != template.version:
+        raise ApiError(
+            "草稿在你核对之后又被修改过（提示词、字段或文件），请刷新看清改动再上线",
+            code=ErrorCode.VERSION_CONFLICT,
+            http_status=409,
+        )
     await _check_publishable(session, template)
     release = TemplateRelease(
         id=new_id(),

@@ -22,8 +22,22 @@ HEARTBEAT_SECONDS = 10.0
 
 async def heartbeat() -> None:
     while True:
-        await beat()
+        # 库连接抖一下不能让它死掉：它一停，健康检查从此一直报不健康。
+        try:
+            await beat()
+        except Exception:  # 下一次接着写
+            logger.warning("worker_heartbeat_failed", exc_info=True)
         await asyncio.sleep(HEARTBEAT_SECONDS)
+
+
+async def _claim() -> str | None:
+    """认领失败（库重启、连接被重置）只等下一轮再试：跳出循环会把在跑的任务全部取消、收尾成「中断」。"""
+
+    try:
+        return await claim_next()
+    except Exception:
+        logger.warning("batch_run_claim_failed", exc_info=True)
+        return None
 
 
 async def consume(stop: asyncio.Event) -> None:
@@ -31,14 +45,18 @@ async def consume(stop: asyncio.Event) -> None:
     if recovered:
         logger.warning("batch_runs_interrupted count=%s", recovered)
     limit = get_settings().batch_max_running
-    running: set[asyncio.Task[None]] = set()
+    running: dict[asyncio.Task[None], str] = {}
     try:
         while not stop.is_set():
-            running = {task for task in running if not task.done()}
-            run_id = await claim_next() if len(running) < limit else None
+            running = {task: run_id for task, run_id in running.items() if not task.done()}
+            run_id = await _claim() if len(running) < limit else None
+            if run_id and run_id in running.values():
+                # 本进程还在跑它，却被误判中断后又被重跑排回了队列：不能再起第二个执行者往同一个目录里写。
+                logger.warning("batch_run_already_running run=%s", run_id)
+                continue
             if run_id:
                 logger.info("batch_run_claimed run=%s", run_id)
-                running.add(asyncio.create_task(execute(run_id)))
+                running[asyncio.create_task(execute(run_id))] = run_id
                 continue
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=POLL_SECONDS)
