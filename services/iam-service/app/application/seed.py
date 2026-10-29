@@ -17,7 +17,7 @@ from app.domain.catalog import (
     SUPERADMIN_ROLE_NAME,
 )
 from app.domain.enums import NodeType, RoleStatus
-from app.domain.models import MenuItem, Resource, ResourceAction, Role, RoleGrant
+from app.domain.models import MenuItem, Resource, ResourceAction, Role, RoleGrant, UserGrant
 from app.repositories import outbox as outbox_repo
 
 _NS = uuid.UUID("8f2c6d1a-3b7e-4d90-9a11-6c4f0e8b2d55")
@@ -165,6 +165,8 @@ async def _retire_resources(session: AsyncSession) -> int:
         return 0
     await session.execute(delete(MenuItem).where(MenuItem.resource_id.in_(ids)))
     await session.execute(delete(RoleGrant).where(RoleGrant.resource_id.in_(ids)))
+    # 单独授权的外键是 RESTRICT：不先删，下线一个有人被单独授权过的模块时 seed 撞外键、部署卡住。
+    await session.execute(delete(UserGrant).where(UserGrant.resource_id.in_(ids)))
     await session.execute(delete(ResourceAction).where(ResourceAction.resource_id.in_(ids)))
     await session.execute(delete(Resource).where(Resource.id.in_(ids)))
     return len(ids)

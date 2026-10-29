@@ -69,12 +69,17 @@ export function revokeUserSessions(userId: string): Promise<{ revoked: number }>
 }
 
 /** 角色之外单独给这个人的授权。 */
-export function getUserGrants(userId: string): Promise<{ grants: GrantItem[] }> {
+export function getUserGrants(userId: string): Promise<{ grants: GrantItem[]; version: number }> {
   return request(http.get(`/system/users/${userId}/grants`))
 }
 
-export function replaceUserGrants(userId: string, grants: { resource_code: string; level: string }[]): Promise<{ grants: GrantItem[] }> {
-  return request(http.put(`/system/users/${userId}/grants`, { grants }))
+/** version 是打开时拿到的用户版本号：两个人同时改同一个人，后保存的会收到 409，不会悄悄盖掉先保存的。 */
+export function replaceUserGrants(
+  userId: string,
+  grants: { resource_code: string; level: string }[],
+  version: number,
+): Promise<{ grants: GrantItem[]; version: number }> {
+  return request(http.put(`/system/users/${userId}/grants`, { grants, version }))
 }
 
 /** 密码连续输错被锁的账号，不等到期直接解锁。 */

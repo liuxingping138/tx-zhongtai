@@ -20,7 +20,8 @@ async def test_retire_removes_dependents_before_the_resource() -> None:
 
     assert removed == 1
     tables = [call.args[0].table.name for call in session.execute.await_args_list]
-    assert tables == ["iam_menu_items", "iam_role_grants", "iam_resource_actions", "iam_resources"]
+    # 单独授权的外键是 RESTRICT：不先删它，下线一个有人被单独授权过的模块时 seed 撞外键、部署卡住。
+    assert tables == ["iam_menu_items", "iam_role_grants", "iam_user_grants", "iam_resource_actions", "iam_resources"]
 
 
 async def test_retire_is_a_noop_when_already_gone() -> None:

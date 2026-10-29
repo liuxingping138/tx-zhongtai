@@ -26,8 +26,10 @@ RESOURCES = {
 
 @pytest.fixture
 def env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
-    state = SimpleNamespace(user=SimpleNamespace(id=uuid.uuid4(), status=UserStatus.ACTIVE), saved=None, events=[])
+    user = SimpleNamespace(id=uuid.uuid4(), status=UserStatus.ACTIVE, version=1, updated_at=None)
+    state = SimpleNamespace(user=user, saved=None, events=[])
     monkeypatch.setattr(user_grants.user_repo, "get_user_by_id", AsyncMock(side_effect=lambda *_: state.user))
+    monkeypatch.setattr(user_grants.user_repo, "get_user_for_update", AsyncMock(side_effect=lambda *_: state.user))
     monkeypatch.setattr(user_grants, "assert_can_manage_target", AsyncMock())
     monkeypatch.setattr(
         user_grants.resource_repo, "get_resource_by_code", AsyncMock(side_effect=lambda _s, code: RESOURCES.get(code))
@@ -81,3 +83,22 @@ async def test_deleted_users_cannot_be_granted(env: SimpleNamespace) -> None:
     env.user = SimpleNamespace(id=env.user.id, status=UserStatus.DELETED)
     with pytest.raises(NotFoundError):
         await _replace(env, [("policy.sources", "READ")])
+
+
+async def test_concurrent_edits_conflict_and_duplicate_modules_are_rejected(env: SimpleNamespace) -> None:
+    """单独授权原来不带版本号：两人同时改同一个人，后保存的悄悄盖掉先保存的；同一模块提交两次撞主键 500。"""
+
+    from platform_common.errors import VersionConflictError
+
+    with pytest.raises(VersionConflictError):
+        await user_grants.replace_grants(
+            object(),  # type: ignore[arg-type]
+            SimpleNamespace(id=uuid.uuid4()),  # type: ignore[arg-type]
+            env.user.id,
+            [("policy.sources", "READ")],
+            version=0,
+        )
+    with pytest.raises(ApiError, match="出现了两次"):
+        await _replace(env, [("policy.sources", "READ"), ("policy.sources", "FULL")])
+    await _replace(env, [("policy.sources", "READ")])
+    assert env.user.version == 2  # 改了授权，版本号跟着走，另一个人手里的旧版本就会被拦下

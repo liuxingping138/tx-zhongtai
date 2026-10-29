@@ -100,6 +100,8 @@ class RoleGrantsReplaceRequest(StrictModel):
 
 class UserGrantsReplaceRequest(StrictModel):
     grants: list[GrantItem]
+    # 打开单独授权时看到的用户版本号：两个人同时改同一个人，后保存的不能悄悄盖掉先保存的。
+    version: int | None = None
 
 
 class UnlockIpRequest(StrictModel):

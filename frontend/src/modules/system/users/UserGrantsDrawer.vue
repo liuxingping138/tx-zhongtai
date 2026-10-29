@@ -12,17 +12,18 @@ import PermissionTable from '../roles/PermissionTable.vue'
 
 /**
  * 角色之外单独给一个人授权：和角色同一张「查看 / 导出 / 管理」勾选表。
- * 实际权限 = 他所有启用角色加这里，按模块取最高一档；「权限分配」锁着，只跟超级管理员角色走。
+ * 实际权限 = 这个人所有启用角色加这里，按模块取最高一档；「权限分配」锁着，只跟超级管理员角色走。
  */
 type Grants = Record<string, GrantLevel>
 
 const props = defineProps<{ user: { id: string; display_name: string; username: string } | null }>()
 const visible = defineModel<boolean>({ required: true })
-const emit = defineEmits<{ saved: [] }>()
+const emit = defineEmits<{ saved: [result: { count: number; version: number }] }>()
 
 const tree = ref<ResourceNode[]>([])
 const selected = ref<Grants>({})
 const original = ref<Grants>({})
+const version = ref(0)
 const loading = ref(false)
 const saving = ref(false)
 const loadError = ref('')
@@ -48,6 +49,7 @@ async function load(): Promise<void> {
     for (const grant of current.grants) saved[grant.resource_code] = grant.level
     selected.value = collectGrants(tree.value, saved)
     original.value = { ...selected.value }
+    version.value = current.version
   } catch (error) {
     loadError.value = errorMessage(error, '单独授权加载失败')
   } finally {
@@ -84,10 +86,11 @@ async function save(): Promise<void> {
   if (!sure) return
   saving.value = true
   try {
-    await replaceUserGrants(user.id, grantsFromTree(tree.value, selected.value))
+    const result = await replaceUserGrants(user.id, grantsFromTree(tree.value, selected.value), version.value)
     original.value = { ...selected.value }
-    ElMessage.success('单独授权已保存，他下次操作时即生效')
-    emit('saved')
+    version.value = result.version
+    ElMessage.success('单独授权已保存，对方下次操作时即生效')
+    emit('saved', { count: result.grants.length, version: result.version })
     visible.value = false
   } catch (error) {
     ElMessage.error(errorMessage(error, '保存失败'))
@@ -107,7 +110,7 @@ async function save(): Promise<void> {
     class="editor-overlay grants-drawer"
   >
     <p class="grants__hint">
-      角色之外再给这个人的权限。他最终能做什么 = 他所有角色的权限加上这里，每个模块取最高一档；角色已经给到的不用再勾。
+      角色之外再给这个人的权限。这个人最终能做什么 = 其所有角色的权限加上这里，每个模块取最高一档；角色已经给到的不用再勾。
       要给多个人同样的权限，建一个角色更好管。
     </p>
     <el-alert

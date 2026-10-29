@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import uuid
 
-from platform_common.errors import ApiError, NotFoundError, PermissionDeniedError
+from platform_common.clock import utcnow
+from platform_common.errors import ApiError, NotFoundError, PermissionDeniedError, VersionConflictError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.user_admin import assert_can_manage_target
@@ -23,8 +24,10 @@ from app.repositories import users as user_repo
 LEVELS = {GrantLevel.READ, GrantLevel.EXPORT, GrantLevel.FULL}
 
 
-async def _live_user(session: AsyncSession, user_id: uuid.UUID) -> User:
-    user = await user_repo.get_user_by_id(session, user_id)
+async def _live_user(session: AsyncSession, user_id: uuid.UUID, *, lock: bool = False) -> User:
+    user = await (
+        user_repo.get_user_for_update(session, user_id) if lock else user_repo.get_user_by_id(session, user_id)
+    )
     if user is None or user.status == UserStatus.DELETED:
         raise NotFoundError("用户不存在")
     return user
@@ -33,14 +36,25 @@ async def _live_user(session: AsyncSession, user_id: uuid.UUID) -> User:
 async def list_grants(session: AsyncSession, user_id: uuid.UUID) -> dict[str, object]:
     user = await _live_user(session, user_id)
     pairs = await grant_repo.list_for_user(session, user.id)
-    return {"grants": [{"resource_code": code, "level": level} for code, level in pairs]}
+    return {"grants": [{"resource_code": code, "level": level} for code, level in pairs], "version": user.version}
 
 
 async def replace_grants(
-    session: AsyncSession, actor: User, user_id: uuid.UUID, grants: list[tuple[str, str]]
+    session: AsyncSession,
+    actor: User,
+    user_id: uuid.UUID,
+    grants: list[tuple[str, str]],
+    *,
+    version: int | None = None,
 ) -> dict[str, object]:
-    user = await _live_user(session, user_id)
+    user = await _live_user(session, user_id, lock=True)
     await assert_can_manage_target(session, actor, user)
+    if version is not None and version != user.version:
+        raise VersionConflictError("这个人刚被别人改过（角色、授权或基本信息），请关闭后重新打开再改")
+    codes = [code for code, level in grants if level != "NONE"]
+    if len(set(codes)) != len(codes):
+        # 原来照单写进去，撞主键回 500。
+        raise ApiError("同一个模块出现了两次，请刷新后重新选择")
     normalized: list[tuple[uuid.UUID, str]] = []
     for resource_code, level in grants:
         if level == "NONE":
@@ -54,6 +68,8 @@ async def replace_grants(
             raise PermissionDeniedError("「权限分配」只跟着超级管理员角色，不能单独授给个人")
         normalized.append((resource.id, str(level)))
     await grant_repo.replace_for_user(session, user.id, normalized, updated_by=actor.id)
+    user.version += 1
+    user.updated_at = utcnow()
     await outbox_repo.enqueue(
         session,
         event_type="iam.user.grants_replaced",

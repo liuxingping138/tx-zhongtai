@@ -111,3 +111,15 @@ async def test_result_file_carries_passwords_and_skipped_rows(created: list[dict
 async def test_empty_sheet_is_rejected(created: list[dict[str, Any]]) -> None:
     with pytest.raises(user_excel.ApiError, match="没有数据"):
         await user_excel.import_users(SimpleNamespace(), SimpleNamespace(), _xlsx(), can_grant=True)
+
+
+@pytest.mark.asyncio
+async def test_overlong_names_and_emails_are_skipped_instead_of_failing_the_whole_file(
+    created: list[dict[str, Any]],
+) -> None:
+    """页面建人有长度限制、导入没有：超长的撞库报错，整份文件一个账号都建不成。"""
+
+    content = _xlsx(["longname", "长" * 200, "", "", ""], ["zhaoliu", "赵六", "", "", ""])
+    outcome = await user_excel.import_users(SimpleNamespace(), SimpleNamespace(), content, can_grant=False)
+    assert [item["username"] for item in outcome.created] == ["zhaoliu"]
+    assert "超过" in outcome.skipped[0]["skip_reason"]

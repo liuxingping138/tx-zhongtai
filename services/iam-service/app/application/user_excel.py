@@ -14,6 +14,7 @@ from io import BytesIO
 from anyio import to_thread
 from openpyxl import Workbook
 from platform_common.clock import format_beijing
+from platform_common.columns import overlong_reasons, string_lengths
 from platform_common.errors import ApiError, ErrorCode
 from platform_common.excel import SKIP_REASON_COLUMN, active_worksheet, append_text_row, parse_sheet_async
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -144,6 +145,9 @@ async def import_users(session: AsyncSession, actor: User, content: bytes, *, ca
     return outcome
 
 
+USER_LENGTHS = string_lengths(User)
+
+
 async def _prepare_row(
     session: AsyncSession, row: dict[str, str], seen: set[str], index: dict[str, list[Role]] | None
 ) -> _ImportRow | str:
@@ -156,6 +160,13 @@ async def _prepare_row(
         email = normalize_email(row["email"])
     except ApiError as exc:
         return exc.message
+    # 页面建人有长度限制，导入这条路原来没有：超长的显示名、邮箱撞库报错，整份文件一个账号都建不成。
+    if reasons := overlong_reasons(
+        {"username": username, "display_name": row["display_name"], "phone": phone, "email": email},
+        USER_IMPORT_COLUMNS,
+        USER_LENGTHS,
+    ):
+        return "、".join(reasons)
     if username in seen:
         return "文件里有重复的用户名，只建第一行"
     seen.add(username)

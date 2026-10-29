@@ -1,7 +1,7 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
 
-import { getAccessToken, getCsrfToken, isAuthPublicPath, onAccessTokenChange, onRemoteLogout, refreshSession, setAccessToken } from './session'
+import { getAccessToken, getCsrfToken, isAuthPublicPath, onAccessTokenChange, onRemoteLogout, refreshRejected, refreshSession, setAccessToken } from './session'
 import { ApiRequestError, wasShown } from './errors'
 import type { ApiError, ApiResponse } from './types'
 
@@ -91,13 +91,8 @@ http.interceptors.response.use(
     const config = error.config as RetryConfig | undefined
     const status = error.response?.status
     if (status === 401 && config && !config._retried && !isAuthPublicPath(config.url)) {
-      config._retried = true
-      try {
-        await refreshSession()
-        return http(config)
-      } catch {
-        signOutOnce()
-      }
+      const retried = await retryAfterRefresh(config)
+      if (retried) return retried.value
     }
     const apiError = toApiError(error)
     if (status === 403) {
@@ -110,6 +105,23 @@ http.interceptors.response.use(
   },
 )
 
+/**
+ * 401 时续期一次再重发。续期被拒绝就退出登录、照常按 401 失败（返回 null）；
+ * 续期连不上就按服务暂时不可用失败，不退出登录。
+ */
+async function retryAfterRefresh(config: RetryConfig): Promise<{ value: Promise<unknown> } | null> {
+  config._retried = true
+  try {
+    await refreshSession()
+    return { value: http(config) }
+  } catch (refreshError) {
+    const failure = afterRefreshFailure(refreshError)
+    if (failure.status === 401) return null
+    notifyByStatus(failure)
+    return { value: Promise.reject(failure) }
+  }
+}
+
 /** 下载接口按 blob 收响应，出错时错误体也是 blob，先还原成 JSON 才能取到中文提示。 */
 async function parseBlobErrorBody(error: AxiosError<ApiResponseBody<unknown>>): Promise<void> {
   if (!(error.response?.data instanceof Blob)) return
@@ -119,6 +131,18 @@ async function parseBlobErrorBody(error: AxiosError<ApiResponseBody<unknown>>): 
   } catch {
     error.response.data = { code: 'UNKNOWN_ERROR', message: '请求失败', data: null, request_id: null }
   }
+}
+
+/**
+ * 续期失败后怎么办：被 IAM 明确拒绝就退出登录（并发的几个请求只退一次）；连不上、5xx 不退出，
+ * 当成服务暂时不可用，会话还在，过一会儿再点就好。流式提问（eventStream）也走这里，不各写一套。
+ */
+export function afterRefreshFailure(error: unknown): ApiRequestError {
+  if (refreshRejected(error)) {
+    signOutOnce()
+    return new ApiRequestError({ status: 401, code: 'AUTH_UNAUTHENTICATED', message: '登录已失效，请重新登录', requestId: null })
+  }
+  return new ApiRequestError({ status: 503, code: 'DEPENDENCY_UNAVAILABLE', message: '服务暂时不可用，请稍后重试', requestId: null })
 }
 
 /** 续期失败时并发的多个请求只触发一次退出登录。 */

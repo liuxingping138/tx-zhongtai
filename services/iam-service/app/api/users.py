@@ -279,4 +279,6 @@ async def replace_user_grants(
     """整体替换单独授权；和给人分配角色同一门槛，只有超级管理员能做。"""
 
     grants: list[tuple[str, str]] = [(item.resource_code, item.level) for item in body.grants]
-    return success_json(await user_grants.replace_grants(session, principal.user, user_id, grants))
+    return success_json(
+        await user_grants.replace_grants(session, principal.user, user_id, grants, version=body.version)
+    )

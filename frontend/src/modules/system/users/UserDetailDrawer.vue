@@ -5,13 +5,14 @@ import { ElMessage } from 'element-plus'
 import { Document } from '@element-plus/icons-vue'
 
 import { getUser, getUserPermissions, replaceUserRoles, updateUser } from '@/api/system'
-import { errorMessage, isApiError } from '@/api/errors'
+import { errorMessage } from '@/api/errors'
 import type { EffectivePermission, RoleItem, UserItem } from '@/api/types'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import { formatTime } from '@/utils/time'
 import EffectivePermissions from './EffectivePermissions.vue'
 import RolePicker from './RolePicker.vue'
 import UserGrantsDrawer from './UserGrantsDrawer.vue'
+import { saveFailureText } from './userSave'
 
 /**
  * 用户的查看与编辑合在一个抽屉里：基本信息、联系方式、角色一次改完一次保存。
@@ -110,15 +111,18 @@ watch(() => [visible.value, props.userId] as const, ([open]) => {
   }
 }, { flush: 'sync' })
 
-async function saveInfo(current: UserItem): Promise<UserItem> {
-  if (!infoDirty.value || !props.canEdit) return current
+/** 存基本信息。存上了就先换成新版本号：角色那一步失败了再点保存，不会拿旧版本号撞 409；列表里的名字也跟着更新。 */
+async function saveInfo(current: UserItem): Promise<boolean> {
+  if (!infoDirty.value || !props.canEdit) return false
   const saved = await updateUser(current.id, {
     display_name: form.display_name.trim(),
     phone: form.phone.trim(),
     email: form.email.trim(),
     version: current.version,
   })
-  return { ...current, ...saved }
+  user.value = { ...current, ...saved }
+  emit('changed', user.value)
+  return true
 }
 
 async function saveRoles(current: UserItem): Promise<UserItem> {
@@ -129,7 +133,8 @@ async function saveRoles(current: UserItem): Promise<UserItem> {
 
 /** 先存基本信息再存角色：两个接口各自带版本号，第二次用第一次返回的新版本。 */
 async function onSave() {
-  if (!user.value || saving.value) return
+  const original = user.value
+  if (!original || saving.value) return
   saveError.value = ''
   if (!form.display_name.trim()) {
     saveError.value = '请填写显示名'
@@ -140,20 +145,28 @@ async function onSave() {
     return
   }
   saving.value = true
+  let infoSaved = false
   try {
-    const current = await saveRoles(await saveInfo(user.value))
+    infoSaved = await saveInfo(original)
+    const current = await saveRoles(user.value ?? original)
     fill(current)
     guard.markSaved()
     emit('changed', current)
     ElMessage.success('已保存，对方下次操作时即生效')
     visible.value = false
   } catch (error) {
-    saveError.value = isApiError(error) && error.status === 409
-      ? '该用户刚被其他人修改过，请关闭后重新打开再改。'
-      : errorMessage(error, '保存失败，请检查后重试')
+    saveError.value = saveFailureText(error, infoSaved)
   } finally {
     saving.value = false
   }
+}
+
+/** 单独授权存好了：用户版本号跟着变（不然再改基本信息会撞 409），列表上的「+单独授权」标签也要跟着更新。 */
+function grantsSaved(result: { count: number; version: number }) {
+  void loadPermissions()
+  if (!user.value) return
+  user.value = { ...user.value, version: result.version, direct_grant_count: result.count }
+  emit('changed', user.value)
 }
 
 async function openAudit() {
@@ -356,7 +369,7 @@ async function openAudit() {
     <UserGrantsDrawer
       v-model="grantsVisible"
       :user="user"
-      @saved="loadPermissions(); user && emit('changed', user)"
+      @saved="grantsSaved"
     />
   </el-drawer>
 </template>

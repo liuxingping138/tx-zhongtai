@@ -10,6 +10,9 @@ vi.mock('./session', () => ({
     return Promise.resolve({})
   },
 }))
+vi.mock('./http', () => ({
+  afterRefreshFailure: () => ({ status: 401, code: 'AUTH_UNAUTHENTICATED', message: '登录已失效，请重新登录' }),
+}))
 
 import { postEventStream, readEvents } from './eventStream'
 
@@ -36,10 +39,11 @@ describe('SSE 解析', () => {
     expect(events).toEqual([{ text: '你' }, { text: '好' }])
   })
 
-  it('没有 [DONE] 时也处理最后一块', async () => {
+  it('没有 [DONE] 时也处理最后一块，并说明没收到结束标记', async () => {
     const events: unknown[] = []
-    await readEvents(body(['data: {"a":1}']), e => events.push(e))
+    expect(await readEvents(body(['data: {"a":1}']), e => events.push(e))).toBe(false)
     expect(events).toEqual([{ a: 1 }])
+    expect(await readEvents(body(['data: {"a":1}\n\ndata: [DONE]\n\n']), () => undefined)).toBe(true)
   })
 })
 
@@ -50,7 +54,7 @@ describe('postEventStream', () => {
       const headers = init.headers as Record<string, string>
       calls.push({ auth: headers.Authorization ?? '', csrf: headers['X-CSRF-Token'] ?? '' })
       if (calls.length === 1) return Promise.resolve(new Response('', { status: 401 }))
-      return Promise.resolve(new Response(body(['data: {"text":"ok"}\n\n'])))
+      return Promise.resolve(new Response(body(['data: {"text":"ok"}\n\n', 'data: [DONE]\n\n'])))
     }))
     const events: unknown[] = []
     await postEventStream('/ai/stream/chat', { message: 'hi' }, e => events.push(e))
@@ -64,5 +68,12 @@ describe('postEventStream', () => {
     await expect(postEventStream('/ai/stream/chat', {}, () => undefined)).rejects.toMatchObject({ status: 422, message: '未知模型：x' })
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response('<html>', { status: 503 }))))
     await expect(postEventStream('/ai/stream/chat', {}, () => undefined)).rejects.toMatchObject({ status: 503, message: '服务暂时不可用，请稍后重试' })
+  })
+
+  it('半截回答不当完整回答，断网不露英文报错', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(body(['data: {"text":"一半"}\n\n'])))))
+    await expect(postEventStream('/ai/stream/chat', {}, () => undefined)).rejects.toMatchObject({ message: '回答中途断了，请重试' })
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))))
+    await expect(postEventStream('/ai/stream/chat', {}, () => undefined)).rejects.toMatchObject({ message: '网络连接中断，请检查网络后重试' })
   })
 })

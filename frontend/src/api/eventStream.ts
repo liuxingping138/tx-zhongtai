@@ -1,4 +1,5 @@
 import { ApiRequestError } from './errors'
+import { afterRefreshFailure } from './http'
 import { getAccessToken, getCsrfToken, refreshSession } from './session'
 
 /**
@@ -15,22 +16,44 @@ export async function postEventStream(
 ): Promise<void> {
   let response = await send(path, body, signal)
   if (response.status === 401) {
-    await refreshSession()
+    try {
+      await refreshSession()
+    } catch (error) {
+      // 和普通请求一样：被拒绝就退出登录、提示「登录已失效」，连不上就说服务暂时不可用，不露英文报错。
+      throw afterRefreshFailure(error)
+    }
     response = await send(path, body, signal)
   }
   if (!response.ok || !response.body) {
     throw await toError(response)
   }
-  await readEvents(response.body, onEvent)
+  let finished: boolean
+  try {
+    finished = await readEvents(response.body, onEvent)
+  } catch (error) {
+    throw networkError(error)
+  }
+  // 连接被干净地断开、没收到 [DONE]：半截回答不能当完整回答给人看。
+  if (!finished) throw new ApiRequestError({ status: 0, code: 'STREAM_INTERRUPTED', message: '回答中途断了，请重试', requestId: null })
 }
 
-function send(path: string, body: unknown, signal?: AbortSignal): Promise<Response> {
+async function send(path: string, body: unknown, signal?: AbortSignal): Promise<Response> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'text/event-stream' }
   const token = getAccessToken()
   if (token) headers.Authorization = `Bearer ${token}`
   const csrf = getCsrfToken()
   if (csrf) headers['X-CSRF-Token'] = csrf
-  return fetch(`/api/v1${path}`, { method: 'POST', headers, body: JSON.stringify(body), credentials: 'include', signal })
+  try {
+    return await fetch(`/api/v1${path}`, { method: 'POST', headers, body: JSON.stringify(body), credentials: 'include', signal })
+  } catch (error) {
+    throw networkError(error)
+  }
+}
+
+/** 断网、连接被重置时 fetch 抛的是「Failed to fetch」「network error」这类英文：换成中文。用户自己停的照原样抛。 */
+function networkError(error: unknown): unknown {
+  if (error instanceof DOMException && error.name === 'AbortError') return error
+  return new ApiRequestError({ status: 0, code: 'NETWORK_ERROR', message: '网络连接中断，请检查网络后重试', requestId: null })
 }
 
 async function toError(response: Response): Promise<ApiRequestError> {
@@ -48,8 +71,8 @@ async function toError(response: Response): Promise<ApiRequestError> {
   return new ApiRequestError({ status: response.status, code, message, requestId })
 }
 
-/** 按 SSE 规则切分：事件之间空行分隔，只取 data 行。 */
-export async function readEvents(stream: ReadableStream<Uint8Array>, onEvent: (event: Record<string, unknown>) => void): Promise<void> {
+/** 按 SSE 规则切分：事件之间空行分隔，只取 data 行。返回是否收到了结束标记 [DONE]。 */
+export async function readEvents(stream: ReadableStream<Uint8Array>, onEvent: (event: Record<string, unknown>) => void): Promise<boolean> {
   const reader = stream.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
@@ -60,13 +83,10 @@ export async function readEvents(stream: ReadableStream<Uint8Array>, onEvent: (e
     while (boundary >= 0) {
       const block = buffer.slice(0, boundary)
       buffer = buffer.slice(boundary + 2)
-      if (dispatch(block, onEvent)) return
+      if (dispatch(block, onEvent)) return true
       boundary = buffer.indexOf('\n\n')
     }
-    if (done) {
-      dispatch(buffer, onEvent)
-      return
-    }
+    if (done) return dispatch(buffer, onEvent)
   }
 }
 

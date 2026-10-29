@@ -11,6 +11,7 @@ const session = vi.hoisted(() => ({
   onAccessTokenChange: vi.fn(),
   onRemoteLogout: vi.fn(),
   refreshSession: vi.fn<() => Promise<unknown>>(),
+  refreshRejected: vi.fn((error: unknown) => [401, 403].includes((error as { response?: { status?: number } })?.response?.status ?? 0)),
   setAccessToken: vi.fn(),
 }))
 const message = vi.hoisted(() => ({ warning: vi.fn(), error: vi.fn() }))
@@ -174,13 +175,23 @@ describe('401 自动续期', () => {
   it('续期失败时清令牌、只回调一次未登录处理，并仍然拒绝', async () => {
     const unauthorized = vi.fn()
     setUnauthorizedHandler(unauthorized)
-    session.refreshSession.mockRejectedValue(new Error('expired'))
+    session.refreshSession.mockRejectedValue(Object.assign(new Error('expired'), { response: { status: 401 } }))
     respondWith(() => fail(401, 'UNAUTHENTICATED', '未登录'))
     await expect(http.get('/a')).rejects.toMatchObject({ status: 401 })
     await expect(http.get('/b')).rejects.toMatchObject({ status: 401 })
     expect(session.setAccessToken).toHaveBeenCalledWith('')
     expect(unauthorized).toHaveBeenCalledOnce()
     expect(message.warning).not.toHaveBeenCalled()
+  })
+
+  it('续期接口暂时连不上（部署时 IAM 重启、网络抖动）：不退出登录，按服务暂时不可用失败', async () => {
+    const unauthorized = vi.fn()
+    setUnauthorizedHandler(unauthorized)
+    session.refreshSession.mockRejectedValue(Object.assign(new Error('Network Error'), { response: undefined }))
+    respondWith(() => fail(401, 'UNAUTHENTICATED', '未登录'))
+    await expect(http.get('/a')).rejects.toMatchObject({ status: 503, message: '服务暂时不可用，请稍后重试' })
+    expect(unauthorized).not.toHaveBeenCalled()
+    expect(session.setAccessToken).not.toHaveBeenCalledWith('')
   })
 
   it('登录、刷新这类公开接口的 401 不走续期', async () => {

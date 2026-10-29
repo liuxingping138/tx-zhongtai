@@ -176,6 +176,15 @@ export async function refreshSession(): Promise<TokenPayload> {
   return inFlight
 }
 
+/**
+ * 续期被 IAM 明确拒绝（刷新凭据失效、CSRF 不对）才算会话真没了。部署时 IAM 重启那十几秒、网络抖一下，
+ * 续期也会失败，但会话多半还好着：这时不能把所有标签页都踢回登录页。
+ */
+export function refreshRejected(error: unknown): boolean {
+  const status = (error as { response?: { status?: number } } | null)?.response?.status
+  return status === 401 || status === 403
+}
+
 export function isAuthPublicPath(url: string | undefined): boolean {
   if (!url) {
     return false
