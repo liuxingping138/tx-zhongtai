@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import quote
 
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 FileKind = Literal["excel", "code"]
@@ -100,6 +101,17 @@ def file_response(content: bytes, filename: str) -> Response:
     suffix = filename[filename.rfind(".") :].lower() if "." in filename else ""
     return Response(
         content=content,
+        media_type=_MEDIA_TYPES.get(suffix, "application/octet-stream"),
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+    )
+
+
+def path_response(path: Path, filename: str) -> FileResponse:
+    """从磁盘边读边发，不整份读进内存（任务产物可能有几个 G）。"""
+
+    suffix = filename[filename.rfind(".") :].lower() if "." in filename else ""
+    return FileResponse(
+        path,
         media_type=_MEDIA_TYPES.get(suffix, "application/octet-stream"),
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
     )

@@ -198,12 +198,19 @@ async def _watch(job: Job) -> None:
         # 库连接抖一下不能让它死掉：它一死心跳就停，任务被误判中断、停止按钮失效、跑完还被记成失败。
         try:
             async with SessionLocal() as session:
-                await repo.update_fields(session, job.run.id, _progress(job))
-                if await repo.cancel_flag(session, job.run.id):
-                    job.stop.set()
+                alive = await repo.update_if_running(session, job.run.id, _progress(job))
+                cancelled = await repo.cancel_flag(session, job.run.id)
                 await session.commit()
         except Exception:
             logger.exception("batch_run_watch_failed run=%s", job.run.id)
+            continue
+        if not alive and not job.stop.is_set():
+            # 心跳断过一阵、任务已被纠正成「中断」：页面上停止按钮已经没了，这里不停就会一直花钱。
+            logger.warning("batch_run_no_longer_running run=%s", job.run.id)
+            job.stop_reason = "任务已被判定中断（有一阵子没写上心跳），不再提交新的提问"
+            job.stop.set()
+        if cancelled:
+            job.stop.set()
 
 
 async def _load(run: BatchRun) -> Job:
@@ -277,7 +284,12 @@ async def _finish(job: Job, status: str, message: str = "") -> None:
         "cancel_requested": False,
         "round_starts_at": None,
     }
-    await _save(job, values)
+    async with SessionLocal() as session:
+        written = await repo.update_if_running(session, job.run.id, values, also=(RUN_INTERRUPTED,))
+        await session.commit()
+    if not written:
+        # 被纠正成「中断」后又被人点了重跑：排队中的任务下次会沿用这次已跑好的行，不拿这次的结果盖掉排队状态。
+        logger.warning("batch_run_finish_skipped run=%s status=%s", job.run.id, status)
 
 
 async def _fail(run_id: str, message: str) -> None:

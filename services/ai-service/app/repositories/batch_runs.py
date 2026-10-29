@@ -191,6 +191,24 @@ async def update_fields(session: AsyncSession, run_id: str, values: dict[str, An
     await session.execute(update(BatchRun).where(BatchRun.id == run_id).values(**values))
 
 
+async def update_if_running(
+    session: AsyncSession, run_id: str, values: dict[str, Any], *, also: Collection[str] = ()
+) -> bool:
+    """只在任务还是运行中（或 also 里的状态）时写，返回写上了没有。
+
+    执行进程写心跳、收尾都走这里：任务已被纠正成「中断」、又被人点了重跑排回队列时，
+    不能拿这次执行的结果把排队状态盖掉，也不能当它还在跑。
+    """
+
+    result = await session.execute(
+        update(BatchRun)
+        .where(BatchRun.id == run_id, BatchRun.status.in_([*_RUNNING, *also]))
+        .values(**values)
+        .execution_options(synchronize_session=False)
+    )
+    return bool(result.rowcount)  # type: ignore[attr-defined]  # UPDATE 的结果才有 rowcount，类型上看不到
+
+
 async def cancel_flag(session: AsyncSession, run_id: str) -> bool:
     value = await session.scalar(select(BatchRun.cancel_requested).where(BatchRun.id == run_id))
     return bool(value)

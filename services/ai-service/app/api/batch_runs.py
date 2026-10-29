@@ -9,7 +9,7 @@ from platform_common.filters import Filters
 from platform_common.http_utils import read_named_upload, success_json
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas import RunFileKind, file_response
+from app.api.schemas import RunFileKind, file_response, path_response
 from app.api.security import CategoryAccess, SecurityClass, classified, get_category_access, require_ai_permission
 from app.application import batch_runs as service
 from app.application import batch_start, prompts
@@ -207,5 +207,5 @@ async def download(
     access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission(RESOURCE, "export")),
 ) -> Response:
-    content, filename = await service.download(session, actor, access, run_id, kind)
-    return file_response(content, filename)
+    path, filename = await service.download(session, actor, access, run_id, kind)
+    return path_response(path, filename)

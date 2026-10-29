@@ -68,17 +68,24 @@ async def test_list_and_progress_and_download(monkeypatch: pytest.MonkeyPatch) -
     _returns(repo, "get", run(status="running", total_count=4, done_count=1), monkeypatch)
     assert (await service.get_run(FakeSession(), FULL_ACCESS, RUN_ID))["percent"] == 25  # type: ignore[arg-type]
     storage.write_atomic(storage.run_file(RUN_ID, "result"), b"xlsx")
-    content, name = await service.download(FakeSession(), ACTOR, FULL_ACCESS, RUN_ID, "result")  # type: ignore[arg-type]
-    assert (content, name) == (b"xlsx", "企业行业-结果.xlsx")
+    path, name = await service.download(FakeSession(), ACTOR, FULL_ACCESS, RUN_ID, "result")  # type: ignore[arg-type]
+    assert (path.read_bytes(), name) == (b"xlsx", "企业行业-结果.xlsx")
 
 
 class _Recorder:
     def __init__(self, cancel_after: int | None = None) -> None:
         self.updates: list[dict[str, Any]] = []
         self.cancel_after = cancel_after
+        # 任务在库里还是不是运行中：被纠正成「中断」后再点重跑排回队列时为 False。
+        self.running = True
 
     async def update(self, _: Any, run_id: str, values: dict[str, Any]) -> None:
         self.updates.append(values)
+
+    async def update_running(self, _: Any, run_id: str, values: dict[str, Any], also: Any = ()) -> bool:
+        if self.running:
+            self.updates.append(values)
+        return self.running
 
     async def cancel(self, *_: Any) -> bool:
         return self.cancel_after is not None
@@ -92,6 +99,7 @@ def _prepare_execution(monkeypatch: pytest.MonkeyPatch, recorder: _Recorder, ite
     monkeypatch.setattr(batch_execute, "SessionLocal", FakeSession)
     _returns(repo, "get", item, monkeypatch)
     monkeypatch.setattr(repo, "update_fields", recorder.update)
+    monkeypatch.setattr(repo, "update_if_running", recorder.update_running)
     monkeypatch.setattr(repo, "cancel_flag", recorder.cancel)
     monkeypatch.setattr(get_settings(), "batch_concurrency", 2)
 

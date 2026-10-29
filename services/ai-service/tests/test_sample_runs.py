@@ -179,8 +179,8 @@ async def test_download_only_serves_this_templates_sample_runs(monkeypatch: pyte
     monkeypatch.setattr(sample_runs, "enqueue_event", record)
     storage.write_atomic(storage.run_file(sample_id, "result"), b"xlsx")
 
-    content, filename = await sample_runs.download(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID, sample_id, "result")  # type: ignore[arg-type]
-    assert (content, filename) == (b"xlsx", "企业行业-样本试跑结果.xlsx")
+    path, filename = await sample_runs.download(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID, sample_id, "result")  # type: ignore[arg-type]
+    assert (path.read_bytes(), filename) == (b"xlsx", "企业行业-样本试跑结果.xlsx")
     assert events[0]["event_type"] == "ai.prompt.sample_exported"
     assert events[0]["changes"] == {"run_id": sample_id, "file": "result"}
 

@@ -11,6 +11,7 @@ from platform_common.route_audit import iter_api_routes
 from app.api.security import get_category_access
 from app.application import asking, batch_runs, batch_start, billing, prompts, sample_runs
 from app.application import test_rows as test_rows_service
+from app.core import storage
 from app.core.config import get_settings
 from app.core.database import get_db_session
 from app.domain.categories import FULL_ACCESS
@@ -63,14 +64,18 @@ def test_upload_parses_multipart_after_auth(client: TestClient, monkeypatch: pyt
 
 
 def test_download_sets_utf8_filename(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    async def download(*_: Any) -> tuple[bytes, str]:
-        return b"a,b", "企业-原始返回.csv"
+    raw = storage.run_file(RUN_ID, "raw")
+    storage.write_atomic(raw, b"a,b")
+
+    async def download(*_: Any) -> tuple[Any, str]:
+        return raw, "企业-原始返回.csv"
 
     monkeypatch.setattr(batch_runs, "download", download)
     response = client.get(f"/api/v1/ai/batch-runs/{RUN_ID}/files/raw")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/csv")
     assert "filename*=UTF-8''" in response.headers["content-disposition"]
+    assert response.content == b"a,b"
     assert client.get(f"/api/v1/ai/batch-runs/{RUN_ID}/files/other").status_code == 422
 
 
@@ -278,7 +283,9 @@ def test_sample_run_routes(client: TestClient, monkeypatch: pytest.MonkeyPatch) 
 
     async def download(_s: Any, _actor: Any, _access: Any, prompt_id: str, run_id: str, kind: str) -> Any:
         calls.append(("download", prompt_id, run_id, kind))
-        return b"xlsx", "企业行业-样本试跑结果.xlsx"
+        path = storage.run_file(run_id, kind)
+        storage.write_atomic(path, b"xlsx")
+        return path, "企业行业-样本试跑结果.xlsx"
 
     monkeypatch.setattr(sample_runs, "stop", stop)
     monkeypatch.setattr(sample_runs, "download", download)

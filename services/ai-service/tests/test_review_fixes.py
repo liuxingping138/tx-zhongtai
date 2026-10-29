@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 from platform_common.errors import ApiError
 
-from app.application import asking, batch_execute, batch_runs, pipeline_runs
+from app.application import asking, batch_execute, batch_runs, pipeline_runs, row_asking
 from app.application.legacy_import import _overwrite
 from app.core import storage
 from app.domain.models import RUN_SOURCE_PIPELINE, PromptTemplate
@@ -48,8 +48,9 @@ async def test_watchdog_survives_a_database_hiccup(monkeypatch: pytest.MonkeyPat
     sessions = iter([_Broken(), _Session(), _Session()])
     beats: list[str] = []
 
-    async def update_fields(_session: Any, run_id: str, _values: dict[str, Any]) -> None:
+    async def update_fields(_session: Any, run_id: str, _values: dict[str, Any], also: Any = ()) -> bool:
         beats.append(run_id)
+        return True
 
     async def cancel_flag(_session: Any, _run_id: str) -> bool:
         return len(beats) >= 2
@@ -57,7 +58,7 @@ async def test_watchdog_survives_a_database_hiccup(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(batch_execute, "SessionLocal", lambda: next(sessions))
     monkeypatch.setattr(batch_execute, "PROGRESS_SECONDS", 0)
     monkeypatch.setattr(batch_execute, "_progress", lambda _job: {})
-    monkeypatch.setattr(batch_execute.repo, "update_fields", update_fields)
+    monkeypatch.setattr(batch_execute.repo, "update_if_running", update_fields)
     monkeypatch.setattr(batch_execute.repo, "cancel_flag", cancel_flag)
     job = SimpleNamespace(run=SimpleNamespace(id="r1"), stop=asyncio.Event())
     watcher = asyncio.create_task(batch_execute._watch(job))  # type: ignore[arg-type]
@@ -105,3 +106,28 @@ async def test_internal_status_corrects_stale_runs_first(monkeypatch: pytest.Mon
     monkeypatch.setattr(pipeline_runs, "require_run", require)
     await pipeline_runs.status(FakeSession(), RUN_ID)  # type: ignore[arg-type]
     assert calls == ["reconcile", "require"]
+
+
+async def test_a_run_marked_interrupted_stops_asking_and_does_not_overwrite_a_requeued_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """心跳断过一阵、任务被纠正成「中断」后 worker 还活着：停止按钮已经没了，它不停就一直花钱；
+    人又点了重跑排回队列的话，这次执行的收尾也不能把排队状态盖掉。"""
+
+    from tests.test_batch import _prepare_execution, _Recorder
+
+    recorder = _Recorder()
+    _prepare_execution(monkeypatch, recorder, run())
+    monkeypatch.setattr(batch_execute, "PROGRESS_SECONDS", 0)
+    asked: list[int] = []
+
+    async def slow(*_: Any, **__: Any) -> Any:
+        asked.append(1)
+        recorder.running = False  # 第一行问着的时候，库里已经不是运行中了
+        await asyncio.sleep(0.05)
+        yield {"text": '[{"行业":"制造"}]'}
+
+    monkeypatch.setattr(row_asking, "stream_responses", slow)
+    await batch_execute.execute(RUN_ID)
+    assert len(asked) < 3
+    assert not any("status" in update for update in recorder.updates)

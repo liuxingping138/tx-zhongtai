@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 import anyio
@@ -248,21 +249,25 @@ async def delete_run(session: AsyncSession, actor: Actor, access: CategoryAccess
 
 async def download(
     session: AsyncSession, actor: Actor, access: CategoryAccess, run_id: str, kind: str
-) -> tuple[bytes, str]:
+) -> tuple[Path, str]:
     run = await require(session, run_id)
     access.require_read(run.prompt_category)
-    content, filename = await read_run_file(run, kind)
+    path, filename = await run_file_path(run, kind)
     await enqueue_event(
         session, event_type="ai.batch_run.exported", actor=actor, target_id=run.id, changes={"file": kind}
     )
-    return content, filename
+    return path, filename
 
 
-async def read_run_file(run: BatchRun, kind: str, *, label: str = "") -> tuple[bytes, str]:
-    """任务产物和下载文件名（模板名-{label}结果.xlsx）；样本试跑的下载也用它。"""
+async def run_file_path(run: BatchRun, kind: str, *, label: str = "") -> tuple[Path, str]:
+    """任务产物的路径和下载文件名（模板名-{label}结果.xlsx）；样本试跑的下载也用它。
+
+    给路径、由响应边读边发，不整份读进内存：原始返回每行带整段提问，大任务一份就有几个 G，
+    在单 worker 的 HTTP 进程里读一次就可能把它撑爆，试发、对话一起中断。
+    """
 
     path = storage.run_file(run.id, kind)
     if not await anyio.Path(path).is_file():
         raise NotFoundError("文件不存在或尚未生成")
     title = run.prompt_title.replace("/", "_")[:60]
-    return await anyio.Path(path).read_bytes(), f"{title}-{label}{storage.RUN_FILES[kind][1]}"
+    return path, f"{title}-{label}{storage.RUN_FILES[kind][1]}"

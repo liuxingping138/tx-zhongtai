@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import shutil
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 import anyio
@@ -200,12 +201,12 @@ async def _own_run(session: AsyncSession, prompt_id: str, run_id: str) -> BatchR
 
 async def download(
     session: AsyncSession, actor: Actor, access: CategoryAccess, prompt_id: str, run_id: str, kind: str
-) -> tuple[bytes, str]:
+) -> tuple[Path, str]:
     """按试跑 ID 下载而不是「最近一次」：点下载的同时有人开了新一轮，拿到的也还是页面上那一轮。"""
 
     run = await _own_run(session, prompt_id, run_id)
     access.require_read(run.prompt_category)
-    content, filename = await batch_runs.read_run_file(run, kind, label="样本试跑")
+    path, filename = await batch_runs.run_file_path(run, kind, label="样本试跑")
     await enqueue_event(
         session,
         event_type="ai.prompt.sample_exported",
@@ -213,7 +214,7 @@ async def download(
         target_id=prompt_id,
         changes={"run_id": run.id, "file": kind},
     )
-    return content, filename
+    return path, filename
 
 
 async def stop(session: AsyncSession, actor: Actor, access: CategoryAccess, prompt_id: str) -> dict[str, Any]:

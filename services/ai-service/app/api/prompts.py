@@ -14,6 +14,7 @@ from app.api.schemas import (
     SampleRunBody,
     TestRowsBody,
     file_response,
+    path_response,
 )
 from app.api.security import CategoryAccess, SecurityClass, classified, get_category_access, require_ai_permission
 from app.application import prompts as service
@@ -235,8 +236,8 @@ async def download_sample_run(
 ) -> Response:
     """和模板附件一样要模板的导出档：在模板页试跑的人不用另有批量任务的权限。"""
 
-    content, filename = await sample_runs.download(session, actor, access, prompt_id, run_id, kind)
-    return file_response(content, filename)
+    path, filename = await sample_runs.download(session, actor, access, prompt_id, run_id, kind)
+    return path_response(path, filename)
 
 
 @router.get("/{prompt_id}/releases")
