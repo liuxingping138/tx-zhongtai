@@ -16,6 +16,7 @@ from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
 from app.policy.api.schemas import BaseTagPatch, BaseTagWrite
 from app.policy.application import base_tags as service
+from app.policy.domain.fields import AI_STATUS_CHOICES
 
 router = APIRouter(prefix="/api/v1/policy/base-tags", tags=["policy-base-tags"])
 RESOURCE = "policy.base_tags"
@@ -29,6 +30,14 @@ def base_tag_filters(
     need_interpret: list[str] | None = Query(default=None),
     ai_status: list[str] | None = Query(default=None, description="打标状态：类型判断失败、解读失败、待解读等"),
 ) -> Filters:
+    # 不认识的打标状态（状态改过名，旧书签、旧链接里还带着）回 422 说清楚，不能在查询时撞成 500。
+    unknown = [value for value in ai_status or [] if value not in AI_STATUS_CHOICES]
+    if unknown:
+        raise ApiError(
+            f"不认识的打标状态：{'、'.join(unknown)}，可选：{'、'.join(AI_STATUS_CHOICES)}",
+            code=ErrorCode.VALIDATION_ERROR,
+            http_status=422,
+        )
     return {
         "policy_name": policy_name,
         "province_name": province_name,

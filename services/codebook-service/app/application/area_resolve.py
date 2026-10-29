@@ -86,6 +86,19 @@ def _pad(row: list[str], size: int) -> list[str]:
     return row + [""] * (size - len(row))
 
 
+def _under(code: str, parent: str, digits: int) -> str:
+    """文件里原有的下级编码，只有在匹配到的上级下面才留着。
+
+    只匹配到地市一级（区县空着或写法不标准）时，原来会留下文件里另一个地方的区县编码、还标「通过」；
+    信源入库以区县编码为准，就存成了别省的编码。
+    """
+
+    code_digits, parent_digits = "".join(filter(str.isdigit, code or "")), "".join(filter(str.isdigit, parent or ""))
+    if not code_digits or len(parent_digits) < digits:
+        return code
+    return code if code_digits[:digits] == parent_digits[:digits] else ""
+
+
 def _has_any_code(province_code: str, city_code: str, district_code: str) -> bool:
     return bool(province_code or city_code or district_code)
 
@@ -121,9 +134,11 @@ def build_resolve_workbook(content: bytes, catalog: list[AreaSnap]) -> tuple[byt
         existing_c = row[index["city_code"]]
         existing_d = row[index["district_code"]]
         result = match_area_indexed(catalog_index, province, city, county)
-        filled[index["province_code"]] = result.province_code or existing_p
-        filled[index["city_code"]] = result.city_code or existing_c
-        filled[index["district_code"]] = result.district_code or existing_d
+        province_code = result.province_code or existing_p
+        city_code = result.city_code or _under(existing_c, province_code, 2)
+        filled[index["province_code"]] = province_code
+        filled[index["city_code"]] = city_code
+        filled[index["district_code"]] = result.district_code or _under(existing_d, city_code or province_code, 4)
         if _has_any_code(filled[index["province_code"]], filled[index["city_code"]], filled[index["district_code"]]):
             filled[reason_idx] = "通过"
             matched += 1

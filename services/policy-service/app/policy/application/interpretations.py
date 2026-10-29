@@ -194,7 +194,11 @@ async def create_interpretation(session: AsyncSession, actor: Actor, data: dict[
     if message := _write_error(values):
         raise ApiError(message, code=ErrorCode.VALIDATION_ERROR, http_status=422)
     if await repo.get_by_relation_key(session, values["relation_key"]):
-        raise ApiError("已存在相同的关联主键", code=ErrorCode.VERSION_CONFLICT, http_status=409)
+        raise ApiError(
+            "这条政策已有同一场景、同一机会类型的解读记录（关联主键重复），请改一下场景或机会类型",
+            code=ErrorCode.DUPLICATE,
+            http_status=409,
+        )
     now = utcnow()
     item_id = uuid.uuid4()
     row = Interpretation(
@@ -255,7 +259,11 @@ async def update_interpretation(
         raise ApiError(message, code=ErrorCode.VALIDATION_ERROR, http_status=422)
     existing = await repo.get_by_relation_key(session, values["relation_key"])
     if existing and existing.id != row.id:
-        raise ApiError("已存在相同的关联主键", code=ErrorCode.VERSION_CONFLICT, http_status=409)
+        raise ApiError(
+            "这条政策已有同一场景、同一机会类型的解读记录（关联主键重复），请改一下场景或机会类型",
+            code=ErrorCode.DUPLICATE,
+            http_status=409,
+        )
     changes = _apply_changes(row, values, renamed=renamed)
     if not changes:
         return _to_out(row)

@@ -190,18 +190,17 @@ class TestScenarios:
     async def test_import_skips_content_that_already_exists(
         self, env: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        known = content_hash({"industry_scenario_code": "A01", "scenario_tag": "旧"}, scenarios.SCENARIO_FIELDS)
-        monkeypatch.setattr(
-            scenarios.repo,
-            "get_by_hash",
-            AsyncMock(side_effect=lambda _s, digest: object() if digest == known else None),
-        )
-
         # 其他字段缺省时按空串参与哈希，和页面新增保持一致。
         def full(**kw: str) -> dict[str, str]:
             return {field: kw.get(field, "") for field in scenarios.SCENARIO_FIELDS}
 
         known = content_hash(full(industry_scenario_code="A01", scenario_tag="旧"), scenarios.SCENARIO_FIELDS)
+        # 文件里的哈希一次查完（按文件分片），不逐行查库。
+        monkeypatch.setattr(
+            scenarios.repo,
+            "existing_hashes",
+            AsyncMock(side_effect=lambda _s, digests: {digest for digest in digests if digest == known}),
+        )
         captured = _parsed(
             monkeypatch,
             scenarios,
@@ -267,17 +266,25 @@ class TestAreaCodes:
     ) -> None:
         monkeypatch.setattr(
             area_codes.repo,
-            "get_by_county_id",
-            AsyncMock(side_effect=lambda _s, cid: object() if cid == "110101" else None),
+            "existing_county_ids",
+            AsyncMock(side_effect=lambda _s, ids: {cid for cid in ids if cid == "110101"}),
         )
         captured = _parsed(
             monkeypatch,
             area_codes,
-            [{"county_id": "110101"}, {"county_id": ""}, {"county_id": "110102", "county_name": "西城区"}],
+            [
+                {"county_id": "110101"},
+                {"county_id": ""},
+                {"county_id": "110102", "county_name": "西城区"},
+                {"county_id": "110102", "county_name": "西城区"},  # 文件里重复的一行
+                {"county_id": "110103", "county_name": "长" * 300},  # 超过列宽：原来撞库报 500
+            ],
         )
         result = await area_codes.import_area_codes(_Session(), ACTOR, b"")  # type: ignore[arg-type]
-        assert (result["inserted"], result["skipped"]) == (1, 2)
-        assert {row["skip_reason"] for row in captured["skipped"]} == {"区县编码已存在", "区县编码为空"}
+        assert (result["inserted"], result["skipped"]) == (1, 4)
+        reasons = [row["skip_reason"] for row in captured["skipped"]]
+        assert reasons[:3] == ["区县编码已存在", "区县编码为空", "区县编码已存在"]
+        assert "超过" in reasons[3]
 
     async def test_resolve_matches_names_against_the_whole_catalog_and_audits(
         self, env: SimpleNamespace, monkeypatch: pytest.MonkeyPatch

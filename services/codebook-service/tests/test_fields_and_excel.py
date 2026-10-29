@@ -171,3 +171,18 @@ def test_match_falls_back_to_province() -> None:
     assert result.level == 1
     assert result.province_code == "11"
     assert "区县不标准" in result.reason
+
+
+def test_resolve_drops_a_leftover_district_code_from_another_place() -> None:
+    """只匹配到地市一级时，原来会留下文件里别处的区县编码还标「通过」；信源入库以区县为准，就存成了别省的编码。"""
+
+    book = Workbook()
+    sheet = book.active
+    sheet.append(["省份", "地市", "区县", "省份编码", "地市编码", "区县编码"])
+    sheet.append(["北京市", "北京市", "", "", "", "320102"])
+    raw = BytesIO()
+    book.save(raw)
+    payload, matched, _ = build_resolve_workbook(raw.getvalue(), _CATALOG)
+    marked = parse_sheet(payload, AREA_CODE_COLUMNS, subject="码表")
+    assert matched == 1 and marked[0]["skip_reason"] == "通过"
+    assert not marked[0].get("county_id")

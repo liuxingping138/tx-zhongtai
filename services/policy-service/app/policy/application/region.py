@@ -42,6 +42,30 @@ def normalize_region(province_code: str, city_code: str, district_code: str) -> 
     return district[:PROVINCE_CODE_LENGTH], district[:CITY_CODE_LENGTH], district
 
 
+def region_conflict(province_code: str, city_code: str, district_code: str) -> str | None:
+    """上下级编码对不上（区县不在这个地市下、地市不在这个省下）时的说明。
+
+    入库时以区县编码为准反推省和市：区县编码是别处残留的话，信源会存成别省的编码，网站编码前缀也跟着错，
+    而省份名称还是原来的，页面上看不出来。
+    """
+
+    province, city, district = (digits_only(code) for code in (province_code, city_code, district_code))
+    if (
+        len(city) >= CITY_CODE_LENGTH
+        and len(district) >= CITY_CODE_LENGTH
+        and district[:CITY_CODE_LENGTH] != city[:CITY_CODE_LENGTH]
+    ):
+        return f"区县编码 {district_code} 不在地市编码 {city_code} 下面，请核对"
+    for code in (city, district):
+        if (
+            len(province) >= PROVINCE_CODE_LENGTH
+            and len(code) >= PROVINCE_CODE_LENGTH
+            and code[:PROVINCE_CODE_LENGTH] != province[:PROVINCE_CODE_LENGTH]
+        ):
+            return f"省份编码 {province_code} 和地市、区县编码不是同一个省，请核对"
+    return None
+
+
 def _fit(code: str, length: int) -> str:
     """右补 0 或截断到固定位数。"""
 

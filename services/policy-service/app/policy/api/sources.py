@@ -15,7 +15,7 @@ from app.common.security import classified, require_policy_permission
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
 from app.policy.api.schemas import SourceClearRequest, SourcePatch, SourceStatusRequest, SourceWrite
-from app.policy.application import source_status
+from app.policy.application import source_import, source_status
 from app.policy.application import sources as service
 
 router = APIRouter(prefix="/api/v1/policy/sources", tags=["policy-sources"])
@@ -148,7 +148,7 @@ async def import_items(
     settings: Settings = Depends(get_settings),
 ) -> Response:
     content = await read_import_upload(request, settings.import_max_bytes)
-    return import_result_response(await service.import_sources(session, actor, content), "sources-import.xlsx")
+    return import_result_response(await source_import.import_sources(session, actor, content), "sources-import.xlsx")
 
 
 @router.post("")

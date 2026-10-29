@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Collection
 
 from platform_common.filters import Filters, ilike_any
 from sqlalchemy import ColumnElement, func, select
@@ -23,6 +24,22 @@ async def get_for_update(session: AsyncSession, item_id: uuid.UUID) -> AreaCode 
 async def get_by_county_id(session: AsyncSession, county_id: str) -> AreaCode | None:
     result = await session.execute(select(AreaCode).where(AreaCode.county_id == county_id))
     return result.scalar_one_or_none()
+
+
+# IN (...) 一次最多带这么多个值。
+IN_CHUNK = 1000
+
+
+async def existing_county_ids(session: AsyncSession, values: Collection[str]) -> set[str]:
+    """文件里这些区县编码哪些库里已有。按文件分片查一次，不逐行查库（场景码表 8000 多行逐行查要往返上万次）。"""
+
+    found: set[str] = set()
+    wanted = list(set(values))
+    for start in range(0, len(wanted), IN_CHUNK):
+        chunk = wanted[start : start + IN_CHUNK]
+        result = await session.execute(select(AreaCode.county_id).where(AreaCode.county_id.in_(chunk)))
+        found.update(result.scalars())
+    return found
 
 
 # 列表与导出共用同一份筛选定义，避免两边条件逐渐走偏。

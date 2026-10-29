@@ -55,3 +55,16 @@ def test_unknown_filter_key_is_rejected(prefix: str, repo) -> None:
 
     with pytest.raises(KeyError):
         repo._conditions({"zz_not_a_column": "x"})
+
+
+def test_unknown_ai_status_is_a_422_not_a_500() -> None:
+    """打标状态改过名后，旧书签、旧链接里还带着旧值：原来查询时 KeyError 成 500。"""
+
+    from platform_common.errors import ApiError
+
+    from app.policy.api.base_tags import base_tag_filters
+
+    with pytest.raises(ApiError) as caught:
+        base_tag_filters(None, None, None, None, None, ["打标中"])
+    assert caught.value.http_status == 422 and "打标中" in caught.value.message
+    assert base_tag_filters(None, None, None, None, None, ["待解读"])["ai_status"] == ["待解读"]

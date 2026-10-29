@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock
 import pytest
 from platform_common.errors import ApiError, NotFoundError
 
-from app.policy.application import source_status, sources
+from app.policy.application import source_import, source_status, sources
 from app.policy.domain.models import Source
 
 ACTOR = SimpleNamespace(id="u1", name="测试")
@@ -132,14 +132,14 @@ async def test_batch_rejects_blank_status_and_missing_rows(env: SimpleNamespace)
 
 
 def test_imported_crawled_sources_without_a_date_get_today(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sources, "beijing_today", lambda: TODAY)
+    monkeypatch.setattr(source_import, "beijing_today", lambda: TODAY)
     base = {"site_name": "某网站", "province_name": "北京市", "district_code": "110101", "tag": ""}
     staged = [
-        sources._stage({**base, "site_name": "甲", "crawler_status": "已爬"}),
-        sources._stage({**base, "site_name": "乙", "crawler_status": "已爬", "online_date": "2024-01-02"}),
-        sources._stage({**base, "site_name": "丙", "crawler_status": "未爬"}),
+        source_import._stage({**base, "site_name": "甲", "crawler_status": "已爬"}),
+        source_import._stage({**base, "site_name": "乙", "crawler_status": "已爬", "online_date": "2024-01-02"}),
+        source_import._stage({**base, "site_name": "丙", "crawler_status": "未爬"}),
     ]
-    rows = sources._build_rows(ACTOR, staged, set())  # type: ignore[arg-type]
+    rows = source_import._build_rows(ACTOR, staged, set())  # type: ignore[arg-type]
     assert [row.online_date for row in rows] == [TODAY, "2024-01-02", ""]
 
 
@@ -157,3 +157,38 @@ def test_online_date_range_filter_includes_both_ends_and_skips_blank_dates() -> 
         "policy_sources.online_date != '' AND policy_sources.online_date <= '2026-10-25'",
     ]
     assert repo._conditions({"online_date_from": "", "online_date_to": None}) == []
+
+
+async def test_sources_without_area_codes_can_still_be_edited(env: SimpleNamespace) -> None:
+    """带着网站编码导入的全国、国央企信源本来没有区划编码：省市区编码只在分配网站编码时要，编辑时不要。"""
+
+    env.row = _row(province_code="", city_code="", district_code="", province_name="全国", city_name="")
+    out = await sources.update_source(_Session(), ACTOR, env.row.id, {"version": 1, "url": "https://a.gov.cn"})  # type: ignore[arg-type]
+    assert out["url"] == "https://a.gov.cn"
+
+
+async def test_clearing_the_online_date_with_null_empties_it(env: SimpleNamespace) -> None:
+    """日期框点清除给的是 null：原来 str(None) 会把「None」当日期，回 422。"""
+
+    env.row = _row(crawler_status="已爬", online_date="2024-01-02")
+    out = await sources.update_source(_Session(), ACTOR, env.row.id, {"version": 1, "online_date": None})  # type: ignore[arg-type]
+    assert out["online_date"] == ""
+
+
+async def test_creating_needs_numeric_area_codes_and_consistent_levels(env: SimpleNamespace) -> None:
+    with pytest.raises(ApiError, match="要填数字编码"):
+        await sources.create_source(_Session(), ACTOR, {"site_name": "某网站", "province_code": "北京"})  # type: ignore[arg-type]
+    # 江苏、南京，加一个北京东城的残留区县编码：原来按区县入库，存成北京的编码，省份名称却还是江苏。
+    data = {"site_name": "某网站", "province_code": "32", "city_code": "3201", "district_code": "110101"}
+    with pytest.raises(ApiError, match="不在地市编码"):
+        await sources.create_source(_Session(), ACTOR, data)  # type: ignore[arg-type]
+
+
+def test_region_conflict_checks_each_level() -> None:
+    from app.policy.application.region import region_conflict
+
+    assert region_conflict("320000", "320100", "320102") is None
+    assert region_conflict("32", "3201", "") is None
+    assert region_conflict("", "", "110101") is None
+    assert "不在地市编码" in (region_conflict("32", "3201", "110101") or "")
+    assert "不是同一个省" in (region_conflict("32", "1101", "") or "")

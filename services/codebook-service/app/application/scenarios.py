@@ -5,6 +5,7 @@ from typing import Any
 
 from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
+from platform_common.columns import overlong_reasons, string_lengths
 from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionConflictError
 from platform_common.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async
 from platform_common.filters import Filters
@@ -16,6 +17,14 @@ from app.domain.fields import SCENARIO_COLUMNS, SCENARIO_SYNC_COLUMNS
 from app.domain.models import SCENARIO_FIELDS, Scenario, content_hash
 from app.repositories import options as options_repo
 from app.repositories import scenarios as repo
+
+# 列宽上限：导入、新建、编辑前按它校验，超长的撞到库里是 DataError，用户只看到「服务器内部错误」。
+SCENARIO_LENGTHS = string_lengths(Scenario)
+
+
+def _too_long(values: dict[str, str]) -> None:
+    if reasons := overlong_reasons(values, SCENARIO_COLUMNS, SCENARIO_LENGTHS):
+        raise ApiError("、".join(reasons), code=ErrorCode.VALIDATION_ERROR, http_status=422)
 
 
 def _to_out(row: Scenario) -> dict[str, Any]:
@@ -81,9 +90,10 @@ async def get_scenario(session: AsyncSession, item_id: uuid.UUID) -> dict[str, A
 
 async def create_scenario(session: AsyncSession, actor: Actor, data: dict[str, str]) -> dict[str, Any]:
     values = {field: (data.get(field) or "").strip() for field in SCENARIO_FIELDS}
+    _too_long(values)
     digest = content_hash(values, SCENARIO_FIELDS)
     if await repo.get_by_hash(session, digest):
-        raise ApiError("已存在完全相同的场景记录", code=ErrorCode.VERSION_CONFLICT, http_status=409)
+        raise ApiError("已存在完全相同的场景记录", code=ErrorCode.DUPLICATE, http_status=409)
     now = utcnow()
     row = Scenario(
         content_hash=digest,
@@ -117,10 +127,11 @@ async def update_scenario(
     if data.get("version") != row.version:
         raise VersionConflictError()
     payload = {field: str(data.get(field, getattr(row, field) or "")) for field in SCENARIO_FIELDS}
+    _too_long({k: payload[k].strip() for k in SCENARIO_FIELDS})
     digest = content_hash({k: payload[k].strip() for k in SCENARIO_FIELDS}, SCENARIO_FIELDS)
     existing = await repo.get_by_hash(session, digest)
     if existing and existing.id != row.id:
-        raise ApiError("已存在完全相同的场景记录", code=ErrorCode.VERSION_CONFLICT, http_status=409)
+        raise ApiError("已存在完全相同的场景记录", code=ErrorCode.DUPLICATE, http_status=409)
     changes = _apply(row, payload)
     if not changes:
         return _to_out(row)
@@ -143,12 +154,17 @@ async def import_scenarios(session: AsyncSession, actor: Actor, content: bytes) 
     inserted = 0
     skipped_rows: list[dict[str, str]] = []
     now = utcnow()
-    for item in parsed:
-        values = {field: (item.get(field) or "").strip() for field in SCENARIO_FIELDS}
-        digest = content_hash(values, SCENARIO_FIELDS)
-        if await repo.get_by_hash(session, digest):
+    staged = [{field: (item.get(field) or "").strip() for field in SCENARIO_FIELDS} for item in parsed]
+    digests = [content_hash(values, SCENARIO_FIELDS) for values in staged]
+    taken = await repo.existing_hashes(session, digests)
+    for values, digest in zip(staged, digests, strict=True):
+        if reasons := overlong_reasons(values, SCENARIO_COLUMNS, SCENARIO_LENGTHS):
+            skipped_rows.append({**values, "skip_reason": "、".join(reasons)})
+            continue
+        if digest in taken:
             skipped_rows.append({**values, "skip_reason": "内容已存在"})
             continue
+        taken.add(digest)
         session.add(
             Scenario(
                 content_hash=digest,

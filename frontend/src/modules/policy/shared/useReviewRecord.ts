@@ -2,7 +2,7 @@ import { computed, reactive, ref, shallowRef, watch, type ShallowRef } from 'vue
 import { onBeforeRouteUpdate, useRoute, useRouter, type LocationQuery } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
-import { errorMessage, isApiError } from '@/api/errors'
+import { errorMessage, isApiError, isStaleConflict } from '@/api/errors'
 import type { Page } from '@/api/types'
 import type { EditorGroup } from '@/components/editorGroups'
 import type { EditorFieldsHandle, RecordForm } from '@/composables/useRecordEditor'
@@ -217,7 +217,7 @@ export function useReviewRecord<Row extends { id: string }>(options: ReviewOptio
       editing.value = false
       ElMessage.success('已保存')
     } catch (error) {
-      if (isApiError(error) && error.status === 409) {
+      if (isStaleConflict(error)) {
         stale.value = true
         saveError.value = STALE_TEXT
       } else {

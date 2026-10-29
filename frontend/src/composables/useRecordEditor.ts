@@ -1,7 +1,7 @@
 import { computed, reactive, ref, shallowRef, type ComputedRef, type Ref, type ShallowRef } from 'vue'
 import { ElMessage } from 'element-plus'
 
-import { errorMessage, isApiError } from '@/api/errors'
+import { errorMessage, isStaleConflict } from '@/api/errors'
 import type { EditorGroup } from '@/components/editorGroups'
 import { useUnsavedForm } from './useUnsavedForm'
 
@@ -52,7 +52,7 @@ function fieldText(value: unknown): string | undefined {
   return typeof value === 'string' ? value : JSON.stringify(value)
 }
 
-export const CONFLICT_TEXT = '数据已被他人修改或内容重复。请保留需要的内容，关闭后重新打开最新记录再修改。'
+export const CONFLICT_TEXT = '数据已被他人修改。请保留需要的内容，关闭后重新打开最新记录再修改。'
 
 /**
  * 业务表的新增与编辑：打开时填表、保存前校验、冲突时保留草稿并提示。
@@ -101,7 +101,7 @@ export function useRecordEditor<Row extends object>(options: RecordEditorOptions
       visible.value = false
       await options.refresh()
     } catch (error) {
-      if (isApiError(error) && error.status === 409) {
+      if (isStaleConflict(error)) {
         saveError.value = CONFLICT_TEXT
         await options.refresh()
       } else {

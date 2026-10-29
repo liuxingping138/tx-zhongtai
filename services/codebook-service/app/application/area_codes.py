@@ -5,6 +5,7 @@ from typing import Any
 
 from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
+from platform_common.columns import overlong_reasons, string_lengths
 from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionConflictError
 from platform_common.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async, run_excel_parse
 from platform_common.filters import Filters
@@ -88,11 +89,21 @@ async def get_area_code(session: AsyncSession, item_id: uuid.UUID) -> dict[str, 
     return _to_out(row)
 
 
+# 列宽上限：导入、新建、编辑前按它校验，超长的撞到库里是 DataError，用户只看到「服务器内部错误」。
+AREA_CODE_LENGTHS = string_lengths(AreaCode)
+
+
+def _too_long(values: dict[str, str]) -> None:
+    if reasons := overlong_reasons(values, AREA_CODE_COLUMNS, AREA_CODE_LENGTHS):
+        raise ApiError("、".join(reasons), code=ErrorCode.VALIDATION_ERROR, http_status=422)
+
+
 async def create_area_code(session: AsyncSession, actor: Actor, data: dict[str, str]) -> dict[str, Any]:
     values = _values(data)
+    _too_long(values)
     county_id = _require_county_id(values)
     if await repo.get_by_county_id(session, county_id):
-        raise ApiError("区县编码已存在", code=ErrorCode.VERSION_CONFLICT, http_status=409)
+        raise ApiError("区县编码已存在", code=ErrorCode.DUPLICATE, http_status=409)
     now = utcnow()
     row = AreaCode(
         version=1,
@@ -125,10 +136,11 @@ async def update_area_code(
     if data.get("version") != row.version:
         raise VersionConflictError()
     payload = {field: str(data.get(field, getattr(row, field) or "")).strip() for field in AREA_CODE_FIELDS}
+    _too_long(payload)
     county_id = _require_county_id(payload)
     existing = await repo.get_by_county_id(session, county_id)
     if existing and existing.id != row.id:
-        raise ApiError("区县编码已存在", code=ErrorCode.VERSION_CONFLICT, http_status=409)
+        raise ApiError("区县编码已存在", code=ErrorCode.DUPLICATE, http_status=409)
     changes = _apply(row, payload)
     if not changes:
         return _to_out(row)
@@ -161,15 +173,20 @@ async def upsert_area_code_rows(
     inserted = 0
     skipped_rows: list[dict[str, str]] = []
     now = utcnow()
-    for item in parsed:
-        values = _values(item)
+    staged = [_values(item) for item in parsed]
+    taken = await repo.existing_county_ids(session, [values["county_id"] for values in staged if values["county_id"]])
+    for values in staged:
         county_id = values["county_id"]
         if not county_id:
             skipped_rows.append({**values, "skip_reason": "区县编码为空"})
             continue
-        if await repo.get_by_county_id(session, county_id):
+        if reasons := overlong_reasons(values, AREA_CODE_COLUMNS, AREA_CODE_LENGTHS):
+            skipped_rows.append({**values, "skip_reason": "、".join(reasons)})
+            continue
+        if county_id in taken:
             skipped_rows.append({**values, "skip_reason": "区县编码已存在"})
             continue
+        taken.add(county_id)
         session.add(
             AreaCode(
                 version=1,

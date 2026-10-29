@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.policy.application import base_tags, importing, sources
+from app.policy.application import base_tags, importing, source_import, sources
 from app.policy.domain.models import BASE_TAG_FIELDS, BaseTag, Source
 
 ACTOR = SimpleNamespace(id="u1", name="测试")
@@ -39,9 +39,9 @@ def source_env(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         env["marked"] = marked
         return b"skipped"
 
-    monkeypatch.setattr(sources, "parse_sheet_async", parse)
+    monkeypatch.setattr(source_import, "parse_sheet_async", parse)
     monkeypatch.setattr(importing, "encode_skipped_file_async", encode)
-    monkeypatch.setattr(sources, "enqueue_event", AsyncMock())
+    monkeypatch.setattr(source_import, "enqueue_event", AsyncMock())
     monkeypatch.setattr(sources.repo, "list_internal_ids", AsyncMock(side_effect=lambda _s: env["internal_ids"]))
     monkeypatch.setattr(sources.repo, "list_site_codes", AsyncMock(side_effect=lambda _s: env["site_codes"]))
     return env
@@ -60,7 +60,7 @@ class TestImportSources:
         ]
         source_env["site_codes"] = {"11010100003"}
         session = _Session()
-        result = await sources.import_sources(session, ACTOR, b"")  # type: ignore[arg-type]
+        result = await source_import.import_sources(session, ACTOR, b"")  # type: ignore[arg-type]
 
         assert result["inserted"] == 3
         assert result["skipped_file"] is None
@@ -72,7 +72,7 @@ class TestImportSources:
     async def test_one_bad_row_rejects_the_whole_file(self, source_env: dict[str, Any]) -> None:
         source_env["rows"] = [_source(site_name="甲", district_code="110101"), _source(site_name="")]
         session = _Session()
-        result = await sources.import_sources(session, ACTOR, b"")  # type: ignore[arg-type]
+        result = await source_import.import_sources(session, ACTOR, b"")  # type: ignore[arg-type]
 
         assert result["rejected"] is True
         assert (result["inserted"], result["skipped"], result["total"]) == (0, 1, 2)
@@ -84,11 +84,11 @@ class TestImportSources:
         # Excel 日期单元格读出来带 00:00:00。
         source_env["rows"] = [_source(site_name="甲", district_code="110101", online_date="2024-03-05 00:00:00")]
         session = _Session()
-        await sources.import_sources(session, ACTOR, b"")  # type: ignore[arg-type]
+        await source_import.import_sources(session, ACTOR, b"")  # type: ignore[arg-type]
         assert session.added[0].online_date == "2024-03-05"
 
         source_env["rows"] = [_source(site_name="乙", district_code="110101", online_date="去年")]
-        result = await sources.import_sources(_Session(), ACTOR, b"")  # type: ignore[arg-type]
+        result = await source_import.import_sources(_Session(), ACTOR, b"")  # type: ignore[arg-type]
         assert result["rejected"] is True
         assert "上线时间格式不对" in _reasons(source_env)[0]
 
@@ -102,7 +102,7 @@ class TestImportSources:
             _source(site_name="甲" * 256, district_code="110101"),
             _source(site_name="乙", district_code="110101", crawler_status="已上线"),
         ]
-        result = await sources.import_sources(_Session(), ACTOR, b"")  # type: ignore[arg-type]
+        result = await source_import.import_sources(_Session(), ACTOR, b"")  # type: ignore[arg-type]
         assert result["rejected"] is True
         reasons = _reasons(source_env)
         assert "网站名称超过 255 字" in reasons[0]
@@ -110,13 +110,13 @@ class TestImportSources:
 
     async def test_missing_area_code_prefers_the_reason_carried_in_the_file(self, source_env: dict[str, Any]) -> None:
         source_env["rows"] = [_source(site_name="甲", skip_reason="区县不标准"), _source(site_name="乙")]
-        await sources.import_sources(_Session(), ACTOR, b"")  # type: ignore[arg-type]
+        await source_import.import_sources(_Session(), ACTOR, b"")  # type: ignore[arg-type]
 
         assert _reasons(source_env) == ["区县不标准", "省市区编码为空"]
 
     async def test_given_site_code_makes_area_code_optional(self, source_env: dict[str, Any]) -> None:
         source_env["rows"] = [_source(site_code="11010100001")]
-        result = await sources.import_sources(_Session(), ACTOR, b"")  # type: ignore[arg-type]
+        result = await source_import.import_sources(_Session(), ACTOR, b"")  # type: ignore[arg-type]
 
         assert result["inserted"] == 1
 
@@ -133,7 +133,7 @@ class TestImportSources:
         ]
         source_env["site_codes"] = {"11010100001"}
         source_env["internal_ids"] = {sources.make_internal_id("已有", "北京市", "北京市", "政策")}
-        await sources.import_sources(_Session(), ACTOR, b"")  # type: ignore[arg-type]
+        await source_import.import_sources(_Session(), ACTOR, b"")  # type: ignore[arg-type]
 
         reasons = _reasons(source_env)
         assert reasons[0] == "网站编码不合法"

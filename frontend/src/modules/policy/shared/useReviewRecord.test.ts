@@ -211,6 +211,16 @@ describe('editing the record', () => {
     expect(get).toHaveBeenCalledWith('a')
   })
 
+  it('says why when the change would duplicate another record, instead of claiming someone else edited it', async () => {
+    const { review, update } = setup('a')
+    await flush()
+    review.startEdit()
+    update.mockRejectedValueOnce(apiError(409, 'DUPLICATE', '这条政策已有同一场景、同一机会类型的解读记录'))
+    await review.saveEdit()
+    expect(review.saveError.value).toBe('这条政策已有同一场景、同一机会类型的解读记录')
+    expect(review.editing.value).toBe(true)
+  })
+
   it('shows the server reason for other save failures', async () => {
     const { review, update } = setup('a')
     await flush()

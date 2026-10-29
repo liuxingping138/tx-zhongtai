@@ -21,6 +21,14 @@ export function isApiError(error: unknown): error is ApiError {
   return Boolean(error && typeof error === 'object' && 'status' in error && 'code' in error && 'message' in error)
 }
 
+/**
+ * 真正的「被别人改过」：版本号对不上。和已有记录重复（code 是 DUPLICATE）也回 409，但重新载入再改还是会撞，
+ * 要把后端说的原因直接告诉用户，不能当成版本冲突让人「取消、载入最新」。
+ */
+export function isStaleConflict(error: unknown): boolean {
+  return isApiError(error) && error.status === 409 && error.code !== 'DUPLICATE'
+}
+
 // 页面已经拿去提示过的错误。请求层的通用提示（503、409）只给没人处理的错误兜底，免得同一个错误弹两条。
 const shown = new WeakSet<object>()
 

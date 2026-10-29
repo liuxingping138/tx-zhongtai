@@ -118,7 +118,7 @@ async def create_base_tag(session: AsyncSession, actor: Actor, data: dict[str, s
     _require_lengths(values)
     digest = content_hash(values, BASE_TAG_FIELDS)
     if await repo.get_by_hash(session, digest):
-        raise ApiError("已存在完全相同的政策基础标签", code=ErrorCode.VERSION_CONFLICT, http_status=409)
+        raise ApiError("已有一条内容完全相同的政策基础标签，不能重复", code=ErrorCode.DUPLICATE, http_status=409)
     now = utcnow()
     row = BaseTag(
         content_hash=digest,
@@ -158,7 +158,7 @@ async def update_base_tag(
     digest = content_hash(values, BASE_TAG_FIELDS)
     existing = await repo.get_by_hash(session, digest)
     if existing and existing.id != row.id:
-        raise ApiError("已存在完全相同的政策基础标签", code=ErrorCode.VERSION_CONFLICT, http_status=409)
+        raise ApiError("已有一条内容完全相同的政策基础标签，不能重复", code=ErrorCode.DUPLICATE, http_status=409)
     changes: dict[str, Any] = {}
     for field, new in values.items():
         old = getattr(row, field) or ""

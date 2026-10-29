@@ -5,6 +5,7 @@ from typing import Any
 
 from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
+from platform_common.columns import overlong_reasons, string_lengths
 from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionConflictError
 from platform_common.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async
 from platform_common.filters import Filters, FilterValue
@@ -66,12 +67,28 @@ async def search_policy_type_options(session: AsyncSession, *, field: str, keywo
     return await options_repo.search(session, options_repo.POLICY_TYPE_OPTION_COLUMNS, field=field, keyword=keyword)
 
 
+# 列宽上限：导入、新建、编辑前按它校验，超长的撞到库里是 DataError，用户只看到「服务器内部错误」。
+POLICY_TYPE_LENGTHS = string_lengths(PolicyType)
+
+
+def _overlong(values: dict[str, Any]) -> list[str]:
+    return overlong_reasons(
+        {k: str(v or "").strip() for k, v in values.items()}, POLICY_TYPE_COLUMNS, POLICY_TYPE_LENGTHS
+    )
+
+
+def _too_long(values: dict[str, Any]) -> None:
+    if reasons := _overlong(values):
+        raise ApiError("、".join(reasons), code=ErrorCode.VALIDATION_ERROR, http_status=422)
+
+
 async def create_policy_type(session: AsyncSession, actor: Actor, data: dict[str, str]) -> dict[str, Any]:
     type_name = (data.get("type_name") or "").strip()
     if not type_name:
         raise ApiError("政策类型不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    _too_long(data)
     if await repo.get_by_name(session, type_name):
-        raise ApiError("政策类型已存在", code=ErrorCode.VERSION_CONFLICT, http_status=409)
+        raise ApiError("政策类型已存在", code=ErrorCode.DUPLICATE, http_status=409)
     now = utcnow()
     row = PolicyType(
         seq_no=(data.get("seq_no") or "").strip(),
@@ -109,10 +126,11 @@ async def update_policy_type(
     type_name = str(data.get("type_name", row.type_name)).strip()
     if not type_name:
         raise ApiError("政策类型不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    _too_long({k: data.get(k, getattr(row, k)) for k in _FIELDS})
     if type_name != row.type_name:
         existing = await repo.get_by_name(session, type_name)
         if existing and existing.id != row.id:
-            raise ApiError("政策类型已存在", code=ErrorCode.VERSION_CONFLICT, http_status=409)
+            raise ApiError("政策类型已存在", code=ErrorCode.DUPLICATE, http_status=409)
     changes = _apply_fields(row, {k: str(data.get(k, getattr(row, k))) for k in _FIELDS})
     if not changes:
         return _to_out(row)
@@ -140,6 +158,9 @@ async def import_policy_types(session: AsyncSession, actor: Actor, content: byte
         type_name = item.get("type_name", "").strip()
         if not type_name:
             skipped_rows.append({**item, "skip_reason": "政策类型为空"})
+            continue
+        if reasons := _overlong(item):
+            skipped_rows.append({**item, "skip_reason": "、".join(reasons)})
             continue
         row = await repo.get_by_name(session, type_name, lock=True)
         if row is None:

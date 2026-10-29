@@ -38,7 +38,8 @@ class SourceWrite(BaseModel):
     site_name: str
     site_type: str = ""
     crawler_status: str = ""
-    online_date: str = ""
+    # 日期框点清除给的是 null：要能清空，不能回 422「Input should be a valid string」。
+    online_date: str | None = ""
     crawl_priority: str = ""
     url: str = ""
     tag: str = ""

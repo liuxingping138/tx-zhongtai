@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Collection
 
 from platform_common.filters import Filters, ilike_any, in_any
 from sqlalchemy import ColumnElement, func, select
@@ -23,6 +24,22 @@ async def get_for_update(session: AsyncSession, item_id: uuid.UUID) -> Scenario 
 async def get_by_hash(session: AsyncSession, digest: str) -> Scenario | None:
     result = await session.execute(select(Scenario).where(Scenario.content_hash == digest))
     return result.scalar_one_or_none()
+
+
+# IN (...) 一次最多带这么多个值。
+IN_CHUNK = 1000
+
+
+async def existing_hashes(session: AsyncSession, values: Collection[str]) -> set[str]:
+    """文件里这些内容哈希哪些库里已有。按文件分片查一次，不逐行查库（场景码表 8000 多行逐行查要往返上万次）。"""
+
+    found: set[str] = set()
+    wanted = list(set(values))
+    for start in range(0, len(wanted), IN_CHUNK):
+        chunk = wanted[start : start + IN_CHUNK]
+        result = await session.execute(select(Scenario.content_hash).where(Scenario.content_hash.in_(chunk)))
+        found.update(result.scalars())
+    return found
 
 
 # 列表与导出共用同一份筛选定义，避免两边条件逐渐走偏。
@@ -59,7 +76,8 @@ async def list_items(
     result = await session.execute(
         select(Scenario)
         .where(*conds)
-        .order_by(Scenario.industry_scenario_code, Scenario.scenario_tag)
+        # 码表按客群重复，同编码同标签的行很多：只按这两列排，翻页时先后不固定，会重复或漏行。
+        .order_by(Scenario.industry_scenario_code, Scenario.scenario_tag, Scenario.id)
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
@@ -76,7 +94,9 @@ async def list_filtered(session: AsyncSession, filters: Filters) -> list[Scenari
     """导出用：与列表一致的筛选和排序，不分页。"""
 
     result = await session.execute(
-        select(Scenario).where(*_conditions(filters)).order_by(Scenario.industry_scenario_code, Scenario.scenario_tag)
+        select(Scenario)
+        .where(*_conditions(filters))
+        .order_by(Scenario.industry_scenario_code, Scenario.scenario_tag, Scenario.id)
     )
     return list(result.scalars())
 
