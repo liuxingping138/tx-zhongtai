@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta, timezone
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from pydantic import ValidationError
+from pydantic import Field, ValidationError
 
 from platform_common.clock import BEIJING, format_beijing, utcnow
 from platform_common.config import BaseServiceSettings, Environment
@@ -82,6 +82,9 @@ class TestHealth:
 
 class _Settings(BaseServiceSettings):
     jwt_secret: str = "real-value"
+    database_url: str = "postgresql+asyncpg://app:R3alPass@db:5432/app_db"
+    internal_caller_secrets: dict[str, str] = Field(default_factory=lambda: {"policy-service": "x9Zk2Lq8Vw"})
+    ark_api_key: str = ""
 
 
 class TestConfig:
@@ -92,6 +95,24 @@ class TestConfig:
     def test_production_refuses_demo_secrets(self, secret: str) -> None:
         with pytest.raises(ValidationError, match="示例/演示密钥"):
             _Settings(environment=Environment.PRODUCTION, jwt_secret=secret)
+
+    def test_production_checks_the_password_inside_the_database_url(self) -> None:
+        """口令拼在连接串里，按字段名查不到它：服务器沿用示例口令照样能启动，而 5433 对公网开放。"""
+
+        with pytest.raises(ValidationError, match="database_url 里的口令"):
+            _Settings(environment=Environment.PRODUCTION, database_url="postgresql://app:dev-only-pw@db/app")
+
+    def test_production_checks_every_value_of_a_secret_dict(self) -> None:
+        with pytest.raises(ValidationError, match=r"internal_caller_secrets\[ai-service\]"):
+            _Settings(environment=Environment.PRODUCTION, internal_caller_secrets={"ai-service": "dev-only-ai"})
+        with pytest.raises(ValidationError, match="是空的"):
+            _Settings(environment=Environment.PRODUCTION, internal_caller_secrets={})
+
+    def test_production_refuses_empty_secrets_but_allows_an_unused_vendor_key(self) -> None:
+        with pytest.raises(ValidationError, match="jwt_secret 是空的"):
+            _Settings(environment=Environment.PRODUCTION, jwt_secret="")
+        # 没配的那家模型在页面上显示不可用，不是配置错误。
+        assert _Settings(environment=Environment.PRODUCTION, ark_api_key="").ark_api_key == ""
 
     def test_production_accepts_a_real_looking_secret(self) -> None:
         assert (

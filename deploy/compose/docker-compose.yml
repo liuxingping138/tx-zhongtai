@@ -20,10 +20,14 @@ volumes:
   # AI提问的模板 Excel、码表和批量结果
   ai-data:
 
+# 应用容器都设内存上限（mem_limit，可用同名环境变量调）：和同机其他业务共用 15G，
+# 不设的话 ai-worker 跑大任务涨上去，宿主机的 OOM killer 可能先杀 Postgres 或别人的服务，而不是出问题的这个容器。
 services:
   postgres:
     image: postgres:17.2-alpine3.21
     restart: unless-stopped
+    # 默认 64MB 的共享内存，并行查询、大排序时会报 could not resize shared memory。
+    shm_size: 256m
     environment:
       POSTGRES_USER: ${POSTGRES_SUPERUSER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?POSTGRES_SUPERUSER_PASSWORD 未设置}
@@ -80,6 +84,7 @@ services:
       context: ../..
       dockerfile: services/iam-service/Dockerfile
     restart: unless-stopped
+    mem_limit: ${IAM_MEM_LIMIT:-1g}
     environment:
       IAM_ENVIRONMENT: ${IAM_ENVIRONMENT:-${ENVIRONMENT:-development}}
       IAM_SERVICE_NAME: iam-service
@@ -121,6 +126,7 @@ services:
       context: ../..
       dockerfile: services/audit-service/Dockerfile
     restart: unless-stopped
+    mem_limit: ${AUDIT_MEM_LIMIT:-512m}
     environment:
       AUDIT_ENVIRONMENT: ${AUDIT_ENVIRONMENT:-${ENVIRONMENT:-development}}
       AUDIT_SERVICE_NAME: audit-service
@@ -149,6 +155,7 @@ services:
       context: ../..
       dockerfile: services/codebook-service/Dockerfile
     restart: unless-stopped
+    mem_limit: ${CODEBOOK_MEM_LIMIT:-1g}
     environment:
       CODEBOOK_ENVIRONMENT: ${CODEBOOK_ENVIRONMENT:-${ENVIRONMENT:-development}}
       CODEBOOK_IMPORT_MAX_BYTES: ${CODEBOOK_IMPORT_MAX_BYTES:-20971520}
@@ -180,6 +187,7 @@ services:
       context: ../..
       dockerfile: services/policy-service/Dockerfile
     restart: unless-stopped
+    mem_limit: ${POLICY_MEM_LIMIT:-2g}
     environment:
       POLICY_ENVIRONMENT: ${POLICY_ENVIRONMENT:-${ENVIRONMENT:-development}}
       POLICY_SERVICE_NAME: policy-service
@@ -221,6 +229,7 @@ services:
     init: true
     stop_grace_period: 45s
     restart: unless-stopped
+    mem_limit: ${POLICY_WORKER_MEM_LIMIT:-2g}
     environment:
       POLICY_ENVIRONMENT: ${POLICY_ENVIRONMENT:-${ENVIRONMENT:-development}}
       POLICY_SERVICE_NAME: policy-worker
@@ -259,6 +268,7 @@ services:
       context: ../..
       dockerfile: services/ai-service/Dockerfile
     restart: unless-stopped
+    mem_limit: ${AI_MEM_LIMIT:-2g}
     environment:
       AI_ENVIRONMENT: ${AI_ENVIRONMENT:-${ENVIRONMENT:-development}}
       AI_SERVICE_NAME: ai-service
@@ -302,6 +312,7 @@ services:
     # 停止时把在跑的批量任务收尾成「中断」并生成已完成部分的结果，要留够时间。
     stop_grace_period: 45s
     restart: unless-stopped
+    mem_limit: ${AI_WORKER_MEM_LIMIT:-4g}
     environment:
       AI_ENVIRONMENT: ${AI_ENVIRONMENT:-${ENVIRONMENT:-development}}
       AI_SERVICE_NAME: ai-worker
@@ -342,6 +353,7 @@ services:
       dockerfile: services/iam-service/Dockerfile
     command: [".venv/bin/python", "-m", "app.worker"]
     restart: unless-stopped
+    mem_limit: ${IAM_WORKER_MEM_LIMIT:-512m}
     environment:
       IAM_ENVIRONMENT: ${IAM_ENVIRONMENT:-${ENVIRONMENT:-development}}
       IAM_SERVICE_NAME: iam-worker
