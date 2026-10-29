@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from platform_common.errors import ApiError
 
 from app.application.auth_service import normalize_username
+from app.domain.password import validate_password_policy
 
 # 带 @：公司邮箱直接当登录账号。登录前统一转小写（normalize_username），大小写不影响。
 USERNAME_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789._-@")
@@ -80,4 +81,8 @@ def normalize_email(email: str) -> str:
 
 
 def generate_temporary_password() -> str:
-    return secrets.token_urlsafe(18)
+    # 24 个随机字符里一个数字都没有的概率约 1.7%，那样会被密码规则拒掉，新建用户偶尔报错；不合规就重抽。
+    while True:
+        candidate = secrets.token_urlsafe(18)
+        if validate_password_policy(candidate) is None:
+            return candidate

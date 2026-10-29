@@ -255,3 +255,12 @@ class TestRoleAssignment:
         monkeypatch.setattr(user_admin.user_repo, "roles_for_users", AsyncMock(return_value={env.user.id: [role]}))
         payload = await user_admin.get_user(object(), env.user.id)  # type: ignore[arg-type]
         assert payload["role_ids"] == [str(role.id)]
+
+
+def test_temporary_passwords_always_pass_the_policy() -> None:
+    """随机串偶尔没有数字，原来约 1.7% 的新建用户会被自己生成的密码拒掉。"""
+
+    from app.application.user_fields import generate_temporary_password
+    from app.domain.password import validate_password_policy
+
+    assert all(validate_password_policy(generate_temporary_password()) is None for _ in range(2000))
