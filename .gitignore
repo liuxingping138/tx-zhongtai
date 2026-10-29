@@ -46,3 +46,9 @@ deploy/compose/.data/
 .coverage
 .coverage.*
 htmlcov/
+
+# 浏览器核对页面时的截图和快照（Playwright MCP），临时文件
+.playwright-mcp/
+
+# 内部人员名单（含姓名、邮箱），只在本机参考，不入库也不同步到服务器
+内部平台角色权限表.xlsx

@@ -36,4 +36,6 @@ rsync -az --delete -e "ssh -i $HOME/.ssh/tx-zhongtai-deploy -o IdentitiesOnly=ye
   --exclude 'frontend/e2e/.admin-password' \
   --exclude 'frontend/test-results/' \
   --exclude 'frontend/playwright-report/' \
+  --exclude '.playwright-mcp/' \
+  --exclude '内部平台角色权限表.xlsx' \
   "$@" "$root/" "$user@$host:$dest/"
