@@ -11,13 +11,18 @@ set -a
 source "$ENV_FILE"
 set +a
 : "${BACKUP_COMPOSE:?请设置 BACKUP_COMPOSE}"
+# 默认写在 /data：服务器根分区只有 20G、同机还有别的业务，AI 附件卷动辄几十 G，写在 $HOME（/root）会把根分区写满。
+if [ -z "${BACKUP_ROOT:-}" ] && [ -d /data ]; then BACKUP_ROOT=/data/tx-zhongtai-backups; fi
 BASE="${BACKUP_ROOT:-$HOME/tx-zhongtai-backups}"
+MIN_FREE_GB="${BACKUP_MIN_FREE_GB:-10}"
 STAMP="${BACKUP_STAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
 RETENTION="${BACKUP_RETENTION_DAYS:-14}"
 [[ "$STAMP" =~ ^[0-9]{8}T[0-9]{6}Z$ ]] || { echo '非法备份时间标识' >&2; exit 2; }
 [[ "$RETENTION" =~ ^[0-9]+$ ]] && [ "$RETENTION" -ge 1 ] || exit 2
 mkdir -p "$BASE"
 chmod 700 "$BASE"
+FREE_GB=$(( $(df -Pk "$BASE" | awk 'NR==2 {print $4}') / 1024 / 1024 ))
+[ "$FREE_GB" -ge "$MIN_FREE_GB" ] || { echo "备份目录所在分区只剩 ${FREE_GB}G，少于 ${MIN_FREE_GB}G，不备份" >&2; exit 1; }
 exec 9>"$BASE/.backup.lock"
 flock -n 9 || { echo '已有备份执行中' >&2; exit 1; }
 OUT="$BASE/$STAMP"
@@ -32,11 +37,17 @@ for pair in "iam:$IAM_DB_NAME" "audit:$AUDIT_DB_NAME" "policy:$POLICY_DB_NAME" "
   printf '%s\n' "$db" > "$TMP/$svc.dbname"
   echo "已导出 $svc"
 done
-# 模板 Excel、码表和批量结果不在库里，在 ai-service 的持久卷上，一起打包。
-$BACKUP_COMPOSE exec -T ai-service tar -C /data/ai -cf - . > "$TMP/ai-files.tar"
-tar -tf "$TMP/ai-files.tar" > /dev/null
+# 模板 Excel、码表和批量结果不在库里，在 ai-service 的持久卷上，一起打包并压缩（原始返回 CSV 压缩比很高）。
+# 批量任务常跑几个小时：备份时正在追加的 temp.csv、刚换掉的结果文件会让 GNU tar 报「file changed」退出 1，
+# 这类只是警告，拿到的是那一刻的内容；退出码 2 以上才是真出错。
+set +e
+$BACKUP_COMPOSE exec -T ai-service tar --warning=no-file-changed --ignore-failed-read -C /data/ai -czf - . > "$TMP/ai-files.tar.gz"
+TAR_STATUS=$?
+set -e
+[ "$TAR_STATUS" -le 1 ] || { echo "打包 AI提问附件失败（tar 退出码 $TAR_STATUS）" >&2; exit 1; }
+tar -tzf "$TMP/ai-files.tar.gz" > /dev/null
 echo "已打包 AI提问附件"
-(cd "$TMP" && sha256sum ./*.dump ./*.dbname ./ai-files.tar > SHA256SUMS)
+(cd "$TMP" && sha256sum ./*.dump ./*.dbname ./ai-files.tar.gz > SHA256SUMS)
 printf 'format=tx-zhongtai-business-v2\ncompleted_utc=%s\n' "$STAMP" > "$TMP/COMPLETE"
 mv "$TMP" "$OUT"
 # 异机目标必须由运维提供；失败退出非零并保留本地备份，不能伪报异机备份成功。
