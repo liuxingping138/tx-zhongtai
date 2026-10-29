@@ -74,10 +74,7 @@ function roleNames(user: UserItem): string {
       min-width="200"
     >
       <template #default="{ row }">
-        <div
-          v-if="(row.roles ?? []).length"
-          class="role-cell"
-        >
+        <div class="role-cell">
           <el-tooltip
             v-for="role in (row.roles ?? []).slice(0, 2)"
             :key="role.id"
@@ -108,15 +105,29 @@ function roleNames(user: UserItem): string {
               +{{ (row.roles ?? []).length - 2 }}
             </el-tag>
           </el-tooltip>
+          <el-tag
+            v-if="!(row.roles ?? []).length"
+            size="small"
+            type="warning"
+            effect="plain"
+          >
+            待分配角色
+          </el-tag>
+          <!-- 权限不全来自角色时标出来，管理员一眼知道这个人有角色之外的权限。 -->
+          <el-tooltip
+            v-if="row.direct_grant_count"
+            :content="`角色之外单独授权了 ${row.direct_grant_count} 个模块，打开详情查看`"
+            placement="top"
+          >
+            <el-tag
+              size="small"
+              type="warning"
+              effect="plain"
+            >
+              +单独授权
+            </el-tag>
+          </el-tooltip>
         </div>
-        <el-tag
-          v-else
-          size="small"
-          type="warning"
-          effect="plain"
-        >
-          待分配角色
-        </el-tag>
       </template>
     </el-table-column>
     <el-table-column

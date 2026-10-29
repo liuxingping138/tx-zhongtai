@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.authorization import max_level
 from app.domain.enums import NodeType, RoleStatus
-from app.domain.models import MenuItem, Resource, ResourceAction, Role, RoleGrant, UserRole
+from app.domain.models import MenuItem, Resource, ResourceAction, Role, RoleGrant, UserGrant, UserRole
 
 
 async def get_resource_by_code(session: AsyncSession, code: str) -> Resource | None:
@@ -41,7 +41,7 @@ async def list_all_menus(session: AsyncSession) -> list[MenuItem]:
 
 
 async def list_effective_levels(session: AsyncSession, user_id: uuid.UUID) -> dict[str, str]:
-    """启用角色在已发布叶子资源上的最高授权。每次判定读取当前权威状态。"""
+    """启用角色加单独授权，在已发布叶子资源上的最高授权。每次判定读取当前权威状态。"""
 
     stmt = (
         select(Resource.code, RoleGrant.level)
@@ -55,7 +55,17 @@ async def list_effective_levels(session: AsyncSession, user_id: uuid.UUID) -> di
             Resource.node_type == NodeType.RESOURCE,
         )
     )
-    result = await session.execute(stmt)
+    # 角色之外单独给这个人的授权，和角色一起按模块取最高一档。
+    direct = (
+        select(Resource.code, UserGrant.level)
+        .join(UserGrant, UserGrant.resource_id == Resource.id)
+        .where(
+            UserGrant.user_id == user_id,
+            Resource.published.is_(True),
+            Resource.node_type == NodeType.RESOURCE,
+        )
+    )
+    result = await session.execute(stmt.union_all(direct))
     grouped: dict[str, list[str]] = {}
     for code, level in result.all():
         grouped.setdefault(code, []).append(level)

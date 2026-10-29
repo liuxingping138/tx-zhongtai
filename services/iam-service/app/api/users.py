@@ -10,9 +10,9 @@ from platform_common.http_utils import IMPORT_FILE_OPENAPI, read_import_upload
 from platform_common.responses import paginate
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas import UserCreateRequest, UserRolesReplaceRequest, UserUpdateRequest
+from app.api.schemas import UserCreateRequest, UserGrantsReplaceRequest, UserRolesReplaceRequest, UserUpdateRequest
 from app.api.security import CurrentPrincipal, classified, require_permission
-from app.application import session_admin, user_admin, user_excel
+from app.application import session_admin, user_admin, user_excel, user_grants
 from app.application.authorization import assert_allowed, is_allowed
 from app.application.user_fields import NewUser, UserChanges
 from app.core.config import Settings, get_settings
@@ -236,3 +236,29 @@ async def unlock_user(
     """密码连续输错被锁的账号，不等到期直接解锁。"""
 
     return success_json({"unlocked": await session_admin.unlock(session, principal.user, user_id, _lockouts())})
+
+
+@router.get("/users/{user_id}/grants")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def get_user_grants(
+    user_id: uuid.UUID,
+    _principal: CurrentPrincipal = Depends(require_permission("system.permissions", "read")),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+) -> JSONResponse:
+    """角色之外单独给这个人的授权。"""
+
+    return success_json(await user_grants.list_grants(session, user_id))
+
+
+@router.put("/users/{user_id}/grants")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def replace_user_grants(
+    user_id: uuid.UUID,
+    body: UserGrantsReplaceRequest,
+    principal: CurrentPrincipal = Depends(require_permission("system.permissions", "grant")),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+) -> JSONResponse:
+    """整体替换单独授权；和给人分配角色同一门槛，只有超级管理员能做。"""
+
+    grants: list[tuple[str, str]] = [(item.resource_code, item.level) for item in body.grants]
+    return success_json(await user_grants.replace_grants(session, principal.user, user_id, grants))

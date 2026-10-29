@@ -45,6 +45,7 @@ async def test_delete_user_keeps_the_row_and_revokes_access(monkeypatch: pytest.
     monkeypatch.setattr(user_admin, "_guard_last_superadmin", AsyncMock())
     monkeypatch.setattr(user_admin.user_repo, "get_user_for_update", get_for_update)
     monkeypatch.setattr(user_admin.user_repo, "clear_user_roles", AsyncMock())
+    monkeypatch.setattr(user_admin.grant_repo, "clear_for_user", AsyncMock())
     monkeypatch.setattr(user_admin.session_repo, "revoke_user_sessions", AsyncMock())
     monkeypatch.setattr(user_admin.outbox_repo, "enqueue", enqueue)
 
@@ -55,6 +56,7 @@ async def test_delete_user_keeps_the_row_and_revokes_access(monkeypatch: pytest.
     assert events == ["iam.user.deleted"]
     user_admin.session_repo.revoke_user_sessions.assert_awaited()  # type: ignore[attr-defined]
     user_admin.user_repo.clear_user_roles.assert_awaited()  # type: ignore[attr-defined]
+    user_admin.grant_repo.clear_for_user.assert_awaited()  # type: ignore[attr-defined]
 
 
 @pytest.mark.asyncio

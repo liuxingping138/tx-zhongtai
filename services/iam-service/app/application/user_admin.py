@@ -29,6 +29,7 @@ from app.repositories import outbox as outbox_repo
 from app.repositories import resources as resource_repo
 from app.repositories import roles as role_repo
 from app.repositories import sessions as session_repo
+from app.repositories import user_grants as grant_repo
 from app.repositories import users as user_repo
 
 
@@ -110,10 +111,13 @@ async def list_users_page(
     rows = await user_repo.list_users(session, filters, offset=(page - 1) * page_size, limit=page_size, sort=sort)
     # 列表直接带上角色：管理员一眼能看出「谁是政策管理员」，不必逐个打开。
     roles = await user_repo.roles_for_users(session, [row.id for row in rows])
+    # 有单独授权的人在角色旁边标出来：权限不全来自角色，管理员要知道。
+    direct = await grant_repo.count_by_users(session, [row.id for row in rows])
     items: list[dict[str, object]] = []
     for row in rows:
         payload = user_public(row)
         payload["roles"] = [_role_brief(role) for role in roles.get(row.id, [])]
+        payload["direct_grant_count"] = direct.get(row.id, 0)
         items.append(payload)
     return items, total
 
@@ -261,6 +265,7 @@ async def delete_user(session: AsyncSession, actor: User, user_id: uuid.UUID) ->
     user.version += 1
     await session_repo.revoke_user_sessions(session, user.id)
     await user_repo.clear_user_roles(session, user.id)
+    await grant_repo.clear_for_user(session, user.id)
     await outbox_repo.enqueue(
         session,
         event_type="iam.user.deleted",
@@ -310,7 +315,7 @@ async def remove_role_member(session: AsyncSession, actor: User, role_id: uuid.U
 
 
 async def effective_permissions(session: AsyncSession, user_id: uuid.UUID) -> dict[str, object]:
-    """用户在每个模块上的最终权限，以及来自哪些角色。停用角色列出但不计入。"""
+    """用户在每个模块上的最终权限，以及来自哪些角色或单独授权。停用角色列出但不计入。"""
 
     user = _require_live(await user_repo.get_user_by_id(session, user_id))
     grouped: dict[str, list[dict[str, object]]] = {}
@@ -318,6 +323,8 @@ async def effective_permissions(session: AsyncSession, user_id: uuid.UUID) -> di
         grouped.setdefault(code, []).append(
             {"role_id": str(role.id), "role_name": role.name, "level": level, "active": role.status == "active"}
         )
+    for code, level in await grant_repo.list_for_user(session, user.id):
+        grouped.setdefault(code, []).append({"role_id": None, "role_name": "单独授权", "level": level, "active": True})
     # 带上模块中文名和所属分组：只有用户管理权限的人拿不到资源树，也要能看懂。
     resources = await resource_repo.list_all_resources(session)
     by_id = {item.id: item for item in resources}

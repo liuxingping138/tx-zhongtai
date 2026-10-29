@@ -98,6 +98,10 @@ class RoleGrantsReplaceRequest(StrictModel):
     grants: list[GrantItem]
 
 
+class UserGrantsReplaceRequest(StrictModel):
+    grants: list[GrantItem]
+
+
 class AuthorizeRequest(StrictModel):
     access_token: str = Field(min_length=1)
     resource: str = Field(min_length=1, max_length=128)

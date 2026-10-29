@@ -93,6 +93,7 @@ async def test_effective_permissions_takes_highest_active_role_and_lists_disable
     user = SimpleNamespace(id=uuid.uuid4(), status="active")
     reader, manager, disabled = _role("只读"), _role("信源配置员"), _role("停用角色", status="disabled")
     monkeypatch.setattr(user_admin.user_repo, "get_user_by_id", AsyncMock(return_value=user))
+    monkeypatch.setattr(user_admin.grant_repo, "list_for_user", AsyncMock(return_value=[("ai.prompts", "READ")]))
     monkeypatch.setattr(
         user_admin.user_repo,
         "list_user_grant_sources",
@@ -111,6 +112,11 @@ async def test_effective_permissions_takes_highest_active_role_and_lists_disable
     # 只有停用角色给了权限：列出来源但最终是无权限，页面据此提示「角色已停用」。
     assert by_code["codebook.scenarios"]["level"] == "NONE"
     assert by_code["codebook.scenarios"]["sources"][0]["active"] is False
+    # 角色之外单独给的权限也算进来，来源写「单独授权」。
+    assert by_code["ai.prompts"]["level"] == "READ"
+    assert by_code["ai.prompts"]["sources"] == [
+        {"role_id": None, "role_name": "单独授权", "level": "READ", "active": True}
+    ]
 
 
 @pytest.mark.asyncio

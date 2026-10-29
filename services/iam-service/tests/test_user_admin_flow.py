@@ -76,6 +76,8 @@ def env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     monkeypatch.setattr(user_admin.user_repo, "list_user_role_ids", AsyncMock(side_effect=lambda *_: state.role_ids))
     monkeypatch.setattr(user_admin.role_repo, "get_roles_by_ids", AsyncMock(side_effect=lambda *_: state.roles))
     monkeypatch.setattr(user_admin.session_repo, "revoke_user_sessions", AsyncMock(return_value=2))
+    monkeypatch.setattr(user_admin.grant_repo, "count_by_users", AsyncMock(return_value={}))
+    monkeypatch.setattr(user_admin.grant_repo, "list_for_user", AsyncMock(return_value=[]))
     return state
 
 

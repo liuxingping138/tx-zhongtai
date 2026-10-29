@@ -68,6 +68,15 @@ export function revokeUserSessions(userId: string): Promise<{ revoked: number }>
   return request(http.post(`/system/users/${userId}/revoke-sessions`))
 }
 
+/** 角色之外单独给这个人的授权。 */
+export function getUserGrants(userId: string): Promise<{ grants: GrantItem[] }> {
+  return request(http.get(`/system/users/${userId}/grants`))
+}
+
+export function replaceUserGrants(userId: string, grants: { resource_code: string; level: string }[]): Promise<{ grants: GrantItem[] }> {
+  return request(http.put(`/system/users/${userId}/grants`, { grants }))
+}
+
 /** 密码连续输错被锁的账号，不等到期直接解锁。 */
 export function unlockUser(userId: string): Promise<{ unlocked: boolean }> {
   return request(http.post(`/system/users/${userId}/unlock`))

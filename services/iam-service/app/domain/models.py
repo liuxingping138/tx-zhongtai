@@ -145,6 +145,23 @@ class RoleGrant(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="更新时间")
 
 
+class UserGrant(Base):
+    """角色之外单独给某个人的授权。实际权限 = 他所有启用角色和这里，按模块取最高一档。"""
+
+    __tablename__ = "iam_user_grants"
+    __table_args__ = {"comment": "用户单独授权"}
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("iam_users.id", ondelete="RESTRICT"), primary_key=True, comment="用户ID"
+    )
+    resource_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("iam_resources.id", ondelete="RESTRICT"), primary_key=True, comment="资源ID"
+    )
+    level: Mapped[str] = mapped_column(String(8), nullable=False, comment="授权级别")
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, comment="更新人ID")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="更新时间")
+
+
 class MenuItem(Base):
     __tablename__ = "iam_menu_items"
     __table_args__ = {"comment": "菜单项"}

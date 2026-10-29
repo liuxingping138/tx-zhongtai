@@ -11,6 +11,7 @@ import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import { formatTime } from '@/utils/time'
 import EffectivePermissions from './EffectivePermissions.vue'
 import RolePicker from './RolePicker.vue'
+import UserGrantsDrawer from './UserGrantsDrawer.vue'
 
 /**
  * 用户的查看与编辑合在一个抽屉里：基本信息、联系方式、角色一次改完一次保存。
@@ -51,6 +52,9 @@ const infoDirty = computed(() => !!user.value && (
   || form.email.trim() !== (user.value.email ?? '')
 ))
 const editable = computed(() => props.canEdit || props.canGrant)
+const grantsVisible = ref(false)
+/** 单独授权了几个模块：从实际权限的来源里数，不另外请求。 */
+const directCount = computed(() => permissions.value.filter(item => item.sources.some(source => source.role_id === null)).length)
 
 function fill(detail: UserItem) {
   user.value = detail
@@ -294,6 +298,20 @@ async function openAudit() {
               待分配角色
             </el-tag>
           </div>
+          <div
+            v-if="canGrant || directCount"
+            class="direct-grants"
+          >
+            <span>{{ directCount ? `角色之外还单独授权了 ${directCount} 个模块` : '角色之外没有单独授权' }}</span>
+            <el-button
+              v-if="canGrant"
+              link
+              type="primary"
+              @click="grantsVisible = true"
+            >
+              单独授权
+            </el-button>
+          </div>
         </section>
 
         <EffectivePermissions
@@ -335,6 +353,11 @@ async function openAudit() {
         保存
       </el-button>
     </template>
+    <UserGrantsDrawer
+      v-model="grantsVisible"
+      :user="user"
+      @saved="loadPermissions(); user && emit('changed', user)"
+    />
   </el-drawer>
 </template>
 
@@ -349,6 +372,7 @@ async function openAudit() {
 .block__hint { font-size: 12px; color: var(--zt-ink-500); }
 .block__notice { margin-bottom: 12px; }
 .role-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.direct-grants { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--zt-divider); color: var(--zt-ink-500); font-size: 13px; }
 .block__notice--after { margin: 12px 0 0; }
 .info-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; }
 .info-grid :deep(.el-form-item) { margin-bottom: 12px; }

@@ -201,9 +201,11 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
 - 费用账单（`ai.billing`，`/api/v1/ai/billing`）：批量任务、定时任务和样本试跑的费用在 `ai_batch_runs` 上（用途按 `source` 分成「批量任务」「样本试跑」，定时任务的用途是发起方名字，如「政策AI打标·类型判断」），
   试发和多轮对话答完时在 `ai_call_usages` 记一行（不记内容，`app/application/billing.py`）。新增调模型的入口要么走批量任务，要么也记进 `ai_call_usages`，否则账单漏钱
 
-### 系统管理：给人分配角色即授权
+### 系统管理：给人分配角色即授权，个别人可再单独授权
 
 菜单六项：用户管理、角色与权限（角色和权限分配在同一页）、在线用户、登录日志、操作日志、任务调度。在线用户（`/system/sessions`，读会话表，可按设备下线）的权限跟着 `system.users`，登录日志（操作日志里 `auth` 模块的登录 / 退出事件）跟着 `system.audit`，都不另设资源。
+角色之外可以单独给某个人授权（`iam_user_grants`，用户详情里「单独授权」，PUT `/users/{id}/grants` 挂 `system.permissions:grant`）：
+实际权限 = 所有启用角色加单独授权，按模块取最高一档，判定统一在 `resources.list_effective_levels`，其他服务经 authorize 自动生效。「权限分配」永远不单独给人；删除用户时一起清掉。
 用户列表的「最近登录」读 `iam_users.last_login_at` / `last_login_ip`（登录成功时写），不靠会话表倒推：会话过期会被清理。密码连续输错被锁的账号在列表里显示「已锁定」，管理员可直接解锁（删 Redis 里账号维度的计数，IP 维度不动）。给人分配角色的所有入口
 （建人带角色、用户详情调角色、角色侧增删成员、复制角色）都要求 `system.permissions:grant`，
 而该资源只能授予超级管理员角色——这是防止「用户管理员给自己加超级管理员」的关键约束，改入口时不要放宽。

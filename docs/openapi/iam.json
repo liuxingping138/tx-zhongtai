@@ -911,6 +911,98 @@
         }
       }
     },
+    "/api/v1/system/users/{user_id}/grants": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Get User Grants",
+        "description": "角色之外单独给这个人的授权。",
+        "operationId": "get_user_grants_api_v1_system_users__user_id__grants_get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Replace User Grants",
+        "description": "整体替换单独授权；和给人分配角色同一门槛，只有超级管理员能做。",
+        "operationId": "replace_user_grants_api_v1_system_users__user_id__grants_put",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserGrantsReplaceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/system/roles": {
       "get": {
         "tags": [
@@ -2101,6 +2193,23 @@
           "display_name"
         ],
         "title": "UserCreateRequest"
+      },
+      "UserGrantsReplaceRequest": {
+        "properties": {
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/GrantItem"
+            },
+            "type": "array",
+            "title": "Grants"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "grants"
+        ],
+        "title": "UserGrantsReplaceRequest"
       },
       "UserRolesReplaceRequest": {
         "properties": {

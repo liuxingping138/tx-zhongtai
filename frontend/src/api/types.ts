@@ -74,6 +74,8 @@ export interface UserItem {
   last_login_ip: string
   /** 密码连续输错被锁，还要锁多少秒；没锁是 0。 */
   locked_seconds?: number
+  /** 角色之外单独授权了几个模块（列表里才有）。 */
+  direct_grant_count?: number
   version: number
   created_at: string
   updated_at: string
@@ -168,5 +170,6 @@ export interface EffectivePermission {
   resource_name: string
   group_name: string
   level: 'NONE' | 'READ' | 'EXPORT' | 'FULL'
-  sources: { role_id: string; role_name: string; level: 'READ' | 'EXPORT' | 'FULL'; active: boolean }[]
+  /** role_id 为 null 的是单独授权，role_name 写「单独授权」。 */
+  sources: { role_id: string | null; role_name: string; level: 'READ' | 'EXPORT' | 'FULL'; active: boolean }[]
 }
