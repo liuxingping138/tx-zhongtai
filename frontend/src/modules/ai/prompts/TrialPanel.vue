@@ -43,10 +43,12 @@ const sampleRow = computed(() => props.sample.state.value.rows?.items.find(item 
 const sampleNo = computed(() => props.sample.run.value?.no ?? 0)
 const verdict = computed(() => (showResult.value && !running.value
   ? trialVerdict(sampleRow.value, reply.value?.parsed, sampleNo.value, props.fields) : null))
+/** 下拉里用提示词引用的列来认行（项目名称、政策标题），第一列常是编号，看不出是哪一行 */
 const label = (index: number) => {
   const item = data.value.rows[index]
-  const first = item ? Object.values(item.values).find(Boolean) : ''
-  return `${index + 1}：${first || '（空行）'}`
+  const values = item?.values ?? {}
+  const used = variables.value.map(variable => values[variable.name]).find(Boolean)
+  return `${index + 1}：${used || Object.values(values).find(Boolean) || '（空行）'}`
 }
 
 watch(() => [props.template?.id, props.template?.excel_name, props.template?.excel_rows], async () => {

@@ -7,7 +7,7 @@ import { listPrompts, type PromptTemplate, type TemplateCategory } from '@/api/a
 import { errorMessage } from '@/api/errors'
 import { useAuthStore } from '@/stores/auth'
 import { ALL_CATEGORIES, defaultCategory, inCategory } from '../shared/categories'
-import { sampleBars } from './sampleView'
+import { sampleBars, shortTime } from './sampleView'
 import { releaseState, sampleState, type ReleaseKind } from './templateStatus'
 import { useTaskFit } from './useTaskFit'
 import '../shared/ai.css'
@@ -169,7 +169,7 @@ function create(): void {
       >
         <el-table-column
           label="模板名称"
-          min-width="190"
+          min-width="170"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -185,12 +185,12 @@ function create(): void {
         <el-table-column
           prop="category_name"
           label="类型"
-          width="70"
+          width="64"
         />
         <el-table-column
           v-if="showTasks"
           label="定时任务"
-          min-width="130"
+          min-width="120"
         >
           <template #default="{ row }">
             <span
@@ -207,7 +207,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="上线状态"
-          min-width="200"
+          min-width="190"
         >
           <template #default="{ row }">
             <!-- 有改动没上线：第二行写改了什么，「看改动」直接打开逐行对比。 -->
@@ -238,8 +238,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="样本试跑"
-          min-width="180"
-          show-overflow-tooltip
+          min-width="190"
         >
           <template #default="{ row }">
             <span
@@ -260,7 +259,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="输出字段"
-          width="80"
+          width="72"
           align="right"
         >
           <template #default="{ row }">
@@ -269,7 +268,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="模型"
-          min-width="150"
+          min-width="120"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -279,14 +278,17 @@ function create(): void {
         <el-table-column
           prop="updated_by_name"
           label="更新人"
-          width="100"
+          width="90"
           show-overflow-tooltip
         />
         <el-table-column
-          prop="updated_at"
           label="更新时间"
-          width="170"
-        />
+          width="110"
+        >
+          <template #default="{ row }">
+            <span :title="row.updated_at">{{ shortTime(row.updated_at) }}</span>
+          </template>
+        </el-table-column>
       </el-table>
     </div>
   </section>
@@ -317,7 +319,8 @@ function create(): void {
 .prompt-list__change { padding-left: 13px; color: var(--zt-ink-500); font-size: 12px; white-space: nowrap; }
 .prompt-list__diff { color: var(--zt-blue-600); text-decoration: none; }
 .prompt-list__diff:hover { text-decoration: underline; }
-.prompt-list__sample { color: var(--zt-ink-500); }
+/* 1440 宽的屏上一屏放下所有列不横向滚动：样本试跑的说明折成两行，不截断。 */
+.prompt-list__sample { align-items: flex-start; color: var(--zt-ink-500); line-height: 1.45; white-space: normal; }
 .prompt-list__sample.is-passed { color: var(--zt-success-text); }
 .prompt-list__sample.is-failed, .prompt-list__sample.is-stale { color: var(--zt-warning-text); }
 .prompt-list__sample.is-running { color: var(--zt-blue-600); }

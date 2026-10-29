@@ -37,6 +37,8 @@ let sequence = 0
 const template = computed(() => props.templates.find(item => item.id === templateId.value))
 const spec = computed(() => runSpec(template.value, version.value, props.models))
 const model = computed(() => spec.value?.model)
+/** 没选模板时「跑哪一版」那步不显示，后面的步骤号跟着往前挪，不跳号。 */
+const stepNo = (step: number) => (spec.value ? step : step - 1)
 const uploadHint = computed(() => (spec.value?.columns.length
   ? '先下载数据模板，表头就是这一版要的列，不要改名；每行填一条数据，可以加别的列，会原样留在结果里。选好后先检查列，不会调用模型。'
   : '第一行是表头，每行问一次。选好后先检查列，不会调用模型。'))
@@ -170,7 +172,7 @@ function close(done: () => void): void {
         :disabled="starting"
       />
       <section class="new-task__step">
-        <h3><span>3</span>上传这次的数据</h3>
+        <h3><span>{{ stepNo(3) }}</span>上传这次的数据</h3>
         <input
           ref="picker"
           type="file"
@@ -227,7 +229,7 @@ function close(done: () => void): void {
       </section>
 
       <section class="new-task__step">
-        <h3><span>4</span>跑多少</h3>
+        <h3><span>{{ stepNo(4) }}</span>跑多少</h3>
         <el-radio-group
           v-model="scope"
           class="new-task__scope"

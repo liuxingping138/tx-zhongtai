@@ -57,6 +57,7 @@ const files = useTemplateFiles({ template: selected, canCreate: canCreateDraft, 
 
 // 新建的地址是 /ai/prompts/new，保存后换成模板 ID：同一条路由，页面不重建，试发记录也还在。
 const routeId = computed(() => (typeof route.params.id === 'string' && route.params.id !== 'new' ? route.params.id : ''))
+const opening = computed(() => Boolean(routeId.value) && !selected.value && !loadError.value)
 const editableCategories = computed(() => categories.value.filter(item => item.editable))
 // 能不能改看两层：页面本身的编辑权，加这个模板所属类型的编辑权；新模板只要有一个能编辑的类型就行。
 const canEdit = computed(() => canEditPage.value && (selected.value ? selected.value.editable : editableCategories.value.length > 0))
@@ -179,14 +180,8 @@ async function remove(): Promise<void> {
 }
 
 async function trial(): Promise<void> {
-  if (!form.content.trim()) {
-    ElMessage.warning('提示词内容不能为空')
-    return
-  }
-  if (!trialModel.value) {
-    ElMessage.warning('先在左边「模型」里选一个模型')
-    return
-  }
+  const problem = form.content.trim() ? '' : '提示词内容不能为空'
+  if (problem || !trialModel.value) return void ElMessage.warning(problem || '先在左边「模型」里选一个模型')
   testTab.value = 'trial'
   const useThinking = thinking.value && Boolean(trialModel.value?.supports_thinking)
   const shown = selected.value ? `［${selected.value.title}］\n${form.content}` : form.content
@@ -207,7 +202,11 @@ function onStep(key: StepKey): void {
 </script>
 
 <template>
-  <section class="prompt-page">
+  <section
+    v-loading="opening"
+    class="prompt-page"
+    :class="{ 'is-opening': opening }"
+  >
     <h1 class="ai-sr-only">
       {{ selected ? selected.title : '新建提示词模板' }}
     </h1>
@@ -375,6 +374,7 @@ function onStep(key: StepKey): void {
 </template>
 
 <style scoped>
+/* 打开已有模板时，数据回来之前不露出新建模板的空样子。 */ .prompt-page.is-opening > :not(.el-loading-mask) { visibility: hidden; }
 .prompt-page { display: flex; flex-direction: column; gap: 12px; height: calc(100dvh - var(--workspace-header-height) - 48px); min-height: 640px; }
 .prompt-page__head { flex: none; overflow: hidden; }
 .prompt-page__title-row { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px 18px; }

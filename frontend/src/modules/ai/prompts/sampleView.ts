@@ -34,11 +34,26 @@ export function rowsToWatch(rows: RunRow[]): RunRow[] {
   return [...rows.filter(isProblem), ...rows.filter(row => !isProblem(row) && row.change)]
 }
 
-/** 两次结果的第一处不同：条数不同就说条数，否则是第一个值不同的字段。 */
+/**
+ * 超过这么多字的值算说明文字（打标理由、解读概述）：真模型每次措辞都不一样，不算「结果变了」，
+ * 免得把标签的真变化淹没。和后端 run_compare.PROSE_CHARS 一致。
+ */
+export const PROSE_CHARS = 40
+
+export function isProse(...values: string[]): boolean {
+  return values.some(value => value.length > PROSE_CHARS)
+}
+
+/** 两次结果的第一处不同：条数不同就说条数，否则是第一个值不同的标签类字段（说明文字措辞变了不算）。 */
 export function firstDiff(after: Record<string, string>[], before: Record<string, string>[], fields: string[]): FieldDiff | null {
   if (after.length !== before.length) return { field: '条数', before: `${before.length} 条`, after: `${after.length} 条` }
   for (const [index, entry] of after.entries()) {
-    const field = fields.find(name => (entry[name] ?? '') !== (before[index]?.[name] ?? ''))
+    const differs = (name: string) => {
+      const now = entry[name] ?? ''
+      const old = before[index]?.[name] ?? ''
+      return now !== old && !isProse(now, old)
+    }
+    const field = fields.find(differs)
     if (field) return { field, before: before[index]?.[field] ?? '', after: entry[field] ?? '' }
   }
   return null
@@ -89,11 +104,12 @@ export function rowNote(row: RunRow, fields: string[]): RowNote {
   return { labels: [{ tone: 'changed', text: '字段变了' }], text: diff ? `${diff.field}「${diff.before || '空'}」改成「${diff.after || '空'}」` : '' }
 }
 
-/** 逐行表格里一个输出字段的格子：第一条的值；和上次不同时另给上次的值。 */
+/** 逐行表格里一个输出字段的格子：第一条的值；标签类字段和上次不同时另给上次的值（说明文字展开一行再对照）。 */
 export function fieldCell(row: RunRow, field: string): { now: string; before: string | null } {
   const now = row.items[0]?.[field] ?? ''
-  const old = row.previous?.status === 'done' ? row.previous.items[0]?.[field] ?? '' : null
-  return { now, before: row.change && old !== null && old !== now ? old : null }
+  if (!row.change || row.previous?.status !== 'done') return { now, before: null }
+  const old = row.previous.items[0]?.[field] ?? ''
+  return { now, before: old !== now && !isProse(now, old) ? old : null }
 }
 
 /** 一次回答写给人看：解析出的字段一条一段；没解析出就给失败原因和模型原话。 */

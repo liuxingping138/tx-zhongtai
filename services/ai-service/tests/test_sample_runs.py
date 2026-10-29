@@ -210,6 +210,17 @@ def test_rows_compare_by_row_number() -> None:
     assert run_compare.change_of(item(1, "failed"), None) == ""
 
 
+def test_rewording_prose_is_not_a_change() -> None:
+    reason, reworded = "项目" + "是对已有信息系统的运维服务，招标单位是公安局，属于政务部门" * 2, "这是另一种说法" * 8
+
+    def done(scene: str, why: str) -> dict[str, Any]:
+        return {"row": 1, "status": "done", "items": [{"三级场景": scene, "打标理由": why}], "error": "", "answer": ""}
+
+    assert run_compare.change_of(done("政务IT运维服务", reworded), done("政务IT运维服务", reason)) == ""
+    assert run_compare.change_of(done("", reworded), done("政务IT运维服务", reason)) == "changed"
+    assert run_compare.change_of(done("政务IT运维服务", "短理由"), done("政务IT运维服务", "另一个短理由")) == "changed"
+
+
 def _sample(run_id: str, minute: int, answers: list[tuple[int, str, str]], source: bytes = SAMPLE) -> Any:
     storage.write_atomic(storage.run_dir(run_id) / "source.xlsx", source)
     _answers(run_id, answers)

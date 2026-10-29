@@ -60,6 +60,17 @@ describe('样本试跑：逐行状态和要看的行', () => {
     expect(firstDiff(done('A'), done('A'), FIELDS)).toBeNull()
   })
 
+  it('说明文字只是措辞不同不算变了，标签变了照样指出来', () => {
+    const fields = ['三级场景', '打标理由']
+    const reason = (text: string) => text.repeat(10)
+    const before = [{ 三级场景: '政务IT运维服务', 打标理由: reason('属于政务部门') }]
+    expect(firstDiff([{ 三级场景: '政务IT运维服务', 打标理由: reason('招标单位是公安局') }], before, fields)).toBeNull()
+    expect(firstDiff([{ 三级场景: '', 打标理由: reason('招标单位是公安局') }], before, fields)).toEqual({ field: '三级场景', before: '政务IT运维服务', after: '' })
+    const changed = row(1, 'done', { items: [{ 三级场景: '', 打标理由: reason('换个说法') }], change: 'changed', previous: { status: 'done', items: before, error: '', answer: '' } })
+    expect(fieldCell(changed, '打标理由').before).toBeNull()
+    expect(fieldCell(changed, '三级场景').before).toBe('政务IT运维服务')
+  })
+
   it('查找输入、字段、原因和原话', () => {
     expect(rowMatches(rows[1]!, '医院')).toBe(true)
     expect(rowMatches(rows[3]!, '120 秒')).toBe(true)

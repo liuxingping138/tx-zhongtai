@@ -13,6 +13,25 @@ from app.core import storage
 PROBLEMS = ("failed", "format")
 CHANGES = ("fixed", "broke", "changed")
 _KEPT = ("status", "items", "error", "answer")
+# 超过这么多字的值算说明文字（打标理由、解读概述）：真模型每次措辞都不一样，算进「字段变了」会把标签的真变化淹没。
+PROSE_CHARS = 40
+
+
+def is_prose(*values: str) -> bool:
+    return any(len(value) > PROSE_CHARS for value in values)
+
+
+def labels_differ(items: list[dict[str, str]], previous: list[dict[str, str]]) -> bool:
+    """两次解析结果是不是真变了：条数不同算变；同一条里只比短的标签类字段，两边都是说明文字的不比。"""
+
+    if len(items) != len(previous):
+        return True
+    for now, old in zip(items, previous, strict=True):
+        for field in now.keys() | old.keys():
+            a, b = now.get(field, ""), old.get(field, "")
+            if a != b and not is_prose(a, b):
+                return True
+    return False
 
 
 def _digest(run_id: str) -> str:
@@ -28,7 +47,7 @@ def same_input(run_id: str, other_id: str) -> bool:
 
 
 def change_of(current: dict[str, Any], previous: dict[str, Any] | None) -> str:
-    """fixed：上次有问题这次成功；broke：上次成功这次有问题；changed：两次都成功但解析出的字段不同。"""
+    """fixed：上次有问题这次成功；broke：上次成功这次有问题；changed：两次都成功但标签类字段不同（说明文字措辞变了不算）。"""
 
     if previous is None or "pending" in (current["status"], previous["status"]):
         return ""
@@ -37,7 +56,7 @@ def change_of(current: dict[str, Any], previous: dict[str, Any] | None) -> str:
         return "fixed"
     if now_bad and not was_bad:
         return "broke"
-    if not now_bad and current["items"] != previous["items"]:
+    if not now_bad and labels_differ(current["items"], previous["items"]):
         return "changed"
     return ""
 
