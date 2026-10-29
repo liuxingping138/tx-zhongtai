@@ -32,6 +32,8 @@ export interface AiTaggingResult {
 export interface ScheduledJob {
   code: string; name: string; enabled: boolean; daily_time: string; next_run_at: string | null
   version: number; watermark: string | null; active_run: ScheduledRun | null; last_run: ScheduledRun | null
+  /** 会花钱的任务：启用、改设置、立即执行还要这个资源可管理（如政策AI打标）。 */
+  cost_resource?: string | null
   /** 前端补上的：任务所属服务的调度接口前缀，改计划、执行、看记录都发往这里。 */
   base: string
 }

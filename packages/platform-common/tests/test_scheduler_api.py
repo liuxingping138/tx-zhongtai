@@ -27,7 +27,7 @@ async def _noop(_batch: uuid.UUID) -> None:
     return None
 
 
-def _app(scheduler: Scheduler, granted: set[str]) -> FastAPI:
+def _app(scheduler: Scheduler, granted: set[str], cost_granted: set[str] | None = None) -> FastAPI:
     def require_permission(resource: str, action: str) -> Any:
         async def dependency() -> Actor:
             from platform_common.errors import PermissionDeniedError
@@ -42,6 +42,13 @@ def _app(scheduler: Scheduler, granted: set[str]) -> FastAPI:
     async def get_db_session() -> AsyncIterator[object]:
         yield object()
 
+    async def check_permission(_request: object, resource: str, action: str) -> None:
+        from platform_common.errors import PermissionDeniedError
+
+        assert resource == "demo.spend"
+        if action not in (cost_granted or set()):
+            raise PermissionDeniedError()
+
     app = FastAPI()
     register_exception_handlers(app)
     app.include_router(
@@ -50,6 +57,7 @@ def _app(scheduler: Scheduler, granted: set[str]) -> FastAPI:
             prefix="/api/v1/demo/scheduled-jobs",
             require_permission=require_permission,
             get_db_session=get_db_session,
+            check_permission=check_permission,
         )
     )
     return app
@@ -57,7 +65,8 @@ def _app(scheduler: Scheduler, granted: set[str]) -> FastAPI:
 
 @pytest.fixture
 def scheduler(monkeypatch: pytest.MonkeyPatch) -> Scheduler:
-    s = Scheduler(jobs=[Job("cleanup", "清理", _noop)], **tables(), audit=AsyncMock())
+    jobs = [Job("cleanup", "清理", _noop), Job("ai", "调模型", _noop, cost_resource="demo.spend")]
+    s = Scheduler(jobs=jobs, **tables(), audit=AsyncMock())
     monkeypatch.setattr(s, "list_jobs", AsyncMock(return_value={"items": [], "worker_online": True}))
     monkeypatch.setattr(s, "update_job", AsyncMock())
     monkeypatch.setattr(s, "trigger_job", AsyncMock(return_value={"status": "queued"}))
@@ -93,6 +102,22 @@ async def test_full_tier_changes_the_plan_and_queues_a_run(scheduler: Scheduler)
     update = scheduler.update_job
     assert isinstance(update, AsyncMock) and update.await_args is not None
     assert update.await_args.kwargs == {"enabled": False, "daily_time": "03:00", "version": 1}
+
+
+async def test_jobs_that_spend_money_also_need_their_own_permission(scheduler: Scheduler) -> None:
+    """能排班的人不一定能决定花钱：带 cost_resource 的任务改计划、立即执行还要那个资源；不花钱的任务不受影响。"""
+
+    base = "/api/v1/demo/scheduled-jobs"
+    plan = {"enabled": True, "daily_time": "03:00", "version": 1}
+    scheduler_only = httpx.ASGITransport(app=_app(scheduler, {"list", "update", "execute"}))
+    async with httpx.AsyncClient(transport=scheduler_only, base_url="http://test") as client:
+        assert (await client.post(f"{base}/ai/runs")).status_code == 403
+        assert (await client.patch(f"{base}/ai", json=plan)).status_code == 403
+        assert (await client.post(f"{base}/cleanup/runs")).status_code == 202
+    both = httpx.ASGITransport(app=_app(scheduler, {"list", "update", "execute"}, {"update", "execute"}))
+    async with httpx.AsyncClient(transport=both, base_url="http://test") as client:
+        assert (await client.post(f"{base}/ai/runs")).status_code == 202
+        assert (await client.patch(f"{base}/ai", json=plan)).status_code == 200
 
 
 class _Connection:

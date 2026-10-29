@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.aitag.application import tagging
-from app.aitag.domain.tasks import TASKS, job_code
+from app.aitag.domain.tasks import AI_TAGGING_RESOURCE, TASKS, job_code
 from app.common.audit_emit import enqueue_event
 from app.core.database import SessionLocal
 from app.crawlconfig.application import rules_sync
@@ -79,8 +79,8 @@ def tagging_job(task: str, name: str) -> Job:
     async def summary(_session: AsyncSession, run_id: uuid.UUID) -> dict[str, Any] | None:
         return await tagging.summary(run_id)
 
-    # AI 打标一批要等模型逐条回答，上千条要一两个小时。
-    return Job(job_code(task), name, execute, 6 * 3600, abandon, summary)
+    # AI 打标一批要等模型逐条回答，上千条要一两个小时。会花钱：启用、改时间、立即执行还要「政策AI打标」可管理。
+    return Job(job_code(task), name, execute, 6 * 3600, abandon, summary, cost_resource=AI_TAGGING_RESOURCE)
 
 
 JOBS: list[Job] = [

@@ -39,6 +39,8 @@ import { EDITOR_DEFAULTS, EDITOR_GROUPS, SUMMARY_KEYS, TABLE_COLUMNS } from './f
 const RESOURCE = 'policy.interpretations'
 const auth = useAuthStore()
 const canWrite = computed(() => auth.canFull(RESOURCE))
+// 同步写的是行业场景码表：还要码表可管理，没有码表编辑权的人不能借这里往码表加行。
+const canSyncScenarios = computed(() => canWrite.value && auth.canFull('codebook.scenarios'))
 
 const query = reactive({
   policy_title: [] as string[],
@@ -165,7 +167,7 @@ onMounted(() => {
           批量改数据状态{{ checked.length ? `（${checked.length}）` : '' }}
         </el-button>
         <SyncScenariosButton
-          v-if="canWrite"
+          v-if="canSyncScenarios"
           ref="scenarioSync"
           @synced="load"
         />

@@ -15,3 +15,7 @@ TASK_COST = {"type": "type_cost", "interpret": "interpret_cost", "opportunity": 
 
 def job_code(task: str) -> str:
     return JOB_PREFIX + task
+
+
+# 会花钱的操作（改任务设置和每日费用上限、启用或改时间、立即执行）单独授权：IAM 资源「政策AI打标」，只有完整档。
+AI_TAGGING_RESOURCE = "policy.ai_tagging"

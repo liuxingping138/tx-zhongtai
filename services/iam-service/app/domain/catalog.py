@@ -59,6 +59,8 @@ RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("policy.base_tags", "政策基础标签表", "policy-service", NodeType.RESOURCE, True, 24, "policy"),
     # 给领导看的按周、按省配置栏目数；完整档才能手动同步规则表。
     ResourceSpec("policy.crawler_config", "爬虫配置统计", "policy-service", NodeType.RESOURCE, True, 25, "policy"),
+    # 政策 AI 打标会花钱：改任务设置和每日费用上限、启用或改时间、立即执行，在任务调度之外单独授权。没有菜单。
+    ResourceSpec("policy.ai_tagging", "政策AI打标", "policy-service", NodeType.RESOURCE, True, 26, "policy"),
     ResourceSpec("customer", "客户", "customer-service", NodeType.RESOURCE, False, 30),
     ResourceSpec("tender", "招投标", "tender-service", NodeType.RESOURCE, False, 40),
     ResourceSpec("codebook", "码表管理", "codebook-service", NodeType.DIRECTORY, True, 50),
@@ -146,6 +148,8 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ActionSpec("policy.interpretations", "import", GrantLevel.FULL),
     # 写的是码表：确认过的新增场景按编码规则建进行业场景码表。
     ActionSpec("policy.interpretations", "sync_scenarios", GrantLevel.FULL),
+    ActionSpec("policy.ai_tagging", "update", GrantLevel.FULL),
+    ActionSpec("policy.ai_tagging", "execute", GrantLevel.FULL),
     # 试发、批量运行和对话会调用大模型产生费用：试发和批量要「管理」档；多轮对话页本身就是对话，「仅查看」即可使用。
     ActionSpec("ai.prompts", "list", GrantLevel.READ),
     ActionSpec("ai.prompts", "export", GrantLevel.EXPORT),
@@ -168,7 +172,6 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ActionSpec("ai.category.customer", "update", GrantLevel.FULL),
     ActionSpec("ai.category.tender", "list", GrantLevel.READ),
     ActionSpec("ai.category.tender", "update", GrantLevel.FULL),
-    ActionSpec("ai.releases", "list", GrantLevel.READ),
     ActionSpec("ai.releases", "publish", GrantLevel.FULL),
     ActionSpec("ai.billing", "list", GrantLevel.READ),
 )

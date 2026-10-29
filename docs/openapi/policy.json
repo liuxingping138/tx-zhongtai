@@ -3051,7 +3051,7 @@
           "policy-interpretations"
         ],
         "summary": "Sync New Scenarios",
-        "description": "把人工验证过的新增场景写进行业场景码表，编码回填到解读行。",
+        "description": "把人工验证过的新增场景写进行业场景码表，编码回填到解读行。\n\n写的是码表，所以还要行业场景码表可管理：没有码表编辑权的人不能借这里往码表加行。",
         "operationId": "sync_new_scenarios_api_v1_policy_interpretations_new_scenarios_sync_post",
         "responses": {
           "200": {

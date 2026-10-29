@@ -36,6 +36,8 @@ const WRITE_LABEL = new Map(WRITE_ACTIONS)
 /** 同一个动作码在个别模块里说法不同。 */
 const WRITE_LABEL_BY_RESOURCE: Record<string, Record<string, string>> = {
   'system.users': { delete: '删除账号', update: '编辑、解锁被锁账号' },
+  'policy.ai_tagging': { update: '改打标任务设置和每日费用上限、启用或改执行时间', execute: '立即执行打标' },
+  'policy.interpretations': { sync_scenarios: '同步新增场景进码表（还要行业场景码表可管理）' },
 }
 
 /** 只能授予超级管理员角色的资源：用它能给别人（包括自己）加权限，后端也拒绝授给其他角色。 */

@@ -152,8 +152,12 @@ async def new_scenarios(
 async def sync_new_scenarios(
     session: AsyncSession = Depends(get_db_session, scope="function"),
     actor: Actor = Depends(require_policy_permission(RESOURCE, "sync_scenarios")),
+    _codebook: Actor = Depends(require_policy_permission("codebook.scenarios", "update")),
 ) -> JSONResponse:
-    """把人工验证过的新增场景写进行业场景码表，编码回填到解读行。"""
+    """把人工验证过的新增场景写进行业场景码表，编码回填到解读行。
+
+    写的是码表，所以还要行业场景码表可管理：没有码表编辑权的人不能借这里往码表加行。
+    """
 
     return success_json(await scenario_sync.sync(session, actor))
 

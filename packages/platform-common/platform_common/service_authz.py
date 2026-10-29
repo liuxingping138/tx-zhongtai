@@ -39,6 +39,15 @@ def _bearer_token(request: Request) -> str:
     return header[7:].strip()
 
 
+async def authorize_request(client: AuthzClient, request: Request, resource: str, action: str) -> None:
+    """按运行时才知道的资源再校验一次（如某个任务额外要求的权限）。
+
+    不通过时由 client 抛 PermissionDeniedError。
+    """
+
+    await client.authorize(access_token=_bearer_token(request), resource=resource, action=action)
+
+
 @functools.cache
 def cached_authz_client(
     *, base_url: str, service_name: str, service_secret: str, timeout_seconds: float

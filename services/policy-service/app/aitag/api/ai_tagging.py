@@ -1,4 +1,5 @@
-"""政策 AI 打标三个任务的设置和可选模板。挂在任务调度资源下：查看档看设置，完整档才能改设置。
+"""政策 AI 打标三个任务的设置和可选模板。任务调度的查看档能看设置；改设置（模板、条数、每日费用上限）
+要「政策AI打标」可管理：会花钱，和排班分开授权。
 
 执行和执行记录走任务调度的接口（每个任务是一个调度任务，编码 policy_ai_<任务>）；花费在 AI提问 → 费用账单 里看。
 """
@@ -19,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.aitag.application import retag, samples
 from app.aitag.application import settings as service
+from app.aitag.domain.tasks import AI_TAGGING_RESOURCE
 from app.common.security import classified, require_policy_permission
 from app.core.database import get_db_session
 
@@ -71,7 +73,7 @@ async def update_task(
     task: Task,
     body: TaskBody,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    actor: Actor = Depends(require_policy_permission(RESOURCE, "update")),
+    actor: Actor = Depends(require_policy_permission(AI_TAGGING_RESOURCE, "update")),
 ) -> JSONResponse:
     return success_json(await service.update_task(session, actor, task, body.model_dump()))
 

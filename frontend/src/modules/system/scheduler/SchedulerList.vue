@@ -20,6 +20,8 @@ import { useSchedulerHistory } from './useSchedulerHistory'
 
 const auth = useAuthStore()
 const canManage = computed(() => auth.canFull('system.scheduler'))
+/** 会花钱的任务（AI 打标）除了任务调度，还要它自己的资源可管理才能启用、改设置、立即执行。 */
+const canChange = (job: ScheduledJob) => canManage.value && (!job.cost_resource || auth.canFull(job.cost_resource))
 const overview = ref<SchedulerOverview | null>(null)
 // 任务分散在各服务的执行进程里：哪个服务离线或取不到就点名，不影响看其他服务的任务。
 const offline = computed(() => overview.value?.workers.filter(worker => !worker.online) ?? [])
@@ -247,7 +249,7 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
               class="job-cell"
             >
               <el-switch
-                v-if="canManage"
+                v-if="canChange(row)"
                 :model-value="row.enabled"
                 :loading="toggling === row.code"
                 :disabled="!!toggling && toggling !== row.code"
@@ -292,7 +294,7 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
         >
           <template #default="{ row }">
             <el-button
-              v-if="canManage"
+              v-if="canChange(row)"
               link
               type="primary"
               :disabled="!!row.active_run || !!pending"
@@ -302,7 +304,7 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
               立即执行
             </el-button>
             <el-button
-              v-if="canManage"
+              v-if="canChange(row)"
               link
               type="primary"
               @click="edit(row)"

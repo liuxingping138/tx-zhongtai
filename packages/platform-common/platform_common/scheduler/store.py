@@ -128,6 +128,7 @@ class Scheduler:
                 {
                     "code": row.code,
                     "name": job.name,
+                    "cost_resource": job.cost_resource,
                     "enabled": row.enabled,
                     "daily_time": row.daily_time,
                     "next_run_at": row.next_run_at if row.enabled else None,

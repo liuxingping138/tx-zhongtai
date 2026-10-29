@@ -179,7 +179,7 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
 - 模板的码表可选上传文件或系统码表（`app/domain/code_tables.py`：政策类型、行业场景六级、一级行业 + 一级场景）。系统码表每次经
   codebook-service 的 `/internal/v1/code-tables/{name}` 实时取，取不到就报 503，绝不拿空码表去问；密钥 `CODEBOOK_AI_CALLER_SECRET` 两边共用。
   只取名称列、去重（原表按客群重复，8370 行只有 3348 条路径）；六级码表按三级行业分组输出（「一级行业 > 二级行业 > 三级行业：场景；场景」，保留上级场景），约 3.8 万字，原样六列要 10.6 万字
-- 模板「上线」由 `ai.releases`（只给管理员）把提示词、输出字段、模型、码表冻结成 `ai_template_releases` 一版，模板 `release_id` 指向生效版本。
+- 模板「上线」由 `ai.releases`（只给管理员，只有管理档：看上线记录跟着模板的查看权限）把提示词、输出字段、模型、码表冻结成 `ai_template_releases` 一版，模板 `release_id` 指向生效版本。
   上线后再改模板只改草稿，页面列出与上线版本不同的项；已上线的模板要先下线才能删，删模板连它的样本试跑记录和产物一起删，试跑没结束的先拦下。定时任务只用上线版本
 - 主线是业务人员写模板、样本试跑 → 管理员上线 → 定时任务只跑上线版本（`releases.current`）。页面发起的批量任务（`app/application/batch_start.py`）用 `version` 选跑上线版本还是已保存的草稿：人自己传 Excel、当场看结果，不用等上线。单独上传本次 Excel，按要跑那一版引用的列检查（`input-preview` 预检不调模型；`input-template` 按同一份列给出只有表头的数据模板下载），把输入文件、那一版的提示词 / 输出字段 / 模型 / 码表冻结进任务目录和任务行（跑上线版本记 `release_no`，跑草稿记 `draft_saved_at`，以及 `input_name`）：之后改模板、重新上线、删模板都不影响排队中、运行中和已完成的任务
 - 样本试跑（`app/application/sample_runs.py`，`/api/v1/ai/prompts/{id}/sample-run`，权限同试发 `ai.prompts:ask`）：草稿 × 模板测试样本前 N 条（最多 50），也是一条 `ai_batch_runs`，`source=sample`，不进批量任务列表（`repositories/batch_runs.TASK_SOURCES`），和正式任务互不阻挡；按先后叫「第 N 次」，`view` 默认看最近一次、和前一次逐行对比（`run_compare`：按发起时复制进任务目录的样本内容判断是不是同一份，同一份才按行号对上，标 fixed / broke / changed；changed 只比标签类短值，超过 `PROSE_CHARS` 字的说明文字措辞变了不算，前端 `sampleView.isProse` 同一规则），`run_id` / `compare_id` 能换着看最近 20 次；`/sample-run/{run_id}/retry` 只重问失败的行，用的是那次冻结的提示词；模板列表带最近一次试跑（`sample`，`current` 表示跑的就是现在的草稿）。逐行结果预览 `run_rows.preview` 样本试跑和批量详情共用，任务可能几十万行，只读要列的那几行：输入读逐行副本 `input.jsonl`（第一次打开时由快照生成，快照大小或修改时间变了就重建），原始返回不留提问原文，前 50 行都成功就不往下读（重跑只重问失败的行，成功那次就是最终结果）。跑完的结果 Excel 在模板页下载（`/sample-run/{run_id}/files/{kind}`），挂模板的导出档 `ai.prompts:export` 而不是批量任务的，只给这个模板自己 `source=sample` 的任务
@@ -267,13 +267,15 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
   任务设置换模板时后端按它拦下；提示词模板编辑页按草稿实时提示（前端 `modules/ai/prompts/taskFit.ts` 同一套规则，两边改要一起改）
 - 「从数据库取测试数据」（`app/aitag/application/samples.py`，`GET /api/v1/policy/ai-tagging/samples`，权限 `policy.base_tags:list`）：按任务生成和正式打标一样的行，
   前端再存成模板测试 Excel（ai-service `POST /api/v1/ai/prompts/{id}/test-data`）。接口只能挂本服务资源，所以不用 AI 模块的模板权限
+- 打标会花钱，单独授权：改任务设置（模板、条数、每日费用上限）挂 `policy.ai_tagging:update`；三个打标调度任务的 `Job.cost_resource` 是它，
+  任务调度改计划、立即执行除了 `system.scheduler` 还要它的完整档（`build_scheduler_router` 的 `check_permission`）。新增花钱的调度任务照此设 `cost_resource`
 - 政策正文不进平台库：基础标签、解读详情里的「政策正文」由 `policy/application/policy_content.py`（`GET /base-tags/{id}/content`、`/interpretations/{id}/content`，各挂自己的 `read`）按 `source_content_id` 现读源库，
   用 `rules.clean_content` 提取成和打标同一口径的文字；源库单条实测 0.2 秒。没有源政策 ID 的行回 404「没有正文」，源库连不上回 503
 - 解读、市场机会按待办做：基础标签「是否解读 = 是」且 `interpreted_at` 为空的政策做解读，一条展开成多行写解读表（「政策概览」写进「政策要文」，
   非新增场景到码表查编码，名称对不上的写备注）；解读过、`opportunity_at` 为空的做市场机会，按一级行业 + 一级场景回填。
   费用到上限没轮到的不记时间，下批接着做；AI 行只要人工验证过或改过就不再覆盖（`app/aitag/application/interpreting.py`）
 - 解读列表「同步新增场景」：是否新增场景 = 是、人工验证、未同步的行，经 codebook `/internal/v1/scenarios/sync` 按编码规则
-  （`app/domain/scenario_codes.py`：各级号全局最大 + 1，已有上级沿用，行业只查不建）写进场景码表并回填编码；动作 `policy.interpretations:sync_scenarios`。
+  （`app/domain/scenario_codes.py`：各级号全局最大 + 1，已有上级沿用，行业只查不建）写进场景码表并回填编码；动作 `policy.interpretations:sync_scenarios`，写的是码表所以还要 `codebook.scenarios:update`。
   码表里同步进来的行标「是否新增场景 = 是」、记「来源政策」（这两列不在 Excel 导入列和内容哈希里），不写业务自己的「场景来源」「三级场景描述」。
   码表有约 700 行通用场景只挂在一级行业下，查编码时六级对不上就按「一级行业 + 场景」再找；名称带「（新增）」标记的拦下不同步（AI 写入时已去掉）。
   解读表单保存时六级名称改了（或编码还空着）按名称重查编码，同步过的改了名称清掉同步时间（`policy/application/interpretations._refresh_codes`）

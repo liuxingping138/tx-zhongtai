@@ -35,6 +35,8 @@ class Job:
       没给就以 execute 不抛异常为成功
     - watermark：页面「数据进度」显示的水位
     - public_errors：RuntimeError 的信息以这些前缀开头时原样显示（例如「已有同步正在运行」）
+    - cost_resource：会花钱的任务（如调大模型）。改计划、手动执行除了 system.scheduler 的完整档，
+      还要这个资源的完整档：能排班的人不一定能决定花钱
     """
 
     code: str
@@ -45,6 +47,7 @@ class Job:
     summary: Callable[[AsyncSession, uuid.UUID], Awaitable[dict[str, Any] | None]] | None = None
     watermark: Callable[[AsyncSession], Awaitable[datetime | None]] | None = None
     public_errors: tuple[str, ...] = ()
+    cost_resource: str | None = None
 
 
 def next_daily(now: datetime, daily_time: str) -> datetime:

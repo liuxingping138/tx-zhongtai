@@ -4,10 +4,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -35,8 +35,17 @@ def build_scheduler_router(
     prefix: str,
     require_permission: Callable[[str, str], Callable[..., Any]],
     get_db_session: Callable[..., Any],
+    check_permission: Callable[[Request, str, str], Awaitable[None]] | None = None,
 ) -> APIRouter:
+    """check_permission(request, resource, action)：没有权限时抛 PermissionDeniedError。
+    给了它，带 cost_resource 的任务改计划、手动执行时再校验那个资源；没给就只看 system.scheduler。"""
+
     router = APIRouter(prefix=prefix, tags=["任务调度"])
+
+    async def check_cost(request: Request, code: str, action: str) -> None:
+        job = scheduler.jobs.get(code)
+        if job is not None and job.cost_resource and check_permission is not None:
+            await check_permission(request, job.cost_resource, action)
 
     @router.get("")
     @classified(SecurityClass.RESOURCE_AUTHORIZED)
@@ -51,9 +60,11 @@ def build_scheduler_router(
     async def update_job(
         code: str,
         payload: JobUpdate,
+        request: Request,
         session: AsyncSession = Depends(get_db_session, scope="function"),
         actor: Actor = Depends(require_permission(RESOURCE, "update")),
     ) -> JSONResponse:
+        await check_cost(request, code, "update")
         await scheduler.update_job(session, code, actor, **payload.model_dump())
         return success_json({"saved": True})
 
@@ -61,9 +72,11 @@ def build_scheduler_router(
     @classified(SecurityClass.RESOURCE_AUTHORIZED)
     async def trigger_job(
         code: str,
+        request: Request,
         session: AsyncSession = Depends(get_db_session, scope="function"),
         actor: Actor = Depends(require_permission(RESOURCE, "execute")),
     ) -> JSONResponse:
+        await check_cost(request, code, "execute")
         return success_json(jsonable_encoder(await scheduler.trigger_job(session, code, actor)), status_code=202)
 
     @router.get("/{code}/runs")
