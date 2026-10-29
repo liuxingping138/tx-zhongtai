@@ -98,7 +98,7 @@ test('AI提问主流程：写模板 → 试发 → 样本试跑 → 上线 → �
   await expect(sample).toContainText('跑到的行结果都一样')
   // 试发选第 2 行：拿这一行的试跑结果对照。
   await page.getByRole('tab', { name: '试发一条' }).click()
-  await trialPane.getByRole('button', { name: '下一行' }).click()
+  await trialPane.getByRole('button', { name: '下一行', exact: true }).click()
   await expect(trialPane).toContainText('乙公司')
   await trialPane.getByRole('button', { name: /^试发这一行/ }).click()
   await expect(trialResult).toContainText('按输出字段解析成功', { timeout: 20_000 })
