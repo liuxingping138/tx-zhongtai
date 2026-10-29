@@ -48,7 +48,7 @@ test('爬虫监测：卡片、筛选联动与导出', async ({ page }) => {
   const exportResponse = page.waitForResponse(
     (response) => response.url().includes('/crawler-monitoring/sites/export') && response.ok(),
   )
-  await page.getByRole('button', { name: '下载 Excel', exact: true }).click()
+  await page.getByRole('button', { name: '导出', exact: true }).click()
   expect(new URL((await exportResponse).url()).searchParams.get('status')).toBe('stale')
 
   // 再次点击取消状态筛选。
@@ -151,7 +151,7 @@ test('爬虫监测：同一字段多选按「或」查询，导出带同样的�
   const exportResponse = page.waitForResponse(
     (response) => response.url().includes('/crawler-monitoring/sites/export') && response.ok(),
   )
-  await page.getByRole('button', { name: '下载 Excel', exact: true }).click()
+  await page.getByRole('button', { name: '导出', exact: true }).click()
   expect(new URL((await exportResponse).url()).searchParams.getAll('province_name').sort()).toEqual([...provinces].sort())
 
   // 刷新后从地址栏恢复两个值，仍然是同一个查询。

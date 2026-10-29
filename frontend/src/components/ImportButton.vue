@@ -28,7 +28,7 @@ defineProps<{
         :icon="Upload"
         :disabled="importUi.visible || Boolean(blocked)"
       >
-        上传 Excel
+        导入
       </el-button>
     </el-tooltip>
   </el-upload>

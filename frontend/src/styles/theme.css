@@ -49,6 +49,13 @@
   --zt-danger-border: #f0cdc6;
   /* 还没开始、跳过这类中性状态的圆点。 */
   --zt-muted-mark: #b3bdca;
+  /* 用户头像底色：按人固定取一个，白字都在 4.5:1 以上。 */
+  --zt-avatar-1: #3558de;
+  --zt-avatar-2: #12776d;
+  --zt-avatar-3: #7048c2;
+  --zt-avatar-4: #b8561a;
+  --zt-avatar-5: #556580;
+  --zt-avatar-6: #b0386a;
   /* 提示词里引用码表的变量：和 Excel 列（蓝）、找不到的列（提醒色）区分开。 */
   --zt-teal-text: #1f7a6b;
   --zt-teal-soft: #dcf1ee;

@@ -5,6 +5,7 @@ import type { UserItem } from '@/api/types'
 import ListEmpty from '@/components/ListEmpty.vue'
 import { useAuthStore } from '@/stores/auth'
 import { formatTime } from '@/utils/time'
+import { avatarText, avatarTone } from './userAvatar'
 
 defineProps<{ users: UserItem[]; loading: boolean; filtered: boolean }>()
 defineEmits<{
@@ -43,18 +44,25 @@ function roleNames(user: UserItem): string {
     </template>
     <el-table-column
       label="用户名"
-      width="130"
+      min-width="230"
       show-overflow-tooltip
     >
       <template #default="{ row }">
-        <el-button
-          link
-          type="primary"
-          class="user-link"
-          @click="$emit('open', row)"
-        >
-          {{ row.username }}
-        </el-button>
+        <span class="user-cell">
+          <span
+            class="user-avatar"
+            :class="`is-tone-${avatarTone(row.id)}`"
+            aria-hidden="true"
+          >{{ avatarText(row) }}</span>
+          <el-button
+            link
+            type="primary"
+            class="user-link"
+            @click="$emit('open', row)"
+          >
+            {{ row.username }}
+          </el-button>
+        </span>
       </template>
     </el-table-column>
     <el-table-column
@@ -181,7 +189,7 @@ function roleNames(user: UserItem): string {
     </el-table-column>
     <el-table-column
       label="创建时间"
-      width="190"
+      width="170"
     >
       <template #default="{ row }">
         <span class="muted">{{ formatTime(row.created_at) }}</span>
@@ -251,7 +259,16 @@ function roleNames(user: UserItem): string {
   color: var(--zt-ink-500);
 }
 
-.user-link { font-weight: 500; }
+.user-cell { display: inline-flex; align-items: center; gap: 10px; max-width: 100%; vertical-align: middle; }
+.user-avatar { display: inline-grid; flex: none; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: var(--el-color-white); font-size: 13px; font-weight: 600; line-height: 1; }
+.user-avatar.is-tone-1 { background: var(--zt-avatar-1); }
+.user-avatar.is-tone-2 { background: var(--zt-avatar-2); }
+.user-avatar.is-tone-3 { background: var(--zt-avatar-3); }
+.user-avatar.is-tone-4 { background: var(--zt-avatar-4); }
+.user-avatar.is-tone-5 { background: var(--zt-avatar-5); }
+.user-avatar.is-tone-6 { background: var(--zt-avatar-6); }
+.user-link { overflow: hidden; min-width: 0; font-weight: 500; }
+.user-link :deep(span) { overflow: hidden; text-overflow: ellipsis; }
 
 .ops-more {
   margin-left: 12px;

@@ -129,8 +129,8 @@ test('1024px 下限：无整页横溢出、工具栏入口齐全、筛选可展�
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   expect(overflow).toBeLessThanOrEqual(0)
 
-  // 上传和下载入口必须保留，且真的落在视口内。
-  for (const name of [/上传/, /下载/, /列设置/]) {
+  // 导入和导出入口必须保留，且真的落在视口内。
+  for (const name of [/^导入$/, /^导出$/, /列设置/]) {
     const button = page.getByRole('button', { name }).first()
     await expect(button).toBeVisible()
     const box = await button.boundingBox()
