@@ -1,16 +1,18 @@
 """在应用读取请求体之前限制体积，并拦住没有身份的上传。
 
 FastAPI 把 ``UploadFile`` 放进路由参数时，会在权限依赖返回之前就把 multipart
-写进临时文件。上传路由改为进入函数后再解析；这里再挡一层：声明了超限
-Content-Length 的请求不会进入应用，没有 Bearer 的上传也不会开始读正文。
-没有 Content-Length 的流式正文由读取端逐块计数。
+写进临时文件；JSON 正文也是先整段读进内存、再跑鉴权依赖。这里挡在应用前面：
+声明了超限 Content-Length 的请求不会进入应用，没有 Bearer 的上传也不会开始读正文；
+不带 Content-Length 的分块（chunked）正文按实际收到的字节累计，一超就停、回 413，
+否则未登录的人发几路大正文就能把服务内存打满。
 """
 
 from __future__ import annotations
 
 import json
 
-from starlette.types import ASGIApp, Receive, Scope, Send
+from fastapi import HTTPException
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from platform_common.errors import ErrorCode
 
@@ -47,12 +49,33 @@ async def _json_response(send: Send, status: int, code: str, message: str) -> No
     await send({"type": "http.response.body", "body": body})
 
 
-class RequestBodyLimitMiddleware:
-    """按字节拒绝过大的请求。上传路径在缺少 Bearer 时直接 401，不读取正文。"""
+class RequestBodyTooLargeError(HTTPException):
+    """读正文时超了上限。FastAPI 读正文出的错会被包成 400「解析失败」，只有 HTTPException 原样往外抛，所以继承它。"""
 
-    def __init__(self, app: ASGIApp, max_bytes: int) -> None:
+    def __init__(self) -> None:
+        super().__init__(status_code=413, detail=_TOO_LARGE)
+
+
+_TOO_LARGE = "请求体过大"
+
+
+class RequestBodyLimitMiddleware:
+    """按字节拒绝过大的请求。上传路径在缺少 Bearer 时直接 401，不读取正文。
+
+    path_limits 给某些路径前缀更小的上限，比如流式提问只收一段 JSON，用不着上传文件那么大的额度。
+    """
+
+    def __init__(self, app: ASGIApp, max_bytes: int, path_limits: dict[str, int] | None = None) -> None:
         self.app = app
         self.max_bytes = max_bytes
+        self.path_limits = path_limits or {}
+
+    def _limit(self, scope: Scope) -> int:
+        path = scope.get("path") or ""
+        for prefix, limit in self.path_limits.items():
+            if path.startswith(prefix):
+                return limit
+        return self.max_bytes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope.get("type") != "http":
@@ -62,13 +85,42 @@ class RequestBodyLimitMiddleware:
         if _is_upload(scope) and not headers.get("authorization", "").lower().startswith("bearer "):
             await _json_response(send, 401, ErrorCode.AUTH_UNAUTHENTICATED, "未认证或凭据已失效")
             return
-        raw_length = headers.get("content-length")
-        if raw_length:
-            try:
-                length = int(raw_length)
-            except ValueError:
-                length = -1
-            if length > self.max_bytes:
-                await _json_response(send, 413, ErrorCode.VALIDATION_ERROR, "请求体过大")
-                return
-        await self.app(scope, receive, send)
+        limit = self._limit(scope)
+        if _declared_length(headers) > limit:
+            await _json_response(send, 413, ErrorCode.VALIDATION_ERROR, _TOO_LARGE)
+            return
+        await self._counted(scope, receive, send, limit)
+
+    async def _counted(self, scope: Scope, receive: Receive, send: Send, limit: int) -> None:
+        """按实际收到的字节累计，一超就停：不带 Content-Length 的分块正文靠这一层挡。"""
+
+        received = 0
+        started = False
+
+        async def counted_receive() -> Message:
+            nonlocal received
+            message = await receive()
+            if message.get("type") == "http.request":
+                received += len(message.get("body", b""))
+                if received > limit:
+                    raise RequestBodyTooLargeError
+            return message
+
+        async def tracked_send(message: Message) -> None:
+            nonlocal started
+            started = started or message.get("type") == "http.response.start"
+            await send(message)
+
+        try:
+            await self.app(scope, counted_receive, tracked_send)
+        except RequestBodyTooLargeError:
+            # 应用的异常处理没接住（比如在中间件层读的正文）：还没开始回响应就由这里回 413。
+            if not started:
+                await _json_response(send, 413, ErrorCode.VALIDATION_ERROR, _TOO_LARGE)
+
+
+def _declared_length(headers: dict[str, str]) -> int:
+    try:
+        return int(headers.get("content-length") or -1)
+    except ValueError:
+        return -1

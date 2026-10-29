@@ -30,6 +30,8 @@ settings = get_settings()
 setup_logging(settings.service_name, level=settings.log_level, json_output=settings.environment != "development")
 logger = get_logger(__name__)
 
+STREAM_MAX_BYTES = 2 * 1024 * 1024
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -53,7 +55,12 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     app.add_middleware(RequestIdMiddleware)
-    app.add_middleware(RequestBodyLimitMiddleware, max_bytes=settings.upload_max_bytes + MULTIPART_OVERHEAD_BYTES)
+    # 流式提问只收一段 JSON（提示词最多 20 万字），用不着上传文件那么大的额度；这个前缀在网关上也不经缓冲限流。
+    app.add_middleware(
+        RequestBodyLimitMiddleware,
+        max_bytes=settings.upload_max_bytes + MULTIPART_OVERHEAD_BYTES,
+        path_limits={"/api/v1/ai/stream": STREAM_MAX_BYTES},
+    )
     if settings.cors_allow_origins:
         app.add_middleware(
             CORSMiddleware,

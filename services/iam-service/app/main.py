@@ -6,8 +6,10 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from platform_common.body_limit import RequestBodyLimitMiddleware
 from platform_common.errors import register_exception_handlers
 from platform_common.health import build_health_router
+from platform_common.http_utils import MULTIPART_OVERHEAD_BYTES
 from platform_common.logging_setup import get_logger, setup_logging
 from platform_common.request_context import RequestIdMiddleware
 from starlette.middleware.cors import CORSMiddleware
@@ -44,6 +46,8 @@ def create_app() -> FastAPI:
     )
 
     app.add_middleware(RequestIdMiddleware)
+    # 登录接口不用登录就能调：不限请求体的话，不带 Content-Length 的大正文会整段读进 IAM 内存。
+    app.add_middleware(RequestBodyLimitMiddleware, max_bytes=settings.import_max_bytes + MULTIPART_OVERHEAD_BYTES)
     if settings.cors_allow_origins:
         app.add_middleware(
             CORSMiddleware,
