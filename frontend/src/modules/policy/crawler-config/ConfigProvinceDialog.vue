@@ -114,8 +114,8 @@ async function copyTable(): Promise<void> {
 .total { display: flex; align-items: baseline; gap: 6px; color: var(--zt-ink-500); font-size: 13px; }
 .total strong { color: var(--zt-blue-600); font-size: 30px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
 .facts { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--zt-ink-700); font-size: 13px; }
-.delta-good { color: var(--el-color-success); }
-.delta-bad { color: var(--el-color-danger); }
+.delta-good { color: var(--zt-success-text); }
+.delta-bad { color: var(--zt-danger-text); }
 .ranking { max-height: min(420px, 52vh); margin: 12px 0 0; padding: 0; overflow-y: auto; list-style: none; }
 .row { display: grid; grid-template-columns: 24px minmax(72px, 8em) 1fr 52px 48px; align-items: center; gap: 12px; width: 100%; padding: 8px; border: 0; border-radius: 4px; background: none; color: var(--zt-ink-900); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
 .row:hover { background: var(--zt-soft); }

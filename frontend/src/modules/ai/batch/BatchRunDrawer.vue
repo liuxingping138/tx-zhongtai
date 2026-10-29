@@ -208,7 +208,7 @@ async function act(action: (current: BatchRun) => Promise<boolean>, close = fals
 .run-detail__facts { display: grid; grid-template-columns: 72px minmax(0, 1fr) 72px minmax(0, 1fr); gap: 10px 12px; margin: 16px 0 0; padding: 14px 16px; border-radius: 6px; background: var(--zt-soft); font-size: 13px; }
 .run-detail__facts dt { color: var(--zt-ink-500); }
 .run-detail__facts dd { margin: 0; overflow-wrap: anywhere; }
-.run-detail__facts dd.is-bad { color: var(--el-color-danger); }
+.run-detail__facts dd.is-bad { color: var(--zt-danger-text); }
 .run-detail__section { margin-top: 20px; }
 .run-detail__section h3 { margin: 0 0 10px; color: var(--zt-ink-900); font-size: 14px; font-weight: 650; }
 .run-detail__section summary { color: var(--zt-blue-600); font-size: 13px; cursor: pointer; }

@@ -27,6 +27,8 @@ SESSION_DEPENDS = re.compile(r"Depends\(\s*get_db_session\s*\)")
 # 颜色只在 frontend/src/styles 的主题变量里定义，页面和组件引用变量；各写各的色值，全站就统一不起来。
 UI_SOURCE = re.compile(r"^frontend/src/(modules|components|layouts|views)/.+\.(vue|ts|css)$")
 COLOR_LITERAL = re.compile(r"#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b|\brgba?\(\s*\d")
+# Element 的状态色在 theme.css 里已换成主题色，页面直接引用它会绕开文字用的 text 档；页面用 --zt-success-text 这一组。
+EL_STATUS_COLOR = re.compile(r"var\(--el-color-(?:success|warning|danger|error|info)\b")
 # 本来就要写色值的文件登记在这里，写明理由。
 COLOR_FILES: dict[str, str] = {
     "frontend/src/views/LoginView.vue": "登录页沿用原独立视觉",
@@ -98,11 +100,13 @@ def frontend_comment_errors(rel: str, source: str) -> list[str]:
 def color_literal_errors(rel: str, source: str) -> list[str]:
     if rel in COLOR_FILES or rel.endswith(".test.ts"):
         return []
-    return [
-        f"{rel}:{number}: 页面和组件里不写色值，用 theme.css 的变量（如 var(--zt-warning-text)）"
-        for number, line in enumerate(source.splitlines(), start=1)
-        if COLOR_LITERAL.search(line)
-    ]
+    errors: list[str] = []
+    for number, line in enumerate(source.splitlines(), start=1):
+        if COLOR_LITERAL.search(line):
+            errors.append(f"{rel}:{number}: 页面和组件里不写色值，用 theme.css 的变量（如 var(--zt-warning-text)）")
+        if EL_STATUS_COLOR.search(line):
+            errors.append(f"{rel}:{number}: 不直接用 Element 的状态色，用 theme.css 的 --zt-success / --zt-warning / --zt-danger 这一组")
+    return errors
 
 
 def line_count_errors(rel: str, source: str) -> list[str]:

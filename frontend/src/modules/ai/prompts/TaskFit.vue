@@ -57,13 +57,13 @@ function lines(item: TaskFitResult): string[] {
 .task-fit__icon { flex: none; margin-top: 3px; font-size: 15px; }
 .is-ok .task-fit__icon { color: var(--zt-success); }
 .is-warn .task-fit__icon { color: var(--zt-warning); }
-.is-error .task-fit__icon { color: var(--el-color-danger); }
+.is-error .task-fit__icon { color: var(--zt-danger-text); }
 .is-skip .task-fit__icon { color: var(--zt-muted-mark); }
 .task-fit__body { min-width: 0; }
 .task-fit__name { color: var(--zt-ink-900); font-weight: 600; }
 .is-skip .task-fit__name { color: var(--zt-ink-500); font-weight: 500; }
 .task-fit__level { margin-left: 8px; color: var(--zt-ink-500); }
-.is-error .task-fit__level { color: var(--el-color-danger); }
+.is-error .task-fit__level { color: var(--zt-danger-text); }
 .task-fit p { margin: 2px 0 0; color: var(--zt-ink-700); font-size: 12px; overflow-wrap: anywhere; }
 .is-skip p { color: var(--zt-ink-500); }
 .task-fit__empty { margin: 0; color: var(--zt-ink-500); font-size: 12px; line-height: 1.6; }

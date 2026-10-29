@@ -59,6 +59,34 @@
   --chart-stale: var(--zt-danger);
   --chart-long: #8a7368;
 
+  /* 遮罩层（加载中）的半透明底。 */
+  --zt-loading-mask: rgb(247 250 255 / 72%);
+
+  --zt-title-size: 24px;
+  --zt-radius: 6px;
+  --zt-font: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  --zt-space-1: 4px;
+  --zt-space-2: 8px;
+  --zt-space-3: 12px;
+  --zt-space-4: 16px;
+  --zt-space-6: 24px;
+  --zt-space-8: 32px;
+  --zt-nav: #203955;
+  --zt-nav-active: #33567e;
+  --zt-nav-text: #c1d0e2;
+  --zt-scroll-thumb: #5d738c;
+  --zt-scroll-track: #d6dee8;
+  --zt-scroll-hover: #4d6480;
+  --zt-scroll-active: #3f546c;
+
+  /* Element Plus 适配：主色和成功、提醒、危险都换成上面的主题色，组件自带的提示框、按钮、消息和页面自己写的状态文字是同一组颜色。
+     Element 的浅色档在它编译时就算好了，只改底色不会跟着变，所以每一档按它的算法（和白色混合）写全。 */
+  --el-font-family: var(--zt-font);
+  --el-font-size-base: 14px;
+  --el-border-radius-base: var(--zt-radius);
+  --el-text-color-primary: var(--zt-ink-900);
+  --el-text-color-regular: var(--zt-ink-700);
+  --el-border-color: var(--zt-border);
   --el-color-primary: #3558de;
   --el-color-primary-light-3: #6b85e7;
   --el-color-primary-light-5: #9aacee;
@@ -66,6 +94,34 @@
   --el-color-primary-light-8: #d7def9;
   --el-color-primary-light-9: #eef1fc;
   --el-color-primary-dark-2: #2948bb;
+  --el-color-success: var(--zt-success);
+  --el-color-success-light-3: color-mix(in srgb, var(--zt-success) 70%, white);
+  --el-color-success-light-5: color-mix(in srgb, var(--zt-success) 50%, white);
+  --el-color-success-light-7: color-mix(in srgb, var(--zt-success) 30%, white);
+  --el-color-success-light-8: var(--zt-success-border);
+  --el-color-success-light-9: var(--zt-success-soft);
+  --el-color-success-dark-2: var(--zt-success-text);
+  --el-color-warning: var(--zt-warning);
+  --el-color-warning-light-3: color-mix(in srgb, var(--zt-warning) 70%, white);
+  --el-color-warning-light-5: color-mix(in srgb, var(--zt-warning) 50%, white);
+  --el-color-warning-light-7: color-mix(in srgb, var(--zt-warning) 30%, white);
+  --el-color-warning-light-8: var(--zt-warning-border);
+  --el-color-warning-light-9: var(--zt-warning-soft);
+  --el-color-warning-dark-2: var(--zt-warning-text);
+  --el-color-danger: var(--zt-danger);
+  --el-color-danger-light-3: color-mix(in srgb, var(--zt-danger) 70%, white);
+  --el-color-danger-light-5: color-mix(in srgb, var(--zt-danger) 50%, white);
+  --el-color-danger-light-7: color-mix(in srgb, var(--zt-danger) 30%, white);
+  --el-color-danger-light-8: var(--zt-danger-border);
+  --el-color-danger-light-9: var(--zt-danger-soft);
+  --el-color-danger-dark-2: var(--zt-danger-text);
+  --el-color-error: var(--el-color-danger);
+  --el-color-error-light-3: var(--el-color-danger-light-3);
+  --el-color-error-light-5: var(--el-color-danger-light-5);
+  --el-color-error-light-7: var(--el-color-danger-light-7);
+  --el-color-error-light-8: var(--el-color-danger-light-8);
+  --el-color-error-light-9: var(--el-color-danger-light-9);
+  --el-color-error-dark-2: var(--el-color-danger-dark-2);
 }
 
 * {
@@ -83,7 +139,9 @@ body,
 body {
   color: var(--zt-ink-900);
   background: var(--zt-soft);
-  font-family: "HarmonyOS Sans SC", "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+  font-family: var(--zt-font);
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .el-card,
@@ -98,7 +156,9 @@ body {
 }
 
 .el-button {
-  font-weight: 600;
+  min-height: 34px;
+  font-weight: 500;
+  box-shadow: none;
   transition:
     background 0.16s ease,
     border-color 0.16s ease,
@@ -111,36 +171,40 @@ body {
 }
 
 .el-loading-mask {
-  background-color: rgba(247, 250, 255, 0.72);
+  background-color: var(--zt-loading-mask);
   backdrop-filter: blur(2px);
 }
 
+/* 数据表和业务表格同一套表头、悬停底色。 */
 .el-table.data-table {
-  --el-table-header-bg-color: #f3f5f8;
+  --el-table-header-bg-color: var(--zt-table-head);
   --el-table-header-text-color: var(--zt-ink-900);
-  --el-table-row-hover-bg-color: #f7f9fc;
-  --el-table-border-color: #e4e9f0;
+  --el-table-row-hover-bg-color: var(--zt-row-hover);
+  --el-table-border-color: var(--zt-border);
 }
 
 .el-table.data-table th.el-table__cell {
+  padding: 11px 0;
+  font-size: 13px;
   font-weight: 600;
-  padding: 10px 0;
 }
 
 .el-table.data-table td.el-table__cell {
+  padding: 12px 0;
   color: var(--zt-ink-700);
-  font-size: 13px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
 }
 
-.pagination-row {
-  display: flex;
-  justify-content: flex-end;
-  padding: 14px 4px 0;
-}
+.el-table.data-table .cell { line-height: 1.6; padding: 0 16px; }
+
+.pagination-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 0; min-height: 64px; }
+.pagination-range { color: var(--zt-ink-500); font-size: 12px; font-variant-numeric: tabular-nums; }
 
 .pagination-row .el-pagination {
-  --el-pagination-button-bg-color: #fff;
+  --el-pagination-button-bg-color: var(--zt-panel);
   --el-pagination-hover-color: var(--zt-blue-600);
+  gap: 6px;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
@@ -160,17 +224,11 @@ body {
   max-width: 100vw;
 }
 
-@media (max-width: 600px) {
-  .pagination-row .el-pagination {
-    gap: 8px;
-  }
-}
-
 /* Shared editor surfaces: the content scrolls while actions remain visible. */
 .editor-overlay.el-drawer .el-drawer__header { margin-bottom: 0; padding: 24px; border-bottom: 1px solid var(--zt-border); color: var(--zt-ink-900); }
 .editor-overlay.el-drawer .el-drawer__title { font-size: 18px; font-weight: 650; }
-.editor-overlay.el-drawer .el-drawer__body { padding: 24px; background: #f7f9fc; }
-.editor-overlay.el-drawer .el-drawer__footer { padding: 16px 24px; border-top: 1px solid var(--zt-border); background: #fff; }
+.editor-overlay.el-drawer .el-drawer__body { padding: 24px; background: var(--zt-panel); }
+.editor-overlay.el-drawer .el-drawer__footer { padding: 16px 24px; border-top: 1px solid var(--zt-border); background: var(--zt-panel); }
 .editor-overlay.el-dialog { padding: 24px; border-radius: 12px; }
 .editor-overlay.el-dialog .el-dialog__body { max-height: 65vh; overflow-y: auto; padding-top: 16px; }
 .editor-overlay .el-dialog__title { color: var(--zt-ink-900); font-weight: 650; }
@@ -182,39 +240,18 @@ body {
 .el-tag--success { --el-tag-bg-color: var(--zt-success-soft); --el-tag-border-color: var(--zt-success-border); --el-tag-text-color: var(--zt-success-text); }
 .el-tag--warning { --el-tag-bg-color: var(--zt-warning-soft); --el-tag-border-color: var(--zt-warning-border); --el-tag-text-color: var(--zt-warning-text); }
 .el-tag--danger { --el-tag-bg-color: var(--zt-danger-soft); --el-tag-border-color: var(--zt-danger-border); --el-tag-text-color: var(--zt-danger-text); }
+.el-alert--success.is-light, .el-alert--success.is-light .el-alert__description { --el-alert-bg-color: var(--zt-success-soft); color: var(--zt-success-text); }
+.el-alert--warning.is-light, .el-alert--warning.is-light .el-alert__description { --el-alert-bg-color: var(--zt-warning-soft); color: var(--zt-warning-text); }
+.el-alert--error.is-light, .el-alert--error.is-light .el-alert__description { --el-alert-bg-color: var(--zt-danger-soft); color: var(--zt-danger-text); }
+.el-message--success { --el-message-text-color: var(--zt-success-text); }
+.el-message--warning { --el-message-text-color: var(--zt-warning-text); }
+.el-message--error { --el-message-text-color: var(--zt-danger-text); }
 .el-tag--info { --el-tag-bg-color: var(--zt-soft); --el-tag-border-color: var(--zt-border); --el-tag-text-color: var(--zt-ink-500); }
 @media (max-width: 540px) { .editor-dirty { display: flex; margin: 0 0 12px; } .editor-overlay.el-drawer .el-drawer__body { padding: 16px; } }
 @media (prefers-reduced-motion: reduce) { .el-button { transition: none; } }
 
 .editor-help { margin: 0 0 20px; color: var(--zt-ink-500); font-size: 12px; line-height: 1.8; }
 
-/* Approved data workbench: canonical tokens and Element Plus adapters. */
-:root {
-  --zt-title-size: 24px;
-  --zt-radius: 6px;
-  --zt-font: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
-  --zt-space-1: 4px;
-  --zt-space-2: 8px;
-  --zt-space-3: 12px;
-  --zt-space-4: 16px;
-  --zt-space-6: 24px;
-  --zt-space-8: 32px;
-  --zt-nav: #203955;
-  --zt-nav-active: #33567e;
-  --zt-nav-text: #c1d0e2;
-  --zt-scroll-thumb: #5d738c;
-  --zt-scroll-track: #d6dee8;
-  --zt-scroll-hover: #4d6480;
-  --zt-scroll-active: #3f546c;
-  --el-font-family: var(--zt-font);
-  --el-font-size-base: 14px;
-  --el-border-radius-base: var(--zt-radius);
-  --el-color-primary: var(--zt-blue-600);
-  --el-text-color-primary: var(--zt-ink-900);
-  --el-text-color-regular: var(--zt-ink-700);
-  --el-border-color: var(--zt-border);
-}
-body { font-family: var(--zt-font); font-size: 14px; line-height: 1.6; }
 * { scrollbar-width: auto; scrollbar-color: var(--zt-scroll-thumb) var(--zt-scroll-track); }
 *::-webkit-scrollbar { width: 12px; height: 12px; }
 *::-webkit-scrollbar-track { background: var(--zt-scroll-track); }
@@ -236,21 +273,12 @@ body { font-family: var(--zt-font); font-size: 14px; line-height: 1.6; }
 button:not(:disabled), a, .el-select, .el-checkbox, .el-radio { cursor: pointer; }
 button:focus-visible, a:focus-visible { outline: 2px solid var(--zt-blue-600); outline-offset: 3px; }
 button:disabled { cursor: not-allowed; }
-.el-button { min-height: 34px; font-weight: 500; box-shadow: none; }
 .el-button.is-text, .el-button.is-link { box-shadow: none; }
 .el-button.is-loading .el-icon.is-loading { position: absolute; left: 3px; font-size: 12px; }
 .el-button--primary { box-shadow: none; }
 .el-textarea__inner { resize: none; }
-.el-table.data-table { --el-table-header-bg-color: #f0f4f9; --el-table-header-text-color: var(--zt-ink-900); --el-table-row-hover-bg-color: #f3f7fc; --el-table-border-color: var(--zt-border); }
-.el-table.data-table td.el-table__cell { font-size: 14px; padding: 12px 0; font-variant-numeric: tabular-nums; }
-.el-table.data-table th.el-table__cell { padding: 11px 0; font-size: 13px; }
-.el-table.data-table .cell { line-height: 1.6; padding: 0 16px; }
-.pagination-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 0; min-height: 64px; }
-.pagination-range { color: var(--zt-ink-500); font-size: 12px; font-variant-numeric: tabular-nums; }
-.pagination-row .el-pagination { gap: 6px; }
 .el-drawer__body { scrollbar-gutter: stable; }
 .el-drawer__footer { border-top: 1px solid var(--zt-border); padding-bottom: max(16px, env(safe-area-inset-bottom)); }
-.editor-overlay.el-drawer .el-drawer__body { background: var(--zt-panel); }
 .editor-overlay .editor-section { border: 0; border-radius: 0; padding: 0 0 24px; margin-bottom: 24px; border-bottom: 1px solid var(--zt-border); }
 .editor-overlay .editor-section:last-child { border-bottom: 0; }
 .editor-overlay .editor-section legend { padding: 0; margin-bottom: 12px; font-size: 15px; }
@@ -272,7 +300,7 @@ button:disabled { cursor: not-allowed; }
  .el-date-range-picker__content { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }
-.field-error { margin: 5px 0 0; color: var(--el-color-danger); font-size: 12px; line-height: 1.5; }
+.field-error { margin: 5px 0 0; color: var(--zt-danger-text); font-size: 12px; line-height: 1.5; }
 @media (max-width: 767px) {
  .list-page__results { overflow-x: auto; }
  .list-page__results > .data-table { min-width: 740px; }

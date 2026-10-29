@@ -138,13 +138,13 @@ const layouts = computed(() => new Map((props.rows?.items ?? []).map(row => [row
 .run-rows__list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
 .run-row { padding: 10px 12px; border: 1px solid var(--zt-border); border-left-width: 3px; border-radius: 6px; background: var(--zt-panel); font-size: 13px; }
 .run-row.is-done { border-left-color: var(--zt-success); }
-.run-row.is-failed { border-left-color: var(--el-color-danger); }
+.run-row.is-failed { border-left-color: var(--zt-danger); }
 .run-row.is-format { border-left-color: var(--zt-warning); }
 .run-row.is-pending { border-left-color: var(--zt-muted-mark); }
 .run-row__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .run-row__no { color: var(--zt-ink-900); font-weight: 600; font-variant-numeric: tabular-nums; }
 .run-row__status { color: var(--zt-ink-500); font-size: 12px; }
-.is-failed .run-row__status { color: var(--el-color-danger); }
+.is-failed .run-row__status { color: var(--zt-danger-text); }
 .is-format .run-row__status { color: var(--zt-warning-text); }
 .run-row dl { display: grid; grid-template-columns: minmax(64px, max-content) minmax(0, 1fr); gap: 2px 12px; margin: 0; }
 .run-row dt { color: var(--zt-ink-500); white-space: nowrap; }
@@ -156,6 +156,6 @@ const layouts = computed(() => new Map((props.rows?.items ?? []).map(row => [row
 .run-row__item summary { padding: 6px 0; color: var(--zt-ink-900); cursor: pointer; overflow-wrap: anywhere; }
 .run-row__item summary:hover { color: var(--zt-blue-600); }
 .run-row__item .run-row__fields { padding: 0 0 8px 16px; border-top: 0; }
-.run-row__error { margin: 6px 0 0; color: var(--el-color-danger); font-size: 12px; overflow-wrap: anywhere; }
+.run-row__error { margin: 6px 0 0; color: var(--zt-danger-text); font-size: 12px; overflow-wrap: anywhere; }
 .run-row__answer { margin: 6px 0 0; padding: 6px 8px; border-radius: 4px; background: var(--zt-soft); color: var(--zt-ink-700); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>

@@ -71,7 +71,7 @@ const current = computed(() => props.models.find(item => item.id === model.value
 .model-picker { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; }
 .model-picker__select { width: 280px; }
 .model-picker__select--small { width: 200px; }
-.model-picker__off { margin-left: 8px; color: var(--el-color-warning); font-size: 12px; }
+.model-picker__off { margin-left: 8px; color: var(--zt-warning-text); font-size: 12px; }
 /* 下拉项：名称在左、参考价在右；下拉框按内容变宽，不截断价格。 */
 .model-picker__option { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .model-picker__price { color: var(--zt-ink-500); font-size: 12px; font-variant-numeric: tabular-nums; }

@@ -275,14 +275,14 @@ defineExpose({ open })
 .job-settings :deep(.el-radio-group + .el-input-number) { width: 180px; }
 .job-settings__intro { margin: 0 0 18px; padding: 10px 12px; border-radius: 4px; background: var(--zt-soft); color: var(--zt-ink-700); font-size: 13px; line-height: 1.7; }
 .job-settings__hint { display: block; width: 100%; color: var(--zt-ink-500); font-size: 12px; line-height: 1.6; }
-.job-settings__hint.is-error { color: var(--el-color-danger); }
+.job-settings__hint.is-error { color: var(--zt-danger-text); }
 .job-settings__checks { width: 100%; margin: 6px 0 0; padding: 8px 12px 8px 26px; border-radius: 4px; background: var(--zt-warning-soft); color: var(--zt-warning-text); font-size: 12px; line-height: 1.6; }
-.job-settings__checks .is-error { color: var(--el-color-danger); }
+.job-settings__checks .is-error { color: var(--zt-danger-text); }
 .job-settings__section { margin: 24px 0 12px; padding-top: 16px; border-top: 1px solid var(--zt-border); color: var(--zt-ink-900); font-size: 14px; font-weight: 600; }
 </style>
 
 <style>
 /* 下拉列表挂在 body 上，scoped 样式够不着：不能用的模板多一行原因，选项要能撑高。 */
 .job-settings-popper .el-select-dropdown__item:has(.job-settings__option-reason) { height: auto; padding-top: 6px; padding-bottom: 6px; line-height: 1.5; }
-.job-settings-popper .job-settings__option-reason { display: block; max-width: 460px; color: var(--el-color-danger); font-size: 12px; line-height: 1.4; white-space: normal; }
+.job-settings-popper .job-settings__option-reason { display: block; max-width: 460px; color: var(--zt-danger-text); font-size: 12px; line-height: 1.4; white-space: normal; }
 </style>

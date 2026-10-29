@@ -140,9 +140,9 @@ defineExpose({ validate, setError })
 
 <style scoped>
 .editor-submit-error { margin-bottom: 20px; }
-.field-error { margin: 5px 0 0; color: var(--el-color-danger); font-size: 12px; line-height: 1.5; }
+.field-error { margin: 5px 0 0; color: var(--zt-danger-text); font-size: 12px; line-height: 1.5; }
 .editor-intro { margin: 0 0 24px; color: var(--zt-ink-500); font-size: 12px; }
-.editor-intro span { color: var(--el-color-danger); }
+.editor-intro span { color: var(--zt-danger-text); }
 .editor-section { min-width: 0; margin: 0 0 26px; padding: 20px; border: 1px solid var(--zt-border); border-radius: 10px; background: var(--zt-panel); }
 .editor-section:last-child { margin-bottom: 0; }
 .editor-section--bare { margin: 0; padding: 0; border: 0; background: none; }

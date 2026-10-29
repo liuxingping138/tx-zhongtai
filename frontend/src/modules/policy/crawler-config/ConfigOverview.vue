@@ -105,8 +105,8 @@ const cards = computed(() => {
 .card--online .dot { background: var(--zt-blue-600); }
 .card--pending .dot { background: var(--zt-blue-600); opacity: 0.25; }
 .card--abnormal .dot { background: var(--chart-stale); }
-.delta-good { color: var(--el-color-success); }
-.delta-bad { color: var(--el-color-danger); }
+.delta-good { color: var(--zt-success-text); }
+.delta-bad { color: var(--zt-danger-text); }
 .delta-flat { color: var(--zt-ink-500); }
 
 @media (max-width: 1280px) {

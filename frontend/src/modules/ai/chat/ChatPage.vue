@@ -181,7 +181,7 @@ function onKeydown(event: KeyboardEvent): void {
 .chat__tools { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 6px 10px 10px 14px; }
 .chat__model { width: 240px; }
 .chat__spacer { flex: 1; }
-.chat__off { margin-left: 8px; color: var(--el-color-warning-dark-2); font-size: 12px; }
+.chat__off { margin-left: 8px; color: var(--zt-warning-text); font-size: 12px; }
 .chat__stats { justify-content: center; border-top: 0; padding: 8px 0 0; }
 @media (prefers-reduced-motion: reduce) {
   .chat__composer { transition: none; }

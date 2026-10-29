@@ -301,7 +301,7 @@ async function takeOffline(): Promise<void> {
 .release__checks .el-icon { flex: none; margin-top: 3px; font-size: 15px; }
 .release__checks .is-ok .el-icon { color: var(--zt-success); }
 .release__checks .is-warn .el-icon { color: var(--zt-warning); }
-.release__checks .is-error { color: var(--el-color-danger); }
+.release__checks .is-error { color: var(--zt-danger-text); }
 .release__muted { margin: 0; color: var(--zt-ink-500); font-size: 13px; }
 .release__meta { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 8px 12px; margin: 0 0 12px; font-size: 13px; }
 .release__meta dt { color: var(--zt-ink-500); }

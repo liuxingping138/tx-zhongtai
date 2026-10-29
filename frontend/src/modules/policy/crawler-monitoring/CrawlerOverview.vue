@@ -249,11 +249,11 @@ defineExpose({ reload })
 .card-value { font-size: 28px; line-height: 1.2; color: var(--zt-ink-900); font-variant-numeric: tabular-nums; }
 .card-foot { font-size: 12px; color: var(--zt-ink-500); }
 .card-delta { font-size: 12px; font-variant-numeric: tabular-nums; }
-.delta-good { color: var(--el-color-success); }
-.delta-bad { color: var(--el-color-danger); }
+.delta-good { color: var(--zt-success-text); }
+.delta-bad { color: var(--zt-danger-text); }
 .delta-flat { color: var(--zt-ink-500); }
-.trend-up { color: var(--el-color-success); }
-.trend-down { color: var(--el-color-danger); }
+.trend-up { color: var(--zt-success-text); }
+.trend-down { color: var(--zt-danger-text); }
 .dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
 .card-normal .dot { background: var(--chart-normal); }
 .card-watch .dot { background: var(--chart-watch); }

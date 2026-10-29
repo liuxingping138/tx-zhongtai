@@ -131,7 +131,7 @@ function optionNote(item: PromptTemplate): string {
 .new-task__step h3 span { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--zt-blue-600); color: var(--el-color-white); font-size: 12px; }
 .new-task__step .el-select { width: 100%; }
 .new-task__hint { margin: 8px 0 0; color: var(--zt-ink-500); font-size: 12px; line-height: 1.6; }
-.new-task__problem { margin: 10px 0 0; color: var(--el-color-danger); font-size: 13px; }
+.new-task__problem { margin: 10px 0 0; color: var(--zt-danger-text); font-size: 13px; }
 .pick__option { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .pick__option small { color: var(--zt-ink-500); font-size: 12px; }
 .pick__versions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: 100%; }

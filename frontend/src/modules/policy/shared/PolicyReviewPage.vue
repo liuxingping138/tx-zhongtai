@@ -366,8 +366,8 @@ function setContentOpen(open: boolean) {
 .review__edit { align-self: center; margin-left: auto; }
 .review__edit-bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--zt-border); }
 .review__edit-bar :deep(.el-button + .el-button) { margin-left: 0; }
-.review__dirty { margin-right: auto; color: var(--el-color-warning-dark-2); font-size: 12px; }
-.review__save-error { flex: 1 1 280px; margin: 0 auto 0 0; color: var(--el-color-danger); font-size: 13px; line-height: 1.5; }
+.review__dirty { margin-right: auto; color: var(--zt-warning-text); font-size: 12px; }
+.review__save-error { flex: 1 1 280px; margin: 0 auto 0 0; color: var(--zt-danger-text); font-size: 13px; line-height: 1.5; }
 .review__editor { padding: 14px 16px; border-radius: var(--zt-radius); background: var(--el-color-primary-light-9); box-shadow: inset 0 0 0 1px var(--el-color-primary-light-7); }
 .review__content { overflow-y: auto; padding: 0 20px 20px; }
 .review__content :deep(.policy-content__head) { padding-top: 14px; }

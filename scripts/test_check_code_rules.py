@@ -67,6 +67,8 @@ def test_ui_color_literals_are_reported_outside_registered_files() -> None:
     assert rules.color_literal_errors(page, "box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);\n")
     assert rules.color_literal_errors(page, "background: #fff;\n")
     assert not rules.color_literal_errors(page, ".tag { color: var(--zt-warning-text); }\n")
+    assert rules.color_literal_errors(page, ".bad { color: var(--el-color-danger); }\n"), "Element 状态色绕开主题的 text 档"
+    assert not rules.color_literal_errors(page, ".on { background: var(--el-color-primary-light-9); }\n")
     assert not rules.color_literal_errors(page, '<a href="#industry">行业</a>\n'), "锚点不是颜色"
     assert not rules.color_literal_errors(page, "return `rgba(${r}, ${g}, ${b}, ${alpha})`\n"), "按变量拼的颜色不算写死"
     assert not rules.color_literal_errors("frontend/src/modules/demo/page.test.ts", "expect(c).toBe('#fff')\n")

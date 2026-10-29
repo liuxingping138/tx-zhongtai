@@ -247,7 +247,7 @@ function progressText(run: BatchRun): string {
 .history__table :deep(.el-table__row) { cursor: pointer; }
 .history__status { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; font-size: 13px; }
 .history__status + .el-progress { margin-top: 6px; }
-.history__error { margin: 4px 0 0; color: var(--el-color-danger); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history__error { margin: 4px 0 0; color: var(--zt-danger-text); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .history__ops { display: flex; align-items: center; gap: 10px; }
 .history__ops .el-button { margin: 0; }
 .history__pager { justify-content: flex-end; padding: 10px 16px; }
