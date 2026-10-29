@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Callable, Mapping
 from typing import Any, Protocol
 
@@ -29,6 +30,41 @@ _SUMMARY_COUNTS: tuple[tuple[str, str], ...] = (
     ("inserted", "新增{}条"),
     ("deleted", "清空{}条"),
 )
+
+
+# enqueue_event 自己放进 payload 的键；其余顶层键都是调用方的 extra（批量操作改了哪些记录、条数等）。
+_BASE_KEYS = frozenset({"actor_id", "actor_name", "target_id", "outcome", "request_id", "changes"})
+# 审计服务单条事件上限 32KB，超了直接拒收、这条进 dead：变更内容留足余量，太长的清单截短并注明原数。
+_CHANGES_MAX_BYTES = 24_000
+
+
+def _size(value: Any) -> int:
+    return len(json.dumps(value, ensure_ascii=False, default=str).encode())
+
+
+def _fit(changes: dict[str, Any]) -> dict[str, Any]:
+    """变更内容太大时，把最长的清单一半一半地截短，记下原来有几项，宁可少列几个 ID 也不能整条审计丢掉。"""
+
+    fitted = dict(changes)
+    while _size(fitted) > _CHANGES_MAX_BYTES:
+        lists = [(len(value), key) for key, value in fitted.items() if isinstance(value, list) and len(value) > 1]
+        if not lists:
+            break
+        _, key = max(lists)
+        fitted.setdefault(f"{key}_总数", len(changes[key]))
+        fitted[key] = fitted[key][: len(fitted[key]) // 2]
+    return fitted
+
+
+def ingest_changes(payload: dict[str, Any]) -> Any:
+    """审计里的「变更」：调用方给的 changes 加上 extra。原来只要有 changes 就把 extra 整个丢掉，
+    批量改状态、重新打标这类操作「改了哪些记录」从没进过操作日志。没有 changes 时照旧给整个 payload。"""
+
+    changes = payload.get("changes")
+    if not changes:
+        return payload
+    extra = {key: value for key, value in payload.items() if key not in _BASE_KEYS}
+    return _fit({**changes, **extra}) if extra else changes
 
 
 class _AuditSettings(Protocol):
@@ -111,7 +147,7 @@ class AuditEmitter:
             "target_type": target_type,
             "target_id": None if target is None else str(target),
             "outcome": payload.get("outcome") or "success",
-            "changes": payload.get("changes") or payload,
+            "changes": ingest_changes(payload),
             "summary": " / ".join(str(item) for item in summary if item),
         }
 

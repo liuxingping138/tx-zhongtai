@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -184,3 +185,25 @@ async def test_rejected_events_are_parked_at_once_but_outages_retry(
 async def test_lost_lease_is_not_counted_as_delivered(monkeypatch: pytest.MonkeyPatch) -> None:
     repo = _Repo([_leased("policy.source.created", {})], lease_ok=False)
     assert await _wired(repo, monkeypatch).deliver_pending(_Settings()) == 0
+
+
+def test_ingest_keeps_extra_next_to_changes_and_stays_under_the_size_limit() -> None:
+    """批量操作的 ID 清单放在 extra：有 changes 时也要进审计，太长就截短并注明原数，不能让整条审计被拒收。"""
+
+    from platform_common.audit_emit import ingest_changes
+
+    payload = {
+        "actor_id": "u1",
+        "actor_name": "张三",
+        "target_id": "batch",
+        "outcome": "success",
+        "request_id": "r1",
+        "changes": {"data_status": "人工验证", "rows": 2},
+        "record_ids": ["a", "b"],
+    }
+    assert ingest_changes(payload) == {"data_status": "人工验证", "rows": 2, "record_ids": ["a", "b"]}
+    assert ingest_changes({**payload, "changes": {}})["actor_name"] == "张三"
+    huge = {**payload, "record_ids": [f"{index:036d}" for index in range(2000)]}
+    fitted = ingest_changes(huge)
+    assert fitted["record_ids_总数"] == 2000 and len(fitted["record_ids"]) < 2000
+    assert len(json.dumps(fitted, ensure_ascii=False).encode()) <= 24_000
