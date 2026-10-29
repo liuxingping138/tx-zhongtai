@@ -169,7 +169,7 @@ function create(): void {
       >
         <el-table-column
           label="模板名称"
-          min-width="170"
+          min-width="142"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -185,7 +185,7 @@ function create(): void {
         <el-table-column
           prop="category_name"
           label="类型"
-          width="64"
+          width="72"
         />
         <el-table-column
           v-if="showTasks"
@@ -207,7 +207,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="上线状态"
-          min-width="190"
+          min-width="188"
         >
           <template #default="{ row }">
             <!-- 有改动没上线：第二行写改了什么，「看改动」直接打开逐行对比。 -->
@@ -259,7 +259,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="输出字段"
-          width="72"
+          width="80"
           align="right"
         >
           <template #default="{ row }">
@@ -268,7 +268,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="模型"
-          min-width="120"
+          min-width="160"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -278,7 +278,7 @@ function create(): void {
         <el-table-column
           prop="updated_by_name"
           label="更新人"
-          width="90"
+          width="96"
           show-overflow-tooltip
         />
         <el-table-column
@@ -286,7 +286,10 @@ function create(): void {
           width="110"
         >
           <template #default="{ row }">
-            <span :title="row.updated_at">{{ shortTime(row.updated_at) }}</span>
+            <span
+              class="prompt-list__time"
+              :title="row.updated_at"
+            >{{ shortTime(row.updated_at) }}</span>
           </template>
         </el-table-column>
       </el-table>
@@ -331,6 +334,7 @@ function create(): void {
 .prompt-list__bars i.is-pending { background: var(--zt-border-strong); }
 .prompt-list__sample.is-stale .prompt-list__bars { opacity: .4; }
 .prompt-list__task { display: inline-flex; align-items: center; height: 22px; margin: 2px 6px 2px 0; padding: 0 8px; border: 1px solid var(--el-color-primary-light-7); border-radius: 4px; background: var(--el-color-primary-light-9); color: var(--zt-blue-700); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.prompt-list__time { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .prompt-list__none { color: var(--zt-ink-400); font-size: 13px; }
 .prompt-list__scheduled { margin: 0; }
 </style>
