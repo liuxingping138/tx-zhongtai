@@ -2,6 +2,10 @@
 
 只同步「是否新增场景 = 是」且「数据状态 = 人工验证」、还没同步过的行。编码由码表服务按现有规则生成
 （各级号取全局最大号 + 1，已有的上级沿用），回填到解读行；同一场景重复同步返回原编码，不会在码表里重复建。
+
+回填编码后关联主键跟着换成编码形式（政策 + 行业场景编码 + 机会类型）：不换的话，之后导入、重新解读按编码算出的主键
+对不上，会再插一条重复的。换完和这条政策已有的另一行撞上，说明两行讲的是同一件事，这一行不回填、写进失败清单让人处理，
+不替人删数据。
 """
 
 from __future__ import annotations
@@ -14,11 +18,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common import internal_clients
 from app.common.audit_emit import enqueue_event
+from app.policy.application.region import make_relation_key
 from app.policy.domain.fields import SCENARIO_NAME_FIELDS
 from app.policy.domain.models import Interpretation
 from app.policy.repositories import interpretations as repo
 
 MAX_ITEMS = 5000
+SAME_ROW = (
+    "这条政策已有同一场景、同一机会类型的解读记录，编码没有回填：请核对这两条，改掉其中一条的场景或机会类型后再同步"
+)
 
 
 async def pending(session: AsyncSession) -> dict[str, Any]:
@@ -46,6 +54,7 @@ async def sync(session: AsyncSession, actor: Actor) -> dict[str, Any]:
     now = utcnow()
     synced = created = 0
     failed: list[dict[str, str]] = []
+    planned: list[tuple[Interpretation, dict[str, Any], str]] = []
     for row in rows:
         result = by_key.get(str(row.id))
         if result is None or result.get("error"):
@@ -53,6 +62,15 @@ async def sync(session: AsyncSession, actor: Actor) -> dict[str, Any]:
                 {"policy_title": row.policy_title, "reason": str((result or {}).get("error") or "码表服务没有返回结果")}
             )
             continue
+        key = make_relation_key(row.policy_uid, str(result["industry_scenario_code"]), row.opportunity_type)
+        planned.append((row, result, key))
+    taken = await repo.existing_relation_keys(session, [key for row, _, key in planned if key != row.relation_key])
+    for row, result, key in planned:
+        if key != row.relation_key and key in taken:
+            failed.append({"policy_title": row.policy_title, "reason": SAME_ROW})
+            continue
+        taken.add(key)
+        row.relation_key = key
         row.industry_code = str(result["industry_code"])
         row.scenario_code = str(result["scenario_code"])
         row.industry_scenario_code = str(result["industry_scenario_code"])
