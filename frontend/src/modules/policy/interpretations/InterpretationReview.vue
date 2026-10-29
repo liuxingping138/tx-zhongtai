@@ -45,6 +45,8 @@ const status = computed(() => {
 // 核对完这条就标掉，接着打开下一条；按「待验证」筛着时，标完的这条会出列表，下一条补到同一位置。
 const verifying = ref(false)
 async function verify(row: InterpretationItem) {
+  // 翻条后新记录还没回来时，按钮旁显示的还是上一条：不能把上一条标掉。
+  if (!review.ready.value || row.id !== review.record.value?.id) return
   verifying.value = true
   try {
     await setInterpretationsDataStatus([row.id], '人工验证')
@@ -72,13 +74,13 @@ async function verify(row: InterpretationItem) {
     :status="status"
     :load-content="getInterpretationContent"
   >
-    <template #actions="{ row, editing }">
+    <template #actions="{ row, editing, ready }">
       <AuditLogButton :module="RESOURCE" />
       <el-button
         v-if="canWrite && row.data_status !== '人工验证'"
         type="primary"
         :loading="verifying"
-        :disabled="editing"
+        :disabled="editing || !ready"
         @click="verify(row)"
       >
         核对无误，标为人工验证

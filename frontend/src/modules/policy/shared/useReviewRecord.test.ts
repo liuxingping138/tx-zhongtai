@@ -164,6 +164,29 @@ describe('editing the record', () => {
     expect(message.success).toHaveBeenCalledWith('已保存')
   })
 
+  it('cannot edit while the next record is still loading, so the previous one is never saved over it', async () => {
+    const { review, get, update } = setup('a', { pos: '0' })
+    await flush()
+    let release: () => void = () => undefined
+    get.mockImplementationOnce((key: string) => new Promise(resolve => {
+      release = () => resolve({ id: key, title: '乙', note: '二', version: 1 })
+    }))
+    void review.move(1)
+    await flush()
+    // 地址已经是下一条，页面上还是上一条：这时不能编辑。
+    expect(review.record.value?.id).toBe('a')
+    expect(review.ready.value).toBe(false)
+    review.startEdit()
+    expect(review.editing.value).toBe(false)
+    release()
+    await flush()
+    expect(review.ready.value).toBe(true)
+    review.startEdit()
+    expect({ ...review.draft }).toEqual({ title: '乙', note: '二' })
+    await review.saveEdit()
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ id: 'b' }), { title: '乙', note: '二' })
+  })
+
   it('does not save when a required field is empty', async () => {
     const { review, update } = setup('a')
     await flush()

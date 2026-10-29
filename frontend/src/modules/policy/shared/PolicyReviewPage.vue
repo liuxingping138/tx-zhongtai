@@ -33,7 +33,7 @@ const props = defineProps<{
 
 // 拆成顶层 ref，模板里才会自动解包。
 const {
-  record, loading, loadError, load, total, position, hasPrev, hasNext, moving, move, backToList,
+  record, ready, loading, loadError, load, total, position, hasPrev, hasNext, moving, move, backToList,
   editing, draft, saving, saveError, fields, dirty, startEdit, cancelEdit, saveEdit,
 } = props.review
 
@@ -191,6 +191,7 @@ function setContentOpen(open: boolean) {
               name="actions"
               :row="record"
               :editing="editing"
+              :ready="ready"
             />
           </div>
         </div>
@@ -230,6 +231,7 @@ function setContentOpen(open: boolean) {
               v-if="canWrite && !editing"
               class="review__edit"
               :icon="EditPen"
+              :disabled="!ready"
               @click="startEdit"
             >
               编辑

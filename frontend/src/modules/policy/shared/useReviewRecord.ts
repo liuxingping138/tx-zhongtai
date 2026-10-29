@@ -65,36 +65,54 @@ export function useReviewRecord<Row extends { id: string }>(options: ReviewOptio
   const guard = useUnsavedForm(editing, () => ({ ...draft }), saving)
   onBeforeRouteUpdate(guard.canLeave)
 
+  /** 地址栏这一条，以及它所在筛选结果的总数（从列表点进来时才有位置）。 */
+  async function fetchCurrent(): Promise<[Row, number | null]> {
+    const position = context.value.position
+    const [row, page] = await Promise.all([
+      options.get(id.value),
+      position === null ? Promise.resolve(null) : options.list(pageAt(position)),
+    ])
+    return [row, page ? page.total : null]
+  }
+
+  function loadFailed(error: unknown) {
+    record.value = null
+    loadError.value = isApiError(error) && error.status === 404
+      ? '这条记录不存在或已删除'
+      : errorMessage(error, '加载失败，请重试')
+  }
+
   async function load() {
     const current = ++ticket
     loading.value = true
     loadError.value = ''
     editing.value = false
+    let loaded = false
     try {
-      const position = context.value.position
-      const [row, page] = await Promise.all([
-        options.get(id.value),
-        position === null ? Promise.resolve(null) : options.list(pageAt(position)),
-      ])
+      const [row, count] = await fetchCurrent()
       if (current !== ticket) return
       record.value = row
-      total.value = page ? page.total : null
-      await openEditorFromLink()
+      total.value = count
+      loaded = true
     } catch (error) {
-      if (current !== ticket) return
-      record.value = null
-      loadError.value = isApiError(error) && error.status === 404
-        ? '这条记录不存在或已删除'
-        : errorMessage(error, '加载失败，请重试')
+      if (current === ticket) loadFailed(error)
     } finally {
       if (current === ticket) loading.value = false
     }
+    // 加载完才按链接打开编辑：加载中不让编辑（见 ready）。
+    if (loaded && current === ticket) await openEditorFromLink()
   }
   // 去掉 edit=1 时地址变了但还是同一条，不重新加载，免得刚打开的编辑又被关上。
   const loadKey = computed(() => route.name === options.routeName ? JSON.stringify([id.value, withoutEdit(route.query)]) : '')
   watch(loadKey, (key) => {
     if (key) void load()
   }, { immediate: true })
+
+  /**
+   * 页面上的记录就是地址栏这一条、而且没在加载：翻条后新记录回来之前，页面还显示着上一条，
+   * 这时点「编辑」「核对无误」会拿上一条的内容去改下一条（版本号对得上，照样保存成功）。
+   */
+  const ready = computed(() => record.value !== null && record.value.id === id.value && !loading.value)
 
   const position = computed(() => context.value.position)
   const hasPrev = computed(() => position.value !== null && position.value > 0)
@@ -163,7 +181,7 @@ export function useReviewRecord<Row extends { id: string }>(options: ReviewOptio
   }
 
   function startEdit() {
-    if (!record.value || editing.value) return
+    if (!ready.value || !record.value || editing.value) return
     for (const key of Object.keys(draft)) delete draft[key]
     Object.assign(draft, formOf(record.value))
     saveError.value = ''
@@ -189,7 +207,7 @@ export function useReviewRecord<Row extends { id: string }>(options: ReviewOptio
 
   async function saveEdit() {
     const row = record.value
-    if (!row || saving.value) return
+    if (!row || saving.value || row.id !== id.value) return
     saveError.value = ''
     if (fields.value && !await fields.value.validate()) return
     saving.value = true
@@ -212,6 +230,7 @@ export function useReviewRecord<Row extends { id: string }>(options: ReviewOptio
 
   return {
     record,
+    ready,
     loading,
     loadError,
     load,
