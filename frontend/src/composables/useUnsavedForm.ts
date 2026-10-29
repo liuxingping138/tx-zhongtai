@@ -12,9 +12,12 @@ export function useUnsavedForm(visible: Ref<boolean>, value: () => unknown, savi
   }, { flush: 'sync' })
   const dirty = computed(() => visible.value && JSON.stringify(value()) !== baseline.value)
 
-  /** Call after an asynchronous form load or a successful save establishes a new clean value. */
-  function markSaved() {
-    baseline.value = JSON.stringify(value())
+  /**
+   * Call after an asynchronous form load or a successful save establishes a new clean value.
+   * 传 snapshot 时以它为基线：保存请求在路上时又改了表单，基线是发出去的那份，表单仍算未保存。
+   */
+  function markSaved(snapshot?: unknown) {
+    baseline.value = JSON.stringify(snapshot === undefined ? value() : snapshot)
   }
 
   async function canLeave(): Promise<boolean> {

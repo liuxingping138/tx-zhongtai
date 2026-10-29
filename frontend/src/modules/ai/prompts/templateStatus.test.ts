@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { BatchRun, PromptTemplate, SampleSummary, TemplateReleaseInfo } from '@/api/ai'
-import { flowSteps, releaseState, sampleFromRun, sampleState, stepActions } from './templateStatus'
+import { flowSteps, releaseState, sampleCurrent, sampleFromRun, sampleState, stepActions } from './templateStatus'
 
 const release = (changes: string[] = []): TemplateReleaseInfo => ({
   id: 'r', release_no: 2, released_at: '2026-10-22 16:24', released_by_name: '管理员', unreleased_changes: changes,
@@ -84,6 +84,12 @@ describe('流程条上的按钮', () => {
   const admin = { canEdit: true, canRelease: true, sampleOpen: false }
   const actionsOf = (item: PromptTemplate, context = admin) => stepActions(item, flowSteps(item, false, context.canRelease), context)
 
+  it('能上线但改不了这类模板的管理员，第一次上线也有入口', () => {
+    const releaser = { canEdit: false, canRelease: true, sampleOpen: false }
+    expect(actionsOf(template({ sample: sample() }), releaser)).toEqual({ release: '上线' })
+    expect(actionsOf(template({ sample: sample() }), { ...releaser, canRelease: false })).toEqual({})
+  })
+
   it('试跑是下一步时给「去试跑」，右栏已经在试跑上就不给', () => {
     expect(actionsOf(template())).toEqual({ test: '去试跑' })
     expect(actionsOf(template(), { ...admin, sampleOpen: true })).toEqual({})
@@ -116,5 +122,22 @@ describe('试跑任务换成模板上的摘要', () => {
     expect(sampleFromRun(run, template({ content: '改过' })).current).toBe(false)
     expect(sampleFromRun(run, template({ model_id: 'other' })).current).toBe(false)
     expect(sampleFromRun(run, template({ model_id: '' })).current).toBe(true)
+  })
+})
+
+describe('样本试跑是不是现在的草稿', () => {
+  const run = { draft_saved_at: '2026-10-29 10:00:00', prompt_content: '问', output_fields: '行业', model_id: 'm1' }
+  const template = { content: '问', output_fields: '行业', model_id: 'm1', updated_at: '2026-10-29 10:00:00' }
+
+  it('按试跑时记下的草稿保存时间比：换了码表、测试样本也算改过', () => {
+    expect(sampleCurrent(run, template)).toBe(true)
+    // 提示词、字段、模型都没变，只是换了码表（保存时间变了）：要重新试跑，预计费用才不会低估。
+    expect(sampleCurrent(run, { ...template, updated_at: '2026-10-29 10:05:00' })).toBe(false)
+  })
+
+  it('早期的试跑没记保存时间，退回按内容比', () => {
+    const old = { ...run, draft_saved_at: '' }
+    expect(sampleCurrent(old, { ...template, updated_at: 'x' })).toBe(true)
+    expect(sampleCurrent(old, { ...template, content: '改过' })).toBe(false)
   })
 })

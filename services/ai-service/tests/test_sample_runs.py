@@ -289,6 +289,22 @@ async def test_retry_only_takes_this_templates_sample_runs(monkeypatch: pytest.M
     monkeypatch.setattr(sample_runs, "view", view)
     data = await sample_runs.retry(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID, RUN_ID)  # type: ignore[arg-type]
     assert data == {"run_id": RUN_ID}
-    assert calls == [(RUN_ID, {"event_type": "ai.prompt.sample_retried"})]
+    assert calls == [(RUN_ID, {"event_type": "ai.prompt.sample_retried", "sample": True})]
     with pytest.raises(NotFoundError):
         await sample_runs.retry(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID, "formal")  # type: ignore[arg-type]
+
+
+def test_a_sample_is_current_only_while_the_draft_is_unchanged_since_it_ran() -> None:
+    """换了码表、重传码表文件也会改保存时间：只比提示词、字段、模型会漏掉，预计费用可能低估几十倍。"""
+
+    from datetime import timedelta
+
+    from app.application.prompts import sample_current
+
+    item = template(content="问", output_fields="行业")
+    sample = run(source="sample", prompt_content="问", output_fields="行业", draft_saved_at=item.updated_at)
+    assert sample_current(sample, item)
+    item.updated_at = item.updated_at + timedelta(minutes=1)  # 只换了码表
+    assert not sample_current(sample, item)
+    legacy = run(source="sample", prompt_content="问", output_fields="行业", draft_saved_at=None)
+    assert sample_current(legacy, item)  # 早期试跑没记保存时间，退回按内容比

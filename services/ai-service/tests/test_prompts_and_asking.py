@@ -313,3 +313,23 @@ async def test_test_rows_give_the_head_of_each_cell_and_its_length(monkeypatch: 
     assert second["values"] == {"名称": "乙", "正文": ""}
     _use(monkeypatch, template(excel_name=""))
     assert await test_rows.preview(FakeSession(), FULL_ACCESS, PROMPT_ID) == {"headers": [], "total": 0, "rows": []}  # type: ignore[arg-type]
+
+
+async def test_trial_uses_the_code_table_chosen_on_the_page_even_before_saving(monkeypatch: pytest.MonkeyPatch) -> None:
+    """改了码表没保存就试发：右栏写着「码表全文整份放进去」，原来后端按存着的设置换成空串。"""
+
+    _with_keys(monkeypatch, baidu="k")
+    _use(monkeypatch, template(content="问：@【上传码表】", code_table="", excel_name="a.xlsx"))
+    storage.write_atomic(storage.prompt_file(PROMPT_ID, "excel"), xlsx([["名称"], ["甲公司"]]))
+    fetched: list[str] = []
+
+    async def fetch(name: str) -> str:
+        fetched.append(name)
+        return "政策类型码表全文"
+
+    monkeypatch.setattr(service, "fetch_code_table", fetch)
+    ask = {"content": "问：@【上传码表】", "model_id": "baidu-deepseek-v3.2", "prompt_id": PROMPT_ID}
+    _, prompt = await asking.prepare_trial(FakeSession(), FULL_ACCESS, code_table="policy_types", **ask)  # type: ignore[arg-type]
+    assert prompt == "问：政策类型码表全文" and fetched == ["policy_types"]
+    _, prompt = await asking.prepare_trial(FakeSession(), FULL_ACCESS, **ask)  # type: ignore[arg-type]
+    assert prompt == "问："  # 不传就按模板存的（没选码表），替换成空

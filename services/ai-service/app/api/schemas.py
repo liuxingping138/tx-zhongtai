@@ -83,6 +83,8 @@ class AskBody(_Body):
     prompt_id: str | None = Field(default=None, max_length=32)
     row: int = Field(default=0, ge=0, le=100_000)
     output_fields: str = Field(default="", max_length=2000)
+    # 编辑页上现在选的系统码表（空串＝不用系统码表，用上传的文件或不用）；不传就按模板存的。
+    code_table: str | None = Field(default=None, max_length=32)
 
 
 class ChatBody(_Body):

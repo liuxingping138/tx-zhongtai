@@ -32,6 +32,7 @@ from app.domain.models import (
     BatchRun,
 )
 from app.repositories import batch_runs as repo
+from app.repositories import prompts as prompt_repo
 
 PAGE_SIZE_MAX = 100
 STALE_MESSAGE = "执行进程重启或中断，任务未完成；已跑完的部分可下载原始返回"
@@ -145,17 +146,21 @@ async def filter_options(session: AsyncSession, access: CategoryAccess) -> dict[
     }
 
 
-async def require(session: AsyncSession, run_id: str, *, lock: bool = False) -> BatchRun:
+async def require(session: AsyncSession, run_id: str, *, lock: bool = False, sample: bool = False) -> BatchRun:
+    """批量任务接口只认正式任务；样本试跑归模板页管（权限是模板的试发档、导出档），sample=True 才认它。
+
+    原来不分来源：拿样本试跑的 ID 就能用批量任务的权限删除、重跑、下载试跑。"""
+
     run = await repo.get(session, run_id, lock=lock) if storage.ID_PATTERN.fullmatch(run_id) else None
-    if run is None:
+    if run is None or (run.source == RUN_SOURCE_SAMPLE) != sample:
         raise NotFoundError("任务不存在或已删除")
     return run
 
 
 async def require_editable(
-    session: AsyncSession, access: CategoryAccess, run_id: str, *, lock: bool = False
+    session: AsyncSession, access: CategoryAccess, run_id: str, *, lock: bool = False, sample: bool = False
 ) -> BatchRun:
-    run = await require(session, run_id, lock=lock)
+    run = await require(session, run_id, lock=lock, sample=sample)
     access.require_edit(run.prompt_category)
     return run
 
@@ -174,12 +179,15 @@ async def retry_run(
     run_id: str,
     *,
     event_type: str = "ai.batch_run.retried",
+    sample: bool = False,
 ) -> dict[str, Any]:
     """把已结束的任务重新排队：worker 沿用已成功的行，只问失败和没跑到的，结果合并回本任务，费用累加。
     样本试跑也能重跑，和正式任务各管各的：试跑在跑不挡正式任务重跑，反之亦然。"""
 
     await reconcile_stale(session)
-    run = await require_editable(session, access, run_id, lock=True)
+    run = await require_editable(session, access, run_id, lock=True, sample=sample)
+    # 和发起一样先锁模板行：两个人同时重跑同一模板的两个任务、或发起和重跑同时点，都能过「只跑一个」的检查。
+    await prompt_repo.get(session, run.prompt_id, lock=True)
     if run.status in ACTIVE_STATUSES:
         raise ApiError("任务仍在运行，结束后才能重跑", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     if not await anyio.to_thread.run_sync(_can_retry, run):
@@ -210,10 +218,11 @@ async def stop_run(
     run_id: str,
     *,
     event_type: str = "ai.batch_run.stopped",
+    sample: bool = False,
 ) -> dict[str, Any]:
     """排队中的直接取消；运行中的只置停止标志，worker 停止提交新请求、等在途请求返回后收尾。"""
 
-    run = await require_editable(session, access, run_id, lock=True)
+    run = await require_editable(session, access, run_id, lock=True, sample=sample)
     if run.status not in ACTIVE_STATUSES:
         raise ApiError("任务已结束，无需停止", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     if run.status == RUN_QUEUED:

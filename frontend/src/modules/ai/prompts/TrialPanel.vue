@@ -150,7 +150,7 @@ function move(step: number): void {
                 v-else
                 class="is-missing"
               >
-                {{ item.state === 'nocode' ? '还没选码表，会原样发出' : '测试样本里没有这一列，会原样发出' }}
+                {{ item.state === 'nocode' ? '还没选码表，这里会替换成空' : '测试样本里没有这一列，会原样发出' }}
               </dd>
             </template>
           </dl>

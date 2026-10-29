@@ -29,7 +29,13 @@ async def ask(
     """试发：@【列名】替换成测试样本所选那一行的值后提问。替换和校验都在推流前完成，出错照常返回 4xx。"""
 
     model, prompt = await asking.prepare_trial(
-        session, access, content=body.content, model_id=body.model_id, prompt_id=body.prompt_id, row=body.row
+        session,
+        access,
+        content=body.content,
+        model_id=body.model_id,
+        prompt_id=body.prompt_id,
+        row=body.row,
+        code_table=body.code_table,
     )
     return sse_response(
         asking.stream_answer(

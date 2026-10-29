@@ -48,10 +48,22 @@ def sample_summary(template: PromptTemplate, run: BatchRun | None) -> dict[str, 
         "cost": float(run.inference_cost + run.search_cost),
         "created_at": format_beijing(run.created_at),
         "created_by_name": run.created_by_name,
-        "current": run.prompt_content == template.content
-        and run.output_fields == template.output_fields
-        and (not template.model_id or run.model_id == template.model_id),
+        "current": sample_current(run, template),
     }
+
+
+def sample_current(run: BatchRun, template: PromptTemplate) -> bool:
+    """这次试跑跑的是不是模板现在的草稿。按试跑时记下的草稿保存时间比：换了码表、重传码表文件、换了测试样本
+    也会改保存时间，只比提示词、字段、模型会漏掉这些（码表从无换成六级码表，每行多 3.8 万字，预计费用差几十倍）。
+    早期的试跑没记保存时间，退回按内容比。"""
+
+    if run.draft_saved_at is not None:
+        return run.draft_saved_at == template.updated_at
+    return (
+        run.prompt_content == template.content
+        and run.output_fields == template.output_fields
+        and (not template.model_id or run.model_id == template.model_id)
+    )
 
 
 def to_dict(
@@ -347,11 +359,16 @@ async def preview_uploaded_code(session: AsyncSession, access: CategoryAccess, p
     return _code_preview(template.code_name, await path.read_text(encoding="utf-8"))
 
 
-async def code_text(template: PromptTemplate) -> str | None:
-    """模板实际用的码表全文：选了系统码表就实时取，否则读上传的码表文件；都没有时为 None。"""
+async def code_text(template: PromptTemplate, *, code_table: str | None = None) -> str | None:
+    """模板实际用的码表全文：选了系统码表就实时取，否则读上传的码表文件；都没有时为 None。
 
-    if template.code_table:
-        return await fetch_code_table(template.code_table)
+    code_table 不为 None 时按它选（编辑页上还没保存的选择）：试发要用页面上看到的码表，不能悄悄换成库里存的。
+    上传的码表文件是传完就存的，不存在「没保存」。
+    """
+
+    key = template.code_table if code_table is None else checked_code_table(code_table)
+    if key:
+        return await fetch_code_table(key)
     path = anyio.Path(storage.prompt_file(template.id, "code"))
     if template.code_name and await path.is_file():
         return await path.read_text(encoding="utf-8")

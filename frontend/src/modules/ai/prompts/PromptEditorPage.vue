@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 
-import { createPrompt, deletePrompt, listPrompts, updatePrompt, type AiModel, type BatchRun, type PromptFileKind, type PromptTemplate, type SystemCodeTable, type TemplateCategory } from '@/api/ai'
+import { createPrompt, listPrompts, updatePrompt, type AiModel, type BatchRun, type PromptFileKind, type PromptTemplate, type SystemCodeTable, type TemplateCategory } from '@/api/ai'
 import { errorMessage } from '@/api/errors'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import { useAuthStore } from '@/stores/auth'
@@ -15,6 +15,7 @@ import FlowBar from './FlowBar.vue'
 import PromptEditor from './PromptEditor.vue'
 import PromptSettings from './PromptSettings.vue'
 import ReleaseDrawer from './ReleaseDrawer.vue'
+import { removeTemplate, trialRequest } from './promptActions'
 import TestPanel from './TestPanel.vue'
 import { fitSummary } from './taskFit'
 import { flowSteps, stepActions, withSample, type StepKey } from './templateStatus'
@@ -148,9 +149,17 @@ async function persist(quiet = false): Promise<PromptTemplate | null> {
   saving.value = true
   try {
     const creating = !selected.value
-    const payload = { ...form, version: selected.value?.version }
+    const sent = { ...form }
+    const payload = { ...sent, version: selected.value?.version }
     const saved = selected.value ? await updatePrompt(selected.value.id, payload) : await createPrompt(payload)
-    fill(saved)
+    if (JSON.stringify({ ...form }) === JSON.stringify(sent)) {
+      fill(saved)
+    } else {
+      // Ctrl/⌘+S 之后接着打字：请求期间敲的字不能被服务端返回的版本盖掉。只换模板信息（版本号等），
+      // 基线是发出去的那份，表单仍算未保存。
+      selected.value = saved
+      unsaved.markSaved(sent)
+    }
     if (!quiet) ElMessage.success('模板已保存')
     if (creating) await router.replace({ name: 'ai-prompt-edit', params: { id: saved.id } })
     return saved
@@ -163,36 +172,20 @@ async function persist(quiet = false): Promise<PromptTemplate | null> {
 }
 
 async function remove(): Promise<void> {
-  const target = selected.value
-  if (!target) return
-  const ok = await ElMessageBox.confirm(`删除「${target.title}」和它的测试样本、码表文件。已发起的任务和结果不受影响。`, '删除模板？', {
-    type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消',
-  }).then(() => true, () => false)
-  if (!ok) return
-  try {
-    await deletePrompt(target.id)
-    unsaved.markSaved()
-    ElMessage.success('模板已删除')
-    await router.push({ name: 'ai-prompts' })
-  } catch (error) {
-    ElMessage.error(errorMessage(error, '删除失败，请重试'))
-  }
+  if (!selected.value || !await removeTemplate(selected.value)) return
+  unsaved.markSaved()
+  await router.push({ name: 'ai-prompts' })
 }
 
 async function trial(): Promise<void> {
+  // 只读的人在编辑器里按 Ctrl/⌘+Enter 也会走到这里，后端只会回 403。
+  if (!canEdit.value) return
   const problem = form.content.trim() ? '' : '提示词内容不能为空'
   if (problem || !trialModel.value) return void ElMessage.warning(problem || '先在左边「模型」里选一个模型')
   testTab.value = 'trial'
-  const useThinking = thinking.value && Boolean(trialModel.value?.supports_thinking)
-  const shown = selected.value ? `［${selected.value.title}］\n${form.content}` : form.content
-  await answer.send('/ai/stream/ask', {
-    content: form.content,
-    model_id: trialModel.value.id,
-    thinking: useThinking,
-    prompt_id: selected.value?.id ?? null,
-    row: trialRow.value,
-    output_fields: form.output_fields,
-  }, shown, useThinking)
+  const context = { template: selected.value, model: trialModel.value, row: trialRow.value, thinking: thinking.value }
+  const request = trialRequest(form, context)
+  await answer.send('/ai/stream/ask', request.body, request.shown, request.thinking)
 }
 
 function onStep(key: StepKey): void {

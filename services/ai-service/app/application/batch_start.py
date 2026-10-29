@@ -92,6 +92,9 @@ async def _plan(
 
     template = await require_editable_prompt(session, access, prompt_id, lock=lock)
     spec = await _spec(session, template, version)
+    # 任务记在跑的那一版的类型下（上线后改了模板类型、没重新上线时，和模板现在的类型不一样）：
+    # 这一类也得能编辑，不然发起人看不到、停不了自己刚发起的任务，钱也记到别的类型名下。
+    access.require_edit(spec.category)
     # 同一模板同时只跑一个正式任务。发起时模板行已加锁，两个人同时点运行只有一个能建出任务。
     await reconcile_stale(session)
     running = await repo.active_for_prompt(session, template.id)

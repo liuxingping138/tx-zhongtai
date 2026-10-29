@@ -102,18 +102,18 @@ def _check_message(message: str) -> str:
     return text
 
 
-async def _row_values(session: AsyncSession, prompt_id: str, row: int) -> dict[str, str]:
+async def _row_values(session: AsyncSession, prompt_id: str, row: int, code_table: str | None) -> dict[str, str]:
     """测试样本第 row 条数据（从 0 数）+ 码表全文（上传的或系统码表），用来把 @【列名】@【上传码表】替换成真实值。"""
 
     template = await require(session, prompt_id)
     values = dict(await test_rows.row_values(template, row))
-    code = await code_text(template)
+    code = await code_text(template, code_table=code_table)
     if code is not None:
         values[CODE_TABLE_FIELD] = code
     return values
 
 
-async def prepare_trial(
+async def prepare_trial(  # noqa: PLR0913  试发请求体里平铺的几个字段，拆成对象反而要在入口再拼一遍
     session: AsyncSession,
     access: CategoryAccess,
     *,
@@ -121,6 +121,7 @@ async def prepare_trial(
     model_id: str,
     prompt_id: str | None,
     row: int = 0,
+    code_table: str | None = None,
 ) -> tuple[LlmModel, str]:
     """在开始推流前做完全部校验和取数：一旦开始推流就没法再返回 4xx 了。
 
@@ -134,7 +135,7 @@ async def prepare_trial(
     model = await resolve_model(session, model_id)
     text = _check_message(content)
     if prompt_id and template_variables(text):
-        values = await _row_values(session, prompt_id, row)
+        values = await _row_values(session, prompt_id, row, code_table)
         text = fill_template(text, values, values.get(CODE_TABLE_FIELD, ""))
     return model, text
 

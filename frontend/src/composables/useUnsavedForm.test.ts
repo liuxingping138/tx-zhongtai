@@ -55,6 +55,16 @@ describe('useUnsavedForm', () => {
     expect(guard.dirty.value).toBe(false)
   })
 
+  it('保存请求在路上时又改了表单：以发出去的那份为基线，后改的内容仍算未保存', () => {
+    const { visible, form, guard } = setup()
+    visible.value = true
+    form.name = '张'
+    const sent = { ...form }
+    form.name = '张三'
+    guard.markSaved(sent)
+    expect(guard.dirty.value).toBe(true)
+  })
+
   it('关闭状态下不算未保存', () => {
     const { form, guard } = setup()
     form.name = '张三'

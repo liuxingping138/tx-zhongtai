@@ -188,12 +188,12 @@ async def retry(
     """只重问这次试跑里失败和没跑到的行，用的还是这次冻结的提示词；改过草稿要看新效果，应该重新试跑。"""
 
     run = await _own_run(session, prompt_id, run_id)
-    await batch_runs.retry_run(session, actor, access, run.id, event_type="ai.prompt.sample_retried")
+    await batch_runs.retry_run(session, actor, access, run.id, event_type="ai.prompt.sample_retried", sample=True)
     return await view(session, access, prompt_id, run_id=run.id)
 
 
 async def _own_run(session: AsyncSession, prompt_id: str, run_id: str) -> BatchRun:
-    run = await batch_runs.require(session, run_id)
+    run = await batch_runs.require(session, run_id, sample=True)
     if run.prompt_id != prompt_id or run.source != RUN_SOURCE_SAMPLE:
         raise NotFoundError("试跑记录不存在")
     return run
@@ -222,5 +222,5 @@ async def stop(session: AsyncSession, actor: Actor, access: CategoryAccess, prom
     running = await repo.active_for_prompt(session, template.id, sources=(RUN_SOURCE_SAMPLE,))
     if running is None:
         raise ApiError("没有正在进行的样本试跑", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    await batch_runs.stop_run(session, actor, access, running.id, event_type="ai.prompt.sample_stopped")
+    await batch_runs.stop_run(session, actor, access, running.id, event_type="ai.prompt.sample_stopped", sample=True)
     return await view(session, access, prompt_id)

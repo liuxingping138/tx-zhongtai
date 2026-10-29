@@ -223,3 +223,15 @@ async def test_unreleased_template_suggests_running_the_draft(monkeypatch: pytes
     _online(monkeypatch, None)
     with pytest.raises(ApiError, match="可以选「当前草稿」跑"):
         await batch_start.preview_input(FakeSession(), FULL_ACCESS, PROMPT_ID, ("a.xlsx", xlsx([["名称"], ["甲"]])))  # type: ignore[arg-type]
+
+
+async def test_running_a_release_needs_edit_rights_on_the_releases_own_category(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """模板以「政策」上线后改成了「客户」、没重新上线：任务记在政策名下。只能编辑客户类的人发起的话，
+    他看不到、停不了自己刚发起的任务，钱也记到政策那边。"""
+
+    _online(monkeypatch, release(), category="customer")
+    customer_only = CategoryAccess(readable=frozenset({"customer"}), editable=frozenset({"customer"}))
+    with pytest.raises(PermissionDeniedError):
+        await batch_start.preview_input(FakeSession(), customer_only, PROMPT_ID, ("a.xlsx", xlsx([["名称"], ["甲"]])))  # type: ignore[arg-type]

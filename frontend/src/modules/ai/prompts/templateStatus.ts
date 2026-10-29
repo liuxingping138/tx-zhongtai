@@ -101,14 +101,25 @@ export function stepActions(template: PromptTemplate | null, steps: FlowStep[], 
   if (!template) return {}
   const toneOf = (key: StepKey) => steps.find(step => step.key === key)?.tone
   const changed = Boolean(template.release?.unreleased_changes.length)
-  // 只能看的模板：不引导去试跑，上线那一步只给看。
-  if (!context.canEdit) return template.release ? { release: changed ? '看改动' : '查看上线内容' } : {}
+  if (!context.canEdit) return readOnlyActions(template, toneOf('release') === 'current', changed, context.canRelease)
   const actions: Partial<Record<StepKey, string>> = {}
   const testTone = toneOf('test')
   if ((testTone === 'current' || testTone === 'warn') && !context.sampleOpen) actions.test = '去试跑'
   const label = releaseAction(template, toneOf('release') === 'current', changed, context.canRelease)
   if (label) actions.release = label
   return actions
+}
+
+/**
+ * 只能看的模板：不引导去试跑。能上线的管理员（上线只要这类模板的查看档）照样给上线入口，
+ * 原来直接返回，第一次上线的模板流程条写着「确认无误后上线」却没有按钮；其他人只给看。
+ */
+function readOnlyActions(template: PromptTemplate, isNext: boolean, changed: boolean, canRelease: boolean): Partial<Record<StepKey, string>> {
+  if (canRelease) {
+    const label = releaseAction(template, isNext, changed, true)
+    return label ? { release: label } : {}
+  }
+  return template.release ? { release: changed ? '看改动' : '查看上线内容' } : {}
 }
 
 function releaseAction(template: PromptTemplate, isNext: boolean, changed: boolean, canRelease: boolean): string {
@@ -122,7 +133,19 @@ function releaseAction(template: PromptTemplate, isNext: boolean, changed: boole
 }
 
 /** 样本试跑的任务换成模板上的摘要：试跑开始、进行中、结束时不用重新拉整张模板列表。 */
-export function sampleFromRun(run: BatchRun, template: Pick<PromptTemplate, 'content' | 'output_fields' | 'model_id'>): SampleSummary {
+type DraftStamp = Pick<PromptTemplate, 'content' | 'output_fields' | 'model_id' | 'updated_at'>
+
+/**
+ * 这次试跑跑的是不是模板现在的草稿：按试跑时记下的草稿保存时间比（和后端 prompts.sample_current 一致）。
+ * 换了码表、重传码表文件、换了测试样本也会改保存时间，只比提示词、字段、模型会漏掉；早期试跑没记时间，退回按内容比。
+ */
+export function sampleCurrent(run: Pick<BatchRun, 'draft_saved_at' | 'prompt_content' | 'output_fields' | 'model_id'>, template: DraftStamp): boolean {
+  if (run.draft_saved_at) return run.draft_saved_at === template.updated_at
+  return run.prompt_content === template.content && run.output_fields === template.output_fields
+    && (!template.model_id || run.model_id === template.model_id)
+}
+
+export function sampleFromRun(run: BatchRun, template: DraftStamp): SampleSummary {
   return {
     id: run.id,
     status: run.status,
@@ -133,8 +156,7 @@ export function sampleFromRun(run: BatchRun, template: Pick<PromptTemplate, 'con
     cost: run.inference_cost + run.search_cost,
     created_at: run.created_at,
     created_by_name: run.created_by_name,
-    current: run.prompt_content === template.content && run.output_fields === template.output_fields
-      && (!template.model_id || run.model_id === template.model_id),
+    current: sampleCurrent(run, template),
   }
 }
 

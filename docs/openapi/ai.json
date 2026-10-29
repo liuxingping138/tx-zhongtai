@@ -2133,6 +2133,18 @@
             "maxLength": 2000,
             "title": "Output Fields",
             "default": ""
+          },
+          "code_table": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Table"
           }
         },
         "additionalProperties": false,

@@ -6,6 +6,7 @@ import { RUN_STATUS_TEXT, formatYuan, runStatusType } from '../shared/aiText'
 import SampleResultsDrawer from './SampleResultsDrawer.vue'
 import SampleStrip from './SampleStrip.vue'
 import { compareText, isProblem, rowNote, rowsToWatch, shortTime } from './sampleView'
+import { sampleCurrent } from './templateStatus'
 import type { SampleRun } from './useSampleRun'
 
 /**
@@ -37,11 +38,12 @@ const limitLocked = computed(() => running.value || !maxRows.value)
 const watched = computed(() => rowsToWatch(rows.value?.items ?? []))
 const notes = computed(() => new Map(watched.value.map(row => [row.row, rowNote(row, rows.value?.fields ?? [])])))
 const compared = computed(() => compare.value?.fixed !== undefined)
-// 草稿在这次试跑之后又改过：结果可能过时，重跑失败的行也还是用旧提示词，所以只给「再跑一次」。
+// 草稿在这次试跑之后又改过（提示词、字段、模型、码表、测试样本都算）：结果可能过时，重跑失败的行也还是用
+// 旧提示词，所以只给「再跑一次」。和模板列表、新建批量任务的提醒同一个口径。
 const stale = computed(() => {
   const current = run.value
   const template = props.template
-  return Boolean(current && template && (current.prompt_content !== template.content || current.output_fields !== template.output_fields))
+  return Boolean(current && template && !sampleCurrent(current, template))
 })
 const retryable = computed(() => Boolean(props.canRun && run.value?.can_retry && !stale.value))
 // 试跑用模板上选定的模型：和上线后跑的是同一个，没选就先选，不拿别的顶替。

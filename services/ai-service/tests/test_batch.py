@@ -332,6 +332,7 @@ async def test_retry_requeues_finished_run_with_pending_rows(monkeypatch: pytest
     _returns(repo, "active_for_prompt", None, monkeypatch)
     finished = run(status="interrupted", total_count=10, done_count=7, failed_count=2, error_message="中断")
     _returns(repo, "get", finished, monkeypatch)
+    _returns(prompt_repo, "get", template(), monkeypatch)  # 重跑和发起一样先锁模板行
     listed = service.to_dict(finished)
     assert (listed["pending_count"], listed["can_retry"]) == (5, True)
     data = await service.retry_run(FakeSession(), ACTOR, FULL_ACCESS, RUN_ID)  # type: ignore[arg-type]
@@ -370,3 +371,14 @@ async def test_read_only_category_can_view_runs_but_not_run_or_stop(monkeypatch:
             await call
     with pytest.raises(PermissionDeniedError):
         await service.get_run(FakeSession(), CategoryAccess(frozenset(), frozenset()), RUN_ID)  # type: ignore[arg-type]
+
+
+async def test_batch_endpoints_do_not_reach_sample_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """样本试跑归模板页管：拿它的 ID 也不能用批量任务的权限删除、重跑、下载。"""
+
+    from platform_common.errors import NotFoundError
+
+    _returns(repo, "get", run(source="sample", status="done"), monkeypatch)
+    with pytest.raises(NotFoundError):
+        await service.delete_run(FakeSession(), ACTOR, FULL_ACCESS, RUN_ID)  # type: ignore[arg-type]
+    assert (await service.require(FakeSession(), RUN_ID, sample=True)).source == "sample"  # type: ignore[arg-type]
