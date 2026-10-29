@@ -1,6 +1,6 @@
 /** 用户列表的彩色头像：取显示名第一个字（英文转大写），颜色按用户 ID 固定，换页、刷新都不变。 */
 
-export const AVATAR_TONES = 6
+export const AVATAR_TONES = 8
 
 export function avatarText(user: { display_name: string; username: string }): string {
   const name = user.display_name.trim() || user.username.trim()

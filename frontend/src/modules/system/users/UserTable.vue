@@ -267,6 +267,8 @@ function roleNames(user: UserItem): string {
 .user-avatar.is-tone-4 { background: var(--zt-avatar-4); }
 .user-avatar.is-tone-5 { background: var(--zt-avatar-5); }
 .user-avatar.is-tone-6 { background: var(--zt-avatar-6); }
+.user-avatar.is-tone-7 { background: var(--zt-avatar-7); }
+.user-avatar.is-tone-8 { background: var(--zt-avatar-8); }
 .user-link { overflow: hidden; min-width: 0; font-weight: 500; }
 .user-link :deep(span) { overflow: hidden; text-overflow: ellipsis; }
 
