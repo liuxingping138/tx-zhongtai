@@ -57,3 +57,15 @@ def test_export_bytes_are_stable_for_the_same_rows() -> None:
     first = build_workbook(_COLUMNS, rows, sheet_name="信源")
     assert first == build_workbook(_COLUMNS, rows, sheet_name="信源")
     assert len(parse_sheet(first, _COLUMNS)) == 2500
+
+
+def test_two_columns_for_the_same_field_do_not_overwrite_each_other() -> None:
+    """表里同时有「备注」「备注（旧）」：两列都按前缀对到备注，原来后面那列静默盖掉前面的。"""
+
+    from platform_common.columns import ColumnSpec
+    from platform_common.excel import map_headers
+
+    columns = (ColumnSpec("policy_name", "政策名称"), ColumnSpec("remark", "备注"), ColumnSpec("province", "省份"))
+    headers = ["政策名称", "备注（旧）", "备注", "省份名称", "省份名称拼音"]
+    # 完全相同的「备注」胜过前缀匹配的「备注（旧）」；两个都是前缀匹配时认最前面那列。
+    assert map_headers(columns, headers) == ["policy_name", None, "remark", "province", None]

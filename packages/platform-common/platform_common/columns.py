@@ -53,6 +53,11 @@ def normalize_header(value: str) -> str:
     return text.split()[0]
 
 
+def header_is_exact(columns: tuple[ColumnSpec, ...], header: str) -> bool:
+    raw = (header or "").replace("\n", " ").strip()
+    return any(spec.header in (raw, normalize_header(raw)) for spec in columns)
+
+
 def header_to_field(columns: tuple[ColumnSpec, ...], header: str) -> str | None:
     """把 Excel 表头映射到业务字段。
 

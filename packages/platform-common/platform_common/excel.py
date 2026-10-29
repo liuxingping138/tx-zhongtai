@@ -22,7 +22,7 @@ from openpyxl.utils.cell import coordinate_to_tuple, range_boundaries
 from openpyxl.worksheet.worksheet import Worksheet
 
 from platform_common.clock import format_beijing
-from platform_common.columns import AUDIT_EXPORT_COLUMNS, ColumnSpec, header_to_field
+from platform_common.columns import AUDIT_EXPORT_COLUMNS, ColumnSpec, header_is_exact, header_to_field
 from platform_common.errors import ApiError, ErrorCode
 from platform_common.xlsx_writer import write_text_xlsx
 
@@ -44,6 +44,25 @@ def _field_of(columns: tuple[ColumnSpec, ...], header: str) -> str | None:
     if raw in {"校验说明", "跳过原因"}:
         return "skip_reason"
     return header_to_field(columns, header)
+
+
+def map_headers(columns: tuple[ColumnSpec, ...], headers: list[str]) -> list[str | None]:
+    """整行表头 -> 每列对应的字段。几列对到同一个字段时只认一列：表头完全相同的优先，否则认最前面那列。
+
+    原来逐列映射、按列顺序逐格写进去：表里同时有「备注」「备注（旧）」，两列都按前缀对到备注，
+    后面那列静默盖掉前面的，导入后备注被空值覆盖，没有任何提示。
+    """
+
+    mapping = [_field_of(columns, header) for header in headers]
+    chosen: dict[str, int] = {}
+    for index, field in enumerate(mapping):
+        if field is None:
+            continue
+        if field not in chosen or (
+            header_is_exact(columns, headers[index]) and not header_is_exact(columns, headers[chosen[field]])
+        ):
+            chosen[field] = index
+    return [field if field is not None and chosen.get(field) == index else None for index, field in enumerate(mapping)]
 
 
 def _reject_oversized_workbook(content: bytes, *, max_uncompressed_bytes: int) -> None:
@@ -168,7 +187,7 @@ def parse_sheet(
                 continue
             if len(header_row) > max_columns:
                 raise ApiError("Excel 列数超过上限", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-            mapping = [_field_of(columns, str(cell or "")) for cell in header_row]
+            mapping = map_headers(columns, [str(cell or "") for cell in header_row])
             if any(mapping):
                 break
             raise ApiError(f"Excel 表头与{subject}字段不匹配", code=ErrorCode.VALIDATION_ERROR, http_status=422)
