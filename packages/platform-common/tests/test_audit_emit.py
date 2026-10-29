@@ -169,11 +169,12 @@ async def test_bad_event_is_retried_and_rest_of_batch_still_delivered(monkeypatc
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(("status", "attempts"), [(422, 3), (401, 3), (503, 1)])
-async def test_rejected_events_are_parked_at_once_but_outages_retry(
+@pytest.mark.parametrize(("status", "attempts"), [(422, 3), (400, 3), (413, 3), (401, 1), (403, 1), (503, 1)])
+async def test_bad_content_is_parked_at_once_but_auth_and_outages_retry(
     monkeypatch: pytest.MonkeyPatch, status: int, attempts: int
 ) -> None:
-    """审计服务明确拒收（4xx）的事件重试多少次都一样，直接停放；服务不可用（5xx）才按次数退避重试。"""
+    """内容本身不合格（400/413/422）重试多少次都一样，直接停放；
+    401/403（换密钥、容器重建有先后）和 5xx 按次数退避重试。"""
 
     event = _leased("policy.source.created", {})
     repo = _Repo([event])

@@ -26,7 +26,8 @@ class Settings(BaseServiceSettings):
     # 允许调用 /internal/ 接口的服务及其密钥，如 {"ai-service": "..."}。
     internal_caller_secrets: dict[str, str] = Field(default_factory=dict)
     worker_poll_interval_seconds: float = 2.0
-    worker_max_attempts: int = 8
+    # 配合最长 15 分钟的退避，审计服务连不上能容忍约一天才置 dead（原来 8 次、三四分钟就放弃）。
+    worker_max_attempts: int = 100
     import_max_bytes: int = 20 * 1024 * 1024
     # 导出会把整表读进内存再生成 Excel，必须有上限，否则大表导出能把服务撑爆。
     export_max_rows: int = 100_000

@@ -7,6 +7,7 @@ from datetime import timedelta
 from typing import Any
 
 import httpx
+from platform_common.audit_emit import PERMANENT_REJECTIONS
 from platform_common.clock import utcnow
 from platform_common.logging_setup import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -81,8 +82,9 @@ async def _deliver_one(settings: Settings, client: httpx.AsyncClient, event: Out
             logger.warning("outbox_lease_lost", event_id=str(event.event_id), phase="delivered")
         return
 
-    # 4xx 是审计服务明确拒收（鉴权错、内容不合格），重试也不会变：直接停放，错误日志里能看到。
-    if response.is_client_error:
+    # 只有内容本身不合格（400/413/422）重试也不会变，直接停放。401/403 多半是两边换密钥、容器重建有先后，
+    # 几分钟后就好：当它们也直接停放，轮换一次密钥就丢一批登录、改权限的审计。
+    if response.status_code in PERMANENT_REJECTIONS:
         await _mark_failure(
             settings,
             event.event_id,

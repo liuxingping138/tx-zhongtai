@@ -35,10 +35,15 @@ class OutboxEventDraft(BaseModel):
     schema_version: int = Field(default=1, ge=1)
 
 
-def retry_delay(attempts: int) -> timedelta:
-    """指数退避，最长 60 秒。"""
+# 退避最长 15 分钟。配合各服务 worker_max_attempts=100，审计服务连不上、密钥对不上能容忍约一天才置 dead；
+# 原来最长 60 秒、8 次，三分钟就放弃，审计服务起不来一会儿，四个服务的审计就全进 dead。
+RETRY_DELAY_CAP_SECONDS = 900
 
-    return timedelta(seconds=min(2**attempts, 60))
+
+def retry_delay(attempts: int) -> timedelta:
+    """指数退避，最长 15 分钟。"""
+
+    return timedelta(seconds=min(2**attempts, RETRY_DELAY_CAP_SECONDS))
 
 
 class OutboxRepository:

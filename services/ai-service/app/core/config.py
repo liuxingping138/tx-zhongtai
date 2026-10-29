@@ -31,7 +31,8 @@ class Settings(BaseServiceSettings):
     # 允许调用 /internal/ 接口的服务及其密钥，如 {"policy-service": "..."}。
     internal_caller_secrets: dict[str, str] = Field(default_factory=dict)
     worker_poll_interval_seconds: float = 2.0
-    worker_max_attempts: int = 8
+    # 配合最长 15 分钟的退避，审计服务连不上能容忍约一天才置 dead（原来 8 次、三四分钟就放弃）。
+    worker_max_attempts: int = 100
 
     # 模板 Excel、码表和批量结果都落在这个目录（容器里挂持久卷），不放静态目录：静态目录谁都能下载。
     data_dir: Path = Path("/data/ai")

@@ -67,6 +67,10 @@ def ingest_changes(payload: dict[str, Any]) -> Any:
     return _fit({**changes, **extra}) if extra else changes
 
 
+# 审计服务拒收、重试也不会变的响应：内容格式不对、超过大小上限、字段校验不过。
+PERMANENT_REJECTIONS = frozenset({400, 413, 422})
+
+
 class _AuditSettings(Protocol):
     audit_ingest_url: str
     audit_ingest_secret: str
@@ -182,8 +186,9 @@ class AuditEmitter:
             )
             if not response.is_success:
                 error = f"http:{response.status_code}"
-                # 4xx 是审计服务明确拒收（鉴权错、内容不合格），重试 8 次也不会变：直接置 dead，错误日志里能看到。
-                if response.is_client_error:
+                # 只有内容本身不合格（400/413/422）重试多少次都不会变，直接置 dead。401/403 多半是两边换密钥、
+                # 容器重建有先后，几分钟后就好；当它们也直接 dead，轮换一次密钥就丢一批审计。
+                if response.status_code in PERMANENT_REJECTIONS:
                     attempts = settings.worker_max_attempts
         except httpx.HTTPError as exc:
             error = f"network:{exc.__class__.__name__}"

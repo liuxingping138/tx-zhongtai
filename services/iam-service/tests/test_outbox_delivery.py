@@ -116,11 +116,19 @@ async def test_server_error_retries_until_the_attempt_budget_then_parks(env: Sim
     assert (DeliveryCounters.retried, DeliveryCounters.parked) == (1, 1)
 
 
-@pytest.mark.parametrize("status", [401, 403, 422])
-async def test_auth_rejection_parks_immediately(env: SimpleNamespace, status: int) -> None:
+@pytest.mark.parametrize("status", [400, 413, 422])
+async def test_bad_content_parks_immediately(env: SimpleNamespace, status: int) -> None:
     await module._deliver_one(SETTINGS, _Client(httpx.Response(status)), _event(attempts=1))  # type: ignore[arg-type]
     assert env.retry_args["status"] == "dead"
     assert env.retry_args["error_message"] == f"http:{status}"
+
+
+@pytest.mark.parametrize("status", [401, 403])
+async def test_auth_rejection_retries_because_secrets_rotate(env: SimpleNamespace, status: int) -> None:
+    """两边换密钥、容器重建有先后，几分钟后就好：直接停放的话，轮换一次密钥就丢一批审计。"""
+
+    await module._deliver_one(SETTINGS, _Client(httpx.Response(status)), _event(attempts=1))  # type: ignore[arg-type]
+    assert env.retry_args["status"] == "failed" and env.retry_args["next_retry_at"] is not None
 
 
 async def test_lost_lease_on_retry_is_only_counted(env: SimpleNamespace) -> None:

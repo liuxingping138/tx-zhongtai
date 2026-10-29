@@ -71,7 +71,7 @@ class _Session:
 
 
 def test_backoff_doubles_and_caps_at_a_minute() -> None:
-    assert [retry_delay(n).total_seconds() for n in (1, 2, 3, 5, 6, 10)] == [2, 4, 8, 32, 60, 60]
+    assert [retry_delay(n).total_seconds() for n in (1, 2, 3, 5, 6, 9, 10, 30)] == [2, 4, 8, 32, 64, 512, 900, 900]
 
 
 class TestEnqueue:

@@ -1,7 +1,12 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
+# 服务器上（SERVER=1）只有独立的 docker-compose，业务栈还叠了 HTTPS 那份：make SERVER=1 outbox-replay
+ifeq ($(SERVER),1)
+COMPOSE := docker-compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.https.yml --env-file .env
+else
 COMPOSE := docker compose -f deploy/compose/docker-compose.yml --env-file .env
+endif
 P6_ENV := deploy/compose/.p6.env
 # 服务器上跑 P6（scripts/p6-on-server.sh 传 P6_SERVER=1）：那里只有独立的 docker-compose，没有 docker compose 插件。
 ifeq ($(P6_SERVER),1)

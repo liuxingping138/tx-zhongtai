@@ -227,7 +227,7 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
 ### 审计走 Outbox
 
 业务写操作调 `enqueue_event(...)` 写本服务的 `*_outbox` 表（与业务同事务），
-再由 worker 投递到 audit-service。失败按指数退避重试，超上限置 dead，可用 `make outbox-replay` 重放
+再由 worker 投递到 audit-service。失败按指数退避重试（最长 15 分钟一次，默认 100 次，约一天），超上限置 dead；只有内容本身不合格（400/413/422）立即 dead，401/403（换密钥、容器重建有先后）照常重试。可用 `make outbox-replay` 重放（服务器上 `make SERVER=1 outbox-replay`）
 （覆盖 iam/policy/codebook/ai，`OUTBOX_SERVICES=policy-service` 只跑一个）。
 
 认领时置 delivering 并写 `lease_until`，回写只在租约没被别人重新认领时生效。进程在投递途中重启，

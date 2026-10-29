@@ -65,9 +65,10 @@ class Settings(BaseServiceSettings):
     worker_batch_size: int = 20
     worker_poll_interval_seconds: float = 2.0
     worker_lease_seconds: int = 30
-    worker_max_attempts: int = 8
+    # 配合最长 15 分钟的退避，审计服务连不上能容忍约一天才置 dead（原来 8 次、三四分钟就放弃）。
+    worker_max_attempts: int = 100
     worker_backoff_base_seconds: int = 2
-    worker_backoff_cap_seconds: int = 300
+    worker_backoff_cap_seconds: int = 900
 
     @model_validator(mode="after")
     def _reject_demo_internal_secrets_in_production(self) -> Settings:
