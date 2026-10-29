@@ -201,13 +201,16 @@ class TestSourceReads:
         )
         monkeypatch.setattr(sync, "mysql_connect", fake.connect)
         days, mark = sync.fetch_affected_days(datetime(2026, 10, 9, tzinfo=UTC))
-        assert days == {date(2026, 10, 9), date(2026, 10, 10)}
+        assert days == {
+            date(2026, 10, 9): datetime(2026, 10, 9, 0, 0, tzinfo=UTC),
+            date(2026, 10, 10): datetime(2026, 10, 10, 1, 0, tzinfo=UTC),
+        }
         assert mark == datetime(2026, 10, 10, 1, 0, tzinfo=UTC)
         assert fake.executed[0][1] == ("2026-10-09 08:00:00",)
 
     def test_affected_days_with_no_new_rows(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sync, "mysql_connect", _FakeMysql([]).connect)
-        assert sync.fetch_affected_days(datetime(2026, 10, 9, tzinfo=UTC)) == (set(), None)
+        assert sync.fetch_affected_days(datetime(2026, 10, 9, tzinfo=UTC)) == ({}, None)
 
     def test_source_bounds(self, monkeypatch: pytest.MonkeyPatch) -> None:
         fake = _FakeMysql([], one=[{"first_day": date(2023, 10, 18)}, {"max_created": datetime(2026, 10, 10, 8, 0)}])

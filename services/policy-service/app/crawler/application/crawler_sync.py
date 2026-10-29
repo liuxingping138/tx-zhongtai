@@ -25,7 +25,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any, cast
 
 from platform_common.clock import BEIJING
-from sqlalchemy import CursorResult, delete, select, text
+from sqlalchemy import CursorResult, delete, func, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -127,8 +127,8 @@ def merge_day_rows(day: date, rows: list[dict[str, Any]]) -> list[dict[str, Any]
 
 
 @retry_mysql_read
-def fetch_affected_days(since: datetime) -> tuple[set[date], datetime | None]:
-    """入库时间晚于 since 的数据落在哪些采集日，以及其中最大的入库时间。create_time 有索引。"""
+def fetch_affected_days(since: datetime) -> tuple[dict[date, datetime], datetime | None]:
+    """入库时间晚于 since 的数据落在哪些采集日、每天最后一条的入库时间，以及其中最大的入库时间。create_time 有索引。"""
 
     table = get_settings().crawler_data_table
     sql = f"""
@@ -140,9 +140,12 @@ def fetch_affected_days(since: datetime) -> tuple[set[date], datetime | None]:
     with mysql_connect() as conn, conn.cursor() as cur:
         cur.execute(sql, (since.astimezone(BEIJING).strftime("%Y-%m-%d %H:%M:%S"),))
         rows = cast(list[dict[str, Any]], cur.fetchall())
-    days = {row["collect_date"] for row in rows if row["collect_date"]}
-    stamps = [row["max_created"] for row in rows if row["max_created"]]
-    return days, _source_time(max(stamps)) if stamps else None
+    days = {
+        row["collect_date"]: _source_time(row["max_created"])
+        for row in rows
+        if row["collect_date"] and row["max_created"]
+    }
+    return days, max(days.values()) if days else None
 
 
 @retry_mysql_read
@@ -287,8 +290,26 @@ async def plan(
     if watermark is None:
         raise RuntimeError("尚未建立同步水位，请先执行一次回填：make crawler-backfill")
     touched, mark = await asyncio.to_thread(fetch_affected_days, watermark - _WATERMARK_OVERLAP)
+    # 水位只在整次成功后才往前走：补录了好几天、一次跑不完超时后，重试和第二天都会把同一批日期从头再算，
+    # 单日聚合最长要七八分钟，「重日」一多就永远超时。上一次（失败的那次）已经在这一天最后一条入库之后
+    # 重算过的日期跳过，每次重试都能往前推进。
+    synced = await _synced_days(session, list(touched))
+    fresh = {day for day, last_in in touched.items() if day not in synced or synced[day] < last_in + _WATERMARK_OVERLAP}
     # 当天数据还在写，无论水位怎么说都重算。水位没有新数据时保持原值。
-    return sorted(touched | {today}, reverse=True), mark or watermark
+    return sorted(fresh | {today}, reverse=True), mark or watermark
+
+
+async def _synced_days(session: AsyncSession, days: list[date]) -> dict[date, datetime]:
+    """这些采集日在本地是什么时候整天重算的（同一天的行同一时刻写入）。"""
+
+    if not days:
+        return {}
+    result = await session.execute(
+        select(CrawlerSiteDaily.collect_date, func.min(CrawlerSiteDaily.synced_at))
+        .where(CrawlerSiteDaily.collect_date.in_(days))
+        .group_by(CrawlerSiteDaily.collect_date)
+    )
+    return {row[0]: row[1] for row in result.all()}
 
 
 async def _sync(session: AsyncSession, window: SyncWindow, *, run_id: uuid.UUID | None = None) -> None:

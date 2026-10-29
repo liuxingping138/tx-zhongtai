@@ -61,11 +61,13 @@ async def test_sync_dates_sites_by_rule_creation_and_leaves_abnormal_alone(monke
                 _source("A4", "异常", "2026-09-01"),
                 _source("A5", "未爬"),  # 规则表里没有
                 _source("A6", "已爬", "2026-10-16"),  # 已经对齐，不算修改
+                _source("A7", "已爬", "2026-10-01"),  # 最早的规则被删，剩下的规则更晚：不往后挪
             ]
         )
         await session.commit()
     first = {"A1": date(2026, 10, 23), "A2": date(2024, 10, 15), "A3": date(2026, 10, 23), "A4": date(2026, 10, 10)}
-    rules = RuleCodes(rows=8, first_dates={**first, "A6": date(2026, 10, 16), "Z9": date(2026, 10, 23)}, blank_rows=1)
+    later = {"A6": date(2026, 10, 16), "A7": date(2026, 10, 20), "Z9": date(2026, 10, 23)}
+    rules = RuleCodes(rows=8, first_dates={**first, **later}, blank_rows=1)
     monkeypatch.setattr(rules_source, "read_rule_codes", lambda: rules)
     sync_id = uuid.uuid4()
     await rules_sync.run(sync_id)
@@ -79,15 +81,16 @@ async def test_sync_dates_sites_by_rule_creation_and_leaves_abnormal_alone(monke
             "A4": ("异常", "2026-09-01"),
             "A5": ("未爬", ""),
             "A6": ("已爬", "2026-10-16"),
+            "A7": ("已爬", "2026-10-01"),
         }
         assert rows["A1"].version == 2 and rows["A1"].updated_by_name == "爬虫配置同步"
         assert rows["A6"].version == 1
         assert await rules_sync.summary(session, sync_id) == {
             "status": "success",
             "rule_rows": 8,
-            "rule_codes": 6,
+            "rule_codes": 7,
             "blank_code_rows": 1,
-            "matched": 5,
+            "matched": 6,
             "marked": 2,
             "redated": 1,
             "unknown_codes": 1,

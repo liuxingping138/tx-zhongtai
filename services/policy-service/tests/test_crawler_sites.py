@@ -77,9 +77,10 @@ async def test_incremental_without_watermark_requires_backfill(monkeypatch: pyte
 async def test_incremental_recomputes_touched_days_and_today(monkeypatch: pytest.MonkeyPatch) -> None:
     mark = datetime(2026, 9, 22, 12, tzinfo=UTC)
     newer = mark + timedelta(hours=10)
-    fetch = MagicMock(return_value=({date(2026, 9, 1), date(2026, 9, 21)}, newer))
+    fetch = MagicMock(return_value=({date(2026, 9, 1): newer, date(2026, 9, 21): newer}, newer))
     monkeypatch.setattr(sync, "_last_watermark", AsyncMock(return_value=mark))
     monkeypatch.setattr(sync, "fetch_affected_days", fetch)
+    monkeypatch.setattr(sync, "_synced_days", AsyncMock(return_value={}))
     targets, new_mark = await sync.plan(
         MagicMock(), sync.SyncWindow(mode=sync.MODE_INCREMENTAL, days=7, since=None, skip_existing=False), today=TODAY
     )
@@ -89,10 +90,31 @@ async def test_incremental_recomputes_touched_days_and_today(monkeypatch: pytest
 
 
 @pytest.mark.asyncio
+async def test_retry_skips_days_already_recomputed_after_their_last_insert(monkeypatch: pytest.MonkeyPatch) -> None:
+    """补录了好几天、一次跑不完超时：水位只在整次成功后才走，重试会把同一批日期从头再算、永远超时。
+    上一次已经在这一天最后一条入库之后重算过的跳过，每次重试都往前推进。"""
+
+    mark = datetime(2026, 9, 22, 12, tzinfo=UTC)
+    last_in = mark + timedelta(hours=1)
+    touched = {date(2026, 9, 1): last_in, date(2026, 9, 2): last_in, date(2026, 9, 3): last_in}
+    synced = {
+        date(2026, 9, 1): last_in + timedelta(hours=3),  # 上一次失败的那次已经重算过：跳过
+        date(2026, 9, 2): last_in + timedelta(minutes=30),  # 重算时离最后一条入库太近，可能漏了晚提交的：再算
+    }
+    monkeypatch.setattr(sync, "_last_watermark", AsyncMock(return_value=mark))
+    monkeypatch.setattr(sync, "fetch_affected_days", MagicMock(return_value=(touched, last_in)))
+    monkeypatch.setattr(sync, "_synced_days", AsyncMock(return_value=synced))
+    targets, _ = await sync.plan(
+        MagicMock(), sync.SyncWindow(mode=sync.MODE_INCREMENTAL, days=7, since=None, skip_existing=False), today=TODAY
+    )
+    assert targets == [TODAY, date(2026, 9, 3), date(2026, 9, 2)]
+
+
+@pytest.mark.asyncio
 async def test_incremental_keeps_watermark_when_nothing_new(monkeypatch: pytest.MonkeyPatch) -> None:
     mark = datetime(2026, 9, 22, 12, tzinfo=UTC)
     monkeypatch.setattr(sync, "_last_watermark", AsyncMock(return_value=mark))
-    monkeypatch.setattr(sync, "fetch_affected_days", MagicMock(return_value=(set(), None)))
+    monkeypatch.setattr(sync, "fetch_affected_days", MagicMock(return_value=({}, None)))
     targets, new_mark = await sync.plan(
         MagicMock(), sync.SyncWindow(mode=sync.MODE_INCREMENTAL, days=7, since=None, skip_existing=False), today=TODAY
     )

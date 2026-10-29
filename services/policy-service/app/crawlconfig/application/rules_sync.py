@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.audit_emit import enqueue_event
+from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.crawlconfig.domain.models import ConfigSyncRun
 from app.crawlconfig.repositories import rules_source, sources
@@ -43,7 +44,10 @@ async def run(sync_id: uuid.UUID) -> None:
     rules = await asyncio.to_thread(rules_source.read_rule_codes)
     async with SessionLocal() as session:
         now = utcnow()
-        marked, redated = await sources.apply_rule_dates(session, rules.first_dates, now=now, actor=ROBOT)
+        placeholder = get_settings().crawler_config_backfill_date.isoformat()
+        marked, redated = await sources.apply_rule_dates(
+            session, rules.first_dates, now=now, actor=ROBOT, placeholder=placeholder
+        )
         matched = await sources.count_known(session, rules.codes)
         row = await session.get(ConfigSyncRun, sync_id, with_for_update=True)
         if row is None:
