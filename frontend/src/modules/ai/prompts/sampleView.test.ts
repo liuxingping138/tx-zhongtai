@@ -4,7 +4,7 @@ import type { RunRow, SampleSummary } from '@/api/ai'
 import type { SampleCompare } from '@/api/aiSamples'
 import {
   answerLines, compareText, estimateCost, fieldCell, firstDiff, previousText, rowCounts, rowMatches, rowNote, rowsToWatch,
-  sampleBars, shortTime, trialVerdict, versionLabel,
+  shortTime, trialVerdict, versionLabel,
 } from './sampleView'
 
 const FIELDS = ['一级行业', '一级场景']
@@ -112,7 +112,7 @@ describe('试发一行之后和样本试跑比', () => {
   })
 })
 
-describe('批量任务的版本、估费和列表小竖条', () => {
+describe('批量任务的版本和估费', () => {
   it('第 N 版或哪次保存的草稿', () => {
     expect(versionLabel({ release_no: 3, draft_saved_at: '' })).toBe('第 3 版')
     expect(versionLabel({ release_no: null, draft_saved_at: '2026-10-28 16:22:00' })).toBe('草稿 10-28 16:22')
@@ -127,13 +127,5 @@ describe('批量任务的版本、估费和列表小竖条', () => {
     expect(estimateCost(null, 10)).toBeNull()
     expect(estimateCost({ ...sample, cost: 0 }, 10)).toBeNull()
     expect(estimateCost(sample, 0)).toBeNull()
-  })
-
-  it('10 条以内一条一根；更多时按比例分到 10 根', () => {
-    expect(sampleBars({ total_count: 10, done_count: 10, failed_count: 2, format_failed_count: 1 }))
-      .toEqual(['done', 'done', 'done', 'done', 'done', 'done', 'done', 'done', 'failed', 'format'])
-    expect(sampleBars({ total_count: 4, done_count: 2, failed_count: 0, format_failed_count: 0 })).toEqual(['done', 'done', 'pending', 'pending'])
-    expect(sampleBars({ total_count: 50, done_count: 50, failed_count: 10, format_failed_count: 0 })).toHaveLength(10)
-    expect(sampleBars({ total_count: 0, done_count: 0, failed_count: 0, format_failed_count: 0 })).toEqual([])
   })
 })

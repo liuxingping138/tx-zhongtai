@@ -159,29 +159,3 @@ export function trialVerdict(sampleRow: RunRow | undefined, parsed: Record<strin
   if (!diff) return { tone: 'same', label: '一样', text: `和${where}的结果一样。` }
   return { tone: 'chg', label: '结果变了', text: `和${where}比，${diff.field}「${diff.before || '空'}」改成「${diff.after || '空'}」。` }
 }
-
-export type BarTone = 'done' | 'failed' | 'format' | 'pending'
-
-/**
- * 列表里最近一次试跑的小竖条：最多 10 根，按成功、调用失败、格式不对、没跑到的比例分配（只有计数，不按行号排）。
- * 只是一眼看好坏的示意，旁边另有文字。
- */
-export function sampleBars(sample: Pick<SampleSummary, 'total_count' | 'done_count' | 'failed_count' | 'format_failed_count'>, max = 10): BarTone[] {
-  const total = sample.total_count
-  if (total <= 0) return []
-  const buckets: [BarTone, number][] = [
-    ['done', sample.done_count - sample.failed_count],
-    ['failed', sample.failed_count - sample.format_failed_count],
-    ['format', sample.format_failed_count],
-    ['pending', total - sample.done_count],
-  ]
-  const bars = Math.min(total, max)
-  return Array.from({ length: bars }, (_, index) => {
-    let position = (index + 0.5) * total / bars
-    for (const [tone, size] of buckets) {
-      if (position < size) return tone
-      position -= Math.max(size, 0)
-    }
-    return 'pending'
-  })
-}

@@ -7,7 +7,7 @@ import { listPrompts, type PromptTemplate, type TemplateCategory } from '@/api/a
 import { errorMessage } from '@/api/errors'
 import { useAuthStore } from '@/stores/auth'
 import { ALL_CATEGORIES, defaultCategory, inCategory } from '../shared/categories'
-import { sampleBars, shortTime } from './sampleView'
+import { shortTime } from './sampleView'
 import { releaseState, sampleState, type ReleaseKind } from './templateStatus'
 import { useTaskFit } from './useTaskFit'
 import '../shared/ai.css'
@@ -24,7 +24,9 @@ const loadError = ref('')
 const category = ref(ALL_CATEGORIES)
 const status = ref<ReleaseKind | ''>('')
 const keyword = ref('')
-const onlyScheduled = ref(false)
+// 「定时任务在用」做成和旁边按钮组一样的按钮，只有一个选项，选中即只看在用的。
+const scheduledFilter = ref<string[]>([])
+const onlyScheduled = computed(() => scheduledFilter.value.length > 0)
 // 哪些模板正被定时任务用：只有政策类会被选用；看不到政策打标约定（没权限）时这一列和筛选都不显示。
 const taskFit = useTaskFit(reactive({ category: 'policy', content: '', output_fields: '', code_table: '' }))
 const showTasks = computed(() => taskFit.usedBy('') !== null)
@@ -34,7 +36,7 @@ const canCreate = computed(() => auth.canFull('ai.prompts') && categories.value.
 
 const STATUS_OPTIONS: { value: ReleaseKind | ''; label: string }[] = [
   { value: '', label: '全部' },
-  { value: 'changed', label: '有改动未上线' },
+  { value: 'changed', label: '有改动' },
   { value: 'online', label: '已上线' },
   { value: 'offline', label: '未上线' },
 ]
@@ -71,6 +73,11 @@ async function load(): Promise<void> {
 }
 onMounted(() => { void load(); void taskFit.load() })
 
+/** 「字节-DeepSeek-V3.2」→「DeepSeek-V3.2」：厂商前缀每行都一样，省下宽度给名称；悬停看全名。 */
+function shortModel(name: string): string {
+  return name ? name.replace(/^(字节|百度)\s*[-－]\s*/, '') : '未选'
+}
+
 function open(template: PromptTemplate): void {
   void router.push({ name: 'ai-prompt-edit', params: { id: template.id } })
 }
@@ -88,11 +95,14 @@ function create(): void {
     </h1>
     <div class="ai-panel prompt-list__panel">
       <div class="prompt-list__toolbar">
-        <span
-          v-if="categories.length > 1"
-          class="prompt-list__label"
-          aria-hidden="true"
-        >类型</span>
+        <el-input
+          v-model="keyword"
+          class="prompt-list__search"
+          :prefix-icon="Search"
+          clearable
+          placeholder="按名称查找"
+          aria-label="按名称查找模板"
+        />
         <el-radio-group
           v-if="categories.length > 1"
           v-model="category"
@@ -125,22 +135,15 @@ function create(): void {
             {{ item.label }}<span class="prompt-list__count">{{ counts[item.value] }}</span>
           </el-radio-button>
         </el-radio-group>
-        <el-checkbox
+        <el-checkbox-group
           v-if="showTasks"
-          v-model="onlyScheduled"
-          border
-          class="prompt-list__scheduled"
+          v-model="scheduledFilter"
+          aria-label="只看定时任务在用的模板"
         >
-          定时任务在用<span class="prompt-list__count">{{ scheduled }}</span>
-        </el-checkbox>
-        <el-input
-          v-model="keyword"
-          class="prompt-list__search"
-          :prefix-icon="Search"
-          clearable
-          placeholder="按名称查找"
-          aria-label="按名称查找模板"
-        />
+          <el-checkbox-button value="scheduled">
+            定时任务在用<span class="prompt-list__count">{{ scheduled }}</span>
+          </el-checkbox-button>
+        </el-checkbox-group>
         <span class="prompt-list__spacer" />
         <el-button
           v-if="canCreate"
@@ -169,7 +172,7 @@ function create(): void {
       >
         <el-table-column
           label="模板名称"
-          min-width="142"
+          min-width="176"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -190,44 +193,35 @@ function create(): void {
         <el-table-column
           v-if="showTasks"
           label="定时任务"
-          min-width="120"
+          min-width="110"
+          show-overflow-tooltip
         >
           <template #default="{ row }">
             <span
-              v-for="task in tasksOf(row)"
-              :key="task"
+              v-if="tasksOf(row).length"
               class="prompt-list__task"
-              :title="`政策 AI 打标的「${task}」任务每天按这个模板的线上版本跑`"
-            >{{ task }}</span>
+            >{{ tasksOf(row).join('、') }}</span>
             <span
-              v-if="!tasksOf(row).length"
+              v-else
               class="prompt-list__none"
             >不在用</span>
           </template>
         </el-table-column>
         <el-table-column
           label="上线状态"
-          min-width="188"
+          min-width="204"
         >
           <template #default="{ row }">
-            <!-- 有改动没上线：第二行写改了什么，「看改动」直接打开逐行对比。 -->
-            <div
+            <!-- 有改动没上线：一行写完，改了什么放悬停提示，「看改动」直接打开逐行对比。 -->
+            <span
               v-if="row.release?.unreleased_changes.length"
-              class="prompt-list__changed"
-            >
-              <span
-                class="prompt-list__state is-changed"
-                :title="releaseState(row).detail"
-              >第 {{ row.release.release_no }} 版在线，有改动未上线</span>
-              <span class="prompt-list__change">
-                改了{{ row.release.unreleased_changes.join('、') }} ·
-                <router-link
-                  class="prompt-list__diff"
-                  :to="{ name: 'ai-prompt-edit', params: { id: row.id }, query: { review: '1' } }"
-                  @click.stop
-                >看改动</router-link>
-              </span>
-            </div>
+              class="prompt-list__state is-changed"
+              :title="`草稿改了${row.release.unreleased_changes.join('、')}，还没上线`"
+            >第 {{ row.release.release_no }} 版，草稿有改动<router-link
+              class="prompt-list__diff"
+              :to="{ name: 'ai-prompt-edit', params: { id: row.id }, query: { review: '1' } }"
+              @click.stop
+            >看改动</router-link></span>
             <span
               v-else
               class="prompt-list__state"
@@ -238,28 +232,19 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="样本试跑"
-          min-width="190"
+          min-width="162"
         >
           <template #default="{ row }">
             <span
               class="prompt-list__sample"
               :class="`is-${sampleState(row).kind}`"
               :title="sampleState(row).detail"
-            >
-              <span
-                v-if="row.sample"
-                class="prompt-list__bars"
-                aria-hidden="true"
-              ><i
-                v-for="(tone, index) in sampleBars(row.sample)"
-                :key="index"
-                :class="`is-${tone}`"
-              /></span>{{ sampleState(row).text }}</span>
+            >{{ sampleState(row).text }}</span>
           </template>
         </el-table-column>
         <el-table-column
           label="输出字段"
-          width="80"
+          width="84"
           align="right"
         >
           <template #default="{ row }">
@@ -268,11 +253,11 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="模型"
-          min-width="160"
+          min-width="140"
           show-overflow-tooltip
         >
           <template #default="{ row }">
-            {{ row.model_name || '未选' }}
+            <span :title="row.model_name">{{ shortModel(row.model_name) }}</span>
           </template>
         </el-table-column>
         <el-table-column
@@ -302,39 +287,30 @@ function create(): void {
 .prompt-list__panel { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
 .prompt-list__toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; padding: 12px 16px; border-bottom: 1px solid var(--zt-border); }
 .prompt-list__toolbar .el-button { margin: 0; }
-.prompt-list__search { width: 168px; }
+.prompt-list__search { width: 180px; }
 /* 两组切换前的小标签；和后面的按钮组挨着，组与组之间留开。 */
-.prompt-list__label { margin-right: -4px; color: var(--zt-ink-500); font-size: 13px; }
-.prompt-list__label + .el-radio-group + .prompt-list__label { margin-left: 8px; }
+.prompt-list__label { margin: 0 -4px 0 8px; color: var(--zt-ink-500); font-size: 13px; }
 .prompt-list__spacer { flex: 1; }
 .prompt-list__count { margin-left: 6px; color: var(--zt-ink-500); font-size: 12px; font-variant-numeric: tabular-nums; }
-.prompt-list :deep(.is-active) .prompt-list__count { color: inherit; opacity: .8; }
+.prompt-list :deep(.is-active) .prompt-list__count, .prompt-list :deep(.is-checked) .prompt-list__count { color: inherit; opacity: .8; }
 .prompt-list__table { flex: 1; min-height: 0; }
 .prompt-list__table :deep(.el-table__row) { cursor: pointer; }
+/* 每格只占一行，所有行一样高：放不下的截断，悬停看全文。 */
+.prompt-list__table :deep(.cell) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prompt-list__name { color: var(--zt-ink-900); font-weight: 600; text-decoration: none; }
 .prompt-list__name:hover { color: var(--zt-blue-600); }
-.prompt-list__state, .prompt-list__sample { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
+.prompt-list__state { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
 .prompt-list__state::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--zt-muted-mark); }
 .prompt-list__state.is-online::before { background: var(--zt-success); }
 .prompt-list__state.is-changed { color: var(--zt-warning-text); }
 .prompt-list__state.is-changed::before { background: var(--zt-warning); }
-.prompt-list__changed { display: grid; gap: 2px; padding: 2px 0; }
-.prompt-list__change { padding-left: 13px; color: var(--zt-ink-500); font-size: 12px; white-space: nowrap; }
-.prompt-list__diff { color: var(--zt-blue-600); text-decoration: none; }
+.prompt-list__diff { margin-left: 2px; color: var(--zt-blue-600); text-decoration: none; }
 .prompt-list__diff:hover { text-decoration: underline; }
-/* 1440 宽的屏上一屏放下所有列不横向滚动：样本试跑的说明折成两行，不截断。 */
-.prompt-list__sample { align-items: flex-start; color: var(--zt-ink-500); line-height: 1.45; white-space: normal; }
+.prompt-list__sample { color: var(--zt-ink-500); font-size: 13px; }
 .prompt-list__sample.is-passed { color: var(--zt-success-text); }
 .prompt-list__sample.is-failed, .prompt-list__sample.is-stale { color: var(--zt-warning-text); }
 .prompt-list__sample.is-running { color: var(--zt-blue-600); }
-.prompt-list__bars { display: inline-flex; flex: none; gap: 2px; }
-.prompt-list__bars i { width: 5px; height: 16px; border-radius: 1px; background: var(--zt-success); }
-.prompt-list__bars i.is-failed { background: var(--zt-danger-text); }
-.prompt-list__bars i.is-format { background: repeating-linear-gradient(180deg, var(--zt-warning) 0 2px, var(--zt-warning-border) 2px 4px); }
-.prompt-list__bars i.is-pending { background: var(--zt-border-strong); }
-.prompt-list__sample.is-stale .prompt-list__bars { opacity: .4; }
-.prompt-list__task { display: inline-flex; align-items: center; height: 22px; margin: 2px 6px 2px 0; padding: 0 8px; border: 1px solid var(--el-color-primary-light-7); border-radius: 4px; background: var(--el-color-primary-light-9); color: var(--zt-blue-700); font-size: 12px; font-weight: 600; white-space: nowrap; }
-.prompt-list__time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.prompt-list__task { color: var(--zt-ink-700); font-size: 13px; }
+.prompt-list__time { font-variant-numeric: tabular-nums; }
 .prompt-list__none { color: var(--zt-ink-400); font-size: 13px; }
-.prompt-list__scheduled { margin: 0; }
 </style>
