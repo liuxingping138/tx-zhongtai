@@ -26,7 +26,7 @@ const WRITE_ACTIONS: [code: string, text: string][] = [
   ['sync', '立即同步'],
   ['sync_scenarios', '同步新增场景进码表'],
   ['reset_password', '重置密码'],
-  ['revoke_sessions', '强制下线'],
+  ['revoke_sessions', '强制下线、按设备下线'],
   ['grant', '给用户分配角色、配置角色权限'],
   // 后端另有规定：清空只有超级管理员能执行，给普通角色「管理」并不包含它。
   ['purge', '清空全表（仅超级管理员）'],
@@ -34,7 +34,9 @@ const WRITE_ACTIONS: [code: string, text: string][] = [
 const WRITE_ORDER = new Map(WRITE_ACTIONS.map(([code], index) => [code, index]))
 const WRITE_LABEL = new Map(WRITE_ACTIONS)
 /** 同一个动作码在个别模块里说法不同。 */
-const WRITE_LABEL_BY_RESOURCE: Record<string, Record<string, string>> = { 'system.users': { delete: '删除账号' } }
+const WRITE_LABEL_BY_RESOURCE: Record<string, Record<string, string>> = {
+  'system.users': { delete: '删除账号', update: '编辑、解锁被锁账号' },
+}
 
 /** 只能授予超级管理员角色的资源：用它能给别人（包括自己）加权限，后端也拒绝授给其他角色。 */
 export const SUPERADMIN_ONLY = new Set(['system.permissions'])
@@ -133,10 +135,20 @@ export function toggleColumn(entry: ModuleEntry, current: GrantLevel, column: Gr
   return lower[lower.length - 1] ?? 'NONE'
 }
 
-/** 这一行右侧的说明：「管理」具体包含什么。 */
+/**
+ * 不单设权限、跟着某个模块走的菜单：给了这个模块的权限，这几个菜单也一起看得到。
+ * 写在权限说明里，免得管理员以为新菜单没人管。和后端 catalog.MENU_SPECS 的 resource_code 一致。
+ */
+const EXTRA_MENUS: Record<string, string[]> = {
+  'system.users': ['在线用户'],
+  'system.audit': ['登录日志'],
+}
+
+/** 这一行右侧的说明：「管理」具体包含什么，以及连带看得到哪些菜单。 */
 export function writesHint(entry: ModuleEntry): string {
-  if (!entry.writes.length) return '只读模块，没有新增或修改操作'
-  return `管理包含：${entry.writes.join('、')}`
+  const base = entry.writes.length ? `管理包含：${entry.writes.join('、')}` : '只读模块，没有新增或修改操作'
+  const extra = EXTRA_MENUS[entry.code]
+  return extra ? `${base}。同时可见「${extra.join('」「')}」菜单` : base
 }
 
 /** 一句话说明某个档位能做什么，用于用户的实际权限等只读展示。 */

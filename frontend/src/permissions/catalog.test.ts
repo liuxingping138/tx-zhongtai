@@ -88,6 +88,12 @@ describe('说明文字', () => {
     expect(writesHint(crawler)).toBe('只读模块，没有新增或修改操作')
   })
 
+  it('不单设权限的菜单写进它跟着的模块，管理员知道给了这个模块也就看得到那几个菜单', () => {
+    const audit = { code: 'system.audit', name: '操作日志', levels: ['READ' as const], writes: [] }
+    expect(writesHint(audit)).toBe('只读模块，没有新增或修改操作。同时可见「登录日志」菜单')
+    expect(writesHint({ ...users, writes: ['新增'] })).toBe('管理包含：新增。同时可见「在线用户」菜单')
+  })
+
   it('每一档的一句话说明', () => {
     expect(levelHint(sources, 'NONE')).toBe('看不到这个模块')
     expect(levelHint(sources, 'READ')).toBe('可查看')
