@@ -64,17 +64,40 @@ def read_by_ids(content_ids: list[str]) -> list[dict[str, Any]]:
     return [found[content_id] for content_id in content_ids if content_id in found]
 
 
+def _contents(cursor: Any, content_ids: list[str]) -> dict[str, str]:
+    contents: dict[str, str] = {}
+    for start in range(0, len(content_ids), _CONTENT_CHUNK):
+        chunk = content_ids[start : start + _CONTENT_CHUNK]
+        marks = ", ".join(["%s"] * len(chunk))
+        cursor.execute(_CONTENT_SQL.format(marks=marks), chunk)
+        found = cast(list[dict[str, Any]], cursor.fetchall())
+        contents.update({str(row["content_id"]): str(row["content"] or "") for row in found})
+    return contents
+
+
 @retry_mysql_read
 def read_contents(content_ids: list[str]) -> dict[str, str]:
-    contents: dict[str, str] = {}
     with mysql_connect(get_settings().policy_source_db) as connection, connection.cursor() as cursor:
-        for start in range(0, len(content_ids), _CONTENT_CHUNK):
-            chunk = content_ids[start : start + _CONTENT_CHUNK]
-            marks = ", ".join(["%s"] * len(chunk))
-            cursor.execute(_CONTENT_SQL.format(marks=marks), chunk)
-            found = cast(list[dict[str, Any]], cursor.fetchall())
-            contents.update({str(row["content_id"]): str(row["content"] or "") for row in found})
-    return contents
+        return _contents(cursor, content_ids)
+
+
+def _connect_for_page() -> Any:
+    database = get_settings().policy_source_db
+    return mysql_connect(database, connect_timeout=PAGE_CONNECT_TIMEOUT, read_timeout=PAGE_READ_TIMEOUT)
+
+
+def read_day_for_page(day: date, limit: int) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    """「从数据库取测试数据」：人在页面上等，一次连接读这天前 limit 条政策和它们的正文。超时同 read_page，不重试。"""
+
+    with _connect_for_page() as connection, connection.cursor() as cursor:
+        cursor.execute(_BATCH_SQL, (day, "", limit))
+        rows = cast(list[dict[str, Any]], cursor.fetchall())
+        return rows, _contents(cursor, [str(row["content_id"]) for row in rows])
+
+
+def read_contents_for_page(content_ids: list[str]) -> dict[str, str]:
+    with _connect_for_page() as connection, connection.cursor() as cursor:
+        return _contents(cursor, content_ids)
 
 
 def read_page(content_id: str) -> tuple[dict[str, Any] | None, str | None]:

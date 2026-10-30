@@ -57,9 +57,10 @@ async def test_type_samples_are_the_rows_the_type_task_would_send(
 ) -> None:
     day = date(2026, 10, 18)
     source_row = {"content_id": "c1", "name": "航道通告", "prov_name": "广东省", "introduced_date": "2026-10-18"}
-    monkeypatch.setattr(samples.source, "read_batch", lambda *args: [source_row] if args[0] == day else [])
+    page = "<html><body><p>正文一段</p></body></html>"
+    # 页面上取测试数据：一次连接读这天的政策和正文，超时短、不重试（source.read_day_for_page）。
     monkeypatch.setattr(
-        samples.source, "read_contents", lambda ids: {"c1": "<html><body><p>正文一段</p></body></html>"}
+        samples.source, "read_day_for_page", lambda *args: ([source_row], {"c1": page}) if args[0] == day else ([], {})
     )
     out = await samples.samples(None, "type", day, 10)  # type: ignore[arg-type]
     assert out["headers"] == list(COLUMNS["type"])
@@ -88,7 +89,7 @@ async def test_opportunity_samples_carry_the_interpreted_scenes(monkeypatch: pyt
 
     monkeypatch.setattr(samples.repo, "recent_tags", recent)
     monkeypatch.setattr(samples.repo, "ai_interpretations", interpretations)
-    monkeypatch.setattr(samples.source, "read_contents", lambda ids: {"c9": "正文"})
+    monkeypatch.setattr(samples.source, "read_contents_for_page", lambda ids: {"c9": "正文"})
     out = await samples.samples(None, "opportunity", None, 5)  # type: ignore[arg-type]
     row = dict(zip(out["headers"], out["rows"][0], strict=True))
     assert row["行业场景"] == "党政行业/数字政府" and row["政策正文"] == "正文"
@@ -109,7 +110,7 @@ async def test_source_outage_says_what_to_do(monkeypatch: pytest.MonkeyPatch, co
     def down(*_: Any) -> Any:
         raise RuntimeError("mysql://user:secret@host refused")
 
-    monkeypatch.setattr(samples.source, "read_batch", down)
+    monkeypatch.setattr(samples.source, "read_day_for_page", down)
     with pytest.raises(DependencyUnavailableError, match="源库暂时连不上") as caught:
         await samples.samples(None, "type", date(2026, 10, 18), 10)  # type: ignore[arg-type]
     assert "secret" not in str(caught.value)

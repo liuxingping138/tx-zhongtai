@@ -62,10 +62,9 @@ async def _read(func: Any, *args: Any) -> Any:
 
 
 async def _source_rows(day: date, limit: int, max_chars: int) -> list[dict[str, str]]:
-    rows = await _read(source.read_batch, day, "", limit, day)
+    rows, contents = await _read(source.read_day_for_page, day, limit)
     if not rows:
         raise _empty(f"{day.isoformat()} 这天源库没有采集到政策，换一天试试")
-    contents = await _read(source.read_contents, [str(row["content_id"]) for row in rows])
     return [rules.prompt_row(row, contents.get(str(row["content_id"])), max_chars) for row in rows]
 
 
@@ -76,7 +75,7 @@ async def _tag_rows(session: AsyncSession, task: str, limit: int, max_chars: int
             raise _empty("还没有被判为「需要解读」的政策：先跑一批政策类型判断，或改用类型判断的源政策测试")
         raise _empty("还没有解读过的政策：先跑一批政策解读")
     ids = [str(tag.source_content_id) for tag in tags]
-    contents = await _read(source.read_contents, ids)
+    contents = await _read(source.read_contents_for_page, ids)
     rows = [
         interpret_rules.base_prompt_row(tag, rules.clean_content(contents.get(str(tag.source_content_id)), max_chars))
         for tag in tags
