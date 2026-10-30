@@ -412,6 +412,17 @@ def run() -> None:
     wait_gateway(base)
     results.append("A11 ok")
 
+    # A16 后台 worker 都在跑：缺配置的 worker 起不来、反复重启，健康检查和网关都看不出来
+    # （audit-worker 曾因缺内部密钥一直没起来，180 天清理在验收里从没跑过）。
+    for worker in ("iam-worker", "audit-worker", "policy-worker", "ai-worker"):
+        try:
+            compose_exec(compose, worker, "true")
+        except subprocess.CalledProcessError as exc:
+            raise Failed(f"A16 {worker} not running") from exc
+    restarting = subprocess.check_output([*compose, "ps", "--status", "restarting", "-q"], text=True).strip()
+    expect(restarting == "", f"A16 restarting containers: {restarting}")
+    results.append("A16 ok")
+
     # isolation
     try:
         compose_exec(

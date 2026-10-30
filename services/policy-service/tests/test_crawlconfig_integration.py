@@ -107,6 +107,9 @@ async def test_sync_dates_sites_by_rule_creation_and_leaves_abnormal_alone(monke
             "redated": 2,
             "unknown_codes": 1,
             "added": 0,
+            "moved": 0,
+            "conflicts": 0,
+            "duplicates": 0,
         }
 
     # 再跑一次：日期已经对齐，什么也不改。

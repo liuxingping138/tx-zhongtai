@@ -39,9 +39,13 @@ services:
       AUDIT_ENVIRONMENT: test
       AUDIT_INTERNAL_CALLER_SECRETS: '{"iam-service":"p6-only-change-me-ingest","codebook-service":"p6-only-change-me-ingest","policy-service":"p6-only-change-me-ingest","ai-service":"p6-only-change-me-ingest"}'
       AUDIT_IAM_SERVICE_SECRET: p6-only-change-me-internal
+  # 和 audit-service 同一套密钥：原来只覆盖了环境名，这一项为空串时配置解析失败，audit-worker 在 P6 里一直起不来，
+  # 180 天清理在验收里从没真跑过。
   audit-worker:
     environment:
       AUDIT_ENVIRONMENT: test
+      AUDIT_INTERNAL_CALLER_SECRETS: '{"iam-service":"p6-only-change-me-ingest","codebook-service":"p6-only-change-me-ingest","policy-service":"p6-only-change-me-ingest","ai-service":"p6-only-change-me-ingest"}'
+      AUDIT_IAM_SERVICE_SECRET: p6-only-change-me-internal
   codebook-service:
     environment:
       CODEBOOK_ENVIRONMENT: test
