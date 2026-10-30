@@ -57,7 +57,7 @@ cd frontend && pnpm exec playwright test --grep "date range"
 ### 开发部署机 vs 本机 / P6
 
 日常只使用 `36.134.128.137`。本机 Docker 栈已停止。分工：`make check` / `make test-unit` 在 Mac 上跑（不要 Docker）；
-集成和 e2e 在服务器上跑 P6：`bash scripts/p6-on-server.sh`（同步 → 集成 + e2e → 一定 `p6-down`）。P6 的模型调用经 `AI_LLM_BASE_URL` 全部发到模拟模型服务 `llm-mock`（`deploy/compose/p6/llm_mock.py`，生产环境配了这个变量会拒绝启动），e2e 能不花钱跑通试发、样本试跑、上线和批量任务，
+集成和 e2e 在服务器上跑 P6：`bash scripts/p6-on-server.sh`（同步到单独的 `/data/tx-zhongtai-p6` → 集成 + e2e → 一定 `p6-down`；`sync-to-server.sh` 同步生产目录时要求工作区已提交）。P6 的模型调用经 `AI_LLM_BASE_URL` 全部发到模拟模型服务 `llm-mock`（`deploy/compose/p6/llm_mock.py`，生产环境配了这个变量会拒绝启动），e2e 能不花钱跑通试发、样本试跑、上线和批量任务，
 Mac 不用开 Docker。P6 与业务栈同机但隔离（项目名 `tx-zhongtai-p6`、独立卷与库，网关只绑 `127.0.0.1:8090`），
 不要把 Playwright 打到 8091 的业务库。同步一律用 `scripts/sync-to-server.sh`，排除列表只维护那一份。脚本带 `--delete`，
 服务器上独有的文件（`.env`、密钥、P6 运行时文件等）全靠排除列表保护，新增服务器独有文件前先加进去。
@@ -117,7 +117,9 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
 
 业务服务不自己校验 JWT。每个受保护路由挂 `Depends(require_*_permission(RESOURCE, action))`，
 它经 `platform_common.authz.AuthzClient` 调 iam-service 的 `/internal/v1/authorize`。
-**依赖失败一律返回 503，绝不当作放行**。网关不启用 ForwardAuth，授权全在服务内执行。
+**依赖失败一律返回 503，绝不当作放行**。IAM 判定时资源和动作目录缓存在进程里（`app/application/authz_catalog.py`，60 秒到期重读，
+查不到的编码立即重读一次；seed 在另一个进程跑，下线、取消发布最多一分钟后生效，要立即生效就重启 iam-service），
+用户的角色和单独授权不缓存、每次现查，撤销下一次请求就生效：一次 authorize 两条查询（会话连账号、这个模块的档位）。网关不启用 ForwardAuth，授权全在服务内执行。
 
 路由必须带 `@classified(SecurityClass.*)`，`tests/test_route_security_class.py` 经
 `platform_common.route_audit.audit_routes` 强制检查：声明为 `resource_authorized` 的路由必须真的挂了
@@ -152,7 +154,7 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
 
 - `app/crawlconfig/`（与 policy、crawler 平级）。爬虫同事维护的规则表 `crawler2021.policy_rules_alls` 一行一个栏目，
   `site_code` 对应信源的网站编码（老数据很多没填），同事每周五批量建规则。调度任务 `crawler_config` 每天 18:00 只读编码和创建时间：
-  关联上的信源标成已爬，**上线时间 = 这个网站最早那条规则的创建日期**（已爬的只往前对齐、不往后挪：最早的规则被删后不能让网站从已汇报的那周消失；上线时统一补填的日期例外，照常对齐），异常（人工标）不动，从规则表消失也不改回。
+  关联上的信源标成已爬，**上线时间 = 这个网站最早那条规则的创建日期**（同步第一次见到某个网站的规则时早晚都对齐，导入时随手填的日期、上线时统一补填的日期都会被纠正；见过之后只往前对齐、不往后挪：最早的规则被删后不能让网站从已汇报的那周消失。见过的最早规则日期记在信源的 `rule_date`，不进 Excel），异常（人工标）不动，从规则表消失也不改回。
   用户每周按信源表透视的就是规则当周新建的网站，按创建日期记才对得上；记同步当天会把信源表里一直没标的老配置算进本周。批次记在 `policy_crawler_config_syncs`
 - 统计页「爬虫配置统计」`/policy/crawler-config`（资源 `policy.crawler_config`：查看 / 导出 / 完整档才能「立即同步」）直接对信源表分组统计，不建快照。
   用户每周给领导的是「省份 / 配置网站数量 / 总计」：信源表一行算一个网站（他们也叫栏目），按上线时间落在哪一期透视，省份随数据变化不写死。
@@ -182,10 +184,10 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
 - 模板「上线」由 `ai.releases`（只给管理员，只有管理档：看上线记录跟着模板的查看权限）把提示词、输出字段、模型、码表冻结成 `ai_template_releases` 一版，模板 `release_id` 指向生效版本。
   上线后再改模板只改草稿，页面列出与上线版本不同的项；已上线的模板要先下线才能删，删模板连它的样本试跑记录和产物一起删，试跑没结束的先拦下。定时任务只用上线版本。
   上线请求带管理员核对时看到的草稿 `version`：核对期间草稿又被保存、换了文件就 409，免得上线一份没人核对过的内容
-- 主线是业务人员写模板、样本试跑 → 管理员上线 → 定时任务只跑上线版本（`releases.current`）。页面发起的批量任务（`app/application/batch_start.py`）用 `version` 选跑上线版本还是已保存的草稿：人自己传 Excel、当场看结果，不用等上线。单独上传本次 Excel，按要跑那一版引用的列检查（`input-preview` 预检不调模型；`input-template` 按同一份列给出只有表头的数据模板下载），把输入文件、那一版的提示词 / 输出字段 / 模型 / 码表冻结进任务目录和任务行（跑上线版本记 `release_no`，跑草稿记 `draft_saved_at`，以及 `input_name`）：之后改模板、重新上线、删模板都不影响排队中、运行中和已完成的任务
-- 样本试跑（`app/application/sample_runs.py`，`/api/v1/ai/prompts/{id}/sample-run`，权限同试发 `ai.prompts:ask`）：草稿 × 模板测试样本前 N 条（最多 50），也是一条 `ai_batch_runs`，`source=sample`，不进批量任务列表（`repositories/batch_runs.TASK_SOURCES`），和正式任务互不阻挡；按先后叫「第 N 次」，`view` 默认看最近一次、和前一次逐行对比（`run_compare`：按发起时复制进任务目录的样本内容判断是不是同一份，同一份才按行号对上，标 fixed / broke / changed；changed 只比标签类短值，超过 `PROSE_CHARS` 字的说明文字措辞变了不算，前端 `sampleView.isProse` 同一规则），`run_id` / `compare_id` 能换着看最近 20 次；`/sample-run/{run_id}/retry` 只重问失败的行，用的是那次冻结的提示词；模板列表带最近一次试跑（`sample`，`current` 表示跑的就是现在的草稿）。逐行结果预览 `run_rows.preview` 样本试跑和批量详情共用，任务可能几十万行，只读要列的那几行：输入读逐行副本 `input.jsonl`（第一次打开时由快照生成，快照大小或修改时间变了就重建），原始返回不留提问原文，前 50 行都成功就不往下读（重跑只重问失败的行，成功那次就是最终结果）。跑完的结果 Excel 在模板页下载（`/sample-run/{run_id}/files/{kind}`），挂模板的导出档 `ai.prompts:export` 而不是批量任务的，只给这个模板自己 `source=sample` 的任务
-- `ai-worker` 持 Postgres 全局锁，用 `SKIP LOCKED` 认领排队任务，最多同时跑 `AI_BATCH_MAX_RUNNING` 个，每个任务
-  `AI_BATCH_CONCURRENCY` 路并发。提示词轮到哪行才拼哪行、成功行写完 CSV 就不再留提问原文、结果 Excel 用 `xlsx_writer` 流式写：10 万行乘上码表全文一次拼好要几个 G，worker 会被 OOM 杀掉。每行完成立即追加 `temp.csv`；进程被停时把已跑部分收尾成「中断」并生成结果。
+- 主线是业务人员写模板、样本试跑 → 管理员上线 → 定时任务只跑上线版本（`releases.current`）。页面发起的批量任务（`app/application/batch_start.py`）用 `version` 选跑上线版本还是已保存的草稿：人自己传 Excel、当场看结果，不用等上线。只跑了前几行的任务可以「用同一份数据跑全部」（`app/application/batch_run_all.py`，`/batch-runs/{id}/run-all`）：复制那次的数据快照、码表和冻结的提示词 / 输出字段 / 模型新建任务，前面答好的行沿用不重问。单独上传本次 Excel，按要跑那一版引用的列检查（`input-preview` 预检不调模型；`input-template` 按同一份列给出只有表头的数据模板下载），把输入文件、那一版的提示词 / 输出字段 / 模型 / 码表冻结进任务目录和任务行（跑上线版本记 `release_no`，跑草稿记 `draft_saved_at`，以及 `input_name`）：之后改模板、重新上线、删模板都不影响排队中、运行中和已完成的任务
+- 样本试跑（`app/application/sample_runs.py`，`/api/v1/ai/prompts/{id}/sample-run`，权限同试发 `ai.prompts:ask`）：草稿 × 模板测试样本前 N 条（最多 50），也是一条 `ai_batch_runs`，`source=sample`，不进批量任务列表（`repositories/batch_runs.TASK_SOURCES`），和正式任务互不阻挡；按先后叫「第 N 次」，`view` 默认看最近一次、和前一次逐行对比（`run_compare`：按发起时复制进任务目录的样本内容判断是不是同一份，同一份才按行号对上，标 fixed / broke / changed；changed 只比标签类短值，超过 `PROSE_CHARS` 字的说明文字措辞变了不算，前端 `sampleView.isProse` 同一规则），`run_id` / `compare_id` 能换着看最近 20 次；`/sample-run/{run_id}/retry` 只重问失败的行，用的是那次冻结的提示词；模板列表带最近一次试跑（`sample`，`current` 表示跑的就是现在的草稿）。逐行结果预览 `run_rows.preview` 样本试跑和批量详情共用，任务可能几十万行，只读要列的那几行：输入读逐行副本 `input.jsonl`（第一次打开时由快照生成，快照大小或修改时间变了就重建），原始返回不留提问原文，前 50 行都成功就不往下读（重跑只重问失败的行，成功那次就是最终结果）；「只看失败」读每写一行原始返回时同步追加的结果记录 `temp.outcomes.jsonl`（`batch_output.append_raw`，不带提问，几十万行也只有几 MB），记录功能上线前开始的任务没有它，才整份读原始返回。跑完的结果 Excel 在模板页下载（`/sample-run/{run_id}/files/{kind}`），挂模板的导出档 `ai.prompts:export` 而不是批量任务的，只给这个模板自己 `source=sample` 的任务
+- `ai-worker` 持 Postgres 全局锁，用 `SKIP LOCKED` 认领排队任务，最多同时跑 `AI_BATCH_MAX_RUNNING` 个，其中留一个给样本试跑和定时打标（页面发起的批量任务最多占其余几个，`batch_queue.bulk_limit`），每个任务
+  `AI_BATCH_CONCURRENCY` 路并发。leader 每 10 秒写 `ai_worker_heartbeat`，一分钟没写就算不在线：批量任务列表和样本试跑接口带 `worker_online`，页面据此提示排队的任务不会开始。提示词轮到哪行才拼哪行、成功行写完 CSV 就不再留提问原文、结果 Excel 用 `xlsx_writer` 流式写：10 万行乘上码表全文一次拼好要几个 G，worker 会被 OOM 杀掉。每行完成立即追加 `temp.csv`；进程被停时把已跑部分收尾成「中断」并生成结果。
   运行中超过 `AI_BATCH_STALE_SECONDS` 没心跳的任务，列表和进度接口会把它纠正为「中断」
 - 自动补救（`app/application/batch_execute.py`）分两层。当场（`ask_row`）：限流、5xx、超时、断连、空返回按 `RETRY_DELAYS` 退避重发，
  400、密钥错误、写到上限被截停不重发。按轮：批量任务和定时任务一次执行最多三轮（`ROUNDS`），一轮跑完隔 `ROUND_WAITS`（1 分钟、5 分钟）
@@ -209,8 +211,13 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
 ### 系统管理：给人分配角色即授权，个别人可再单独授权
 
 菜单六项：用户管理、角色与权限（角色和权限分配在同一页）、在线用户、登录日志、操作日志、任务调度。在线用户（`/system/sessions`，读会话表，可按设备下线）的权限跟着 `system.users`，登录日志（操作日志里 `auth` 模块的登录 / 退出事件）跟着 `system.audit`，都不另设资源。
+在线用户列出全部有效登录（没撤销、没过期），最近 `IAM_ONLINE_WINDOW_SECONDS`（30 分钟）内有操作的标「在线」。「最近活跃」由带令牌的请求（含业务服务的 authorize）经 `auth_service.note_activity` 更新：
+每台设备至多 60 秒写一次，写在独立短事务里、行被锁就跳过（`FOR UPDATE SKIP LOCKED`），别改成在请求事务里改这一行，长事务会让同一个人的其他请求等锁。
+自己正在用的那台标 `current`，接口拒绝下线（要退出用「退出登录」）。
+登录失败能对上账号的（没删的用户名）也记 `actor_id` 和显示名，对不上的只记输入的用户名；锁定原因分 `locked_account` / `locked_ip`，IP 限制由超级管理员在登录日志页解除（`/system/login-limits/unlock-ip`）。
+用户列表、用户详情、在线用户每行带 `can_manage`（`user_admin.manageable_ids`，规则同 `assert_can_manage_target`：不是超级管理员的管不了超级管理员），前端据此不给按钮，后端照旧拒绝。
 角色之外可以单独给某个人授权（`iam_user_grants`，用户详情里「单独授权」，PUT `/users/{id}/grants` 挂 `system.permissions:grant`）：
-实际权限 = 所有启用角色加单独授权，按模块取最高一档，判定统一在 `resources.list_effective_levels`，其他服务经 authorize 自动生效。「权限分配」永远不单独给人；删除用户时一起清掉。
+实际权限 = 所有启用角色加单独授权，按模块取最高一档，口径在 `repositories/resources.py`：`list_effective_levels`（菜单、「我的权限」）和 `effective_level`（authorize 只查一个模块）是同一规则，改一处要改另一处；其他服务经 authorize 自动生效。「权限分配」永远不单独给人；删除用户时一起清掉。
 用户列表的「最近登录」读 `iam_users.last_login_at` / `last_login_ip`（登录成功时写），不靠会话表倒推：会话过期会被清理。密码连续输错被锁的账号在列表里显示「已锁定」，管理员可直接解锁（删 Redis 里账号维度的计数，IP 维度不动）。给人分配角色的所有入口
 （建人带角色、用户详情调角色、角色侧增删成员、复制角色）都要求 `system.permissions:grant`，
 而该资源只能授予超级管理员角色——这是防止「用户管理员给自己加超级管理员」的关键约束，改入口时不要放宽。
@@ -238,10 +245,14 @@ policy / codebook / ai 走公共 Outbox，默认 5 分钟。审计服务按 `eve
 （`make migrate` 里 `provision-audit-cleanup` + `app.cli.grant_cleanup` 负责授权）。
 新的审计写入逻辑不能依赖 UPDATE/DELETE，换库或重建后要重新跑这两步。
 
+操作日志的筛选项（操作人、模块、动作）不整表 DISTINCT，而是用递归查询沿索引一个个跳到下一个不同的值
+（`repositories/events.distinct_values_stmt`），步数只和不同值的个数有关；新加筛选项字段要给它建以它打头的索引，
+否则每一步都是整表扫描（`test_option_columns_are_indexed` 会拦）。列表这一页没取满时总数直接算出来，取满了才 count。
+
 ### 任务调度
 
 平台所有定时任务都在系统管理的任务调度页 `/system/scheduler`。引擎在 `platform_common.scheduler`：各服务在自己的库里存计划和执行记录，
-登记自己的 `Job`，worker 持本服务的 PostgreSQL 全局会话锁执行；接口由 `build_scheduler_router` 生成，都校验资源 `system.scheduler`
+登记自己的 `Job`，worker 持本服务的 PostgreSQL 全局会话锁执行，按 `Job.lane` 分通道：每条通道同时一条、通道之间并行，几个小时的 AI 打标走长通道，不堵爬虫同步；接口由 `build_scheduler_router` 生成，都校验资源 `system.scheduler`
 （READ 查看，FULL 设置计划和手动执行）。前端 `src/api/scheduler.ts` 的 `SCHEDULER_SERVICES` 把各服务的任务汇总成一张表，
 新服务接入照 `docs/guides/任务调度.md`「接入一个新服务的定时任务」，不要再自己写定时循环或宿主机 cron。
 
@@ -270,7 +281,7 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
 - 类型判断结果用系统政策类型码表核对（缺「类」字的旧写法补上能对上就算），写进基础标签：按 `source_content_id` 更新，
   人工在打标后改过的行不覆盖；失败和没对上码表的写进备注。含「信息化建设类」的标「是否解读 = 是」
 - 重新打标（`app/aitag/application/retag.py`，`POST /api/v1/policy/ai-tagging/retag`）：基础标签勾选后放回某个任务的待办，不当场调模型。
-  重新判断类型记 `type_retag_at`，类型判断下一批先按源政策 ID 重打这些、强制覆盖（人填的穿透三列和人写的备注保留，只换 AI 写的几段；重打后内容和另一条基础标签相同的不写、出队并在备注注明（带本条源政策ID，几条副本彼此不撞哈希），否则撞内容哈希整批回滚）、不动读取进度；类型和「是否解读」都没变就不重做解读（用户定的），改成非信息化的删掉没人核对过的 AI 解读行；重新解读 / 补机会清掉完成时间。失败说明前缀在 `policy.domain.fields.AI_NOTE_*`，列表「打标状态」按它筛；表格里的「打标状态」列由 `policy.domain.fields.ai_status` 按同一套条件算，改筛选条件要一起改。源库标题是 `document.write(...)` 脚本残留的，`rules.policy_title` 取出其中文字写进基础标签和提示词，备注注明
+  重新判断类型记 `type_retag_at`（已在队里的不重记，入队时去掉上次的类型失败说明；排着队的不算「类型判断失败」），类型判断下一批先按源政策 ID 重打这些、强制覆盖（人填的穿透三列和人写的备注保留，只换 AI 写的几段；重打后内容和另一条基础标签相同的不写、出队并在备注注明（带本条源政策ID，几条副本彼此不撞哈希），否则撞内容哈希整批回滚）、不动读取进度；类型和「是否解读」都没变就不重做解读（用户定的），改成非信息化的删掉没人核对过的 AI 解读行；重新解读 / 补机会清掉完成时间。失败说明前缀在 `policy.domain.fields.AI_NOTE_*`，列表「打标状态」按它筛；表格里的「打标状态」列由 `policy.domain.fields.ai_status` 按同一套条件算，改筛选条件要一起改。源库标题是 `document.write(...)` 脚本残留的，`rules.policy_title` 取出其中文字写进基础标签和提示词，备注注明
 - 模板和任务的约定在 `app/aitag/domain/contract.py`：每个任务给模板哪些列、要哪些输出字段，`check_template` 分必须改（errors）和提醒（warnings）。
   任务设置换模板时后端按它拦下；提示词模板编辑页按草稿实时提示（前端 `modules/ai/prompts/taskFit.ts` 同一套规则，两边改要一起改）
 - 「从数据库取测试数据」（`app/aitag/application/samples.py`，`GET /api/v1/policy/ai-tagging/samples`，权限 `policy.base_tags:list`）：按任务生成和正式打标一样的行，
@@ -278,10 +289,13 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
 - 打标会花钱，单独授权：改任务设置（模板、条数、每日费用上限）挂 `policy.ai_tagging:update`；三个打标调度任务的 `Job.cost_resource` 是它，
   任务调度改计划、立即执行除了 `system.scheduler` 还要它的完整档（`build_scheduler_router` 的 `check_permission`）。新增花钱的调度任务照此设 `cost_resource`
 - 政策正文不进平台库：基础标签、解读详情里的「政策正文」由 `policy/application/policy_content.py`（`GET /base-tags/{id}/content`、`/interpretations/{id}/content`，各挂自己的 `read`）按 `source_content_id` 现读源库，
-  用 `rules.clean_content` 提取成和打标同一口径的文字；源库单条实测 0.2 秒。没有源政策 ID 的行回 404「没有正文」，源库连不上回 503
+  用 `rules.clean_content` 提取成和打标同一口径的文字；源库单条实测 0.2 秒。读源库用 `source.read_page`：一次连接、连接 5 秒读 20 秒超时、不重试，
+  不沿用同步任务的 30 秒连接、20 分钟读取和重试（人在页面上等，卡住的请求还占着线程）。没有源政策 ID 的行回 404「没有正文」，源库连不上回 503
 - 解读、市场机会按待办做：基础标签「是否解读 = 是」且 `interpreted_at` 为空的政策做解读，一条展开成多行写解读表（「政策概览」写进「政策要文」，
   非新增场景到码表查编码，名称对不上的写备注）；解读过、`opportunity_at` 为空的做市场机会，按一级行业 + 一级场景回填。
-  费用到上限没轮到的不记时间，下批接着做；AI 行只要人工验证过或改过就不再覆盖（`app/aitag/application/interpreting.py`）
+  费用到上限没轮到的不记时间，下批接着做；AI 行只要人工验证过或改过就不再覆盖（`app/aitag/application/interpreting.py`）。
+  待办（以及解读列表「待同步」的新增场景）都有部分索引，查询条件写在 `policy.domain.models` 的 `awaiting_interpretation` 等函数里、和索引条件一字不差，
+  常量用 `literal_execute` 直接写进 SQL：写成绑定参数的话通用执行计划用不上部分索引，几百万行时又是整表扫描（`tests/test_backlog_indexes.py` 会拦）
 - 解读列表「同步新增场景」：是否新增场景 = 是、人工验证、未同步的行，经 codebook `/internal/v1/scenarios/sync` 按编码规则
   （`app/domain/scenario_codes.py`：各级号全局最大 + 1，已有上级沿用，行业只查不建）写进场景码表并回填编码；动作 `policy.interpretations:sync_scenarios`，写的是码表所以还要 `codebook.scenarios:update`。
   回填编码时关联主键换成编码形式（和导入、重新解读的算法一致，否则之后会插出重复行）；换完和同一政策已有的同场景、同机会类型的行撞上，

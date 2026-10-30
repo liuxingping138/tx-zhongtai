@@ -4,7 +4,7 @@
 
 ## 1. 导航接入
 
-新增页面登记路由和 `router/menu.ts`，在 `layouts/workspace.ts` 配用途说明和独立图标（Element Plus Icons、17px、继承菜单颜色）。不在菜单里的详情页填 `meta.menuPath`，侧栏高亮挂到所属列表。新菜单走现有的路由、发布和权限体系，不能只加一个不受权限约束的链接。
+新增页面登记路由和 `router/menu.ts`，在 `layouts/workspace.ts` 的 `ENTRY_DESCRIPTIONS` 配用途说明（漏配会在顶部「查找模块」里显示成「进入业务模块」，`workspace.test.ts` 会拦）和独立图标（Element Plus Icons、17px、继承菜单颜色）。不在菜单里的详情页填 `meta.menuPath`，侧栏高亮挂到所属列表。新菜单走现有的路由、发布和权限体系，不能只加一个不受权限约束的链接。
 
 `AdminLayout.vue` 是唯一的导航外壳；颜色变量在 `styles/theme.css`，外壳和列表的样式适配在 `styles/workspace.css`，不新增页面专属色板。页面和组件不写色值：状态色、浅底、边框、阴影、遮罩、聚焦外圈都有现成变量；`check_code_rules.py` 会拦住 `modules`、`components`、`layouts`、`views` 里的色值，确需写的文件登记在它的 `COLOR_FILES` 并写明理由。
 
@@ -141,9 +141,11 @@ frontend 目录运行 `pnpm run type-check`、`pnpm run lint`、`pnpm run test`�
 `modules/policy/shared/`：`PolicyReviewPage.vue` 是页面骨架（概要、按分组的字段表、右栏正文），`useReviewRecord.ts` 管取记录、翻条和编辑，两张表的 `BaseTagReview.vue`、`InterpretationReview.vue` 只给字段、概要字段、状态标签和右上角动作。
 
 - 列表经 BusinessTable 的 `detailRoute` 跳过来，地址带上已生效的筛选、这条在结果里的位置 `pos` 和列表每页条数 `ps`（`reviewQuery.ts`，有单测）。上一条、下一条用列表接口按位置取一条（`page=pos+1&page_size=1`），所以两张表的列表排序最后按 ID 兜底，顺序才固定。没有 `pos`（直接打开链接）就不显示翻条
+- 每次列表请求都要数一遍筛选结果的总数，几百万行时它最贵：翻条时找那一条已经数过，换过去只取记录、用刚才的总数（`useReviewRecord` 的 `knownTotal`）；打开页面、点「重试」才连总数一起取
 - 编辑：分组导航右边一个「编辑」，各组的字段表一起换成 `GroupedFields`（`bare`，每组一份，保存前倒着逐组校验，焦点停在最靠前的错误上），底部操作条一个「保存」，整张表单连同版本号提交，和列表页的编辑抽屉一致；409 保留草稿并提示。列表的「编辑」带 `edit=1` 进来，`useReviewRecord` 加载完先把它从地址栏去掉（不重新加载），再按 `canEdit` 打开编辑。改了没保存就翻条、离开都走 `useUnsavedForm` 的确认
 - 正文用 `PolicyContent` 的 `panel` 模式：直接给全文，表头右侧放「收起」；收起状态存在本浏览器
-- 政策解读「核对无误，标为人工验证」后调 `advance()`：同一位置换成了别的记录（这条出了筛选）就打开它，否则往后一条，最后一条就停在原页
+- 政策解读「核对无误，标为人工验证」（`interpretations/useVerify.ts`）后调 `advance()`：同一位置换成了别的记录（这条出了筛选）就打开它，否则往后一条，最后一条就停在原页。`advance()` 用 `windowAt` 一次取到这个位置和下一个位置，只数一次总数。改状态失败和打开下一条失败分开提示
+- 基础标签核对页右上角有「重新打标」（AI 打标的行才有），和列表页勾选后的是同一个 `base-tags/RetagDialog.vue`；放回待办后重新取这一条，打标状态马上更新
 
 ## 任务调度
 
