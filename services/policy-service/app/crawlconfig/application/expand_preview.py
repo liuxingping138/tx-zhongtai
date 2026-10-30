@@ -88,6 +88,8 @@ async def preview(expand_from: date) -> tuple[bytes, dict[str, int]]:
         sites: dict[tuple[str, str, str], list[Source]] = {}
         for row in await repo.rows_of_sites(session, names):
             sites.setdefault(_site_key(row), []).append(row)
+        # 表在会话里生成：回滚会让读出来的行全部过期，之后再取字段会报错。
+        content = _sheet(result, sites)
         await session.rollback()
     counts = Counter(step.kind for step in result.plan.steps)
     summary = {
@@ -98,4 +100,4 @@ async def preview(expand_from: date) -> tuple[bytes, dict[str, int]]:
         "撞上已有信源不展开": len(result.conflicts),
         "信源表没有这个编码": len(result.plan.unknown),
     }
-    return _sheet(result, sites), summary
+    return content, summary
