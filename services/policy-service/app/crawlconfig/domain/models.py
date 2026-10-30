@@ -39,4 +39,13 @@ class ConfigSyncRun(Base):
     added: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0", comment="本次按栏目展开新增的信源行数"
     )
+    moved: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0", comment="展开后改了网站编码的规则数"
+    )
+    conflicts: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0", comment="栏目名和已有信源重复没展开的规则数"
+    )
+    duplicates: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0", comment="同一网页已在另一网站编码下没展开的规则数"
+    )
     error_message: Mapped[str | None] = mapped_column(Text, comment="失败原因")

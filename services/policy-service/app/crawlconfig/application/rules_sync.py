@@ -38,6 +38,9 @@ SUMMARY_FIELDS = (
     "redated",
     "unknown_codes",
     "added",
+    "moved",
+    "conflicts",
+    "duplicates",
 )
 
 
@@ -49,13 +52,18 @@ async def run(sync_id: uuid.UUID) -> None:
     rules = await asyncio.to_thread(rules_source.read_rule_codes, settings.crawler_config_expand_from)
     async with SessionLocal() as session:
         now = utcnow()
+        placeholder = settings.crawler_config_backfill_date.isoformat()
         # 先按栏目展开新规则（展开过的行记了规则 ID，下面按网站一行的对齐不再碰它们）。
-        expanded = await expand.expand(session, rules.columns, set(rules.first_dates), now=now, actor=ROBOT)
+        stamp = expand.Stamp(now=now, actor=ROBOT, placeholder=placeholder)
+        expanded = await expand.expand(session, rules.columns, set(rules.first_dates), stamp)
+        moved_rules = [rule.rule_id for rule, _ in expanded.moved]
+        conflict_rules = [step.rule.rule_id for step, _ in expanded.conflicts]
+        if expanded.moved:
+            logger.warning("crawler_config_rules_moved rule_ids=%s", ",".join(moved_rules[:50]))
         if expanded.conflicts:
-            logger.warning("crawler_config_expand_conflicts count=%s", len(expanded.conflicts))
+            logger.warning("crawler_config_expand_conflicts rule_ids=%s", ",".join(conflict_rules[:50]))
         if expanded.plan.duplicates:
             logger.info("crawler_config_same_page_skipped count=%s", len(expanded.plan.duplicates))
-        placeholder = settings.crawler_config_backfill_date.isoformat()
         marked, redated = await sources.apply_rule_dates(
             session, rules.first_dates, now=now, actor=ROBOT, placeholder=placeholder
         )
@@ -68,6 +76,8 @@ async def run(sync_id: uuid.UUID) -> None:
         row.rule_rows, row.rule_codes, row.blank_code_rows = rules.rows, len(rules.codes), rules.blank_rows
         row.matched, row.marked, row.redated = matched, len(marked), len(redated)
         row.unknown_codes, row.added = len(rules.codes) - matched, expanded.added
+        row.moved, row.conflicts = len(expanded.moved), len(expanded.conflicts)
+        row.duplicates = len(expanded.plan.duplicates)
         if marked or redated or expanded.added:
             await enqueue_event(
                 session,
@@ -83,7 +93,8 @@ async def run(sync_id: uuid.UUID) -> None:
                 extra={
                     "marked_codes": marked[:AUDIT_CODES_MAX],
                     "redated_codes": redated[:AUDIT_CODES_MAX],
-                    "expand_conflicts": [step.rule.rule_id for step, _ in expanded.conflicts][:AUDIT_CODES_MAX],
+                    "expand_conflicts": conflict_rules[:AUDIT_CODES_MAX],
+                    "moved_rules": moved_rules[:AUDIT_CODES_MAX],
                 },
             )
         await session.commit()

@@ -14,7 +14,7 @@ from platform_common.clock import utcnow
 from platform_common.xlsx_writer import write_text_xlsx
 
 from app.core.database import SessionLocal
-from app.crawlconfig.application.expand import ExpandResult, expand
+from app.crawlconfig.application.expand import ExpandResult, Stamp, expand
 from app.crawlconfig.domain.expand import ADOPT, CONVERT, ColumnRule, Step, page_key
 from app.crawlconfig.repositories import rules_source
 from app.crawlconfig.repositories import sources as repo
@@ -71,21 +71,27 @@ def _duplicate_line(rule: ColumnRule, row: Source) -> list[str]:
             rule.link, rule.day.isoformat(), "", "", note]  # fmt: skip
 
 
+def _moved_line(rule: ColumnRule, row: Source) -> list[str]:
+    note = f"已在网站编码 {row.site_code} 下展开过，规则后来改了编码：那一行留在原编码下，请核对"
+    return ["不动", rule.rule_id, rule.site_code, row.site_name, row.province_name, row.city_name, rule.module,
+            rule.link, rule.day.isoformat(), row.tag, row.url, note]  # fmt: skip
+
+
 def _sheet(result: ExpandResult, sites: dict[tuple[str, str, str], list[Source]]) -> bytes:
     lines: list[list[str]] = [list(HEADERS)]
     lines.extend(_step_line(step, "", sites.get(_site_key(step.row), [])) for step in result.plan.steps)
     lines.extend(["不展开", *_step_line(step, reason, [])[1:]] for step, reason in result.conflicts)
     lines.extend(_unknown_line(rule) for rule in result.plan.unknown)
     lines.extend(_duplicate_line(rule, row) for rule, row in result.plan.duplicates)
+    lines.extend(_moved_line(rule, row) for rule, row in result.moved)
     return write_text_xlsx("按栏目展开预览", lines, column_count=len(HEADERS))
 
 
 async def preview(expand_from: date) -> tuple[bytes, dict[str, int]]:
     rules = await asyncio.to_thread(rules_source.read_rule_codes, expand_from)
     async with SessionLocal() as session:
-        result = await expand(
-            session, rules.columns, set(rules.first_dates), now=utcnow(), actor=_PREVIEW_ACTOR, apply=False
-        )
+        stamp = Stamp(now=utcnow(), actor=_PREVIEW_ACTOR)
+        result = await expand(session, rules.columns, set(rules.first_dates), stamp, apply=False)
         names = {step.row.site_name for step in result.plan.steps}
         sites: dict[tuple[str, str, str], list[Source]] = {}
         for row in await repo.rows_of_sites(session, names):
@@ -102,5 +108,6 @@ async def preview(expand_from: date) -> tuple[bytes, dict[str, int]]:
         "撞上已有信源不展开": len(result.conflicts),
         "信源表没有这个编码": len(result.plan.unknown),
         "同一网页另一编码已有": len(result.plan.duplicates),
+        "展开后改了网站编码": len(result.moved),
     }
     return content, summary

@@ -77,7 +77,7 @@ def test_a_row_already_named_after_a_column_is_matched_before_the_site_row_is_re
         _rule("b2", "33100000099", "首页 <—> 政策法规 <—> 政策法规"),
     ]
     plan = plan_expansion([site], rules, legacy_codes=set())
-    assert [(step.kind, step.rule.rule_id) for step in plan.steps] == [(CREATE, "a1"), (ADOPT, "b2")]
+    assert [(step.kind, step.rule.rule_id) for step in plan.steps] == [(ADOPT, "b2"), (CREATE, "a1")]
 
 
 def test_the_same_page_under_another_site_code_counts_once() -> None:
@@ -124,3 +124,39 @@ def test_columns_sharing_one_address_under_the_same_code_still_count_separately(
     plan = plan_expansion([site], rules, legacy_codes=set())
     assert [step.kind for step in plan.steps] == [CONVERT, CREATE]
     assert plan.duplicates == []
+
+
+def test_the_column_row_wins_over_the_main_code_rule_whatever_the_rule_order() -> None:
+    """连云港那种：栏目自己的编码那行标签就是栏目名，主编码下又配了同一个网页。
+    原来主编码那条规则 ID 排在前面时两条都展开；现在不管先后，都留栏目自己编码那行。"""
+
+    page = "https://lyg.gov.cn/szfgfxwj1/szfgfxwj1.html"
+    main = _row("32070000001")
+    own = _row("32070000012", "市政府规范性文件", minute=1)
+    main.site_name = own.site_name = "连云港市人民政府"
+    main.url, own.url = "https://www.lyg.gov.cn", page
+    rules = [
+        ColumnRule("a0", "32070000001", "政策_市政府规范性文件", page, date(2026, 10, 30)),
+        ColumnRule("a1", "32070000012", "市政府规范性文件", page, date(2026, 10, 30)),
+    ]
+    plan = plan_expansion([main, own], rules, legacy_codes=set())
+    assert [(step.kind, step.rule.rule_id) for step in plan.steps] == [(ADOPT, "a1")]
+    assert [rule.rule_id for rule, _ in plan.duplicates] == ["a0"]
+
+
+def test_rules_of_the_same_day_go_by_numeric_rule_id() -> None:
+    """规则 ID 是数字：按字符串排 "10" 在 "9" 前面，原来那行会改成后建的那个栏目。"""
+
+    site = _row("32040000002")
+    rules = [_rule("10", "32040000002", "后建的"), _rule("9", "32040000002", "先建的")]
+    plan = plan_expansion([site], rules, legacy_codes=set())
+    assert [(step.kind, step.rule.rule_id) for step in plan.steps] == [(CONVERT, "9"), (CREATE, "10")]
+
+
+def test_an_expanded_rule_moved_to_another_site_code_is_not_planned_again() -> None:
+    """展开后爬虫同事改了规则的网站编码：已展开的那行（按规则 ID 取到）还在原编码下，不再展开第二次。"""
+
+    expanded = _row("32070000001", "政策文件", rule_id="r1")
+    other = _row("32070000099")
+    plan = plan_expansion([expanded, other], [_rule("r1", "32070000099", "政策文件")], legacy_codes=set())
+    assert (plan.steps, plan.duplicates, plan.unknown) == ([], [], [])

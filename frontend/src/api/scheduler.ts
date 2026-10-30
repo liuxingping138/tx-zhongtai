@@ -17,6 +17,8 @@ export interface CrawlerConfigResult {
   matched: number; marked: number; redated: number; unknown_codes: number
   /** 按栏目展开新增的信源行数（规则表一行一个栏目，信源表跟着展开） */
   added?: number
+  /** 没展开的规则：展开后改了网站编码的、栏目名和已有信源撞号的、同一网页已在另一编码下的 */
+  moved?: number; conflicts?: number; duplicates?: number
 }
 /** IAM 清理失效会话的结果：删了多少、还剩多少、保留期多少天。 */
 export interface SessionCleanupResult {

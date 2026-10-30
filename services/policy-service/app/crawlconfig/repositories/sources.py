@@ -6,7 +6,7 @@ from collections.abc import Collection
 from datetime import date, datetime
 
 from platform_common.actors import Actor
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.policy.domain.fields import CRAWLER_STATUS_ONLINE, CRAWLER_STATUS_PENDING
@@ -70,12 +70,21 @@ async def count_known(session: AsyncSession, codes: set[str]) -> int:
     return int(await session.scalar(statement) or 0)
 
 
-async def site_rows(session: AsyncSession, codes: Collection[str]) -> list[Source]:
-    """这些网站编码在信源表里的全部行，加锁：展开要改原来那行、照抄它新增，和人工编辑互斥。"""
+async def site_rows(session: AsyncSession, codes: Collection[str], rule_ids: Collection[str] = ()) -> list[Source]:
+    """这些网站编码在信源表里的全部行，加上已经对上这些规则的行，加锁：展开要改原来那行、照抄它新增，和人工编辑互斥。
 
-    if not codes:
+    按规则 ID 也取一遍：规则展开以后爬虫同事改了它的网站编码，只按现在的编码取就看不到已展开的那行，
+    会把它当新规则再展开一次，撞上规则 ID 的唯一索引，整次同步回滚、以后天天失败。
+    """
+
+    if not codes and not rule_ids:
         return []
-    statement = select(Source).where(Source.site_code.in_(set(codes))).order_by(Source.id).with_for_update()
+    statement = (
+        select(Source)
+        .where(or_(Source.site_code.in_(set(codes)), Source.rule_id.in_(set(rule_ids))))
+        .order_by(Source.id)
+        .with_for_update()
+    )
     return list((await session.scalars(statement)).all())
 
 

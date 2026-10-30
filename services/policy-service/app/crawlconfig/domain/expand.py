@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import sys
 import uuid
 from collections import defaultdict
 from collections.abc import Collection, Sequence
@@ -63,14 +64,21 @@ def _site(row: Source) -> tuple[str, str, str]:
     return row.site_name, row.province_name, row.city_name
 
 
+def rule_order(rule: ColumnRule) -> tuple[date, int, str]:
+    """先建的在前；同一天的按规则 ID 先后。ID 是数字，按字符串排的话 "10" 会排在 "9" 前面。"""
+
+    return rule.day, int(rule.rule_id) if rule.rule_id.isdigit() else sys.maxsize, rule.rule_id
+
+
 def plan_expansion(rows: Sequence[Source], rules: Sequence[ColumnRule], legacy_codes: Collection[str]) -> ExpandPlan:
-    """rows：这些规则涉及的网站编码在信源表里的全部行。legacy_codes：expand_from 之前就有规则的网站编码。"""
+    """rows：这些规则涉及的网站编码在信源表里的全部行，加上已经对上这些规则的行（规则后来可能改了编码）。
+    legacy_codes：expand_from 之前就有规则的网站编码。"""
 
     linked = {row.rule_id for row in rows if row.rule_id}
     by_code: dict[str, list[Source]] = defaultdict(list)
     for row in sorted(rows, key=lambda item: (item.created_at, str(item.id))):
         by_code[row.site_code].append(row)
-    pending = [rule for rule in sorted(rules, key=lambda item: (item.day, item.rule_id)) if rule.rule_id not in linked]
+    pending = [rule for rule in sorted(rules, key=rule_order) if rule.rule_id not in linked]
     plan = ExpandPlan(unknown=[rule for rule in pending if rule.site_code not in by_code])
     pending = [rule for rule in pending if rule.site_code in by_code]
     # 先把标签就是栏目名的行对上：不然原来那行可能先被别的栏目改掉，这条再新增时和它原来的内部唯一 id 撞上。
@@ -84,7 +92,9 @@ def plan_expansion(rows: Sequence[Source], rules: Sequence[ColumnRule], legacy_c
     # 同一网站里已经对上规则的网页（网站, 网页 -> 那一行）。同一个网页又挂在另一个网站编码下配了一条规则时，
     # 只算一个栏目（用户定的：链接相同的留一个）。同一个编码下几个栏目共用一个接口地址的（常州那种）照常各算各的。
     pages = {(_site(row), page_key(row.url)): row for row in rows if row.rule_id and page_key(row.url)}
-    for rule in pending:
+    # 信源表里本来就有这个栏目行的规则先占住网页，留的就是这一行（连云港那种，留栏目自己编码那行）；
+    # 不然谁留下取决于两条规则的先后，主编码那条先建的话两条都会展开。
+    for rule in sorted(pending, key=lambda item: item.rule_id not in adopted):
         step = adopted.get(rule.rule_id) or _place(rule, by_code[rule.site_code], taken, legacy_codes)
         page = (_site(step.row), page_key(rule.link))
         same = pages.get(page) if page[1] else None

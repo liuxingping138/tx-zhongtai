@@ -165,6 +165,38 @@ async def test_rules_from_the_expand_day_become_one_source_row_each(monkeypatch:
         assert latest is not None and (latest["added"], latest["marked"], latest["redated"]) == (0, 0, 0)
 
 
+async def test_a_rule_moved_to_another_site_code_keeps_its_row_and_the_sync_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """规则展开以后爬虫同事改了它的网站编码：原来按现在的编码取不到已展开的那行，又展开一次，
+    撞规则 ID 唯一索引整次回滚、天天失败。现在那行留在原编码下照常跟着规则走，批次记下改了编码的条数。"""
+
+    async with SessionLocal() as session:
+        session.add_all([_source("C1", "已爬", "2024-10-01"), _source("C2", "未爬")])
+        await session.commit()
+    first = [ColumnRule("m1", "C1", "政策文件", "https://c1.gov.cn/zcwj", date(2026, 10, 30))]
+    rules = RuleCodes(rows=1, first_dates={}, columns=first)
+    monkeypatch.setattr(rules_source, "read_rule_codes", lambda *_: rules)
+    await rules_sync.run(uuid.uuid4())
+
+    moved = RuleCodes(
+        rows=1,
+        first_dates={},
+        columns=[ColumnRule("m1", "C2", "政策文件", "https://c1.gov.cn/zcwj", date(2026, 10, 30))],
+    )
+    monkeypatch.setattr(rules_source, "read_rule_codes", lambda *_: moved)
+    sync_id = uuid.uuid4()
+    await rules_sync.run(sync_id)
+    async with SessionLocal() as session:
+        rows = (await session.scalars(select(Source).order_by(Source.site_code))).all()
+        assert [(row.site_code, row.rule_id, row.crawler_status) for row in rows] == [
+            ("C1", "m1", "已爬"),
+            ("C2", "", "未爬"),
+        ]
+        summary = await rules_sync.summary(session, sync_id)
+        assert summary is not None and (summary["status"], summary["moved"], summary["added"]) == ("success", 1, 0)
+
+
 async def test_abandon_marks_a_running_batch_failed() -> None:
     sync_id = uuid.uuid4()
     async with SessionLocal() as session:

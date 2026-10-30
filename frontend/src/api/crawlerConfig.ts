@@ -18,7 +18,9 @@ export interface ConfigSyncSummary {
   status: string; rule_rows: number; rule_codes: number; blank_code_rows: number
   matched: number; marked: number; redated: number; unknown_codes: number
   /** 按栏目展开新增的信源行数（规则表一行一个栏目，信源表跟着展开） */
-  added?: number; finished_at: string
+  added?: number
+  /** 没展开的规则：展开后改了网站编码的、栏目名和已有信源撞号的、同一网页已在另一编码下的 */
+  moved?: number; conflicts?: number; duplicates?: number; finished_at: string
 }
 export interface CrawlerConfigReport {
   unit: ConfigUnit

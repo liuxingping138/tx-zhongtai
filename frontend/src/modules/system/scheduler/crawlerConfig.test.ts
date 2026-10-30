@@ -18,6 +18,11 @@ describe('configResultText', () => {
     expect(configResultText(result)).toBe('新标已爬 0 个 · 按栏目展开新增 92 行 · 上线时间对齐规则创建日期 134 个 · 规则表网站编码 134 个')
   })
 
+  it('有没展开的规则时写出各自条数', () => {
+    const result = { status: 'success', rule_rows: 10, rule_codes: 5, blank_code_rows: 0, matched: 5, marked: 0, redated: 0, unknown_codes: 0, moved: 1, conflicts: 2, duplicates: 0 }
+    expect(configResultText(result)).toBe('新标已爬 0 个 · 规则表网站编码 5 个 · 1 条规则展开后改了网站编码（已展开的行留在原编码下，请核对），2 条栏目名和已有信源重复没展开')
+  })
+
   it('没有结果时返回空串', () => {
     expect(configResultText(null)).toBe('')
     expect(configResultText({ days_synced: 1 })).toBe('')
