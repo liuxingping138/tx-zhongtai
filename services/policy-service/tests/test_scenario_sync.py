@@ -73,6 +73,7 @@ async def test_sync_fills_codes_back_and_explains_failures(monkeypatch: pytest.M
     result = await scenario_sync.sync(object(), Actor(id="u1", name="张三"))  # type: ignore[arg-type]
     assert (result["synced"], result["created"]) == (1, 1)
     assert result["failed"] == [{"policy_title": "行业对不上的政策", "reason": "行业不在码表里"}]
+    assert result["failed_total"] == 1
     assert (good.industry_scenario_code, good.version, good.updated_by_name) == ("01010300234569262000", 2, "张三")
     # 关联主键换成编码形式，和导入、重新解读按编码算出来的一致。
     assert good.relation_key == "p101010300234569262000新增需求"
@@ -124,4 +125,9 @@ async def test_nothing_pending_does_not_call_the_codebook(monkeypatch: pytest.Mo
 
     monkeypatch.setattr(scenario_sync.repo, "unsynced_new_scenarios", none)
     monkeypatch.setattr(internal_clients, "codebook", boom)
-    assert await scenario_sync.sync(object(), Actor(id="u1", name="张三")) == {"synced": 0, "created": 0, "failed": []}  # type: ignore[arg-type]
+    assert await scenario_sync.sync(object(), Actor(id="u1", name="张三")) == {
+        "synced": 0,
+        "created": 0,
+        "failed": [],
+        "failed_total": 0,
+    }  # type: ignore[arg-type]

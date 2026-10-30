@@ -12,7 +12,7 @@ export interface ConfigPeriod { period_from: string; period_to: string; new: num
 export interface ConfigProvinceCount { province_name: string; new: number }
 export interface ConfigSite {
   province_name: string; city_name: string; district_name: string; site_name: string
-  site_code: string; url: string; crawler_status: string; online_date: string
+  site_code: string; tag: string; url: string; crawler_status: string; online_date: string
 }
 export interface ConfigSyncSummary {
   status: string; rule_rows: number; rule_codes: number; blank_code_rows: number

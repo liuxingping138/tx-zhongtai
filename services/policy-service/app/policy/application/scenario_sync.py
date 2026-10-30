@@ -44,7 +44,7 @@ def _item(row: Interpretation) -> dict[str, str]:
 async def sync(session: AsyncSession, actor: Actor) -> dict[str, Any]:
     rows = await repo.unsynced_new_scenarios(session, MAX_ITEMS)
     if not rows:
-        return {"synced": 0, "created": 0, "failed": []}
+        return {"synced": 0, "created": 0, "failed": [], "failed_total": 0}
     results = await internal_clients.codebook(
         "POST",
         "/internal/v1/scenarios/sync",
@@ -85,4 +85,5 @@ async def sync(session: AsyncSession, actor: Actor) -> dict[str, Any]:
         actor=actor,
         extra={"synced": synced, "created": created, "failed": len(failed)},
     )
-    return {"synced": synced, "created": created, "failed": failed[:50]}
+    # 清单只带前 50 条（页面列前 10 条），总数单独给：超过 50 条时原来提示「以下 50 条没有同步」，数字偏小。
+    return {"synced": synced, "created": created, "failed": failed[:50], "failed_total": len(failed)}

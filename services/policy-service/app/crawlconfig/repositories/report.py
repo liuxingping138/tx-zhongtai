@@ -14,12 +14,19 @@ from app.policy.domain.models import Source
 _DETAIL_ORDER = (Source.province_code, Source.province_name, Source.city_code, Source.site_code)
 
 
+def backfilled(backfill: str) -> ColumnElement[bool]:
+    """上线时间是统一补填日、又没有规则印证的：不知道真实配置日，算期初。
+    规则创建日期正好也是这天（rule_date 等于它）的是真在这天配的，照常算进那一期，原来也被当成期初漏掉。"""
+
+    return and_(Source.online_date == backfill, Source.rule_date != backfill)
+
+
 def online_between(date_from: str, date_to: str, backfill: str) -> ColumnElement[bool]:
-    """上线时间落在 [date_from, date_to]（YYYY-MM-DD 文本按字符串比较），统一补填日（backfill）的不算。"""
+    """上线时间落在 [date_from, date_to]（YYYY-MM-DD 文本按字符串比较），统一补填的期初不算。"""
 
     return and_(
         Source.online_date != "",
-        Source.online_date != backfill,
+        ~backfilled(backfill),
         Source.online_date >= date_from,
         Source.online_date <= date_to,
     )
@@ -54,7 +61,7 @@ async def count_baseline(session: AsyncSession, backfill: str) -> int:
     """期初存量：上线时间是统一补填日的（不知道真实配置日），加上已爬但没填上线时间的。"""
 
     cond = or_(
-        Source.online_date == backfill,
+        backfilled(backfill),
         and_(Source.crawler_status == CRAWLER_STATUS_ONLINE, Source.online_date == ""),
     )
     return int(await session.scalar(select(func.count()).where(cond)) or 0)

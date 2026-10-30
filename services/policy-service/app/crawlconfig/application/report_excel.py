@@ -19,6 +19,7 @@ SITE_HEADERS = (
     ("district_name", "区县", 12),
     ("site_name", "网站名称", 36),
     ("site_code", "网站编码", 16),
+    ("tag", "栏目", 24),
     ("url", "链接", 48),
     ("crawler_status", "爬虫状态", 10),
     ("online_date", "上线时间", 12),

@@ -19,7 +19,8 @@ from app.crawlconfig.domain import report as rules
 from app.crawlconfig.repositories import report as repo
 from app.policy.domain.models import Source
 
-SITE_FIELDS = ("province_name", "city_name", "district_name", "site_name", "site_code", "url", "crawler_status")
+# 按栏目展开后同一网站有好几行，只差栏目名（标签）和链接：明细要带上栏目名，不然看着像重复。
+SITE_FIELDS = ("province_name", "city_name", "district_name", "site_name", "site_code", "tag", "url", "crawler_status")
 STATUS_FIELDS = ("total", "online", "pending", "abnormal")
 
 

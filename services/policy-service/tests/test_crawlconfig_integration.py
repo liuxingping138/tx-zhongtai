@@ -226,6 +226,8 @@ async def test_report_counts_sites_per_period_and_keeps_backfilled_ones_as_basel
                 _source("B6", "已爬", "2024-10-15"),  # 很早以前
                 _source("B7", "未爬"),
                 _source("B8", "", province=""),
+                # 规则正好在补填日那天建的：是真配置，算进本周（原来也被当成期初漏掉）
+                _source("B9", "已爬", "2026-10-22", rule_date="2026-10-22"),
             ]
         )
         await session.commit()
@@ -233,14 +235,14 @@ async def test_report_counts_sites_per_period_and_keeps_backfilled_ones_as_basel
         data = await report.build_report(session, "week", date(2026, 10, 23))
         month = await report.build_report(session, "month", date(2026, 10, 1))
     assert (data["period_from"], data["period_to"], data["backfill_date"]) == ("2026-10-19", "2026-10-25", "2026-10-22")
-    assert (data["baseline"], data["new"], data["previous_new"]) == (2, 2, 1)
-    assert data["provinces"] == [{"province_name": "北京市", "new": 2}]
-    assert [site["site_code"] for site in data["new_sites"]] == ["B4", "B5"]
+    assert (data["baseline"], data["new"], data["previous_new"]) == (2, 3, 1)
+    assert data["provinces"] == [{"province_name": "北京市", "new": 3}]
+    assert [site["site_code"] for site in data["new_sites"]] == ["B4", "B5", "B9"]
     counts = {
         row["province_name"]: (row["total"], row["online"], row["pending"], row["abnormal"]) for row in data["status"]
     }
-    assert counts == {"北京市": (6, 4, 1, 1), "河北省": (1, 1, 0, 0), "（未填省份）": (1, 0, 1, 0)}
+    assert counts == {"北京市": (7, 5, 1, 1), "河北省": (1, 1, 0, 0), "（未填省份）": (1, 0, 1, 0)}
     assert (month["new"], month["provinces"]) == (
-        3,
-        [{"province_name": "北京市", "new": 2}, {"province_name": "河北省", "new": 1}],
+        4,
+        [{"province_name": "北京市", "new": 3}, {"province_name": "河北省", "new": 1}],
     )

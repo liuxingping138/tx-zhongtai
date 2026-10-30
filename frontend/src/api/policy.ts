@@ -242,6 +242,8 @@ export interface ScenarioSyncResult {
   /** 码表里新建的场景数；已有同名同路径的只回填编码 */
   created: number
   failed: { policy_title: string; reason: string }[]
+  /** 没同步的总条数；failed 只带前 50 条 */
+  failed_total: number
 }
 
 export function syncNewScenarios(): Promise<ScenarioSyncResult> {

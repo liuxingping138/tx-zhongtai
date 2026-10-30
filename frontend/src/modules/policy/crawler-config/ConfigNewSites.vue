@@ -19,7 +19,7 @@ const sites = computed(() => props.report.new_sites.filter(site => (site.provinc
     @close="emit('close')"
   >
     <p class="sites__note">
-      上线时间是爬虫同事在规则表里给这个网站建第一条规则的日期
+      一行一个栏目；上线时间是爬虫同事在规则表里建这个栏目规则的日期（按网站一行的老信源是这个网站最早那条规则的日期）
     </p>
     <p
       v-if="!sites.length"
@@ -50,6 +50,12 @@ const sites = computed(() => props.report.new_sites.filter(site => (site.provinc
         prop="site_code"
         label="网站编码"
         width="130"
+      />
+      <el-table-column
+        prop="tag"
+        label="栏目"
+        min-width="160"
+        show-overflow-tooltip
       />
       <el-table-column
         prop="online_date"
