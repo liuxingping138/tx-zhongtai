@@ -118,7 +118,7 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
 业务服务不自己校验 JWT。每个受保护路由挂 `Depends(require_*_permission(RESOURCE, action))`，
 它经 `platform_common.authz.AuthzClient` 调 iam-service 的 `/internal/v1/authorize`。
 **依赖失败一律返回 503，绝不当作放行**。IAM 判定时资源和动作目录缓存在进程里（`app/application/authz_catalog.py`，60 秒到期重读，
-查不到的编码立即重读一次；seed 在另一个进程跑，下线、取消发布最多一分钟后生效，要立即生效就重启 iam-service），
+资源或动作编码查不到时立即重读一次；seed 在另一个进程跑，下线、取消发布最多一分钟后生效，要立即生效就重启 iam-service），
 用户的角色和单独授权不缓存、每次现查，撤销下一次请求就生效：一次 authorize 两条查询（会话连账号、这个模块的档位）。网关不启用 ForwardAuth，授权全在服务内执行。
 
 路由必须带 `@classified(SecurityClass.*)`，`tests/test_route_security_class.py` 经
@@ -168,7 +168,7 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
   页面从上到下：一句话结论 + 五张卡 → 按周 / 月 / 季度 / 年的配置数量柱图（周是近 12 周、默认上周，因为同事周五建规则、周一汇报；
   月、季度只画今年的 12 个月、四个季度，默认当前这期，没到的期为 0；年从最早有数据的那年起）→ 信源表按省透视的已爬 / 未爬 / 异常（数字链到信源管理）。
   点柱子整页换到那期并弹出这期各省配置的排行（`ConfigProvinceDialog.vue`，可复制成汇报表，点省份开抽屉看网站）。
-  `POLICY_CRAWLER_CONFIG_BACKFILL_DATE`（2026-10-22，上线时给历史已爬统一补填的日期）上线的、已爬没填日期的算期初，不进任何一期。
+  `POLICY_CRAWLER_CONFIG_BACKFILL_DATE`（2026-10-22，上线时给历史已爬统一补填的日期）上线、又没有规则印证（`rule_date` 不是这天）的，和已爬没填日期的算期初，不进任何一期；规则正好在这天建的照常算进那一期。
   报告 Excel 第一张就是那张表
 - 「立即同步」的接口在 `app/scheduler/api/config_sync.py`：只往调度队列放一次，执行仍在 policy-worker，HTTP 进程不连爬虫库
 
@@ -201,7 +201,7 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
  只重问网络失败和格式不对（解析不出输出字段，error 列以 `返回格式不对` 开头，原始返回 CSV 不加列）的行，哪轮全成功就提前结束，三轮后仍失败的留着失败原因；
  格式不对不当场再问（每问一次都带码表全文、按全价收钱），交给下一轮。样本试跑不分轮，格式不对当场再问一次，结果原样给人看提示词哪里要改。
  任务上的 `retry_round` / `round_rows` / `round_starts_at` 给页面显示「第 2 轮：重问 N 条」；轮与轮之间心跳照写，否则会被纠正成「中断」。
- 「重跑失败」把已结束的任务重新排队：worker 读回原始返回，已成功的行沿用，只问失败和没跑到的行，token 和费用累加。
+ 「重跑失败」把已结束的任务重新排队（轮次从 1 算起）：worker 读回原始返回，已成功的行沿用，只问失败和没跑到的行，token 和费用累加。要问几条用执行进程写进度时算好的 `open_count`（第 2 轮途中被杀时，按已处理、失败两个数推会把正在重问的行算两次）。
  旧系统迁来的任务没有 Excel 快照，不能重跑；定时任务的批次也不能重跑（政策服务已取走结果，重跑只会再花钱，要补的政策在基础标签里「重新打标」）。
  原始返回 CSV 的「提问」列是整段提示词，政策全文加码表能到十几万字，`batch_output` 放开了 csv 单格上限，别再按默认值读
 - 试发（`/api/v1/ai/stream/ask`）带 `row` 选测试样本第几条（`app/application/test_rows.py`，`/prompts/{id}/test-rows` 给前 100 行每格开头 200 字供页面选行和预览），带 `output_fields` 时答完多推一块 `{"parsed": [...] | null}`，按和批量任务同一套 `parse_fields` 解析，页面据此说这一行能不能解析、和样本试跑比修好了没有
@@ -250,7 +250,7 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
 policy / codebook / ai 走公共 Outbox，默认 5 分钟。审计服务按 `event_id` 去重，重投不重复入库。
 
 审计库（库、public schema、全部表）归超级用户所有，`audit_events` 对应用账号只有 SELECT/INSERT：属主是应用账号时
-「收回删改权」防不住被攻破的应用账号（属主能把权限授回给自己、直接删表删库）。所以审计迁移用超级用户跑，
+「收回删改权」防不住被攻破的应用账号（属主能把权限授回给自己、直接删表删库）。所以审计迁移用超级用户跑（生产环境超级用户口令为空或还是示例值时 `migrate_audit` 拒绝执行），
 跑完由 `deploy/compose/scripts/secure-audit-db.sh` 收紧权限，两步都在 `make migrate-audit`（服务器上 `make SERVER=1 migrate-audit`）里，
 新表靠默认权限给应用账号增删改查。到期清理（`AUDIT_RETENTION_DAYS`，180 天）是审计服务自己的定时任务 `audit_cleanup`（每天 04:30），
 在单独的 `audit-worker` 容器里用清理账号分批删：清理账号的连接串只给它，对外提供接口的 audit-service 拿不到。
@@ -281,7 +281,7 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
 
 - `app/aitag/`（与 policy、crawler、scheduler 平级）。源数据是同一 MySQL 实例的 `bid_analyse.csys_policy_info` + `csys_policy_info_content`
   （正文，按 `content_id` 一对一），只读不回写。正文其实是整页网页源码，发给模型前由 `rules.page_text` 提取成看得见的文字（只剩约 6%），并去掉导航、页头页脚（语义标签，或 class / id 拆开后含 header、footer、nav、menu、crumb 等词的块，否定词开头的如 `no-breadNav-padd` 不算；去完把原文最长一段弄丢了、或导航块到结尾没闭合，就退回整页文字。400 页实测再少约四分之一、没丢正文句子），
-  不提取既浪费十几倍的输入费用，又和业务人员用 Excel 测试时的输入口径不一致。按采集日逐天读、日内按 `content_id` 分页，只读到前天整天（源政策 ID 是哈希、不按入库先后排，读过一天之后再入库的会漏；源库每个采集日的数据第二天才入库完，实测最晚到第二天晚上），读到的政策已打过类型标的跳过（读取进度往回调重扫补漏时不重复花钱）；批次进行中有人改了起始日期，收尾不把它改回去；每批开始前按模板现在的上线版本复核任务契约（`tagging.check_template_now`）；读取进度（采集日 + 正文ID）存在
+  不提取既浪费十几倍的输入费用，又和业务人员用 Excel 测试时的输入口径不一致。按采集日逐天读、日内按 `content_id` 分页，只读到前天整天（源政策 ID 是哈希、不按入库先后排，读过一天之后再入库的会漏；源库每个采集日的数据第二天才入库完，实测最晚到第二天晚上），读到的政策已打过类型标的跳过（和已有基础标签内容相同、没写进去的记在 `policy_ai_skipped_sources`，也算打过）（读取进度往回调重扫补漏时不重复花钱）；批次进行中有人改了起始日期，收尾不把它改回去；每批开始前按模板现在的上线版本复核任务契约（`tagging.check_template_now`）；读取进度（采集日 + 正文ID）存在
   `policy_ai_tasks` 的类型判断那一行，一批写完才前移，费用到上限没跑到的行下批重读
 - 类型判断、政策解读、市场机会是三个独立的调度任务（`app/aitag/domain/tasks.py`），各有模板、每批条数、正文长度和每日上限（`policy_ai_tasks` 一任务一行），
   一次执行只跑一个任务的一批。后两个按待办取数据，前一个没跑后一个就没有待办，彼此不串联
