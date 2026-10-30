@@ -15,6 +15,7 @@ import SchedulerHistoryDrawer from './SchedulerHistoryDrawer.vue'
 import { TASK_INTRO, formatYuan, taskOfJob } from './aiTagging'
 import { CRAWLER_CONFIG_JOB, configProgress } from './crawlerConfig'
 import { SESSION_CLEANUP_JOB, cleanupProgress } from './sessionCleanup'
+import { AUDIT_CLEANUP_JOB, auditCleanupProgress } from './auditCleanup'
 import { STATUS_TEXT, statusType, type RunStatus } from './runStatus'
 import { useSchedulerHistory } from './useSchedulerHistory'
 
@@ -56,10 +57,16 @@ function aiTask(job: ScheduledJob): AiTask | null {
   return aiTasks.value.find(task => task.job_code === job.code) ?? null
 }
 /** 数据进度：爬虫是源数据入库时间；类型判断是读到的采集日和排队重判的条数；解读、市场机会是待办条数。 */
+// 各任务自己的「数据进度」写法；打标任务按设置里的读取进度和待办写。
+const PROGRESS: Record<string, (job: ScheduledJob) => string> = {
+  crawler: job => formatTime(job.watermark),
+  [CRAWLER_CONFIG_JOB]: job => configProgress(job.last_run),
+  [SESSION_CLEANUP_JOB]: job => cleanupProgress(job.last_run),
+  [AUDIT_CLEANUP_JOB]: job => auditCleanupProgress(job.last_run),
+}
 function progress(job: ScheduledJob): string {
-  if (job.code === 'crawler') return formatTime(job.watermark)
-  if (job.code === CRAWLER_CONFIG_JOB) return configProgress(job.last_run)
-  if (job.code === SESSION_CLEANUP_JOB) return cleanupProgress(job.last_run)
+  const own = PROGRESS[job.code]
+  if (own) return own(job)
   const task = aiTask(job)
   if (!task) return '—'
   if (task.code !== 'type') return task.pending ? `待${task.code === 'interpret' ? '解读' : '补'} ${task.pending} 条` : '没有待办'

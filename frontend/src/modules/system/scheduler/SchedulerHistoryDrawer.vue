@@ -7,8 +7,9 @@ import ScrollPort from '@/components/ScrollPort.vue'
 import { formatTime } from '@/utils/time'
 import { useAuthStore } from '@/stores/auth'
 import { TASK_PURPOSE, formatYuan, runResultText, taskOfJob } from './aiTagging'
-import { CRAWLER_CONFIG_JOB, configResultText, configRunText } from './crawlerConfig'
+import { CRAWLER_CONFIG_JOB, configRunText } from './crawlerConfig'
 import { SESSION_CLEANUP_JOB, cleanupRunText } from './sessionCleanup'
+import { AUDIT_CLEANUP_JOB, auditCleanupRunText } from './auditCleanup'
 import { STATUS_TEXT, duration, statusType, type RunStatus } from './runStatus'
 import type { SchedulerHistory } from './useSchedulerHistory'
 
@@ -16,26 +17,26 @@ const props = defineProps<{ history: SchedulerHistory }>()
 // 历史记录状态在页面里只创建一次，拆成顶层 ref 后模板能直接解包。
 const { job, visible, records, loading, error, page, total, load } = props.history
 const task = computed(() => (job.value ? taskOfJob(job.value.code) : null))
-const isConfig = computed(() => job.value?.code === CRAWLER_CONFIG_JOB)
 // 打标任务的花费统一在「AI提问 → 费用账单」看，这里带上用途跳过去。
 const auth = useAuthStore()
 const billingLink = computed(() =>
   task.value && auth.canRead('ai.billing') ? { path: '/ai/billing', query: { purpose: TASK_PURPOSE[task.value] } } : null,
 )
 
-// 各任务自己的结果写法；没登记的按爬虫增量同步写。
+// 各任务自己的结果写法；没登记的按爬虫增量同步写。展开行也按它写，不再一律写「处理日期、数据更新至」。
 const RUN_TEXT: Record<string, (row: ScheduledRun) => string> = {
   [CRAWLER_CONFIG_JOB]: configRunText,
   [SESSION_CLEANUP_JOB]: cleanupRunText,
+  [AUDIT_CLEANUP_JOB]: auditCleanupRunText,
 }
+const ownText = computed(() => (job.value ? RUN_TEXT[job.value.code] : undefined))
 function crawlerRunText(row: ScheduledRun): string {
   if (!row.result?.days_synced && row.result?.days_synced !== 0) return row.error_message || '—'
   return `处理 ${row.result.days_synced} 个采集日 · 网站快照 ${row.result.site_rows ?? '—'} 条`
 }
 function resultText(row: ScheduledRun): string {
   if (task.value) return runResultText(row.result)
-  const text = job.value ? RUN_TEXT[job.value.code] : undefined
-  return text ? text(row) : crawlerRunText(row)
+  return ownText.value ? ownText.value(row) : crawlerRunText(row)
 }
 </script>
 
@@ -104,8 +105,8 @@ function resultText(row: ScheduledRun): string {
                   读取进度：{{ row.result.source_from || '—' }} → {{ row.result.source_to || '—' }}
                 </p>
               </template>
-              <p v-else-if="isConfig">
-                {{ configResultText(row.result) }}
+              <p v-else-if="ownText">
+                {{ ownText(row) }}
               </p>
               <template v-else-if="row.result">
                 <p>处理日期：{{ row.result.date_from || '—' }} 至 {{ row.result.date_to || '—' }}</p>

@@ -85,6 +85,22 @@ describe('load', () => {
     expect(grants.selected.value).toEqual({})
   })
 
+  it('快速切换角色时先发的请求后回来，不盖掉后一个角色', async () => {
+    let roleId = 'a'
+    const grants = useRoleGrants({ roleId: () => roleId, canSeeGrants: () => true, readonly: () => false, justCreated: () => '', saved: vi.fn() })
+    let releaseA!: (value: unknown) => void
+    api.getRole.mockImplementation((id: string) => (id === 'a'
+      ? new Promise((resolve) => { releaseA = resolve })
+      : Promise.resolve({ ...ROLE, id: 'b', name: '角色B' })))
+    const first = grants.load()
+    roleId = 'b'
+    await grants.load()
+    releaseA({ ...ROLE, id: 'a', name: '角色A' })
+    await first
+    expect(grants.role.value?.name).toBe('角色B')
+    expect(grants.loading.value).toBe(false)
+  })
+
   it('加载失败显示原因', async () => {
     api.getRole.mockRejectedValue({ status: 404, code: 'NOT_FOUND', message: '角色不存在' })
     const { grants } = setup()

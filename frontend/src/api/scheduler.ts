@@ -7,7 +7,7 @@ export interface ScheduledRun {
   status: 'queued' | 'running' | 'retrying' | 'success' | 'failed' | 'cancelled'
   attempts: number; created_at: string; scheduled_at: string; available_at: string
   started_at: string | null; finished_at: string | null; error_message: string | null
-  result: (CrawlerResult & Partial<AiTaggingResult> & Partial<CrawlerConfigResult> & Partial<SessionCleanupResult>) | null
+  result: (CrawlerResult & Partial<AiTaggingResult> & Partial<CrawlerConfigResult> & Partial<SessionCleanupResult> & Partial<AuditCleanupResult>) | null
 }
 /** 爬虫增量同步的结果摘要 */
 export interface CrawlerResult { date_from?: string; date_to?: string; watermark?: string; days_synced?: number; site_rows?: number }
@@ -24,6 +24,8 @@ export interface CrawlerConfigResult {
 export interface SessionCleanupResult {
   retention_days: number; tokens_deleted: number; sessions_deleted: number; tokens_remaining: number; sessions_remaining: number
 }
+/** 审计服务清理到期操作日志的结果：删了多少条、保留期多少天。 */
+export interface AuditCleanupResult { deleted: number; retention_days: number }
 /** 政策 AI 打标一批的结果摘要。task 是三个打标任务之一；source_rows 是这一批处理的政策条数。 */
 export interface AiTaggingResult {
   task: string; status: string; stage: string; source_from: string; source_to: string; source_rows: number

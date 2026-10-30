@@ -54,17 +54,26 @@ export function useRoleGrants(options: RoleGrantsOptions) {
   )
   const openedCount = computed(() => Object.values(selected.value).filter(level => level !== 'NONE').length)
 
+  // 快速切换角色时先发的请求可能后回来：只认最后一次，不然左边高亮的是 B，右边显示、保存的却是 A。
+  let sequence = 0
+
+  /** 角色、资源树（已取过就不再取）、已有授权；看不了授权时只取角色。 */
+  function fetchRole(id: string) {
+    const see = options.canSeeGrants()
+    return Promise.all([
+      getRole(id),
+      see ? (tree.value.length ? { tree: tree.value } : listResourceTree()) : { tree: [] as ResourceNode[] },
+      see ? listRoleGrants(id) : null,
+    ])
+  }
+
   async function load(): Promise<void> {
+    const current = ++sequence
     loading.value = true
     loadError.value = ''
     try {
-      const id = options.roleId()
-      const see = options.canSeeGrants()
-      const [detail, resources, grants] = await Promise.all([
-        getRole(id),
-        see ? (tree.value.length ? { tree: tree.value } : listResourceTree()) : { tree: [] as ResourceNode[] },
-        see ? listRoleGrants(id) : null,
-      ])
+      const [detail, resources, grants] = await fetchRole(options.roleId())
+      if (current !== sequence) return
       tree.value = resources.tree
       role.value = detail
       const saved: Grants = {}
@@ -73,16 +82,18 @@ export function useRoleGrants(options: RoleGrantsOptions) {
       selected.value = next
       original.value = { ...next }
     } catch (error) {
-      loadError.value = errorMessage(error, '暂时无法加载这个角色，请稍后重试。')
+      if (current === sequence) loadError.value = errorMessage(error, '暂时无法加载这个角色，请稍后重试。')
     } finally {
-      loading.value = false
+      if (current === sequence) loading.value = false
     }
   }
 
   /** 只刷新成员数、版本号这类统计，失败不打扰。 */
   async function refreshRole(): Promise<void> {
+    const id = options.roleId()
     try {
-      role.value = await getRole(options.roleId())
+      const detail = await getRole(id)
+      if (id === options.roleId()) role.value = detail
     } catch {
       /* 仅刷新统计数字 */
     }
