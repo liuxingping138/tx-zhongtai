@@ -4,7 +4,12 @@ from datetime import date
 from types import SimpleNamespace
 
 from app.aitag.domain import rules
-from app.policy.domain.fields import AI_NOTE_TYPE_EMPTY
+from app.policy.domain.fields import (
+    AI_NOTE_INTERPRET_FAILED,
+    AI_NOTE_OPPORTUNITY_FAILED,
+    AI_NOTE_TYPE_EMPTY,
+    AI_NOTE_TYPE_UNKNOWN,
+)
 
 KNOWN = ["信息化建设类", "工业制造类", "资金扶持类", "科技创新类", "人才政策类", "产业政策类", "顶层规划类"]
 
@@ -140,6 +145,8 @@ def test_retag_keeps_manual_columns_and_hand_written_remarks() -> None:
         is_penetrate="是",
         penetrate_words="数字政府",
         penetrate_score="0.9",
+        policy_types="",
+        need_interpret="否",
         remark=f"{AI_NOTE_TYPE_EMPTY}；领导关注；{rules.TITLE_SCRIPT_NOTE}",
     )
     fresh = rules.base_tag_values({"name": "政策甲"}, ["信息化建设类"], "")
@@ -156,6 +163,30 @@ def test_retag_keeps_manual_columns_and_hand_written_remarks() -> None:
     stale = rules.base_tag_values({"name": "政策甲"}, ["信息化建设类"], "")
     existing.remark = f"{note}；{rules.MISSING_NOTE}；领导关注"
     assert rules.keep_manual_edits(stale, existing)["remark"] == "领导关注"
+
+
+def test_retag_keeps_interpretation_failures_when_the_type_did_not_change() -> None:
+    """类型和「是否解读」都没变时解读不重做，上次解读、市场机会的失败说明还算数：
+    去掉的话这条显示「已完成」，解读表里却一行都没有，以后也不会再做。类型变了会重做，旧说明才去掉。"""
+
+    failures = f"{AI_NOTE_INTERPRET_FAILED}：超时；{AI_NOTE_OPPORTUNITY_FAILED}：超时"
+    existing = SimpleNamespace(
+        is_penetrate="",
+        penetrate_words="",
+        penetrate_score="",
+        policy_types="信息化建设类",
+        need_interpret="是",
+        remark=f"{AI_NOTE_TYPE_UNKNOWN}：乱写类；{failures}；领导关注",
+    )
+    same = rules.base_tag_values({"name": "政策甲"}, ["信息化建设类"], "")
+    assert not rules.redoes_downstream(existing, same)
+    assert rules.keep_manual_edits(same, existing)["remark"] == f"{failures}；领导关注"
+    other = rules.base_tag_values({"name": "政策甲"}, ["产业发展类"], "")
+    assert rules.redoes_downstream(existing, other)
+    assert rules.keep_manual_edits(other, existing)["remark"] == "领导关注"
+    # 判成重复副本的那条类型、解读都没动：只去掉类型那步的说明。
+    note = f"{rules.DUPLICATE_NOTE}（源政策ID c1）"
+    assert rules.note_duplicate(existing.remark, "c1") == f"{note}；{failures}；领导关注"
 
 
 def test_page_text_survives_a_page_without_closing_head() -> None:

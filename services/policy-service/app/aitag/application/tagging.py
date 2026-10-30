@@ -41,6 +41,7 @@ from app.common import internal_clients
 from app.common.audit_emit import enqueue_event
 from app.common.errors import UserFacingError
 from app.core.database import SessionLocal
+from app.policy.domain.fields import TYPE_NOTES
 from app.policy.domain.models import BASE_TAG_FIELDS, BaseTag, content_hash
 
 __all__ = ["abandon", "day_start", "policy_type_names", "run_batch", "run_summary", "summary", "today"]
@@ -70,7 +71,7 @@ def _write_base_tag(
         existing.type_retag_at = None
         # 只有类型或「是否解读」变了，后面两步才按新类型重做：用新模板重判一千条类型没变的政策，
         # 不能把最贵的解读整批重跑一遍。
-        changed = (existing.policy_types, existing.need_interpret) != (values["policy_types"], values["need_interpret"])
+        changed = rules.redoes_downstream(existing, values)
         for key, value in values.items():
             setattr(existing, key, value)
         existing.refresh_hash()
@@ -120,6 +121,11 @@ async def _save_types(
             failed += 1 if remark else 0
             values = rules.base_tag_values(row, types, remark)
             current = existing.get(str(row["content_id"]))
+            if current is not None and retag and result.get("error"):
+                # 网络、限流这类失败不是答案：上次判好的类型和解读留着，只记这次失败、出队。
+                # 不然一次失败就把类型清空、「是否解读」改成否，没人核对过的 AI 解读也跟着删掉。
+                _note_retag_failed(current, remark)
+                continue
             if current is not None and retag:
                 values = rules.keep_manual_edits(values, current)
             digest = content_hash(values, BASE_TAG_FIELDS)
@@ -165,6 +171,20 @@ def _note_duplicate(row: BaseTag) -> None:
     row.type_retag_at = None
     row.remark = rules.note_duplicate(row.remark, str(row.source_content_id))
     row.refresh_hash()
+    row.version += 1
+    row.tagged_at = row.updated_at = utcnow()
+    row.updated_by_id, row.updated_by_name = ROBOT.id, ROBOT.name
+
+
+def _note_retag_failed(row: BaseTag, note: str) -> None:
+    """重新判断类型这次没问成：出队，备注换上这次的失败说明，类型、解读都不动。
+
+    不重算内容哈希：同一网页的几条副本失败原因一样，加上同一句说明会变得一模一样、撞唯一约束整批回滚。
+    """
+
+    row.type_retag_at = None
+    kept = rules.drop_notes(row.remark, TYPE_NOTES)
+    row.remark = rules.NOTE_SEP.join(part for part in (f"{note}（保留了上次的类型）", kept) if part)
     row.version += 1
     row.tagged_at = row.updated_at = utcnow()
     row.updated_by_id, row.updated_by_name = ROBOT.id, ROBOT.name

@@ -12,6 +12,7 @@ from app.policy.domain.fields import (
     AI_NOTE_TYPE_EMPTY,
     AI_NOTE_TYPE_FAILED,
     AI_NOTE_TYPE_UNKNOWN,
+    TYPE_NOTES,
 )
 
 INFORMATIZATION = "信息化建设类"
@@ -295,24 +296,35 @@ DUPLICATE_NOTE = "重新判断后内容和另一条基础标签相同，未重�
 MISSING_NOTE = "源库里已经找不到这条政策，没有重新判断类型"
 
 
+def redoes_downstream(existing: Any, values: dict[str, str]) -> bool:
+    """重新判断类型后解读、市场机会要不要重做：类型或「是否解读」变了才重做（用户定的，解读最贵）。"""
+
+    return (existing.policy_types, existing.need_interpret) != (values["policy_types"], values["need_interpret"])
+
+
 def keep_manual_edits(values: dict[str, str], existing: Any) -> dict[str, str]:
-    """重新判断类型覆盖的是源库字段和类型：人填的穿透三列照旧，备注里人写的几段留着，只换掉 AI 写的几段。"""
+    """重新判断类型覆盖的是源库字段和类型：人填的穿透三列照旧，备注里人写的几段留着，只换掉 AI 写的几段。
+
+    类型没变时解读、市场机会不重做，它们上次的失败说明还算数，要留着：去掉的话这条显示「已完成」、
+    解读表里却一行都没有，「解读失败」筛不出来、待办里也没有，永远不会再做。
+    """
 
     kept = dict(values)
     for field in MANUAL_FIELDS:
         kept[field] = getattr(existing, field) or ""
+    stale = AI_NOTES if redoes_downstream(existing, values) else (*TYPE_NOTES, TITLE_SCRIPT_NOTE)
     # 上次重判留下的「和另一条相同」「源库找不到」也是那时的说明，这次判成功了就该去掉。
-    old = drop_notes(existing.remark, (*AI_NOTES, DUPLICATE_NOTE, MISSING_NOTE))
+    old = drop_notes(existing.remark, (*stale, DUPLICATE_NOTE, MISSING_NOTE))
     kept["remark"] = NOTE_SEP.join(part for part in (values["remark"], old) if part)
     return kept
 
 
 def note_duplicate(remark: str, source_id: str) -> str:
-    """这次的结果不写了，上次 AI 留的失败说明也就过时了，一起去掉。
+    """这次的结果不写了，上次类型判断的失败说明也就过时了，一起去掉。类型、解读都没动，解读和市场机会的失败说明留着。
 
     备注带上本条的源政策ID：同一网页采了三条以上时，好几条重判后都和同一条相同，备注一样的话
     它们彼此又撞内容哈希，整批回滚、队列清不掉，每次执行都先花钱再失败。源政策ID 一条一个，撞不上。
     """
 
     note = f"{DUPLICATE_NOTE}（源政策ID {source_id}）"
-    return NOTE_SEP.join(part for part in (note, drop_notes(remark, (DUPLICATE_NOTE, *AI_NOTES))) if part)
+    return NOTE_SEP.join(part for part in (note, drop_notes(remark, (DUPLICATE_NOTE, *TYPE_NOTES))) if part)
