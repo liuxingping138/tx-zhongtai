@@ -32,6 +32,11 @@ function homeTarget(to: RouteLocationNormalized): RouteLocationRaw {
   return { path: groups.value[0]?.entries[0]?.path || '/no-modules', query: to.query, replace: true }
 }
 
+/** 启动时服务暂时不可用：停在提示页、可以重试，不当成没登录踢回登录页。 */
+function unavailableTarget(to: RouteLocationNormalized): RouteLocationRaw | true {
+  return to.name === 'service-unavailable' ? true : { name: 'service-unavailable', query: { redirect: to.fullPath } }
+}
+
 router.beforeEach(async (to) => {
   // 兼容旧预览书签，正式页面不再需要开关；保留业务筛选和锚点。
   if ('design-preview' in to.query) {
@@ -42,6 +47,7 @@ router.beforeEach(async (to) => {
   const auth = useAuthStore()
   if (!auth.bootstrapped) {
     await auth.bootstrap()
+    if (auth.unavailable) return unavailableTarget(to)
   }
 
   if (to.meta.public) return publicRouteTarget(auth)

@@ -109,7 +109,7 @@ describe('bootstrap', () => {
   })
 
   it('刷新凭据失效时清空身份，仍然标记为已启动，页面据此跳登录', async () => {
-    session.refreshSession.mockRejectedValue(new Error('expired'))
+    session.refreshSession.mockRejectedValue({ response: { status: 401 } })
     const store = useAuthStore()
     store.user = me() as never
     await store.bootstrap()
@@ -117,6 +117,25 @@ describe('bootstrap', () => {
     expect(store.bootstrapped).toBe(true)
     expect(store.signedIn).toBe(false)
     expect(session.setAccessToken).toHaveBeenCalledWith('')
+  })
+
+  it('服务暂时不可用（部署时 IAM 重启、网关 502）时不清身份，下次进页面再试', async () => {
+    session.refreshSession.mockRejectedValue({ response: { status: 503 } })
+    const store = useAuthStore()
+    await store.bootstrap()
+    expect([store.unavailable, store.bootstrapped]).toEqual([true, false])
+    expect(session.setAccessToken).not.toHaveBeenCalled()
+    session.token = 't'
+    await store.bootstrap()
+    expect([store.unavailable, store.bootstrapped, store.signedIn]).toEqual([false, true, true])
+  })
+
+  it('取个人信息被拒（续期也失败）同样按会话失效处理', async () => {
+    session.token = 't'
+    api.fetchMe.mockRejectedValue({ status: 401 })
+    const store = useAuthStore()
+    await store.bootstrap()
+    expect([store.signedIn, store.bootstrapped]).toEqual([false, true])
   })
 
   it('只启动一次', async () => {

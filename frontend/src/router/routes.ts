@@ -8,6 +8,12 @@ export const routes: RouteRecordRaw[] = [
     meta: { public: true, title: '登录' },
   },
   {
+    path: '/service-unavailable',
+    name: 'service-unavailable',
+    component: () => import('@/views/UnavailableView.vue'),
+    meta: { public: true, title: '服务暂时不可用' },
+  },
+  {
     path: '/change-password',
     name: 'change-password',
     component: () => import('@/views/ChangePasswordView.vue'),

@@ -14,6 +14,13 @@ import {
 import type { MePayload, MenuItem, ResourceLevel } from '@/api/types'
 import { canExport, canRead, canWrite } from '@/permissions/levels'
 
+/** 会话真没了（IAM 明确拒绝）才清身份：续期被拒是带 response 的原始错误，取个人信息被拒是 ApiRequestError.status。 */
+function sessionRejected(error: unknown): boolean {
+  const failure = error as { status?: number; response?: { status?: number } } | null
+  const status = failure?.response?.status ?? failure?.status
+  return status === 401 || status === 403
+}
+
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     user: null as MePayload | null,
@@ -22,6 +29,8 @@ export const useAuthStore = defineStore('auth', {
     mustChangePassword: false,
     bootstrapped: false,
     restoring: false,
+    /** 启动时服务暂时不可用（IAM 重启、网关 502、断网）：不清身份，下次进页面再试。 */
+    unavailable: false,
     signedIn: false,
   }),
   getters: {
@@ -66,6 +75,7 @@ export const useAuthStore = defineStore('auth', {
         return
       }
       this.restoring = true
+      this.unavailable = false
       try {
         await ensureCsrfToken()
         if (!getAccessToken()) {
@@ -77,11 +87,18 @@ export const useAuthStore = defineStore('auth', {
           this.signedIn = true
           await this.loadProfile()
         }
-      } catch {
-        setAccessToken('')
-        this.clearIdentity()
-      } finally {
         this.bootstrapped = true
+      } catch (error) {
+        if (sessionRejected(error)) {
+          setAccessToken('')
+          this.signedIn = false
+          this.clearIdentity()
+          this.bootstrapped = true
+        } else {
+          // 部署时刷新页面、新开标签页：原来不分原因一律清身份、跳登录页，会话其实还在。
+          this.unavailable = true
+        }
+      } finally {
         this.restoring = false
       }
     },
