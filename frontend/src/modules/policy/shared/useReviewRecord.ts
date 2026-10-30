@@ -7,7 +7,7 @@ import type { Page } from '@/api/types'
 import type { EditorGroup } from '@/components/editorGroups'
 import type { EditorFieldsHandle, RecordForm } from '@/composables/useRecordEditor'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
-import { listQuery, parseReviewQuery, reviewQuery } from './reviewQuery'
+import { listQuery, parseReviewQuery, reviewQuery, windowAt } from './reviewQuery'
 
 export interface ReviewOptions<Row> {
   /** 核对页和列表页的路由名，翻条、返回列表都按名字跳。 */
@@ -52,6 +52,11 @@ export function useReviewRecord<Row extends { id: string }>(options: ReviewOptio
   const total = ref<number | null>(null)
   const moving = ref(false)
   let ticket = 0
+  /**
+   * 翻条、标完接着看下一条时，找那一条的那次查询已经数过筛选结果的总数：换过去后只取记录，不再数一遍。
+   * 每数一次都是对整个筛选结果计数，几百万行时最贵的就是它。只给紧接着加载的那一条用，用过即清。
+   */
+  let knownTotal: { id: string; position: number | null; total: number } | null = null
 
   const pageAt = (position: number) => ({ ...context.value.filters, page: position + 1, page_size: 1 })
 
@@ -68,6 +73,9 @@ export function useReviewRecord<Row extends { id: string }>(options: ReviewOptio
   /** 地址栏这一条，以及它所在筛选结果的总数（从列表点进来时才有位置）。 */
   async function fetchCurrent(): Promise<[Row, number | null]> {
     const position = context.value.position
+    const known = knownTotal
+    knownTotal = null
+    if (known && known.id === id.value && known.position === position) return [await options.get(id.value), known.total]
     const [row, page] = await Promise.all([
       options.get(id.value),
       position === null ? Promise.resolve(null) : options.list(pageAt(position)),
@@ -118,12 +126,22 @@ export function useReviewRecord<Row extends { id: string }>(options: ReviewOptio
   const hasPrev = computed(() => position.value !== null && position.value > 0)
   const hasNext = computed(() => position.value !== null && total.value !== null && position.value + 1 < total.value)
 
-  async function open(row: Row, at: number) {
+  /** 换到 at 位置上的这一条；count 是刚查到的筛选结果总数，换过去不用再数。 */
+  async function open(row: Row, at: number, count: number) {
+    knownTotal = { id: row.id, position: at, total: count }
     await router.replace({
       name: options.routeName,
       params: { id: row.id },
       query: reviewQuery(context.value.filters, at, context.value.pageSize),
     })
+    // 换过去时加载已经用掉了它；没换成（如有未保存的修改、用户留在原页）就作废，不留给以后。
+    knownTotal = null
+  }
+
+  /** 重新取这一条（如标完状态后停在原页），总数用刚查到的，不再数。 */
+  async function reload(count: number) {
+    knownTotal = { id: id.value, position: position.value, total: count }
+    await load()
   }
 
   async function move(delta: number) {
@@ -134,7 +152,7 @@ export function useReviewRecord<Row extends { id: string }>(options: ReviewOptio
       const page = await options.list(pageAt(target))
       total.value = page.total
       const row = page.items[0]
-      if (row) await open(row, target)
+      if (row) await open(row, target, page.total)
       else ElMessage.info('筛选结果有变化，这个位置已经没有记录')
     } catch (error) {
       ElMessage.error(errorMessage(error, '没能打开这一条，请重试'))
@@ -146,6 +164,7 @@ export function useReviewRecord<Row extends { id: string }>(options: ReviewOptio
   /**
    * 当前这条处理完（如标为人工验证）后接着看下一条。它若因此出了筛选范围，
    * 后面的记录会补到同一位置上；否则往后挪一条。返回 false 表示已经是最后一条，停在原页。
+   * 一次查询同时取到这个位置和下一个位置（windowAt），只数一次总数。
    */
   async function advance(): Promise<boolean> {
     const at = position.value
@@ -153,21 +172,20 @@ export function useReviewRecord<Row extends { id: string }>(options: ReviewOptio
       await load()
       return false
     }
-    const page = await options.list(pageAt(at))
+    const span = windowAt(at)
+    const page = await options.list({ ...context.value.filters, page: span.page, page_size: span.size })
     total.value = page.total
-    const same = page.items[0]
-    if (same && same.id !== id.value) {
-      await open(same, at)
+    const here = page.items[at - span.offset]
+    const after = page.items[at - span.offset + 1]
+    if (here && here.id !== id.value) {
+      await open(here, at, page.total)
       return true
     }
-    if (at + 1 < page.total) {
-      const next = (await options.list(pageAt(at + 1))).items[0]
-      if (next) {
-        await open(next, at + 1)
-        return true
-      }
+    if (here && after) {
+      await open(after, at + 1, page.total)
+      return true
     }
-    await load()
+    await reload(page.total)
     return false
   }
 

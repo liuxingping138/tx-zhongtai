@@ -37,7 +37,7 @@ async function sync(): Promise<void> {
     const head = `已同步 ${result.synced} 条，其中码表新建 ${result.created} 个场景`
     if (result.failed.length) {
       const lines = result.failed.slice(0, 10).map(item => `「${item.policy_title}」：${item.reason}`)
-      await ElMessageBox.alert(`${head}。以下 ${result.failed.length} 条没有同步：\n${lines.join('\n')}`, '同步结果', { type: 'warning' })
+      await ElMessageBox.alert(`${head}。以下 ${result.failed.length} 条没有同步：\n${lines.join('\n')}`, '同步结果', { type: 'warning', customClass: 'confirm-lines' })
     } else {
       ElMessage.success(head)
     }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { listQuery, parseReviewQuery, reviewQuery } from './reviewQuery'
+import { listQuery, parseReviewQuery, reviewQuery, windowAt } from './reviewQuery'
 
 const KEYS = ['policy_title', 'data_status', 'industry_l1']
 
@@ -29,5 +29,26 @@ describe('review page query', () => {
     const context = parseReviewQuery({ data_status: '待验证', pos: '45', ps: '20' }, KEYS)
     expect(listQuery(context)).toEqual({ data_status: ['待验证'], page: '3' })
     expect(listQuery(parseReviewQuery({ pos: '5', ps: '50' }, KEYS))).toEqual({ page_size: '50' })
+  })
+})
+
+describe('window around a position', () => {
+  it('always holds the position and the one after it on a single small page', () => {
+    for (let at = 0; at < 5000; at += 1) {
+      const { page, size, offset } = windowAt(at)
+      expect(offset).toBe((page - 1) * size)
+      expect(at - offset).toBeGreaterThanOrEqual(0)
+      expect(at + 1 - offset).toBeLessThan(size)
+      expect(size).toBeLessThanOrEqual(100)
+    }
+  })
+
+  it('stays small for huge positions too', () => {
+    expect(windowAt(0)).toEqual({ page: 1, size: 2, offset: 0 })
+    expect(windowAt(1)).toEqual({ page: 1, size: 3, offset: 0 })
+    expect(windowAt(5)).toEqual({ page: 2, size: 4, offset: 4 })
+    // 2520 = 1..10 的最小公倍数，at + 1 是它时要到 11。
+    expect(windowAt(2519).size).toBe(11)
+    expect(windowAt(Number.MAX_SAFE_INTEGER - 1).size).toBeLessThanOrEqual(100)
   })
 })

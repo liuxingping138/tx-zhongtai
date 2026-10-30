@@ -4,12 +4,10 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import { importAfterAreaResolve } from '@/api/codebook'
-import { requestRetag, type AiTaskCode } from '@/api/aiTagging'
 import { createBaseTag, importBaseTags, listBaseTags, updateBaseTag, type BaseTagItem } from '@/api/policy'
 import { errorMessage } from '@/api/errors'
 import { reportImportResult, runExcelImport } from '@/api/excelImport'
 import AuditLogButton from '@/components/AuditLogButton.vue'
-import BatchChoiceDialog from '@/components/BatchChoiceDialog.vue'
 import BusinessTable from '@/components/BusinessTable.vue'
 import { reviewQuery } from '../shared/reviewQuery'
 import ColumnPicker from '@/components/ColumnPicker.vue'
@@ -28,7 +26,8 @@ import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import { useRecordEditor } from '@/composables/useRecordEditor'
 import { useTableSelection } from '@/composables/useTableSelection'
 import { useAuthStore } from '@/stores/auth'
-import { AI_STATUS_CHOICES, EDITOR_GROUPS, RETAG_CHOICES, SUMMARY_KEYS, TABLE_COLUMNS } from './fields'
+import { AI_STATUS_CHOICES, EDITOR_GROUPS, SUMMARY_KEYS, TABLE_COLUMNS } from './fields'
+import RetagDialog from './RetagDialog.vue'
 
 const RESOURCE = 'policy.base_tags'
 const auth = useAuthStore()
@@ -71,13 +70,6 @@ function detailRoute(row: BaseTagItem, index: number) {
 const selection = useTableSelection<BaseTagItem>()
 const checked = selection.checked
 const retagOpen = ref(false)
-async function submitRetag(step: string) {
-  const result = await requestRetag(selection.ids.value, step as AiTaskCode)
-  const message = result.queued
-    ? `已把 ${result.queued} 条放回「${result.task}」的待办，到任务调度执行它或等每日计划`
-    : '没有可以重新打标的政策'
-  return { message, skipped: result.skipped }
-}
 async function afterRetag() {
   selection.clear()
   await refresh()
@@ -237,13 +229,9 @@ onMounted(() => {
         @selection-change="checked = $event"
       />
     </ListPage>
-    <BatchChoiceDialog
+    <RetagDialog
       v-model="retagOpen"
-      title="重新打标"
-      :count="checked.length"
-      prompt="重新打标的是："
-      :choices="RETAG_CHOICES"
-      :submit="submitRetag"
+      :ids="selection.ids.value"
       @done="afterRetag"
     />
     <RecordEditorDrawer

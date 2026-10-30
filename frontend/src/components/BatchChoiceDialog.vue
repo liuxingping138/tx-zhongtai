@@ -22,6 +22,8 @@ const props = defineProps<{
   count: number
   /** 「已勾选 N 条政策，」后面接的话，如「数据状态改为：」 */
   prompt: string
+  /** 不是勾选来的（如核对页的当前这条）时开头写它，代替「已勾选 N 条」 */
+  target?: string
   choices: BatchChoice[]
   submit: (value: string) => Promise<BatchResult>
 }>()
@@ -41,7 +43,7 @@ async function confirm(): Promise<void> {
     emit('done')
     if (result.skipped?.length) {
       const lines = result.skipped.map(item => `${item.count} 条：${item.reason}`).join('\n')
-      await ElMessageBox.alert(`${result.message}\n\n跳过的：\n${lines}`, props.title, { confirmButtonText: '知道了' }).catch(() => undefined)
+      await ElMessageBox.alert(`${result.message}\n\n跳过的：\n${lines}`, props.title, { confirmButtonText: '知道了', customClass: 'confirm-lines' }).catch(() => undefined)
     } else {
       ElMessage.success(result.message)
     }
@@ -60,7 +62,7 @@ async function confirm(): Promise<void> {
     width="min(480px, calc(100vw - 32px))"
   >
     <p class="batch-choice__count">
-      已勾选 {{ count }} 条，{{ prompt }}
+      {{ target ?? `已勾选 ${count} 条` }}，{{ prompt }}
     </p>
     <el-radio-group
       v-model="value"

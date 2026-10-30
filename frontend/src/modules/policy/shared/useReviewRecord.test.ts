@@ -50,8 +50,9 @@ function setup(id: string, query: Record<string, string | string[]> = {}, initia
     return row ? Promise.resolve({ ...row }) : Promise.reject(apiError(404, 'RESOURCE_NOT_FOUND', '不存在'))
   })
   const list = vi.fn((params: Record<string, unknown>): Promise<Page<Row>> => {
-    const at = Number(params.page) - 1
-    return Promise.resolve({ items: rows.slice(at, at + 1), total: rows.length, page: at + 1, page_size: 1 })
+    const size = Number(params.page_size)
+    const offset = (Number(params.page) - 1) * size
+    return Promise.resolve({ items: rows.slice(offset, offset + size), total: rows.length, page: Number(params.page), page_size: size })
   })
   const update = vi.fn((row: Row, form: Record<string, string>) => Promise.resolve({ ...row, ...form, version: row.version + 1 }))
   const scope = effectScope()
@@ -137,6 +138,59 @@ describe('moving through the list', () => {
     state.replace.mockClear()
     expect(await review.advance()).toBe(false)
     expect(state.replace).not.toHaveBeenCalled()
+  })
+
+  it('counts the filtered list once per move, not again when the next record loads', async () => {
+    const { review, list, get } = setup('a', { status: '待验证', pos: '0' })
+    await flush()
+    list.mockClear()
+    await review.move(1)
+    await flush()
+    expect(review.record.value?.id).toBe('b')
+    expect(review.total.value).toBe(3)
+    expect(list).toHaveBeenCalledTimes(1)
+    expect(get).toHaveBeenLastCalledWith('b')
+  })
+
+  it('finds the next record with a single count after handling one', async () => {
+    const { review, list, rows } = setup('a', { pos: '0' })
+    await flush()
+    list.mockClear()
+    // 还在筛选结果里：往后挪一条。
+    expect(await review.advance()).toBe(true)
+    await flush()
+    expect(review.record.value?.id).toBe('b')
+    expect(list).toHaveBeenCalledTimes(1)
+    // 出了筛选结果：后面那条补到同一位置上。
+    list.mockClear()
+    rows.splice(1, 1)
+    expect(await review.advance()).toBe(true)
+    await flush()
+    expect(review.record.value?.id).toBe('c')
+    expect(state.replace).toHaveBeenLastCalledWith(expect.objectContaining({ params: { id: 'c' }, query: { pos: '1' } }))
+    expect(list).toHaveBeenCalledTimes(1)
+  })
+
+  it('stays on the last record and refreshes it without counting again', async () => {
+    const { review, list, get } = setup('c', { pos: '2' })
+    await flush()
+    list.mockClear()
+    get.mockClear()
+    expect(await review.advance()).toBe(false)
+    expect(list).toHaveBeenCalledTimes(1)
+    expect(get).toHaveBeenCalledWith('c')
+    expect(review.total.value).toBe(3)
+  })
+
+  it('counts again when the move did not happen', async () => {
+    const { review, list } = setup('a', { pos: '0' })
+    await flush()
+    // 有未保存的修改、用户选择留下：路由没换，之后重新加载这一条照常数总数。
+    state.replace.mockResolvedValueOnce(undefined)
+    await review.move(1)
+    list.mockClear()
+    await review.load()
+    expect(list).toHaveBeenCalledTimes(1)
   })
 
   it('returns to the list page that holds the record', async () => {

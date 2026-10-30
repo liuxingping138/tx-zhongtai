@@ -54,3 +54,14 @@ export function listQuery(context: ReviewContext): LocationQueryRaw {
   if (context.pageSize !== DEFAULT_PAGE_SIZE) query.page_size = String(context.pageSize)
   return query
 }
+
+/**
+ * 一次取到第 at、at + 1 两个位置用的页：页大小取不整除 at + 1 的最小整数（2、3、4…），
+ * 第 at 条就不会落在页尾，后一条一定在同一页。最多几十条（远小于列表每页上限 100），只查一次、只数一次总数。
+ */
+export function windowAt(at: number): { page: number; size: number; offset: number } {
+  let size = 2
+  while ((at + 1) % size === 0) size += 1
+  const page = Math.floor(at / size) + 1
+  return { page, size, offset: (page - 1) * size }
+}

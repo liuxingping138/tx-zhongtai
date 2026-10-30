@@ -1,14 +1,10 @@
 <script setup lang="ts">
 import { Refresh } from '@element-plus/icons-vue'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, onMounted, ref } from 'vue'
 
 import {
   CRAWLER_CONFIG_BASE,
-  getConfigSyncStatus,
   getCrawlerConfigReport,
-  triggerConfigSync,
-  type ConfigSyncStatus,
   type ConfigUnit,
   type CrawlerConfigReport,
 } from '@/api/crawlerConfig'
@@ -23,29 +19,27 @@ import ConfigOverview from './ConfigOverview.vue'
 import ConfigPeriodPanel from './ConfigPeriodPanel.vue'
 import ConfigProvinceDialog from './ConfigProvinceDialog.vue'
 import ConfigStatusPanel from './ConfigStatusPanel.vue'
-import { periodName as nameOf, syncFailure, syncRunning } from './report'
+import { periodName as nameOf } from './report'
+import { useConfigSync } from './useConfigSync'
 
 const RESOURCE = 'policy.crawler_config'
-const POLL_MS = 3000
 const auth = useAuthStore()
 
 const unit = ref<ConfigUnit>('week')
 /** 所选这期的第一天；空表示用后端的默认（周看上周，月、季度、年看当前这期）。 */
 const period = ref('')
 const report = ref<CrawlerConfigReport | null>(null)
-const status = ref<ConfigSyncStatus | null>(null)
 const loading = ref(false)
 const error = ref('')
-const syncing = ref(false)
 /** 各省配置弹窗：点配置数量的柱子或「各省明细」打开。 */
 const provincesOpen = ref(false)
 /** 弹窗里点中的省份：抽屉里看这个省这期配置的网站。 */
 const province = ref('')
 let sequence = 0
-let pollTimer: ReturnType<typeof setTimeout> | undefined
 
-const running = computed(() => syncRunning(status.value))
-const failure = computed(() => syncFailure(status.value))
+// 同步在排队或执行时轮询状态，结束后刷新统计；离开页面就停。
+const { syncing, running, failure, poll: pollStatus, syncNow } = useConfigSync(load)
+
 const periodName = computed(() => (report.value ? nameOf(report.value) : ''))
 /** 卡片和透视表的数字点了去信源管理；没有信源管理权限就只是数字。 */
 const sourcesLink = computed(() => (auth.canRead('policy.sources')
@@ -102,43 +96,10 @@ async function load(): Promise<void> {
   }
 }
 
-/** 同步在排队或执行时每 3 秒看一次，结束后刷新统计。 */
-async function pollStatus(): Promise<void> {
-  clearTimeout(pollTimer)
-  const wasRunning = running.value
-  try {
-    status.value = await getConfigSyncStatus()
-  } catch {
-    // 状态取不到不影响看统计，下一轮再试。
-  }
-  if (running.value) {
-    pollTimer = setTimeout(() => void pollStatus(), POLL_MS)
-  } else if (wasRunning) {
-    await load()
-    const result = status.value?.last_run
-    if (result?.status === 'success') ElMessage.success(`同步完成，${configResultText(result.result)}`)
-  }
-}
-
-async function syncNow(): Promise<void> {
-  syncing.value = true
-  try {
-    await triggerConfigSync()
-    ElMessage.info('已开始同步规则表，完成后自动刷新')
-    status.value = { active_run: { status: 'queued' } as ConfigSyncStatus['active_run'], last_run: status.value?.last_run ?? null }
-    pollTimer = setTimeout(() => void pollStatus(), POLL_MS)
-  } catch (cause) {
-    ElMessage.error(errorMessage(cause, '同步没有发起，请重试'))
-  } finally {
-    syncing.value = false
-  }
-}
-
 onMounted(() => {
   void load()
   void pollStatus()
 })
-onBeforeUnmount(() => clearTimeout(pollTimer))
 </script>
 
 <template>
