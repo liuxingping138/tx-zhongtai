@@ -57,26 +57,34 @@ def plan_expansion(rows: Sequence[Source], rules: Sequence[ColumnRule], legacy_c
     by_code: dict[str, list[Source]] = defaultdict(list)
     for row in sorted(rows, key=lambda item: (item.created_at, str(item.id))):
         by_code[row.site_code].append(row)
+    pending = [rule for rule in sorted(rules, key=lambda item: (item.day, item.rule_id)) if rule.rule_id not in linked]
+    plan = ExpandPlan(unknown=[rule for rule in pending if rule.site_code not in by_code])
+    pending = [rule for rule in pending if rule.site_code in by_code]
+    # 先把标签就是栏目名的行对上：不然原来那行可能先被别的栏目改掉，这条再新增时和它原来的内部唯一 id 撞上。
     taken: set[uuid.UUID] = set()
-    plan = ExpandPlan()
-    for rule in sorted(rules, key=lambda item: (item.day, item.rule_id)):
-        if rule.rule_id in linked:
-            continue
-        site_rows = by_code.get(rule.site_code)
-        if not site_rows:
-            plan.unknown.append(rule)
-            continue
-        free = [row for row in site_rows if not row.rule_id and row.id not in taken]
-        same = next((row for row in free if row.tag.strip() == rule.module), None)
-        started = any(row.rule_id or row.id in taken for row in site_rows)
+    adopted: dict[str, Step] = {}
+    for rule in pending:
+        same = next((row for row in _free(by_code[rule.site_code], taken) if row.tag.strip() == rule.module), None)
         if same is not None:
-            step = Step(ADOPT, rule, same)
-        elif free and rule.site_code not in legacy_codes and not started:
-            step = Step(CONVERT, rule, free[0])
-        else:
-            step = Step(CREATE, rule, site_rows[0])
-        if step.kind != CREATE:
+            adopted[rule.rule_id] = Step(ADOPT, rule, same)
+            taken.add(same.id)
+    for rule in pending:
+        step = adopted.get(rule.rule_id) or _place(rule, by_code[rule.site_code], taken, legacy_codes)
+        if step.kind == CONVERT:
             taken.add(step.row.id)
-        linked.add(rule.rule_id)
         plan.steps.append(step)
     return plan
+
+
+def _free(site_rows: list[Source], taken: set[uuid.UUID]) -> list[Source]:
+    return [row for row in site_rows if not row.rule_id and row.id not in taken]
+
+
+def _place(rule: ColumnRule, site_rows: list[Source], taken: set[uuid.UUID], legacy_codes: Collection[str]) -> Step:
+    """没有现成的栏目行：网站之前没有规则、也还没有行对上规则的，原来那行改成这个栏目；否则照抄新增。"""
+
+    free = _free(site_rows, taken)
+    started = any(row.rule_id or row.id in taken for row in site_rows)
+    if free and rule.site_code not in legacy_codes and not started:
+        return Step(CONVERT, rule, free[0])
+    return Step(CREATE, rule, site_rows[0])

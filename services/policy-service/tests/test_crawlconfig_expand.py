@@ -64,3 +64,17 @@ def test_existing_column_rows_are_adopted_and_expanded_rules_are_not_expanded_ag
 def test_rules_whose_site_code_is_not_in_sources_are_listed_as_unknown() -> None:
     plan = plan_expansion([], [_rule("r9", "99999999999", "政策")], legacy_codes=set())
     assert (plan.steps, [rule.rule_id for rule in plan.unknown]) == ([], ["r9"])
+
+
+def test_a_row_already_named_after_a_column_is_matched_before_the_site_row_is_reused() -> None:
+    """网站那行的标签正好是某条规则的栏目名：先对上它，其余栏目新增。
+
+    原来先被别的栏目改掉，这条再新增时撞了内部唯一 id。"""
+
+    site = _row("33100000099", "首页 <—> 政策法规 <—> 政策法规")
+    rules = [
+        _rule("a1", "33100000099", "政策法规_政策法规"),
+        _rule("b2", "33100000099", "首页 <—> 政策法规 <—> 政策法规"),
+    ]
+    plan = plan_expansion([site], rules, legacy_codes=set())
+    assert [(step.kind, step.rule.rule_id) for step in plan.steps] == [(CREATE, "a1"), (ADOPT, "b2")]
