@@ -148,13 +148,26 @@ def _usage(raw_csv: Path, row: dict[str, Any]) -> dict[str, int]:
     }
 
 
+def _run_skipped(existing: BatchRun | None, *, update: bool) -> str:
+    """已有的任务不导入的原因，空串表示照常导入或覆盖。"""
+
+    if existing is None:
+        return ""
+    if existing.deleted_at is not None:
+        # 在新系统里删过的（只打了删除标记，账单还要算它的钱）：不再导回来，也不能按同一主键再插一行。
+        return "已在新系统里删除"
+    if not update or existing.status in ACTIVE_STATUSES:
+        return "已存在"
+    return ""
+
+
 async def _import_run(
     session: AsyncSession, row: dict[str, Any], root: Path, report: ImportReport, *, write: bool, update: bool
 ) -> None:
     run_id = row["history_id"]
-    existing = await run_repo.get(session, run_id, lock=True)
-    if existing is not None and (not update or existing.status in ACTIVE_STATUSES):
-        report.skipped.append(f"任务 {run_id}（{row['prompt_title']}）已存在")
+    existing = await run_repo.get(session, run_id, lock=True, deleted=True)
+    if reason := _run_skipped(existing, update=update):
+        report.skipped.append(f"任务 {run_id}（{row['prompt_title']}）{reason}")
         return
     source = root / "batch_runs" / run_id
     run = BatchRun(

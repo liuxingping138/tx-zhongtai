@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -308,3 +309,22 @@ def test_sample_run_routes(client: TestClient, monkeypatch: pytest.MonkeyPatch) 
         ("test-rows", PROMPT_ID),
         ("download", PROMPT_ID, RUN_ID, "result"),
     ]
+
+
+def test_downloading_a_growing_file_sends_the_length_seen_at_the_start(tmp_path: Path) -> None:
+    """运行中的任务每答一行都往原始返回里追加：读到文件尾会比声明的 Content-Length 多，下载被掐断。"""
+
+    import asyncio
+
+    from app.api.schemas import path_response
+
+    raw = tmp_path / "temp.csv"
+    raw.write_bytes(b"a" * 10)
+    response = path_response(raw, "原始返回.csv")
+    raw.write_bytes(b"a" * 25)  # 开始发之前 worker 又写了几行
+
+    async def body() -> bytes:
+        return b"".join([chunk async for chunk in response.body_iterator])  # type: ignore[misc]
+
+    assert response.headers["content-length"] == "10"
+    assert asyncio.run(body()) == b"a" * 10

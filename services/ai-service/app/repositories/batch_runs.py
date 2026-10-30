@@ -84,8 +84,12 @@ async def distinct_values(session: AsyncSession, column: str, *, categories: Col
     return list(rows)
 
 
-async def get(session: AsyncSession, run_id: str, *, lock: bool = False) -> BatchRun | None:
-    statement = select(BatchRun).where(BatchRun.id == run_id, LIVE)
+async def get(session: AsyncSession, run_id: str, *, lock: bool = False, deleted: bool = False) -> BatchRun | None:
+    """deleted=True 连已删除的也取：按主键插入前判断有没有这一行时用，否则会撞主键。"""
+
+    statement = select(BatchRun).where(BatchRun.id == run_id)
+    if not deleted:
+        statement = statement.where(LIVE)
     if lock:
         statement = statement.with_for_update()
     return (await session.scalars(statement)).first()

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -75,7 +76,7 @@ def _bundle(root: Path) -> Path:
 def stored(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     existing: dict[str, Any] = {}
 
-    async def get(_session: object, item_id: str, *, lock: bool = False) -> object | None:
+    async def get(_session: object, item_id: str, *, lock: bool = False, deleted: bool = False) -> object | None:
         return existing.get(item_id)
 
     monkeypatch.setattr(prompt_repo, "get", get)
@@ -115,7 +116,7 @@ async def test_imports_templates_runs_and_files(tmp_path: Path, stored: dict[str
 
 
 async def test_existing_ids_are_skipped(tmp_path: Path, stored: dict[str, Any]) -> None:
-    stored.update({PROMPT_ID: object(), RUN_ID: object()})
+    stored.update({PROMPT_ID: object(), RUN_ID: BatchRun(id=RUN_ID, status="done")})
     session = FakeSession()
     report = await service.import_legacy(session, _bundle(tmp_path))  # type: ignore[arg-type]
 
@@ -181,3 +182,16 @@ async def test_update_keeps_templates_edited_in_new_system_and_active_runs(
         "模板「新系统改过」在新系统里保存过（张三），没有覆盖",
         f"任务 {RUN_ID}（政策解读）已存在",
     ]
+
+
+async def test_runs_deleted_in_the_new_system_are_not_imported_again(tmp_path: Path, stored: dict[str, Any]) -> None:
+    """删除批量任务只打删除标记（账单照算）：导入按同一主键再插一行会撞主键，整次导入回滚、以后每次都失败。"""
+
+    deleted = BatchRun(id=RUN_ID, status="done", deleted_at=datetime(2026, 10, 30, tzinfo=UTC))
+    stored.update({RUN_ID: deleted})
+    session = FakeSession()
+    report = await service.import_legacy(session, _bundle(tmp_path), update=True)  # type: ignore[arg-type]
+
+    assert RUN_ID not in [item.id for item in _added(session, BatchRun)]
+    assert f"任务 {RUN_ID}（政策解读）已在新系统里删除" in report.skipped
+    assert deleted.status == "done"

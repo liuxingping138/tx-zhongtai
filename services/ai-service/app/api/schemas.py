@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import quote
 
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 FileKind = Literal["excel", "code"]
@@ -108,15 +108,36 @@ def file_response(content: bytes, filename: str) -> Response:
     )
 
 
-def path_response(path: Path, filename: str) -> FileResponse:
-    """从磁盘边读边发，不整份读进内存（任务产物可能有几个 G）。"""
+_CHUNK_BYTES = 1024 * 1024
 
+
+def path_response(path: Path, filename: str) -> StreamingResponse:
+    """从磁盘边读边发，不整份读进内存（任务产物可能有几个 G）。
+
+    只发请求开始时的长度：运行中的任务每答一行都往原始返回、运行日志里追加，
+    读到文件尾的话发出的字节比声明的 Content-Length 多，服务端直接掐断，下载半截失败。
+    """
+
+    size = path.stat().st_size
     suffix = filename[filename.rfind(".") :].lower() if "." in filename else ""
-    return FileResponse(
-        path,
+    return StreamingResponse(
+        _read_upto(path, size),
         media_type=_MEDIA_TYPES.get(suffix, "application/octet-stream"),
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
+            "Content-Length": str(size),
+        },
     )
+
+
+def _read_upto(path: Path, size: int) -> Iterator[bytes]:
+    """同步读文件，StreamingResponse 放进线程池逐块迭代，不占事件循环。"""
+
+    left = size
+    with path.open("rb") as handle:
+        while left > 0 and (chunk := handle.read(min(_CHUNK_BYTES, left))):
+            left -= len(chunk)
+            yield chunk
 
 
 def sse_response(stream: AsyncIterator[str]) -> StreamingResponse:
