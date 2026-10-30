@@ -71,6 +71,11 @@ def env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
         "user_has_builtin_superadmin",
         AsyncMock(side_effect=lambda _s, uid: uid in state.superadmin_ids),
     )
+    monkeypatch.setattr(
+        user_admin.user_repo,
+        "builtin_superadmin_ids",
+        AsyncMock(side_effect=lambda _s, ids: {uid for uid in ids if uid in state.superadmin_ids}),
+    )
     monkeypatch.setattr(user_admin.user_repo, "lock_superadmin_users", AsyncMock(side_effect=lambda *_: state.locked))
     monkeypatch.setattr(user_admin.user_repo, "replace_user_roles", AsyncMock())
     monkeypatch.setattr(user_admin.user_repo, "list_user_role_ids", AsyncMock(side_effect=lambda *_: state.role_ids))
@@ -235,14 +240,15 @@ class TestRoleAssignment:
         self, env: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         with pytest.raises(ApiError, match="排序"):
-            await user_admin.list_users_page(object(), UserFilters(), page=1, page_size=20, sort="password")  # type: ignore[arg-type]
+            await user_admin.list_users_page(object(), ACTOR, UserFilters(), page=1, page_size=20, sort="password")  # type: ignore[arg-type]
         role = SimpleNamespace(id=uuid.uuid4(), name="编辑", status="active", is_builtin=False)
         monkeypatch.setattr(user_admin.user_repo, "count_users", AsyncMock(return_value=1))
         listed = AsyncMock(return_value=[env.user])
         monkeypatch.setattr(user_admin.user_repo, "list_users", listed)
         monkeypatch.setattr(user_admin.user_repo, "roles_for_users", AsyncMock(return_value={env.user.id: [role]}))
         items, total = await user_admin.list_users_page(
-            object(),
+            object(),  # type: ignore[arg-type]
+            ACTOR,  # type: ignore[arg-type]
             UserFilters(),
             page=0,
             page_size=999,
@@ -255,8 +261,39 @@ class TestRoleAssignment:
     async def test_get_user_lists_role_ids(self, env: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> None:
         role = SimpleNamespace(id=uuid.uuid4(), name="编辑", status="active", is_builtin=False)
         monkeypatch.setattr(user_admin.user_repo, "roles_for_users", AsyncMock(return_value={env.user.id: [role]}))
-        payload = await user_admin.get_user(object(), env.user.id)  # type: ignore[arg-type]
+        payload = await user_admin.get_user(object(), ACTOR, env.user.id)  # type: ignore[arg-type]
         assert payload["role_ids"] == [str(role.id)]
+        assert payload["can_manage"] is True
+
+    async def test_list_marks_superadmin_rows_unmanageable_for_a_user_admin(
+        self, env: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """不是超级管理员的用户管理员：超级管理员那几行 can_manage=false，页面不给停用、删除、重置密码。"""
+
+        boss = _user(username="admin")
+        monkeypatch.setattr(user_admin.user_repo, "count_users", AsyncMock(return_value=2))
+        monkeypatch.setattr(user_admin.user_repo, "list_users", AsyncMock(return_value=[env.user, boss]))
+        monkeypatch.setattr(user_admin.user_repo, "roles_for_users", AsyncMock(return_value={}))
+        monkeypatch.setattr(user_admin.user_repo, "builtin_superadmin_ids", AsyncMock(return_value={boss.id}))
+        items, _ = await user_admin.list_users_page(
+            object(),  # type: ignore[arg-type]
+            ACTOR,  # type: ignore[arg-type]
+            UserFilters(),
+            page=1,
+            page_size=20,
+            sort="created_at",
+        )
+        assert [item["can_manage"] for item in items] == [True, False]
+        env.superadmin_ids = {ACTOR.id}
+        items, _ = await user_admin.list_users_page(
+            object(),  # type: ignore[arg-type]
+            ACTOR,  # type: ignore[arg-type]
+            UserFilters(),
+            page=1,
+            page_size=20,
+            sort="created_at",
+        )
+        assert [item["can_manage"] for item in items] == [True, True]
 
 
 def test_temporary_passwords_always_pass_the_policy() -> None:

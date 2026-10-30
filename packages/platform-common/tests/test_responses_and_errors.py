@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from platform_common.errors import NotFoundError, PermissionDeniedError, register_exception_handlers
-from platform_common.request_context import RequestIdMiddleware
+from platform_common.request_context import RequestIdMiddleware, get_request_id
 from platform_common.responses import ok, paginate
 
 
@@ -71,6 +73,48 @@ def test_unexpected_exception_returns_500_without_leaking_stack() -> None:
     body = resp.json()
     assert body["code"] == "INTERNAL_ERROR"
     assert "unexpected" not in body["message"]
+
+
+def test_unexpected_exception_keeps_the_request_id(caplog: pytest.LogCaptureFixture) -> None:
+    """未捕获异常的 500 由最外层中间件处理，那时请求 ID 中间件已经退出：响应体、响应头、日志都要带上同一个 ID。"""
+
+    client = TestClient(_build_test_app(), raise_server_exceptions=False)
+    with caplog.at_level(logging.ERROR, logger="platform_common.errors"):
+        resp = client.get("/boom-500", headers={"X-Request-Id": "trace-500"})
+    assert resp.status_code == 500
+    assert resp.json()["request_id"] == "trace-500"
+    assert resp.headers["X-Request-Id"] == "trace-500"
+    record = next(item for item in caplog.records if item.name == "platform_common.errors")
+    assert "trace-500" in record.getMessage()
+
+
+def test_unexpected_exception_gets_a_generated_request_id() -> None:
+    client = TestClient(_build_test_app(), raise_server_exceptions=False)
+    resp = client.get("/boom-500")
+    generated = resp.json()["request_id"]
+    assert generated and len(generated) == 32
+    assert resp.headers["X-Request-Id"] == generated
+
+
+def test_log_lines_written_by_the_500_handler_carry_the_request_id() -> None:
+    """结构化日志的 request_id 字段从上下文变量取，处理器写日志时要临时放回去。"""
+
+    seen: list[str | None] = []
+    app = _build_test_app()
+
+    class _Probe(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            seen.append(get_request_id())
+
+    probe = _Probe()
+    errors_logger = logging.getLogger("platform_common.errors")
+    errors_logger.addHandler(probe)
+    try:
+        TestClient(app, raise_server_exceptions=False).get("/boom-500", headers={"X-Request-Id": "ctx-500"})
+    finally:
+        errors_logger.removeHandler(probe)
+    assert seen == ["ctx-500"]
+    assert get_request_id() is None
 
 
 def test_request_id_passthrough_from_header() -> None:

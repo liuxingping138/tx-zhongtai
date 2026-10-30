@@ -9,7 +9,8 @@ from __future__ import annotations
 import contextvars
 import re
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator
+from contextlib import contextmanager
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -31,6 +32,27 @@ def get_request_id() -> str | None:
 
 def new_request_id() -> str:
     return uuid.uuid4().hex
+
+
+def request_id_of(request: Request) -> str | None:
+    """这个请求的 ID。优先取上下文变量；取不到时读中间件挂在 request.state 上的那份。
+
+    未捕获的异常由最外层的 ServerErrorMiddleware 交给 500 处理器，那时 RequestIdMiddleware 已经退出、
+    上下文变量已经还原，get_request_id() 是 None；request.state 存在整个请求共用的 scope 里，还在。
+    """
+
+    return get_request_id() or getattr(request.state, "request_id", None)
+
+
+@contextmanager
+def bound_request_id(request_id: str | None) -> Iterator[None]:
+    """临时把请求 ID 放回上下文变量，让这段时间里写的日志带上它（日志处理链从上下文变量取）。"""
+
+    token = _request_id_ctx.set(request_id)
+    try:
+        yield
+    finally:
+        _request_id_ctx.reset(token)
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):

@@ -48,9 +48,21 @@ async def list_page(
         occurred_from=assume_beijing(filters.occurred_from),
         occurred_to=assume_beijing(filters.occurred_to),
     )
-    total = await event_repo.count_events(session, filters)
-    rows = await event_repo.list_events(session, filters, offset=(page - 1) * page_size, limit=page_size)
+    offset = (page - 1) * page_size
+    rows = await event_repo.list_events(session, filters, offset=offset, limit=page_size)
+    total = await _total(session, filters, offset=offset, page_size=page_size, got=len(rows))
     return [to_out(row) for row in rows], total
+
+
+async def _total(session: AsyncSession, filters: EventFilters, *, offset: int, page_size: int, got: int) -> int:
+    """这页没取满就是最后一页，总数直接算出来，不再 count（按人、按时间筛常常只有一两页）。
+
+    取满了、或者翻过了头（这页一条没有），才老老实实数一遍。
+    """
+
+    if 0 < got < page_size or (got == 0 and offset == 0):
+        return offset + got
+    return await event_repo.count_events(session, filters)
 
 
 async def list_options(session: AsyncSession) -> dict[str, Any]:

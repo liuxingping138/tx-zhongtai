@@ -8,9 +8,11 @@ from typing import Any
 
 from platform_common.clock import utcnow
 from platform_common.errors import ApiError, ErrorCode, UnauthenticatedError
+from platform_common.logging_setup import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.core.database import SessionLocal
 from app.core.jwt_tokens import issue_access_token
 from app.core.rate_limit import login_key_username
 from app.domain.enums import UserStatus
@@ -26,6 +28,8 @@ from app.domain.tokens import generate_refresh_token, hash_refresh_token
 from app.repositories import outbox as outbox_repo
 from app.repositories import sessions as session_repo
 from app.repositories import users as user_repo
+
+logger = get_logger(__name__)
 
 UNIFIED_LOGIN_FAILURE = "用户名或密码错误"
 ACCOUNT_UNAVAILABLE = "账号不可用"
@@ -142,11 +146,18 @@ class AuthService:
         user_agent: str,
         reason: str,
     ) -> None:
+        """登录失败留痕。输入的用户名能对上账号时记上这个人和显示名，和成功的那几行一样，
+        按人筛登录日志才看得到把他锁住的那些失败；对不上的照旧只记输入的用户名。"""
+
+        normalized = normalize_username(username)
+        user = await user_repo.get_user_by_username(self.session, normalized)
+        who = {} if user is None else {"actor_id": str(user.id), "actor_name": user.display_name}
         await outbox_repo.enqueue(
             self.session,
             event_type="auth.login.failed",
             payload={
-                "username": normalize_username(username),
+                **who,
+                "username": normalized,
                 "request_id": request_id,
                 "client_ip": client_ip,
                 "user_agent": user_agent,
@@ -279,11 +290,14 @@ class AuthService:
 
 
 async def load_principal(session: AsyncSession, user_id: uuid.UUID, session_id: uuid.UUID) -> tuple[User, Session]:
-    """按访问令牌里的用户和会话编号加载登录主体；账号不可用、会话失效或与用户不匹配一律视为未登录。"""
-    user = await user_repo.get_user_by_id(session, user_id)
-    session_row = await session_repo.get_session(session, session_id)
-    if user is None or session_row is None:
+    """按访问令牌里的用户和会话编号加载登录主体；账号不可用、会话失效或与用户不匹配一律视为未登录。
+
+    会话和账号一条查出：业务服务每个受保护请求都经 authorize 走到这里。
+    """
+    found = await session_repo.get_session_with_user(session, session_id, user_id)
+    if found is None:
         raise UnauthenticatedError()
+    session_row, user = found
     if user.status != UserStatus.ACTIVE:
         raise UnauthenticatedError("账号不可用")
     if not session_repo.session_is_usable(session_row):
@@ -291,6 +305,26 @@ async def load_principal(session: AsyncSession, user_id: uuid.UUID, session_id: 
     if session_row.user_id != user.id:
         raise UnauthenticatedError()
     return user, session_row
+
+
+async def note_activity(session_row: Session, *, every_seconds: int) -> None:
+    """在线用户的「最近活跃」：带令牌的请求（含业务服务经 authorize 的请求）都算一次操作。
+
+    原来只在登录和刷新令牌时更新，访问令牌 8 小时才刷新一次，看不出谁 30 分钟内还在用。
+    每台设备最多每 every_seconds 写一次库；写在独立的短事务里：请求自己的事务可能很长（如导入），
+    在里面改这一行会让同一个人的其他请求等锁。写失败只记日志，不影响请求。
+    """
+
+    now = utcnow()
+    stale_before = now - timedelta(seconds=every_seconds)
+    if session_row.last_seen_at >= stale_before:
+        return
+    try:
+        async with SessionLocal() as db:
+            await session_repo.touch_last_seen(db, session_row.id, now=now, stale_before=stale_before)
+            await db.commit()
+    except Exception:  # noqa: BLE001  活跃时间写不进去不能让请求失败
+        logger.warning("session_touch_failed", session_id=str(session_row.id))
 
 
 async def role_summary(session: AsyncSession, user_id: uuid.UUID) -> tuple[bool, list[str]]:

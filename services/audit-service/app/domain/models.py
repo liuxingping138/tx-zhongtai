@@ -14,13 +14,16 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 class AuditEvent(Base):
     __tablename__ = "audit_events"
-    # 这四个索引由迁移 c2b8d4e7a201 建出，必须在 model 里同步声明，
+    # 索引由迁移 c2b8d4e7a201、e4b1c7d2a403 建出，必须在 model 里同步声明，
     # 否则 alembic check 会认为库里多了索引、提议把它们删掉。
+    # actor_name、action_code 两个单列索引给筛选项取候选值用（repositories.events.distinct_values_stmt）。
     __table_args__ = (
         Index("ix_audit_events_occurred_at", "occurred_at"),
         Index("ix_audit_events_actor_id", "actor_id"),
         Index("ix_audit_events_module_action", "module_code", "action_code"),
         Index("ix_audit_events_outcome", "outcome"),
+        Index("ix_audit_events_actor_name", "actor_name_snapshot"),
+        Index("ix_audit_events_action_code", "action_code"),
         {"comment": "操作日志"},
     )
 

@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from platform_common.clock import utcnow
-from platform_common.errors import NotFoundError
+from platform_common.errors import ApiError, NotFoundError
 from redis.exceptions import RedisError
 
 from app.application import session_admin
@@ -74,7 +74,8 @@ def env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
 
 
 def _user(**overrides: Any) -> SimpleNamespace:
-    return SimpleNamespace(**({"id": uuid.uuid4(), "username": "zhangsan", "status": UserStatus.ACTIVE} | overrides))
+    base = {"id": uuid.uuid4(), "username": "zhangsan", "display_name": "张三", "status": UserStatus.ACTIVE}
+    return SimpleNamespace(**(base | overrides))
 
 
 async def test_unlock_clears_the_counter_and_is_audited(env: SimpleNamespace) -> None:
@@ -96,7 +97,7 @@ async def test_revoke_one_only_touches_that_session(env: SimpleNamespace) -> Non
     env.row = SimpleNamespace(
         id=uuid.uuid4(), user_id=env.user.id, revoked_at=None, expires_at=utcnow() + timedelta(hours=1)
     )
-    await session_admin.revoke_one(object(), _user(), env.row.id)  # type: ignore[arg-type]
+    await session_admin.revoke_one(object(), _user(), env.row.id, current_session_id=uuid.uuid4())  # type: ignore[arg-type]
     assert env.row.revoked_at is not None
     assert env.events == ["iam.session.revoked"]
 
@@ -107,4 +108,61 @@ async def test_revoking_an_already_ended_session_says_so(env: SimpleNamespace) -
         id=uuid.uuid4(), user_id=env.user.id, revoked_at=utcnow(), expires_at=utcnow() + timedelta(hours=1)
     )
     with pytest.raises(NotFoundError, match="已经下线"):
-        await session_admin.revoke_one(object(), _user(), env.row.id)  # type: ignore[arg-type]
+        await session_admin.revoke_one(object(), _user(), env.row.id, current_session_id=uuid.uuid4())  # type: ignore[arg-type]
+
+
+async def test_the_device_in_use_cannot_be_revoked_here(env: SimpleNamespace) -> None:
+    """正在用的这台下线就等于退出登录，误点会把自己踢出去；要退出用「退出登录」。"""
+
+    env.user = _user()
+    env.row = SimpleNamespace(
+        id=uuid.uuid4(), user_id=env.user.id, revoked_at=None, expires_at=utcnow() + timedelta(hours=1)
+    )
+    with pytest.raises(ApiError, match="正在用的这台设备"):
+        await session_admin.revoke_one(object(), env.user, env.row.id, current_session_id=env.row.id)  # type: ignore[arg-type]
+    assert env.row.revoked_at is None
+    assert env.events == []
+
+
+def _session_row(user_id: uuid.UUID, *, seen_minutes_ago: int) -> SimpleNamespace:
+    now = utcnow()
+    return SimpleNamespace(
+        id=uuid.uuid4(),
+        user_id=user_id,
+        client_info={"ip": "10.0.0.1", "user_agent": "ua"},
+        created_at=now - timedelta(days=1),
+        last_seen_at=now - timedelta(minutes=seen_minutes_ago),
+    )
+
+
+async def test_online_means_active_in_the_window_and_rows_say_what_i_can_do(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """有效登录全列出来，30 分钟内有操作的才标在线；我正在用的这台、超级管理员的设备都不给下线。"""
+
+    me, colleague, boss = _user(), _user(username="lisi"), _user(username="admin")
+    mine = _session_row(me.id, seen_minutes_ago=0)
+    idle = _session_row(colleague.id, seen_minutes_ago=31)
+    busy = _session_row(boss.id, seen_minutes_ago=5)
+    rows = [(mine, me), (busy, boss), (idle, colleague)]
+    monkeypatch.setattr(session_admin.session_repo, "list_active_sessions", AsyncMock(return_value=rows))
+    manageable = AsyncMock(return_value={me.id, colleague.id})
+    monkeypatch.setattr(session_admin, "manageable_ids", manageable)
+
+    result = await session_admin.list_online(
+        object(),  # type: ignore[arg-type]
+        me,  # type: ignore[arg-type]
+        current_session_id=mine.id,
+        online_window_seconds=30 * 60,
+    )
+
+    items = {item["id"]: item for item in result["items"]}  # type: ignore[attr-defined]
+    assert result["online_window_seconds"] == 1800
+    assert (items[str(mine.id)]["online"], items[str(mine.id)]["current"], items[str(mine.id)]["can_manage"]) == (
+        True,
+        True,
+        False,
+    )
+    assert (items[str(idle.id)]["online"], items[str(idle.id)]["can_manage"]) == (False, True)
+    assert (items[str(busy.id)]["online"], items[str(busy.id)]["can_manage"]) == (True, False)
+    assert sorted(manageable.await_args.args[2]) == sorted({me.id, colleague.id, boss.id})

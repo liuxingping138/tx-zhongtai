@@ -21,7 +21,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from platform_common.request_context import get_request_id
+from platform_common.request_context import REQUEST_ID_HEADER, bound_request_id, get_request_id, request_id_of
 
 logger = logging.getLogger("platform_common.errors")
 
@@ -206,11 +206,15 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
-        request_id = get_request_id()
-        logger.exception("未捕获异常 request_id=%s", request_id)
+        # 这个处理器挂在最外层的 ServerErrorMiddleware 上，跑到这里时请求 ID 中间件已经退出：
+        # 上下文变量里没有了，要从 request.state 取，日志、响应体、响应头才对得上同一个 ID。
+        request_id = request_id_of(request)
+        with bound_request_id(request_id):
+            logger.exception("未捕获异常 request_id=%s", request_id)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=_error_body(ErrorCode.INTERNAL_ERROR, "服务器内部错误，请联系管理员", request_id),
+            headers={REQUEST_ID_HEADER: request_id} if request_id else None,
         )
 
 

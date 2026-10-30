@@ -78,6 +78,7 @@ async def principal_from_access_token(
         raise UnauthenticatedError() from exc
 
     user, session_row = await auth_service.load_principal(session, uuid.UUID(user_id), uuid.UUID(session_id))
+    await auth_service.note_activity(session_row, every_seconds=settings.session_touch_seconds)
     return CurrentPrincipal(user=user, session=session_row, claims=claims)
 
 

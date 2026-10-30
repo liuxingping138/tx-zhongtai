@@ -89,6 +89,24 @@ async def user_has_builtin_superadmin(session: AsyncSession, user_id: uuid.UUID)
     return result.scalar_one_or_none() is not None
 
 
+async def builtin_superadmin_ids(session: AsyncSession, user_ids: list[uuid.UUID]) -> set[uuid.UUID]:
+    """这批人里谁是（启用的）内置超级管理员，口径同 user_has_builtin_superadmin，一条查询。"""
+
+    if not user_ids:
+        return set()
+    result = await session.execute(
+        select(UserRole.user_id)
+        .join(Role, Role.id == UserRole.role_id)
+        .where(
+            UserRole.user_id.in_(user_ids),
+            Role.is_builtin.is_(True),
+            Role.code == SUPERADMIN_ROLE_CODE,
+            Role.status == "active",
+        )
+    )
+    return set(result.scalars().all())
+
+
 async def clear_user_roles(session: AsyncSession, user_id: uuid.UUID) -> None:
     await session.execute(delete(UserRole).where(UserRole.user_id == user_id))
 

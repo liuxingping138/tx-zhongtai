@@ -8,11 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.schemas import AuthorizeRequest
 from app.api.security import classified, principal_from_access_token
 from app.application import outbox_delivery
-from app.application.authorization import authorize_access_context
+from app.application.authorization import audit_service_denial, authorize_access_context
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
 from app.core.http_utils import success_json
 from app.core.jwt_keys import build_jwks, ensure_jwt_keys
+from app.core.redis_client import redis_client
 from app.domain.enums import SecurityClass
 
 router = APIRouter(prefix="/internal/v1", tags=["internal"])
@@ -37,9 +38,11 @@ async def authorize(
     session: AsyncSession = Depends(get_db_session, scope="function"),
     settings: Settings = Depends(get_settings),
 ) -> JSONResponse:
-    require_internal_caller(request, settings)
+    caller = require_internal_caller(request, settings)
     principal = await principal_from_access_token(body.access_token, session, settings)
     data = await authorize_access_context(session, principal.user, body.resource, body.action)
+    if not data["allowed"]:
+        await audit_service_denial(redis_client, principal.user, data, caller)
     return success_json(data)
 
 

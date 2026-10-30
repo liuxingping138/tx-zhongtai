@@ -149,8 +149,11 @@ class RoleChanges:
 
 
 async def update_role(
-    session: AsyncSession, actor: User, role_id: uuid.UUID, changes: RoleChanges
+    session: AsyncSession, actor: User, role_id: uuid.UUID, changes: RoleChanges, *, can_grant: bool = False
 ) -> dict[str, object]:
+    """can_grant：操作人有没有「权限分配」（只有超管有）。启用一个停用的角色等于把它的授权还给全部成员，
+    和给人分配角色是一回事，只有角色管理权的用户管理员不能做。"""
+
     role = await role_repo.get_role_for_update(session, role_id)
     if role is None:
         raise NotFoundError("角色不存在")
@@ -162,6 +165,8 @@ async def update_role(
     if status is not None:
         if status not in {RoleStatus.ACTIVE, RoleStatus.DISABLED}:
             raise ApiError("无效的角色状态")
+        if status == RoleStatus.ACTIVE and role.status != RoleStatus.ACTIVE and not can_grant:
+            raise PermissionDeniedError("启用角色会恢复它全部成员的授权，需要「权限分配」权限（超级管理员）")
         role.status = status
     if changes.name is not None:
         display = changes.name.strip()
@@ -212,6 +217,11 @@ async def replace_grants(
         # 放开修改的话，删掉它的「权限分配」后就再没人能给别人分配角色。
         raise PermissionDeniedError("超级管理员角色固定拥有全部权限，不能修改授权")
 
+    before = {
+        resource.code: (resource.name, str(grant.level))
+        for grant, resource in await role_repo.list_role_grants(session, role.id)
+    }
+    after: dict[str, tuple[str, str]] = {}
     normalized: list[tuple[uuid.UUID, str]] = []
     for resource_code, level in grants:
         if level == "NONE":
@@ -236,6 +246,7 @@ async def replace_grants(
         if resource.code == SYSTEM_PERMISSIONS_CODE and role.code != SUPERADMIN_ROLE_CODE:
             raise PermissionDeniedError("系统权限分配仅能授予超级管理员角色")
         normalized.append((resource.id, str(level)))
+        after[resource.code] = (resource.name, str(level))
 
     await role_repo.replace_role_grants(session, role.id, normalized, updated_by=actor.id)
     role.updated_at = utcnow()
@@ -246,11 +257,28 @@ async def replace_grants(
         payload={
             "actor_id": str(actor.id),
             "role_id": str(role.id),
+            "role_name": role.name,
             "grant_count": len(normalized),
+            # 追查「谁开了哪个模块哪一档」：只记变了的模块，原来只有一个数，看不出改了什么。
+            "grant_changes": grant_changes(before, after),
             "outcome": "success",
         },
     )
     return await list_grants(session, role.id)
+
+
+def grant_changes(before: dict[str, tuple[str, str]], after: dict[str, tuple[str, str]]) -> list[dict[str, str]]:
+    """{模块编码: (模块名, 档位)} 前后对比，只列变了的；没有授权记作 NONE。"""
+
+    changes = []
+    for code in sorted(before.keys() | after.keys()):
+        old, new = before.get(code), after.get(code)
+        if (old and old[1]) != (new and new[1]):
+            name = (new or old or (code, ""))[0]
+            changes.append(
+                {"module": name, "code": code, "from": old[1] if old else "NONE", "to": new[1] if new else "NONE"}
+            )
+    return changes
 
 
 async def resource_tree(session: AsyncSession) -> list[dict[str, object]]:

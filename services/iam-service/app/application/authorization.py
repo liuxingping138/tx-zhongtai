@@ -6,8 +6,10 @@ import uuid
 
 from platform_common.errors import PermissionDeniedError, UnauthenticatedError
 from platform_common.logging_setup import get_logger
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application import authz_catalog
 from app.application.audit_outbox import enqueue_independent
 from app.domain.authorization import AuthzDecision, evaluate_authorization
 from app.domain.enums import UserStatus
@@ -16,6 +18,8 @@ from app.repositories import resources as resource_repo
 from app.repositories import users as user_repo
 
 logger = get_logger(__name__)
+# 业务服务经 authorize 被拒时记审计：同一个人、同一模块、同一动作这么久只记一次，页面轮询、反复点按钮不会刷屏。
+DENIAL_AUDIT_SECONDS = 600
 _WRITE_ACTIONS = {"create", "update", "reset_password", "revoke_sessions", "grant", "purge"}
 _SUPERADMIN_ACTIONS = {"purge"}
 
@@ -33,16 +37,24 @@ async def resolve_authorization(
     resource_code: str,
     action_code: str,
 ) -> tuple[AuthzDecision, str | None]:
-    resource = await resource_repo.get_resource_by_code(session, resource_code)
-    action = await resource_repo.get_action(session, resource.id, action_code) if resource is not None else None
-    levels = await resource_repo.list_effective_levels(session, user.id)
+    """资源和动作查进程内目录（见 authz_catalog），这个人在该模块上的档位每次现查一条。
+
+    账号不可用、资源或动作未知、未发布时不查档位：结论已经是拒绝。
+    """
+
+    entry = await authz_catalog.catalog.resource(session, resource_code)
+    required = None if entry is None else entry.actions.get(action_code)
+    active = user.status == UserStatus.ACTIVE
+    level = None
+    if active and entry is not None and entry.grantable and required is not None:
+        level = await resource_repo.effective_level(session, user.id, entry.id)
     decision = evaluate_authorization(
-        account_active=user.status == UserStatus.ACTIVE,
-        resource_published=None if resource is None else resource.published,
-        action_required_level=None if action is None else action.required_level,
-        effective_level=levels.get(resource_code),
+        account_active=active,
+        resource_published=None if entry is None else entry.published,
+        action_required_level=required,
+        effective_level=level,
     )
-    return decision, levels.get(resource_code)
+    return decision, level
 
 
 async def is_allowed(session: AsyncSession, user: User, resource_code: str, action_code: str) -> bool:
@@ -72,6 +84,32 @@ async def assert_allowed(session: AsyncSession, user: User, resource_code: str, 
         except Exception:  # noqa: BLE001  拒绝审计写入失败不能改变「拒绝」结论，只记日志
             logger.warning("authz_denied_outbox_failed", resource=resource_code, action=action_code)
     raise PermissionDeniedError(_DECISION_MESSAGE[decision])
+
+
+async def audit_service_denial(redis: Redis, user: User, context: dict[str, object], caller: str) -> None:
+    """业务服务（政策、码表、AI……）问 IAM 被拒：原来只有 IAM 自己的写接口留审计，看不出谁在试别的模块。
+    独立事务写，失败只记日志，不改变「拒绝」的结论。"""
+
+    resource, action = str(context["resource"]), str(context["action"])
+    try:
+        if not await redis.set(
+            f"iam:authz:denied:{user.id}:{resource}:{action}", "1", nx=True, ex=DENIAL_AUDIT_SECONDS
+        ):
+            return
+        await enqueue_independent(
+            event_type="iam.authz.denied",
+            payload={
+                "actor_id": str(user.id),
+                "actor_name": user.display_name,
+                "resource_code": resource,
+                "action_code": action,
+                "reason": context["reason"],
+                "caller": caller,
+                "outcome": "denied",
+            },
+        )
+    except Exception:  # noqa: BLE001  审计写不进去不能让鉴权报错，结论仍是拒绝
+        logger.warning("service_denial_audit_failed", resource=resource, action=action)
 
 
 async def authorize_access_context(

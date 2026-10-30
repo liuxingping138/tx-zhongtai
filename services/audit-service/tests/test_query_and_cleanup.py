@@ -119,6 +119,88 @@ class TestQuery:
         assert rows.await_args.kwargs["offset"] == 40
         assert rows.await_args.kwargs["limit"] == 20
 
+    @pytest.mark.parametrize(
+        ("page", "got", "counted", "total"),
+        [
+            (1, 7, False, 7),  # 第一页没取满：总数就是这几条
+            (3, 5, False, 45),  # 最后一页：前两页满的加这一页
+            (1, 0, False, 0),  # 什么都没有
+            (2, 20, True, 99),  # 取满了：后面可能还有，要数
+            (5, 0, True, 99),  # 翻过了头：要数出真实总数，页面好退回去
+        ],
+    )
+    async def test_count_only_when_the_page_does_not_tell_the_total(
+        self, monkeypatch: pytest.MonkeyPatch, page: int, got: int, counted: bool, total: int
+    ) -> None:
+        count = AsyncMock(return_value=99)
+        rows = [AuditEvent(**_row()) for _ in range(got)]
+        monkeypatch.setattr(event_repo, "count_events", count)
+        monkeypatch.setattr(event_repo, "list_events", AsyncMock(return_value=rows))
+        items, result = await query.list_page(AsyncMock(), EventFilters(), page=page, page_size=20)
+        assert len(items) == got
+        assert result == total
+        assert count.await_count == (1 if counted else 0)
+
+
+def _row() -> dict[str, Any]:
+    now = datetime(2026, 10, 1, tzinfo=UTC)
+    return {
+        "id": uuid.uuid4(),
+        "event_id": uuid.uuid4(),
+        "occurred_at": now,
+        "received_at": now,
+        "source_service": "iam-service",
+        "schema_version": 1,
+        "outcome": "success",
+    }
+
+
+class TestOptions:
+    """筛选项候选值沿索引逐个跳到下一个不同的值，不整表 DISTINCT；结果形状与公共的 preview_options 一致。"""
+
+    def test_values_walk_the_index_instead_of_a_full_distinct(self) -> None:
+        text = sql(event_repo.distinct_values_stmt(AuditEvent.actor_name_snapshot, keyword=None, limit=201))
+        assert text.startswith("WITH RECURSIVE walk(value)")
+        assert "DISTINCT" not in text
+        assert "min(audit_events.actor_name_snapshot)" in text
+        assert "actor_name_snapshot > ''" in text
+        assert "actor_name_snapshot > walk.value" in text
+        assert "ORDER BY walk.value" in text
+        assert text.rstrip().endswith("LIMIT 201")
+
+    def test_keyword_filters_the_walked_values(self) -> None:
+        stmt = event_repo.distinct_values_stmt(AuditEvent.action_code, keyword=" 登_录 ", limit=50)
+        assert "walk.value ILIKE" in sql(stmt)
+        assert "%登\\_录%" in stmt.compile(dialect=postgresql.dialect()).params.values()
+
+    async def test_preview_marks_truncation_like_the_shared_helper(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        values = {
+            "actor_name": [f"用户{i:03d}" for i in range(201)],
+            "module_code": ["auth"],
+            "action_code": [],
+        }
+
+        async def fake(_session: object, column: Any, *, keyword: str | None, limit: int) -> list[str]:
+            field = next(name for name, col in event_repo.OPTION_COLUMNS.items() if col is column)
+            assert keyword is None and limit == 201
+            return values[field][:limit]
+
+        monkeypatch.setattr(event_repo, "_distinct_values", fake)
+        options = (await event_repo.list_options(AsyncMock()))["options"]
+        assert options["actor_name"]["truncated"] is True and len(options["actor_name"]["items"]) == 200
+        assert options["module_code"] == {"items": ["auth"], "truncated": False}
+        assert options["action_code"] == {"items": [], "truncated": False}
+
+    async def test_unknown_search_field_is_a_key_error(self) -> None:
+        with pytest.raises(KeyError):
+            await event_repo.search_option_values(AsyncMock(), field="summary", keyword="x")
+
+    def test_option_columns_are_indexed(self) -> None:
+        """每个候选值字段都要有以它打头的索引，否则「沿索引跳」每一步都是整表扫描，比原来还慢。"""
+
+        leading = {index.columns[0].name for index in AuditEvent.__table__.indexes}
+        assert {column.key for column in event_repo.OPTION_COLUMNS.values()} <= leading
+
 
 class TestCleanup:
     async def test_deletes_rows_older_than_retention_and_commits(self, monkeypatch: pytest.MonkeyPatch) -> None:

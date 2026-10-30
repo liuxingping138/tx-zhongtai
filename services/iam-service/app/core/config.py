@@ -51,6 +51,10 @@ class Settings(BaseServiceSettings):
     login_lockout_seconds: int = 300
     # 会话与刷新令牌失效后的额外保留天数，供回溯近期登录情况；到期由清理任务删除。
     session_retention_days: int = 30
+    # 在线用户：这么多秒内有过操作（带令牌的请求，含业务服务经 authorize 的请求）才算在线。
+    online_window_seconds: int = 30 * 60
+    # 「最近活跃」每台设备最多隔这么久写一次库，不是每个请求都写。
+    session_touch_seconds: int = 60
 
     # 内部调用方：service_name -> 共享密钥。生产环境字段名含 secret，会被演示值检查拦截。
     internal_caller_secrets: dict[str, str] = Field(default_factory=dict)

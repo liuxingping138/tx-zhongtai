@@ -46,14 +46,17 @@ def user_filters(
 @router.get("/users")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def list_users(
-    _principal: CurrentPrincipal = Depends(require_permission("system.users", "list")),
+    principal: CurrentPrincipal = Depends(require_permission("system.users", "list")),
     session: AsyncSession = Depends(get_db_session, scope="function"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     filters: UserFilters = Depends(user_filters),
     sort: str = "created_at",
 ) -> JSONResponse:
-    items, total = await user_admin.list_users_page(session, filters, page=page, page_size=page_size, sort=sort)
+    # 每行带 can_manage：不是超级管理员的看超级管理员那几行时，页面不给停用、删除、重置密码这类按钮。
+    items, total = await user_admin.list_users_page(
+        session, principal.user, filters, page=page, page_size=page_size, sort=sort
+    )
     items = await session_admin.with_lockouts(items, _lockouts())
     return success_json(paginate(items, total, page=page, page_size=page_size).model_dump())
 
@@ -118,10 +121,11 @@ async def import_users(
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def get_user(
     user_id: uuid.UUID,
-    _principal: CurrentPrincipal = Depends(require_permission("system.users", "read")),
+    principal: CurrentPrincipal = Depends(require_permission("system.users", "read")),
     session: AsyncSession = Depends(get_db_session, scope="function"),
 ) -> JSONResponse:
-    [item] = await session_admin.with_lockouts([await user_admin.get_user(session, user_id)], _lockouts())
+    detail = await user_admin.get_user(session, principal.user, user_id)
+    [item] = await session_admin.with_lockouts([detail], _lockouts())
     return success_json(item)
 
 

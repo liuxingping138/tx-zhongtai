@@ -132,6 +132,23 @@ class TestUpdateRole:
         with pytest.raises(PermissionDeniedError, match="内置角色"):
             await role_admin.update_role(object(), ACTOR, env.role.id, RoleChanges(version=1, status="disabled"))  # type: ignore[arg-type]
 
+    async def test_enabling_a_disabled_role_needs_the_grant_permission(self, env: SimpleNamespace) -> None:
+        """启用停用的角色等于把授权还给它的全部成员：和分配角色一样，只有超管（权限分配）能做。"""
+
+        env.role.status = "disabled"
+        with pytest.raises(PermissionDeniedError, match="权限分配"):
+            await role_admin.update_role(object(), ACTOR, env.role.id, RoleChanges(version=1, status="active"))  # type: ignore[arg-type]
+        payload = await role_admin.update_role(
+            object(),
+            ACTOR,
+            env.role.id,  # type: ignore[arg-type]
+            RoleChanges(version=1, status="active"),
+            can_grant=True,
+        )
+        assert payload["status"] == "active"
+        # 已经启用的角色改名、改说明时带着 active 不算「启用」。
+        await role_admin.update_role(object(), ACTOR, env.role.id, RoleChanges(version=2, name="新名", status="active"))  # type: ignore[arg-type]
+
     async def test_invalid_status_is_rejected(self, env: SimpleNamespace) -> None:
         with pytest.raises(ApiError, match="无效的角色状态"):
             await role_admin.update_role(object(), ACTOR, env.role.id, RoleChanges(version=1, status="archived"))  # type: ignore[arg-type]
@@ -261,3 +278,22 @@ class TestQueries:
         nested = tree[0]["children"][0]  # type: ignore[index]
         assert nested["code"] == "policy.sources"
         assert [a["action_code"] for a in nested["actions"]] == ["list", "update"]
+
+
+def test_grant_changes_list_only_modules_whose_level_moved() -> None:
+    """角色授权的审计记哪个模块从哪档到哪档：原来只记「改了几项」，追查不了谁开了什么。"""
+
+    before = {"policy.sources": ("信源管理", "READ"), "ai.prompts": ("提示词模板", "FULL")}
+    after = {
+        "policy.sources": ("信源管理", "EXPORT"),
+        "ai.prompts": ("提示词模板", "FULL"),
+        "ai.chat": ("多轮对话", "READ"),
+    }
+    assert role_admin.grant_changes(before, after) == [
+        {"module": "多轮对话", "code": "ai.chat", "from": "NONE", "to": "READ"},
+        {"module": "信源管理", "code": "policy.sources", "from": "READ", "to": "EXPORT"},
+    ]
+    assert role_admin.grant_changes(before, {}) == [
+        {"module": "提示词模板", "code": "ai.prompts", "from": "FULL", "to": "NONE"},
+        {"module": "信源管理", "code": "policy.sources", "from": "READ", "to": "NONE"},
+    ]

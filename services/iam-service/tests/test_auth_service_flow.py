@@ -49,10 +49,20 @@ def _user(**overrides: Any) -> SimpleNamespace:
 
 @pytest.fixture
 def env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
-    state = SimpleNamespace(events=[], user=None, token=None, session=None, revoked_family=[], revoked_user=0)
+    state = SimpleNamespace(
+        events=[], payloads=[], user=None, token=None, session=None, revoked_family=[], revoked_user=0
+    )
 
     async def enqueue(_s: object, *, event_type: str, payload: dict[str, object]) -> None:
         state.events.append(event_type)
+        state.payloads.append(payload)
+
+    def session_with_user(_s: object, session_id: uuid.UUID, user_id: uuid.UUID) -> Any:
+        # 和真实查询一样按会话、账号联表：会话不属于这个账号就查不到。
+        row, user = state.session, state.user
+        if row is None or user is None or row.id != session_id or user.id != user_id or row.user_id != user.id:
+            return None
+        return row, user
 
     monkeypatch.setattr(module.outbox_repo, "enqueue", enqueue)
     monkeypatch.setattr(module, "issue_access_token", lambda **_: "access-token")
@@ -62,6 +72,7 @@ def env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
         module.session_repo, "get_refresh_token_for_update", AsyncMock(side_effect=lambda *_: state.token)
     )
     monkeypatch.setattr(module.session_repo, "get_session", AsyncMock(side_effect=lambda *_: state.session))
+    monkeypatch.setattr(module.session_repo, "get_session_with_user", AsyncMock(side_effect=session_with_user))
     monkeypatch.setattr(
         module.session_repo,
         "revoke_family",
@@ -119,6 +130,22 @@ class TestIssue:
             username=" ZhangSan ", request_id=None, client_ip="1.1.1.1", user_agent="ua", reason="bad"
         )
         assert env.events == ["auth.login.failed"]
+        assert env.payloads[0]["username"] == "zhangsan"
+        assert "actor_id" not in env.payloads[0] and "actor_name" not in env.payloads[0]
+
+    async def test_failure_of_a_real_account_is_tied_to_the_person(self, env: SimpleNamespace) -> None:
+        """成功行记显示名，失败行也要记上这个人：按人筛登录日志才看得到把他锁住的那些失败。"""
+
+        env.user = _user()
+        await _service().record_login_failure(
+            username="ZhangSan", request_id=None, client_ip="1.1.1.1", user_agent="ua", reason="locked_account"
+        )
+        payload = env.payloads[0]
+        assert payload["actor_id"] == str(env.user.id)
+        assert payload["actor_name"] == "张三"
+        assert payload["username"] == "zhangsan"
+        lookup = module.user_repo.get_user_by_username
+        assert lookup.await_args.args[1] == "zhangsan"  # type: ignore[attr-defined]  # 替身上的调用记录
 
 
 def _refresh_fixture(env: SimpleNamespace, **token: Any) -> str:
@@ -214,6 +241,47 @@ class TestLogoutAndPassword:
             await _service().change_password(user, GOOD_LOGIN, "1")  # type: ignore[arg-type]
         with pytest.raises(ApiError, match="不能与原密码相同"):
             await _service().change_password(user, GOOD_LOGIN, GOOD_LOGIN)  # type: ignore[arg-type]
+
+
+class TestActivity:
+    """在线用户的「最近活跃」：带令牌的请求都算，但每台设备最多每分钟写一次库，写在独立短事务里。"""
+
+    @pytest.fixture
+    def db(self, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
+        state = SimpleNamespace(opened=0, commit=AsyncMock(), touch=AsyncMock(return_value=True), fail=False)
+
+        class _Db:
+            async def __aenter__(self) -> Any:
+                if state.fail:
+                    raise OSError("db down")
+                state.opened += 1
+                return SimpleNamespace(commit=state.commit)
+
+            async def __aexit__(self, *_: object) -> None:
+                return None
+
+        monkeypatch.setattr(module, "SessionLocal", _Db)
+        monkeypatch.setattr(module.session_repo, "touch_last_seen", state.touch)
+        return state
+
+    async def test_recent_activity_is_not_written_again(self, db: SimpleNamespace) -> None:
+        row = SimpleNamespace(id=uuid.uuid4(), last_seen_at=utcnow() - timedelta(seconds=30))
+        await module.note_activity(row, every_seconds=60)  # type: ignore[arg-type]
+        assert db.opened == 0
+
+    async def test_stale_activity_is_written_in_its_own_transaction(self, db: SimpleNamespace) -> None:
+        row = SimpleNamespace(id=uuid.uuid4(), last_seen_at=utcnow() - timedelta(minutes=10))
+        await module.note_activity(row, every_seconds=60)  # type: ignore[arg-type]
+        assert db.opened == 1
+        db.commit.assert_awaited_once()
+        kwargs = db.touch.await_args.kwargs
+        assert kwargs["now"] - kwargs["stale_before"] == timedelta(seconds=60)
+        assert db.touch.await_args.args[1] == row.id
+
+    async def test_a_failed_write_does_not_fail_the_request(self, db: SimpleNamespace) -> None:
+        db.fail = True
+        row = SimpleNamespace(id=uuid.uuid4(), last_seen_at=utcnow() - timedelta(minutes=10))
+        await module.note_activity(row, every_seconds=60)  # type: ignore[arg-type]
 
 
 class TestPrincipal:

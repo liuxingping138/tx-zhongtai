@@ -18,7 +18,7 @@ from app.api.schemas import (
 )
 from app.api.security import CurrentPrincipal, classified, require_permission
 from app.application import role_admin, user_admin
-from app.application.authorization import assert_allowed
+from app.application.authorization import assert_allowed, is_allowed
 from app.core.database import get_db_session
 from app.core.http_utils import success_json
 from app.domain.enums import SecurityClass
@@ -73,6 +73,8 @@ async def update_role(
     principal: CurrentPrincipal = Depends(require_permission("system.roles", "update")),
     session: AsyncSession = Depends(get_db_session, scope="function"),
 ) -> JSONResponse:
+    enabling = body.status == "active"
+    can_grant = enabling and await is_allowed(session, principal.user, "system.permissions", "grant")
     return success_json(
         await role_admin.update_role(
             session,
@@ -81,6 +83,7 @@ async def update_role(
             role_admin.RoleChanges(
                 version=body.version, name=body.name, description=body.description, status=body.status
             ),
+            can_grant=can_grant,
         )
     )
 

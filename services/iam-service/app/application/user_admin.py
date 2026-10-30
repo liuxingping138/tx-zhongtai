@@ -66,6 +66,15 @@ async def assert_can_manage_target(session: AsyncSession, actor: User, target: U
         raise PermissionDeniedError("不能管理受保护的超级管理员账号")
 
 
+async def manageable_ids(session: AsyncSession, actor: User, user_ids: list[uuid.UUID]) -> set[uuid.UUID]:
+    """这批人里当前操作人能管的（停用、删除、重置密码、下线、解锁、改角色）。规则同 assert_can_manage_target：
+    不是超级管理员的不能管超级管理员。列表据此给每行 can_manage，页面不再给点了必然 403 的按钮。"""
+
+    if await user_repo.user_has_builtin_superadmin(session, actor.id):
+        return set(user_ids)
+    return set(user_ids) - await user_repo.builtin_superadmin_ids(session, user_ids)
+
+
 async def _guard_last_superadmin(
     session: AsyncSession,
     target: User,
@@ -101,7 +110,7 @@ def _role_brief(role: Role) -> dict[str, object]:
 
 
 async def list_users_page(
-    session: AsyncSession, filters: UserFilters, *, page: int, page_size: int, sort: str
+    session: AsyncSession, actor: User, filters: UserFilters, *, page: int, page_size: int, sort: str
 ) -> tuple[list[dict[str, object]], int]:
     if sort not in {"created_at", "username"}:
         raise ApiError("不支持的排序字段")
@@ -113,21 +122,24 @@ async def list_users_page(
     roles = await user_repo.roles_for_users(session, [row.id for row in rows])
     # 有单独授权的人在角色旁边标出来：权限不全来自角色，管理员要知道。
     direct = await grant_repo.count_by_users(session, [row.id for row in rows])
+    manageable = await manageable_ids(session, actor, [row.id for row in rows])
     items: list[dict[str, object]] = []
     for row in rows:
         payload = user_public(row)
         payload["roles"] = [_role_brief(role) for role in roles.get(row.id, [])]
         payload["direct_grant_count"] = direct.get(row.id, 0)
+        payload["can_manage"] = row.id in manageable
         items.append(payload)
     return items, total
 
 
-async def get_user(session: AsyncSession, user_id: uuid.UUID) -> dict[str, object]:
+async def get_user(session: AsyncSession, actor: User, user_id: uuid.UUID) -> dict[str, object]:
     user = _require_live(await user_repo.get_user_by_id(session, user_id))
     payload = user_public(user)
     roles = (await user_repo.roles_for_users(session, [user.id])).get(user.id, [])
     payload["role_ids"] = [str(role.id) for role in roles]
     payload["roles"] = [_role_brief(role) for role in roles]
+    payload["can_manage"] = user.id in await manageable_ids(session, actor, [user.id])
     return payload
 
 
@@ -356,6 +368,9 @@ async def _set_roles(session: AsyncSession, actor: User, user: User, role_ids: l
     will_have_super = any(role.code == SUPERADMIN_ROLE_CODE and role.is_builtin for role in roles)
     if had_super and not will_have_super:
         await _guard_last_superadmin(session, user, remove_role=True)
+    before_ids = await user_repo.list_user_role_ids(session, user.id)
+    before = {role.id: role.name for role in await role_repo.get_roles_by_ids(session, list(before_ids))}
+    after = {role.id: role.name for role in roles}
     await user_repo.replace_user_roles(session, user.id, unique_ids, granted_by=actor.id)
     user.updated_at = utcnow()
     user.version += 1
@@ -365,7 +380,11 @@ async def _set_roles(session: AsyncSession, actor: User, user: User, role_ids: l
         payload={
             "actor_id": str(actor.id),
             "target_id": str(user.id),
+            "username": user.username,
             "role_ids": [str(item) for item in unique_ids],
+            # 操作日志里直接看出给谁加了、去了哪个角色，原来只有一串 UUID。
+            "roles_added": [name for role_id, name in after.items() if role_id not in before],
+            "roles_removed": [name for role_id, name in before.items() if role_id not in after],
             "outcome": "success",
         },
     )

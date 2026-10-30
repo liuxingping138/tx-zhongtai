@@ -8,6 +8,7 @@ from platform_common.clock import utcnow
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application import authz_catalog
 from app.domain.catalog import (
     ACTION_SPECS,
     MENU_SPECS,
@@ -183,6 +184,8 @@ async def sync_catalog(session: AsyncSession) -> dict[str, int]:
         event_type="iam.catalog.synced",
         payload={"resource_count": len(RESOURCE_SPECS), "action_count": len(ACTION_SPECS), "outcome": "success"},
     )
+    # 同一进程里的鉴权目录缓存立即作废；seed 一般在另一个进程跑，那边的服务靠缓存到期重读（见 authz_catalog）。
+    authz_catalog.catalog.invalidate()
     return {
         "resources": len(RESOURCE_SPECS),
         "actions": len(ACTION_SPECS),

@@ -265,6 +265,20 @@ async def test_token_without_session_claim_is_rejected(monkeypatch: pytest.Monke
         await security.principal_from_access_token("token", MagicMock(), SETTINGS)
 
 
+@pytest.mark.asyncio
+async def test_every_token_request_counts_as_activity(monkeypatch: pytest.MonkeyPatch) -> None:
+    """带令牌的请求（IAM 自己的接口、业务服务的 authorize）都记一次活跃，在线用户据此看 30 分钟内有没有操作。"""
+
+    row = SimpleNamespace(id=uuid.uuid4())
+    monkeypatch.setattr(security, "decode_access_token", lambda *_: {"sub": str(USER.id), "sid": str(row.id)})
+    monkeypatch.setattr(security.auth_service, "load_principal", AsyncMock(return_value=(USER, row)))
+    noted = AsyncMock()
+    monkeypatch.setattr(security.auth_service, "note_activity", noted)
+    principal = await security.principal_from_access_token("token", MagicMock(), SETTINGS)
+    assert principal.session is row
+    noted.assert_awaited_once_with(row, every_seconds=SETTINGS.session_touch_seconds)
+
+
 def test_production_requires_origin_header() -> None:
     request = SimpleNamespace(headers={})
     production = SETTINGS.model_copy(update={"environment": Environment.PRODUCTION})
