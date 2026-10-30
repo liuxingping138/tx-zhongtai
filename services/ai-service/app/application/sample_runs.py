@@ -173,6 +173,7 @@ async def view(
         older = history[history.index(run) + 1 :]
         previous = older[0] if older else None
     rows = await anyio.to_thread.run_sync(_rows, run)
+    same_sample = await anyio.to_thread.run_sync(run_compare.matches_template, run.id, template.id)
     compared = (
         await anyio.to_thread.run_sync(_compared, run, rows, previous, numbers[previous.id]) if previous else None
     )
@@ -181,6 +182,8 @@ async def view(
         "rows": rows,
         "history": [_brief(item, numbers[item.id]) for item in history],
         "compare": compared,
+        # 这次试跑的测试样本还是不是模板现在那份：换过的话「试发这一行」不和它比。
+        "same_sample": same_sample,
         # 排队中的试跑等不来执行进程时，页面据此说明，而不是一直转圈。
         "worker_online": (await worker_status(session))["online"],
     }

@@ -39,7 +39,10 @@ const reply = computed(() => messages.value.at(-1))
 const showResult = computed(() => Boolean(reply.value && askedRow.value === row.value))
 const current = computed(() => data.value.rows[row.value])
 const variables = computed(() => usedVariables(props.content, data.value.headers, Boolean(props.codeName)))
-const sampleRow = computed(() => props.sample.state.value.rows?.items.find(item => item.row === row.value + 1))
+// 换过测试样本后第 N 行已经是另一条数据，不能拿上次试跑的结果对照。
+const sampleRow = computed(() => (props.sample.state.value.same_sample === false
+  ? undefined
+  : props.sample.state.value.rows?.items.find(item => item.row === row.value + 1)))
 const sampleNo = computed(() => props.sample.run.value?.no ?? 0)
 const verdict = computed(() => (showResult.value && !running.value
   ? trialVerdict(sampleRow.value, reply.value?.parsed, sampleNo.value, props.fields) : null))

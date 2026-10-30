@@ -39,6 +39,14 @@ def _digest(run_id: str) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else ""
 
 
+def matches_template(run_id: str, prompt_id: str) -> bool:
+    """这次试跑用的测试样本是不是模板现在的那份。换过样本后第 N 行已经是另一条数据，「试发这一行」不能再和它比。"""
+
+    first = _digest(run_id)
+    path = storage.prompt_file(prompt_id, "excel")
+    return bool(first) and path.is_file() and first == hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def same_input(run_id: str, other_id: str) -> bool:
     """两次试跑用的是不是同一份测试样本：按发起时复制进任务目录的那份比内容，改名、重传同一份都算同一份。"""
 

@@ -1,5 +1,6 @@
 import type { AiModel, BatchInputSummary, PromptTemplate, RunVersion } from '@/api/ai'
 import { CODE_TABLE_FIELD } from '../shared/aiText'
+import { VARIABLE, variableName } from '../prompts/promptVariables'
 import { shortTime } from '../prompts/sampleView'
 
 /**
@@ -30,11 +31,9 @@ export interface VersionOption {
   disabled: boolean
 }
 
-const VARIABLE = /@【([^【】\n]+)】/g
-
 /** 提示词引用的 Excel 列（去重、保持出现顺序），码表不算列。和后端 input_columns 同一套规则。 */
 export function inputColumns(content: string): string[] {
-  return [...new Set([...content.matchAll(VARIABLE)].map(match => (match[1] ?? '').trim()))].filter(name => name !== CODE_TABLE_FIELD)
+  return [...new Set([...content.matchAll(VARIABLE)].map(variableName))].filter(name => name !== CODE_TABLE_FIELD)
 }
 
 /** 有上线版本时默认跑线上那一版，没上线就只能跑草稿。 */
