@@ -1,5 +1,6 @@
 import type { DataColumn } from '@/components/dataColumns'
 import type { EditorGroup } from '@/components/editorGroups'
+import type { FieldError, RecordForm } from '@/composables/useRecordEditor'
 
 export const TABLE_COLUMNS: DataColumn[] = [
   { prop: 'site_name', label: '网站名称', minWidth: 240, grow: 2 },
@@ -51,7 +52,7 @@ export const EDITOR_GROUPS: EditorGroup[] = [
   },
   {
     title: '所属地区',
-    hint: '省、市、区县编码至少填写一项；名称与编码请保持对应。',
+    hint: '新建时省、市、区县编码至少填写一项（用来分配网站编码）；名称与编码请保持对应。',
     fields: [
       { key: 'province_name', label: '省份名称', maxLength: 64 },
       { key: 'province_code', label: '省份编码', placeholder: '如：11', maxLength: 8 },
@@ -71,3 +72,10 @@ export const EDITOR_GROUPS: EditorGroup[] = [
     ],
   },
 ]
+
+/** 省市区编码只用来给新信源分配网站编码：新建时三级至少要有一级，编辑已有网站编码的信源不要求
+ * （带编码导入的全国、国央企信源本来就没有区划编码，要求的话改标签、爬虫状态都保存不了，和后端一致）。 */
+export function checkArea(form: RecordForm, editing: unknown): FieldError | undefined {
+  if (editing || form.province_code?.trim() || form.city_code?.trim() || form.district_code?.trim()) return undefined
+  return { key: 'province_code', message: '请至少填写省份、地市或区县编码中的一项' }
+}

@@ -4,7 +4,7 @@ import { computed } from 'vue'
 import type { ConfigUnit, CrawlerConfigReport } from '@/api/crawlerConfig'
 import BaseChart from '@/components/charts/BaseChart.vue'
 import { chartPalette } from '@/components/charts/echarts'
-import { UNITS, isFuture, periodOption, periodRange } from './report'
+import { UNITS, adjacentPeriods, isFuture, periodOption, periodRange } from './report'
 
 /** 配置数量：按周（近 12 周）、月（今年 12 个月）、季度（今年四个季度）、年看各期配置了多少；点柱子换到那一期并弹出各省配置。 */
 const props = defineProps<{ report: CrawlerConfigReport; periodName: string; loading: boolean }>()
@@ -20,12 +20,9 @@ function pickPeriod(params: { dataIndex: number }): void {
 }
 
 // 上一期 / 下一期按钮：点柱子键盘够不着，图表旁边给一对按钮换期。
-const currentIndex = computed(() => props.report.periods.findIndex(item => item.period_from === props.report.current_from))
-const previous = computed(() => (currentIndex.value > 0 ? props.report.periods[currentIndex.value - 1] : undefined))
-const next = computed(() => {
-  const item = currentIndex.value >= 0 ? props.report.periods[currentIndex.value + 1] : undefined
-  return item && !isFuture(props.report, item.period_from) ? item : undefined
-})
+const adjacent = computed(() => adjacentPeriods(props.report))
+const previous = computed(() => adjacent.value.previous)
+const next = computed(() => adjacent.value.next)
 </script>
 
 <template>

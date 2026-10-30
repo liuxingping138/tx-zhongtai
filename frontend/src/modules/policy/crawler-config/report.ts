@@ -50,6 +50,17 @@ export function isFuture(report: Pick<CrawlerConfigReport, 'current_from'>, from
   return from > report.current_from
 }
 
+/** 正在看的这期的前一期、后一期（「上一周 / 下一周」按钮用）。按正在看的期找，不是今天所在的期：
+ * 默认看上周时按今天找，「上一周」还是上周、「下一周」永远点不了。没到的期不能选。 */
+export function adjacentPeriods(
+  report: Pick<CrawlerConfigReport, 'periods' | 'period_from' | 'current_from'>,
+): { previous?: ConfigPeriod; next?: ConfigPeriod } {
+  const index = report.periods.findIndex(item => item.period_from === report.period_from)
+  if (index < 0) return {}
+  const next = report.periods[index + 1]
+  return { previous: report.periods[index - 1], next: next && !isFuture(report, next.period_from) ? next : undefined }
+}
+
 /** 所选这期叫什么：当前这期叫「本周 / 本月」，前一期叫「上周 / 上月」，再早的直接写日期。 */
 export function periodName(report: Pick<CrawlerConfigReport, 'unit' | 'period_from' | 'period_to' | 'current_from' | 'periods'>): string {
   const [current, previous] = RELATIVE[report.unit]

@@ -28,8 +28,8 @@ interface RecordEditorOptions<Row> {
   create: (form: RecordForm) => Promise<unknown>
   /** 由调用方带上版本号等额外字段，后端靠版本号发现并发修改。 */
   update: (row: Row, form: RecordForm) => Promise<unknown>
-  /** 必填之外的跨字段规则（如「省市区编码至少填一项」）。 */
-  check?: (form: RecordForm) => FieldError | undefined
+  /** 必填之外的跨字段规则（如「新建时省市区编码至少填一项」）。editing 是正在编辑的记录，新建时为 null。 */
+  check?: (form: RecordForm, editing: Row | null) => FieldError | undefined
   /** 保存成功或遇到冲突后刷新列表和筛选项。 */
   refresh: () => Promise<unknown>
 }
@@ -81,7 +81,7 @@ export function useRecordEditor<Row extends object>(options: RecordEditorOptions
   /** 必填和跨字段规则都过了才返回 true；不过时提示已经落在对应字段上。 */
   async function validate(): Promise<boolean> {
     if (!await fields.value?.validate()) return false
-    const problem = options.check?.(form)
+    const problem = options.check?.(form, editing.value)
     if (!problem) return true
     await fields.value?.setError(problem.key, problem.message)
     return false

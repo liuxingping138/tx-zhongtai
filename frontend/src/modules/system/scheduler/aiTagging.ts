@@ -39,3 +39,9 @@ export function formatYuan(value: string | number | null | undefined): string {
   if (!Number.isFinite(amount)) return '—'
   return `¥${amount !== 0 && Math.abs(amount) < 0.01 ? amount.toFixed(4) : amount.toFixed(2)}`
 }
+
+/** 设置里提交的起始采集日期：和打开时一样（没改）就发空串，后端不动读取进度。
+ * 抽屉开着时一批跑完、进度已前移，把打开时的旧日期原样发回去会把进度退回那天第一条。 */
+export function cursorToSend(current: string, opened: string): string {
+  return current === opened ? '' : current
+}

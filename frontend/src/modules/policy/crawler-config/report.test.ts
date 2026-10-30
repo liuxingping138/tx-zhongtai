@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { ScheduledRun } from '@/api/scheduler'
 import { chartPalette } from '@/components/charts/echarts'
 import {
-  deltaText, periodLabel, periodName, periodOption, periodRange, provinceRanking, provinceTableText, statusOption, statusRows, syncFailure, syncRunning, tint,
+  adjacentPeriods, deltaText, periodLabel, periodName, periodOption, periodRange, provinceRanking, provinceTableText, statusOption, statusRows, syncFailure, syncRunning, tint,
 } from './report'
 
 const run = (status: ScheduledRun['status'], error: string | null = null) => ({ status, error_message: error }) as ScheduledRun
@@ -105,5 +105,23 @@ describe('配置数量图和汇报表', () => {
   it('复制出来就是「省份 / 配置网站数量 / 总计」，制表符分列', () => {
     expect(provinceTableText([{ province_name: '浙江省', new: 66 }, { province_name: '全国', new: 3 }], 69))
       .toBe('省份\t配置网站数量\n浙江省\t66\n全国\t3\n总计\t69')
+  })
+})
+
+describe('adjacentPeriods', () => {
+  const periods = [
+    { period_from: '2026-10-12', period_to: '2026-10-18', new: 1 },
+    { period_from: '2026-10-19', period_to: '2026-10-25', new: 2 },
+    { period_from: '2026-10-26', period_to: '2026-11-01', new: 3 },
+  ]
+
+  it('按正在看的期找前后：默认看上周时，上一周是上上周、下一周是本周', () => {
+    const around = adjacentPeriods({ periods, period_from: '2026-10-19', current_from: '2026-10-26' })
+    expect([around.previous?.period_from, around.next?.period_from]).toEqual(['2026-10-12', '2026-10-26'])
+  })
+
+  it('本期之后没到的期不能选，最早一期没有上一期', () => {
+    expect(adjacentPeriods({ periods, period_from: '2026-10-19', current_from: '2026-10-19' }).next).toBeUndefined()
+    expect(adjacentPeriods({ periods, period_from: '2026-10-12', current_from: '2026-10-26' }).previous).toBeUndefined()
   })
 })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatYuan, runResultText, taskOfJob } from './aiTagging'
+import { cursorToSend, formatYuan, runResultText, taskOfJob } from './aiTagging'
 
 describe('政策 AI 打标', () => {
   it('金额到分，试跑的小额保留 4 位', () => {
@@ -18,5 +18,12 @@ describe('政策 AI 打标', () => {
     expect(runResultText({ error_message: '', note: '读取 10 条', cost: '0.325566' })).toBe('读取 10 条 · ¥0.33')
     expect(runResultText({ error_message: '', note: '没有待解读的政策', cost: '0' })).toBe('没有待解读的政策')
     expect(runResultText(null)).toBe('—')
+  })
+})
+
+describe('cursorToSend', () => {
+  it('没改起始日期就不发，免得把这期间已前移的读取进度改回去', () => {
+    expect(cursorToSend('2026-10-20', '2026-10-20')).toBe('')
+    expect(cursorToSend('2026-09-01', '2026-10-20')).toBe('2026-09-01')
   })
 })

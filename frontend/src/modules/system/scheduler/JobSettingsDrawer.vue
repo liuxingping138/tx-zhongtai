@@ -6,7 +6,7 @@ import { listAiTemplates, updateAiTask, type AiTask, type OnlineTemplate } from 
 import { updateJob, type ScheduledJob } from '@/api/scheduler'
 import { errorMessage } from '@/api/errors'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
-import { TASK_INTRO, formatYuan } from './aiTagging'
+import { TASK_INTRO, cursorToSend, formatYuan } from './aiTagging'
 
 /** 一个任务的设置：每日计划；打标任务再加模板、每批条数、正文长度、每日上限，类型判断还有起始采集日期。 */
 const emit = defineEmits<{ saved: [] }>()
@@ -19,6 +19,8 @@ const templates = ref<OnlineTemplate[]>([])
 const templatesError = ref('')
 const schedule = reactive({ enabled: false, daily_time: '10:00' })
 const ai = reactive({ prompt_id: '', batch_size: 10, content_max_chars: 0, daily_cost_limit: '0', cursor_date: '' })
+// 打开时的读取进度：没改就不发（cursorToSend）。
+const openedCursor = ref('')
 const unsaved = useUnsavedForm(visible, () => ({ schedule, ai: task.value ? ai : null }), saving)
 
 // 放进这个任务写不回表的模板置灰并写原因；选着的模板被下线后不在上线列表里，也显示成一项，免得露出一串 ID。
@@ -48,6 +50,7 @@ function open(target: ScheduledJob, aiTask: AiTask | null): void {
   if (aiTask) {
     const { prompt_id, batch_size, content_max_chars, daily_cost_limit, cursor_date } = aiTask
     Object.assign(ai, { prompt_id, batch_size, content_max_chars, daily_cost_limit, cursor_date })
+    openedCursor.value = cursor_date
     void loadTemplates()
   }
   error.value = ''
@@ -71,7 +74,7 @@ function setContentMode(mode: string | number | boolean | undefined): void {
 }
 
 async function saveTask(current: AiTask): Promise<void> {
-  task.value = await updateAiTask(current.code, { ...ai, daily_cost_limit: String(ai.daily_cost_limit), version: current.version })
+  task.value = await updateAiTask(current.code, { ...ai, cursor_date: cursorToSend(ai.cursor_date, openedCursor.value), daily_cost_limit: String(ai.daily_cost_limit), version: current.version })
 }
 
 async function saveSchedule(current: ScheduledJob): Promise<void> {

@@ -21,11 +21,11 @@ import { useExcelExport } from '@/composables/useExcelExport'
 import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useListLoader } from '@/composables/useListLoader'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
-import { useRecordEditor, type RecordForm } from '@/composables/useRecordEditor'
+import { useRecordEditor } from '@/composables/useRecordEditor'
 import { useTableSelection } from '@/composables/useTableSelection'
 import { useAuthStore } from '@/stores/auth'
 import BatchStatusDialog from './BatchStatusDialog.vue'
-import { EDITOR_GROUPS, SUMMARY_KEYS, TABLE_COLUMNS } from './fields'
+import { EDITOR_GROUPS, SUMMARY_KEYS, TABLE_COLUMNS, checkArea } from './fields'
 
 const RESOURCE = 'policy.sources'
 const auth = useAuthStore()
@@ -81,12 +81,6 @@ async function refresh() {
 async function afterBatch() {
   selection.clear()
   await refresh()
-}
-
-/** 省市区编码只用来分配网站编码，三级至少要有一级。 */
-function checkArea(form: RecordForm) {
-  if (form.province_code?.trim() || form.city_code?.trim() || form.district_code?.trim()) return undefined
-  return { key: 'province_code', message: '请至少填写省份、地市或区县编码中的一项' }
 }
 
 const editor = useRecordEditor<SourceItem>({

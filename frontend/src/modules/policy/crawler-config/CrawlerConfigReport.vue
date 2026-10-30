@@ -66,27 +66,27 @@ const { exporting, onExport } = useExcelExport({
 })
 
 function pickUnit(value: ConfigUnit): void {
-  unit.value = value
-  period.value = ''
-  void load()
+  void load(value, '')
 }
 
 /** 点柱子：整页换到那一期（卡片、下载报告跟着走），同时弹出这期各省配置。 */
 function pickPeriod(from: string): void {
   provincesOpen.value = true
-  if (from === period.value) return
-  period.value = from
-  void load()
+  if (from === report.value?.period_from) return
+  void load(unit.value, from)
 }
 
-async function load(): Promise<void> {
+/** 拿到那一期的数据才换过去：原来先改了「当前期」再请求，失败时页面显示旧一期、下载的却是新一期，
+ * 再点同一根柱子还会被当成「已经在这期」拦下、没法重试。 */
+async function load(nextUnit: ConfigUnit = unit.value, nextPeriod: string = period.value): Promise<void> {
   const current = ++sequence
   loading.value = true
   error.value = ''
   try {
-    const data = await getCrawlerConfigReport(unit.value, period.value || undefined)
+    const data = await getCrawlerConfigReport(nextUnit, nextPeriod || undefined)
     if (current === sequence) {
       report.value = data
+      unit.value = data.unit
       period.value = data.period_from
     }
   } catch (cause) {
