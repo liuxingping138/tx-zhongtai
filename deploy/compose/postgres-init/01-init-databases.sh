@@ -39,7 +39,7 @@ create_db_and_user "${CODEBOOK_DB_NAME}" "${CODEBOOK_DB_USER}" "${CODEBOOK_DB_PA
 create_db_and_user "${POLICY_DB_NAME}" "${POLICY_DB_USER}" "${POLICY_DB_PASSWORD}"
 create_db_and_user "${AI_DB_NAME}" "${AI_DB_USER}" "${AI_DB_PASSWORD}"
 
-# 清理账号只建登录与 CONNECT，表级 DELETE 在迁移后由 grant_cleanup 授予。
+# 清理账号只建登录与 CONNECT，表级 DELETE 在迁移后由 deploy/compose/scripts/secure-audit-db.sh 授予（make migrate-audit）。
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "postgres" <<-EOSQL
   DO \$\$
   BEGIN

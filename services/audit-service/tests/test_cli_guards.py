@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.cli import cleanup, grant_cleanup
+from app.cli import cleanup
 
 APP_URL = "postgresql+asyncpg://audit_app:x@db/audit_db"
 CLEAN_URL = "postgresql+asyncpg://audit_cleanup:x@db/audit_db"
@@ -80,49 +80,3 @@ class TestCleanup:
         with pytest.raises(RuntimeError):
             await cleanup.main()
         engine.dispose.assert_awaited_once()
-
-
-class _Conn:
-    def __init__(self, role_exists: bool) -> None:
-        self.statements: list[str] = []
-        self.role_exists = role_exists
-
-    async def execute(self, statement: Any, _params: Any = None) -> Any:
-        sql = str(statement)
-        self.statements.append(sql)
-        return SimpleNamespace(scalar_one_or_none=lambda: 1 if self.role_exists else None)
-
-
-class TestGrantCleanup:
-    def _engine(self, conn: _Conn) -> SimpleNamespace:
-        return SimpleNamespace(begin=lambda: _Ctx(conn))
-
-    @pytest.mark.parametrize("name", ["a;drop table x", "1abc", 'x"y', ""])
-    async def test_rejects_account_names_that_could_inject_sql(
-        self, monkeypatch: pytest.MonkeyPatch, name: str
-    ) -> None:
-        monkeypatch.setattr(grant_cleanup, "get_settings", MagicMock(return_value=_settings(cleanup_db_user=name)))
-        conn = _Conn(True)
-        monkeypatch.setattr(grant_cleanup, "engine", self._engine(conn))
-        with pytest.raises(SystemExit, match="非法"):
-            await grant_cleanup.main()
-        assert conn.statements == []
-
-    async def test_missing_account_tells_the_operator_what_to_run_first(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(grant_cleanup, "get_settings", MagicMock(return_value=_settings()))
-        monkeypatch.setattr(grant_cleanup, "engine", self._engine(_Conn(False)))
-        with pytest.raises(SystemExit, match="provision-audit-cleanup"):
-            await grant_cleanup.main()
-
-    async def test_grants_delete_to_cleanup_and_revokes_it_from_everyone_else(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(grant_cleanup, "get_settings", MagicMock(return_value=_settings()))
-        conn = _Conn(True)
-        monkeypatch.setattr(grant_cleanup, "engine", self._engine(conn))
-        await grant_cleanup.main()
-        sql = "\n".join(conn.statements)
-        assert 'GRANT SELECT, DELETE ON TABLE audit_events TO "audit_cleanup"' in sql
-        assert "REVOKE UPDATE, DELETE, TRUNCATE ON TABLE audit_events FROM PUBLIC" in sql
-        assert "REVOKE UPDATE, DELETE, TRUNCATE ON TABLE audit_events FROM CURRENT_USER" in sql
-        assert "GRANT SELECT, INSERT ON TABLE audit_events TO CURRENT_USER" in sql

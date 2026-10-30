@@ -77,9 +77,6 @@ for svc in $SERVICES; do
   echo "  $svc -> $db (对象属主已改为 $app_user)"
 done
 
-# 审计清理账号有 SELECT/DELETE，单独补。
-$COMPOSE exec -T postgres psql -U "$POSTGRES_SUPERUSER" -d "$AUDIT_DB_NAME" \
-  -c "GRANT CONNECT ON DATABASE \"${AUDIT_DB_NAME}\" TO \"${AUDIT_CLEANUP_DB_USER}\";" \
-  -c "GRANT USAGE ON SCHEMA public TO \"${AUDIT_CLEANUP_DB_USER}\";"
-$COMPOSE exec -T audit-service .venv/bin/python -m app.cli.grant_cleanup
+# 审计库不归应用账号：上面统一改成应用账号的属主再收回给超级用户，audit_events 只给应用账号查和插，删除只给清理账号。
+$COMPOSE exec -T postgres sh < "$ROOT/deploy/compose/scripts/secure-audit-db.sh"
 echo "恢复完成"

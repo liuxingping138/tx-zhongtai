@@ -247,9 +247,12 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
 租约到期后会被重新认领，不会永远卡在 delivering。IAM 默认租约 30 秒（`IAM_WORKER_LEASE_SECONDS`）；
 policy / codebook / ai 走公共 Outbox，默认 5 分钟。审计服务按 `event_id` 去重，重投不重复入库。
 
-`audit_events` 对审计服务的应用账号只有 SELECT/INSERT，删改权被收回；到期清理用独立的清理账号
-（`make migrate` 里 `provision-audit-cleanup` + `app.cli.grant_cleanup` 负责授权）。
-新的审计写入逻辑不能依赖 UPDATE/DELETE，换库或重建后要重新跑这两步。
+审计库（库、public schema、全部表）归超级用户所有，`audit_events` 对应用账号只有 SELECT/INSERT：属主是应用账号时
+「收回删改权」防不住被攻破的应用账号（属主能把权限授回给自己、直接删表删库）。所以审计迁移用超级用户跑，
+跑完由 `deploy/compose/scripts/secure-audit-db.sh` 收紧权限，两步都在 `make migrate-audit`（服务器上 `make SERVER=1 migrate-audit`）里，
+新表靠默认权限给应用账号增删改查。到期清理（`AUDIT_RETENTION_DAYS`，180 天）是审计服务自己的定时任务 `audit_cleanup`（每天 04:30），
+在单独的 `audit-worker` 容器里用清理账号分批删：清理账号的连接串只给它，对外提供接口的 audit-service 拿不到。
+新的审计写入逻辑不能依赖 UPDATE/DELETE。已投递的出站记录各服务自己每小时清一次，保留 30 天（`audit_emit.OUTBOX_RETENTION`、IAM 的 `outbox_delivery.OUTBOX_RETENTION`）。
 
 操作日志的筛选项（操作人、模块、动作）不整表 DISTINCT，而是用递归查询沿索引一个个跳到下一个不同的值
 （`repositories/events.distinct_values_stmt`），步数只和不同值的个数有关；新加筛选项字段要给它建以它打头的索引，
@@ -263,6 +266,7 @@ policy / codebook / ai 走公共 Outbox，默认 5 分钟。审计服务按 `eve
 新服务接入照 `docs/guides/任务调度.md`「接入一个新服务的定时任务」，不要再自己写定时循环或宿主机 cron。
 
 现有任务：iam-service 的清理失效会话（`iam_session_cleanup`，默认 03:30，在 iam-worker 里与 Outbox 投递同进程）；
+audit-service 的清理到期操作日志（`audit_cleanup`，默认 04:30，在 audit-worker 里）；
 policy-service 的三类（`policy-worker`，`app/scheduler/application/jobs.py` 登记）：爬虫监测增量同步
 （任务编码 `crawler`，默认 10:10，时刻可在页面改）、爬虫配置同步（`crawler_config`，默认 18:00）和政策 AI 打标的三个任务（`policy_ai_type` / `policy_ai_interpret` / `policy_ai_opportunity`，
 上线时默认停用、页面手动执行）。

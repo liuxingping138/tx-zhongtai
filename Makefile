@@ -22,7 +22,7 @@ JWT_KEYS_DIR := deploy/secrets/jwt
 JWT_P6_DIR := deploy/secrets/jwt-p6
 
 .PHONY: p6-logs help bootstrap jwt-keys jwt-keys-p6 dev-up dev-down migrate migrate-check seed admin-create check \
-        test-unit test-integration test-e2e smoke provision-audit-cleanup provision-codebook-db \
+        test-unit test-integration test-e2e smoke migrate-audit provision-audit-cleanup provision-codebook-db \
         seed-area-codes crawler-sync crawler-backfill \
         provision-policy-db provision-ai-db \
         outbox-replay audit-cleanup iam-session-cleanup p6-env p6-up p6-down p6-migrate p6-seed p6-admin \
@@ -46,6 +46,7 @@ help:
 	@echo "  make test-integration 隔离栈 A01-A15 等真实依赖验收"
 	@echo "  make test-e2e         Playwright 关键流程（需先 integration）"
 	@echo "  make smoke            经网关执行公共功能冒烟验证"
+	@echo "  make migrate-audit    用超级用户迁移审计库并收紧权限（服务器上 make SERVER=1 migrate-audit）"
 	@echo "  make provision-audit-cleanup  为已有数据卷补建审计清理账号"
 	@echo "  make outbox-replay    重放 iam/policy/codebook/ai 的 dead/failed Outbox 事件"
 	@echo "  make audit-cleanup    使用独立清理账号删除到期审计事件"
@@ -97,15 +98,21 @@ dev-up: jwt-keys
 dev-down:
 	$(COMPOSE) down
 
+# 审计库归超级用户所有（deploy/compose/scripts/secure-audit-db.sh）：应用账号不是属主、改不了表结构，
+# 迁移用超级用户跑，跑完重新收紧 audit_events 的权限。$(1) 是 compose 命令，$(2) 是带超级用户密码的 env 文件。
+define migrate_audit
+	@set -a && . ./$(2) && set +a && $(1) exec -T \
+		-e AUDIT_DATABASE_URL="postgresql+asyncpg://$${POSTGRES_SUPERUSER:-postgres}:$${POSTGRES_SUPERUSER_PASSWORD}@postgres:5432/$${AUDIT_DB_NAME}" \
+		audit-service .venv/bin/alembic upgrade head
+	$(1) exec -T postgres sh < deploy/compose/scripts/secure-audit-db.sh
+endef
+
 migrate:
 	@echo "== iam-service 迁移 =="
 	$(COMPOSE) exec -T iam-service .venv/bin/alembic upgrade head
-	@echo "== audit-service 迁移 =="
-	$(COMPOSE) exec -T audit-service .venv/bin/alembic upgrade head
 	@$(MAKE) provision-audit-cleanup
+	@$(MAKE) migrate-audit
 	@$(MAKE) provision-codebook-db
-	@echo "== 授予审计清理权限 =="
-	$(COMPOSE) exec -T audit-service .venv/bin/python -m app.cli.grant_cleanup
 	@echo "== codebook-service 迁移 =="
 	$(COMPOSE) exec -T codebook-service .venv/bin/alembic upgrade head
 	@$(MAKE) provision-policy-db
@@ -120,6 +127,10 @@ migrate-check:
 	@# model 改了但没写迁移、或迁移漏建索引/约束，都会在这里暴露。
 	@# 失败必须原样返回非零退出码，不能再把检查结果送进 tail。
 	COMPOSE_CMD="$(COMPOSE)" bash scripts/migrate_check.sh
+
+migrate-audit:
+	@echo "== audit-service 迁移（超级用户）并收紧审计库权限 =="
+	$(call migrate_audit,$(COMPOSE),.env)
 
 provision-audit-cleanup:
 	@echo "== 补建审计清理账号（已有数据卷不会重跑 init） =="
@@ -240,10 +251,9 @@ p6-logs:
 
 p6-migrate:
 	$(P6_COMPOSE) exec -T iam-service .venv/bin/alembic upgrade head
-	$(P6_COMPOSE) exec -T audit-service .venv/bin/alembic upgrade head
 	$(P6_COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-audit-cleanup.sh
+	$(call migrate_audit,$(P6_COMPOSE),$(P6_ENV))
 	$(P6_COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-codebook-db.sh
-	$(P6_COMPOSE) exec -T audit-service .venv/bin/python -m app.cli.grant_cleanup
 	$(P6_COMPOSE) exec -T codebook-service .venv/bin/alembic upgrade head
 	$(P6_COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-policy-db.sh
 	$(P6_COMPOSE) exec -T policy-service .venv/bin/alembic upgrade head
