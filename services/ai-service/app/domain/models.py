@@ -55,6 +55,10 @@ class PromptTemplate(Base):
     excel_rows: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="Excel 数据行数")
     excel_headers: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list, comment="Excel 表头")
     code_name: Mapped[str] = mapped_column(String(255), nullable=False, default="", comment="码表文件名")
+    # 上传码表内容的摘要：同名重传也看得出换了内容（上线检查只比文件名的话，上线入口不出现、定时任务一直用旧码表）。
+    code_digest: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="", server_default="", comment="码表内容摘要"
+    )
     # 选了系统码表就不用上传的码表文件，每次实时从码表服务取。
     code_table: Mapped[str] = mapped_column(
         String(32), nullable=False, default="", server_default="", comment="系统码表"
@@ -85,6 +89,9 @@ class TemplateRelease(Base):
     model_id: Mapped[str] = mapped_column(String(100), nullable=False, comment="模型ID")
     code_table: Mapped[str] = mapped_column(String(32), nullable=False, default="", comment="系统码表")
     code_name: Mapped[str] = mapped_column(String(255), nullable=False, default="", comment="码表文件名")
+    code_digest: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="", server_default="", comment="码表内容摘要"
+    )
     released_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="上线时间")
     released_by_id: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="上线人ID")
     released_by_name: Mapped[str] = mapped_column(String(128), nullable=False, default="", comment="上线人")

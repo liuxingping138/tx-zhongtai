@@ -25,8 +25,10 @@ FIELD_NAMES = {
 
 def unreleased_changes(template: PromptTemplate, release: TemplateRelease) -> list[str]:
     changed = [field for field in RELEASED_FIELDS if getattr(template, field) != getattr(release, field)]
-    # 用上传码表的模板，换了码表文件也算改动（文件内容在上线时已复制冻结）。
-    if not template.code_table and template.code_name != release.code_name and "code_table" not in changed:
+    # 用上传码表的模板，换了码表文件也算改动（文件内容在上线时已复制冻结）。同名重传按内容摘要认出来；
+    # 摘要上线前的旧版本没有摘要，重传一次就算改动，宁可多提示一次重新上线，不能悄悄一直用旧码表。
+    replaced = (template.code_name, template.code_digest) != (release.code_name, release.code_digest)
+    if not template.code_table and replaced and "code_table" not in changed:
         changed.append("code_table")
     return [FIELD_NAMES[field] for field in changed]
 

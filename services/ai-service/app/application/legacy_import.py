@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.application.batch_output import FORMAT_ERROR_PREFIX, read_raw
 from app.application.sheets import decode_code_table, sheet_summary
 from app.core import storage
+from app.domain.code_tables import code_digest
 from app.domain.models import ACTIVE_STATUSES, RUN_INTERRUPTED, BatchRun, PromptTemplate
 from app.domain.templating import split_fields
 from app.repositories import batch_runs as run_repo
@@ -86,7 +87,7 @@ async def _attach_files(template: PromptTemplate, folder: Path, report: ImportRe
         except ApiError as exc:
             report.warnings.append(f"模板「{template.title}」的码表没导入：{exc.message}")
         else:
-            template.code_name = f"{template.title}码表.txt"
+            template.code_name, template.code_digest = f"{template.title}码表.txt", code_digest(files["code"])
     return files
 
 
@@ -111,6 +112,7 @@ async def _import_template(
         excel_rows=0,
         excel_headers=[],
         code_name="",
+        code_digest="",
         version=1,
         created_at=_time(row["created_at"]),
         created_by_id="",

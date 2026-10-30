@@ -18,7 +18,7 @@ from app.application.sheets import code_table_from_sheet, decode_code_table, row
 from app.core import storage
 from app.core.codebook import fetch_code_table
 from app.domain.categories import CategoryAccess, category_name, checked_category
-from app.domain.code_tables import checked_code_table, code_table_name
+from app.domain.code_tables import checked_code_table, code_digest, code_table_name
 from app.domain.models import RUN_SOURCE_SAMPLE, BatchRun, PromptTemplate, TemplateRelease, new_id
 from app.domain.releases import release_summary
 from app.domain.templating import CODE_TABLE_FIELD, split_fields, template_variables
@@ -49,6 +49,8 @@ def sample_summary(template: PromptTemplate, run: BatchRun | None) -> dict[str, 
         "created_at": format_beijing(run.created_at),
         "created_by_name": run.created_by_name,
         "current": sample_current(run, template),
+        # 深度思考开没开：开了的回答长得多，按没开的样本估开了的任务会低估。
+        "thinking": run.thinking,
     }
 
 
@@ -274,7 +276,7 @@ async def upload_file(
         payload = content
     else:
         payload = (await _code_table_text(name, content)).encode("utf-8")
-        template.code_name = name
+        template.code_name, template.code_digest = name, code_digest(payload)
     _touch(template, actor)
     await enqueue_event(
         session, event_type="ai.prompt.file_uploaded", actor=actor, target_id=prompt_id, changes={"kind": kind}
@@ -307,7 +309,7 @@ async def delete_file(
     if kind == "excel":
         template.excel_name, template.excel_headers, template.excel_rows = "", [], 0
     else:
-        template.code_name = ""
+        template.code_name, template.code_digest = "", ""
     _touch(template, actor)
     await enqueue_event(
         session, event_type="ai.prompt.file_deleted", actor=actor, target_id=prompt_id, changes={"kind": kind}

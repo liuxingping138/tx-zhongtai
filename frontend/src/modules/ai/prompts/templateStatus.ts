@@ -154,6 +154,7 @@ export function sampleFromRun(run: BatchRun, template: DraftStamp): SampleSummar
     failed_count: run.failed_count,
     format_failed_count: run.format_failed_count,
     cost: run.inference_cost + run.search_cost,
+    thinking: run.thinking,
     created_at: run.created_at,
     created_by_name: run.created_by_name,
     current: sampleCurrent(run, template),

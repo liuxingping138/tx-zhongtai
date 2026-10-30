@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { AiModel, PromptTemplate, SampleSummary, TemplateReleaseInfo } from '@/api/ai'
-import { defaultVersion, inputColumns, runSpec, versionOptions } from './batchVersion'
+import { confirmedLabel, defaultVersion, inputColumns, runSpec, versionOptions } from './batchVersion'
 
 const models = [
   { id: 'flash', name: 'V4.1-Flash', available: true },
@@ -27,7 +27,7 @@ function template(overrides: Partial<PromptTemplate> = {}): PromptTemplate {
 }
 
 const sample = (overrides: Partial<SampleSummary> = {}): SampleSummary => ({
-  id: 's', status: 'done', total_count: 10, done_count: 10, failed_count: 2, format_failed_count: 1, cost: 0.07,
+  id: 's', status: 'done', total_count: 10, done_count: 10, failed_count: 2, format_failed_count: 1, cost: 0.07, thinking: false,
   created_at: '', created_by_name: '', current: true, ...overrides,
 })
 
@@ -70,5 +70,12 @@ describe('新建批量任务跑哪一版', () => {
     expect(runSpec(template({ model_id: 'gone', model_name: '旧模型' }), 'draft', models)?.problem).toBe('「旧模型」已停用，在模板里换一个模型并保存')
     expect(runSpec(template({ model_id: 'nokey' }), 'draft', models)?.problem).toContain('接口密钥还没配置')
     expect(runSpec(template({ release: release({ model_id: 'gone', model_name: '旧模型' }) }), 'release', models)?.problem).toContain('重新上线')
+  })
+})
+
+describe('confirmedLabel', () => {
+  it('跑上线版本时按预检回的版本号写：页面开着时别人上线了新版本，确认框不能还写旧的', () => {
+    expect(confirmedLabel({ version: 'release', label: '第 3 版' }, { release_no: 4 })).toBe('第 4 版')
+    expect(confirmedLabel({ version: 'draft', label: '当前草稿' }, { release_no: null })).toBe('当前草稿')
   })
 })

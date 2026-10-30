@@ -121,11 +121,19 @@ describe('批量任务的版本和估费', () => {
   })
 
   it('按最近一次试跑每条的平均费用估；没试跑、没花钱、没行数给不出', () => {
-    const sample = { done_count: 10, cost: 0.076 } as SampleSummary
+    const sample = { done_count: 10, cost: 0.076, current: true, thinking: false } as SampleSummary
     expect(estimateCost(sample, 2386)?.total).toBeCloseTo(18.1336)
     expect(estimateCost(sample, 2386)?.perRow).toBeCloseTo(0.0076)
     expect(estimateCost(null, 10)).toBeNull()
     expect(estimateCost({ ...sample, cost: 0 }, 10)).toBeNull()
     expect(estimateCost(sample, 0)).toBeNull()
+  })
+
+  it('样本跑的不是这次要跑的内容就不估：草稿改过、深度思考不一样、跑上线版本而草稿和线上不一样', () => {
+    const sample = { done_count: 10, cost: 0.076, current: true, thinking: false } as SampleSummary
+    expect(estimateCost({ ...sample, current: false }, 100)).toBeNull()
+    expect(estimateCost(sample, 100, { thinking: true, draftMatchesRun: true })).toBeNull()
+    expect(estimateCost(sample, 100, { thinking: false, draftMatchesRun: false })).toBeNull()
+    expect(estimateCost({ ...sample, thinking: true }, 100, { thinking: true, draftMatchesRun: true })?.total).toBeCloseTo(0.76)
   })
 })

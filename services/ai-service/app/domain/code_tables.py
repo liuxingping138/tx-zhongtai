@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+
 from platform_common.errors import ApiError, ErrorCode
 
 SYSTEM_CODE_TABLES: dict[str, str] = {
@@ -22,3 +24,9 @@ def checked_code_table(value: object) -> str:
     if key and key not in SYSTEM_CODE_TABLES:
         raise ApiError(f"不认识的系统码表：{key}", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     return key
+
+
+def code_digest(content: bytes) -> str:
+    """上传码表（存盘的 UTF-8 文本）的内容摘要，上线检查据此认出同名重传。"""
+
+    return hashlib.sha256(content).hexdigest()

@@ -160,3 +160,21 @@ async def test_codebook_client_never_falls_back_to_an_empty_table(monkeypatch: p
     monkeypatch.setattr(codebook.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(refuse), **kw))
     with pytest.raises(DependencyUnavailableError, match="401"):
         await codebook.fetch_code_table("policy_types")
+
+
+def test_reuploading_a_code_table_with_the_same_name_counts_as_a_change() -> None:
+    """按提示重传同名的「码表.txt」：原来只比文件名，算没改动，上线入口不出现，定时任务一直用旧码表。"""
+
+    from app.domain.code_tables import code_digest
+    from app.domain.models import PromptTemplate, TemplateRelease
+    from app.domain.releases import unreleased_changes
+
+    same = {"title": "t", "category": "policy", "content": "c", "output_fields": "f", "model_id": "m", "code_table": ""}
+    release = TemplateRelease(**same, code_name="码表.txt", code_digest=code_digest(b"old"))
+    template = PromptTemplate(**same, code_name="码表.txt", code_digest=code_digest(b"old"))
+    assert unreleased_changes(template, release) == []
+    template.code_digest = code_digest(b"new")
+    assert unreleased_changes(template, release) == ["码表"]
+    # 摘要功能上线前的版本没有摘要：重传一次就算改动，多提示一次重新上线，不悄悄沿用旧码表。
+    release.code_digest = ""
+    assert unreleased_changes(template, release) == ["码表"]

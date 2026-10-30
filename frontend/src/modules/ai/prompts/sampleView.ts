@@ -126,8 +126,17 @@ export function versionLabel(run: Pick<BatchRun, 'release_no' | 'draft_saved_at'
 }
 
 /** 按最近一次样本试跑每条的平均费用估这次要花多少；没试跑过、或者没花钱的给不出。 */
-export function estimateCost(sample: SampleSummary | null | undefined, rows: number): { total: number; perRow: number } | null {
+/**
+ * 按最近一次样本试跑的单条费用估这次任务。样本跑的不是这次要跑的内容就不估（返回 null），宁可不写也不能低估几十倍：
+ * 草稿改过（如换成六级码表，每行多 3.8 万字）、深度思考开关不一样、跑上线版本而草稿和线上不一样（样本跑的是草稿）。
+ */
+export function estimateCost(
+  sample: SampleSummary | null | undefined,
+  rows: number,
+  run: { thinking: boolean; draftMatchesRun: boolean } = { thinking: false, draftMatchesRun: true },
+): { total: number; perRow: number } | null {
   if (!sample?.done_count || !(sample.cost > 0) || rows <= 0) return null
+  if (!sample.current || !run.draftMatchesRun || Boolean(sample.thinking) !== run.thinking) return null
   const perRow = sample.cost / sample.done_count
   return { total: perRow * rows, perRow }
 }

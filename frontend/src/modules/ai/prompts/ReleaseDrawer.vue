@@ -85,7 +85,11 @@ const metaChanges = computed(() => {
   const rows: { label: string; before: string; after: string }[] = []
   if (old.title !== props.template.title) rows.push({ label: '标题', before: old.title, after: props.template.title })
   if (old.model_id !== props.template.model_id) rows.push({ label: '模型', before: old.model_name, after: props.template.model_name || '未选' })
-  if (changes.value.includes('码表')) rows.push({ label: '码表', before: old.code || '不用码表', after: draftCode.value || '不用码表' })
+  if (changes.value.includes('码表')) {
+    const after = draftCode.value || '不用码表'
+    // 同名重传：文件名一样、内容换了，不写明的话两边看着一模一样。
+    rows.push({ label: '码表', before: old.code || '不用码表', after: after === old.code ? `${after}（重新上传，内容可能不同）` : after })
+  }
   if (changes.value.includes('类型')) rows.push({ label: '类型', before: `${old.category_name}类`, after: `${props.template.category_name}类` })
   return rows
 })

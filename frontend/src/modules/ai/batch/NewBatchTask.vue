@@ -10,7 +10,7 @@ import { estimateCost } from '../prompts/sampleView'
 import { formatYuan } from '../shared/aiText'
 import { downloadBatchInputTemplate } from '../shared/downloads'
 import BatchVersionPick from './BatchVersionPick.vue'
-import { defaultVersion, runSpec } from './batchVersion'
+import { confirmedLabel, defaultVersion, runSpec } from './batchVersion'
 
 /**
  * 新建批量任务：选模板和跑哪一版（线上版本或当前草稿），上传这次的数据，选跑全部还是先跑几条。
@@ -43,7 +43,14 @@ const uploadHint = computed(() => (spec.value?.columns.length
   ? '先下载数据模板，表头就是这一版要的列，不要改名；每行填一条数据，可以加别的列，会原样留在结果里。选好后先检查列，不会调用模型。'
   : '第一行是表头，每行问一次。选好后先检查列，不会调用模型。'))
 const count = computed(() => (scope.value === 'test' ? Math.min(testRows.value || 1, summary.value?.rows ?? 0) : summary.value?.rows ?? 0))
-const estimate = computed(() => (summary.value ? estimateCost(template.value?.sample, count.value) : null))
+// 样本试跑跑的是草稿：跑上线版本时只有草稿和线上一样才拿它估。
+const draftMatchesRun = computed(() => version.value === 'draft' || !template.value?.release?.unreleased_changes.length)
+const estimate = computed(() => (summary.value
+  ? estimateCost(template.value?.sample, count.value, {
+      thinking: thinking.value && Boolean(model.value?.supports_thinking),
+      draftMatchesRun: draftMatchesRun.value,
+    })
+  : null))
 const blocker = computed(() => {
   if (!template.value || !spec.value) return '选一个模板'
   if (spec.value.problem) return spec.value.problem
@@ -121,7 +128,7 @@ async function start(): Promise<void> {
   const rows = count.value
   const cost = estimate.value ? `，预计约 ${formatYuan(estimate.value.total)}` : ''
   const ok = await ElMessageBox.confirm(
-    `用「${model.value!.name}」按「${selected.title}」${spec.value!.label}处理「${data.name}」${rows === data.rows ? '全部' : '前'} ${rows} 条，会产生模型费用${cost}。`,
+    `用「${model.value!.name}」按「${selected.title}」${confirmedLabel(spec.value!, data)}处理「${data.name}」${rows === data.rows ? '全部' : '前'} ${rows} 条，会产生模型费用${cost}。`,
     '开始运行？',
     { confirmButtonText: '开始运行', cancelButtonText: '取消', type: 'warning' },
   ).then(() => true, () => false)

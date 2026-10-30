@@ -60,6 +60,8 @@ export interface SampleSummary {
   format_failed_count: number
   /** 这次试跑一共花了多少（元），新建批量任务按它估每条的费用 */
   cost: number
+  /** 试跑时开没开深度思考：和要跑的任务不一样就不拿它估费用 */
+  thinking: boolean
   created_at: string
   created_by_name: string
   current: boolean

@@ -92,6 +92,7 @@ async def publish(
         model_id=template.model_id,
         code_table=template.code_table,
         code_name="" if template.code_table else template.code_name,
+        code_digest="" if template.code_table else template.code_digest,
         released_at=utcnow(),
         released_by_id=actor.id,
         released_by_name=actor.name,

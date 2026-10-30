@@ -1,4 +1,4 @@
-import type { AiModel, PromptTemplate, RunVersion } from '@/api/ai'
+import type { AiModel, BatchInputSummary, PromptTemplate, RunVersion } from '@/api/ai'
 import { CODE_TABLE_FIELD } from '../shared/aiText'
 import { shortTime } from '../prompts/sampleView'
 
@@ -98,4 +98,9 @@ export function runSpec(template: PromptTemplate | undefined, version: RunVersio
     version, label: '当前草稿', content: template.content, columns: inputColumns(template.content), fields: template.fields,
     modelName: template.model_name, model, code: template.code_table_name || template.code_name, problem,
   }
+}
+
+/** 确认框里写跑的是哪一版：以预检回的版本号为准（发起时冻结的就是它），页面上的模板信息可能是打开时取的旧数据。 */
+export function confirmedLabel(spec: Pick<RunSpec, 'version' | 'label'>, summary: Pick<BatchInputSummary, 'release_no'>): string {
+  return spec.version === 'release' && summary.release_no ? `第 ${summary.release_no} 版` : spec.label
 }

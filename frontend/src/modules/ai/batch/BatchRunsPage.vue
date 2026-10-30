@@ -49,6 +49,12 @@ const STATUS_OPTIONS = Object.keys(RUN_STATUS_TEXT)
 const filtered = computed(() => Object.values(applied.value).some(values => values.length > 0))
 const canManageViewing = computed(() => Boolean(viewing.value && canRun.value && editableCategories.value.includes(viewing.value.prompt_category)))
 
+/** 每次新建都重取模板：页面开着时别人上线了新版本、新建了模板，下拉和「线上第几版」要跟上。 */
+function openNew(): void {
+  creating.value = true
+  void loadOptions()
+}
+
 async function loadOptions(): Promise<void> {
   try {
     const data = await batchOptions()
@@ -168,7 +174,7 @@ async function created(): Promise<void> {
             v-if="canRun && editableCategories.length"
             type="primary"
             :icon="Plus"
-            @click="creating = true"
+            @click="openNew"
           >
             新建批量任务
           </el-button>
