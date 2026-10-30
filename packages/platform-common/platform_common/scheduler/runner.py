@@ -1,6 +1,7 @@
-"""调度执行进程：持 PostgreSQL 会话锁的单 leader，轮询数据库队列逐条执行。
+"""调度执行进程：持 PostgreSQL 会话锁的单 leader，按执行通道轮询数据库队列执行。
 
 - 同一服务起几个执行进程都只有拿到锁的那个在跑；锁随连接走，进程死了自动释放
+- 每条通道（Job.lane）同一时刻只跑一条，通道之间并行：几个小时的 AI 打标不堵几秒就完的同步
 - 新 leader 先回收停在 running 的记录：批次其实已成功的记成功，否则收成失败按次数重试
 - 每条执行按任务的超时中止；失败原因只显示能给人看的部分
 """
@@ -19,7 +20,7 @@ from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, async_sessionmaker
 
-from platform_common.scheduler.jobs import DEFAULT_TIMEOUT, UserFacingError, claim_failure, fail_run
+from platform_common.scheduler.jobs import DEFAULT_TIMEOUT, SHORT_LANE, UserFacingError, claim_failure, fail_run
 from platform_common.scheduler.store import ONLINE_WITHIN, Scheduler
 
 POLL_SECONDS = 5
@@ -42,11 +43,18 @@ class SchedulerRunner:
         self.leader_lock = leader_lock
         self.logger = logging.getLogger(logger_name)
 
-    async def recover_interrupted(self) -> None:
-        # 只有获得全局会话锁的新 leader 才能回收；心跳超时本身不会抢走仍持锁的任务。
+    async def recover_interrupted(self, lane: str | None = None) -> None:
+        """回收停在 running 的记录。lane 为空是 leader 刚接手时的全部回收（含已下线任务的记录）；
+        给了通道只回收这条通道的：只在它空闲时调用，这时它名下的 running 都没人在执行。"""
+
+        # 只有获得全局会话锁的 leader 才能回收；心跳超时本身不会抢走仍持锁的任务。
         s = self.scheduler
+        run = s.run_model
+        where = [run.status == "running"]
+        if lane is not None:
+            where.append(run.job_code.in_(s.lane_codes(lane)))
         async with self.session_factory() as session:
-            rows = (await session.scalars(select(s.run_model).where(s.run_model.status == "running"))).all()
+            rows = (await session.scalars(select(run).where(*where))).all()
             for row in rows:
                 result = await s.result_of(session, row)
                 job = s.jobs.get(row.job_code)
@@ -60,9 +68,9 @@ class SchedulerRunner:
                     row.result = await s.result_of(session, row)
             await session.commit()
 
-    async def claim_next(self) -> tuple[uuid.UUID, str, uuid.UUID] | None:
+    async def claim_next(self, lane: str | None = None) -> tuple[uuid.UUID, str, uuid.UUID] | None:
         async with self.session_factory() as session:
-            return await self.scheduler.claim_next_run(session, datetime.now(UTC))
+            return await self.scheduler.claim_next_run(session, datetime.now(UTC), lane)
 
     def safe_error(self, exc: Exception, code: str) -> str:
         job = self.scheduler.jobs.get(code)
@@ -125,14 +133,38 @@ class SchedulerRunner:
             await connection.commit()
             await asyncio.sleep(HEARTBEAT_SECONDS)
 
-    async def consume(self) -> None:
-        await self.recover_interrupted()
+    async def drain(self, lane: str) -> None:
+        """一条通道：领一条、执行完再领下一条，没有就隔一会儿再看。
+
+        领取时库暂时不可用不往外抛：抛出去会让整个 leader 重启，把别的通道里跑了几个小时的任务也中断。
+        这次领取有没有提交说不准，下次领取前先回收这条通道停在 running 的记录（此刻本通道没在执行任何任务）。
+        执行完落记录失败照旧往外抛，由 leader 重启后统一回收。
+        """
+
+        unsure = False
         while True:
-            claim = await self.claim_next()
+            try:
+                if unsure:
+                    await self.recover_interrupted(lane)
+                    unsure = False
+                claim = await self.claim_next(lane)
+            except Exception as exc:  # noqa: BLE001  库暂时不可用时等一会儿再领，不能连累别的通道
+                unsure = True
+                self.logger.warning("scheduler_claim_failed lane=%s reason=%s", lane, type(exc).__name__)
+                await asyncio.sleep(POLL_SECONDS)
+                continue
             if claim:
                 await self.execute_claim(claim)
             else:
                 await asyncio.sleep(POLL_SECONDS)
+
+    async def consume(self) -> None:
+        await self.recover_interrupted()
+        # 一条通道出错时 TaskGroup 取消其余通道，由 leader 统一收尾、重启后回收。
+        # 没登记任务时也留一条空通道轮询，不让 leader 反复抢锁放锁。
+        async with asyncio.TaskGroup() as group:
+            for lane in self.scheduler.lanes or [SHORT_LANE]:
+                group.create_task(self.drain(lane))
 
     async def lead(self, stop: asyncio.Event) -> None:
         async with self.engine.connect() as connection:
@@ -167,7 +199,9 @@ class SchedulerRunner:
             try:
                 await self.lead(stop)
             except Exception as exc:  # noqa: BLE001  数据库或锁暂时不可用时等待后重试，调度进程常驻不退出
-                self.logger.warning("scheduler_unavailable reason=%s", type(exc).__name__)
+                # 通道在 TaskGroup 里跑，出错时包成 ExceptionGroup，日志写里面真正的异常类型。
+                causes = exc.exceptions if isinstance(exc, ExceptionGroup) else (exc,)
+                self.logger.warning("scheduler_unavailable reason=%s", ",".join(type(item).__name__ for item in causes))
                 with contextlib.suppress(TimeoutError):
                     await asyncio.wait_for(stop.wait(), timeout=POLL_SECONDS)
 

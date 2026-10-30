@@ -12,7 +12,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from platform_common.scheduler import SchedulerRunner
+from platform_common.scheduler import LONG_LANE, SHORT_LANE, SchedulerRunner
 
 from app.aitag.domain.tasks import TASKS, job_code
 from app.scheduler.application import jobs
@@ -44,6 +44,13 @@ def test_jobs_are_listed_in_page_order_with_their_own_timeouts() -> None:
     assert all(registered[job_code(task)].timeout_seconds == 6 * 3600 for task in TASKS)
     # 每个任务都能收尾和给出摘要：执行记录只认批次写成 success。
     assert all(job.abandon and job.summary for job in registered.values())
+
+
+def test_tagging_runs_in_its_own_lane_so_syncs_do_not_wait_hours_behind_it() -> None:
+    registered = jobs.scheduler.jobs
+    assert {registered[job_code(task)].lane for task in TASKS} == {LONG_LANE}
+    assert registered["crawler"].lane == registered["crawler_config"].lane == SHORT_LANE
+    assert jobs.scheduler.lanes == [SHORT_LANE, LONG_LANE]
 
 
 def test_the_worker_runs_this_services_scheduler() -> None:

@@ -10,7 +10,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from platform_common.scheduler import Job, Scheduler
+from platform_common.scheduler import LONG_LANE, Job, Scheduler
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -79,8 +79,18 @@ def tagging_job(task: str, name: str) -> Job:
     async def summary(_session: AsyncSession, run_id: uuid.UUID) -> dict[str, Any] | None:
         return await tagging.summary(run_id)
 
-    # AI 打标一批要等模型逐条回答，上千条要一两个小时。会花钱：启用、改时间、立即执行还要「政策AI打标」可管理。
-    return Job(job_code(task), name, execute, 6 * 3600, abandon, summary, cost_resource=AI_TAGGING_RESOURCE)
+    # AI 打标一批要等模型逐条回答，上千条要一两个小时，走长通道：跑着的时候爬虫同步、配置同步照常执行，
+    # 三个打标任务之间仍一个接一个。会花钱：启用、改时间、立即执行还要「政策AI打标」可管理。
+    return Job(
+        job_code(task),
+        name,
+        execute,
+        6 * 3600,
+        abandon,
+        summary,
+        cost_resource=AI_TAGGING_RESOURCE,
+        lane=LONG_LANE,
+    )
 
 
 JOBS: list[Job] = [

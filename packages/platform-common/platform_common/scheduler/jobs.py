@@ -15,6 +15,10 @@ BEIJING = ZoneInfo("Asia/Shanghai")
 ACTIVE = ("queued", "running", "retrying")
 MAX_ATTEMPTS = 3
 DEFAULT_TIMEOUT = 1800
+# 执行通道：每条通道同一时刻只跑一条，不同通道并行。按小时算的任务（如 AI 打标一批最长 6 小时）走长通道，
+# 免得几秒、几分钟就完的同步在后面排几个小时。
+SHORT_LANE = "short"
+LONG_LANE = "long"
 
 
 class UserFacingError(RuntimeError):
@@ -37,6 +41,7 @@ class Job:
     - public_errors：RuntimeError 的信息以这些前缀开头时原样显示（例如「已有同步正在运行」）
     - cost_resource：会花钱的任务（如调大模型）。改计划、手动执行除了 system.scheduler 的完整档，
       还要这个资源的完整档：能排班的人不一定能决定花钱
+    - lane：执行通道，默认短通道。同一通道的任务一条一条跑，不同通道互不等待；同一任务仍然最多一条在排队或执行
     """
 
     code: str
@@ -48,6 +53,7 @@ class Job:
     watermark: Callable[[AsyncSession], Awaitable[datetime | None]] | None = None
     public_errors: tuple[str, ...] = ()
     cost_resource: str | None = None
+    lane: str = SHORT_LANE
 
 
 def next_daily(now: datetime, daily_time: str) -> datetime:

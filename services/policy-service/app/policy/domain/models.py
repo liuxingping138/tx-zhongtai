@@ -8,11 +8,13 @@ import uuid
 from datetime import datetime
 
 from platform_common.orm_base import Base
-from sqlalchemy import DateTime, Index, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy import ColumnElement, DateTime, Index, Integer, String, Text, UniqueConstraint, and_, literal, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.policy.domain.fields import BASE_TAG_COLUMNS
+from app.policy.domain.fields import BASE_TAG_COLUMNS, DATA_STATUS_VERIFIED
+
+YES = "是"
 
 
 def _uuid() -> uuid.UUID:
@@ -53,6 +55,11 @@ class Source(Base):
     online_date: Mapped[str] = mapped_column(
         String(10), nullable=False, default="", server_default="", comment="上线时间"
     )
+    # 爬虫配置同步见过的这个网站最早那条规则的创建日期（YYYY-MM-DD），空 = 同步还没见过它的规则。
+    # 不进 Excel、不在页面上：只用来分清上线时间是规则定的（只往前挪）还是导入时填的（对齐成规则日期）。
+    rule_date: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="", server_default="", comment="规则最早创建日期"
+    )
     crawl_priority: Mapped[str] = mapped_column(
         String(255), nullable=False, default="", comment="网站梳理和抓取的优先级"
     )
@@ -73,13 +80,30 @@ class BaseTag(Base):
     __tablename__ = "policy_base_tags"
     __table_args__ = (
         UniqueConstraint("source_content_id", name="uq_policy_base_tags_source_content_id"),
-        # 政策名称按关键词模糊查找（ILIKE '%词%'），三个字及以上走这个三元组索引。
-        # 只给待重新判断的行建索引：类型判断每批先找这些。
+        # 打标流水线的三类待办只给待办的行建索引（部分索引），几百万行时任务调度页每 5 秒数待办、每批取待办都不扫整表。
+        # 条件和 awaiting_interpretation / awaiting_opportunity 一字不差，改一边要改另一边。
         Index(
             "ix_policy_base_tags_type_retag_at",
             "type_retag_at",
             postgresql_where=text("type_retag_at IS NOT NULL"),
         ),
+        Index(
+            "ix_policy_base_tags_interpret_backlog",
+            "tagged_at",
+            "id",
+            postgresql_where=text("need_interpret = '是' AND source_content_id IS NOT NULL AND interpreted_at IS NULL"),
+        ),
+        Index(
+            "ix_policy_base_tags_opportunity_backlog",
+            "interpreted_at",
+            "id",
+            postgresql_where=text("interpreted_at IS NOT NULL AND opportunity_at IS NULL"),
+        ),
+        # 「是否穿透」「是否解读」的筛选项是去重值：有索引就只读索引，不读几个 G 的整表。
+        # 是否穿透是人填的，AI 行都空着，只给填了的行建。
+        Index("ix_policy_base_tags_need_interpret", "need_interpret"),
+        Index("ix_policy_base_tags_is_penetrate", "is_penetrate", postgresql_where=text("is_penetrate <> ''")),
+        # 政策名称按关键词模糊查找（ILIKE '%词%'），三个字及以上走这个三元组索引。
         Index(
             "ix_policy_base_tags_policy_name_trgm",
             "policy_name",
@@ -98,7 +122,7 @@ class BaseTag(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid, comment="主键")
     content_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, comment="内容哈希")
-    policy_name: Mapped[str] = mapped_column(Text, nullable=False, default="", index=True, comment="政策名称")
+    policy_name: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="政策名称")
     issuing_dept: Mapped[str] = mapped_column(String(255), nullable=False, default="", comment="出台部门")
     issuer_industry: Mapped[str] = mapped_column(String(255), nullable=False, default="", comment="发文机构行业")
     policy_level: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="政策层级")
@@ -107,7 +131,7 @@ class BaseTag(Base):
     city_code: Mapped[str] = mapped_column(String(16), nullable=False, default="", comment="地市编码")
     city_name: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="地市名称")
     issued_at: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="当前政策出台时间")
-    policy_types: Mapped[str] = mapped_column(Text, nullable=False, default="", index=True, comment="政策类型")
+    policy_types: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="政策类型")
     source_url: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="原始网站链接")
     is_penetrate: Mapped[str] = mapped_column(String(32), nullable=False, default="", comment="是否穿透")
     penetrate_words: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="穿透词")
@@ -147,6 +171,14 @@ class Interpretation(Base):
     __tablename__ = "policy_interpretations"
     __table_args__ = (
         UniqueConstraint("relation_key", name="uq_policy_interpretations_relation_key"),
+        # 人工验证过、还没同步进码表的新增场景：列表每次打开都数一遍、同步时按更新时间取，只给这些行建索引。
+        # 条件和 unsynced_new_scenario 一字不差。
+        Index(
+            "ix_policy_interpretations_unsynced_scenarios",
+            "updated_at",
+            "id",
+            postgresql_where=text("is_new_scenario = '是' AND data_status = '人工验证' AND scenario_synced_at IS NULL"),
+        ),
         Index(
             "ix_policy_interpretations_policy_title_trgm",
             "policy_title",
@@ -205,6 +237,36 @@ class Interpretation(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="更新时间")
     updated_by_id: Mapped[str] = mapped_column(String(64), nullable=False, comment="更新人ID")
     updated_by_name: Mapped[str] = mapped_column(String(128), nullable=False, comment="操作人")
+
+
+# 下面几个条件要用上对应的部分索引：常量直接写进 SQL（literal_execute）。写成绑定参数的话，
+# PostgreSQL 换成通用执行计划后证明不了查询落在部分索引的范围里，又会退回整表扫描。
+def _const(value: str) -> ColumnElement[str]:
+    return literal(value, String(), literal_execute=True)
+
+
+def awaiting_interpretation() -> ColumnElement[bool]:
+    """待解读：需要解读、还没解读的 AI 打标行。"""
+
+    return and_(
+        BaseTag.need_interpret == _const(YES), BaseTag.source_content_id.is_not(None), BaseTag.interpreted_at.is_(None)
+    )
+
+
+def awaiting_opportunity() -> ColumnElement[bool]:
+    """待补市场机会：解读过、还没补市场机会。"""
+
+    return and_(BaseTag.interpreted_at.is_not(None), BaseTag.opportunity_at.is_(None))
+
+
+def unsynced_new_scenario() -> ColumnElement[bool]:
+    """人工验证过、还没同步进行业场景码表的新增场景。"""
+
+    return and_(
+        Interpretation.is_new_scenario == _const(YES),
+        Interpretation.data_status == _const(DATA_STATUS_VERIFIED),
+        Interpretation.scenario_synced_at.is_(None),
+    )
 
 
 SOURCE_FIELDS = (

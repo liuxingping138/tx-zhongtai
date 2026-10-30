@@ -14,8 +14,10 @@ import pytest
 import pytest_asyncio
 from platform_common.actors import Actor
 from platform_common.errors import PermissionDeniedError, VersionConflictError
+from platform_common.scheduler import LONG_LANE, SHORT_LANE
 from sqlalchemy import delete, text
 
+from app.aitag.domain.tasks import job_code
 from app.common.security import get_authz_client
 from app.core.database import SessionLocal, engine
 from app.crawler.domain.models import CrawlerSyncRun
@@ -201,6 +203,22 @@ async def test_recovery_retries_interrupted_run_and_global_lock():
             assert not await second.scalar(text("SELECT pg_try_advisory_lock(:k)"), {"k": LEADER_LOCK})
         finally:
             await first.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": LEADER_LOCK})
+
+
+async def test_each_lane_claims_only_its_own_jobs():
+    # 打标在长通道排着，爬虫同步在短通道照样能领到，不用等打标跑完。
+    await trigger(job_code("type"))
+    await trigger()
+    long_claim = await runner.claim_next(LONG_LANE)
+    short_claim = await runner.claim_next(SHORT_LANE)
+    assert long_claim and long_claim[1] == job_code("type")
+    assert short_claim and short_claim[1] == "crawler"
+    assert await runner.claim_next(LONG_LANE) is None
+    # 只回收一条通道时，另一条通道正在跑的不受影响。
+    await runner.recover_interrupted(SHORT_LANE)
+    async with SessionLocal() as session:
+        assert (await session.get(ScheduledRun, short_claim[0])).status == "retrying"
+        assert (await session.get(ScheduledRun, long_claim[0])).status == "running"
 
 
 async def test_empty_database_refuses_automatic_backfill():

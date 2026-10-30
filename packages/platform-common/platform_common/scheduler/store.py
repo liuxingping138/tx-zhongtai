@@ -33,6 +33,8 @@ class Scheduler:
     ) -> None:
         # 页面按登记顺序列出任务。
         self.jobs = {job.code: job for job in jobs}
+        # 执行通道按登记顺序；执行进程每条通道一个循环。
+        self.lanes = list(dict.fromkeys(job.lane for job in jobs))
         self.job_model = job_model
         self.run_model = run_model
         self.heartbeat_model = heartbeat_model
@@ -42,6 +44,11 @@ class Scheduler:
         if code not in self.jobs:
             raise NotFoundError("任务不存在")
         return self.jobs[code]
+
+    def lane_codes(self, lane: str | None) -> list[str]:
+        """这条通道的任务编码；None 是全部任务。"""
+
+        return [code for code, job in self.jobs.items() if lane is None or job.lane == lane]
 
     def run_data(self, row: Any) -> dict[str, Any]:
         return {col.name: getattr(row, col.name) for col in self.run_model.__table__.columns}
@@ -208,15 +215,25 @@ class Scheduler:
         items = [{**self.run_data(row), "result": await self.result_of(session, row)} for row in rows]
         return {"items": items, "total": total, "page": page, "page_size": page_size}
 
-    async def claim_next_run(self, session: AsyncSession, now: datetime) -> tuple[uuid.UUID, str, uuid.UUID] | None:
-        """把到点的计划入队，再领取一条可执行的任务置为 running；没有可执行的返回 None。"""
+    async def claim_next_run(
+        self, session: AsyncSession, now: datetime, lane: str | None = None
+    ) -> tuple[uuid.UUID, str, uuid.UUID] | None:
+        """把到点的计划入队，再从这条通道（None 是不分通道）领取一条可执行的任务置为 running；没有可执行的返回 None。
+
+        入队不分通道：长通道在跑的几个小时里，到点的长任务照样显示「排队中」，空出来就接着跑。
+        几条通道同时入队靠任务行锁排队，后到的看到计划时间已前移就跳过，不会重复入队。
+        """
 
         await self.schedule_due(session, now)
         await session.commit()
         run = self.run_model
         candidate = await session.scalar(
             select(run.job_code)
-            .where(run.status.in_(("queued", "retrying")), run.available_at <= now, run.job_code.in_(list(self.jobs)))
+            .where(
+                run.status.in_(("queued", "retrying")),
+                run.available_at <= now,
+                run.job_code.in_(self.lane_codes(lane)),
+            )
             .order_by(run.available_at, run.created_at)
             .limit(1)
         )

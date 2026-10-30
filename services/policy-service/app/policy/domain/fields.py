@@ -118,7 +118,7 @@ AI_STATUS_CHOICES: tuple[str, ...] = (
     "待补市场机会",
 )
 AI_STATUS_DONE = "已完成"
-_TYPE_NOTES = (AI_NOTE_TYPE_FAILED, AI_NOTE_TYPE_UNKNOWN, AI_NOTE_TYPE_EMPTY)
+TYPE_NOTES = (AI_NOTE_TYPE_FAILED, AI_NOTE_TYPE_UNKNOWN, AI_NOTE_TYPE_EMPTY)
 
 
 def ai_status(
@@ -131,7 +131,8 @@ def ai_status(
     opportunity_at: object,
 ) -> str:
     """列表「打标状态」列：一行走到哪一步。和 repositories.base_tags.AI_STATUS 的筛选条件一一对应，
-    同时符合几种时按 AI_STATUS_CHOICES 的顺序取第一个（先失败、再排队）。手工录入、没经过 AI 的行为空。"""
+    同时符合几种时按 AI_STATUS_CHOICES 的顺序取第一个（先失败、再排队）。手工录入、没经过 AI 的行为空。
+    已经排进「重新判断类型」的不算类型判断失败。"""
 
     notes = [part for part in (remark or "").split("；") if part]
 
@@ -139,7 +140,7 @@ def ai_status(
         return any(note.startswith(prefixes) for note in notes)
 
     checks = (
-        ("类型判断失败", noted(*_TYPE_NOTES)),
+        ("类型判断失败", type_retag_at is None and noted(*TYPE_NOTES)),
         ("解读失败", noted(AI_NOTE_INTERPRET_FAILED)),
         ("市场机会失败", noted(AI_NOTE_OPPORTUNITY_FAILED)),
         ("等待重新判断类型", type_retag_at is not None),

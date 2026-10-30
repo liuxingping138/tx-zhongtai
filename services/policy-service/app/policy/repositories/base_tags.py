@@ -8,14 +8,8 @@ from sqlalchemy import ColumnElement, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
-from app.policy.domain.fields import (
-    AI_NOTE_INTERPRET_FAILED,
-    AI_NOTE_OPPORTUNITY_FAILED,
-    AI_NOTE_TYPE_EMPTY,
-    AI_NOTE_TYPE_FAILED,
-    AI_NOTE_TYPE_UNKNOWN,
-)
-from app.policy.domain.models import BaseTag
+from app.policy.domain.fields import AI_NOTE_INTERPRET_FAILED, AI_NOTE_OPPORTUNITY_FAILED, TYPE_NOTES
+from app.policy.domain.models import BaseTag, awaiting_interpretation, awaiting_opportunity
 
 # 列表、导出共用的排序。最后按 ID 兜底：同名的记录每次查询先后一致，翻页不重复不漏，
 # 详情页按位置取上一条、下一条也不会跳乱。
@@ -69,15 +63,18 @@ def _remark_starts(*prefixes: str) -> ColumnElement[bool]:
 
 # 「打标状态」精确筛选：AI 打标失败待重打的、排着队的待办。它不是库里的一列，不在 FILTER_COLUMNS 里；
 # 列表上的「打标状态」列由 domain.fields.ai_status 按同样的条件算，改这里要一起改。
+# 已经排进「重新判断类型」的不再算类型判断失败：申请重判时会去掉失败说明，这里再兜住申请前留下的旧备注，
+# 免得列表还显示失败、用户以为没生效又点一次。
 AI_STATUS: dict[str, Callable[[], ColumnElement[bool]]] = {
-    "类型判断失败": lambda: _remark_starts(AI_NOTE_TYPE_FAILED, AI_NOTE_TYPE_UNKNOWN, AI_NOTE_TYPE_EMPTY),
+    "类型判断失败": lambda: and_(
+        BaseTag.type_retag_at.is_(None),
+        _remark_starts(*TYPE_NOTES),
+    ),
     "解读失败": lambda: _remark_starts(AI_NOTE_INTERPRET_FAILED),
     "市场机会失败": lambda: _remark_starts(AI_NOTE_OPPORTUNITY_FAILED),
     "等待重新判断类型": lambda: BaseTag.type_retag_at.is_not(None),
-    "待解读": lambda: and_(
-        BaseTag.need_interpret == "是", BaseTag.source_content_id.is_not(None), BaseTag.interpreted_at.is_(None)
-    ),
-    "待补市场机会": lambda: and_(BaseTag.interpreted_at.is_not(None), BaseTag.opportunity_at.is_(None)),
+    "待解读": awaiting_interpretation,
+    "待补市场机会": awaiting_opportunity,
 }
 EXACT_FILTERS = ("ai_status",)
 

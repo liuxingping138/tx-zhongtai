@@ -8,8 +8,7 @@ from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
-from app.policy.domain.fields import DATA_STATUS_VERIFIED
-from app.policy.domain.models import Interpretation
+from app.policy.domain.models import Interpretation, unsynced_new_scenario
 
 # 列表、导出共用的排序。最后按 ID 兜底：同名的记录每次查询先后一致，翻页不重复不漏，
 # 详情页按位置取上一条、下一条也不会跳乱。
@@ -118,24 +117,18 @@ async def list_all(session: AsyncSession) -> list[Interpretation]:
     return await list_filtered(session, {})
 
 
-def _unsynced_new_scenarios() -> list[ColumnElement[bool]]:
-    return [
-        Interpretation.is_new_scenario == "是",
-        Interpretation.data_status == DATA_STATUS_VERIFIED,
-        Interpretation.scenario_synced_at.is_(None),
-    ]
-
-
 async def count_unsynced_new_scenarios(session: AsyncSession) -> int:
+    """解读列表每次打开都数一遍：只读部分索引 ix_policy_interpretations_unsynced_scenarios，不扫整表。"""
+
     return int(
-        await session.scalar(select(func.count()).select_from(Interpretation).where(*_unsynced_new_scenarios())) or 0
+        await session.scalar(select(func.count()).select_from(Interpretation).where(unsynced_new_scenario())) or 0
     )
 
 
 async def unsynced_new_scenarios(session: AsyncSession, limit: int) -> list[Interpretation]:
     rows = await session.scalars(
         select(Interpretation)
-        .where(*_unsynced_new_scenarios())
+        .where(unsynced_new_scenario())
         .order_by(Interpretation.updated_at, Interpretation.id)
         .limit(limit)
         .with_for_update(skip_locked=True)

@@ -11,7 +11,9 @@ from platform_common.scheduler.api import JobUpdate, build_scheduler_router
 from platform_common.scheduler.jobs import (
     ACTIVE,
     BEIJING,
+    LONG_LANE,
     MAX_ATTEMPTS,
+    SHORT_LANE,
     Job,
     UserFacingError,
     claim_failure,
@@ -25,7 +27,9 @@ from platform_common.scheduler.store import Scheduler
 __all__ = [
     "ACTIVE",
     "BEIJING",
+    "LONG_LANE",
     "MAX_ATTEMPTS",
+    "SHORT_LANE",
     "Job",
     "JobUpdate",
     "Scheduler",

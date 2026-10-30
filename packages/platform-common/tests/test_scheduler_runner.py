@@ -11,7 +11,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from platform_common.scheduler import Job, Scheduler, SchedulerRunner, UserFacingError
+from platform_common.scheduler import LONG_LANE, SHORT_LANE, Job, Scheduler, SchedulerRunner, UserFacingError
+from platform_common.scheduler import runner as runner_module
 
 from .scheduler_tables import tables
 
@@ -22,6 +23,7 @@ class _Db:
     def __init__(self, rows: dict[Any, Any] | None = None, running: list[Any] | None = None) -> None:
         self.rows = rows or {}
         self.running = running or []
+        self.statements: list[Any] = []
         self.commit = AsyncMock()
 
     def __call__(self) -> _Db:
@@ -36,7 +38,8 @@ class _Db:
     async def get(self, _model: object, key: Any) -> Any:
         return self.rows.get(key)
 
-    async def scalars(self, *_: Any) -> Any:
+    async def scalars(self, statement: Any) -> Any:
+        self.statements.append(statement)
         return SimpleNamespace(all=lambda: self.running)
 
 
@@ -91,6 +94,7 @@ def _runner(db: _Db, batches: _Batches, **job: Any) -> SchedulerRunner:
             public_errors=("已有同步正在运行",),
         ),
         Job("cleanup", "清理", execute),
+        Job("tagging", "打标", execute, timeout_seconds=6 * 3600, lane=LONG_LANE),
     ]
     scheduler = Scheduler(jobs=jobs, **tables(), audit=AsyncMock())
     return SchedulerRunner(
@@ -189,6 +193,20 @@ class TestRecover:
         await _runner(_Db(running=[row]), batches).recover_interrupted()
         assert row.status == "retrying"
 
+    async def test_recovering_one_lane_leaves_the_other_lanes_runs_alone(self, batches: _Batches) -> None:
+        from sqlalchemy.dialects import postgresql
+
+        db = _Db()
+        runner = _runner(db, batches)
+        await runner.recover_interrupted()
+        await runner.recover_interrupted(SHORT_LANE)
+        whole, lane = (
+            str(item.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+            for item in db.statements
+        )
+        assert "job_code IN" not in whole
+        assert "IN ('sync', 'cleanup')" in lane and "tagging" not in lane
+
 
 class TestSafeError:
     def test_public_messages_pass_through_only_for_their_job(self, batches: _Batches) -> None:
@@ -210,17 +228,125 @@ class TestHealth:
         assert await _runner(_Db(), batches).healthy() is False
 
 
+async def _until(condition: Any) -> None:
+    for _ in range(200):
+        if condition():
+            return
+        await asyncio.sleep(0.005)
+    raise AssertionError("等不到预期的状态")
+
+
 class TestLoop:
-    async def test_consume_recovers_first_then_runs_claims_until_cancelled(self, batches: _Batches) -> None:
+    async def test_a_lane_recovers_first_then_runs_claims_until_cancelled(self, batches: _Batches) -> None:
         runner = _runner(_Db(), batches)
         claim = (uuid.uuid4(), "sync", uuid.uuid4())
         calls: list[str] = []
-        runner.recover_interrupted = AsyncMock(side_effect=lambda: calls.append("recover"))  # type: ignore[method-assign]
         runner.claim_next = AsyncMock(side_effect=[claim, asyncio.CancelledError()])  # type: ignore[method-assign]
         runner.execute_claim = AsyncMock(side_effect=lambda c: calls.append("execute"))  # type: ignore[method-assign]
         with pytest.raises(asyncio.CancelledError):
-            await runner.consume()
-        assert calls == ["recover", "execute"]
+            await runner.drain(SHORT_LANE)
+        assert calls == ["execute"]
+        assert [call.args for call in runner.claim_next.await_args_list] == [(SHORT_LANE,), (SHORT_LANE,)]
+
+    async def test_a_long_job_does_not_hold_up_the_short_lane(
+        self, batches: _Batches, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(runner_module, "POLL_SECONDS", 0.005)
+        runner = _runner(_Db(), batches)
+        tagging = (uuid.uuid4(), "tagging", uuid.uuid4())
+        sync = (uuid.uuid4(), "sync", uuid.uuid4())
+        queues: dict[str, list[Any]] = {LONG_LANE: [tagging], SHORT_LANE: [None, sync]}
+        asked: dict[str, int] = {SHORT_LANE: 0, LONG_LANE: 0}
+        release = asyncio.Event()
+        done: list[str] = []
+
+        async def claim_next(lane: str | None = None) -> Any:
+            assert lane is not None
+            asked[lane] += 1
+            return queues[lane].pop(0) if queues[lane] else None
+
+        async def execute_claim(claim: tuple[uuid.UUID, str, uuid.UUID]) -> None:
+            if claim is tagging:
+                await release.wait()
+            done.append(claim[1])
+
+        recover = AsyncMock()
+        runner.recover_interrupted = recover  # type: ignore[method-assign]
+        runner.claim_next = claim_next  # type: ignore[method-assign]
+        runner.execute_claim = execute_claim  # type: ignore[method-assign]
+        consume = asyncio.create_task(runner.consume())
+        try:
+            await _until(lambda: done == ["sync"])
+            # 打标还在跑：短通道照样执行完同步，长通道这段时间不再领第二条。
+            assert asked[LONG_LANE] == 1
+            release.set()
+            await _until(lambda: "tagging" in done)
+        finally:
+            consume.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await consume
+        # leader 接手时全部回收一次，之后各通道不再回收。
+        recover.assert_awaited_once_with()
+
+    async def test_a_failed_claim_keeps_other_lanes_running_and_recovers_its_own_lane_first(
+        self, batches: _Batches, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(runner_module, "POLL_SECONDS", 0)
+        runner = _runner(_Db(), batches)
+        claim = (uuid.uuid4(), "sync", uuid.uuid4())
+        calls: list[Any] = []
+        runner.claim_next = AsyncMock(side_effect=[OSError("db down"), claim, asyncio.CancelledError()])  # type: ignore[method-assign]
+        runner.recover_interrupted = AsyncMock(side_effect=lambda lane=None: calls.append(("recover", lane)))  # type: ignore[method-assign]
+        runner.execute_claim = AsyncMock(side_effect=lambda c: calls.append("execute"))  # type: ignore[method-assign]
+        with pytest.raises(asyncio.CancelledError):
+            await runner.drain(SHORT_LANE)
+        # 那次领取可能已经提交、只是回包丢了：先把本通道停在 running 的收回来再接着领。
+        assert calls == [("recover", SHORT_LANE), "execute"]
+
+    async def test_a_lane_that_cannot_record_its_result_stops_every_lane_for_the_leader_to_recover(
+        self, batches: _Batches, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(runner_module, "POLL_SECONDS", 0.005)
+        runner = _runner(_Db(), batches)
+        tagging = (uuid.uuid4(), "tagging", uuid.uuid4())
+        sync = (uuid.uuid4(), "sync", uuid.uuid4())
+        queues: dict[str, list[Any]] = {LONG_LANE: [tagging], SHORT_LANE: [None, sync]}
+        cancelled: list[str] = []
+
+        async def claim_next(lane: str | None = None) -> Any:
+            assert lane is not None
+            return queues[lane].pop(0) if queues[lane] else None
+
+        async def execute_claim(claim: tuple[uuid.UUID, str, uuid.UUID]) -> None:
+            if claim is sync:
+                raise RuntimeError("执行记录丢失")
+            try:
+                await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                cancelled.append(claim[1])
+                raise
+
+        runner.recover_interrupted = AsyncMock()  # type: ignore[method-assign]
+        runner.claim_next = claim_next  # type: ignore[method-assign]
+        runner.execute_claim = execute_claim  # type: ignore[method-assign]
+        with pytest.raises(ExceptionGroup):
+            await asyncio.wait_for(runner.consume(), timeout=1)
+        assert cancelled == ["tagging"]
+
+    async def test_a_service_without_jobs_still_polls_instead_of_spinning_on_the_lock(
+        self, batches: _Batches, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(runner_module, "POLL_SECONDS", 0.005)
+        runner = _runner(_Db(), batches)
+        runner.scheduler.lanes = []
+        runner.recover_interrupted = AsyncMock()  # type: ignore[method-assign]
+        runner.claim_next = AsyncMock(return_value=None)  # type: ignore[method-assign]
+        consume = asyncio.create_task(runner.consume())
+        await _until(lambda: runner.claim_next.await_count >= 2)
+        assert not consume.done()
+        consume.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await consume
 
     async def test_run_keeps_retrying_when_the_database_is_down_and_stops_on_signal(self, batches: _Batches) -> None:
         runner = _runner(_Db(), batches)

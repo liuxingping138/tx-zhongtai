@@ -12,7 +12,16 @@ import pytest
 from pydantic import ValidationError
 
 from platform_common.errors import NotFoundError, VersionConflictError
-from platform_common.scheduler import Job, JobUpdate, Scheduler, claim_failure, fail_run, next_daily
+from platform_common.scheduler import (
+    LONG_LANE,
+    SHORT_LANE,
+    Job,
+    JobUpdate,
+    Scheduler,
+    claim_failure,
+    fail_run,
+    next_daily,
+)
 
 from .scheduler_tables import RunRow as _RunRow
 from .scheduler_tables import tables
@@ -276,3 +285,37 @@ class TestClaim:
         monkeypatch.setattr(s, "get_job", AsyncMock())
         monkeypatch.setattr(s, "active_run", AsyncMock(return_value=_run(status="cancelled")))
         assert await s.claim_next_run(_Session(scalar_values=["crawler"]), NOW) is None  # type: ignore[arg-type]
+
+
+class TestLanes:
+    def test_lanes_follow_registration_order_and_jobs_default_to_the_short_lane(self) -> None:
+        s = _scheduler(a=Job("a", "甲", _noop), b=Job("b", "乙", _noop, lane=LONG_LANE), c=Job("c", "丙", _noop))
+        assert s.lanes == [SHORT_LANE, LONG_LANE]
+        assert (s.lane_codes(SHORT_LANE), s.lane_codes(LONG_LANE), s.lane_codes(None)) == (
+            ["a", "c"],
+            ["b"],
+            ["a", "b", "c"],
+        )
+
+    async def test_a_lane_only_claims_its_own_jobs_but_every_due_plan_is_still_queued(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from sqlalchemy.dialects import postgresql
+
+        s = _scheduler(sync=Job("sync", "同步", _noop), tagging=Job("tagging", "打标", _noop, lane=LONG_LANE))
+        schedule = AsyncMock()
+        monkeypatch.setattr(s, "schedule_due", schedule)
+        asked: list[str] = []
+
+        class Session(_Session):
+            async def scalar(self, statement: Any) -> Any:
+                compiled = statement.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
+                asked.append(str(compiled))
+                return None
+
+        assert await s.claim_next_run(Session(), NOW, SHORT_LANE) is None  # type: ignore[arg-type]
+        assert await s.claim_next_run(Session(), NOW, LONG_LANE) is None  # type: ignore[arg-type]
+        assert await s.claim_next_run(Session(), NOW) is None  # type: ignore[arg-type]
+        assert "IN ('sync')" in asked[0] and "IN ('tagging')" in asked[1] and "IN ('sync', 'tagging')" in asked[2]
+        # 入队不分通道：长通道忙着的时候，到点的长任务也照样排上队。
+        assert schedule.await_count == 3

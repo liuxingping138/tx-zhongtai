@@ -4,13 +4,13 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, ScalarSelect, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
 from app.aitag.domain.models import PolicyAiRun, PolicyAiTask
 from app.aitag.domain.tasks import TASK_COST
-from app.policy.domain.models import BaseTag, Interpretation
+from app.policy.domain.models import BaseTag, Interpretation, awaiting_interpretation, awaiting_opportunity
 
 
 async def task(session: AsyncSession, code: str, *, lock: bool = False) -> PolicyAiTask:
@@ -89,24 +89,14 @@ async def interpret_backlog(session: AsyncSession, limit: int) -> list[BaseTag]:
     """需要解读、还没解读过的 AI 打标政策，先打标的先解读。上一批费用到上限没做完的也在里面。"""
 
     rows = await session.scalars(
-        select(BaseTag)
-        .where(
-            BaseTag.need_interpret == "是",
-            BaseTag.source_content_id.is_not(None),
-            BaseTag.interpreted_at.is_(None),
-        )
-        .order_by(BaseTag.tagged_at, BaseTag.id)
-        .limit(limit)
+        select(BaseTag).where(awaiting_interpretation()).order_by(BaseTag.tagged_at, BaseTag.id).limit(limit)
     )
     return list(rows)
 
 
 async def opportunity_backlog(session: AsyncSession, limit: int) -> list[BaseTag]:
     rows = await session.scalars(
-        select(BaseTag)
-        .where(BaseTag.interpreted_at.is_not(None), BaseTag.opportunity_at.is_(None))
-        .order_by(BaseTag.interpreted_at, BaseTag.id)
-        .limit(limit)
+        select(BaseTag).where(awaiting_opportunity()).order_by(BaseTag.interpreted_at, BaseTag.id).limit(limit)
     )
     return list(rows)
 
@@ -173,20 +163,20 @@ async def base_tags_by_source_ids(session: AsyncSession, source_ids: list[str]) 
     )
 
 
-async def pending_counts(session: AsyncSession) -> dict[str, int]:
-    """三个任务各有多少待办：待重新判断类型的、待解读的、待补市场机会的。"""
+def _count(condition: ColumnElement[bool]) -> ScalarSelect[int]:
+    return select(func.count()).select_from(BaseTag).where(condition).scalar_subquery()
 
-    retag = BaseTag.type_retag_at.is_not(None)
-    interpret = (BaseTag.need_interpret == "是") & BaseTag.interpreted_at.is_(None)
-    opportunity = BaseTag.interpreted_at.is_not(None) & BaseTag.opportunity_at.is_(None)
+
+async def pending_counts(session: AsyncSession) -> dict[str, int]:
+    """三个任务各有多少待办：待重新判断类型的、待解读的、待补市场机会的。
+
+    任务调度页开着时每 5 秒问一次。三个数各数各的、条件和取待办一样，每个都只读自己的部分索引；
+    合成一条 count(*) FILTER 的话只能整表扫一遍，几百万行时一次就要半秒以上。
+    """
+
+    retag = BaseTag.type_retag_at.is_not(None) & BaseTag.source_content_id.is_not(None)
     row = (
-        await session.execute(
-            select(
-                func.count().filter(retag),
-                func.count().filter(interpret),
-                func.count().filter(opportunity),
-            ).where(BaseTag.source_content_id.is_not(None))
-        )
+        await session.execute(select(_count(retag), _count(awaiting_interpretation()), _count(awaiting_opportunity())))
     ).one()
     return {"type": int(row[0]), "interpret": int(row[1]), "opportunity": int(row[2])}
 
