@@ -48,8 +48,8 @@ class Settings(BaseServiceSettings):
     # 规则表里能关联上的网站，同步会把上线时间改成规则创建日期，剩下的才停在这天。
     crawler_config_backfill_date: date = date(2026, 10, 22)
     # 从这天起建的规则按栏目展开：每条规则在信源表里一行（见 crawlconfig.domain.expand）。之前的规则仍按网站一行。
-    # None 表示不展开。
-    crawler_config_expand_from: date | None = None
+    # 用户定的从本周（2026-10-26 周一）开始，历史先不处理。None 表示不展开。
+    crawler_config_expand_from: date | None = date(2026, 10, 26)
 
     @field_validator("crawler_data_table", "crawler_rules_table")
     @classmethod
