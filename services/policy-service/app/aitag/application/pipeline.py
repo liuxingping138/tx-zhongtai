@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import time
 import uuid
 from dataclasses import dataclass
@@ -31,6 +32,10 @@ REUSE_DAYS = 3
 FINISHED = {"done", "cancelled", "failed", "interrupted"}
 # ai-service 对没轮到的行写「未执行（任务停止或中断）」：费用到上限或任务被停。这些行下批重做。
 NOT_RUN = "未执行"
+# 一批发给 ai-service 的行最多这么多字节（ai-service 的 PIPELINE_MAX_BYTES 是 64MB，留出余量）。
+# 默认一批 1000 条、正文全文，长正文多的日子会超；超出的行记成未执行，读取进度、待办都不前移，下一批接着做。
+PIPELINE_ROWS_BUDGET = 56 * 1024 * 1024
+TOO_LARGE = f"{NOT_RUN}（这一批数据超过 AI 服务一次能收的大小，留到下一批）"
 ROBOT = Actor(id="policy-ai-tagging", name="政策AI打标")
 # 每一步在批次记录上的任务ID列 -> 这一步的费用列，账单按步骤拆。
 STAGE_COST = {
@@ -138,7 +143,8 @@ async def ask(
     """
 
     previous = await _reusable(run_id, run_field)
-    body = {"prompt_id": prompt_id, "rows": rows, "cost_limit": str(spend.remaining()), "caller_name": caller}
+    sent = fitting_rows(rows)
+    body = {"prompt_id": prompt_id, "rows": rows[:sent], "cost_limit": str(spend.remaining()), "caller_name": caller}
     created = await internal_clients.ai("POST", "/internal/v1/pipeline-runs", json={**body, "reuse_run_id": previous})
     ai_run_id = str(created["id"])
     await update_run(run_id, **{run_field: ai_run_id})
@@ -156,7 +162,18 @@ async def ask(
         raise UserFacingError(f"AI 服务没能执行这一批：{status.get('error_message') or '没有说明原因'}")
     data = await internal_clients.ai("GET", f"/internal/v1/pipeline-runs/{ai_run_id}/results")
     status["reused"] = int(created.get("reused") or 0)
-    return status, list(data["items"])
+    return status, [*data["items"], *({"error": TOO_LARGE, "items": []} for _ in rows[sent:])]
+
+
+def fitting_rows(rows: list[dict[str, str]]) -> int:
+    """从头数能装进 PIPELINE_ROWS_BUDGET 的行数，至少一行（一条政策正文最多 20 万字，不会单独超）。"""
+
+    used = 0
+    for index, row in enumerate(rows):
+        used += len(json.dumps(row, ensure_ascii=False).encode()) + 1
+        if used > PIPELINE_ROWS_BUDGET:
+            return max(index, 1)
+    return len(rows)
 
 
 def reused_note(status: dict[str, Any]) -> str:

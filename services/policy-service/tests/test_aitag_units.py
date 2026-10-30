@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -851,3 +852,118 @@ async def test_retag_only_redoes_interpretation_when_the_type_changed(monkeypatc
     config.cursor_date = DAY
     await tagging._save_types(uuid.uuid4(), rows, results, known, retag=False, start=(DAY, ""))
     assert (config.cursor_date, config.cursor_content_id) == (DAY, "c2")
+
+
+async def test_retag_keeps_interpretation_failures_and_the_old_result_when_the_call_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """重判类型没变：上次的「解读失败」留着，这条还能在「解读失败」里筛出来重新解读。
+    重判本身没问成（网络、限流）：上次判好的类型和解读都不动，只记这次失败、出队。"""
+
+    from app.policy.domain.fields import AI_NOTE_INTERPRET_FAILED, AI_NOTE_TYPE_FAILED
+    from app.policy.domain.models import BASE_TAG_FIELDS, BaseTag, content_hash
+
+    done_at = datetime(2026, 10, 1, tzinfo=UTC)
+    retag_at = datetime(2026, 10, 2, tzinfo=UTC)
+
+    def tag(content_id: str) -> BaseTag:
+        values = rules.base_tag_values({"name": f"政策{content_id}"}, ["信息化建设类"], "")
+        values["remark"] = f"{AI_NOTE_INTERPRET_FAILED}：超时"
+        row = BaseTag(
+            source_content_id=content_id,
+            version=1,
+            interpreted_at=done_at,
+            opportunity_at=done_at,
+            type_retag_at=retag_at,
+            **values,
+        )
+        row.content_hash = content_hash(values, BASE_TAG_FIELDS)
+        return row
+
+    same, broken = tag("c1"), tag("c2")
+    deleted: list[Any] = []
+    config = SimpleNamespace(cursor_date=DAY, cursor_content_id="")
+
+    async def by_source(_session: Any, _ids: list[str]) -> dict[str, BaseTag]:
+        return {"c1": same, "c2": broken}
+
+    async def none_by_hash(*_: Any) -> None:
+        return None
+
+    async def interpretations(*_: Any) -> dict[str, list[Any]]:
+        return {}
+
+    async def delete_rows(_session: Any, rows: list[Any]) -> None:
+        deleted.extend(rows)
+
+    async def task(*_: Any, **__: Any) -> Any:
+        return config
+
+    async def noop(*_: Any, **__: Any) -> None:
+        return None
+
+    monkeypatch.setattr(repo, "base_tags_by_source", by_source)
+    monkeypatch.setattr(repo, "base_tag_by_hash", none_by_hash)
+    monkeypatch.setattr(repo, "ai_interpretations", interpretations)
+    monkeypatch.setattr(repo, "delete_rows", delete_rows)
+    monkeypatch.setattr(repo, "task", task)
+    monkeypatch.setattr(tagging, "enqueue_event", noop)
+    monkeypatch.setattr(tagging, "SessionLocal", FakeSession)
+    rows = [{"content_id": cid, "name": f"政策{cid}", "collect_date": DAY} for cid in ("c1", "c2")]
+    results = [{"error": "", "items": [{"政策类型名称": "信息化建设类"}]}, {"error": "请求超时", "items": []}]
+    counts = await tagging._save_types(uuid.uuid4(), rows, results, ["信息化建设类"], retag=True)
+
+    assert counts["failed"] == 1 and deleted == []
+    assert same.remark == f"{AI_NOTE_INTERPRET_FAILED}：超时" and same.interpreted_at == done_at
+    assert same.type_retag_at is None
+    assert (broken.policy_types, broken.need_interpret, broken.interpreted_at) == ("信息化建设类", "是", done_at)
+    assert broken.remark.startswith(f"{AI_NOTE_TYPE_FAILED}：请求超时（保留了上次的类型）")
+    assert broken.remark.endswith(f"{AI_NOTE_INTERPRET_FAILED}：超时")
+    assert broken.type_retag_at is None and broken.tagged_at == broken.updated_at
+
+
+async def test_internal_json_is_sent_as_utf8(monkeypatch: pytest.MonkeyPatch) -> None:
+    """汉字转义成 \\uXXXX 一个字 6 字节，一批政策正文就超过 ai-service 的请求体上限。"""
+
+    real = httpx.AsyncClient
+    bodies: list[bytes] = []
+
+    def reply(request: httpx.Request) -> httpx.Response:
+        bodies.append(request.content)
+        assert request.headers["content-type"] == "application/json"
+        return httpx.Response(200, json={"code": "OK", "data": {}})
+
+    monkeypatch.setattr(get_settings(), "ai_service_secret", "s")
+    monkeypatch.setattr(
+        internal_clients.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(reply), **kw)
+    )
+    await internal_clients.ai("POST", "/internal/v1/pipeline-runs", json={"rows": [{"政策正文": "数字政府"}]})
+    assert bodies == ['{"rows": [{"政策正文": "数字政府"}]}'.encode()]
+
+
+async def test_a_batch_too_large_for_ai_service_sends_what_fits_and_leaves_the_rest(
+    monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]
+) -> None:
+    """超出一次能发的大小的行不发，记成未执行：读取进度、待办都不前移，下一批接着做。原来整批 413，天天失败。"""
+
+    run_id = uuid.uuid4()
+    run_store[str(run_id)] = _run_row()
+    sent: list[int] = []
+
+    async def ai(method: str, path: str, **kwargs: Any) -> Any:
+        if method == "POST":
+            sent.append(len(kwargs["json"]["rows"]))
+            return {"id": "r" * 32, "reused": 0}
+        if path.endswith("/results"):
+            return {"items": [{"error": "", "items": [{"政策类型名称": "信息化建设类"}]}] * sent[0]}
+        return {"status": "done", "done_count": sent[0], "inference_cost": "0.3"}
+
+    rows = [{"政策正文": "字" * 100} for _ in range(3)]
+    monkeypatch.setattr(pipeline, "PIPELINE_ROWS_BUDGET", 2 * len(json.dumps(rows[0], ensure_ascii=False).encode()) + 2)
+    monkeypatch.setattr(internal_clients, "ai", ai)
+    monkeypatch.setattr(pipeline, "POLL_SECONDS", 0)
+    spend = pipeline.Spend(limit=Decimal(10), before=Decimal(0))
+    _, results = await pipeline.ask(run_id, spend, prompt_id="p", rows=rows, caller="c", run_field="type_run_id")
+    assert sent == [2] and len(results) == 3
+    assert [pipeline.not_run(result) for result in results] == [False, False, True]
+    assert rules.resume_point(results, pipeline.NOT_RUN) == 2

@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import httpx
@@ -22,9 +23,14 @@ async def _call(base_url: str, secret: str, method: str, path: str, **kwargs: An
     settings = get_settings()
     if not secret:
         raise DependencyUnavailableError(f"未配置调用 {base_url} 的内部密钥")
+    headers = internal_headers(CALLER, secret)
+    if "json" in kwargs:
+        # 汉字按 UTF-8 原样发：httpx 默认转义成 \uXXXX，一个字 6 字节，一批政策正文就会超过对方的请求体上限。
+        kwargs["content"] = json.dumps(kwargs.pop("json"), ensure_ascii=False).encode()
+        headers = {**headers, "content-type": "application/json"}
     try:
         async with httpx.AsyncClient(base_url=base_url, timeout=settings.internal_timeout_seconds) as client:
-            response = await client.request(method, path, headers=internal_headers(CALLER, secret), **kwargs)
+            response = await client.request(method, path, headers=headers, **kwargs)
     except httpx.HTTPError as exc:
         raise DependencyUnavailableError(f"{base_url} 暂时不可用") from exc
     body = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}

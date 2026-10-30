@@ -31,6 +31,10 @@ setup_logging(settings.service_name, level=settings.log_level, json_output=setti
 logger = get_logger(__name__)
 
 STREAM_MAX_BYTES = 2 * 1024 * 1024
+# 政策打标一批（/internal/v1/pipeline-runs）把每条政策的正文放在一段 JSON 里，默认 1000 条、全文，
+# 上传额度的 20MB 装不下（汉字一个 3 字节），超了回 413、类型判断天天失败、进度不动。
+# 这个前缀网关上没有路由，只有政策服务调得到；政策服务按 PIPELINE_ROWS_BUDGET 截短每批，留出余量。
+PIPELINE_MAX_BYTES = 64 * 1024 * 1024
 
 
 @asynccontextmanager
@@ -59,7 +63,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         RequestBodyLimitMiddleware,
         max_bytes=settings.upload_max_bytes + MULTIPART_OVERHEAD_BYTES,
-        path_limits={"/api/v1/ai/stream": STREAM_MAX_BYTES},
+        path_limits={"/api/v1/ai/stream": STREAM_MAX_BYTES, "/internal/v1/pipeline-runs": PIPELINE_MAX_BYTES},
     )
     if settings.cors_allow_origins:
         app.add_middleware(
