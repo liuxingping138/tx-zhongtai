@@ -83,6 +83,13 @@ def test_big_table_indexes_must_be_built_concurrently() -> None:
     assert not rules.index_lock_errors(rel, 'op.create_index("ix_a", "policy_base_tags", ["a"], postgresql_concurrently=True)\n')
     assert not rules.index_lock_errors(rel, 'op.execute("CREATE INDEX CONCURRENTLY ix_a ON policy_base_tags (a)")\n')
     assert not rules.index_lock_errors(rel, 'op.create_index("ix_a", "ai_run_costs", ["day"])\n'), "小表不管"
+    # 表名写成变量、f-string 拼 SQL：按这个迁移里出现过的大表算，原来都能绕过去。
+    looped = 'INDEXES = (("ix_a", "policy_base_tags", ["a"]),)\nfor name, table, cols in INDEXES:\n    op.create_index(name, table, cols)\n'
+    assert rules.index_lock_errors(rel, looped)
+    assert rules.index_lock_errors(rel, 'op.execute(f"CREATE INDEX {name} ON policy_interpretations (a)")\n')
+    assert rules.index_lock_errors(rel, 'T = "audit_events"\nop.execute(f"CREATE INDEX ix_a ON {T} (a)")\n')
+    assert not rules.index_lock_errors(rel, 'T = "ai_run_costs"\nop.execute(f"CREATE INDEX ix_a ON {T} (a)")\n')
+    assert not rules.index_lock_errors(rel, 'op.execute(f"CREATE INDEX CONCURRENTLY {name} ON policy_base_tags (a)")\n')
     baseline = next(iter(rules.INDEX_LOCK_BASELINE))
     assert not rules.index_lock_errors(baseline, plain), "已上线的历史迁移不改"
 

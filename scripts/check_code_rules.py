@@ -53,13 +53,22 @@ INDEX_LOCK_BASELINE: dict[str, str] = {
     "services/policy-service/migrations/versions/c1d2e3f4a258_policy_title_trgm.py": "已上线，当时表很小",
     "services/policy-service/migrations/versions/d2e3f4a5b369_policy_filter_indexes.py": "已上线，当时表很小",
     "services/policy-service/migrations/versions/f7a8b9c0d035_base_tag_type_retag.py": "已上线，当时表很小",
+    "services/policy-service/migrations/versions/a7b4c5d6e704_missing_searchable_indexes.py": (
+        "已上线，当时表很小；表名在循环里，检查原来认不出来"
+    ),
 }
+
+
+# 表名写成变量（循环里取常量元组、f-string 拼 SQL）时认不出是哪张表，用这个占位，再看整个迁移文件里出现过哪些大表。
+_VARIABLE_TABLE = "__variable_table__"
 
 
 def _index_table(call: ast.Call) -> str | None:
     named = next((kw.value for kw in call.keywords if kw.arg == "table_name"), None)
     table = call.args[1] if len(call.args) > 1 else named
-    return table.value if isinstance(table, ast.Constant) and isinstance(table.value, str) else None
+    if table is None:
+        return None
+    return table.value if isinstance(table, ast.Constant) and isinstance(table.value, str) else _VARIABLE_TABLE
 
 
 def _concurrent(call: ast.Call) -> bool:
@@ -69,25 +78,56 @@ def _concurrent(call: ast.Call) -> bool:
     )
 
 
-def _plain_index_tables(node: ast.AST) -> list[tuple[int, str]]:
-    """普通（不带 CONCURRENTLY）建索引落在哪些大表上：op.create_index 调用和 SQL 字符串两种写法。"""
+def _sql_text(node: ast.AST) -> str | None:
+    """SQL 字符串；f-string 把各段拼回来，插值处换成占位表名。"""
+
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.JoinedStr):
+        return "".join(
+            part.value if isinstance(part, ast.Constant) and isinstance(part.value, str) else _VARIABLE_TABLE
+            for part in node.values
+        )
+    return None
+
+
+def _plain_index_tables(node: ast.AST, module_tables: frozenset[str]) -> list[tuple[int, str]]:
+    """普通（不带 CONCURRENTLY）建索引落在哪些大表上：op.create_index 调用和 SQL 字符串两种写法。
+    表名是变量时按这个迁移文件里出现过的大表算：原来只认字面量，循环建索引、f-string 拼 SQL 都能绕过去。"""
+
+    def big(lineno: int, table: str) -> list[tuple[int, str]]:
+        tables = module_tables if table == _VARIABLE_TABLE else {table} & BIG_TABLES
+        return [(lineno, name) for name in sorted(tables)]
 
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "create_index":
         table = _index_table(node)
-        return [(node.lineno, table)] if table in BIG_TABLES and not _concurrent(node) else []
-    if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        tables = (match.group(1) for match in PLAIN_INDEX_SQL.finditer(node.value))
-        return [(node.lineno, table) for table in tables if table in BIG_TABLES]
-    return []
+        return big(node.lineno, table) if table and not _concurrent(node) else []
+    text = _sql_text(node)
+    if text is None:
+        return []
+    return [item for match in PLAIN_INDEX_SQL.finditer(text) for item in big(node.lineno, match.group(1))]
 
 
 def index_lock_errors(rel: str, source: str) -> list[str]:
     if rel in INDEX_LOCK_BASELINE:
         return []
-    found = [item for node in ast.walk(ast.parse(source)) for item in _plain_index_tables(node)]
+    tree = ast.parse(source)
+    # f-string 里的各段常量 ast.walk 还会单独走到一遍，跳过它们，免得同一处报两次。
+    parts = {id(part) for node in ast.walk(tree) if isinstance(node, ast.JoinedStr) for part in node.values}
+    module_tables = frozenset(
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value in BIG_TABLES
+    )
+    found = {
+        item
+        for node in ast.walk(tree)
+        if id(node) not in parts
+        for item in _plain_index_tables(node, module_tables)
+    }
     return [
         f"{rel}:{line}: 给大表 {table} 建索引要用 CONCURRENTLY（放在 autocommit_block 里）"
-        for line, table in found
+        for line, table in sorted(found)
     ]
 
 

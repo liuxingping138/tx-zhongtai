@@ -100,7 +100,13 @@ dev-down:
 
 # 审计库归超级用户所有（deploy/compose/scripts/secure-audit-db.sh）：应用账号不是属主、改不了表结构，
 # 迁移用超级用户跑，跑完重新收紧 audit_events 的权限。$(1) 是 compose 命令，$(2) 是带超级用户密码的 env 文件。
+# 超级用户口令只有 postgres 容器和这里用，各服务 Settings 的示例密钥检查管不到它；5433 对公网开放，
+# 它能进全部五个库。生产环境还是示例值（或空）就拒绝往下走。
 define migrate_audit
+	@set -a && . ./$(2) && set +a && case "$${ENVIRONMENT:-development}:$${POSTGRES_SUPERUSER_PASSWORD:-}" in \
+		production:|production:dev-only-*|production:p6-only-*|production:change-me*) \
+		echo "生产环境的 POSTGRES_SUPERUSER_PASSWORD 为空或还是示例值：先在库里改掉超级用户口令，再同步写进 .env" >&2; exit 1;; \
+	esac
 	@set -a && . ./$(2) && set +a && $(1) exec -T \
 		-e AUDIT_DATABASE_URL="postgresql+asyncpg://$${POSTGRES_SUPERUSER:-postgres}:$${POSTGRES_SUPERUSER_PASSWORD}@postgres:5432/$${AUDIT_DB_NAME}" \
 		audit-service .venv/bin/alembic upgrade head
