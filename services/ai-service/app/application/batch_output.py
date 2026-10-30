@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import csv
+import io
 import json
 import sys
 from collections.abc import Callable, Generator, Iterable, Iterator
@@ -45,6 +46,8 @@ class RowResult:
     elapsed: float
     retryable: bool = False
     attempts: int = 1
+    # 这一行在原始返回 CSV 里的字节位置（结果记录里记的）：详情预览按它直接取，不用从头扫几个 G。-1 表示不知道。
+    offset: int = -1
 
     @property
     def format_error(self) -> bool:
@@ -94,12 +97,12 @@ def outcomes_path(raw: Path) -> Path:
     return raw.with_suffix(OUTCOMES_SUFFIX)
 
 
-def _append_outcome(raw: Path, row: list[str]) -> None:
+def _append_outcome(raw: Path, row: list[str], offset: int) -> None:
     target = outcomes_path(raw)
     if not target.is_file():
         return
     record = dict(zip(RAW_COLUMNS, row, strict=True))
-    line: dict[str, str] = {"myid": record["myid"], "error": record["error"]}
+    line: dict[str, str | int] = {"myid": record["myid"], "error": record["error"], "at": offset}
     if record["error"]:
         line["text"] = record["content"][:OUTCOME_TEXT_MAX]
     with target.open("a", encoding="utf-8") as handle:
@@ -131,7 +134,30 @@ def _read_outcomes(target: Path) -> Generator[RowResult]:
                 search_calls=0,
                 error=record["error"],
                 elapsed=0.0,
+                offset=int(record.get("at", -1)),
             )
+
+
+def raw_at(path: Path, offset: int) -> RowResult | None:
+    """按结果记录里的字节位置取原始返回的一行（不带提问）。位置不对（文件被重写过）返回 None，调用方改为顺序读。"""
+
+    with path.open("rb") as binary:
+        binary.seek(offset)
+        with io.TextIOWrapper(binary, encoding="utf-8", newline="") as handle:
+            row = next(csv.reader(handle), None)
+    if row is None or len(row) != len(RAW_COLUMNS):
+        return None
+    record = dict(zip(RAW_COLUMNS, row, strict=True))
+    return RowResult(
+        myid=record["myid"].strip(),
+        prompt="",
+        text=record["content"],
+        input_tokens=_int(record["input_tokens"]),
+        output_tokens=_int(record["output_tokens"]),
+        search_calls=_int(record["search_count"]),
+        error=record["error"],
+        elapsed=0.0,
+    )
 
 
 def read_raw(path: Path) -> dict[str, RowResult]:
@@ -170,9 +196,12 @@ def _int(value: str | None) -> int:
 
 
 def append_raw(path: Path, row: list[str]) -> None:
+    """同一任务同时只能有一个写入方（batch_execute 用 Job.write_lock 排队），记下的字节位置才准。"""
+
+    offset = path.stat().st_size if path.is_file() else 0
     with path.open("a", newline="", encoding="utf-8-sig") as handle:
         csv.writer(handle).writerow(row)
-    _append_outcome(path, row)
+    _append_outcome(path, row, offset)
 
 
 def append_log(path: Path, line: str) -> None:
@@ -225,8 +254,10 @@ def copy_answers(source: Path, target: Path, mapping: dict[str, list[str]], fiel
                 continue
             for new_id in mapping[myid]:
                 values = [new_id if column == "myid" else row.get(column) or "" for column in RAW_COLUMNS]
+                writer_handle.flush()
+                offset = target.stat().st_size
                 writer.writerow(values)
-                _append_outcome(target, values)
+                _append_outcome(target, values, offset)
                 copied += 1
     return copied
 

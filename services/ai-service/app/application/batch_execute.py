@@ -39,6 +39,7 @@ from app.application.batch_output import (
 )
 from app.application.row_asking import FORMAT_RETRIES, ask_row, needs_retry, round_retry
 from app.application.run_costs import Ledger, Spend, book
+from app.application.run_heartbeat import beating
 from app.application.sheets import read_run_input
 from app.core import storage
 from app.core.config import get_settings
@@ -90,6 +91,8 @@ class Job:
     search_cost: Decimal = Decimal(0)
     # 这次执行花的钱按天记账（见 run_costs）：重跑、跨零点的钱记到实际花钱那天。
     ledger: Ledger = field(default_factory=Ledger)
+    # 几路并发答完的行排队写原始返回：结果记录里记的字节位置才准（详情预览按位置取行）。
+    write_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     def path(self, kind: str) -> Any:
         return storage.run_file(self.run.id, kind)
@@ -136,7 +139,8 @@ async def _record(job: Job, result: RowResult) -> None:
         line = f"{head} {result.failure_kind} 耗时={result.elapsed}s{tries} 错误={result.error}"
     else:
         line = f"{head} 成功 耗时={result.elapsed}s{tries}"
-    await anyio.to_thread.run_sync(append_raw, job.path("raw"), result.raw_row(job.model.name))
+    async with job.write_lock:
+        await anyio.to_thread.run_sync(append_raw, job.path("raw"), result.raw_row(job.model.name))
     await anyio.to_thread.run_sync(_log, job, line)
     # 提问原文已经落在原始返回 CSV 里，不再留着它；失败清单要的提问写文件时现拼（Job.prompt_of）。
     result.prompt = ""
@@ -273,16 +277,17 @@ async def _load(run: BatchRun) -> Job:
 
 async def _finish(job: Job, status: str, message: str = "") -> None:
     merged = job.merged()
-    if merged:
-        await anyio.to_thread.run_sync(
-            build_result, job.path("result"), job.headers, job.rows, merged, job.fields, job.model.name
-        )
     failed = [item for item in merged.values() if item.error]
     failed_file = job.path("failed")
-    if failed:
-        await anyio.to_thread.run_sync(write_failed, failed_file, failed, job.prompt_of)
-    elif await anyio.Path(failed_file).is_file():
-        await anyio.Path(failed_file).unlink()
+    async with beating(job.run.id):
+        if merged:
+            await anyio.to_thread.run_sync(
+                build_result, job.path("result"), job.headers, job.rows, merged, job.fields, job.model.name
+            )
+        if failed:
+            await anyio.to_thread.run_sync(write_failed, failed_file, failed, job.prompt_of)
+        elif await anyio.Path(failed_file).is_file():
+            await anyio.Path(failed_file).unlink()
     formats = sum(1 for item in failed if item.format_error)
     summary = f"结束：{status}｜完成 {len(merged)}/{len(job.rows)}｜失败 {len(failed)}（格式不对 {formats}）"
     if job.round > 1:
@@ -349,7 +354,8 @@ async def execute(run_id: str) -> None:
     if run is None:
         return
     try:
-        job = await _load(run)
+        async with beating(run_id):
+            job = await _load(run)
     except Exception as exc:  # noqa: BLE001  读 Excel 失败要落到任务上让用户看到原因
         await _fail(run_id, str(exc))
         return

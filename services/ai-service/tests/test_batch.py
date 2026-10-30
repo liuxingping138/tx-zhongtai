@@ -9,7 +9,7 @@ import pytest
 from openpyxl import load_workbook
 from platform_common.errors import ApiError, PermissionDeniedError
 
-from app.application import batch_execute, batch_queue, batch_start, row_asking
+from app.application import batch_execute, batch_queue, batch_start, row_asking, run_heartbeat
 from app.application import batch_runs as service
 from app.core import storage
 from app.core.config import get_settings
@@ -419,3 +419,35 @@ async def test_batch_endpoints_do_not_reach_sample_runs(monkeypatch: pytest.Monk
     with pytest.raises(NotFoundError):
         await service.delete_run(FakeSession(), ACTOR, FULL_ACCESS, RUN_ID)  # type: ignore[arg-type]
     assert (await service.require(FakeSession(), RUN_ID, sample=True)).source == "sample"  # type: ignore[arg-type]
+
+
+async def test_long_steps_keep_writing_the_heartbeat(monkeypatch: pytest.MonkeyPatch) -> None:
+    """大任务重跑前读回原始返回、收尾时生成结果表都可能超过一分半：这期间照写心跳，不被纠正成「中断」后自己停掉。"""
+
+    beats: list[dict[str, Any]] = []
+
+    async def update_if_running(_session: Any, _run_id: str, values: dict[str, Any], **_: Any) -> bool:
+        beats.append(values)
+        return True
+
+    monkeypatch.setattr(run_heartbeat, "SessionLocal", FakeSession)
+    monkeypatch.setattr(run_heartbeat.repo, "update_if_running", update_if_running)
+    monkeypatch.setattr(run_heartbeat, "BEAT_SECONDS", 0.01)
+    async with run_heartbeat.beating(RUN_ID):
+        await asyncio.sleep(0.05)
+    count = len(beats)
+    await asyncio.sleep(0.03)
+    assert count >= 2 and all(set(beat) == {"heartbeat_at"} for beat in beats)
+    assert len(beats) == count  # 出了长操作就不再写
+
+
+async def test_a_cut_off_answer_is_charged_by_length(monkeypatch: pytest.MonkeyPatch) -> None:
+    """写出一部分后断了、没等到用量：厂商照收读进去的提示词和写出来的部分。原来记 0 再重发，账单和打标费用上限少算。"""
+
+    events = [{"reasoning": "想" * 10}, {"text": "答" * 10}, {"error": "回答被提前截断", "retryable": True}]
+    monkeypatch.setattr(row_asking, "stream_responses", fake_stream(events))
+    result = await row_asking.call_model_once(_model(), "问" * 100, False, None)  # type: ignore[arg-type]
+    assert (result.input_tokens, result.output_tokens) == (60, 12)
+    monkeypatch.setattr(row_asking, "stream_responses", fake_stream([{"error": "超时", "retryable": True}]))
+    silent = await row_asking.call_model_once(_model(), "问" * 100, False, None)  # type: ignore[arg-type]
+    assert (silent.input_tokens, silent.output_tokens) == (0, 0)

@@ -50,7 +50,32 @@ def test_answers_stop_once_the_listed_rows_have_final_results(monkeypatch: pytes
     data = run_rows.preview(item)
     assert (len(data["items"]), data["total"], data["matched"]) == (run_rows.ROWS_MAX, ROWS, ROWS)
     assert {row["status"] for row in data["items"]} == {"done"}
-    assert len(read) == run_rows.ROWS_MAX  # 前 50 行都成功了，后面的结果没读
+    assert read == []  # 按结果记录里的位置直接取，不顺序读原始返回
+
+
+def test_rows_answered_in_a_later_round_are_read_by_position_not_by_scanning(monkeypatch: pytest.MonkeyPatch) -> None:
+    """第 1 行第一轮失败、第二轮才答好，记在文件末尾：原来要从头扫到末尾，十几 G 的任务打开详情就超时。"""
+
+    item = _task()
+    _answer(item, [(0, "", "限流"), *[(index, OK, "") for index in range(1, ROWS)], (0, OK, "")])
+    monkeypatch.setattr(run_rows, "iter_raw", lambda *_a, **_k: pytest.fail("不该顺序读原始返回"))
+    data = run_rows.preview(item, limit=2)
+    assert [(row["status"], row["items"]) for row in data["items"]] == [
+        ("done", [{"行业": "制造"}]),
+        ("done", [{"行业": "制造"}]),
+    ]
+
+
+def test_tasks_without_positions_still_read_sequentially() -> None:
+    """结果记录里没有位置的（这个功能上线前开始的任务）照旧顺序读。"""
+
+    item = _task()
+    _answer(item, [(0, OK, ""), (1, "", "超时")])
+    path = outcomes_path(storage.run_file(item.id, "raw"))
+    lines = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    path.write_text("".join(json.dumps({k: v for k, v in line.items() if k != "at"}) + "\n" for line in lines))
+    data = run_rows.preview(item, limit=2)
+    assert [(row["status"], row["error"]) for row in data["items"]] == [("done", ""), ("failed", "超时")]
 
 
 def test_a_failed_row_shows_its_rerun_result_and_a_lasting_failure_stays() -> None:

@@ -10,7 +10,7 @@ import contextlib
 from pathlib import Path
 from typing import Any
 
-from app.application.batch_output import RowResult, iter_outcomes, iter_raw
+from app.application.batch_output import RowResult, iter_outcomes, iter_raw, raw_at
 from app.application.row_asking import needs_retry
 from app.application.sheets import run_input_head, run_input_rows
 from app.core import storage
@@ -37,14 +37,41 @@ def _status(error: str, format_error: bool, answered: bool) -> str:
 
 
 def _first_answers(raw: Path, count: int, fields: list[str]) -> dict[int, RowResult]:
-    """前 count 行各自最后一次的结果。重跑只重问失败的行（needs_retry），成功的那次就是最终结果：
-    这几行都成功了就不再往下读，几十万行的任务打开详情也只读到前面一点。"""
+    """前 count 行各自最后一次的结果。
+
+    有结果记录时按它定下每行的最终结果：失败行用记录里的说明，成功行按记下的字节位置直接从原始返回取那一行。
+    原来顺序读原始返回，前几十行里只要有一行最终失败（或第 2 轮才答好、记在文件末尾），就要扫完整份，
+    十万行带码表的任务十几 G，打开详情就超时。没有记录（功能上线前的任务）或位置对不上时才顺序读。
+    """
 
     wanted = {build_myid(index): index for index in range(count)}
+    if not wanted:
+        return {}
+    outcomes = iter_outcomes(raw)
+    if outcomes is None:
+        return _scan_answers(raw, wanted, fields)
+    final: dict[str, RowResult] = {}
+    for result in outcomes:
+        if result.myid in wanted:
+            final[result.myid] = result
+    found: dict[int, RowResult] = {}
+    unknown: dict[str, int] = {}
+    for myid, result in final.items():
+        located = result if result.error or result.offset < 0 else raw_at(raw, result.offset)
+        if result.error or (located is not None and located.myid == myid):
+            found[wanted[myid]] = located or result
+        else:
+            unknown[myid] = wanted[myid]
+    if unknown:
+        found.update(_scan_answers(raw, unknown, fields))
+    return found
+
+
+def _scan_answers(raw: Path, wanted: dict[str, int], fields: list[str]) -> dict[int, RowResult]:
+    """顺序读原始返回。重跑只重问失败的行（needs_retry），成功的那次就是最终结果：这几行都成功了就不再往下读。"""
+
     unsettled = set(wanted)
     found: dict[int, RowResult] = {}
-    if not wanted:
-        return found
     with contextlib.closing(iter_raw(raw, with_prompt=False)) as results:
         for result in results:
             index = wanted.get(result.myid)

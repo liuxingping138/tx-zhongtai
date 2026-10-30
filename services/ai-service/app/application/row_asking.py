@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import random
 import time
 from typing import Any
@@ -11,6 +12,7 @@ import httpx
 
 from app.application.asking import llm_request
 from app.application.batch_output import FORMAT_ERROR_PREFIX, RowResult, answered
+from app.application.billing import TOKENS_PER_CHAR
 from app.core.llm import stream_responses
 from app.domain.llm_models import LlmModel, build_body
 
@@ -28,19 +30,30 @@ async def call_model_once(model: LlmModel, prompt: str, thinking: bool, client: 
     usage: dict[str, int] = {}
     errors: list[dict[str, Any]] = []
     search_events = 0
+    reasoning_chars = 0
     async for event in stream_responses(llm_request(model, build_body(model, prompt, thinking=thinking)), client):
         if "text" in event:
             parts.append(event["text"])
+        elif "reasoning" in event:
+            reasoning_chars += len(str(event["reasoning"] or ""))
         elif "usage" in event:
             usage = event["usage"]
         elif "error" in event:
             errors.append(event)
         elif event.get("tool_event", {}).get("stage") == "web_search_in_progress":
             search_events += 1
+    text = "".join(parts)
+    if errors and not usage and (text or reasoning_chars):
+        # 写出一部分后断了（截断、读超时）：厂商照收读进去的提示词和写出来的部分，没等到用量就按字数估，
+        # 和试发、对话中途断开同一口径（billing.CallTally.estimate）。原来记 0 再重发，账单和打标的费用上限都少算。
+        usage = {
+            "input_tokens": math.ceil(len(prompt) * TOKENS_PER_CHAR),
+            "output_tokens": math.ceil((len(text) + reasoning_chars) * TOKENS_PER_CHAR),
+        }
     return RowResult(
         myid="",
         prompt=prompt,
-        text="".join(parts),
+        text=text,
         input_tokens=usage.get("input_tokens", 0),
         output_tokens=usage.get("output_tokens", 0),
         search_calls=usage.get("web_search", search_events),
