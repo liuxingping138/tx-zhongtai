@@ -53,6 +53,8 @@ async def run(sync_id: uuid.UUID) -> None:
         expanded = await expand.expand(session, rules.columns, set(rules.first_dates), now=now, actor=ROBOT)
         if expanded.conflicts:
             logger.warning("crawler_config_expand_conflicts count=%s", len(expanded.conflicts))
+        if expanded.plan.duplicates:
+            logger.info("crawler_config_same_page_skipped count=%s", len(expanded.plan.duplicates))
         placeholder = settings.crawler_config_backfill_date.isoformat()
         marked, redated = await sources.apply_rule_dates(
             session, rules.first_dates, now=now, actor=ROBOT, placeholder=placeholder

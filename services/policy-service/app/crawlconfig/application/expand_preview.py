@@ -15,7 +15,7 @@ from platform_common.xlsx_writer import write_text_xlsx
 
 from app.core.database import SessionLocal
 from app.crawlconfig.application.expand import ExpandResult, expand
-from app.crawlconfig.domain.expand import ADOPT, CONVERT, ColumnRule, Step
+from app.crawlconfig.domain.expand import ADOPT, CONVERT, ColumnRule, Step, page_key
 from app.crawlconfig.repositories import rules_source
 from app.crawlconfig.repositories import sources as repo
 from app.policy.domain.models import Source
@@ -43,16 +43,11 @@ def _site_key(row: Source) -> tuple[str, str, str]:
     return row.site_name, row.province_name, row.city_name
 
 
-def _link(value: str) -> str:
-    text = (value or "").strip().lower().removeprefix("https://").removeprefix("http://").removeprefix("www.")
-    return text.rstrip("/")
-
-
 def _possible_duplicate(step: Step, same_site: list[Source]) -> str:
     """同一个网站（名称、省、市都一样）里另一条信源的链接和这条规则的一样：可能是同一个栏目早就单独建过。"""
 
-    link = _link(step.rule.link)
-    others = [row for row in same_site if row.id != step.row.id and link and _link(row.url) == link]
+    link = page_key(step.rule.link)
+    others = [row for row in same_site if row.id != step.row.id and link and page_key(row.url) == link]
     return "；".join(f"同网站已有相同链接的信源 {row.site_code}（标签：{row.tag[:40]}）" for row in others[:3])
 
 
@@ -70,11 +65,18 @@ def _unknown_line(rule: ColumnRule) -> list[str]:
             "", "", "信源表里没有这个网站编码"]  # fmt: skip
 
 
+def _duplicate_line(rule: ColumnRule, row: Source) -> list[str]:
+    note = f"同一个网页已在网站编码 {row.site_code} 下对上规则（标签：{row.tag[:40]}），只算一个栏目"
+    return ["不展开", rule.rule_id, rule.site_code, row.site_name, row.province_name, row.city_name, rule.module,
+            rule.link, rule.day.isoformat(), "", "", note]  # fmt: skip
+
+
 def _sheet(result: ExpandResult, sites: dict[tuple[str, str, str], list[Source]]) -> bytes:
     lines: list[list[str]] = [list(HEADERS)]
     lines.extend(_step_line(step, "", sites.get(_site_key(step.row), [])) for step in result.plan.steps)
     lines.extend(["不展开", *_step_line(step, reason, [])[1:]] for step, reason in result.conflicts)
     lines.extend(_unknown_line(rule) for rule in result.plan.unknown)
+    lines.extend(_duplicate_line(rule, row) for rule, row in result.plan.duplicates)
     return write_text_xlsx("按栏目展开预览", lines, column_count=len(HEADERS))
 
 
@@ -99,5 +101,6 @@ async def preview(expand_from: date) -> tuple[bytes, dict[str, int]]:
         "记上规则ID": counts[ADOPT],
         "撞上已有信源不展开": len(result.conflicts),
         "信源表没有这个编码": len(result.plan.unknown),
+        "同一网页另一编码已有": len(result.plan.duplicates),
     }
     return content, summary

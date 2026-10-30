@@ -78,3 +78,49 @@ def test_a_row_already_named_after_a_column_is_matched_before_the_site_row_is_re
     ]
     plan = plan_expansion([site], rules, legacy_codes=set())
     assert [(step.kind, step.rule.rule_id) for step in plan.steps] == [(CREATE, "a1"), (ADOPT, "b2")]
+
+
+def test_the_same_page_under_another_site_code_counts_once() -> None:
+    """同一个网页在两个网站编码下各配了一条规则，只算一个栏目（用户定的：链接相同的留一个）。
+
+    删掉多出来的信源行后，规则表里的规则还在（规则表不归我们管），下次同步不能把它再展开回来。"""
+
+    main = _row("32070000001")
+    main.url = "https://www.lyg.gov.cn"
+    own = _row("32070000012", "市政府规范性文件", rule_id="r_own", minute=1)
+    own.url = "https://lyg.gov.cn/szfgfxwj1/szfgfxwj1.html"
+    main.site_name = own.site_name = "连云港市人民政府"  # 同一个网站的两个网站编码
+    rule = ColumnRule(
+        "r_main",
+        "32070000001",
+        "政策_市政府规范性文件",
+        "https://www.lyg.gov.cn/szfgfxwj1/szfgfxwj1.html/",
+        date(2026, 10, 30),
+    )
+    plan = plan_expansion([main, own], [rule], legacy_codes=set())
+    assert plan.steps == []
+    assert [(item.rule_id, row.site_code) for item, row in plan.duplicates] == [("r_main", "32070000012")]
+
+    # 两条都是新规则：先建的展开，后建的跳过。
+    fresh = _row("32070000012", "市政府规范性文件", minute=1)
+    fresh.url, fresh.site_name = own.url, own.site_name
+    both = [_rule("a1", "32070000012", "市政府规范性文件"), _rule("b2", "32070000001", "政策_市政府规范性文件")]
+    both[0] = ColumnRule("a1", "32070000012", "市政府规范性文件", own.url, date(2026, 10, 30))
+    both[1] = ColumnRule("b2", "32070000001", "政策_市政府规范性文件", own.url, date(2026, 10, 30))
+    plan = plan_expansion([main, fresh], both, legacy_codes=set())
+    assert [step.rule.rule_id for step in plan.steps] == ["a1"]
+    assert [item.rule_id for item, _ in plan.duplicates] == ["b2"]
+
+
+def test_columns_sharing_one_address_under_the_same_code_still_count_separately() -> None:
+    """常州那种：同一个网站编码下几个栏目共用一个接口地址，是不同的栏目，照常各算各的。"""
+
+    site = _row("32040000001")
+    shared = "https://www.changzhou.gov.cn/ns_class/zwgk_18?act=aj"
+    rules = [
+        ColumnRule("c1", "32040000001", "专项规划", shared, date(2026, 10, 30)),
+        ColumnRule("c2", "32040000001", "质量监督", shared, date(2026, 10, 30)),
+    ]
+    plan = plan_expansion([site], rules, legacy_codes=set())
+    assert [step.kind for step in plan.steps] == [CONVERT, CREATE]
+    assert plan.duplicates == []

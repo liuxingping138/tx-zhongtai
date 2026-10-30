@@ -48,6 +48,19 @@ class ExpandPlan:
     steps: list[Step] = field(default_factory=list)
     # 信源表里没有这个网站编码，展开不了。
     unknown: list[ColumnRule] = field(default_factory=list)
+    # 同一个网页在两个网站编码下各配了一条规则：只展开先建的那条，这些不展开（规则, 已经对上的那一行）。
+    duplicates: list[tuple[ColumnRule, Source]] = field(default_factory=list)
+
+
+def page_key(url: str) -> str:
+    """比较两个链接是不是同一个网页：不分 http/https、有没有 www.、结尾斜杠。"""
+
+    text = (url or "").strip().lower().removeprefix("https://").removeprefix("http://").removeprefix("www.")
+    return text.rstrip("/")
+
+
+def _site(row: Source) -> tuple[str, str, str]:
+    return row.site_name, row.province_name, row.city_name
 
 
 def plan_expansion(rows: Sequence[Source], rules: Sequence[ColumnRule], legacy_codes: Collection[str]) -> ExpandPlan:
@@ -68,12 +81,38 @@ def plan_expansion(rows: Sequence[Source], rules: Sequence[ColumnRule], legacy_c
         if same is not None:
             adopted[rule.rule_id] = Step(ADOPT, rule, same)
             taken.add(same.id)
+    # 同一网站里已经对上规则的网页（网站, 网页 -> 那一行）。同一个网页又挂在另一个网站编码下配了一条规则时，
+    # 只算一个栏目（用户定的：链接相同的留一个）。同一个编码下几个栏目共用一个接口地址的（常州那种）照常各算各的。
+    pages = {(_site(row), page_key(row.url)): row for row in rows if row.rule_id and page_key(row.url)}
     for rule in pending:
         step = adopted.get(rule.rule_id) or _place(rule, by_code[rule.site_code], taken, legacy_codes)
+        page = (_site(step.row), page_key(rule.link))
+        same = pages.get(page) if page[1] else None
+        if same is not None and same.site_code != rule.site_code and step.kind != ADOPT:
+            plan.duplicates.append((rule, same))
+            continue
         if step.kind == CONVERT:
             taken.add(step.row.id)
+        if page[1]:
+            pages.setdefault(page, _planned(step))
         plan.steps.append(step)
     return plan
+
+
+def _planned(step: Step) -> Source:
+    """这一步做完后对上规则的那一行：新增的行还不存在，用照抄的那行带上新链接代替（只用来比较网站和网页）。"""
+
+    if step.kind != CREATE:
+        return step.row
+    template = step.row
+    return Source(
+        site_code=template.site_code,
+        site_name=template.site_name,
+        province_name=template.province_name,
+        city_name=template.city_name,
+        url=step.rule.link,
+        rule_id=step.rule.rule_id,
+    )
 
 
 def _free(site_rows: list[Source], taken: set[uuid.UUID]) -> list[Source]:
