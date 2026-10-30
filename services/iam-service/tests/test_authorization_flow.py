@@ -148,6 +148,18 @@ class TestCatalogCache:
         repo.clock.now += authz_catalog.MISS_RELOAD_SECONDS
         assert (await _resolve(_user(), "policy.new", "list"))[0] == AuthzDecision.ALLOW
 
+    async def test_a_new_action_on_a_known_resource_is_picked_up_without_waiting(self, repo: SimpleNamespace) -> None:
+        """部署时给已有模块加了新动作：原来资源查得到就不重读，最多一分钟里连超管调新动作都被拒。"""
+
+        await _resolve(_user())
+        repo.actions = [
+            *repo.actions,
+            SimpleNamespace(resource_id=SOURCES_ID, action_code="sync", required_level="FULL"),
+        ]
+        repo.clock.now += authz_catalog.MISS_RELOAD_SECONDS
+        assert (await _resolve(_user(), "policy.sources", "sync"))[0] == AuthzDecision.ALLOW
+        assert repo.list_resources.await_count == 2
+
     async def test_unknown_codes_do_not_hit_the_database_every_time(self, repo: SimpleNamespace) -> None:
         await _resolve(_user())
         for _ in range(5):

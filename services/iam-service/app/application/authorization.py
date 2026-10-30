@@ -42,7 +42,7 @@ async def resolve_authorization(
     账号不可用、资源或动作未知、未发布时不查档位：结论已经是拒绝。
     """
 
-    entry = await authz_catalog.catalog.resource(session, resource_code)
+    entry = await authz_catalog.catalog.resource(session, resource_code, action_code)
     required = None if entry is None else entry.actions.get(action_code)
     active = user.status == UserStatus.ACTIVE
     level = None

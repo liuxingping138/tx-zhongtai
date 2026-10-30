@@ -8,8 +8,9 @@
 - 到期重读：缓存 `CATALOG_TTL_SECONDS`（60 秒）后下一次判定重读整份目录（两条查询）。seed 跑在另一个进程里
   （`docker-compose exec iam-service python -m app.cli.seed`），这里不会收到通知，靠到期重读跟上；
   要立即生效就重启 iam-service。
-- 查不到就重读：新加的资源编码在缓存里找不到时立即重读一次（`MISS_RELOAD_SECONDS` 内最多一次），seed 一跑完
-  新模块就能用，不用等满一分钟；未知编码反复来也不会每次都打库。
+- 查不到就重读：新加的资源编码、已有资源上新加的动作在缓存里找不到时立即重读一次
+  （`MISS_RELOAD_SECONDS` 内最多一次），seed 一跑完新模块、新动作就能用，不用等满一分钟；
+  未知编码反复来也不会每次都打库。
 - 同一进程里跑 `sync_catalog`（单测、管理命令）结束时直接清空缓存。
 
 下线、取消发布一个模块最多要等一个缓存周期才在判定里生效；用户的角色、单独授权不在这里缓存，每次判定现查。
@@ -65,11 +66,15 @@ class AuthzCatalog:
         self._entries = {}
         self._loaded_at = None
 
-    async def resource(self, session: AsyncSession, code: str) -> CatalogResource | None:
+    async def resource(self, session: AsyncSession, code: str, action: str | None = None) -> CatalogResource | None:
+        """action 给了的话，资源在、动作却不在也算查不到：部署时给已有模块加了新动作，seed 前已经读过目录的话，
+        原来要等满一分钟，期间连超管调这个动作都被拒。"""
+
         if self._age() >= self._ttl:
             await self._load(session)
         entry = self._entries.get(code)
-        if entry is None and self._age() >= self._miss_reload:
+        missing = entry is None or (action is not None and action not in entry.actions)
+        if missing and self._age() >= self._miss_reload:
             await self._load(session)
             entry = self._entries.get(code)
         return entry
