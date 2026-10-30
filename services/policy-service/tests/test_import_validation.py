@@ -30,7 +30,7 @@ def _source(**values: str) -> dict[str, str]:
 
 @pytest.fixture
 def source_env(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    env: dict[str, Any] = {"rows": [], "internal_ids": set(), "site_codes": set(), "marked": None}
+    env: dict[str, Any] = {"rows": [], "internal_ids": set(), "sites": {}, "marked": None}
 
     async def parse(_content: bytes, _columns: object, *, subject: str) -> list[dict[str, str]]:
         return env["rows"]
@@ -43,7 +43,7 @@ def source_env(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(importing, "encode_skipped_file_async", encode)
     monkeypatch.setattr(source_import, "enqueue_event", AsyncMock())
     monkeypatch.setattr(sources.repo, "list_internal_ids", AsyncMock(side_effect=lambda _s: env["internal_ids"]))
-    monkeypatch.setattr(sources.repo, "list_site_codes", AsyncMock(side_effect=lambda _s: env["site_codes"]))
+    monkeypatch.setattr(sources.repo, "site_identities", AsyncMock(side_effect=lambda _s: env["sites"]))
     return env
 
 
@@ -58,7 +58,7 @@ class TestImportSources:
             _source(site_name="乙", district_code="110101"),
             _source(site_name="丙", site_code="11010200009"),
         ]
-        source_env["site_codes"] = {"11010100003"}
+        source_env["sites"] = {"11010100003": {("别的网站", "北京市", "北京市")}}
         session = _Session()
         result = await source_import.import_sources(session, ACTOR, b"")  # type: ignore[arg-type]
 
@@ -68,6 +68,21 @@ class TestImportSources:
         # 同区县在库里最大序号之后顺延；自带编码的行原样保留。
         assert [row.site_code for row in added] == ["11010100004", "11010100005", "11010200009"]
         assert all(row.created_by_name == "测试" for row in added)
+
+    async def test_column_rows_of_one_site_share_its_site_code(self, source_env: dict[str, Any]) -> None:
+        """按栏目展开后同一网站几行共用一个网站编码：导出再导入、给已有网站补一个栏目行都要能导进来。"""
+
+        source_env["rows"] = [
+            _source(site_name="某局", tag="政策文件", site_code="11010100001"),
+            _source(site_name="某局", tag="通知公告", site_code="11010100001"),
+            _source(site_name="已有网站", tag="新栏目", site_code="11010100002"),
+        ]
+        source_env["sites"] = {"11010100002": {("已有网站", "北京市", "北京市")}}
+        session = _Session()
+        result = await source_import.import_sources(session, ACTOR, b"")  # type: ignore[arg-type]
+
+        assert result["inserted"] == 3
+        assert [row.site_code for row in session.added] == ["11010100001", "11010100001", "11010100002"]
 
     async def test_one_bad_row_rejects_the_whole_file(self, source_env: dict[str, Any]) -> None:
         source_env["rows"] = [_source(site_name="甲", district_code="110101"), _source(site_name="")]
@@ -143,14 +158,14 @@ class TestImportSources:
             dict(dup),
             _source(site_name="已有", district_code="110101"),
         ]
-        source_env["site_codes"] = {"11010100001"}
+        source_env["sites"] = {"11010100001": {("别的网站", "北京市", "北京市")}}
         source_env["internal_ids"] = {sources.make_internal_id("已有", "北京市", "北京市", "政策")}
         await source_import.import_sources(_Session(), ACTOR, b"")  # type: ignore[arg-type]
 
         reasons = _reasons(source_env)
         assert reasons[0] == "网站编码不合法"
-        assert reasons[1] == "网站编码已存在"
-        assert reasons[2] == reasons[3] == "文件内网站编码重复"
+        assert reasons[1] == "网站编码已被另一个网站使用"
+        assert reasons[2] == reasons[3] == "文件内同一个网站编码对应了不同网站"
         assert reasons[4] == reasons[5] == "网站名称+省份+地市+标签重复"
         assert reasons[6] == "内部唯一id已存在"
 

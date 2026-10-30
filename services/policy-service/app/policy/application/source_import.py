@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Any
 
@@ -64,22 +64,47 @@ def _stage(item: dict[str, str]) -> _StagedSource:
     )
 
 
-def _site_code_reasons(site_code: str, db_site: set[str], file_site: Counter[str]) -> list[str]:
-    if not site_code:
+# 网站编码属于哪个网站：（网站名称, 省份, 地市）。
+SiteIdentity = tuple[str, str, str]
+
+
+def _identity(values: dict[str, str]) -> SiteIdentity:
+    return values["site_name"], values["province_name"], values["city_name"]
+
+
+def _site_code_reasons(
+    row: _StagedSource, db_sites: dict[str, set[SiteIdentity]], file_sites: dict[str, set[SiteIdentity]]
+) -> list[str]:
+    """按栏目展开后同一个网站的几行共用一个网站编码：同一网站可以共用（导出再导入、给网站补一个栏目行），
+    不同网站不能。真正重复的行由「内部唯一id」那条拦下。"""
+
+    code = row.site_code
+    if not code:
         return []
+    if digits_only(code) != code or len(code) > SITE_CODE_MAX_LENGTH:
+        return ["网站编码不合法"]
     reasons: list[str] = []
-    if digits_only(site_code) != site_code or len(site_code) > SITE_CODE_MAX_LENGTH:
-        reasons.append("网站编码不合法")
-    elif site_code in db_site:
-        reasons.append("网站编码已存在")
-    if file_site[site_code] > 1:
-        reasons.append("文件内网站编码重复")
+    own = _identity(row.values)
+    if db_sites.get(code, set()) - {own}:
+        reasons.append("网站编码已被另一个网站使用")
+    if len(file_sites[code]) > 1:
+        reasons.append("文件内同一个网站编码对应了不同网站")
     return reasons
 
 
-def _check_rows(staged: list[_StagedSource], db_internal: set[str], db_site: set[str]) -> list[list[str]]:
+def _sites_in_file(staged: list[_StagedSource]) -> dict[str, set[SiteIdentity]]:
+    sites: dict[str, set[SiteIdentity]] = defaultdict(set)
+    for row in staged:
+        if row.site_code:
+            sites[row.site_code].add(_identity(row.values))
+    return sites
+
+
+def _check_rows(
+    staged: list[_StagedSource], db_internal: set[str], db_sites: dict[str, set[SiteIdentity]]
+) -> list[list[str]]:
     file_internal = Counter(row.internal_id for row in staged)
-    file_site = Counter(row.site_code for row in staged if row.site_code)
+    file_sites = _sites_in_file(staged)
     checked: list[list[str]] = []
     for row in staged:
         reasons: list[str] = []
@@ -102,7 +127,7 @@ def _check_rows(staged: list[_StagedSource], db_internal: set[str], db_site: set
             reasons.append("内部唯一id已存在")
         if file_internal[row.internal_id] > 1:
             reasons.append("网站名称+省份+地市+标签重复")
-        reasons.extend(_site_code_reasons(row.site_code, db_site, file_site))
+        reasons.extend(_site_code_reasons(row, db_sites, file_sites))
         checked.append(reasons)
     return checked
 
@@ -141,8 +166,8 @@ def _build_rows(actor: Actor, staged: list[_StagedSource], db_site: set[str]) ->
 async def import_sources(session: AsyncSession, actor: Actor, content: bytes) -> dict[str, Any]:
     parsed = await parse_sheet_async(content, SOURCE_COLUMNS, subject="政策")
     staged = [_stage(item) for item in parsed]
-    db_site = await repo.list_site_codes(session)
-    checked = _check_rows(staged, await repo.list_internal_ids(session), db_site)
+    db_sites = await repo.site_identities(session)
+    checked = _check_rows(staged, await repo.list_internal_ids(session), db_sites)
     blocked = sum(1 for reasons in checked if reasons)
     if blocked:
         marked = [
@@ -150,7 +175,7 @@ async def import_sources(session: AsyncSession, actor: Actor, content: bytes) ->
             for row, reasons in zip(staged, checked, strict=True)
         ]
         return await rejected_result(SOURCE_COLUMNS, marked, blocked=blocked)
-    inserted = await add_in_batches(session, _build_rows(actor, staged, db_site))
+    inserted = await add_in_batches(session, _build_rows(actor, staged, set(db_sites)))
     await enqueue_event(
         session,
         event_type="policy.source.imported",

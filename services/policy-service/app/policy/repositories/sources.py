@@ -12,6 +12,9 @@ from sqlalchemy.orm import InstrumentedAttribute
 
 from app.policy.domain.models import Source
 
+# 列表、导出共用的排序。按栏目展开后同一网站编码、网站名称有好几行，最后按 ID 兜底：翻页不重复不漏。
+_ORDER = (Source.site_code, Source.site_name, Source.id)
+
 
 async def get_by_id(session: AsyncSession, item_id: uuid.UUID) -> Source | None:
     return await session.get(Source, item_id)
@@ -52,9 +55,14 @@ async def list_internal_ids(session: AsyncSession) -> set[str]:
     return set(result.scalars())
 
 
-async def list_site_codes(session: AsyncSession) -> set[str]:
-    result = await session.execute(select(Source.site_code))
-    return set(result.scalars())
+async def site_identities(session: AsyncSession) -> dict[str, set[tuple[str, str, str]]]:
+    """每个网站编码属于哪些网站（网站名称, 省份, 地市）。按栏目展开后一个网站几行共用一个编码，只扫一遍表。"""
+
+    result = await session.execute(select(Source.site_code, Source.site_name, Source.province_name, Source.city_name))
+    sites: dict[str, set[tuple[str, str, str]]] = {}
+    for code, name, province, city in result.all():
+        sites.setdefault(code, set()).add((name, province, city))
+    return sites
 
 
 async def list_site_codes_for_district(session: AsyncSession, district_code: str) -> list[str]:
@@ -113,11 +121,7 @@ async def list_items(
     conds = _conditions(filters)
     total = int(await session.scalar(select(func.count()).select_from(Source).where(*conds)) or 0)
     result = await session.execute(
-        select(Source)
-        .where(*conds)
-        .order_by(Source.site_code, Source.site_name)
-        .offset((page - 1) * page_size)
-        .limit(page_size)
+        select(Source).where(*conds).order_by(*_ORDER).offset((page - 1) * page_size).limit(page_size)
     )
     return list(result.scalars()), total
 
@@ -131,9 +135,7 @@ async def count_filtered(session: AsyncSession, filters: Filters) -> int:
 async def list_filtered(session: AsyncSession, filters: Filters) -> list[Source]:
     """导出用：与列表一致的筛选和排序，不分页。"""
 
-    result = await session.execute(
-        select(Source).where(*_conditions(filters)).order_by(Source.site_code, Source.site_name)
-    )
+    result = await session.execute(select(Source).where(*_conditions(filters)).order_by(*_ORDER))
     return list(result.scalars())
 
 
