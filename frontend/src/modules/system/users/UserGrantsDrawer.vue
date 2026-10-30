@@ -81,7 +81,7 @@ async function save(): Promise<void> {
     type: 'warning',
     confirmButtonText: '保存',
     cancelButtonText: '再看看',
-    customClass: 'grant-confirm',
+    customClass: 'confirm-lines',
   }).then(() => true, () => false)
   if (!sure) return
   saving.value = true

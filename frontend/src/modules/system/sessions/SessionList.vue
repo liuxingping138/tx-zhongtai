@@ -4,28 +4,41 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 
 import { errorMessage } from '@/api/errors'
-import { listOnlineSessions, revokeOnlineSession } from '@/api/system'
-import type { OnlineSession } from '@/api/types'
+import { listOnlineSessions, revokeOnlineSession, type OnlineDevice } from '@/api/system'
 import ListEmpty from '@/components/ListEmpty.vue'
 import ListPage from '@/components/ListPage.vue'
 import { useAuthStore } from '@/stores/auth'
 import { formatTime } from '@/utils/time'
 import UserAvatar from '../users/UserAvatar.vue'
 import { browserOf, sinceText } from './loginText'
+import { deviceAction, sessionCounts, visibleSessions, windowText, type SessionView } from './sessionView'
 
-/** 在线用户：每台登录着的设备一行，可以单独下线。看跟着用户管理的查看权限，下线要用户管理可管理。 */
+/**
+ * 在线用户：每台设备一行。「在线」是最近 30 分钟内有操作的设备；「有效登录」是没退出、没过期的全部设备
+ * （登录后 7 天内都有效），可能早就没在用了。看跟着用户管理的查看权限，下线要用户管理可管理；
+ * 正在用的这台标「当前设备」、不给下线，要退出用「退出登录」。
+ */
 const auth = useAuthStore()
 const canRevoke = computed(() => auth.canFull('system.users'))
-const sessions = ref<OnlineSession[]>([])
+const sessions = ref<OnlineDevice[]>([])
+const windowSeconds = ref(1800)
+const view = ref<SessionView>('online')
 const loading = ref(false)
 const loadError = ref('')
-const people = computed(() => new Set(sessions.value.map(item => item.user.id)).size)
+const counts = computed(() => sessionCounts(sessions.value))
+const rows = computed(() => visibleSessions(sessions.value, view.value))
+const windowLabel = computed(() => windowText(windowSeconds.value))
+const hint = computed(() =>
+  `在线：最近 ${windowLabel.value}内有操作的设备。有效登录：登录后没退出、没过期的全部设备（7 天内有效），可能早就没在用了。`,
+)
 
 async function load(): Promise<void> {
   loading.value = true
   loadError.value = ''
   try {
-    sessions.value = (await listOnlineSessions()).items
+    const result = await listOnlineSessions()
+    sessions.value = result.items
+    windowSeconds.value = result.online_window_seconds
   } catch (error) {
     loadError.value = errorMessage(error, '在线用户加载失败')
   } finally {
@@ -33,7 +46,7 @@ async function load(): Promise<void> {
   }
 }
 
-async function revoke(item: OnlineSession): Promise<void> {
+async function revoke(item: OnlineDevice): Promise<void> {
   const where = [browserOf(item.user_agent), item.ip].filter(Boolean).join('，')
   const sure = await ElMessageBox.confirm(
     `${item.user.display_name}（${item.user.username}）在这台设备（${where}）上会马上退出，其他设备不受影响。`,
@@ -56,10 +69,10 @@ onMounted(load)
 <template>
   <ListPage
     title="在线用户"
-    hint="现在登录着的设备，一台一行。一个人在几台电脑或手机上登录就有几行。"
-    :total="sessions.length"
+    :hint="hint"
+    :total="rows.length"
     :page="1"
-    :page-size="sessions.length || 1"
+    :page-size="rows.length || 1"
     :loading="loading"
     :error="loadError"
     hide-pager
@@ -67,7 +80,23 @@ onMounted(load)
     @retry="load"
   >
     <template #actions>
-      <span class="online-people">{{ people }} 人在线</span>
+      <el-radio-group
+        v-model="view"
+        aria-label="显示哪些设备"
+      >
+        <el-radio-button
+          value="online"
+          :title="`最近 ${windowLabel}内有操作`"
+        >
+          在线 {{ counts.onlinePeople }} 人
+        </el-radio-button>
+        <el-radio-button
+          value="all"
+          title="登录后没退出、没过期的全部设备（7 天内有效），可能早就没在用了"
+        >
+          有效登录 {{ counts.validPeople }} 人
+        </el-radio-button>
+      </el-radio-group>
       <el-button
         :icon="Refresh"
         :loading="loading"
@@ -79,18 +108,20 @@ onMounted(load)
     <el-table
       v-loading="loading"
       class="data-table"
-      :data="sessions"
+      :data="rows"
       stripe
     >
       <template #empty>
+        <!-- 只看在线时没人：当作筛过了，「清除筛选」切到全部有效登录。 -->
         <ListEmpty
           :loading="loading"
-          :filtered="false"
+          :filtered="view === 'online' && sessions.length > 0"
+          @reset="view = 'all'"
         />
       </template>
       <el-table-column
         label="用户"
-        min-width="240"
+        min-width="260"
         show-overflow-tooltip
       >
         <template #default="{ row }">
@@ -98,7 +129,22 @@ onMounted(load)
             <UserAvatar :user="row.user" />
             <span class="online-user__name">{{ row.user.display_name }}</span>
             <span class="online-user__account">{{ row.user.username }}</span>
+            <el-tag
+              v-if="row.current"
+              size="small"
+              effect="plain"
+            >
+              当前设备
+            </el-tag>
           </span>
+        </template>
+      </el-table-column>
+      <el-table-column
+        label="状态"
+        width="100"
+      >
+        <template #default="{ row }">
+          <span :class="row.online ? 'online-state is-online' : 'online-state'">{{ row.online ? '在线' : '不在线' }}</span>
         </template>
       </el-table-column>
       <el-table-column
@@ -136,17 +182,28 @@ onMounted(load)
       <el-table-column
         v-if="canRevoke"
         label="操作"
-        width="100"
+        width="110"
         fixed="right"
       >
         <template #default="{ row }">
+          <span
+            v-if="deviceAction(row, canRevoke) === 'current'"
+            class="online-muted"
+            title="这是你正在用的设备，要退出请点左下角账号里的「退出登录」"
+          >正在使用</span>
           <el-button
+            v-else-if="deviceAction(row, canRevoke) === 'revoke'"
             link
             type="danger"
             @click="revoke(row)"
           >
             下线
           </el-button>
+          <span
+            v-else
+            class="online-muted"
+            title="超级管理员的设备只有超级管理员能下线"
+          >—</span>
         </template>
       </el-table-column>
     </el-table>
@@ -154,8 +211,10 @@ onMounted(load)
 </template>
 
 <style scoped>
-.online-people { color: var(--zt-ink-500); font-size: 13px; }
 .online-user { display: inline-flex; align-items: center; gap: 10px; max-width: 100%; vertical-align: middle; }
 .online-user__name { color: var(--zt-ink-900); font-weight: 500; }
 .online-user__account { overflow: hidden; color: var(--zt-ink-500); font-size: 13px; text-overflow: ellipsis; }
+.online-state { color: var(--zt-ink-500); }
+.online-state.is-online { color: var(--zt-success-text); }
+.online-muted { color: var(--zt-ink-500); font-size: 13px; }
 </style>

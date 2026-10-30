@@ -15,6 +15,21 @@ import type {
 /** 角色筛选里的特殊值：还没分配任何角色的账号。 */
 export const NO_ROLE = 'none'
 
+/**
+ * 用户列表、详情里的一行，带上当前操作人能不能管这个人（停用、删除、重置密码、下线、解锁）。
+ * 不是超级管理员的看超级管理员时为 false，页面据此不给这些按钮（点了后端也会拒绝）。
+ */
+export type ManagedUser = UserItem & { can_manage?: boolean }
+
+/** 在线用户页的一台设备：全部有效登录里，标出是否在线、是不是我正在用的这台、我能不能把它下线。 */
+export interface OnlineDevice extends OnlineSession {
+  /** 最近 online_window_seconds（30 分钟）内有过操作。 */
+  online: boolean
+  /** 当前操作人正在用的这台设备；不给下线，要退出用「退出登录」。 */
+  current: boolean
+  can_manage: boolean
+}
+
 export function listUsers(params: {
   page?: number
   page_size?: number
@@ -25,7 +40,7 @@ export function listUsers(params: {
   /** 角色 id，或 NO_ROLE 表示待分配角色。 */
   role_id?: FilterParam
   sort?: string
-}): Promise<Page<UserItem>> {
+}): Promise<Page<ManagedUser>> {
   return request(http.get('/system/users', { params }))
 }
 
@@ -34,7 +49,7 @@ export function importUsers(file: File, onProgress?: (percent: number, stage: Im
   return postExcelImport('/system/users/import', file, onProgress)
 }
 
-export function getUser(userId: string): Promise<UserItem> {
+export function getUser(userId: string): Promise<ManagedUser> {
   return request(http.get(`/system/users/${userId}`))
 }
 
@@ -87,8 +102,13 @@ export function unlockUser(userId: string): Promise<{ unlocked: boolean }> {
   return request(http.post(`/system/users/${userId}/unlock`))
 }
 
-/** 在线用户：没撤销、没过期的登录会话，每台设备一行。 */
-export function listOnlineSessions(): Promise<{ items: OnlineSession[] }> {
+/** 解除一个出口 IP 的登录限制（同一出口输错太多次，所有人都登不上）。只有超级管理员能做。 */
+export function unlockLoginIp(ip: string): Promise<{ unlocked: boolean }> {
+  return request(http.post('/system/login-limits/unlock-ip', { ip }))
+}
+
+/** 在线用户页：全部有效登录（没撤销、没过期的会话），每台设备一行，online 标出 30 分钟内有操作的。 */
+export function listOnlineSessions(): Promise<{ items: OnlineDevice[]; online_window_seconds: number }> {
   return request(http.get('/system/sessions'))
 }
 

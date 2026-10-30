@@ -66,3 +66,20 @@ export function loginResult(event: { action_code: string | null; outcome: string
   if (event.outcome === 'success') return { tone: 'ok', text: '登录成功' }
   return { tone: 'bad', text: `失败：${FAILURE_REASONS[event.error_code ?? ''] ?? '登录失败'}` }
 }
+
+/** 这一行是「来源 IP 被暂时限制」：超级管理员可以按这一行的 IP 解除。 */
+export function ipLimited(event: { error_code: string | null; client_ip: string | null }): boolean {
+  return event.error_code === 'locked_ip' && Boolean(event.client_ip)
+}
+
+const IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/
+const IPV6 = /^[0-9a-f:.]+$/i
+
+/** 手填的 IP：去掉首尾空格，只收 IPv4（每段 0–255）或 IPv6 的写法，不合格返回 null。 */
+export function normalizeIp(text: string): string | null {
+  const value = text.trim()
+  if (!value || value.length > 64) return null
+  const v4 = IPV4.exec(value)
+  if (v4) return v4.slice(1).every(part => Number(part) <= 255) ? value : null
+  return value.includes(':') && IPV6.test(value) ? value : null
+}

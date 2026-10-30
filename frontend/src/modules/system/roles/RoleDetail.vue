@@ -214,9 +214,20 @@ onMounted(() => {
               </el-button>
             </span>
           </el-tooltip>
-          <el-button @click="onToggleStatus">
-            {{ role.status === 'active' ? '停用' : '启用' }}
-          </el-button>
+          <el-tooltip
+            :disabled="role.status === 'active' || canGrant"
+            content="启用会把这个角色的权限还给它的全部成员，只有超级管理员可以操作"
+            placement="top"
+          >
+            <span>
+              <el-button
+                :disabled="role.status !== 'active' && !canGrant"
+                @click="onToggleStatus"
+              >
+                {{ role.status === 'active' ? '停用' : '启用' }}
+              </el-button>
+            </span>
+          </el-tooltip>
         </div>
       </header>
 
@@ -377,10 +388,4 @@ onMounted(() => {
   .role-head { flex-direction: column; }
   .role-head__actions { justify-content: flex-start; }
 }
-</style>
-
-<style>
-/* 保存确认里逐行列出修改，按行显示，不挤成一段。 */
-.grant-confirm { --el-messagebox-width: 520px; }
-.grant-confirm .el-message-box__message p { white-space: pre-line; line-height: 1.8; }
 </style>

@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Document } from '@element-plus/icons-vue'
 
-import { getUser, getUserPermissions, replaceUserRoles, updateUser } from '@/api/system'
+import { getUser, getUserPermissions, replaceUserRoles, updateUser, type ManagedUser } from '@/api/system'
 import { errorMessage } from '@/api/errors'
 import type { EffectivePermission, RoleItem, UserItem } from '@/api/types'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
@@ -29,7 +29,7 @@ const visible = defineModel<boolean>({ required: true })
 const emit = defineEmits<{ changed: [user: UserItem] }>()
 const router = useRouter()
 
-const user = ref<UserItem | null>(null)
+const user = ref<ManagedUser | null>(null)
 const permissions = ref<EffectivePermission[]>([])
 const accountActive = ref(true)
 const loading = ref(false)
@@ -52,12 +52,13 @@ const infoDirty = computed(() => !!user.value && (
   || form.phone.trim() !== (user.value.phone ?? '')
   || form.email.trim() !== (user.value.email ?? '')
 ))
-const editable = computed(() => props.canEdit || props.canGrant)
+const canEditInfo = computed(() => props.canEdit && user.value?.can_manage !== false) // 管不了超级管理员时只读
+const editable = computed(() => canEditInfo.value || props.canGrant)
 const grantsVisible = ref(false)
 /** 单独授权了几个模块：从实际权限的来源里数，不另外请求。 */
 const directCount = computed(() => permissions.value.filter(item => item.sources.some(source => source.role_id === null)).length)
 
-function fill(detail: UserItem) {
+function fill(detail: ManagedUser) {
   user.value = detail
   form.display_name = detail.display_name
   form.phone = detail.phone ?? ''
@@ -112,8 +113,8 @@ watch(() => [visible.value, props.userId] as const, ([open]) => {
 }, { flush: 'sync' })
 
 /** 存基本信息。存上了就先换成新版本号：角色那一步失败了再点保存，不会拿旧版本号撞 409；列表里的名字也跟着更新。 */
-async function saveInfo(current: UserItem): Promise<boolean> {
-  if (!infoDirty.value || !props.canEdit) return false
+async function saveInfo(current: ManagedUser): Promise<boolean> {
+  if (!infoDirty.value || !canEditInfo.value) return false
   const saved = await updateUser(current.id, {
     display_name: form.display_name.trim(),
     phone: form.phone.trim(),
@@ -125,7 +126,7 @@ async function saveInfo(current: UserItem): Promise<boolean> {
   return true
 }
 
-async function saveRoles(current: UserItem): Promise<UserItem> {
+async function saveRoles(current: ManagedUser): Promise<ManagedUser> {
   if (!rolesDirty.value || !props.canGrant) return current
   const saved = await replaceUserRoles(current.id, { role_ids: draft.value, version: current.version })
   return { ...current, ...saved }
@@ -222,12 +223,12 @@ async function openAudit() {
               >
                 {{ STATUS_TEXT[user.status] ?? user.status }}
               </el-tag>
-              创建于 {{ formatTime(user.created_at) }}{{ user.must_change_password ? '，下次登录需改密' : '' }}
+              创建于 {{ formatTime(user.created_at) }}{{ user.must_change_password ? '，下次登录需改密' : '' }}{{ canEdit && !canEditInfo ? '。超级管理员的账号只有超级管理员能改' : '' }}
             </span>
           </div>
           <el-form
             label-position="top"
-            :disabled="saving || !canEdit"
+            :disabled="saving || !canEditInfo"
             class="info-grid"
             @submit.prevent
           >

@@ -20,6 +20,7 @@ import { useAuthStore } from '@/stores/auth'
 import UserCreateDrawer from './UserCreateDrawer.vue'
 import UserDetailDrawer from './UserDetailDrawer.vue'
 import UserTable from './UserTable.vue'
+import { mergeUserRow } from './userRows'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -140,9 +141,9 @@ function openDetail(user: UserItem) {
   detailVisible.value = true
 }
 
+/** 详情里存好了：合进列表那一行（单独授权存好后「+单独授权」标签也跟着变），不整页重载。 */
 function onDetailChanged(user: UserItem) {
-  const index = items.value.findIndex(item => item.id === user.id)
-  if (index >= 0) items.value[index] = { ...items.value[index], ...user }
+  items.value = mergeUserRow(items.value, user)
   void loadRoles()
   void loadPendingCount()
   if (user.id === auth.user?.id) void auth.loadProfile()

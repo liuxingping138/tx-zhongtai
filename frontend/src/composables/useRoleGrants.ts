@@ -113,7 +113,7 @@ export function useRoleGrants(options: RoleGrantsOptions) {
         type: 'warning',
         confirmButtonText: '保存',
         cancelButtonText: '再看看',
-        customClass: 'grant-confirm',
+        customClass: 'confirm-lines',
       })
     } catch {
       saving.value = false

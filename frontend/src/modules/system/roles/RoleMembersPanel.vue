@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { addRoleMembers, listRoleMembers, listUsers, removeRoleMember } from '@/api/system'
 import { errorMessage } from '@/api/errors'
 import type { RoleItem, RoleMember, UserItem } from '@/api/types'
+import { memberSearchParams } from './memberSearch'
 
 const props = defineProps<{ role: RoleItem; canGrant: boolean }>()
 const emit = defineEmits<{ changed: [count: number] }>()
@@ -48,7 +49,7 @@ async function search(keyword: string) {
   const current = ++searchSequence
   searching.value = true
   try {
-    const page = await listUsers({ page: 1, page_size: 50, username: keyword.trim() ? [keyword.trim()] : undefined })
+    const page = await listUsers(memberSearchParams(keyword))
     if (current !== searchSequence) return
     candidates.value = page.items
   } catch {
@@ -220,7 +221,7 @@ defineExpose({ reload: load })
         remote
         :remote-method="search"
         :loading="searching"
-        placeholder="输入用户名搜索，不输入则列出最近的用户"
+        placeholder="输入用户名或姓名搜索，不输入则列出最近的用户"
         no-data-text="没有可添加的用户"
         aria-label="选择要添加的用户"
         @change="picker?.blur()"

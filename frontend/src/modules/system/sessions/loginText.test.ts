@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { browserOf, lockText, loginResult, sinceText } from './loginText'
+import { browserOf, ipLimited, lockText, loginResult, normalizeIp, sinceText } from './loginText'
 
 const MAC_CHROME = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'
 const WIN_EDGE = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 Edg/130.0'
@@ -35,5 +35,27 @@ describe('登录相关的说法', () => {
     expect(loginResult({ action_code: 'login', outcome: 'failure', error_code: 'locked' }).text).toBe('失败：输错次数过多，已锁定')
     expect(loginResult({ action_code: 'login', outcome: 'failure', error_code: 'unauthenticated' }).tone).toBe('bad')
     expect(loginResult({ action_code: 'logout', outcome: 'success', error_code: null }).text).toBe('退出登录')
+  })
+
+  it('账号被锁和来源 IP 被限制分开说', () => {
+    expect(loginResult({ action_code: 'login', outcome: 'failure', error_code: 'locked_account' }).text)
+      .toBe('失败：这个账号输错次数过多，已锁定')
+    expect(loginResult({ action_code: 'login', outcome: 'failure', error_code: 'locked_ip' }).text)
+      .toBe('失败：这个网络出口输错次数过多，已暂时限制（同一出口的人都登不上）')
+    expect(loginResult({ action_code: 'login', outcome: 'failure', error_code: 'disabled' }).text).toBe('失败：账号已停用')
+  })
+
+  it('只有「来源 IP 被限制」的行能按 IP 解除', () => {
+    expect(ipLimited({ error_code: 'locked_ip', client_ip: '10.0.0.1' })).toBe(true)
+    expect(ipLimited({ error_code: 'locked_account', client_ip: '10.0.0.1' })).toBe(false)
+    expect(ipLimited({ error_code: 'locked_ip', client_ip: null })).toBe(false)
+  })
+
+  it('手填的 IP 要像个 IP', () => {
+    expect(normalizeIp(' 10.0.0.1 ')).toBe('10.0.0.1')
+    expect(normalizeIp('2408:8207::1')).toBe('2408:8207::1')
+    expect(normalizeIp('10.0.0.256')).toBeNull()
+    expect(normalizeIp('abc')).toBeNull()
+    expect(normalizeIp('')).toBeNull()
   })
 })

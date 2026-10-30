@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { listAuditEvents } from '@/api/audit'
 import { errorMessage } from '@/api/errors'
+import { unlockLoginIp } from '@/api/system'
 import type { AuditEventItem } from '@/api/types'
 import FilterBar from '@/components/FilterBar.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
@@ -10,14 +12,20 @@ import ListEmpty from '@/components/ListEmpty.vue'
 import ListPage from '@/components/ListPage.vue'
 import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useListQuery } from '@/composables/useListQuery'
+import { useAuthStore } from '@/stores/auth'
 import { formatTime, toBeijingIso } from '@/utils/time'
-import { browserOf, loginResult } from './loginText'
+import { browserOf, ipLimited, loginResult, normalizeIp } from './loginText'
 
 /**
  * 登录日志：谁、什么时候、从哪个 IP 登录或退出，失败的写原因。数据就是操作日志里认证模块的那几类事件，
- * 权限跟着操作日志走。
+ * 权限跟着操作日志走。能对上账号的失败也记在这个人名下，按人筛看得到把他锁住的那些失败。
+ * 来源 IP 输错太多次被暂时限制时，同一出口的人都登不上；超级管理员（有「权限分配」）可以在这里解除。
  */
 const LOGIN_ACTIONS = ['login', 'logout', 'logout_all']
+const IP_UNLOCK_NOTE = '同一出口可能有很多人，也可能是有人在试密码；确认是自己人输错了再解除。'
+
+const auth = useAuthStore()
+const canUnlockIp = computed(() => auth.canFull('system.permissions'))
 
 const loading = ref(false)
 const loadError = ref('')
@@ -32,7 +40,8 @@ const query = reactive({
   page_size: 20,
 })
 const filters = useFilterOptions('/audit/events')
-const listQuery = useListQuery(query, load)
+// 人名是个人信息，不写进地址栏（同操作日志页）。
+const listQuery = useListQuery(query, load, ['actor_name'])
 let loadSequence = 0
 
 type LoginQuery = typeof query
@@ -86,6 +95,43 @@ function onReset() {
   onSearch()
 }
 
+async function unlockIp(ip: string): Promise<void> {
+  try {
+    const result = await unlockLoginIp(ip)
+    if (result.unlocked) ElMessage.success(`已解除 ${ip} 的登录限制，这个出口的人现在可以重新登录`)
+    else ElMessage.info(`${ip} 现在没有被限制，可能已经到期自动解除`)
+  } catch (error) {
+    ElMessage.error(errorMessage(error, '解除失败'))
+  }
+}
+
+/** 按这一行的来源 IP 解除。 */
+async function unlockRow(row: AuditEventItem): Promise<void> {
+  const ip = row.client_ip ?? ''
+  const sure = await ElMessageBox.confirm(
+    `解除后，从 ${ip} 来的登录马上可以重试。${IP_UNLOCK_NOTE}`,
+    '解除 IP 登录限制',
+    { type: 'warning', confirmButtonText: '解除', cancelButtonText: '取消' },
+  ).then(() => true, () => false)
+  if (sure) await unlockIp(ip)
+}
+
+/** 手填一个 IP 解除：同事说「登不上」时，问到对方的出口 IP 直接解，不必先翻到那一行。 */
+async function promptUnlock(): Promise<void> {
+  const answer = await ElMessageBox.prompt(
+    `填被限制的来源 IP，就是登录日志里写「这个网络出口输错次数过多」那几行的 IP。${IP_UNLOCK_NOTE}`,
+    '解除 IP 登录限制',
+    {
+      confirmButtonText: '解除',
+      cancelButtonText: '取消',
+      inputPlaceholder: '如 10.0.0.1',
+      inputValidator: (value: string) => Boolean(normalizeIp(value ?? '')) || '请填写正确的 IP，如 10.0.0.1',
+    },
+  ).then(result => result.value, () => null)
+  const ip = answer === null ? null : normalizeIp(answer)
+  if (ip) await unlockIp(ip)
+}
+
 onMounted(() => {
   void load()
   void filters.load()
@@ -107,6 +153,14 @@ onMounted(() => {
     @update:page-size="query.page_size = $event"
     @change="load"
   >
+    <template
+      v-if="canUnlockIp"
+      #actions
+    >
+      <el-button @click="promptUnlock">
+        解除 IP 限制
+      </el-button>
+    </template>
     <template #filters>
       <FilterBar
         :query="query"
@@ -204,6 +258,23 @@ onMounted(() => {
       >
         <template #default="{ row }">
           <span :title="row.user_agent || ''">{{ browserOf(row.user_agent) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column
+        v-if="canUnlockIp"
+        label="操作"
+        width="110"
+        fixed="right"
+      >
+        <template #default="{ row }">
+          <el-button
+            v-if="ipLimited(row)"
+            link
+            type="primary"
+            @click="unlockRow(row)"
+          >
+            解除限制
+          </el-button>
         </template>
       </el-table-column>
     </el-table>

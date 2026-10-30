@@ -1,22 +1,23 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import type { UserItem } from '@/api/types'
+import type { ManagedUser } from '@/api/system'
 import ListEmpty from '@/components/ListEmpty.vue'
 import { useAuthStore } from '@/stores/auth'
 import { formatTime } from '@/utils/time'
 import { lockText, sinceText } from '../sessions/loginText'
 import UserAvatar from './UserAvatar.vue'
+import { canManageRow, openLabel } from './userRows'
 
-defineProps<{ users: UserItem[]; loading: boolean; filtered: boolean }>()
+defineProps<{ users: ManagedUser[]; loading: boolean; filtered: boolean }>()
 defineEmits<{
-  open: [user: UserItem]
-  toggle: [user: UserItem]
-  remove: [user: UserItem]
-  'reset-password': [user: UserItem]
-  revoke: [user: UserItem]
-  unlock: [user: UserItem]
-  audit: [user: UserItem]
+  open: [user: ManagedUser]
+  toggle: [user: ManagedUser]
+  remove: [user: ManagedUser]
+  'reset-password': [user: ManagedUser]
+  revoke: [user: ManagedUser]
+  unlock: [user: ManagedUser]
+  audit: [user: ManagedUser]
   reset: []
 }>()
 
@@ -25,7 +26,12 @@ const canGrant = computed(() => auth.canFull('system.permissions'))
 const canAudit = computed(() => auth.canRead('system.audit'))
 const canEditUsers = computed(() => auth.canFull('system.users'))
 
-function roleNames(user: UserItem): string {
+/** 这一行能不能停用、删除、重置密码、下线、解锁：不是超级管理员的管不了超级管理员（后端给 can_manage）。 */
+function manageable(row: ManagedUser): boolean {
+  return canManageRow(row, canEditUsers.value)
+}
+
+function roleNames(user: ManagedUser): string {
   return (user.roles ?? []).map(role => role.name).join('、')
 }
 </script>
@@ -137,7 +143,7 @@ function roleNames(user: UserItem): string {
       <template #default="{ row }">
         <span class="status-line">
           <el-switch
-            v-if="canEditUsers && row.id !== auth.user?.id"
+            v-if="manageable(row) && row.id !== auth.user?.id"
             :model-value="row.status === 'active'"
             :aria-label="`${row.username} 的账号启用`"
             @change="$emit('toggle', row)"
@@ -156,7 +162,7 @@ function roleNames(user: UserItem): string {
               :title="lockText(row.locked_seconds)"
             >已锁定</span>
             <el-button
-              v-if="canEditUsers"
+              v-if="manageable(row)"
               link
               type="primary"
               @click="$emit('unlock', row)"
@@ -165,7 +171,7 @@ function roleNames(user: UserItem): string {
             </el-button>
           </template>
           <span
-            v-else-if="canEditUsers && row.id !== auth.user?.id"
+            v-else-if="manageable(row) && row.id !== auth.user?.id"
             class="status-text"
           >{{ row.status === 'active' ? '启用' : '停用' }}</span>
         </span>
@@ -249,10 +255,10 @@ function roleNames(user: UserItem): string {
           type="primary"
           @click="$emit('open', row)"
         >
-          {{ canGrant && !(row.roles ?? []).length ? '分配角色' : canEditUsers || canGrant ? '编辑' : '查看' }}
+          {{ openLabel(row, { edit: canEditUsers, grant: canGrant }) }}
         </el-button>
         <el-dropdown
-          v-if="canEditUsers || canAudit"
+          v-if="manageable(row) || canAudit"
           class="ops-more"
           trigger="click"
         >
@@ -265,26 +271,26 @@ function roleNames(user: UserItem): string {
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item
-                v-if="canEditUsers && row.id !== auth.user?.id"
+                v-if="manageable(row) && row.id !== auth.user?.id"
                 @click="$emit('remove', row)"
               >
                 删除
               </el-dropdown-item>
               <el-dropdown-item
-                v-if="canEditUsers"
+                v-if="manageable(row)"
                 @click="$emit('reset-password', row)"
               >
                 重置密码
               </el-dropdown-item>
               <el-dropdown-item
-                v-if="canEditUsers"
+                v-if="manageable(row)"
                 @click="$emit('revoke', row)"
               >
                 强制下线
               </el-dropdown-item>
               <el-dropdown-item
                 v-if="canAudit"
-                :divided="canEditUsers"
+                :divided="manageable(row)"
                 @click="$emit('audit', row)"
               >
                 操作记录
