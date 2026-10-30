@@ -52,6 +52,8 @@ def test_internal_id_md5() -> None:
     assert digest == make_internal_id("北京市财政局", "北京市", "", "政务公开")
     assert digest != make_internal_id("北京市财政局", "北京市", "市辖区", "政务公开")
     assert len(digest) == 32
+    # 字段边界不同就是不同的信源：原来直接拼接，这两条算出同一个 id，被当成重复。
+    assert make_internal_id("某局", "北京市", "海淀", "区政策") != make_internal_id("某局", "北京市", "海淀区", "政策")
 
 
 def test_interpretation_keys() -> None:

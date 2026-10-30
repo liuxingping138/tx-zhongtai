@@ -72,8 +72,13 @@ def _fit(code: str, length: int) -> str:
     return code.ljust(length, "0")[:length]
 
 
+# 字段之间的分隔符（单元分隔符 U+001F，正常文本里不会出现）。原来直接拼接，("ab","c") 和 ("a","bc") 算出同一个 id，
+# 两个不同的信源会被当成重复。库里已有的 id 由迁移 d8e9f0a1b2c5 按同一算法重算（PostgreSQL 的 md5 结果和这里一致）。
+_ID_SEPARATOR = "\x1f"
+
+
 def make_internal_id(site_name: str, province_name: str, city_name: str, tag: str) -> str:
-    raw = f"{site_name}{province_name}{city_name}{tag}"
+    raw = _ID_SEPARATOR.join((site_name, province_name, city_name, tag))
     return hashlib.md5(raw.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
