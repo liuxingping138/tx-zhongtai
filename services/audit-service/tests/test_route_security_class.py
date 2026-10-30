@@ -16,12 +16,15 @@ def test_api_and_internal_routes_pass_security_audit() -> None:
 
 
 def test_query_routes_are_bound_to_the_audit_resource() -> None:
-    """审计查询接口全部挂在 system.audit 上，只读动作。"""
+    """审计查询接口全部挂在 system.audit 上，只读动作；任务调度页的接口挂 system.scheduler。"""
 
     mapping = permission_map(app, covered_prefixes=COVERED)
-    assert mapping, "审计查询接口一条都没挂权限依赖"
-    assert all(resource == AUDIT_RESOURCE for resource, _ in mapping.values())
-    assert all(action in {"list", "read"} for _, action in mapping.values())
+    scheduling = {route: bound for route, bound in mapping.items() if "/scheduled-jobs" in route}
+    queries = {route: bound for route, bound in mapping.items() if route not in scheduling}
+    assert queries, "审计查询接口一条都没挂权限依赖"
+    assert all(resource == AUDIT_RESOURCE for resource, _ in queries.values())
+    assert all(action in {"list", "read"} for _, action in queries.values())
+    assert scheduling and all(resource == "system.scheduler" for resource, _ in scheduling.values())
 
 
 def test_ingest_route_is_internal_only() -> None:

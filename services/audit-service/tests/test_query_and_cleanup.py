@@ -208,14 +208,17 @@ class TestCleanup:
         monkeypatch.setattr(cleanup, "utcnow", lambda: now)
         executed: list[Any] = []
 
+        # 分批删：第一批满了接着删，不满就停。每批一个事务，不长时间占着表。
+        counts = iter([cleanup.DELETE_BATCH, 3])
+
         async def execute(stmt: Any) -> Any:
             executed.append(stmt)
-            return SimpleNamespace(all=lambda: [1, 2, 3])
+            return SimpleNamespace(rowcount=next(counts))
 
         session = SimpleNamespace(execute=execute, commit=AsyncMock())
         deleted = await cleanup.delete_expired(session, retention_days=180)  # type: ignore[arg-type]
-        assert deleted == 3
-        session.commit.assert_awaited_once()
+        assert deleted == cleanup.DELETE_BATCH + 3
+        assert session.commit.await_count == 2
         cutoff = (now - timedelta(days=180)).isoformat(sep=" ")
         assert f"occurred_at < '{cutoff}" in str(
             executed[0].compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
@@ -229,3 +232,43 @@ class TestCleanup:
         sent: IngestRequest = recorded.await_args.kwargs["body"]
         assert (sent.module_code, sent.action_code) == ("system.audit", "cleanup")
         assert sent.changes == {"deleted": 7, "retention_days": 180}
+
+
+class TestScheduledCleanup:
+    async def test_refuses_without_a_separate_cleanup_account(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """应用账号对 audit_events 只有查和插；没配清理账号就明说，不拿应用账号去删。"""
+
+        from platform_common.scheduler import UserFacingError
+
+        from app.application import scheduled_jobs
+
+        settings = SimpleNamespace(cleanup_database_url=None, database_url="postgresql+asyncpg://app@db/audit")
+        monkeypatch.setattr(scheduled_jobs, "get_settings", lambda: settings)
+        with pytest.raises(UserFacingError, match="清理账号"):
+            await scheduled_jobs.run_cleanup(uuid.uuid4())
+        settings.cleanup_database_url = settings.database_url
+        with pytest.raises(UserFacingError, match="清理账号"):
+            await scheduled_jobs.run_cleanup(uuid.uuid4())
+
+    async def test_schedule_changes_are_written_straight_into_the_audit_table(self) -> None:
+        from platform_common.actors import Actor
+
+        from app.application import scheduled_jobs
+
+        added: list[Any] = []
+        session = SimpleNamespace(add=added.append)
+        actor = Actor(id="u1", name="管理员")
+        await scheduled_jobs.record_schedule_change(
+            session,  # type: ignore[arg-type]
+            event_type="scheduler.updated",
+            actor=actor,
+            target_id="audit_cleanup",
+            changes={"daily_time": "05:00"},
+        )
+        event = added[0]
+        assert (event.module_code, event.action_code, event.target_id) == (
+            "system.scheduler",
+            "update",
+            "audit_cleanup",
+        )
+        assert event.changes == {"daily_time": "05:00"} and event.actor_name_snapshot == "管理员"

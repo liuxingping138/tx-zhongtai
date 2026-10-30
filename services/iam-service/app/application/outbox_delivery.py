@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 import httpx
@@ -20,6 +20,9 @@ from app.domain.models import OutboxEvent
 from app.repositories import outbox as outbox_repo
 
 logger = get_logger("iam.worker")
+# 已投递的出站记录保留多久、一批删多少：和其他服务的公共 Outbox 一致。
+OUTBOX_RETENTION = timedelta(days=30)
+PURGE_BATCH = 5000
 
 
 class DeliveryCounters:
@@ -28,6 +31,20 @@ class DeliveryCounters:
     retried = 0
     parked = 0
     lease_lost = 0
+
+
+async def purge_delivered(*, now: datetime | None = None) -> int:
+    """已投递的出站记录保留 OUTBOX_RETENTION（和其他服务一致），分批删、每批一个事务。"""
+
+    before = (now or utcnow()) - OUTBOX_RETENTION
+    total = 0
+    while True:
+        async with SessionLocal() as session:
+            deleted = await outbox_repo.purge_delivered(session, before=before, limit=PURGE_BATCH)
+            await session.commit()
+        total += deleted
+        if deleted < PURGE_BATCH:
+            return total
 
 
 async def claim_and_deliver(settings: Settings, client: httpx.AsyncClient) -> int:

@@ -48,7 +48,7 @@ root_package = "app"
 name = "分层：入口 → application → repositories → domain"
 type = "layers"
 layers = [
-    "app.api | app.cli",
+    "app.api | app.cli | app.worker",
     "app.application",
     "app.repositories",
     "app.domain",
@@ -63,7 +63,7 @@ forbidden_modules = ["app.api", "app.application", "app.repositories"]
 [[tool.importlinter.contracts]]
 name = "入口层不跳过 application 直接用仓储"
 type = "forbidden"
-source_modules = ["app.api", "app.cli"]
+source_modules = ["app.api", "app.cli", "app.worker"]
 forbidden_modules = ["app.repositories"]
 # 只管直接导入；经 application 间接用到仓储是正常链路。
 allow_indirect_imports = true

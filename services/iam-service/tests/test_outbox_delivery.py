@@ -156,3 +156,20 @@ async def test_metrics_and_replay_delegate_to_the_repository(monkeypatch: pytest
     assert await module.metrics(object()) == {"dead_count": 1}  # type: ignore[arg-type]
     assert await module.replay(object(), event_id=None, event_type="x", statuses=("dead",), limit=7) == 5  # type: ignore[arg-type]
     assert replayed.await_args.kwargs["limit"] == 7
+
+
+async def test_delivered_events_are_purged_after_retention_in_batches(monkeypatch: pytest.MonkeyPatch) -> None:
+    """已投递的出站记录保留 30 天，分批删：原来永不删除，iam_outbox 只增不减。"""
+
+    now = utcnow()
+    batches = iter([module.PURGE_BATCH, 3])
+    cutoffs: list[Any] = []
+
+    async def purge(_session: Any, *, before: Any, limit: int) -> int:
+        cutoffs.append((before, limit))
+        return next(batches)
+
+    monkeypatch.setattr(module, "SessionLocal", _Db)
+    monkeypatch.setattr(module.outbox_repo, "purge_delivered", purge)
+    assert await module.purge_delivered(now=now) == module.PURGE_BATCH + 3
+    assert cutoffs == [(now - module.OUTBOX_RETENTION, module.PURGE_BATCH)] * 2

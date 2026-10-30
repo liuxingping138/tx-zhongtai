@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from typing import Any, cast
 
 from pydantic import BaseModel, Field
-from sqlalchemy import CursorResult, and_, or_, select, update
+from sqlalchemy import CursorResult, and_, delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from platform_common.clock import utcnow
@@ -155,6 +155,19 @@ class OutboxRepository:
                 "lease_until": None,
             },
         )
+
+    async def purge_delivered(self, session: AsyncSession, *, before: datetime, limit: int = 5000) -> int:
+        """删掉 before 之前建的、已经投递成功的事件，一次最多 limit 条。审计服务那边已经入库，这里留着只会越积越多。"""
+
+        model = self._model
+        doomed = (
+            select(model.event_id)
+            .where(model.status == OutboxStatus.DELIVERED, model.created_at < before)
+            .limit(limit)
+            .scalar_subquery()
+        )
+        result = cast(CursorResult[Any], await session.execute(delete(model).where(model.event_id.in_(doomed))))
+        return int(result.rowcount or 0)
 
     async def replay(
         self,

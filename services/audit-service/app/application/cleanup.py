@@ -13,15 +13,21 @@ from app.application.ingest import ingest_event
 from app.application.schemas import IngestRequest
 from app.domain.models import AuditEvent
 
+# 一批删多少：一次删几十万行会长时间占着表、生成巨量 WAL；分批每批一个事务。
+DELETE_BATCH = 5000
+
 
 async def delete_expired(cleanup_session: AsyncSession, *, retention_days: int) -> int:
     cutoff = utcnow() - timedelta(days=retention_days)
-    result = await cleanup_session.execute(
-        delete(AuditEvent).where(AuditEvent.occurred_at < cutoff).returning(AuditEvent.id)
-    )
-    deleted = len(result.all())
-    await cleanup_session.commit()
-    return deleted
+    total = 0
+    while True:
+        doomed = select(AuditEvent.id).where(AuditEvent.occurred_at < cutoff).limit(DELETE_BATCH).scalar_subquery()
+        result = await cleanup_session.execute(delete(AuditEvent).where(AuditEvent.id.in_(doomed)))
+        await cleanup_session.commit()
+        deleted = int(getattr(result, "rowcount", 0) or 0)
+        total += deleted
+        if deleted < DELETE_BATCH:
+            return total
 
 
 async def remaining_count(session: AsyncSession) -> int:

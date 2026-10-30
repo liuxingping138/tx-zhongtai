@@ -14,6 +14,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from app.api.events import router as events_router
 from app.api.internal import router as internal_router
+from app.api.scheduled_jobs import router as scheduled_jobs_router
 from app.api.security import get_authz_client
 from app.core.config import get_settings
 from app.core.database import check_database_ready
@@ -61,6 +62,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(internal_router)
     app.include_router(events_router)
+    app.include_router(scheduled_jobs_router)
     return app
 
 

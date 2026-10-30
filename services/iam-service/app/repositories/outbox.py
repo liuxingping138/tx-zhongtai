@@ -8,7 +8,7 @@ from typing import Any
 
 from platform_common.clock import utcnow
 from platform_common.redaction import redact
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.enums import OutboxStatus
@@ -36,6 +36,19 @@ async def enqueue(
     )
     session.add(event)
     return event
+
+
+async def purge_delivered(session: AsyncSession, *, before: datetime, limit: int = 5000) -> int:
+    """删掉 before 之前建的、已投递成功的事件，一次最多 limit 条（同公共 Outbox 的 purge_delivered）。"""
+
+    doomed = (
+        select(OutboxEvent.event_id)
+        .where(OutboxEvent.status == OutboxStatus.DELIVERED, OutboxEvent.created_at < before)
+        .limit(limit)
+        .scalar_subquery()
+    )
+    result = await session.execute(delete(OutboxEvent).where(OutboxEvent.event_id.in_(doomed)))
+    return int(getattr(result, "rowcount", 0) or 0)
 
 
 async def claim_batch(

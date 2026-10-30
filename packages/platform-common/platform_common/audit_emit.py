@@ -10,13 +10,16 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from collections.abc import Callable, Mapping
+from datetime import datetime, timedelta
 from typing import Any, Protocol
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from platform_common.actors import Actor
+from platform_common.clock import utcnow
 from platform_common.logging_setup import get_logger
 from platform_common.outbox import OutboxRepository
 from platform_common.redaction import redact
@@ -36,6 +39,10 @@ _SUMMARY_COUNTS: tuple[tuple[str, str], ...] = (
 _BASE_KEYS = frozenset({"actor_id", "actor_name", "target_id", "outcome", "request_id", "changes"})
 # 审计服务单条事件上限 32KB，超了直接拒收、这条进 dead：变更内容留足余量，太长的清单截短并注明原数。
 _CHANGES_MAX_BYTES = 24_000
+# 已投递的出站记录保留 30 天（审计服务那边早已入库，这里只留着排查投递问题），每小时清一次、一批 5000 条。
+OUTBOX_RETENTION = timedelta(days=30)
+PURGE_EVERY_SECONDS = 3600.0
+PURGE_BATCH = 5000
 
 
 def _size(value: Any) -> int:
@@ -217,10 +224,30 @@ class AuditEmitter:
             self._logger.warning(f"{self._log_name}_audit_deliver_failed", event_id=str(event.event_id), error=error)
         return ok and error is None
 
+    async def purge_delivered(self, *, now: datetime | None = None) -> int:
+        """已投递的出站记录保留 OUTBOX_RETENTION，分批删，每批一个事务，不长时间占着表。"""
+
+        before = (now or utcnow()) - OUTBOX_RETENTION
+        total = 0
+        while True:
+            async with self._sessions() as session:
+                deleted = await self._repo.purge_delivered(session, before=before, limit=PURGE_BATCH)
+                await session.commit()
+            total += deleted
+            if deleted < PURGE_BATCH:
+                break
+        if total:
+            self._logger.info(f"{self._log_name}_outbox_purged", deleted=total)
+        return total
+
     async def outbox_loop(self, stop: asyncio.Event, settings: _AuditSettings) -> None:
+        next_purge = 0.0
         while not stop.is_set():
             try:
                 await self.deliver_pending(settings)
+                if time.monotonic() >= next_purge:
+                    next_purge = time.monotonic() + PURGE_EVERY_SECONDS
+                    await self.purge_delivered()
             except Exception:
                 self._logger.exception(f"{self._log_name}_outbox_loop_failed")
             try:

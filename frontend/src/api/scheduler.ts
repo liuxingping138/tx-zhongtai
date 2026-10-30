@@ -50,6 +50,7 @@ export interface ServiceOverview {
 export const SCHEDULER_SERVICES = [
   { name: '政策服务', base: '/policy/scheduled-jobs' },
   { name: '系统管理', base: '/system/scheduled-jobs' },
+  { name: '操作日志', base: '/audit/scheduled-jobs' },
 ] as const
 export interface WorkerStatus { service: string; online: boolean; heartbeat_at: string | null; error: string }
 export interface SchedulerOverview { items: ScheduledJob[]; workers: WorkerStatus[] }

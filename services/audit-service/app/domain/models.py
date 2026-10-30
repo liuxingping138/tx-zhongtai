@@ -7,6 +7,12 @@ from datetime import datetime
 from typing import Any
 
 from platform_common.orm_base import Base
+from platform_common.scheduler.models import (
+    ScheduledJobMixin,
+    ScheduledRunMixin,
+    SchedulerHeartbeatMixin,
+    run_table_args,
+)
 from sqlalchemy import DateTime, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -48,3 +54,19 @@ class AuditEvent(Base):
     changes: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True, comment="变更内容")
     summary: Mapped[str | None] = mapped_column(Text, nullable=True, comment="摘要")
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="耗时毫秒")
+
+
+class ScheduledJob(ScheduledJobMixin, Base):
+    __tablename__ = "audit_scheduled_jobs"
+    __table_args__ = {"comment": "定时任务配置"}
+
+
+class ScheduledRun(ScheduledRunMixin, Base):
+    __tablename__ = "audit_scheduled_runs"
+    __jobs_table__ = "audit_scheduled_jobs"
+    __table_args__ = run_table_args("定时任务执行记录")
+
+
+class SchedulerHeartbeat(SchedulerHeartbeatMixin, Base):
+    __tablename__ = "audit_scheduler_heartbeat"
+    __table_args__ = {"comment": "调度进程心跳"}

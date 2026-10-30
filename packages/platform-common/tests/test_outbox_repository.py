@@ -178,3 +178,15 @@ class TestReplayCli:
         )
         kwargs = repository.replay.await_args.kwargs
         assert (kwargs["event_id"], kwargs["limit"], kwargs["statuses"]) == (target, 5, ("pending",))
+
+
+async def test_purge_deletes_only_delivered_events_created_before_the_cutoff_in_one_batch() -> None:
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=SimpleNamespace(rowcount=7))
+    deleted = await OutboxRepository(_Event).purge_delivered(session, before=NOW, limit=7)
+    statement = session.execute.call_args.args[0]
+    sql = str(statement.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+    assert deleted == 7
+    assert sql.startswith("DELETE FROM fake_outbox")
+    assert f"fake_outbox.status = '{OutboxStatus.DELIVERED}'" in sql and "LIMIT 7" in sql
+    assert "fake_outbox.created_at <" in sql

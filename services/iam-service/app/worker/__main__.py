@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import signal
+import time
 
 import httpx
 from platform_common.logging_setup import get_logger, setup_logging
@@ -18,6 +19,7 @@ setup_logging(settings.service_name, level=settings.log_level, json_output=setti
 logger = get_logger("iam.worker")
 # 与 policy 的调度锁键不同：两个服务各自一个 leader，库也各自独立。
 SCHEDULER_LOCK = 72120261026
+PURGE_EVERY_SECONDS = 3600.0
 runner = SchedulerRunner(
     scheduler, engine=engine, session_factory=SessionLocal, leader_lock=SCHEDULER_LOCK, logger_name="iam.scheduler"
 )
@@ -37,6 +39,19 @@ async def _log_metrics() -> None:
     )
 
 
+async def _housekeeping(cycles: int, next_purge: float) -> float:
+    """隔几轮记一次投递指标；已投递的出站记录每小时清一次，保留 30 天（审计服务那边早已入库）。返回下次清理的时刻。"""
+
+    if cycles == 1 or cycles % 15 == 0:
+        await _log_metrics()
+    if time.monotonic() < next_purge:
+        return next_purge
+    purged = await outbox_delivery.purge_delivered()
+    if purged:
+        logger.info("outbox_purged", deleted=purged)
+    return time.monotonic() + PURGE_EVERY_SECONDS
+
+
 async def run() -> None:
     stop = asyncio.Event()
 
@@ -54,14 +69,14 @@ async def run() -> None:
     scheduling = asyncio.create_task(runner.run(stop))
     timeout = httpx.Timeout(5.0)
     cycles = 0
+    next_purge = 0.0
     async with httpx.AsyncClient(base_url=settings.audit_ingest_url.rstrip("/"), timeout=timeout) as client:
         logger.info("iam_worker_started", ingest_url=settings.audit_ingest_url)
         while not stop.is_set():
             try:
                 claimed = await claim_and_deliver(settings, client)
                 cycles += 1
-                if cycles == 1 or cycles % 15 == 0:
-                    await _log_metrics()
+                next_purge = await _housekeeping(cycles, next_purge)
                 if claimed == 0:
                     await asyncio.wait_for(stop.wait(), timeout=settings.worker_poll_interval_seconds)
             except TimeoutError:

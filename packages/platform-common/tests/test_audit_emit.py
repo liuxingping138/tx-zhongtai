@@ -208,3 +208,24 @@ def test_ingest_keeps_extra_next_to_changes_and_stays_under_the_size_limit() -> 
     fitted = ingest_changes(huge)
     assert fitted["record_ids_总数"] == 2000 and len(fitted["record_ids"]) < 2000
     assert len(json.dumps(fitted, ensure_ascii=False).encode()) <= 24_000
+
+
+@pytest.mark.asyncio
+async def test_delivered_events_older_than_retention_are_purged_in_batches(monkeypatch: pytest.MonkeyPatch) -> None:
+    """已投递的出站记录保留 30 天：审计服务早已入库，这里永不删除只会越积越多。分批删、每批一个事务。"""
+
+    from platform_common import audit_emit
+
+    calls: list[datetime] = []
+    batches = iter([audit_emit.PURGE_BATCH, 12])
+
+    class _PurgingRepo(_Repo):
+        async def purge_delivered(self, session: Any, *, before: datetime, limit: int = 5000) -> int:
+            calls.append(before)
+            return next(batches)
+
+    emitter = _emitter()
+    emitter._sessions = _Session  # type: ignore[assignment]
+    emitter._repo = _PurgingRepo([])
+    assert await emitter.purge_delivered(now=OCCURRED) == audit_emit.PURGE_BATCH + 12
+    assert calls == [OCCURRED - audit_emit.OUTBOX_RETENTION] * 2
