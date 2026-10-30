@@ -16,6 +16,8 @@ interface Options {
   /** 把当前草稿存成模板并返回它，失败返回 null */
   create: () => Promise<PromptTemplate | null>
   changed: (template: PromptTemplate) => void
+  /** 和保存排队执行：上传、删附件也会换版本号，和保存同时发出去会自己撞自己回 409。 */
+  inTurn?: <T>(task: () => Promise<T>) => Promise<T>
 }
 
 /**
@@ -30,6 +32,7 @@ export function codeDownloadName(name: string): string {
 
 export function useTemplateFiles(options: Options) {
   const busy = ref<PromptFileKind | null>(null)
+  const queued = <T>(task: () => Promise<T>): Promise<T> => (options.inTurn ? options.inTurn(task) : task())
   const inputs: Partial<Record<PromptFileKind, HTMLInputElement | null>> = {}
 
   function bind(kind: PromptFileKind) {
@@ -57,7 +60,7 @@ export function useTemplateFiles(options: Options) {
       const creating = !options.template.value
       const template = await ensure()
       if (!template) return
-      options.changed(await uploadPromptFile(template.id, kind, file))
+      options.changed(await queued(() => uploadPromptFile(template.id, kind, file)))
       ElMessage.success(creating ? `模板已保存，${UPLOADED[kind]}` : UPLOADED[kind])
     } catch (error) {
       ElMessage.error(errorMessage(error, '上传失败，请重试'))
@@ -79,7 +82,7 @@ export function useTemplateFiles(options: Options) {
     if (!ok) return false
     busy.value = kind
     try {
-      options.changed(await deletePromptFile(template.id, kind))
+      options.changed(await queued(() => deletePromptFile(template.id, kind)))
       return true
     } catch (error) {
       ElMessage.error(errorMessage(error, '删除失败，请重试'))

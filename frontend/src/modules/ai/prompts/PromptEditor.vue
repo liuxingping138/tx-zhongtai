@@ -95,6 +95,11 @@ function move(step: number): void {
 /** Ctrl/⌘ + Enter 试发、Ctrl/⌘ + S 保存。处理了返回 true。 */
 function shortcut(event: KeyboardEvent): boolean {
   if (!(event.metaKey || event.ctrlKey)) return false
+  // 按住不放时浏览器连发按键：只认第一下，不然一按就是好几次保存、好几次试发。
+  if (event.repeat && (event.key === 'Enter' || event.key.toLowerCase() === 's')) {
+    event.preventDefault()
+    return true
+  }
   if (event.key === 'Enter') emit('run')
   else if (event.key.toLowerCase() === 's') emit('save')
   else return false

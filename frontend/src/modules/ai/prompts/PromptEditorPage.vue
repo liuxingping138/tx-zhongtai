@@ -21,6 +21,7 @@ import { fitSummary } from './taskFit'
 import { flowSteps, stepActions, withSample, type StepKey } from './templateStatus'
 import { useTaskFit } from './useTaskFit'
 import { useTemplateFiles } from './useTemplateFiles'
+import { createTurns } from '../shared/inTurn'
 import '../shared/ai.css'
 
 /**
@@ -54,7 +55,9 @@ watch(() => form.category, category => { if (category === 'policy') void taskFit
 const releaseFit = computed(() => fitSummary(taskFit.results.value))
 const titleInput = ref<HTMLInputElement | null>(null)
 const FILE_KINDS: PromptFileKind[] = ['excel', 'code']
-const files = useTemplateFiles({ template: selected, canCreate: canCreateDraft, create: () => persist(true), changed: replace })
+// 保存、上传、删附件都会换版本号，排队一个接一个发（见 createTurns）。
+const inTurn = createTurns()
+const files = useTemplateFiles({ template: selected, canCreate: canCreateDraft, create: () => persist(true), changed: replace, inTurn })
 
 // 新建的地址是 /ai/prompts/new，保存后换成模板 ID：同一条路由，页面不重建，试发记录也还在。
 const routeId = computed(() => (typeof route.params.id === 'string' && route.params.id !== 'new' ? route.params.id : ''))
@@ -142,9 +145,13 @@ function canCreateDraft(): boolean {
   return true
 }
 
-/** 存下草稿并返回模板；quiet 时不弹「已保存」（上传时顺便保存，由上传那边一起提示）。 */
-async function persist(quiet = false): Promise<PromptTemplate | null> {
-  if (!canEdit.value || !canCreateDraft()) return null
+/** 存下草稿并返回模板；quiet 时不弹「已保存」（上传时顺便保存，由上传那边一起提示）。和上传、删附件排队执行（inTurn）。 */
+function persist(quiet = false): Promise<PromptTemplate | null> {
+  if (!canEdit.value || !canCreateDraft()) return Promise.resolve(null)
+  return inTurn(() => save(quiet))
+}
+
+async function save(quiet: boolean): Promise<PromptTemplate | null> {
   saving.value = true
   try {
     const creating = !selected.value
