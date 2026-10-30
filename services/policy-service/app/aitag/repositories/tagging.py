@@ -46,19 +46,22 @@ async def get_run(session: AsyncSession, run_id: uuid.UUID) -> PolicyAiRun | Non
 
 
 async def failed_ai_run(session: AsyncSession, run_field: str, *, current: uuid.UUID, since: datetime) -> str:
-    """这一步上一次发起的 AI 任务，前提是那一批失败了（中断、超时、轮询连不上、写库出错）：
-    它已经答好的行还没写进业务表，这一批重读同一批数据时可以沿用。上一批成功了就不用找，返回空串。"""
+    """这一步最近一次失败的批次（中断、超时、轮询连不上、写库出错）发起的 AI 任务：它已经答好的行还没写进业务表，
+    这一批读到同样的数据时可以沿用。
+
+    不要求它是最近一批：按天读的一批失败后、重试前插进来一批「重新判断类型」并成功了，原来只看最近一批就找不到它，
+    那批已付费的答案全部重问。沿用是 ai-service 按上线版本、模型、码表和整行内容逐行核对的，
+    找到更早的失败批次也不会抄错。
+    """
 
     column: InstrumentedAttribute[str] = getattr(PolicyAiRun, run_field)
-    row = (
-        await session.execute(
-            select(PolicyAiRun.status, column)
-            .where(PolicyAiRun.id != current, column != "", PolicyAiRun.started_at >= since)
-            .order_by(PolicyAiRun.started_at.desc())
-            .limit(1)
-        )
-    ).first()
-    return str(row[1]) if row is not None and row[0] == "failed" else ""
+    value = await session.scalar(
+        select(column)
+        .where(PolicyAiRun.id != current, column != "", PolicyAiRun.status == "failed", PolicyAiRun.started_at >= since)
+        .order_by(PolicyAiRun.started_at.desc())
+        .limit(1)
+    )
+    return str(value or "")
 
 
 async def base_tags_by_source(session: AsyncSession, source_ids: list[str]) -> dict[str, BaseTag]:

@@ -401,3 +401,31 @@ async def test_reinterpreting_keeps_rows_people_already_verified(
         ("一网通办", "待验证"),
         ("城市大脑", "人工验证"),
     ]
+
+
+async def test_the_latest_failed_batch_is_reused_even_after_a_later_success() -> None:
+    """按天读的一批失败后、重试前插进来一批重判并成功了：原来只看最近一批，找不到那批失败的，它已付费的答案全部重问。"""
+
+    from platform_common.clock import utcnow
+
+    from app.aitag.repositories import tagging as repo
+
+    now = utcnow()
+    runs = [
+        PolicyAiRun(
+            id=uuid.uuid4(), status="failed", stage="typing", type_run_id="a" * 32, started_at=now - timedelta(hours=3)
+        ),
+        PolicyAiRun(
+            id=uuid.uuid4(), status="success", stage="done", type_run_id="b" * 32, started_at=now - timedelta(hours=2)
+        ),
+        PolicyAiRun(
+            id=uuid.uuid4(), status="success", stage="done", type_run_id="", started_at=now - timedelta(hours=1)
+        ),
+    ]
+    async with SessionLocal() as session:
+        session.add_all(runs)
+        await session.commit()
+        current = uuid.uuid4()
+        found = await repo.failed_ai_run(session, "type_run_id", current=current, since=now - timedelta(days=1))
+        assert found == "a" * 32
+        assert await repo.failed_ai_run(session, "type_run_id", current=current, since=now - timedelta(hours=2)) == ""
