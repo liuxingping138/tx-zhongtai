@@ -149,6 +149,9 @@ def run_store(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     async def get_run(_session: Any, run_id: uuid.UUID) -> Any:
         return store.get(str(run_id))
 
+    async def run_of_ai_task(_session: Any, run_field: str, ai_run_id: str) -> Any:
+        return next((run for run in store.values() if getattr(run, run_field, "") == ai_run_id), None)
+
     original_add = session.add
 
     def add(item: Any) -> None:
@@ -159,6 +162,7 @@ def run_store(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(tagging, "SessionLocal", lambda: session)
     monkeypatch.setattr(pipeline, "SessionLocal", lambda: session)
     monkeypatch.setattr(repo, "get_run", get_run)
+    monkeypatch.setattr(repo, "run_of_ai_task", run_of_ai_task)
     return store
 
 
@@ -769,6 +773,37 @@ async def test_the_next_batch_reuses_answers_from_the_failed_one(
     assert ("POST", f"/internal/v1/pipeline-runs/{old}/stop") in calls
 
 
+async def test_the_failed_batch_gets_its_final_cost_once_the_ai_run_settles(
+    monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]
+) -> None:
+    """上一批失败时只补记到最后一次轮询到的花费，之后那边又花的钱今日已花里没有：停稳后按最终花费补上差额。"""
+
+    old = "o" * 32
+    failed = _run_row(interpret_run_id=old, interpret_cost=Decimal("0.4"), cost=Decimal("0.4"))
+    run_store["previous"] = failed
+    current = uuid.uuid4()
+    run_store[str(current)] = _run_row()
+
+    async def failed_ai_run(*_: Any, **__: Any) -> str:
+        return old
+
+    async def ai(method: str, path: str, **kwargs: Any) -> Any:
+        if path == f"/internal/v1/pipeline-runs/{old}":
+            return {"status": "cancelled", "inference_cost": "0.9", "search_cost": "0.1"}
+        if method == "POST":
+            return {"id": "r" * 32, "reused": 0}
+        if path.endswith("/results"):
+            return {"items": []}
+        return {"status": "done", "done_count": 1}
+
+    monkeypatch.setattr(repo, "failed_ai_run", failed_ai_run)
+    monkeypatch.setattr(internal_clients, "ai", ai)
+    monkeypatch.setattr(pipeline, "POLL_SECONDS", 0)
+    spend = pipeline.Spend(limit=Decimal(10), before=Decimal(0))
+    await pipeline.ask(current, spend, prompt_id="p", rows=[], caller="c", run_field="interpret_run_id")
+    assert (failed.interpret_cost, failed.cost) == (Decimal("1.0"), Decimal("1.0"))
+
+
 async def test_an_ai_run_that_never_started_fails_the_batch(
     monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]
 ) -> None:
@@ -967,3 +1002,42 @@ async def test_a_batch_too_large_for_ai_service_sends_what_fits_and_leaves_the_r
     assert sent == [2] and len(results) == 3
     assert [pipeline.not_run(result) for result in results] == [False, False, True]
     assert rules.resume_point(results, pipeline.NOT_RUN) == 2
+
+
+async def test_new_copies_of_an_existing_policy_are_remembered_so_a_rescan_does_not_pay_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """和已有基础标签内容一样的新政策不建行；原来也不留记录，读取进度往回调重扫时又当成新的、再付一遍钱。"""
+
+    from app.policy.domain.models import BASE_TAG_FIELDS, BaseTag, content_hash
+
+    values = rules.base_tag_values({"name": "政策甲"}, ["信息化建设类"], "")
+    existing = BaseTag(source_content_id="c0", version=1, **values)
+    existing.content_hash = content_hash(values, BASE_TAG_FIELDS)
+    marked: list[list[str]] = []
+
+    async def by_source(*_: Any) -> dict[str, BaseTag]:
+        return {}
+
+    async def by_hash(_session: Any, digest: str) -> BaseTag | None:
+        return existing if digest == existing.content_hash else None
+
+    async def mark(_session: Any, ids: list[str], *_: Any) -> None:
+        marked.append(ids)
+
+    async def task(*_: Any, **__: Any) -> Any:
+        return SimpleNamespace(cursor_date=DAY, cursor_content_id="")
+
+    async def noop(*_: Any, **__: Any) -> None:
+        return None
+
+    monkeypatch.setattr(repo, "base_tags_by_source", by_source)
+    monkeypatch.setattr(repo, "base_tag_by_hash", by_hash)
+    monkeypatch.setattr(repo, "mark_skipped", mark)
+    monkeypatch.setattr(repo, "task", task)
+    monkeypatch.setattr(tagging, "enqueue_event", noop)
+    monkeypatch.setattr(tagging, "SessionLocal", FakeSession)
+    rows = [{"content_id": "c9", "name": "政策甲", "collect_date": DAY}]
+    results = [{"error": "", "items": [{"政策类型名称": "信息化建设类"}]}]
+    await tagging._save_types(uuid.uuid4(), rows, results, ["信息化建设类"], retag=False)
+    assert marked == [["c9"]]

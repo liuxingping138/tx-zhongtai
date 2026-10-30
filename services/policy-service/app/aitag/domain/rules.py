@@ -293,6 +293,7 @@ AI_NOTES = (
     TITLE_SCRIPT_NOTE,
 )
 DUPLICATE_NOTE = "重新判断后内容和另一条基础标签相同，未重复写入"
+COPY_SKIPPED = "和已有基础标签内容相同"
 MISSING_NOTE = "源库里已经找不到这条政策，没有重新判断类型"
 
 

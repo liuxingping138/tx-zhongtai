@@ -18,7 +18,7 @@ import anyio
 from platform_common.clock import utcnow
 from platform_common.errors import ApiError
 
-from app.aitag.application import interpreting, retag
+from app.aitag.application import base_tag_rows, interpreting, retag
 from app.aitag.application.interpreting import untouched
 from app.aitag.application.pipeline import (
     NOT_RUN,
@@ -41,8 +41,7 @@ from app.common import internal_clients
 from app.common.audit_emit import enqueue_event
 from app.common.errors import UserFacingError
 from app.core.database import SessionLocal
-from app.policy.domain.fields import TYPE_NOTES
-from app.policy.domain.models import BASE_TAG_FIELDS, BaseTag, content_hash
+from app.policy.domain.models import BASE_TAG_FIELDS, content_hash
 
 __all__ = ["abandon", "day_start", "policy_type_names", "run_batch", "run_summary", "summary", "today"]
 
@@ -54,49 +53,6 @@ SOURCE_SETTLE_DAYS = 2
 
 async def policy_type_names() -> list[str]:
     return await internal_clients.policy_type_names()
-
-
-def _write_base_tag(
-    session: Any, existing: BaseTag | None, source_row: dict[str, Any], values: dict[str, str], *, force: bool = False
-) -> bool:
-    """有这条政策的 AI 行就更新，返回是否写入。
-
-    人工在打标之后改过的不覆盖，除非是人在列表上点了「重新判断类型」（force）。
-    """
-
-    now = utcnow()
-    if existing is not None:
-        if not force and existing.tagged_at is not None and existing.updated_at > existing.tagged_at:
-            return False
-        existing.type_retag_at = None
-        # 只有类型或「是否解读」变了，后面两步才按新类型重做：用新模板重判一千条类型没变的政策，
-        # 不能把最贵的解读整批重跑一遍。
-        changed = rules.redoes_downstream(existing, values)
-        for key, value in values.items():
-            setattr(existing, key, value)
-        existing.refresh_hash()
-        existing.version += 1
-        existing.tagged_at = existing.updated_at = now
-        if changed:
-            existing.interpreted_at = existing.opportunity_at = None
-        existing.updated_by_id, existing.updated_by_name = ROBOT.id, ROBOT.name
-        return True
-    session.add(
-        BaseTag(
-            content_hash=content_hash(values, BASE_TAG_FIELDS),
-            source_content_id=str(source_row["content_id"]),
-            tagged_at=now,
-            version=1,
-            created_at=now,
-            created_by_id=ROBOT.id,
-            created_by_name=ROBOT.name,
-            updated_at=now,
-            updated_by_id=ROBOT.id,
-            updated_by_name=ROBOT.name,
-            **values,
-        )
-    )
-    return True
 
 
 async def _save_types(
@@ -114,6 +70,8 @@ async def _save_types(
     seen: set[str] = set()
     # 重判后不再是信息化建设类的：它没人核对过的 AI 解读行要清掉，不然解读列表里一直挂着不该有的解读。
     no_longer_interpreted: list[str] = []
+    # 和已有基础标签内容一样、没写进去的新政策：记下来，往回重扫时不再花钱问一遍。
+    copies: list[str] = []
     async with SessionLocal() as session:
         existing = await repo.base_tags_by_source(session, [str(row["content_id"]) for row in done_rows])
         for row, result in zip(done_rows, done_results, strict=True):
@@ -124,7 +82,7 @@ async def _save_types(
             if current is not None and retag and result.get("error"):
                 # 网络、限流这类失败不是答案：上次判好的类型和解读留着，只记这次失败、出队。
                 # 不然一次失败就把类型清空、「是否解读」改成否，没人核对过的 AI 解读也跟着删掉。
-                _note_retag_failed(current, remark)
+                base_tag_rows.note_retag_failed(current, remark)
                 continue
             if current is not None and retag:
                 values = rules.keep_manual_edits(values, current)
@@ -135,15 +93,18 @@ async def _save_types(
             other = None if digest in seen else await repo.base_tag_by_hash(session, digest)
             if digest in seen or (other is not None and other is not current):
                 if current is not None:
-                    _note_duplicate(current)
+                    base_tag_rows.note_duplicate(current)
                     duplicate += 1
+                else:
+                    copies.append(str(row["content_id"]))
                 continue
             seen.add(digest)
             was_interpreted = current is not None and current.need_interpret == "是"
-            if _write_base_tag(session, current, row, values, force=retag):
+            if base_tag_rows.write(session, current, row, values, force=retag):
                 tagged += 1
                 if was_interpreted and values["need_interpret"] != "是":
                     no_longer_interpreted.append(str(row["content_id"]))
+        await repo.mark_skipped(session, copies, rules.COPY_SKIPPED, utcnow())
         if no_longer_interpreted:
             stale = await repo.ai_interpretations(session, no_longer_interpreted)
             await repo.delete_rows(session, [item for rows_ in stale.values() for item in rows_ if untouched(item)])
@@ -163,31 +124,6 @@ async def _save_types(
         )
         await session.commit()
     return {"processed": processed, "tagged": tagged, "failed": failed, "duplicate": duplicate}
-
-
-def _note_duplicate(row: BaseTag) -> None:
-    """重打后和另一条内容一样：出队、备注注明，不动其他字段。"""
-
-    row.type_retag_at = None
-    row.remark = rules.note_duplicate(row.remark, str(row.source_content_id))
-    row.refresh_hash()
-    row.version += 1
-    row.tagged_at = row.updated_at = utcnow()
-    row.updated_by_id, row.updated_by_name = ROBOT.id, ROBOT.name
-
-
-def _note_retag_failed(row: BaseTag, note: str) -> None:
-    """重新判断类型这次没问成：出队，备注换上这次的失败说明，类型、解读都不动。
-
-    不重算内容哈希：同一网页的几条副本失败原因一样，加上同一句说明会变得一模一样、撞唯一约束整批回滚。
-    """
-
-    row.type_retag_at = None
-    kept = rules.drop_notes(row.remark, TYPE_NOTES)
-    row.remark = rules.NOTE_SEP.join(part for part in (f"{note}（保留了上次的类型）", kept) if part)
-    row.version += 1
-    row.tagged_at = row.updated_at = utcnow()
-    row.updated_by_id, row.updated_by_name = ROBOT.id, ROBOT.name
 
 
 def _cursor_text(day: Any, content_id: str) -> str:

@@ -104,24 +104,40 @@ async def _wait(run_id: uuid.UUID, ai_run_id: str, spend: Spend) -> dict[str, An
         await asyncio.sleep(POLL_SECONDS)
 
 
-async def _settled(ai_run_id: str) -> bool:
-    """那批 AI 任务停稳了没有：还在跑就叫停、等它收尾（在途的几行答完才写进文件）。问不到就当没停稳，不沿用。"""
+async def _settled(ai_run_id: str) -> dict[str, Any] | None:
+    """那批 AI 任务停稳了没有：还在跑就叫停、等它收尾（在途的几行答完才写进文件）。停稳了返回它最后的状态，
+    问不到、等不到就返回 None，不沿用。"""
 
     deadline = time.monotonic() + SETTLE_SECONDS
     stopped = False
     while True:
         try:
-            status = await internal_clients.ai("GET", f"/internal/v1/pipeline-runs/{ai_run_id}")
+            status: dict[str, Any] = await internal_clients.ai("GET", f"/internal/v1/pipeline-runs/{ai_run_id}")
         except (ApiError, DependencyUnavailableError):
-            return False
+            return None
         if status["status"] in FINISHED:
-            return True
+            return status
         if not stopped:
             await stop_quietly(ai_run_id)
             stopped = True
         if time.monotonic() > deadline:
-            return False
+            return None
         await asyncio.sleep(POLL_SECONDS)
+
+
+async def _book_final_cost(run_field: str, ai_run_id: str, final: Decimal) -> None:
+    """上一批失败收尾时只补记到最后一次轮询到的花费：之后问不到 ai-service 的那段、叫停前在途几行的钱没记上，
+    今日已花偏少、当天上限会被超过。那边停稳后按最终花费把差额补进那一批的步骤费用列。"""
+
+    column = STAGE_COST[run_field]
+    async with SessionLocal() as session:
+        run = await repo.run_of_ai_task(session, run_field, ai_run_id)
+        booked = Decimal(0) if run is None else getattr(run, column) or Decimal(0)
+        if run is None or final <= booked:
+            return
+        setattr(run, column, final)
+        run.cost = (run.cost or Decimal(0)) + (final - booked)
+        await session.commit()
 
 
 async def _reusable(run_id: uuid.UUID, run_field: str) -> str:
@@ -131,7 +147,11 @@ async def _reusable(run_id: uuid.UUID, run_field: str) -> str:
     async with SessionLocal() as session:
         since = utcnow() - timedelta(days=REUSE_DAYS)
         previous = await repo.failed_ai_run(session, run_field, current=run_id, since=since)
-    return previous if previous and await _settled(previous) else ""
+    status = await _settled(previous) if previous else None
+    if status is None:
+        return ""
+    await _book_final_cost(run_field, previous, cost_of(status))
+    return previous
 
 
 async def ask(

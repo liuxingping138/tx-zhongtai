@@ -89,3 +89,17 @@ class PolicyAiRun(Base):
     error_message: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="失败原因")
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="开始时间")
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, comment="结束时间")
+
+
+class SkippedSource(Base):
+    """类型判断问过、但和已有基础标签内容一样所以没写进去的源政策（各地转发同一文件）。
+
+    读取进度往回调重扫时，「打过类型标的跳过」只认基础标签，认不出这些，每次都重新付费再问一遍、又被跳过。
+    """
+
+    __tablename__ = "policy_ai_skipped_sources"
+    __table_args__ = {"comment": "政策AI打标跳过的源政策"}
+
+    source_content_id: Mapped[str] = mapped_column(String(200), primary_key=True, comment="源政策ID")
+    reason: Mapped[str] = mapped_column(String(64), nullable=False, default="", server_default="", comment="跳过原因")
+    skipped_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="跳过时间")

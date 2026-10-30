@@ -5,10 +5,11 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import ColumnElement, ScalarSelect, func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
-from app.aitag.domain.models import PolicyAiRun, PolicyAiTask
+from app.aitag.domain.models import PolicyAiRun, PolicyAiTask, SkippedSource
 from app.aitag.domain.tasks import TASK_COST
 from app.policy.domain.models import BaseTag, Interpretation, awaiting_interpretation, awaiting_opportunity
 
@@ -64,6 +65,14 @@ async def failed_ai_run(session: AsyncSession, run_field: str, *, current: uuid.
     return str(value or "")
 
 
+async def run_of_ai_task(session: AsyncSession, run_field: str, ai_run_id: str) -> PolicyAiRun | None:
+    """发起这个 AI 任务的那一批（加锁，补记费用时用）。"""
+
+    column: InstrumentedAttribute[str] = getattr(PolicyAiRun, run_field)
+    run: PolicyAiRun | None = await session.scalar(select(PolicyAiRun).where(column == ai_run_id).with_for_update())
+    return run
+
+
 async def base_tags_by_source(session: AsyncSession, source_ids: list[str]) -> dict[str, BaseTag]:
     if not source_ids:
         return {}
@@ -81,7 +90,19 @@ async def tagged_source_ids(session: AsyncSession, source_ids: list[str]) -> set
             BaseTag.source_content_id.in_(source_ids), BaseTag.tagged_at.is_not(None)
         )
     )
-    return {str(value) for value in rows}
+    skipped = await session.scalars(
+        select(SkippedSource.source_content_id).where(SkippedSource.source_content_id.in_(source_ids))
+    )
+    return {str(value) for value in rows} | {str(value) for value in skipped}
+
+
+async def mark_skipped(session: AsyncSession, source_ids: list[str], reason: str, now: datetime) -> None:
+    """记下问过却没写进基础标签的源政策（已记过的不动）。"""
+
+    if not source_ids:
+        return
+    rows = [{"source_content_id": item, "reason": reason, "skipped_at": now} for item in dict.fromkeys(source_ids)]
+    await session.execute(insert(SkippedSource).values(rows).on_conflict_do_nothing())
 
 
 async def base_tag_by_hash(session: AsyncSession, digest: str) -> BaseTag | None:
