@@ -393,7 +393,8 @@ services:
       - gateway
 
   gateway:
-    image: traefik:v3.2.3
+    # 不要退回 3.2：之后修过路径匹配绕过中间件一类漏洞（CVE-2025-32431 等）。升级时先在服务器上拿生产配置空跑一次看有没有报错。
+    image: traefik:v3.7.14
     restart: unless-stopped
     command:
       - "--configFile=/etc/traefik/traefik.yml"

@@ -2,16 +2,27 @@
 # HTTP 入口只做跳转。证书文件由续期脚本写到 /certs，动态配置变更后 Traefik 会重新加载。
 # 宿主机 443 被同机其他站点占用，HTTPS 用 8443；容器内外同一个端口，跳转目标才不会错。
 
+# aliasHeadersStrategy: delete —— 删掉和受管请求头「同名换写法」的头（X_Forwarded_For、X.Forwarded.For），
+# 按头名推变量名的后端（nginx、CGI）会把它们当成 X-Forwarded-For，客户端借此伪造来源 IP。
+# respondingTimeouts 和本地一致：慢网上传 20MB 的 Excel、几百 MB 的结果下载都要几分钟，默认读超时会把请求切断。
 entryPoints:
   web:
     address: ":80"
     http:
+      aliasHeadersStrategy: delete
       redirections:
         entryPoint:
           to: ":8443"
           scheme: https
   websecure:
     address: ":8443"
+    http:
+      aliasHeadersStrategy: delete
+    transport:
+      respondingTimeouts:
+        readTimeout: "600s"
+        writeTimeout: "600s"
+        idleTimeout: "600s"
 
 providers:
   file:

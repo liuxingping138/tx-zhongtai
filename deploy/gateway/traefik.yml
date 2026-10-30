@@ -6,6 +6,9 @@
 entryPoints:
   web:
     address: ":80"
+    http:
+      # 删掉和受管请求头同名换写法的头（X_Forwarded_For），见 traefik.https.yml。
+      aliasHeadersStrategy: delete
     transport:
       respondingTimeouts:
         readTimeout: "600s"

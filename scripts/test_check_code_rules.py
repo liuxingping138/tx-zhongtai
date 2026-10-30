@@ -75,6 +75,18 @@ def test_ui_color_literals_are_reported_outside_registered_files() -> None:
     assert not rules.color_literal_errors("frontend/src/views/LoginView.vue", "color: #fff;\n")
 
 
+def test_big_table_indexes_must_be_built_concurrently() -> None:
+    rel = "services/policy-service/migrations/versions/x_new.py"
+    plain = 'op.create_index("ix_a", "policy_base_tags", ["a"])\n'
+    assert rules.index_lock_errors(rel, plain)
+    assert rules.index_lock_errors(rel, 'op.execute("CREATE INDEX IF NOT EXISTS ix_a ON policy_interpretations (a)")\n')
+    assert not rules.index_lock_errors(rel, 'op.create_index("ix_a", "policy_base_tags", ["a"], postgresql_concurrently=True)\n')
+    assert not rules.index_lock_errors(rel, 'op.execute("CREATE INDEX CONCURRENTLY ix_a ON policy_base_tags (a)")\n')
+    assert not rules.index_lock_errors(rel, 'op.create_index("ix_a", "ai_run_costs", ["day"])\n'), "小表不管"
+    baseline = next(iter(rules.INDEX_LOCK_BASELINE))
+    assert not rules.index_lock_errors(baseline, plain), "已上线的历史迁移不改"
+
+
 if __name__ == "__main__":
     test_python_suppressions_need_reason()
     test_strings_and_test_type_ignores_are_not_reported()
@@ -82,4 +94,6 @@ if __name__ == "__main__":
     test_session_dependency_must_be_function_scoped()
     test_long_python_source_is_reported_unless_registered()
     test_ui_color_literals_are_reported_outside_registered_files()
+    test_big_table_indexes_must_be_built_concurrently()
     print("code_rules_selftest_ok")
+

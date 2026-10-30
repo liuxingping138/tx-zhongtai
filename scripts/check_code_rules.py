@@ -1,8 +1,9 @@
 """工程规范里 ruff / ESLint 管不到的几条：Python 源文件不超过 400 行；忽略注释必须写原因；
-数据库会话依赖必须是 function 作用域；前端页面和组件不写色值。"""
+数据库会话依赖必须是 function 作用域；前端页面和组件不写色值；迁移里给大表建索引要用 CONCURRENTLY。"""
 
 from __future__ import annotations
 
+import ast
 import io
 import re
 import sys
@@ -35,6 +36,59 @@ COLOR_FILES: dict[str, str] = {
     "frontend/src/modules/ai/billing/billing.ts": "费用账单的分类色板，按名字固定颜色，校验过色盲和对比度",
     "frontend/src/components/charts/echarts.ts": "图表取色在拿不到主题变量时的兜底值",
 }
+
+
+# 几十万到几百万行的表：普通 CREATE INDEX 建索引期间锁住写入，大表要几分钟，打标、导入、审计入库全部卡住。
+# 用 op.create_index(..., postgresql_concurrently=True) 或 CREATE INDEX CONCURRENTLY，放在 autocommit_block 里。
+BIG_TABLES = frozenset({"policy_base_tags", "policy_interpretations", "policy_crawler_site_daily", "audit_events"})
+MIGRATION = re.compile(r"^services/[^/]+/migrations/versions/.+\.py$")
+PLAIN_INDEX_SQL = re.compile(
+    r"CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?!CONCURRENTLY)(?:IF\s+NOT\s+EXISTS\s+)?\S+\s+ON\s+(\w+)", re.I
+)
+# 这条规则之前已经上线的迁移：当时表还小或是建表时一起建，改历史迁移没有意义。
+INDEX_LOCK_BASELINE: dict[str, str] = {
+    "services/audit-service/migrations/versions/c2b8d4e7a201_p2_audit_events.py": "建表时一起建",
+    "services/policy-service/migrations/versions/d4e1f2a3b401_init_policy.py": "建表时一起建",
+    "services/policy-service/migrations/versions/a2b3c4d5e520_policy_ai_interpretation.py": "已上线，当时表很小",
+    "services/policy-service/migrations/versions/c1d2e3f4a258_policy_title_trgm.py": "已上线，当时表很小",
+    "services/policy-service/migrations/versions/d2e3f4a5b369_policy_filter_indexes.py": "已上线，当时表很小",
+    "services/policy-service/migrations/versions/f7a8b9c0d035_base_tag_type_retag.py": "已上线，当时表很小",
+}
+
+
+def _index_table(call: ast.Call) -> str | None:
+    named = next((kw.value for kw in call.keywords if kw.arg == "table_name"), None)
+    table = call.args[1] if len(call.args) > 1 else named
+    return table.value if isinstance(table, ast.Constant) and isinstance(table.value, str) else None
+
+
+def _concurrent(call: ast.Call) -> bool:
+    return any(
+        kw.arg == "postgresql_concurrently" and isinstance(kw.value, ast.Constant) and kw.value.value is True
+        for kw in call.keywords
+    )
+
+
+def _plain_index_tables(node: ast.AST) -> list[tuple[int, str]]:
+    """普通（不带 CONCURRENTLY）建索引落在哪些大表上：op.create_index 调用和 SQL 字符串两种写法。"""
+
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "create_index":
+        table = _index_table(node)
+        return [(node.lineno, table)] if table in BIG_TABLES and not _concurrent(node) else []
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        tables = (match.group(1) for match in PLAIN_INDEX_SQL.finditer(node.value))
+        return [(node.lineno, table) for table in tables if table in BIG_TABLES]
+    return []
+
+
+def index_lock_errors(rel: str, source: str) -> list[str]:
+    if rel in INDEX_LOCK_BASELINE:
+        return []
+    found = [item for node in ast.walk(ast.parse(source)) for item in _plain_index_tables(node)]
+    return [
+        f"{rel}:{line}: 给大表 {table} 建索引要用 CONCURRENTLY（放在 autocommit_block 里）"
+        for line, table in found
+    ]
 
 
 def _is_python_test(rel: str) -> bool:
@@ -119,6 +173,8 @@ def line_count_errors(rel: str, source: str) -> list[str]:
 def check(files: list[str], root: Path) -> list[str]:
     errors: list[str] = []
     for rel in files:
+        if MIGRATION.match(rel) and (root / rel).is_file():
+            errors += index_lock_errors(rel, (root / rel).read_text(encoding="utf-8"))
         is_python = rel.endswith(".py") and "/migrations/versions/" not in rel
         is_frontend = bool(FRONTEND.match(rel))
         if not (is_python or is_frontend):

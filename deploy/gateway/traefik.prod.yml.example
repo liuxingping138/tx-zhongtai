@@ -6,12 +6,20 @@ entryPoints:
   web:
     address: ":80"
     http:
+      aliasHeadersStrategy: delete
       redirections:
         entryPoint:
           to: websecure
           scheme: https
   websecure:
     address: ":443"
+    http:
+      aliasHeadersStrategy: delete
+    transport:
+      respondingTimeouts:
+        readTimeout: "600s"
+        writeTimeout: "600s"
+        idleTimeout: "600s"
 
 providers:
   docker:
