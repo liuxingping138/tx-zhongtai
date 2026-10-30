@@ -65,10 +65,33 @@ def read_raw_sheet(content: bytes) -> tuple[list[str], list[list[str]]]:
         rows.close()
 
 
+def _is_exact(role: str, header: str) -> bool:
+    raw = (header or "").replace("\n", " ").strip()
+    titles = dict(_ROLE_HEADERS)[role]
+    return bool(raw) and (raw in titles or raw.split()[0] in titles)
+
+
+def _role_columns(headers: list[str], roles: list[str | None]) -> dict[str, int]:
+    """几列对到同一个角色时只认一列：表头完全相同的优先，否则认最前面那列
+    （和 platform_common.excel.map_headers 同一规则）。
+
+    原来后面的列盖掉前面的：表里有「区县编码」「区县编码（旧）」时补出的编码写进了（旧）那列，
+    信源导入认的是「区县编码」，这次补码等于白做。
+    """
+
+    index: dict[str, int] = {}
+    for idx, role in enumerate(roles):
+        if role is None:
+            continue
+        if role not in index or (_is_exact(role, headers[idx]) and not _is_exact(role, headers[index[role]])):
+            index[role] = idx
+    return index
+
+
 def _ensure_code_columns(
     headers: list[str], roles: list[str | None]
 ) -> tuple[list[str], list[str | None], dict[str, int]]:
-    index = {role: idx for idx, role in enumerate(roles) if role}
+    index = _role_columns(headers, roles)
     next_headers = list(headers)
     next_roles = list(roles)
     for role in ("province_code", "city_code", "district_code"):
@@ -94,9 +117,11 @@ def _under(code: str, parent: str, digits: int) -> str:
     """
 
     code_digits, parent_digits = "".join(filter(str.isdigit, code or "")), "".join(filter(str.isdigit, parent or ""))
-    if not code_digits or len(parent_digits) < digits:
+    if not code_digits or not parent_digits:
         return code
-    return code if code_digits[:digits] == parent_digits[:digits] else ""
+    # 上级只配上省份（2 位）时按省份比：原来位数不够就原样留着，「江苏 + 残留的 110101」照样标通过。
+    width = min(digits, len(parent_digits))
+    return code if code_digits[:width] == parent_digits[:width] else ""
 
 
 def _has_any_code(province_code: str, city_code: str, district_code: str) -> bool:

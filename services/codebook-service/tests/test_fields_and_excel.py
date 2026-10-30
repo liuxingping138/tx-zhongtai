@@ -4,7 +4,7 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from platform_common.columns import header_to_field
 from platform_common.excel import parse_sheet
 
@@ -186,3 +186,36 @@ def test_resolve_drops_a_leftover_district_code_from_another_place() -> None:
     marked = parse_sheet(payload, AREA_CODE_COLUMNS, subject="码表")
     assert matched == 1 and marked[0]["skip_reason"] == "通过"
     assert not marked[0].get("county_id")
+
+
+def _resolved(header: list[str], row: list[str]) -> tuple[list[str], list[str]]:
+    book = Workbook()
+    sheet = book.active
+    sheet.append(header)
+    sheet.append(row)
+    raw = BytesIO()
+    book.save(raw)
+    payload, _, _ = build_resolve_workbook(raw.getvalue(), _CATALOG)
+    sheet_out = load_workbook(BytesIO(payload)).active
+    rows = [[str(cell.value or "") for cell in line] for line in sheet_out.iter_rows()]
+    return rows[0], rows[1]
+
+
+def test_resolve_drops_a_leftover_code_when_only_the_province_matched() -> None:
+    """只配上省份（2 位）时，原来位数不够就把别处的地市、区县编码原样留着还标「通过」，到信源导入又被拒。"""
+
+    header, row = _resolved(
+        ["省份", "地市", "区县", "省份编码", "地市编码", "区县编码"], ["吉林省", "宁城", "", "", "1101", "110101"]
+    )
+    values = dict(zip(header, row, strict=False))
+    assert (values["省份编码"], values["地市编码"], values["区县编码"], values["校验说明"]) == ("22", "", "", "通过")
+
+
+def test_resolve_writes_into_the_exact_code_column_when_two_columns_match() -> None:
+    """表头有「区县编码」「区县编码（旧）」：补出的编码写进「区县编码」，信源导入认的就是它。"""
+
+    header, row = _resolved(
+        ["省份", "地市", "区县", "区县编码", "区县编码（旧）"], ["北京市", "北京市", "朝阳区", "", "999999"]
+    )
+    values = dict(zip(header, row, strict=False))
+    assert (values["区县编码"], values["区县编码（旧）"]) == ("110105", "999999")
