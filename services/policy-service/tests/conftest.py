@@ -23,7 +23,8 @@ def _no_previous_ai_run(monkeypatch: pytest.MonkeyPatch, request: pytest.Fixture
     async def none(*_: object, **__: object) -> str:
         return ""
 
-    monkeypatch.setattr(tagging, "failed_ai_run", none)
+    if not request.node.get_closest_marker("real_failed_run"):
+        monkeypatch.setattr(tagging, "failed_ai_run", none)
 
     async def no_tagged(*_: object, **__: object) -> set[str]:
         return set()

@@ -403,6 +403,7 @@ async def test_reinterpreting_keeps_rows_people_already_verified(
     ]
 
 
+@pytest.mark.real_failed_run
 async def test_the_latest_failed_batch_is_reused_even_after_a_later_success() -> None:
     """按天读的一批失败后、重试前插进来一批重判并成功了：原来只看最近一批，找不到那批失败的，它已付费的答案全部重问。"""
 
