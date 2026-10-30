@@ -114,7 +114,7 @@ def test_failed_login_counts_failure_and_writes_audit_in_its_own_session(
     """登录失败要在独立会话里留痕：请求本身的事务会因异常回滚。"""
 
     fail_session = _FailSession()
-    monkeypatch.setattr(auth_api, "SessionLocal", lambda: fail_session)
+    monkeypatch.setattr(auth_api, "SideSessionLocal", lambda: fail_session)
     service.authenticate_password.side_effect = UnauthenticatedError()
     response = client.post("/api/v1/auth/login", json={"username": "zhangsan", "password": "bad"})
     assert response.status_code == 401
@@ -125,12 +125,44 @@ def test_failed_login_counts_failure_and_writes_audit_in_its_own_session(
     fail_session.commit.assert_awaited_once()
 
 
+def test_failure_log_that_cannot_get_a_connection_still_answers_401(
+    client: TestClient, service: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """留痕用的小连接池正忙（一波错密码登录）：只记日志，这次照样回 401，不变成 500。"""
+
+    class _Busy:
+        async def __aenter__(self) -> Any:
+            raise TimeoutError("QueuePool limit reached")
+
+        async def __aexit__(self, *_: object) -> None:
+            return None
+
+    monkeypatch.setattr(auth_api, "SideSessionLocal", _Busy)
+    service.authenticate_password.side_effect = UnauthenticatedError()
+    response = client.post("/api/v1/auth/login", json={"username": "zhangsan", "password": "bad"})
+    assert response.status_code == 401
+    _Limiter.instances[0].release.assert_not_awaited()
+
+
+def test_side_writes_use_their_own_small_pool() -> None:
+    """请求还占着一条连接时再要一条的写（留痕、最近活跃）不进请求的连接池：
+    共用的话并发十几个就互相等到超时，全平台鉴权一起 503。"""
+
+    from app.application import audit_outbox, auth_service
+    from app.core import database
+
+    assert database.side_engine is not database.engine
+    assert database.side_engine.pool.timeout() <= 1  # type: ignore[attr-defined]
+    assert auth_service.SideSessionLocal is database.SideSessionLocal
+    assert audit_outbox.SideSessionLocal is database.SideSessionLocal
+
+
 def test_attempt_while_locked_is_logged_as_locked(
     client: TestClient, service: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """锁定期间的尝试也进登录日志，账号被锁和出口 IP 被限制分开写；同一窗口里只记第一次，照样拒绝。"""
 
-    monkeypatch.setattr(auth_api, "SessionLocal", _FailSession)
+    monkeypatch.setattr(auth_api, "SideSessionLocal", _FailSession)
     blocked = {"by_ip": False}
 
     class _Locked(_Limiter):
@@ -151,7 +183,7 @@ def test_attempt_while_locked_is_logged_as_locked(
 def test_locked_attempts_after_the_first_are_not_logged_again(
     client: TestClient, service: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(auth_api, "SessionLocal", _FailSession)
+    monkeypatch.setattr(auth_api, "SideSessionLocal", _FailSession)
 
     class _Quiet(_Limiter):
         def __init__(self, *args: Any) -> None:
@@ -177,7 +209,7 @@ def test_unexpected_errors_give_the_try_back(client: TestClient, service: MagicM
 def test_disabled_account_failure_has_its_own_reason(
     client: TestClient, service: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(auth_api, "SessionLocal", _FailSession)
+    monkeypatch.setattr(auth_api, "SideSessionLocal", _FailSession)
     service.authenticate_password.side_effect = UnauthenticatedError("账号不可用")
     client.post("/api/v1/auth/login", json={"username": "zhangsan", "password": "pw"})
     assert service.record_login_failure.await_args.kwargs["reason"] == "disabled"

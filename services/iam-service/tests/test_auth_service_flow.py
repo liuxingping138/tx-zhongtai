@@ -260,7 +260,7 @@ class TestActivity:
             async def __aexit__(self, *_: object) -> None:
                 return None
 
-        monkeypatch.setattr(module, "SessionLocal", _Db)
+        monkeypatch.setattr(module, "SideSessionLocal", _Db)
         monkeypatch.setattr(module.session_repo, "touch_last_seen", state.touch)
         return state
 

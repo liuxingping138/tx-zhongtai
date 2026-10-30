@@ -12,7 +12,7 @@ from platform_common.logging_setup import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.core.database import SessionLocal
+from app.core.database import SideSessionLocal
 from app.core.jwt_tokens import issue_access_token
 from app.core.rate_limit import login_key_username
 from app.domain.enums import UserStatus
@@ -320,7 +320,7 @@ async def note_activity(session_row: Session, *, every_seconds: int) -> None:
     if session_row.last_seen_at >= stale_before:
         return
     try:
-        async with SessionLocal() as db:
+        async with SideSessionLocal() as db:
             await session_repo.touch_last_seen(db, session_row.id, now=now, stale_before=stale_before)
             await db.commit()
     except Exception:  # noqa: BLE001  活跃时间写不进去不能让请求失败

@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, Response
 from platform_common.errors import UnauthenticatedError
+from platform_common.logging_setup import get_logger
 from platform_common.request_context import get_request_id
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,13 +23,14 @@ from app.application import auth_service
 from app.application.auth_service import AuthService
 from app.application.authorization import visible_permissions
 from app.core.config import Settings, get_settings
-from app.core.database import SessionLocal, get_db_session
+from app.core.database import SideSessionLocal, get_db_session
 from app.core.http_utils import client_ip, client_user_agent, success_json
 from app.core.rate_limit import LoginLockedError, LoginRateLimiter
 from app.core.redis_client import redis_client
 from app.domain.enums import SecurityClass
 from app.domain.tokens import generate_csrf_token
 
+logger = get_logger(__name__)
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 
@@ -109,17 +111,23 @@ def _client(request: Request) -> dict[str, str]:
 
 
 async def _record_failure(settings: Settings, username: str, ip: str, user_agent: str, reason: str) -> None:
-    """失败留痕放在独立会话里：请求本身的事务会因异常回滚。"""
+    """失败留痕放在独立会话里：请求本身的事务会因异常回滚。
 
-    async with SessionLocal() as fail_session:
-        await AuthService(fail_session, settings).record_login_failure(
-            username=username,
-            request_id=get_request_id(),
-            client_ip=ip,
-            user_agent=user_agent,
-            reason=reason,
-        )
-        await fail_session.commit()
+    留痕写不进去（库出错、小连接池正忙）只记日志：不能把这次的 401 变成 500，失败次数照样记在 Redis 里。
+    """
+
+    try:
+        async with SideSessionLocal() as fail_session:
+            await AuthService(fail_session, settings).record_login_failure(
+                username=username,
+                request_id=get_request_id(),
+                client_ip=ip,
+                user_agent=user_agent,
+                reason=reason,
+            )
+            await fail_session.commit()
+    except Exception:  # 留痕失败不改变登录失败的结论
+        logger.exception("login_failure_record_failed", reason=reason)
 
 
 @router.post("/refresh")

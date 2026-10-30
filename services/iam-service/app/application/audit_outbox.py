@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from app.core.database import SessionLocal
+from app.core.database import SideSessionLocal
 from app.repositories import outbox as outbox_repo
 
 
@@ -18,7 +18,7 @@ async def enqueue_independent(
 ) -> None:
     """失败、拒绝类事件用独立事务提交：业务随后回滚时，这条审计也要留下。"""
 
-    async with SessionLocal() as session:
+    async with SideSessionLocal() as session:
         await outbox_repo.enqueue(
             session,
             event_type=event_type,
