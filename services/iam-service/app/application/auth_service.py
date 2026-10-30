@@ -31,6 +31,15 @@ from app.repositories import users as user_repo
 
 logger = get_logger(__name__)
 
+
+class WrongOldPasswordError(ApiError):
+    """改密码时原密码不对。不能回 401：前端会当成会话过期，先续期再重发，每输错一次多跑两遍 Argon2。
+    接口层据此按登录失败计数、留痕：拿到别人令牌的人原来能无限次试原密码，猜中就改掉密码、长期接管账号。"""
+
+    def __init__(self) -> None:
+        super().__init__("原密码不正确", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+
+
 UNIFIED_LOGIN_FAILURE = "用户名或密码错误"
 ACCOUNT_UNAVAILABLE = "账号不可用"
 
@@ -258,8 +267,7 @@ class AuthService:
         self, user: User, old_password: str, new_password: str, *, client: ClientInfo | None = None
     ) -> tuple[str, str, Session]:
         if not await verify_password_async(user.password_hash, old_password):
-            # 不能回 401：前端会当成会话过期，先续期再重发，每输错一次多跑两遍 Argon2。
-            raise ApiError("原密码不正确", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+            raise WrongOldPasswordError()
         policy_error = validate_password_policy(new_password)
         if policy_error:
             raise ApiError(policy_error)

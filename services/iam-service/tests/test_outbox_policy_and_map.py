@@ -45,6 +45,26 @@ def test_map_login_and_redact_password() -> None:
     assert redact({"temporary_password": "x"})["temporary_password"] == "***REDACTED***"
 
 
+def test_failed_login_with_an_unknown_username_has_no_actor() -> None:
+    """对不上账号的失败（乱填的用户名）不当操作人：操作人筛选项会被垃圾值塞满。输入的用户名还在目标里。"""
+
+    def event(payload: dict[str, str]) -> OutboxEvent:
+        return OutboxEvent(
+            event_id=uuid.uuid4(),
+            event_type="auth.login.failed",
+            schema_version=1,
+            payload={"username": "x-7f3a", "outcome": "failure", "reason": "unauthenticated", **payload},
+            status=OutboxStatus.PENDING,
+            attempts=0,
+            created_at=datetime.now(UTC),
+        )
+
+    unknown = map_outbox_to_ingest(event({}))
+    assert (unknown["actor_name_snapshot"], unknown["target_id"]) == (None, "x-7f3a")
+    known = map_outbox_to_ingest(event({"actor_id": "u1", "actor_name": "张三"}))
+    assert known["actor_name_snapshot"] == "张三"
+
+
 def test_map_unknown_event_type_keeps_type() -> None:
     event = OutboxEvent(
         event_id=uuid.uuid4(),

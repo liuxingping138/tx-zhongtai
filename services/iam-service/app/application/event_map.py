@@ -10,6 +10,7 @@ from app.domain.models import OutboxEvent
 _EVENT_META: dict[str, tuple[str, str, str, str]] = {
     "auth.login.succeeded": ("auth", "login", "user", "登录成功"),
     "auth.login.failed": ("auth", "login", "user", "登录失败"),
+    "auth.password.change_failed": ("auth", "password_change", "user", "修改密码失败（原密码不正确）"),
     "auth.refresh.replayed": ("auth", "refresh", "session", "刷新令牌重放"),
     "auth.logout": ("auth", "logout", "session", "退出登录"),
     "auth.logout_all": ("auth", "logout_all", "user", "退出全部会话"),
@@ -64,6 +65,10 @@ def map_outbox_to_ingest(event: OutboxEvent) -> dict[str, Any]:
     )
     outcome = str(safe.get("outcome") or "success")
     actor = _actor_name(safe)
+    if event.event_type == "auth.login.failed" and not safe.get("actor_id"):
+        # 对不上账号的失败（乱填的用户名）不当操作人：操作日志的「操作人」筛选项是逐个不同值跳的，
+        # 塞满垃圾用户名既慢又没法用。输入的用户名还在目标和摘要里，登录日志照样看得到。
+        actor = None
     target = _target_id(safe, target_type)
     summary_bits = [label]
     if actor:

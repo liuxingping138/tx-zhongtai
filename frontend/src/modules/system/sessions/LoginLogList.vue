@@ -233,7 +233,7 @@ onMounted(() => {
         show-overflow-tooltip
       >
         <template #default="{ row }">
-          {{ row.actor_name_snapshot || '—' }}
+          {{ row.actor_name_snapshot || row.target_id || '—' }}
         </template>
       </el-table-column>
       <el-table-column

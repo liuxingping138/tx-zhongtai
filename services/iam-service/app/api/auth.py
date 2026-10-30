@@ -20,6 +20,7 @@ from app.api.security import (
     require_restricted_or_authenticated,
 )
 from app.application import auth_service
+from app.application.audit_outbox import enqueue_independent
 from app.application.auth_service import AuthService
 from app.application.authorization import visible_permissions
 from app.core.config import Settings, get_settings
@@ -28,6 +29,7 @@ from app.core.http_utils import client_ip, client_user_agent, success_json
 from app.core.rate_limit import LoginLockedError, LoginRateLimiter
 from app.core.redis_client import redis_client
 from app.domain.enums import SecurityClass
+from app.domain.models import User
 from app.domain.tokens import generate_csrf_token
 
 logger = get_logger(__name__)
@@ -227,8 +229,41 @@ async def change_password(
     session: AsyncSession = Depends(get_db_session, scope="function"),
     settings: Settings = Depends(get_settings),
 ) -> JSONResponse:
+    user, client = principal.user, _client(request)
+    # 和登录共用失败计数：原密码输错按一次失败算，连错几次一样被锁，留下审计。
+    limiter = LoginRateLimiter(redis_client, settings)
+    await limiter.reserve(user.username, client["ip"])
     service = AuthService(session, settings)
-    access, refresh, _session_row = await service.change_password(
-        principal.user, body.old_password, body.new_password, client=_client(request)
-    )
+    try:
+        access, refresh, _session_row = await service.change_password(
+            user, body.old_password, body.new_password, client=client
+        )
+    except auth_service.WrongOldPasswordError:
+        await _record_password_failure(user, client)
+        raise
+    except Exception:
+        await limiter.release(user.username, client["ip"])
+        raise
+    await limiter.succeeded(user.username, client["ip"])
     return _token_response(access, refresh, must_change_password=False, settings=settings)
+
+
+async def _record_password_failure(user: User, client: dict[str, str]) -> None:
+    """独立事务留痕：请求本身的事务会因异常回滚。写不进去只记日志，不改变这次的结果。"""
+
+    try:
+        await enqueue_independent(
+            event_type="auth.password.change_failed",
+            payload={
+                "actor_id": str(user.id),
+                "actor_name": user.display_name,
+                "username": user.username,
+                "client_ip": client["ip"],
+                "user_agent": client["user_agent"],
+                "request_id": get_request_id(),
+                "reason": "wrong_old_password",
+                "outcome": "failure",
+            },
+        )
+    except Exception:  # 留痕失败不改变「原密码不正确」的结论
+        logger.exception("password_failure_record_failed")

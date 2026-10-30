@@ -16,6 +16,7 @@ from platform_common.errors import UnauthenticatedError
 from app.api import auth as auth_api
 from app.api import security
 from app.api.security import CurrentPrincipal, get_principal
+from app.application import auth_service
 from app.core.config import get_settings
 from app.core.database import get_db_session
 from app.core.rate_limit import LoginLockedError
@@ -284,6 +285,28 @@ def test_change_password_issues_new_tokens(client: TestClient) -> None:
     response = client.put("/api/v1/auth/password", json={"old_password": "a", "new_password": "b"})
     assert response.json()["data"]["must_change_password"] is False
     assert response.cookies[SETTINGS.refresh_cookie_name] == "refresh-3"
+
+
+def test_wrong_old_password_counts_as_a_failed_login_and_is_audited(
+    client: TestClient, service: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """拿到别人令牌的人原来能无限次试原密码：现在和登录共用失败计数（占的名额不退回），每次留审计。"""
+
+    audited: list[dict[str, Any]] = []
+
+    async def enqueue(**kwargs: Any) -> None:
+        audited.append(kwargs)
+
+    monkeypatch.setattr(auth_api, "enqueue_independent", enqueue)
+    service.change_password.side_effect = auth_service.WrongOldPasswordError()
+    _signed_in()
+    response = client.put("/api/v1/auth/password", json={"old_password": "x", "new_password": "y"})
+    assert response.status_code == 422
+    limiter = _Limiter.instances[0]
+    limiter.reserve.assert_awaited_once()
+    limiter.release.assert_not_awaited()
+    assert audited[0]["event_type"] == "auth.password.change_failed"
+    assert audited[0]["payload"]["reason"] == "wrong_old_password"
 
 
 def test_missing_bearer_token_is_unauthenticated(client: TestClient) -> None:

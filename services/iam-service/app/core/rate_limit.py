@@ -120,7 +120,9 @@ class LoginRateLimiter:
     async def first_notice(self, username: str, ip: str, reason: str, seconds: int) -> bool:
         """锁定期间的尝试只在每个锁定窗口里记一次登录日志：每次都记，匿名请求就能无限写库、拖慢真实审计。"""
 
-        key = f"iam:login:notice:{reason}:{login_key_username(username)}:{ip}"
+        # 出口 IP 被限制时按 IP 记：键里带用户名的话，换个用户名就又记一条，匿名请求照样能无限写库。
+        who = "" if reason == "locked_ip" else f"{login_key_username(username)}:"
+        key = f"iam:login:notice:{reason}:{who}{ip}"
         try:
             return bool(await self._redis.set(key, 1, ex=max(seconds, 1), nx=True))
         except RedisError:

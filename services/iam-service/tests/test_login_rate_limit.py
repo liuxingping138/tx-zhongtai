@@ -168,6 +168,8 @@ async def test_locked_attempts_are_logged_once_per_window() -> None:
     assert await limiter.first_notice("admin", "10.0.0.1", "locked_account", 300) is True
     assert await limiter.first_notice("Admin", "10.0.0.1", "locked_account", 300) is False
     assert await limiter.first_notice("admin", "10.0.0.1", "locked_ip", 300) is True
+    # 出口 IP 被限制时按 IP 只记一次：换个用户名再试不能又写一条（匿名请求无限写库）。
+    assert await limiter.first_notice("random-1", "10.0.0.1", "locked_ip", 300) is False
 
 
 @pytest.mark.asyncio
