@@ -158,7 +158,7 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
   用户每周按信源表透视的就是规则当周新建的网站，按创建日期记才对得上；记同步当天会把信源表里一直没标的老配置算进本周。批次记在 `policy_crawler_config_syncs`
 - **工作量按栏目算，信源表按栏目展开**（用户定的）：规则表一个网站常有好几行（一行一个栏目，网站编码相同），信源表原来一个网站一行、标签里列一串栏目。
   从 `POLICY_CRAWLER_CONFIG_EXPAND_FROM`（2026-10-26，用户定的从这周开始）那天起建的规则，同步时每条在信源表里展开成一行（`app/crawlconfig/domain/expand.py`）：标签换成栏目名、链接换成规则链接，
-  其余字段照抄这个网站那一行，网站编码共用（所以网站编码不再唯一，`rule_id` 记对应的规则、部分唯一）。这个网站之前没有规则的，原来那行改成第一个栏目；
+  其余字段照抄这个网站那一行，网站编码共用（所以网站编码不再唯一，`rule_id` 记对应的规则、部分唯一；信源导入允许同一网站（名称、省、市都一样）共用编码，不同网站撞编码才拒收）。这个网站之前没有规则的，原来那行改成第一个栏目；
   之前配过规则的，原来那行留着代表老栏目，新栏目另起一行；信源表已有同名栏目的行就记上规则 ID。之前的规则不展开（历史不好处理，用户定的先不管），没填编码的规则不管。
   展开的行按自己那条规则的创建日期算上线时间（同样只往前对齐、不往后挪），按网站一行的对齐（上一条）只管 `rule_id` 为空的行。
   展开后爬虫同事改了规则的网站编码：展开时按规则 ID 也取一遍已对上的行，那一行留在原编码下照常跟着规则走（用户定的），批次记 `moved` 让人核对；只按编码取会再展开一次、撞规则 ID 唯一索引，整次同步回滚、天天失败。
@@ -192,7 +192,7 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
   上线后再改模板只改草稿，页面列出与上线版本不同的项；已上线的模板要先下线才能删，删模板连它的样本试跑记录和产物一起删，试跑没结束的先拦下。定时任务只用上线版本。
   上线请求带管理员核对时看到的草稿 `version`：核对期间草稿又被保存、换了文件就 409，免得上线一份没人核对过的内容
 - 主线是业务人员写模板、样本试跑 → 管理员上线 → 定时任务只跑上线版本（`releases.current`）。页面发起的批量任务（`app/application/batch_start.py`）用 `version` 选跑上线版本还是已保存的草稿：人自己传 Excel、当场看结果，不用等上线。只跑了前几行的任务可以「用同一份数据跑全部」（`app/application/batch_run_all.py`，`/batch-runs/{id}/run-all`）：复制那次的数据快照、码表和冻结的提示词 / 输出字段 / 模型新建任务，前面答好的行沿用不重问。单独上传本次 Excel，按要跑那一版引用的列检查（`input-preview` 预检不调模型；`input-template` 按同一份列给出只有表头的数据模板下载），把输入文件、那一版的提示词 / 输出字段 / 模型 / 码表冻结进任务目录和任务行（跑上线版本记 `release_no`，跑草稿记 `draft_saved_at`，以及 `input_name`）：之后改模板、重新上线、删模板都不影响排队中、运行中和已完成的任务
-- 样本试跑（`app/application/sample_runs.py`，`/api/v1/ai/prompts/{id}/sample-run`，权限同试发 `ai.prompts:ask`）：草稿 × 模板测试样本前 N 条（最多 50），也是一条 `ai_batch_runs`，`source=sample`，不进批量任务列表（`repositories/batch_runs.TASK_SOURCES`），和正式任务互不阻挡；按先后叫「第 N 次」，`view` 默认看最近一次、和前一次逐行对比（`run_compare`：按发起时复制进任务目录的样本内容判断是不是同一份，同一份才按行号对上，标 fixed / broke / changed；changed 只比标签类短值，超过 `PROSE_CHARS` 字的说明文字措辞变了不算，前端 `sampleView.isProse` 同一规则），`run_id` / `compare_id` 能换着看最近 20 次；`/sample-run/{run_id}/retry` 只重问失败的行，用的是那次冻结的提示词；模板列表带最近一次试跑（`sample`，`current` 表示跑的就是现在的草稿）。逐行结果预览 `run_rows.preview` 样本试跑和批量详情共用，任务可能几十万行，只读要列的那几行：输入读逐行副本 `input.jsonl`（第一次打开时由快照生成，快照大小或修改时间变了就重建），原始返回不留提问原文，前 50 行都成功就不往下读（重跑只重问失败的行，成功那次就是最终结果）；「只看失败」读每写一行原始返回时同步追加的结果记录 `temp.outcomes.jsonl`（`batch_output.append_raw`，不带提问，几十万行也只有几 MB），记录功能上线前开始的任务没有它，才整份读原始返回。跑完的结果 Excel 在模板页下载（`/sample-run/{run_id}/files/{kind}`），挂模板的导出档 `ai.prompts:export` 而不是批量任务的，只给这个模板自己 `source=sample` 的任务
+- 样本试跑（`app/application/sample_runs.py`，`/api/v1/ai/prompts/{id}/sample-run`，权限同试发 `ai.prompts:ask`）：草稿 × 模板测试样本前 N 条（最多 50），也是一条 `ai_batch_runs`，`source=sample`，不进批量任务列表（`repositories/batch_runs.TASK_SOURCES`），和正式任务互不阻挡；按先后叫「第 N 次」，`view` 默认看最近一次、和前一次逐行对比（`run_compare`：按发起时复制进任务目录的样本内容判断是不是同一份，同一份才按行号对上，标 fixed / broke / changed；changed 只比标签类短值，超过 `PROSE_CHARS` 字的说明文字措辞变了不算，前端 `sampleView.isProse` 同一规则），`run_id` / `compare_id` 能换着看最近 20 次；`/sample-run/{run_id}/retry` 只重问失败的行，用的是那次冻结的提示词；模板列表带最近一次试跑（`sample`，`current` 表示跑的就是现在的草稿）。逐行结果预览 `run_rows.preview` 样本试跑和批量详情共用，任务可能几十万行，只读要列的那几行：输入读逐行副本 `input.jsonl`（第一次打开时由快照生成，快照大小或修改时间变了就重建），原始返回不留提问原文；每写一行原始返回同步追加一条结果记录 `temp.outcomes.jsonl`（`batch_output.append_raw`，不带提问，几十万行也只有几 MB，记着这一行在原始返回里的字节位置 `at`，同一任务的几路并发写原始返回用 `Job.write_lock` 排队，位置才准）：前 N 行按记录定下最终结果、成功行按位置直接取，「只看失败」也读它。记录（或位置）功能上线前开始的任务没有它，才顺序读原始返回。跑完的结果 Excel 在模板页下载（`/sample-run/{run_id}/files/{kind}`），挂模板的导出档 `ai.prompts:export` 而不是批量任务的，只给这个模板自己 `source=sample` 的任务
 - `ai-worker` 持 Postgres 全局锁，用 `SKIP LOCKED` 认领排队任务，最多同时跑 `AI_BATCH_MAX_RUNNING` 个，其中留一个给样本试跑和定时打标（页面发起的批量任务最多占其余几个，`batch_queue.bulk_limit`），每个任务
   `AI_BATCH_CONCURRENCY` 路并发。leader 每 10 秒写 `ai_worker_heartbeat`，一分钟没写就算不在线：批量任务列表和样本试跑接口带 `worker_online`，页面据此提示排队的任务不会开始。提示词轮到哪行才拼哪行、成功行写完 CSV 就不再留提问原文、结果 Excel 用 `xlsx_writer` 流式写：10 万行乘上码表全文一次拼好要几个 G，worker 会被 OOM 杀掉。每行完成立即追加 `temp.csv`；进程被停时把已跑部分收尾成「中断」并生成结果。
   运行中超过 `AI_BATCH_STALE_SECONDS` 没心跳的任务，列表和进度接口会把它纠正为「中断」
@@ -289,7 +289,7 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
   一批最多发 `pipeline.PIPELINE_ROWS_BUDGET`（56MB，ai-service 这个前缀收 64MB），超出的行记成未执行、下一批接着做；内部调用的 JSON 按 UTF-8 发（转义的话一个汉字 6 字节）；
   政策服务轮询到结束再取解析结果（ai-service 那边已跑过三轮）。轮询偶尔问不到不放弃（连续 `POLL_MISSES` 次才算失败）；
   调度超时、进程中断、一直问不到都先停掉 ai-service 那边的任务，批次记失败时把已花的钱补进步骤费用列（`tagging._close`），重试时当日额度才算得到。
-  下一批发起时带上上一批失败的 AI 任务（`pipeline._reusable` → `reuse_run_id`）：同一上线版本、同一模型、同一码表、行数据一模一样且已答好的行，
+  下一批发起时带上复用期限内最近一次失败的 AI 任务（`pipeline._reusable` → `reuse_run_id`，不要求是最近一批）：同一上线版本、同一模型、同一码表、行数据一模一样且已答好的行，
   ai-service 直接抄进新任务（`pipeline_runs._reuse_answers`），不再花钱重问
 - 类型判断结果用系统政策类型码表核对（缺「类」字的旧写法补上能对上就算），写进基础标签：按 `source_content_id` 更新，
   人工在打标后改过的行不覆盖；失败和没对上码表的写进备注。含「信息化建设类」的标「是否解读 = 是」
@@ -422,7 +422,7 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
 
 - `pg_stat_user_tables.n_live_tup` 是过期统计会显示 0 行，判断数据量用 `count(*)`
 - mypy 有缓存假报错，改完文件结构先 `rm -rf .mypy_cache`
-- 登录失败按账号 5 次、IP 20 次 / 300 秒限流，账号键是小写后的用户名。账号被锁在用户管理里点「解锁」；
+- 登录失败按账号 5 次、IP 20 次 / 300 秒限流，账号键是小写后的用户名；改密码时原密码输错也按这个计数（`api/auth.change_password`）。账号被锁在用户管理里点「解锁」；
   IP 维度的计数页面不管，探测后清理：`docker exec tx-zhongtai-redis-1 redis-cli del 'iam:login:ip:<IP>'`
 - Element Plus 的原生 checkbox 是 `opacity:0; 0x0` 隐藏元素，e2e 里 `check()` 会一直等可见，
   改点可见标签；hover 才出现的清除图标用 `dispatchEvent('click')`，
