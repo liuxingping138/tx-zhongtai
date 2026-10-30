@@ -214,6 +214,9 @@ class BatchRun(Base):
     round_starts_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, comment="本轮开始时间"
     )
+    # 还没答好的行数（失败的 + 没问到的），执行进程写进度时算好：第 2 轮或重跑途中进程被杀，
+    # 只靠「已处理」「失败」两个数推，正在重问的行会算两次，「重跑失败的 N 条」偏大。旧任务没有这个数（空），照旧推算。
+    open_count: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="还没答好的行数")
     # 删除只是不再列出：花掉的钱还要留在费用账单里。
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, comment="删除时间")
 

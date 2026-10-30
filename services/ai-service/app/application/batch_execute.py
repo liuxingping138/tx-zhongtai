@@ -93,6 +93,8 @@ class Job:
     ledger: Ledger = field(default_factory=Ledger)
     # 几路并发答完的行排队写原始返回：结果记录里记的字节位置才准（详情预览按位置取行）。
     write_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    # 等下一轮的时候被停了：这时每行都有结果（上一轮的），只看行数会把它收尾成「完成」、不写停止说明。
+    rounds_cut: bool = False
 
     def path(self, kind: str) -> Any:
         return storage.run_file(self.run.id, kind)
@@ -174,6 +176,7 @@ async def _next_round(job: Job) -> bool:
     with contextlib.suppress(TimeoutError):
         await asyncio.wait_for(job.stop.wait(), timeout=wait)
     if job.stop.is_set():
+        job.rounds_cut = True
         return False
     for myid in again:
         job.previous[myid] = job.results.pop(myid)
@@ -186,7 +189,9 @@ def _progress(job: Job, *, final: bool = False) -> dict[str, Any]:
 
     merged = job.merged()
     failed = [item for item in merged.values() if item.error]
+    answered = sum(1 for item in merged.values() if not item.error)
     return {
+        "open_count": len(job.rows) - answered,
         "done_count": len(merged if final else job.results),
         "failed_count": len(failed),
         "format_failed_count": sum(1 for item in failed if item.format_error),
@@ -212,7 +217,8 @@ async def _watch(job: Job) -> None:
                 cancelled = await repo.cancel_flag(session, job.run.id)
                 await book(session, job.run.id, taken)
                 await session.commit()
-            booked = True
+                # 提交了就算记上：在退出会话（关连接）时被取消的话，放回去会让收尾再记一遍，同一笔钱记两次。
+                booked = True
         except Exception:
             logger.exception("batch_run_watch_failed run=%s", job.run.id)
             continue
@@ -369,5 +375,5 @@ async def execute(run_id: str) -> None:
         logger.exception("batch_run_failed run=%s", run_id)
         await _finish(job, RUN_FAILED, f"执行失败：{exc}"[:ERROR_MAX])
         return
-    stopped_early = job.stop.is_set() and len(job.results) < len(job.rows)
+    stopped_early = job.stop.is_set() and (len(job.results) < len(job.rows) or job.rounds_cut)
     await _finish(job, RUN_CANCELLED if stopped_early else RUN_DONE, job.stop_reason if stopped_early else "")

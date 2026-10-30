@@ -211,6 +211,7 @@ async def test_billing_groups_batches_pipelines_and_calls_by_beijing_day() -> No
                 inference_cost=Decimal("0.3"))
         )  # fmt: skip
         session.add(run(id="4" * 32, created_at=late, source="sample", inference_cost=Decimal("0.04")))
+        session.add(run(id="6" * 32, created_at=late))  # 排队就取消、一分钱没花：不算一次
         for index, kind in enumerate(("chat", "chat", "trial")):
             session.add(
                 CallUsage(id=f"{index}" * 32, kind=kind, model_id="m", model_name="百度-DeepSeek-V3.2",

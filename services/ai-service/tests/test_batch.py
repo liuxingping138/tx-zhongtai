@@ -200,9 +200,13 @@ async def test_bulk_runs_leave_one_slot_for_samples_and_pipelines(monkeypatch: p
     """三个执行位：页面批量任务最多占两个，第三个只给样本试跑和定时打标。只有一个执行位时没法留。"""
 
     seen: list[Collection[str]] = []
+    ids: list[set[str]] = []
 
-    async def claim(*, exclude_sources: Collection[str] = ()) -> tuple[str, str] | None:
+    async def claim(
+        *, exclude_sources: Collection[str] = (), exclude_ids: Collection[str] = ()
+    ) -> tuple[str, str] | None:
         seen.append(exclude_sources)
+        ids.append(set(exclude_ids))
         return None
 
     monkeypatch.setattr(runner, "claim_next", claim)
@@ -214,6 +218,8 @@ async def test_bulk_runs_leave_one_slot_for_samples_and_pipelines(monkeypatch: p
     await runner._claim({task: ("a", "sample"), object(): ("b", "pipeline")}, 3)  # type: ignore[arg-type]
     await runner._claim({}, 1)
     assert seen == [(), ("manual",), (), ()]
+    # 本进程还在跑的不再认领：原来认领了再跳过，任务被改成「运行中」却没人执行。
+    assert ids[1] == {"a", "b"}
     # 满了就不去认领。
     assert await runner._claim({**two_bulk, object(): ("c", "sample")}, 3) is None  # type: ignore[arg-type]
     assert len(seen) == 4
@@ -367,13 +373,17 @@ async def test_execute_keeps_old_failures_for_rows_not_reached_after_stop(monkey
 async def test_retry_requeues_finished_run_with_pending_rows(monkeypatch: pytest.MonkeyPatch) -> None:
     storage.write_atomic(storage.run_dir(RUN_ID) / "source.xlsx", xlsx([["名称"], ["甲"]]))
     _returns(repo, "active_for_prompt", None, monkeypatch)
-    finished = run(status="interrupted", total_count=10, done_count=7, failed_count=2, error_message="中断")
+    finished = run(
+        status="interrupted", total_count=10, done_count=7, failed_count=2, error_message="中断", retry_round=3
+    )
     _returns(repo, "get", finished, monkeypatch)
     _returns(prompt_repo, "get", template(), monkeypatch)  # 重跑和发起一样先锁模板行
     listed = service.to_dict(finished)
     assert (listed["pending_count"], listed["can_retry"]) == (5, True)
     data = await service.retry_run(FakeSession(), ACTOR, FULL_ACCESS, RUN_ID)  # type: ignore[arg-type]
     assert (data["status"], data["error_message"], data["can_retry"], data["pending_count"]) == ("queued", "", False, 0)
+    # 轮次从头算：排队期间不再显示上次的「第 3 轮」。
+    assert (finished.retry_round, finished.round_rows, finished.round_starts_at) == (1, 5, None)
 
     _returns(repo, "get", run(status="running", total_count=3), monkeypatch)
     with pytest.raises(ApiError, match="仍在运行"):
@@ -451,3 +461,12 @@ async def test_a_cut_off_answer_is_charged_by_length(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(row_asking, "stream_responses", fake_stream([{"error": "超时", "retryable": True}]))
     silent = await row_asking.call_model_once(_model(), "问" * 100, False, None)  # type: ignore[arg-type]
     assert (silent.input_tokens, silent.output_tokens) == (0, 0)
+
+
+def test_rows_left_to_rerun_use_the_count_written_by_the_worker() -> None:
+    """第 2 轮途中进程被杀：「已处理」只数本轮、「失败」按合并后的算，正在重问的行会被算两次；执行进程记的数是准的。"""
+
+    killed = run(status="interrupted", total_count=10, done_count=7, failed_count=3, open_count=3)
+    assert service.pending_rows(killed) == 3
+    legacy = run(status="interrupted", total_count=10, done_count=7, failed_count=2)
+    assert service.pending_rows(legacy) == 5

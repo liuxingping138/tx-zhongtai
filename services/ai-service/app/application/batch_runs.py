@@ -58,8 +58,10 @@ def _files(run: BatchRun) -> dict[str, bool]:
 
 
 def pending_rows(run: BatchRun) -> int:
-    """重跑要问的行：失败的 + 没跑到的（停止、中断时剩下的）。"""
+    """重跑要问的行：失败的 + 没跑到的（停止、中断时剩下的）。执行进程记了「还没答好的行数」就用它。"""
 
+    if run.open_count is not None:
+        return run.open_count
     return max(run.total_count - run.done_count, 0) + run.failed_count
 
 
@@ -219,6 +221,8 @@ async def retry_run(
     pending = pending_rows(run)
     run.status, run.cancel_requested, run.error_message = RUN_QUEUED, False, ""
     run.finished_at, run.heartbeat_at = None, None
+    # 轮次从头算：不然排队期间还显示上次的「第 3 轮：重问 35 条」。
+    run.retry_round, run.round_rows, run.round_starts_at = 1, pending, None
     target = run.prompt_id if run.source == RUN_SOURCE_SAMPLE else run.id
     changes: dict[str, Any] = {"rows": pending}
     if run.source == RUN_SOURCE_SAMPLE:

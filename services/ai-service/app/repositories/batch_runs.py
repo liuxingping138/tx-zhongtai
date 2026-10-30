@@ -169,12 +169,17 @@ async def mark_stale_interrupted(session: AsyncSession, *, cutoff: datetime, mes
     return int(result.rowcount or 0)  # type: ignore[attr-defined]  # UPDATE 的结果才有 rowcount，类型上看不到
 
 
-async def claim_next(session: AsyncSession, *, now: datetime, exclude_sources: Collection[str] = ()) -> BatchRun | None:
-    """认领最早排队的任务。SKIP LOCKED：多实例时不会重复认领同一条。exclude_sources 里的来源这次不认领。"""
+async def claim_next(
+    session: AsyncSession, *, now: datetime, exclude_sources: Collection[str] = (), exclude_ids: Collection[str] = ()
+) -> BatchRun | None:
+    """认领最早排队的任务。SKIP LOCKED：多实例时不会重复认领同一条。exclude_sources 里的来源这次不认领；
+    exclude_ids 是本进程还在跑的任务（被误判中断后又被人重跑排回队列的），等它收尾后再认领。"""
 
     statement = select(BatchRun).where(BatchRun.status == RUN_QUEUED, LIVE)
     if exclude_sources:
         statement = statement.where(BatchRun.source.not_in(exclude_sources))
+    if exclude_ids:
+        statement = statement.where(BatchRun.id.not_in(list(exclude_ids)))
     statement = statement.order_by(BatchRun.created_at, BatchRun.id).limit(1).with_for_update(skip_locked=True)
     run = (await session.scalars(statement)).first()
     if run is None:

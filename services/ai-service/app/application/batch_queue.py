@@ -28,11 +28,13 @@ def bulk_limit(total: int) -> int:
     return total - 1 if total > 1 else total
 
 
-async def claim_next(*, exclude_sources: Collection[str] = ()) -> tuple[str, str] | None:
+async def claim_next(
+    *, exclude_sources: Collection[str] = (), exclude_ids: Collection[str] = ()
+) -> tuple[str, str] | None:
     """认领一条排队任务，返回 (任务ID, 来源)。"""
 
     async with SessionLocal() as session:
-        run = await repo.claim_next(session, now=utcnow(), exclude_sources=exclude_sources)
+        run = await repo.claim_next(session, now=utcnow(), exclude_sources=exclude_sources, exclude_ids=exclude_ids)
         await session.commit()
         return (run.id, run.source) if run else None
 

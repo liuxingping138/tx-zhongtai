@@ -64,6 +64,25 @@ async def test_network_failures_are_asked_again_next_round_and_it_stops_once_all
     assert "第 3 轮" not in _log()  # 第二轮全成功就提前结束，不跑满三轮
 
 
+async def test_stopping_while_waiting_for_the_next_round_ends_as_stopped(monkeypatch: pytest.MonkeyPatch) -> None:
+    """等下一轮时点了停止：每行都有上一轮的结果，只看行数会收尾成「完成」、不写停止说明。"""
+
+    recorder = _Recorder()
+    _prepare_execution(monkeypatch, recorder, run())
+    _script(monkeypatch, {"甲": [GOOD], "乙": [NETWORK], "丙": [GOOD]})
+    monkeypatch.setattr(batch_execute, "ROUND_WAITS", (30.0, 30.0))
+    real_save = batch_execute._save
+
+    async def save_and_stop(job: Any, values: dict[str, Any]) -> None:
+        await real_save(job, values)
+        if values.get("retry_round") == 2:
+            job.stop.set()  # 页面上在等第 2 轮时点了停止
+
+    monkeypatch.setattr(batch_execute, "_save", save_and_stop)
+    await batch_execute.execute(RUN_ID)
+    assert recorder.updates[-1]["status"] == "cancelled"
+
+
 async def test_bad_format_is_left_to_the_next_round_instead_of_reasked_on_the_spot(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

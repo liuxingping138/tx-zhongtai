@@ -95,6 +95,9 @@ async def daily(session: AsyncSession, since: datetime, until: datetime) -> list
             BatchRun.created_at >= since,
             BatchRun.created_at < until,
             ~select(RunCost.run_id).where(RunCost.run_id == BatchRun.id).exists(),
+            # 一分钱没花的（排队就取消、读 Excel 就失败、跑全部时整份沿用）不算一次：账单说的是「花了钱的组合」。
+            (BatchRun.input_tokens + BatchRun.output_tokens + BatchRun.search_calls > 0)
+            | (BatchRun.inference_cost + BatchRun.search_cost > 0),
         )
         .group_by(batch_day, BatchRun.model_id, batch_purpose)
     )

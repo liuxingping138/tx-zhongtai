@@ -41,8 +41,10 @@ async def _claim(running: dict[asyncio.Task[None], tuple[str, str]], limit: int)
         return None
     bulk = sum(1 for _, source in running.values() if source in BULK_SOURCES)
     exclude = BULK_SOURCES if bulk >= bulk_limit(limit) else ()
+    # 本进程还在跑的不认领：原来认领了再跳过，任务已被改成「运行中」却没人执行，过一会儿又被判中断。
+    mine = {run_id for run_id, _ in running.values()}
     try:
-        return await claim_next(exclude_sources=exclude)
+        return await claim_next(exclude_sources=exclude, exclude_ids=mine)
     except Exception:
         logger.warning("batch_run_claim_failed", exc_info=True)
         return None
@@ -58,10 +60,6 @@ async def consume(stop: asyncio.Event) -> None:
         while not stop.is_set():
             running = {task: claimed for task, claimed in running.items() if not task.done()}
             claimed = await _claim(running, limit)
-            if claimed and claimed[0] in {run_id for run_id, _ in running.values()}:
-                # 本进程还在跑它，却被误判中断后又被重跑排回了队列：不能再起第二个执行者往同一个目录里写。
-                logger.warning("batch_run_already_running run=%s", claimed[0])
-                continue
             if claimed:
                 logger.info("batch_run_claimed run=%s source=%s", *claimed)
                 running[asyncio.create_task(execute(claimed[0]))] = claimed
