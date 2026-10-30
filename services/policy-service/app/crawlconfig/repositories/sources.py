@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from datetime import date, datetime
 
 from platform_common.actors import Actor
@@ -28,10 +29,11 @@ async def apply_rule_dates(
     if not first_dates:
         return [], []
     statuses = (*CRAWLER_STATUS_PENDING, CRAWLER_STATUS_ONLINE)
+    # 只管按网站一行的：按栏目展开的行有自己那条规则的日期（见 crawlconfig.domain.expand）。
     rows = (
         await session.scalars(
             select(Source)
-            .where(Source.site_code.in_(first_dates), Source.crawler_status.in_(statuses))
+            .where(Source.site_code.in_(first_dates), Source.crawler_status.in_(statuses), Source.rule_id == "")
             .order_by(Source.id)
             .with_for_update()
         )
@@ -60,6 +62,33 @@ async def apply_rule_dates(
 
 
 async def count_known(session: AsyncSession, codes: set[str]) -> int:
+    """规则表里的网站编码有几个在信源表里。按栏目展开后一个编码有几行，按编码数。"""
+
     if not codes:
         return 0
-    return int(await session.scalar(select(func.count()).where(Source.site_code.in_(codes))) or 0)
+    statement = select(func.count(func.distinct(Source.site_code))).where(Source.site_code.in_(codes))
+    return int(await session.scalar(statement) or 0)
+
+
+async def site_rows(session: AsyncSession, codes: Collection[str]) -> list[Source]:
+    """这些网站编码在信源表里的全部行，加锁：展开要改原来那行、照抄它新增，和人工编辑互斥。"""
+
+    if not codes:
+        return []
+    statement = select(Source).where(Source.site_code.in_(set(codes))).order_by(Source.id).with_for_update()
+    return list((await session.scalars(statement)).all())
+
+
+async def taken_internal_ids(session: AsyncSession, internal_ids: Collection[str]) -> set[str]:
+    if not internal_ids:
+        return set()
+    statement = select(Source.internal_id).where(Source.internal_id.in_(set(internal_ids)))
+    return set((await session.scalars(statement)).all())
+
+
+async def rows_of_sites(session: AsyncSession, site_names: Collection[str]) -> list[Source]:
+    """这些网站名称下的全部信源（不加锁）：预览时找同一网站里链接相同的另一条信源，提示可能重复。"""
+
+    if not site_names:
+        return []
+    return list((await session.scalars(select(Source).where(Source.site_name.in_(set(site_names))))).all())

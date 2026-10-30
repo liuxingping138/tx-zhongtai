@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from typing import Any
 
@@ -19,9 +20,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.audit_emit import enqueue_event
 from app.core.config import get_settings
 from app.core.database import SessionLocal
+from app.crawlconfig.application import expand
 from app.crawlconfig.domain.models import ConfigSyncRun
 from app.crawlconfig.repositories import rules_source, sources
 
+logger = logging.getLogger("policy.crawler_config")
 ROBOT = Actor(id="crawler-config-sync", name="爬虫配置同步")
 # 审计里最多记这么多个网站编码。
 AUDIT_CODES_MAX = 500
@@ -34,6 +37,7 @@ SUMMARY_FIELDS = (
     "marked",
     "redated",
     "unknown_codes",
+    "added",
 )
 
 
@@ -41,13 +45,19 @@ async def run(sync_id: uuid.UUID) -> None:
     async with SessionLocal() as session:
         session.add(ConfigSyncRun(id=sync_id, status="running", started_at=utcnow()))
         await session.commit()
-    rules = await asyncio.to_thread(rules_source.read_rule_codes)
+    settings = get_settings()
+    rules = await asyncio.to_thread(rules_source.read_rule_codes, settings.crawler_config_expand_from)
     async with SessionLocal() as session:
         now = utcnow()
-        placeholder = get_settings().crawler_config_backfill_date.isoformat()
+        # 先按栏目展开新规则（展开过的行记了规则 ID，下面按网站一行的对齐不再碰它们）。
+        expanded = await expand.expand(session, rules.columns, set(rules.first_dates), now=now, actor=ROBOT)
+        if expanded.conflicts:
+            logger.warning("crawler_config_expand_conflicts count=%s", len(expanded.conflicts))
+        placeholder = settings.crawler_config_backfill_date.isoformat()
         marked, redated = await sources.apply_rule_dates(
             session, rules.first_dates, now=now, actor=ROBOT, placeholder=placeholder
         )
+        marked, redated = [*marked, *expanded.marked], [*redated, *expanded.redated]
         matched = await sources.count_known(session, rules.codes)
         row = await session.get(ConfigSyncRun, sync_id, with_for_update=True)
         if row is None:
@@ -55,15 +65,24 @@ async def run(sync_id: uuid.UUID) -> None:
         row.status, row.finished_at = "success", now
         row.rule_rows, row.rule_codes, row.blank_code_rows = rules.rows, len(rules.codes), rules.blank_rows
         row.matched, row.marked, row.redated = matched, len(marked), len(redated)
-        row.unknown_codes = len(rules.codes) - matched
-        if marked or redated:
+        row.unknown_codes, row.added = len(rules.codes) - matched, expanded.added
+        if marked or redated or expanded.added:
             await enqueue_event(
                 session,
                 event_type="policy.crawler_config.synced",
                 actor=ROBOT,
                 target_id="batch",
-                changes={"crawler_status": "已爬", "marked": len(marked), "redated": len(redated)},
-                extra={"marked_codes": marked[:AUDIT_CODES_MAX], "redated_codes": redated[:AUDIT_CODES_MAX]},
+                changes={
+                    "crawler_status": "已爬",
+                    "marked": len(marked),
+                    "redated": len(redated),
+                    "added": expanded.added,
+                },
+                extra={
+                    "marked_codes": marked[:AUDIT_CODES_MAX],
+                    "redated_codes": redated[:AUDIT_CODES_MAX],
+                    "expand_conflicts": [step.rule.rule_id for step, _ in expanded.conflicts][:AUDIT_CODES_MAX],
+                },
             )
         await session.commit()
 

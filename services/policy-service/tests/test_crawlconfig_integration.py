@@ -15,6 +15,7 @@ from sqlalchemy import delete, select
 
 from app.core.database import SessionLocal, engine
 from app.crawlconfig.application import report, rules_sync
+from app.crawlconfig.domain.expand import ColumnRule
 from app.crawlconfig.domain.models import ConfigSyncRun
 from app.crawlconfig.repositories import rules_source
 from app.crawlconfig.repositories.rules_source import RuleCodes
@@ -72,7 +73,7 @@ async def test_sync_dates_sites_by_rule_creation_and_leaves_abnormal_alone(monke
     first = {"A1": date(2026, 10, 23), "A2": date(2024, 10, 15), "A3": date(2026, 10, 23), "A4": date(2026, 10, 10)}
     later = {"A6": date(2026, 10, 16), "A7": date(2026, 10, 20), "A8": date(2026, 10, 30), "Z9": date(2026, 10, 23)}
     rules = RuleCodes(rows=9, first_dates={**first, **later}, blank_rows=1)
-    monkeypatch.setattr(rules_source, "read_rule_codes", lambda: rules)
+    monkeypatch.setattr(rules_source, "read_rule_codes", lambda *_: rules)
     sync_id = uuid.uuid4()
     await rules_sync.run(sync_id)
 
@@ -105,6 +106,7 @@ async def test_sync_dates_sites_by_rule_creation_and_leaves_abnormal_alone(monke
             "marked": 2,
             "redated": 2,
             "unknown_codes": 1,
+            "added": 0,
         }
 
     # 再跑一次：日期已经对齐，什么也不改。
@@ -112,6 +114,55 @@ async def test_sync_dates_sites_by_rule_creation_and_leaves_abnormal_alone(monke
     async with SessionLocal() as session:
         latest = await rules_sync.latest(session)
         assert latest is not None and (latest["marked"], latest["redated"]) == (0, 0)
+
+
+async def test_rules_from_the_expand_day_become_one_source_row_each(monkeypatch: pytest.MonkeyPatch) -> None:
+    """从展开那天起建的规则，每条在信源表里一行：标签、链接换成规则的，其余照抄网站那行，网站编码共用。"""
+
+    async with SessionLocal() as session:
+        site = _source("B1", "已爬", "2024-10-01")
+        site.department, site.url, site.tag = "市政府办公室", "https://b1.gov.cn", "政策|通知公告"
+        session.add_all([site, _source("B2", "已爬", "2026-10-10", rule_date="2026-10-10")])
+        await session.commit()
+    columns = [
+        ColumnRule("r1", "B1", "政策文件", "https://b1.gov.cn/zcwj", date(2026, 10, 30)),
+        ColumnRule("r2", "B1", "通知公告", "https://b1.gov.cn/tzgg", date(2026, 10, 30)),
+        ColumnRule("r3", "B2", "新栏目", "https://b2.gov.cn/new", date(2026, 10, 30)),
+        ColumnRule("r4", "Z9", "没有这个网站", "https://z9.gov.cn", date(2026, 10, 30)),
+    ]
+    rules = RuleCodes(rows=5, first_dates={"B2": date(2026, 10, 10)}, columns=columns)
+    monkeypatch.setattr(rules_source, "read_rule_codes", lambda *_: rules)
+    sync_id = uuid.uuid4()
+    await rules_sync.run(sync_id)
+
+    async with SessionLocal() as session:
+        rows = (await session.scalars(select(Source).order_by(Source.site_code, Source.rule_id))).all()
+        assert [(row.site_code, row.rule_id, row.tag, row.url, row.online_date) for row in rows] == [
+            # B1 之前没有规则：原来那行改成第一个栏目，第二个栏目新增一行
+            ("B1", "r1", "政策文件", "https://b1.gov.cn/zcwj", "2026-10-30"),
+            ("B1", "r2", "通知公告", "https://b1.gov.cn/tzgg", "2026-10-30"),
+            # B2 之前配过规则：原来那行留着、日期不变，新栏目另起一行
+            ("B2", "", "", "", "2026-10-10"),
+            ("B2", "r3", "新栏目", "https://b2.gov.cn/new", "2026-10-30"),
+        ]
+        added = next(row for row in rows if row.rule_id == "r2")
+        assert (added.department, added.site_name, added.crawler_status, added.created_by_name) == (
+            "市政府办公室",
+            "网站B1",
+            "已爬",
+            "爬虫配置同步",
+        )
+        summary = await rules_sync.summary(session, sync_id)
+        assert summary is not None
+        assert (summary["added"], summary["matched"], summary["unknown_codes"]) == (2, 2, 1)
+
+    # 再跑一次：规则 ID 都记在行上了，不会再展开。
+    again = uuid.uuid4()
+    await rules_sync.run(again)
+    async with SessionLocal() as session:
+        assert len((await session.scalars(select(Source))).all()) == 4
+        latest = await rules_sync.summary(session, again)
+        assert latest is not None and (latest["added"], latest["marked"], latest["redated"]) == (0, 0, 0)
 
 
 async def test_abandon_marks_a_running_batch_failed() -> None:

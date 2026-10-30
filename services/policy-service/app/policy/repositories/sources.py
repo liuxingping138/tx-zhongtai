@@ -41,9 +41,10 @@ async def get_by_internal_id(session: AsyncSession, internal_id: str) -> Source 
     return result.scalar_one_or_none()
 
 
-async def get_by_site_code(session: AsyncSession, site_code: str) -> Source | None:
-    result = await session.execute(select(Source).where(Source.site_code == site_code))
-    return result.scalar_one_or_none()
+async def site_code_taken(session: AsyncSession, site_code: str) -> bool:
+    """按栏目展开后一个网站编码有几行，只问有没有。"""
+
+    return bool(await session.scalar(select(Source.id).where(Source.site_code == site_code).limit(1)))
 
 
 async def list_internal_ids(session: AsyncSession) -> set[str]:

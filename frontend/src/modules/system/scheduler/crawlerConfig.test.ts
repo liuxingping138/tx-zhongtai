@@ -13,6 +13,11 @@ describe('configResultText', () => {
     expect(configResultText(result)).toBe('新标已爬 0 个 · 规则表网站编码 2 个')
   })
 
+  it('按栏目展开新增了行时写出来', () => {
+    const result = { status: 'success', rule_rows: 226, rule_codes: 134, blank_code_rows: 0, matched: 134, marked: 0, redated: 134, unknown_codes: 0, added: 92 }
+    expect(configResultText(result)).toBe('新标已爬 0 个 · 按栏目展开新增 92 行 · 上线时间对齐规则创建日期 134 个 · 规则表网站编码 134 个')
+  })
+
   it('没有结果时返回空串', () => {
     expect(configResultText(null)).toBe('')
     expect(configResultText({ days_synced: 1 })).toBe('')

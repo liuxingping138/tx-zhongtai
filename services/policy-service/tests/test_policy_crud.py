@@ -41,7 +41,7 @@ class TestSources:
         audit = AsyncMock(side_effect=lambda *_a, **k: state.events.append(k["event_type"]))
         monkeypatch.setattr(sources, "enqueue_event", audit)
         monkeypatch.setattr(sources.repo, "get_by_internal_id", AsyncMock(side_effect=lambda *_: state.internal))
-        monkeypatch.setattr(sources.repo, "get_by_site_code", AsyncMock(side_effect=lambda *_: state.site))
+        monkeypatch.setattr(sources.repo, "site_code_taken", AsyncMock(side_effect=lambda *_: state.site is not None))
         monkeypatch.setattr(sources.repo, "get_for_update", AsyncMock(side_effect=lambda *_: state.row))
         monkeypatch.setattr(sources.repo, "get_by_id", AsyncMock(side_effect=lambda *_: state.row))
         monkeypatch.setattr(

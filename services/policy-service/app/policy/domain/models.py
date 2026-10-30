@@ -31,7 +31,10 @@ class Source(Base):
     __tablename__ = "policy_sources"
     __table_args__ = (
         UniqueConstraint("internal_id", name="uq_policy_sources_internal_id"),
-        UniqueConstraint("site_code", name="uq_policy_sources_site_code"),
+        # 网站编码标识网站，按栏目展开后同一个网站有几行共用一个编码（见 crawlconfig.domain.expand），不再唯一。
+        Index("ix_policy_sources_site_code", "site_code"),
+        # 一条规则只展开成一行。
+        Index("uq_policy_sources_rule_id", "rule_id", unique=True, postgresql_where=text("rule_id <> ''")),
         {"comment": "信源管理"},
     )
 
@@ -60,6 +63,8 @@ class Source(Base):
     rule_date: Mapped[str] = mapped_column(
         String(10), nullable=False, default="", server_default="", comment="规则最早创建日期"
     )
+    # 按栏目展开的行对应的爬虫规则（规则表的 id），空 = 按网站一行的老数据或人工建的行。不进 Excel。
+    rule_id: Mapped[str] = mapped_column(String(64), nullable=False, default="", server_default="", comment="规则ID")
     crawl_priority: Mapped[str] = mapped_column(
         String(255), nullable=False, default="", comment="网站梳理和抓取的优先级"
     )

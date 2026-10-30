@@ -16,7 +16,9 @@ export interface ConfigSite {
 }
 export interface ConfigSyncSummary {
   status: string; rule_rows: number; rule_codes: number; blank_code_rows: number
-  matched: number; marked: number; redated: number; unknown_codes: number; finished_at: string
+  matched: number; marked: number; redated: number; unknown_codes: number
+  /** 按栏目展开新增的信源行数（规则表一行一个栏目，信源表跟着展开） */
+  added?: number; finished_at: string
 }
 export interface CrawlerConfigReport {
   unit: ConfigUnit

@@ -70,7 +70,7 @@ def env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
         monkeypatch.setattr(module, "beijing_today", lambda: TODAY)
         monkeypatch.setattr(module, "enqueue_event", record)
     monkeypatch.setattr(sources.repo, "get_by_internal_id", AsyncMock(return_value=None))
-    monkeypatch.setattr(sources.repo, "get_by_site_code", AsyncMock(return_value=None))
+    monkeypatch.setattr(sources.repo, "site_code_taken", AsyncMock(return_value=None))
     monkeypatch.setattr(sources.repo, "list_site_codes_for_district", AsyncMock(return_value=[]))
     monkeypatch.setattr(sources.repo, "get_for_update", AsyncMock(side_effect=lambda *_: state.row))
     monkeypatch.setattr(sources.repo, "get_many_for_update", AsyncMock(side_effect=lambda *_: state.rows))

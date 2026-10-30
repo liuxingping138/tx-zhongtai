@@ -191,7 +191,7 @@ async def create_source(session: AsyncSession, actor: Actor, data: dict[str, str
     site_code = await _allocate_site_code(
         session, values["province_code"], values["city_code"], values["district_code"]
     )
-    if await repo.get_by_site_code(session, site_code):
+    if await repo.site_code_taken(session, site_code):
         raise ApiError("网站编码冲突，请重试", code=ErrorCode.VERSION_CONFLICT, http_status=409)
     now = utcnow()
     row = Source(

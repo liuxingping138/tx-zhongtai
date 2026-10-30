@@ -48,7 +48,7 @@ def test_each_site_takes_the_creation_date_of_its_earliest_rule(monkeypatch: pyt
         {"site_code": "11010100001", "create_time": datetime(2024, 10, 15, 17, 29)},  # 同一网站更早的栏目
         {"site_code": None, "create_time": datetime(2023, 12, 19, 14, 24)},
         {"site_code": "", "create_time": datetime(2023, 12, 19, 14, 24)},
-        {"site_code": "62120000004", "create_time": "2026-10-16 10:00:00"},
+        {"id": "r5", "site_code": "62120000004", "create_time": "2026-10-16 10:00:00"},
     ]
     cursor = FakeCursor(rows)
     used: list[str] = []
@@ -60,6 +60,19 @@ def test_each_site_takes_the_creation_date_of_its_earliest_rule(monkeypatch: pyt
     monkeypatch.setattr(rules_source, "mysql_connect", connect)
     result = rules_source.read_rule_codes()
     assert used == ["crawler2021"]
-    assert cursor.sql == "SELECT site_code, create_time FROM policy_rules_alls"
+    assert cursor.sql == "SELECT id, site_code, site_module_name, site_link, create_time FROM policy_rules_alls"
     assert result.first_dates == {"11010100001": date(2024, 10, 15), "62120000004": date(2026, 10, 16)}
     assert (result.rows, result.blank_rows, result.codes) == (5, 2, {"11010100001", "62120000004"})
+    assert result.columns == []
+
+    # 从 10-20 起建的规则按栏目展开：单独列出来，不并进网站的最早日期。
+    rows[0].update(id="r1", site_module_name=" 政策文件 ", site_link=" https://a.gov.cn/zcwj ")
+    split = rules_source.read_rule_codes(date(2026, 10, 20))
+    assert split.first_dates == {"11010100001": date(2024, 10, 15), "62120000004": date(2026, 10, 16)}
+    assert split.columns == [
+        rules_source.ColumnRule("r1", "11010100001", "政策文件", "https://a.gov.cn/zcwj", date(2026, 10, 23))
+    ]
+    assert split.codes == {"11010100001", "62120000004"}
+    only_new = rules_source.read_rule_codes(date(2026, 10, 1))
+    # 只有展开的规则的网站也算规则表里的编码。
+    assert ("62120000004" in only_new.codes, "62120000004" in only_new.first_dates) == (True, False)

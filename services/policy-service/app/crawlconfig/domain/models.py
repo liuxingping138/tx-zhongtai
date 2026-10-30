@@ -36,4 +36,7 @@ class ConfigSyncRun(Base):
         Integer, nullable=False, default=0, comment="已爬但上线时间对齐成规则创建日期的信源数"
     )
     unknown_codes: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="信源表里没有的网站编码数")
+    added: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0", comment="本次按栏目展开新增的信源行数"
+    )
     error_message: Mapped[str | None] = mapped_column(Text, comment="失败原因")

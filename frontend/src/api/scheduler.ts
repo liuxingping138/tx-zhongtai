@@ -15,6 +15,8 @@ export interface CrawlerResult { date_from?: string; date_to?: string; watermark
 export interface CrawlerConfigResult {
   status: string; rule_rows: number; rule_codes: number; blank_code_rows: number
   matched: number; marked: number; redated: number; unknown_codes: number
+  /** 按栏目展开新增的信源行数（规则表一行一个栏目，信源表跟着展开） */
+  added?: number
 }
 /** IAM 清理失效会话的结果：删了多少、还剩多少、保留期多少天。 */
 export interface SessionCleanupResult {
