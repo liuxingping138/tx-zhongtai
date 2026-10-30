@@ -11,7 +11,7 @@ import pytest
 from platform_common.errors import ApiError
 
 from app.application import batch_execute, pipeline_runs, releases, row_asking
-from app.application.batch_output import RowResult, append_raw, copy_answers, start_raw
+from app.application.batch_output import RowResult, append_raw, copy_answers, iter_outcomes, start_raw
 from app.core import storage
 from app.core.llm import _StreamState
 from app.domain.categories import FULL_ACCESS
@@ -130,6 +130,10 @@ def test_copy_answers_takes_the_last_attempt_and_only_answered_rows(tmp_path: An
         ("a1000001", good, "问 a1000002"),
         ("a1000002", good, "问 a1000002"),
     ]
+    # 抄过来的行也记进结果记录，「只看失败」不会把它们当成没跑。
+    outcomes = iter_outcomes(target)
+    assert outcomes is not None
+    assert [(item.myid, item.error) for item in outcomes] == [("a1000003", ""), ("a1000001", ""), ("a1000002", "")]
 
 
 def test_reuse_needs_the_same_rows_and_the_same_code_table() -> None:

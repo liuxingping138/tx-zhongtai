@@ -34,6 +34,7 @@ from app.core import storage
 from app.domain.models import ACTIVE_STATUSES, RUN_INTERRUPTED, BatchRun, PromptTemplate
 from app.domain.templating import split_fields
 from app.repositories import batch_runs as run_repo
+from app.repositories import billing as billing_repo
 from app.repositories import prompts as prompt_repo
 
 IMPORTER = "旧系统迁移"
@@ -205,6 +206,8 @@ async def _import_run(
         report.runs.append(run_id)
     else:
         _overwrite(existing, run, keep=("id",))
+        # 费用换成旧库里最新的累计数：去掉按天的流水，账单按发起那天记这笔整数，不和旧流水叠加。
+        await billing_repo.drop_run_costs(session, run_id)
         report.updated.append(f"任务 {run_id}（{run.prompt_title}）")
 
 

@@ -92,22 +92,14 @@ export async function postExcelImport(
   return body.data as ImportResult
 }
 
+/** 导入接口回的跳过明细（base64）：转成 Blob 交给 downloadBlob，链接要先挂到页面上再点，部分浏览器才会下载。 */
 export function downloadBase64Xlsx(content: string, filename: string): void {
   const binary = atob(content)
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i += 1) {
     bytes[i] = binary.charCodeAt(i)
   }
-  const url = URL.createObjectURL(
-    new Blob([bytes], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    }),
-  )
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  URL.revokeObjectURL(url)
+  downloadBlob(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), filename)
 }
 
 export function reportImportResult(result: ImportResult, skippedFilename: string): void {

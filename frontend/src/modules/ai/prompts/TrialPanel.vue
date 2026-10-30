@@ -113,7 +113,7 @@ function move(step: number): void {
         :disabled="row >= data.rows.length - 1 || running"
         @click="move(1)"
       />
-      <span class="trial__total">共 {{ data.total }} 行</span>
+      <span class="trial__total">{{ data.total > data.rows.length ? `共 ${data.total} 行，这里列前 ${data.rows.length} 行` : `共 ${data.total} 行` }}</span>
     </div>
     <p
       v-if="!showResult && sampleRow && isProblem(sampleRow)"

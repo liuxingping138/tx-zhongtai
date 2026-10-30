@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.asking import resolve_model
 from app.application.audit_emit import enqueue_event
+from app.application.batch_queue import worker_status
 from app.application.run_rows import preview as run_rows_preview
 from app.application.sheets import has_run_input
 from app.core import storage
@@ -26,6 +27,7 @@ from app.domain.models import (
     RUN_CANCELLED,
     RUN_DONE,
     RUN_QUEUED,
+    RUN_SOURCE_MANUAL,
     RUN_SOURCE_PIPELINE,
     RUN_SOURCE_SAMPLE,
     RUN_STOPPING,
@@ -72,6 +74,13 @@ def _can_retry(run: BatchRun) -> bool:
     return ready and has_run_input(storage.run_dir(run.id))
 
 
+def _can_run_all(run: BatchRun) -> bool:
+    """页面发起、只跑了前几行、已经结束的任务，可以用同一份数据跑全部（见 batch_run_all）。"""
+
+    ready = run.source == RUN_SOURCE_MANUAL and run.row_limit > 0 and run.status not in ACTIVE_STATUSES
+    return ready and has_run_input(storage.run_dir(run.id))
+
+
 def to_dict(run: BatchRun) -> dict[str, Any]:
     active = run.status in ACTIVE_STATUSES
     return {
@@ -102,6 +111,7 @@ def to_dict(run: BatchRun) -> dict[str, Any]:
         "round_rows": run.round_rows,
         "round_starts_at": format_beijing(run.round_starts_at) if run.round_starts_at else "",
         "can_retry": _can_retry(run),
+        "can_run_all": _can_run_all(run),
         "percent": _percent(run),
         "total_tokens_kilo": _kilo_tokens(run),
         "inference_cost": float(run.inference_cost),
@@ -134,7 +144,13 @@ async def list_runs(
     rows, total = await repo.page(
         session, offset=(max(page, 1) - 1) * size, limit=size, filters=filters, categories=access.readable
     )
-    return {"items": [to_dict(run) for run in rows], "total": total, "page": max(page, 1), "page_size": size}
+    return {
+        "items": [to_dict(run) for run in rows],
+        "total": total,
+        "page": max(page, 1),
+        "page_size": size,
+        "worker_online": (await worker_status(session))["online"],
+    }
 
 
 async def filter_options(session: AsyncSession, access: CategoryAccess) -> dict[str, list[str]]:

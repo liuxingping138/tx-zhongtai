@@ -5,10 +5,12 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import case, func, literal, select
+from platform_common.clock import BEIJING
+from sqlalchemy import case, delete, func, literal, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.models import CALL_CHAT, RUN_SOURCE_PIPELINE, RUN_SOURCE_SAMPLE, AiModel, BatchRun, CallUsage
+from app.domain.models import CALL_CHAT, RUN_SOURCE_PIPELINE, RUN_SOURCE_SAMPLE, AiModel, BatchRun, CallUsage, RunCost
 
 # 页面上「用途」的写法：页面发起的统称「批量任务」，模板页的整批试跑是「样本试跑」，
 # 定时任务发起的写发起方（如「政策AI打标·类型判断」）。
@@ -22,12 +24,34 @@ def add_call(session: AsyncSession, usage: CallUsage) -> None:
     session.add(usage)
 
 
+_COST_COLUMNS = ("input_tokens", "output_tokens", "search_calls", "inference_cost", "search_cost")
+
+
+async def add_run_costs(session: AsyncSession, rows: list[dict[str, Any]]) -> None:
+    """按（任务, 日期）累加：同一天同一个任务多次写进度、重跑都加在一行上。"""
+
+    if not rows:
+        return
+    statement = insert(RunCost).values(rows)
+    await session.execute(
+        statement.on_conflict_do_update(
+            index_elements=["run_id", "day"],
+            set_={name: getattr(RunCost, name) + getattr(statement.excluded, name) for name in _COST_COLUMNS},
+        )
+    )
+
+
+async def drop_run_costs(session: AsyncSession, run_id: str) -> None:
+    await session.execute(delete(RunCost).where(RunCost.run_id == run_id))
+
+
 def _day(column: Any) -> Any:
     return func.date(func.timezone("Asia/Shanghai", column)).label("day")
 
 
 async def daily(session: AsyncSession, since: datetime, until: datetime) -> list[dict[str, Any]]:
-    """[since, until) 之间每天、每个模型、每种用途的次数、token 和费用。批量任务按发起时间算在那一天。
+    """[since, until) 之间每天、每个模型、每种用途的次数、token 和费用。批量任务按费用流水记在实际花钱那天
+    （次数是那天花了钱的任务数）；没有流水的（流水表上线后才导入的旧系统任务）按发起那天算整笔。
     删除了的任务也算：删除只是不再列出，钱已经花出去了。
 
     按模型 ID 分组：任务上记的是发起当时的模型名，改过名（或旧系统导入）的同一个模型名字不一样。
@@ -39,8 +63,24 @@ async def daily(session: AsyncSession, since: datetime, until: datetime) -> list
         (BatchRun.source == RUN_SOURCE_SAMPLE, literal(SAMPLE_PURPOSE)),
         else_=literal(BATCH_PURPOSE),
     ).label("purpose")
+    ledger_day = RunCost.day.label("day")
+    booked = (
+        select(
+            ledger_day,
+            BatchRun.model_id.label("model_id"),
+            func.max(BatchRun.model_name).label("model_name"),
+            batch_purpose,
+            func.count().label("calls"),
+            func.sum(RunCost.input_tokens).label("input_tokens"),
+            func.sum(RunCost.output_tokens).label("output_tokens"),
+            func.sum(RunCost.inference_cost + RunCost.search_cost).label("cost"),
+        )
+        .join(BatchRun, BatchRun.id == RunCost.run_id)
+        .where(RunCost.day >= since.astimezone(BEIJING).date(), RunCost.day < until.astimezone(BEIJING).date())
+        .group_by(ledger_day, BatchRun.model_id, batch_purpose)
+    )
     batch_day = _day(BatchRun.created_at)
-    batches = (
+    unbooked = (
         select(
             batch_day,
             BatchRun.model_id.label("model_id"),
@@ -51,7 +91,11 @@ async def daily(session: AsyncSession, since: datetime, until: datetime) -> list
             func.sum(BatchRun.output_tokens).label("output_tokens"),
             func.sum(BatchRun.inference_cost + BatchRun.search_cost).label("cost"),
         )
-        .where(BatchRun.created_at >= since, BatchRun.created_at < until)
+        .where(
+            BatchRun.created_at >= since,
+            BatchRun.created_at < until,
+            ~select(RunCost.run_id).where(RunCost.run_id == BatchRun.id).exists(),
+        )
         .group_by(batch_day, BatchRun.model_id, batch_purpose)
     )
     call_purpose = case(
@@ -74,7 +118,7 @@ async def daily(session: AsyncSession, since: datetime, until: datetime) -> list
         .group_by(call_day, CallUsage.model_id, call_purpose)
     )
     rows: list[dict[str, Any]] = []
-    for statement in (batches, calls):
+    for statement in (booked, unbooked, calls):
         rows.extend(dict(row._mapping) for row in await session.execute(statement))
     return rows
 

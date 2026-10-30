@@ -1,8 +1,9 @@
-/** 批量任务的停止、重跑失败、删除、下载：列表的操作列和详情抽屉共用，确认文案只写一份。 */
+/** 批量任务的停止、重跑失败、跑全部、删除、下载：列表的操作列和详情抽屉共用，确认文案只写一份。 */
 import { ElMessage, ElMessageBox } from 'element-plus'
 
-import { deleteBatchRun, retryBatchRun, stopBatchRun, type BatchRun, type RunFileKind } from '@/api/ai'
+import { deleteBatchRun, retryBatchRun, runAllBatchRun, stopBatchRun, type BatchRun, type RunFileKind } from '@/api/ai'
 import { errorMessage } from '@/api/errors'
+import { formatYuan } from '../shared/aiText'
 import { downloadBatchFile } from '../shared/downloads'
 
 export const RUN_FILES: { kind: RunFileKind; label: string }[] = [
@@ -49,6 +50,23 @@ export async function retryRun(run: BatchRun): Promise<boolean> {
     return true
   } catch (error) {
     ElMessage.error(errorMessage(error, '重跑失败，请重试'))
+    return false
+  }
+}
+
+/** 这次只跑了前几行、看着满意：同一份数据、同一版提示词跑全部，不用重新选模板、传 Excel。 */
+export async function runAllRun(run: BatchRun): Promise<boolean> {
+  const spent = run.inference_cost + run.search_cost
+  const perRow = run.done_count ? `，按这次每条约 ${formatYuan(spent / run.done_count)} 估算` : ''
+  const message = `用「${run.input_name || '这份数据'}」的全部行、这次冻结的提示词和「${run.model_name}」新建一个任务。`
+    + `前 ${run.row_limit} 行里答好的沿用、不再花钱，其余每行都会产生模型费用${perRow}。`
+  if (!await confirm(message, '用同一份数据跑全部？', '开始跑全部')) return false
+  try {
+    const created = await runAllBatchRun(run.id)
+    ElMessage.success(created.reused_rows ? `已加入队列，共 ${created.total_count} 条，沿用 ${created.reused_rows} 条` : `已加入队列，共 ${created.total_count} 条`)
+    return true
+  } catch (error) {
+    ElMessage.error(errorMessage(error, '没能开始，请重试'))
     return false
   }
 }

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import sys
 from collections.abc import Callable, Generator, Iterable, Iterator
 from dataclasses import dataclass
@@ -25,6 +26,11 @@ META_COLUMNS = ["model_name", "input_tokens", "output_tokens", "error", "search_
 FAILED_COLUMNS = ["myid", "提问", "失败类型", "error", "耗时(秒)"]
 # 模型正常回答了但解析不出输出字段。写在 error 列里，原始返回 CSV 不用加列，续跑时也能从文件认出来。
 FORMAT_ERROR_PREFIX = "返回格式不对"
+# 每写一行原始返回，同时在这里记一行「这一行成没成、错在哪」，不带提问原文。详情「只看失败」读它：
+# 原始返回每行带着整段提问，几十万行的任务有几个 G，跑着时每 10 秒整份扫一遍会超时。
+OUTCOMES_SUFFIX = ".outcomes.jsonl"
+# 失败行的回答只留开头，页面也只显示前 300 字。
+OUTCOME_TEXT_MAX = 400
 
 
 @dataclass
@@ -70,13 +76,62 @@ def answered(result: RowResult, fields: list[str]) -> bool:
 
 
 def start_raw(path: Path) -> None:
-    """已有文件（续跑）就接着追加，不清空。"""
+    """已有文件（续跑）就接着追加，不清空。
+
+    结果记录和原始返回同时新建：已有原始返回、却没有结果记录的（这个功能上线前开始的任务）一直不建，
+    免得只记了后半截、看起来没有失败。
+    """
 
     if path.is_file():
         return
     # utf-8-sig：Excel 直接双击打开不乱码
     with path.open("w", newline="", encoding="utf-8-sig") as handle:
         csv.writer(handle).writerow(RAW_COLUMNS)
+    outcomes_path(path).write_text("", encoding="utf-8")
+
+
+def outcomes_path(raw: Path) -> Path:
+    return raw.with_suffix(OUTCOMES_SUFFIX)
+
+
+def _append_outcome(raw: Path, row: list[str]) -> None:
+    target = outcomes_path(raw)
+    if not target.is_file():
+        return
+    record = dict(zip(RAW_COLUMNS, row, strict=True))
+    line: dict[str, str] = {"myid": record["myid"], "error": record["error"]}
+    if record["error"]:
+        line["text"] = record["content"][:OUTCOME_TEXT_MAX]
+    with target.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(line, ensure_ascii=False) + "\n")
+
+
+def iter_outcomes(raw: Path) -> Generator[RowResult] | None:
+    """按写入顺序读结果记录（不带提问、只有失败行带回答开头）。没有记录文件时返回 None，调用方改读原始返回。"""
+
+    target = outcomes_path(raw)
+    if not target.is_file():
+        return None
+    return _read_outcomes(target)
+
+
+def _read_outcomes(target: Path) -> Generator[RowResult]:
+    with target.open(encoding="utf-8") as handle:
+        for line in handle:
+            try:
+                record = json.loads(line)
+            except ValueError:  # 执行进程正写到一半的最后一行，下次再读
+                continue
+            yield RowResult(
+                myid=record["myid"],
+                prompt="",
+                text=record.get("text", ""),
+                input_tokens=0,
+                output_tokens=0,
+                search_calls=0,
+                error=record["error"],
+                elapsed=0.0,
+            )
 
 
 def read_raw(path: Path) -> dict[str, RowResult]:
@@ -117,6 +172,7 @@ def _int(value: str | None) -> int:
 def append_raw(path: Path, row: list[str]) -> None:
     with path.open("a", newline="", encoding="utf-8-sig") as handle:
         csv.writer(handle).writerow(row)
+    _append_outcome(path, row)
 
 
 def append_log(path: Path, line: str) -> None:
@@ -168,7 +224,9 @@ def copy_answers(source: Path, target: Path, mapping: dict[str, list[str]], fiel
             if index not in chosen:
                 continue
             for new_id in mapping[myid]:
-                writer.writerow([new_id if column == "myid" else row.get(column) or "" for column in RAW_COLUMNS])
+                values = [new_id if column == "myid" else row.get(column) or "" for column in RAW_COLUMNS]
+                writer.writerow(values)
+                _append_outcome(target, values)
                 copied += 1
     return copied
 

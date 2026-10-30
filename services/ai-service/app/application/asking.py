@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
@@ -18,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application import model_configs, test_rows
 from app.application.billing import CallTally
-from app.application.prompts import code_text, require, require_editable
+from app.application.prompts import code_text, require, require_code, require_editable
 from app.core.config import get_settings
 from app.core.llm import LlmRequest, stream_responses
 from app.domain.categories import CategoryAccess
@@ -113,6 +114,12 @@ async def _row_values(session: AsyncSession, prompt_id: str, row: int, code_tabl
     return values
 
 
+async def _trial_values(session: AsyncSession, prompt_id: str, text: str, row: int, code_table: str | None) -> str:
+    values = await _row_values(session, prompt_id, row, code_table)
+    require_code(text, values.get(CODE_TABLE_FIELD))
+    return fill_template(text, values, values.get(CODE_TABLE_FIELD, ""))
+
+
 async def prepare_trial(  # noqa: PLR0913  试发请求体里平铺的几个字段，拆成对象反而要在入口再拼一遍
     session: AsyncSession,
     access: CategoryAccess,
@@ -135,8 +142,7 @@ async def prepare_trial(  # noqa: PLR0913  试发请求体里平铺的几个字�
     model = await resolve_model(session, model_id)
     text = _check_message(content)
     if prompt_id and template_variables(text):
-        values = await _row_values(session, prompt_id, row, code_table)
-        text = fill_template(text, values, values.get(CODE_TABLE_FIELD, ""))
+        text = await _trial_values(session, prompt_id, text, row, code_table)
     return model, text
 
 
@@ -149,7 +155,8 @@ async def stream_answer(
     trial_fields: list[str] | None = None,
     on_done: Callable[[CallTally], Awaitable[None]] | None = None,
 ) -> AsyncIterator[str]:
-    """推流回答。答完把这次的用量交给 on_done 记账；用户中途停止时模型还没给用量，这次不记。
+    """推流回答。答完把这次的用量交给 on_done 记账；用户中途停止、断网时模型还没给用量，按字数估了照样记
+    （记账在另起的任务里做：断开时这个生成器已被取消，在这里等数据库会被一起取消）。
 
     trial_fields 只在试发时给（模板的输出字段，可以为空）：先回显实际发出的提示词，答完按和批量任务同一套规则解析，
     页面直接看出这一行能不能解析、解析成什么。
@@ -163,16 +170,34 @@ async def stream_answer(
     tally = CallTally()
     parts: list[str] = []
     failed = False
-    async for event in stream_responses(llm_request(model, body)):
-        tally.add(event)
-        parts.append(str(event.get("text") or ""))
-        failed = failed or bool(event.get("error"))
-        yield _sse(event)
-    if fields and not failed:
-        yield _sse({"parsed": parse_fields("".join(parts), fields)})
-    if on_done is not None:
-        await on_done(tally)
-    yield _sse("[DONE]")
+    recorded = False
+    try:
+        async for event in stream_responses(llm_request(model, body)):
+            tally.add(event)
+            parts.append(str(event.get("text") or ""))
+            failed = failed or bool(event.get("error"))
+            yield _sse(event)
+        if fields and not failed:
+            yield _sse({"parsed": parse_fields("".join(parts), fields)})
+        if on_done is not None:
+            recorded = True
+            await on_done(tally)
+        yield _sse("[DONE]")
+    finally:
+        # 报错的调用（密钥错、限流）厂商不收钱，断开也不估。
+        if on_done is not None and not recorded and not failed:
+            tally.estimate(message)
+            _background(on_done(tally))
+
+
+# 断开时另起的记账任务：留着引用，免得还没写完就被垃圾回收。
+_pending: set[asyncio.Task[None]] = set()
+
+
+def _background(work: Awaitable[None]) -> None:
+    task = asyncio.ensure_future(work)
+    _pending.add(task)
+    task.add_done_callback(_pending.discard)
 
 
 async def prepare_chat(session: AsyncSession, model_id: str, message: str) -> tuple[LlmModel, str]:

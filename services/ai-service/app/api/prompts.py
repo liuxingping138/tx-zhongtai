@@ -46,6 +46,26 @@ async def list_prompts(
     )
 
 
+@router.get("/editor")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def editor_data(
+    prompt_id: str | None = Query(default=None, max_length=64),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    access: CategoryAccess = Depends(get_category_access),
+    _: Actor = Depends(require_ai_permission(RESOURCE, "list")),
+) -> JSONResponse:
+    """编辑页只要这一个模板和下拉选项；原来拉整张模板列表（每个都带提示词全文）再从里面找。新建时不带 prompt_id。"""
+
+    return success_json(
+        {
+            "item": await service.get_prompt(session, access, prompt_id) if prompt_id else None,
+            "models": await available_models(session),
+            "categories": access.options(),
+            "code_tables": [{"key": key, "name": name} for key, name in SYSTEM_CODE_TABLES.items()],
+        }
+    )
+
+
 @router.post("")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def create_prompt(

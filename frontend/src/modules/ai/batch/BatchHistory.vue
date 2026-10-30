@@ -4,7 +4,7 @@ import { ArrowDown } from '@element-plus/icons-vue'
 import type { BatchRun, RunFileKind } from '@/api/ai'
 import { RUN_SOURCE_TEXT, RUN_STATUS_TEXT, formatYuan, isActive, roundText, runModeText, runStatusType } from '../shared/aiText'
 import { versionLabel } from '../prompts/sampleView'
-import { RUN_FILES, deleteRun, downloadRunFile, retryRun, stopRun } from './runActions'
+import { RUN_FILES, deleteRun, downloadRunFile, retryRun, runAllRun, stopRun } from './runActions'
 
 /** 批量任务列表。点一行看详情（逐行结果、冻结的提示词）；常用的下载、停止、重跑、删除也留在操作列。 */
 const props = defineProps<{
@@ -223,6 +223,15 @@ function progressText(run: BatchRun): string {
               @click="act(retryRun, row)"
             >
               重跑失败
+            </el-button>
+            <el-button
+              v-if="canManage(row) && row.can_run_all"
+              link
+              type="primary"
+              title="这次只跑了前几行：用同一份数据、同一版提示词跑全部"
+              @click="act(runAllRun, row)"
+            >
+              跑全部
             </el-button>
             <el-button
               v-if="canManage(row) && row.can_delete"

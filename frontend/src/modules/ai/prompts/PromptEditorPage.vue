@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 
-import { createPrompt, listPrompts, updatePrompt, type AiModel, type BatchRun, type PromptFileKind, type PromptTemplate, type SystemCodeTable, type TemplateCategory } from '@/api/ai'
+import { createPrompt, promptEditorData, updatePrompt, type AiModel, type BatchRun, type PromptFileKind, type PromptTemplate, type SystemCodeTable, type TemplateCategory } from '@/api/ai'
 import { errorMessage } from '@/api/errors'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import { useAuthStore } from '@/stores/auth'
@@ -84,13 +84,12 @@ const actions = computed(() => stepActions(selected.value, steps.value, {
 async function load(): Promise<void> {
   loading.value = true
   try {
-    const data = await listPrompts()
+    const data = await promptEditorData(routeId.value)
     models.value = data.models
     categories.value = data.categories
     codeTables.value = data.code_tables
-    const found = routeId.value ? data.items.find(item => item.id === routeId.value) : null
-    loadError.value = routeId.value && !found ? '模板不存在或已被删除' : ''
-    fill(found ?? null)
+    loadError.value = ''
+    fill(data.item)
     openReviewFromLink()
   } catch (error) {
     loadError.value = errorMessage(error, '模板加载失败，请刷新重试')

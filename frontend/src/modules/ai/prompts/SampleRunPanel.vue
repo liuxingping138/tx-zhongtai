@@ -33,6 +33,7 @@ const run = computed(() => props.sample.run.value)
 const rows = computed(() => props.sample.state.value.rows)
 const compare = computed(() => props.sample.state.value.compare)
 const running = computed(() => props.sample.running.value)
+const workerOffline = computed(() => props.sample.workerOffline.value)
 const maxRows = computed(() => Math.min(MAX_ROWS, props.template?.excel_rows ?? 0))
 const limitLocked = computed(() => running.value || !maxRows.value)
 const watched = computed(() => rowsToWatch(rows.value?.items ?? []))
@@ -187,6 +188,12 @@ async function start(): Promise<void> {
           class="sample__versus"
         >
           {{ compareText(compare) }}
+        </p>
+        <p
+          v-if="workerOffline"
+          class="sample__stale"
+        >
+          AI 执行进程不在线，这次试跑暂时不会开始，请联系管理员检查 ai-worker
         </p>
         <p
           v-if="stale && !running"

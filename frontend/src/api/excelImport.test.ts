@@ -115,13 +115,11 @@ describe('postExcelImport', () => {
 })
 
 describe('结果与报告下载', () => {
-  it('跳过明细是 base64 时解码后触发浏览器下载', () => {
-    const clicked: string[] = []
-    const link = { href: '', download: '', click: () => clicked.push(link.download) }
-    vi.stubGlobal('document', { createElement: () => link })
-    vi.stubGlobal('URL', { createObjectURL: () => 'blob:x', revokeObjectURL: vi.fn() })
+  it('跳过明细是 base64 时解码后交给 downloadBlob（链接先挂到页面上再点，部分浏览器才会下载）', async () => {
     reportImportResult({ inserted: 1, updated: 0, skipped: 1, total: 2, skipped_file: btoa('hello') }, '跳过.xlsx')
-    expect(clicked).toEqual(['跳过.xlsx'])
+    expect(download.downloadBlob).toHaveBeenCalledWith(expect.any(Blob), '跳过.xlsx')
+    const blob = download.downloadBlob.mock.calls[0]?.[0] as Blob
+    expect(await blob.text()).toBe('hello')
     expect(importResultUi).toMatchObject({ visible: true, filename: '跳过.xlsx' })
   })
 

@@ -3,8 +3,8 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Refresh } from '@element-plus/icons-vue'
 
-import { batchOptions, batchRunFilterOptions, listBatchRuns, type AiModel, type BatchRun, type BatchRunFilters, type PromptTemplate, type TemplateCategory } from '@/api/ai'
-import { errorMessage } from '@/api/errors'
+import { batchOptions, batchRunFilterOptions, getBatchRun, listBatchRuns, type AiModel, type BatchRun, type BatchRunFilters, type PromptTemplate, type TemplateCategory } from '@/api/ai'
+import { errorMessage, isApiError } from '@/api/errors'
 import FilterBar from '@/components/FilterBar.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -25,13 +25,17 @@ const categories = ref<TemplateCategory[]>([])
 const editableCategories = computed(() => categories.value.filter(item => item.editable).map(item => item.code))
 const categoryLabels = computed(() => Object.fromEntries(categories.value.map(item => [item.code, item.name])))
 const creating = ref(false)
-const viewingId = ref('')
+/** 详情抽屉里的任务单独存一份：按「运行中」筛着时任务一结束、点了重跑，它就不在当前页了，抽屉不能跟着关。 */
+const viewing = ref<BatchRun | null>(null)
 const runs = ref<BatchRun[]>([])
 const total = ref(0)
 const page = ref(1)
 const loadingRuns = ref(false)
 const loadError = ref('')
+const workerOnline = ref(true)
 let timer: number | undefined
+let sequence = 0
+let disposed = false
 
 type HistoryFilters = Required<BatchRunFilters>
 const emptyFilters = (): HistoryFilters => ({ prompt_title: [], prompt_category: [], source: [], run_mode: [], status: [], created_by_name: [] })
@@ -43,7 +47,6 @@ const RUN_MODE_OPTIONS = Object.keys(RUN_MODE_TEXT)
 const SOURCE_OPTIONS = Object.keys(RUN_SOURCE_TEXT)
 const STATUS_OPTIONS = Object.keys(RUN_STATUS_TEXT)
 const filtered = computed(() => Object.values(applied.value).some(values => values.length > 0))
-const viewing = computed(() => runs.value.find(item => item.id === viewingId.value) ?? null)
 const canManageViewing = computed(() => Boolean(viewing.value && canRun.value && editableCategories.value.includes(viewing.value.prompt_category)))
 
 async function loadOptions(): Promise<void> {
@@ -81,26 +84,51 @@ function resetFilters(): void {
   search()
 }
 
+/** 只认最后一次请求的结果：翻页、筛选、轮询的请求可能后发先回，旧结果不能盖掉新的。 */
 async function loadRuns(quiet = false): Promise<void> {
+  const ticket = ++sequence
   loadingRuns.value = !quiet
   try {
     const data = await listBatchRuns(page.value, undefined, applied.value)
+    if (ticket !== sequence) return
     runs.value = data.items
     total.value = data.total
-    // 详情里的任务被删了、或者翻页后不在这一页了，关掉抽屉。
-    if (viewingId.value && !viewing.value) viewingId.value = ''
+    workerOnline.value = data.worker_online
+    await refreshViewing()
   } catch (error) {
-    if (!quiet) ElMessage.error(errorMessage(error, '任务加载失败，请重试'))
+    if (ticket === sequence && !quiet) ElMessage.error(errorMessage(error, '任务加载失败，请重试'))
   } finally {
-    loadingRuns.value = false
-    schedule()
+    if (ticket === sequence) {
+      loadingRuns.value = false
+      schedule()
+    }
   }
 }
 
-/** 有任务在排队或运行时每 2 秒刷新一次进度，全部结束后停止轮询。 */
+/** 抽屉里的任务跟着刷新：在这一页就用列表里的，不在就单独取一次；取不到（被删了）才关抽屉。 */
+async function refreshViewing(): Promise<void> {
+  const current = viewing.value
+  if (!current) return
+  const listed = runs.value.find(item => item.id === current.id)
+  if (listed) {
+    viewing.value = listed
+    return
+  }
+  try {
+    const fresh = await getBatchRun(current.id)
+    if (viewing.value?.id === fresh.id) viewing.value = fresh
+  } catch (error) {
+    // 只有确实不在了（被删）才关；网络抖一下保留抽屉，下一次刷新再取。
+    if (isApiError(error) && error.status === 404 && viewing.value?.id === current.id) viewing.value = null
+  }
+}
+
+/** 列表或抽屉里有任务在排队、运行时每 2 秒刷新一次进度，全部结束后停止轮询；离开页面后不再排下一次。 */
 function schedule(): void {
   window.clearTimeout(timer)
-  if (runs.value.some(run => isActive(run.status))) timer = window.setTimeout(() => void loadRuns(true), POLL_MS)
+  if (disposed) return
+  const active = runs.value.some(run => isActive(run.status)) || (viewing.value !== null && isActive(viewing.value.status))
+  if (active) timer = window.setTimeout(() => void loadRuns(true), POLL_MS)
 }
 
 watch(page, () => void loadRuns())
@@ -109,7 +137,10 @@ onMounted(() => {
   void loadFilterOptions()
   void loadRuns()
 })
-onBeforeUnmount(() => window.clearTimeout(timer))
+onBeforeUnmount(() => {
+  disposed = true
+  window.clearTimeout(timer)
+})
 
 async function created(): Promise<void> {
   void loadFilterOptions()
@@ -147,6 +178,13 @@ async function created(): Promise<void> {
         v-if="loadError"
         :title="loadError"
         type="error"
+        :closable="false"
+        show-icon
+      />
+      <el-alert
+        v-if="!workerOnline"
+        title="AI 执行进程不在线：排队中的任务暂时不会开始，运行中的任务也不会有进度。请联系管理员检查 ai-worker。"
+        type="warning"
         :closable="false"
         show-icon
       />
@@ -219,7 +257,7 @@ async function created(): Promise<void> {
         :can-export="canExport"
         :editable-categories="editableCategories"
         @changed="loadRuns()"
-        @open="run => viewingId = run.id"
+        @open="run => viewing = run"
       />
     </div>
     <NewBatchTask
@@ -233,7 +271,7 @@ async function created(): Promise<void> {
       :can-manage="canManageViewing"
       :can-export="canExport"
       @changed="loadRuns(true)"
-      @close="viewingId = ''"
+      @close="viewing = null"
     />
   </section>
 </template>

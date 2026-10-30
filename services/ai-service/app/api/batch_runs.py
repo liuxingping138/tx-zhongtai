@@ -11,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import RunFileKind, file_response, path_response
 from app.api.security import CategoryAccess, SecurityClass, classified, get_category_access, require_ai_permission
+from app.application import batch_run_all, batch_start, prompts
 from app.application import batch_runs as service
-from app.application import batch_start, prompts
 from app.application.asking import available_models
 from app.core.config import get_settings
 from app.core.database import get_db_session
@@ -124,7 +124,6 @@ async def input_template(
 async def start_run(
     request: Request,
     prompt_id: str = Query(max_length=32),
-    model_id: str = Query(default="", max_length=100),
     thinking: bool = Query(default=False),
     limit: int = Query(default=0, ge=0, le=100_000),
     version: RunVersion = Query(default="release", description="跑上线版本还是已保存的草稿"),
@@ -135,7 +134,7 @@ async def start_run(
     """带文件的 multipart，其余参数在 query 里。0 条表示跑全部。"""
 
     content, filename = await read_named_upload(request, get_settings().upload_max_bytes, missing=_MISSING_FILE)
-    values = {"prompt_id": prompt_id, "model_id": model_id, "thinking": thinking, "limit": limit, "version": version}
+    values = {"prompt_id": prompt_id, "thinking": thinking, "limit": limit, "version": version}
     return success_json(
         await batch_start.start_run(session, actor, access, values, upload=(filename, content)), status_code=201
     )
@@ -173,6 +172,19 @@ async def retry_run(
     actor: Actor = Depends(require_ai_permission(RESOURCE, "run")),
 ) -> JSONResponse:
     return success_json(await service.retry_run(session, actor, access, run_id))
+
+
+@router.post("/{run_id}/run-all")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def run_all(
+    run_id: str,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    access: CategoryAccess = Depends(get_category_access),
+    actor: Actor = Depends(require_ai_permission(RESOURCE, "run")),
+) -> JSONResponse:
+    """只跑了前几行的任务，用同一份数据和同一版提示词跑全部；前面答好的行沿用。"""
+
+    return success_json(await batch_run_all.run_all(session, actor, access, run_id), status_code=201)
 
 
 @router.post("/{run_id}/stop")

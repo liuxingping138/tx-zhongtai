@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Collection
+from datetime import timedelta
 from typing import Any
 
 import pytest
@@ -160,7 +162,7 @@ async def test_call_counts_search_events_when_usage_has_none(monkeypatch: pytest
 async def test_queue_claims_and_recovers(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(batch_queue, "SessionLocal", FakeSession)
     _returns(repo, "claim_next", run(), monkeypatch)
-    assert await batch_queue.claim_next() == RUN_ID
+    assert await batch_queue.claim_next() == (RUN_ID, "manual")
     _returns(repo, "running_ids", [RUN_ID], monkeypatch)
     recorder = _Recorder()
     monkeypatch.setattr(repo, "update_fields", recorder.update)
@@ -170,11 +172,11 @@ async def test_queue_claims_and_recovers(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 async def test_worker_consumes_until_stopped(monkeypatch: pytest.MonkeyPatch) -> None:
-    claims = iter([RUN_ID, None])
+    claims = iter([(RUN_ID, "manual"), None])
     executed: list[str] = []
     stop = asyncio.Event()
 
-    async def claim() -> str | None:
+    async def claim(**_: Any) -> tuple[str, str] | None:
         value = next(claims, None)
         if value is None:
             await asyncio.sleep(0)  # 让刚认领的任务先跑起来，再要求退出
@@ -192,6 +194,41 @@ async def test_worker_consumes_until_stopped(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(runner, "recover_orphans", recover)
     await asyncio.wait_for(runner.consume(stop), timeout=5)
     assert executed == [RUN_ID]
+
+
+async def test_bulk_runs_leave_one_slot_for_samples_and_pipelines(monkeypatch: pytest.MonkeyPatch) -> None:
+    """三个执行位：页面批量任务最多占两个，第三个只给样本试跑和定时打标。只有一个执行位时没法留。"""
+
+    seen: list[Collection[str]] = []
+
+    async def claim(*, exclude_sources: Collection[str] = ()) -> tuple[str, str] | None:
+        seen.append(exclude_sources)
+        return None
+
+    monkeypatch.setattr(runner, "claim_next", claim)
+    task: Any = object()
+    one_bulk = {task: ("a", "manual")}
+    two_bulk = {task: ("a", "manual"), object(): ("b", "manual")}
+    await runner._claim(one_bulk, 3)  # type: ignore[arg-type]
+    await runner._claim(two_bulk, 3)  # type: ignore[arg-type]
+    await runner._claim({task: ("a", "sample"), object(): ("b", "pipeline")}, 3)  # type: ignore[arg-type]
+    await runner._claim({}, 1)
+    assert seen == [(), ("manual",), (), ()]
+    # 满了就不去认领。
+    assert await runner._claim({**two_bulk, object(): ("c", "sample")}, 3) is None  # type: ignore[arg-type]
+    assert len(seen) == 4
+    assert batch_queue.bulk_limit(1) == 1
+
+
+async def test_worker_status_goes_offline_after_a_minute_without_heartbeat(monkeypatch: pytest.MonkeyPatch) -> None:
+    from platform_common.clock import utcnow
+
+    _returns(repo, "worker_seen_at", utcnow() - timedelta(seconds=20), monkeypatch)
+    assert await batch_queue.worker_status(FakeSession()) == {"online": True}  # type: ignore[arg-type]
+    _returns(repo, "worker_seen_at", utcnow() - timedelta(minutes=5), monkeypatch)
+    assert await batch_queue.worker_status(FakeSession()) == {"online": False}  # type: ignore[arg-type]
+    _returns(repo, "worker_seen_at", None, monkeypatch)
+    assert await batch_queue.worker_status(FakeSession()) == {"online": False}  # type: ignore[arg-type]
 
 
 def test_history_filters_combine_fields_and_map_run_mode() -> None:

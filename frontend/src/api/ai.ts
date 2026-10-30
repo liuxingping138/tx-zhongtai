@@ -155,6 +155,8 @@ export interface BatchRun {
   round_rows: number
   round_starts_at: string
   can_retry: boolean
+  /** 页面发起、只跑了前几行、已结束：可以用同一份数据跑全部 */
+  can_run_all: boolean
   percent: number
   total_tokens_kilo: number
   inference_cost: number
@@ -176,6 +178,8 @@ export interface BatchRunPage {
   total: number
   page: number
   page_size: number
+  /** 执行进程（ai-worker）最近一分钟有没有心跳；不在时排队的任务不会开始。 */
+  worker_online: boolean
 }
 
 export const AI_BASE = '/ai'
@@ -183,6 +187,11 @@ const BASE = AI_BASE
 
 export function listPrompts(): Promise<{ items: PromptTemplate[]; models: AiModel[]; categories: TemplateCategory[]; code_tables: SystemCodeTable[] }> {
   return request(http.get(`${BASE}/prompts`))
+}
+
+/** 编辑页：只取这一个模板（新建时不传）和模型、类型、系统码表的选项 */
+export function promptEditorData(promptId?: string): Promise<{ item: PromptTemplate | null; models: AiModel[]; categories: TemplateCategory[]; code_tables: SystemCodeTable[] }> {
+  return request(http.get(`${BASE}/prompts/editor`, { params: { prompt_id: promptId || undefined } }))
 }
 
 export function createPrompt(payload: PromptPayload): Promise<PromptTemplate> {
@@ -323,6 +332,11 @@ export function getBatchRun(id: string): Promise<BatchRun> {
 /** 重跑失败和没跑到的行，已成功的沿用，结果合并回原任务。 */
 export function retryBatchRun(id: string): Promise<BatchRun> {
   return request(http.post(`${BASE}/batch-runs/${id}/retry`))
+}
+
+/** 只跑了前几行的任务：用同一份数据、同一版提示词新建一个跑全部的任务，前面答好的行沿用 */
+export function runAllBatchRun(id: string): Promise<BatchRun & { reused_rows: number }> {
+  return request(http.post(`${BASE}/batch-runs/${id}/run-all`))
 }
 
 export function stopBatchRun(id: string): Promise<BatchRun> {

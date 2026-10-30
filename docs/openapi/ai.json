@@ -105,6 +105,55 @@
         }
       }
     },
+    "/api/v1/ai/prompts/editor": {
+      "get": {
+        "tags": [
+          "ai-prompts"
+        ],
+        "summary": "Editor Data",
+        "description": "编辑页只要这一个模板和下拉选项；原来拉整张模板列表（每个都带提示词全文）再从里面找。新建时不带 prompt_id。",
+        "operationId": "editor_data_api_v1_ai_prompts_editor_get",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prompt Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/ai/prompts/{prompt_id}": {
       "put": {
         "tags": [
@@ -1139,17 +1188,6 @@
             }
           },
           {
-            "name": "model_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "maxLength": 100,
-              "default": "",
-              "title": "Model Id"
-            }
-          },
-          {
             "name": "thinking",
             "in": "query",
             "required": false,
@@ -1500,6 +1538,47 @@
         ],
         "summary": "Retry Run",
         "operationId": "retry_run_api_v1_ai_batch_runs__run_id__retry_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/batch-runs/{run_id}/run-all": {
+      "post": {
+        "tags": [
+          "ai-batch-runs"
+        ],
+        "summary": "Run All",
+        "description": "只跑了前几行的任务，用同一份数据和同一版提示词跑全部；前面答好的行沿用。",
+        "operationId": "run_all_api_v1_ai_batch_runs__run_id__run_all_post",
         "parameters": [
           {
             "name": "run_id",

@@ -27,6 +27,7 @@ DEFAULT_PEAK_HOURS = "09:00-12:00,14:00-18:00"
 _SATURDAY = 5
 _COST_QUANT = Decimal("0.000001")
 _THOUSAND = Decimal(1000)
+_HOURS, _MINUTES = 24, 60
 _PEAK_RANGE = re.compile(r"(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})")
 
 
@@ -92,11 +93,21 @@ def parse_peak_hours(text: str) -> list[tuple[time, time]]:
         if match is None:
             raise ValueError(part)
         start_h, start_m, end_h, end_m = (int(value) for value in match.groups())
-        start, end = time(start_h, start_m), time(end_h, end_m)
-        if start >= end:
+        start, end = _clock(start_h, start_m), _clock(end_h, end_m, end=True)
+        if start is None or end is None or start >= end:
             raise ValueError(part)
         ranges.append((start, end))
     return ranges
+
+
+def _clock(hour: int, minute: int, *, end: bool = False) -> time | None:
+    """时刻不合法返回 None。结束时刻可以写 24:00，表示到当天结束（time 本身只到 23 点，会抛英文的错）。"""
+
+    if end and (hour, minute) == (_HOURS, 0):
+        return time.max
+    if hour >= _HOURS or minute >= _MINUTES:
+        return None
+    return time(hour, minute)
 
 
 def in_peak(when: datetime, peak_hours: str) -> bool:

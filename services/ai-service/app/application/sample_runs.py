@@ -22,7 +22,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.application import batch_runs, run_compare
 from app.application.asking import resolve_model
 from app.application.audit_emit import enqueue_event
-from app.application.prompts import code_text, require, require_editable
+from app.application.batch_queue import worker_status
+from app.application.prompts import code_text, require, require_code, require_editable
 from app.application.run_rows import preview
 from app.application.sheets import has_run_input
 from app.core import storage
@@ -68,6 +69,7 @@ async def start(
             http_status=409,
         )
     code = await code_text(template)
+    require_code(template.content, code)
     rows = min(max(int(values.get("limit") or ROWS_DEFAULT), 1), ROWS_MAX, template.excel_rows)
     run = BatchRun(
         id=new_id(),
@@ -158,7 +160,7 @@ async def view(
     history, total = await repo.sample_history(session, template.id, limit=HISTORY_MAX)
     numbers = {item.id: total - index for index, item in enumerate(history)}
     if not history:
-        return {"run": None, "rows": None, "history": [], "compare": None}
+        return {"run": None, "rows": None, "history": [], "compare": None, "worker_online": True}
     run = next((item for item in history if item.id == run_id), None) if run_id else history[0]
     if run is None:
         raise NotFoundError("试跑记录不存在，或者太早了已不在最近的记录里")
@@ -179,6 +181,8 @@ async def view(
         "rows": rows,
         "history": [_brief(item, numbers[item.id]) for item in history],
         "compare": compared,
+        # 排队中的试跑等不来执行进程时，页面据此说明，而不是一直转圈。
+        "worker_online": (await worker_status(session))["online"],
     }
 
 

@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from app.domain.models import BatchRun, OutboxEvent, PromptTemplate, WorkerHeartbeat
+from app.domain.models import BatchRun, OutboxEvent, PromptTemplate, RunCost, WorkerHeartbeat
 
-__all__ = ["BatchRun", "OutboxEvent", "PromptTemplate", "WorkerHeartbeat"]
+__all__ = ["BatchRun", "OutboxEvent", "PromptTemplate", "RunCost", "WorkerHeartbeat"]

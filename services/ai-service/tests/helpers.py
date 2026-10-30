@@ -38,6 +38,9 @@ class FakeSession:
     async def execute(self, statement: Any) -> None:
         self.executed.append(statement)
 
+    async def get(self, *_: object) -> None:
+        """按主键取：替身库里什么都没有（执行进程心跳也没有，页面会显示执行进程不在线）。"""
+
     async def __aenter__(self) -> FakeSession:
         return self
 

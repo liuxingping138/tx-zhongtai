@@ -23,9 +23,12 @@ export function useSampleRun(template: Ref<PromptTemplate | null>, changed: (run
   const compareId = ref('')
   let timer: ReturnType<typeof setTimeout> | undefined
   let sequence = 0
+  // 离开页面后不再发请求、不再排下一次轮询：开始、停止、重跑的请求可能在离开之后才回来。
+  let disposed = false
 
   const run = computed(() => state.value.run)
   const running = computed(() => Boolean(run.value && isActive(run.value.status)))
+  const workerOffline = computed(() => running.value && state.value.worker_online === false)
 
   function apply(next: SampleRunState): void {
     state.value = next
@@ -36,6 +39,7 @@ export function useSampleRun(template: Ref<PromptTemplate | null>, changed: (run
   async function load(quiet = false): Promise<void> {
     const current = template.value
     clearTimeout(timer)
+    if (disposed) return
     if (!current) { state.value = EMPTY; return }
     const token = ++sequence
     loading.value = !quiet
@@ -43,7 +47,7 @@ export function useSampleRun(template: Ref<PromptTemplate | null>, changed: (run
       if (!quiet && token === sequence) ElMessage.error(errorMessage(error, '试跑结果加载失败，请重试'))
       return null
     })
-    if (token !== sequence) return
+    if (token !== sequence || disposed) return
     loading.value = false
     if (next) apply(next)
     if (running.value) timer = setTimeout(() => void load(true), POLL_MS)
@@ -107,9 +111,9 @@ export function useSampleRun(template: Ref<PromptTemplate | null>, changed: (run
     compareId.value = ''
     void load()
   }, { immediate: true })
-  onBeforeUnmount(() => { sequence++; clearTimeout(timer) })
+  onBeforeUnmount(() => { disposed = true; sequence++; clearTimeout(timer) })
 
-  return { state, run, running, loading, busy, runId, compareId, load, view, start, stop, retry, download }
+  return { state, run, running, workerOffline, loading, busy, runId, compareId, load, view, start, stop, retry, download }
 }
 
 export type SampleRun = ReturnType<typeof useSampleRun>

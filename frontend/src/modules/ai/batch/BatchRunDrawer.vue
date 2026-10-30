@@ -6,7 +6,7 @@ import { getBatchRunRows, type BatchRun, type RunFileKind, type RunRows as Rows 
 import { errorMessage } from '@/api/errors'
 import { RUN_SOURCE_TEXT, RUN_STATUS_TEXT, formatYuan, isActive, roundText, runModeText, runStatusType } from '../shared/aiText'
 import RunRows from '../shared/RunRows.vue'
-import { RUN_FILES, deleteRun, downloadRunFile, retryRun, stopRun } from './runActions'
+import { RUN_FILES, deleteRun, downloadRunFile, retryRun, runAllRun, stopRun } from './runActions'
 
 /** 一个批量任务的详情：进度和费用、按哪一版跑的、逐行结果（前 50 行），以及发起时冻结的提示词。 */
 const props = defineProps<{ run: BatchRun | null; canManage: boolean; canExport: boolean }>()
@@ -125,6 +125,15 @@ async function act(action: (current: BatchRun) => Promise<boolean>, close = fals
             @click="act(retryRun)"
           >
             重跑失败的 {{ run.pending_count }} 条
+          </el-button>
+          <el-button
+            v-if="run.can_run_all"
+            size="small"
+            type="primary"
+            plain
+            @click="act(runAllRun)"
+          >
+            用同一份数据跑全部
           </el-button>
           <el-button
             v-if="run.can_delete"

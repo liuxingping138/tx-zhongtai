@@ -2,21 +2,46 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection
+from datetime import timedelta
+from typing import Any
+
 from platform_common.clock import utcnow
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import SessionLocal
-from app.domain.models import RUN_INTERRUPTED, WorkerHeartbeat
+from app.domain.models import RUN_INTERRUPTED, RUN_SOURCE_MANUAL, WorkerHeartbeat
 from app.repositories import batch_runs as repo
 
 ORPHAN_MESSAGE = "执行进程重启，任务未完成；已跑完的部分可下载原始返回"
+# leader 每 10 秒写一次心跳；超过这么久没写，就当执行进程不在（健康检查同一口径）。
+WORKER_STALE = timedelta(seconds=60)
+# 页面发起的批量任务最多占到「总执行位 - 1」，留一个给样本试跑和定时打标：
+# 几个大任务占满后，十条的试跑、每天的打标不用排几个小时。
+BULK_SOURCES = (RUN_SOURCE_MANUAL,)
 
 
-async def claim_next() -> str | None:
+def bulk_limit(total: int) -> int:
+    """批量任务能占几个执行位。只有一个执行位时没法留，照旧先来先跑。"""
+
+    return total - 1 if total > 1 else total
+
+
+async def claim_next(*, exclude_sources: Collection[str] = ()) -> tuple[str, str] | None:
+    """认领一条排队任务，返回 (任务ID, 来源)。"""
+
     async with SessionLocal() as session:
-        run = await repo.claim_next(session, now=utcnow())
+        run = await repo.claim_next(session, now=utcnow(), exclude_sources=exclude_sources)
         await session.commit()
-        return run.id if run else None
+        return (run.id, run.source) if run else None
+
+
+async def worker_status(session: AsyncSession) -> dict[str, Any]:
+    """页面用：执行进程在不在。不在时排队的任务不会开始，页面要说出来，不能让人一直等「排队中」。"""
+
+    seen_at = await repo.worker_seen_at(session)
+    return {"online": seen_at is not None and utcnow() - seen_at < WORKER_STALE}
 
 
 async def recover_orphans() -> int:

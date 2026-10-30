@@ -22,7 +22,7 @@ from app.application.asking import RELEASE_MODEL_DISABLED, resolve_model
 from app.application.audit_emit import enqueue_event
 from app.application.batch_inputs import blank_input, inspect_upload, snapshot_input
 from app.application.batch_runs import reconcile_stale, to_dict
-from app.application.prompts import code_text
+from app.application.prompts import code_text, require_code
 from app.application.prompts import require_editable as require_editable_prompt
 from app.core import storage
 from app.domain.categories import CategoryAccess
@@ -34,7 +34,7 @@ VERSION_RELEASE = "release"
 VERSION_DRAFT = "draft"
 
 
-def _invalid(message: str) -> ApiError:
+def invalid(message: str) -> ApiError:
     return ApiError(message, code=ErrorCode.VALIDATION_ERROR, http_status=422)
 
 
@@ -54,9 +54,9 @@ class _Spec:
 async def _spec(session: AsyncSession, template: PromptTemplate, version: str) -> _Spec:
     if version == VERSION_DRAFT:
         if not template.content.strip():
-            raise _invalid("草稿的提示词还是空的，写好保存后再跑")
+            raise invalid("草稿的提示词还是空的，写好保存后再跑")
         if not template.model_id:
-            raise _invalid("草稿还没选模型，先在模板上选好模型并保存")
+            raise invalid("草稿还没选模型，先在模板上选好模型并保存")
         model = await resolve_model(session, template.model_id)
         return _Spec(
             template.title,
@@ -67,7 +67,7 @@ async def _spec(session: AsyncSession, template: PromptTemplate, version: str) -
             draft_saved_at=template.updated_at,
         )
     if not template.release_id:
-        raise _invalid(f"模板「{template.title}」还没有上线，可以选「当前草稿」跑，或请管理员先上线")
+        raise invalid(f"模板「{template.title}」还没有上线，可以选「当前草稿」跑，或请管理员先上线")
     release = await releases.current(session, template, "批量任务")
     model = await resolve_model(session, release.model_id, frozen=RELEASE_MODEL_DISABLED)
     return _Spec(release.title, release.category, release.content, release.output_fields, model, release=release)
@@ -76,7 +76,22 @@ async def _spec(session: AsyncSession, template: PromptTemplate, version: str) -
 async def _code(template: PromptTemplate, spec: _Spec) -> str | None:
     """码表全文，发起时冻结进任务目录：上线版本用上线时那份，草稿用模板现在选的（系统码表实时取）。"""
 
-    return await releases.release_code(spec.release) if spec.release else await code_text(template)
+    code = await releases.release_code(spec.release) if spec.release else await code_text(template)
+    require_code(spec.content, code)
+    return code
+
+
+async def ensure_idle(session: AsyncSession, template: PromptTemplate) -> None:
+    """同一模板同时只跑一个正式任务。调用方已锁模板行，两个人同时点运行只有一个能建出任务。"""
+
+    await reconcile_stale(session)
+    running = await repo.active_for_prompt(session, template.id)
+    if running is not None:
+        raise ApiError(
+            f"这个模板已有任务在运行（{running.done_count}/{running.total_count or '?'} 条），请等它结束或先停止",
+            code=ErrorCode.VERSION_CONFLICT,
+            http_status=409,
+        )
 
 
 async def _plan(
@@ -95,17 +110,9 @@ async def _plan(
     # 任务记在跑的那一版的类型下（上线后改了模板类型、没重新上线时，和模板现在的类型不一样）：
     # 这一类也得能编辑，不然发起人看不到、停不了自己刚发起的任务，钱也记到别的类型名下。
     access.require_edit(spec.category)
-    # 同一模板同时只跑一个正式任务。发起时模板行已加锁，两个人同时点运行只有一个能建出任务。
-    await reconcile_stale(session)
-    running = await repo.active_for_prompt(session, template.id)
-    if running is not None:
-        raise ApiError(
-            f"这个模板已有任务在运行（{running.done_count}/{running.total_count or '?'} 条），请等它结束或先停止",
-            code=ErrorCode.VERSION_CONFLICT,
-            http_status=409,
-        )
+    await ensure_idle(session, template)
     if upload is None:
-        raise _invalid("请选择本次任务的数据文件")
+        raise invalid("请选择本次任务的数据文件")
     return template, spec, await inspect_upload(spec.content, upload)
 
 

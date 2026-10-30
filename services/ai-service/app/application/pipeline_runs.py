@@ -137,6 +137,7 @@ async def create(session: AsyncSession, caller: Actor, values: dict[str, Any]) -
     release = await _release(session, str(values.get("prompt_id") or ""))
     model = await resolve_model(session, release.model_id, frozen=RELEASE_MODEL_DISABLED)
     code = await releases.release_code(release)
+    prompts.require_code(release.content, code)
     previous = await _reusable(session, str(values.get("reuse_run_id") or ""), release, model.id)
     run = BatchRun(
         id=new_id(),

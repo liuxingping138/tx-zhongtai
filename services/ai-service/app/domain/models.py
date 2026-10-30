@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
 from platform_common.orm_base import Base
-from sqlalchemy import BigInteger, Boolean, DateTime, Integer, Numeric, String, Text
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -214,6 +214,26 @@ class BatchRun(Base):
 # 试发、多轮对话一次调用记一行（批量任务的费用记在 BatchRun 上），费用账单把两边合起来。
 CALL_TRIAL = "trial"
 CALL_CHAT = "chat"
+
+
+class RunCost(Base):
+    """批量任务（含定时打标、样本试跑）每天实际花了多少。任务上的费用是累计数，几天后点「重跑失败」花的钱
+    也加在那条任务上；账单按这张表记到真正花钱的那天，不改早先那天已经看过的数。"""
+
+    __tablename__ = "ai_run_costs"
+    __table_args__ = {"comment": "批量任务费用流水"}
+
+    run_id: Mapped[str] = mapped_column(String(32), primary_key=True, comment="任务ID")
+    day: Mapped[date] = mapped_column(Date, primary_key=True, index=True, comment="花费日期（北京）")
+    input_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, comment="输入token")
+    output_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, comment="输出token")
+    search_calls: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="联网次数")
+    inference_cost: Mapped[Decimal] = mapped_column(
+        Numeric(12, 6), nullable=False, default=Decimal(0), comment="推理费用(元)"
+    )
+    search_cost: Mapped[Decimal] = mapped_column(
+        Numeric(12, 6), nullable=False, default=Decimal(0), comment="联网费用(元)"
+    )
 
 
 class CallUsage(Base):

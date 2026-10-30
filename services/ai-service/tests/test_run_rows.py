@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 from app.application import run_rows, sheets
-from app.application.batch_output import FORMAT_ERROR_PREFIX, RowResult, append_raw, start_raw
+from app.application.batch_output import FORMAT_ERROR_PREFIX, RowResult, append_raw, outcomes_path, start_raw
 from app.core import storage
 from app.domain.models import BatchRun
 from app.domain.templating import build_myid
@@ -76,6 +76,29 @@ def test_failed_only_counts_failures_anywhere_within_the_run_range() -> None:
         (73, "failed", ""),
         (76, "format", "我不确定"),
     ]
+
+
+def test_failed_only_reads_the_outcome_log_not_the_raw_answers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """原始返回每行带整段提问，大任务有几个 G；只看失败读每行的结果记录。没有记录的老任务照旧读原始返回。"""
+
+    item = _task()
+    _answer(item, [(0, "", "限流"), (1, "答非所问", f"{FORMAT_ERROR_PREFIX}：没有解析出输出字段"), (0, OK, "")])
+
+    def forbidden(*_: Any, **__: Any) -> Generator[RowResult]:
+        raise AssertionError("不该读原始返回")
+
+    original = run_rows.iter_raw
+    monkeypatch.setattr(run_rows, "iter_raw", forbidden)
+    rows = run_rows.preview(item, failed_only=True)["items"]
+    assert [(row["row"], row["status"], row["answer"]) for row in rows] == [(2, "format", "答非所问")]
+
+    raw = storage.run_file(item.id, "raw")
+    outcomes_path(raw).unlink()
+    monkeypatch.setattr(run_rows, "iter_raw", original)
+    assert [row["row"] for row in run_rows.preview(item, failed_only=True)["items"]] == [2]
+    # 已有原始返回却没有记录的任务不补建记录：只记后半截会让前面的失败看不见。
+    start_raw(raw)
+    assert not outcomes_path(raw).exists()
 
 
 def test_input_copy_is_parsed_once_and_rebuilt_when_the_snapshot_changes(monkeypatch: pytest.MonkeyPatch) -> None:

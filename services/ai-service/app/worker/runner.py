@@ -1,4 +1,5 @@
-"""批量任务执行进程：持全局锁的单个 leader 从数据库队列认领任务，最多同时跑 batch_max_running 个。"""
+"""批量任务执行进程：持全局锁的单个 leader 从数据库队列认领任务，最多同时跑 batch_max_running 个，
+其中留一个给样本试跑和定时打标。"""
 
 from __future__ import annotations
 
@@ -10,7 +11,7 @@ import signal
 from sqlalchemy import text
 
 from app.application.batch_execute import execute
-from app.application.batch_queue import beat, claim_next, recover_orphans
+from app.application.batch_queue import BULK_SOURCES, beat, bulk_limit, claim_next, recover_orphans
 from app.core.config import get_settings
 from app.core.database import engine
 
@@ -30,11 +31,18 @@ async def heartbeat() -> None:
         await asyncio.sleep(HEARTBEAT_SECONDS)
 
 
-async def _claim() -> str | None:
-    """认领失败（库重启、连接被重置）只等下一轮再试：跳出循环会把在跑的任务全部取消、收尾成「中断」。"""
+async def _claim(running: dict[asyncio.Task[None], tuple[str, str]], limit: int) -> tuple[str, str] | None:
+    """有空位才认领；页面批量任务占满它那份后，只认领样本试跑和定时打标。
 
+    认领失败（库重启、连接被重置）只等下一轮再试：跳出循环会把在跑的任务全部取消、收尾成「中断」。
+    """
+
+    if len(running) >= limit:
+        return None
+    bulk = sum(1 for _, source in running.values() if source in BULK_SOURCES)
+    exclude = BULK_SOURCES if bulk >= bulk_limit(limit) else ()
     try:
-        return await claim_next()
+        return await claim_next(exclude_sources=exclude)
     except Exception:
         logger.warning("batch_run_claim_failed", exc_info=True)
         return None
@@ -45,18 +53,18 @@ async def consume(stop: asyncio.Event) -> None:
     if recovered:
         logger.warning("batch_runs_interrupted count=%s", recovered)
     limit = get_settings().batch_max_running
-    running: dict[asyncio.Task[None], str] = {}
+    running: dict[asyncio.Task[None], tuple[str, str]] = {}
     try:
         while not stop.is_set():
-            running = {task: run_id for task, run_id in running.items() if not task.done()}
-            run_id = await _claim() if len(running) < limit else None
-            if run_id and run_id in running.values():
+            running = {task: claimed for task, claimed in running.items() if not task.done()}
+            claimed = await _claim(running, limit)
+            if claimed and claimed[0] in {run_id for run_id, _ in running.values()}:
                 # 本进程还在跑它，却被误判中断后又被重跑排回了队列：不能再起第二个执行者往同一个目录里写。
-                logger.warning("batch_run_already_running run=%s", run_id)
+                logger.warning("batch_run_already_running run=%s", claimed[0])
                 continue
-            if run_id:
-                logger.info("batch_run_claimed run=%s", run_id)
-                running[asyncio.create_task(execute(run_id))] = run_id
+            if claimed:
+                logger.info("batch_run_claimed run=%s source=%s", *claimed)
+                running[asyncio.create_task(execute(claimed[0]))] = claimed
                 continue
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=POLL_SECONDS)

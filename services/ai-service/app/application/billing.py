@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
@@ -25,18 +26,37 @@ logger = logging.getLogger("ai.billing")
 MAX_DAYS = 366
 
 
+# 中途断开时模型还没给用量，按字数估：中文为主的提示词和回答，DeepSeek 一类模型约每个字 0.6 个 token。
+TOKENS_PER_CHAR = 0.6
+
+
 class CallTally:
     """一次流式回答里的用量：最后的 usage 事件给 token；联网次数优先用 usage 里的，没有就数联网事件。"""
 
     def __init__(self) -> None:
         self.usage: dict[str, int] = {}
         self.search_events = 0
+        self.output_chars = 0
+        self.estimated = False
 
     def add(self, event: dict[str, Any]) -> None:
         if isinstance(event.get("usage"), dict):
             self.usage = event["usage"]
         elif event.get("tool_event", {}).get("stage") == "web_search_in_progress":
             self.search_events += 1
+        self.output_chars += len(str(event.get("text") or "")) + len(str(event.get("reasoning") or ""))
+
+    def estimate(self, prompt: str) -> None:
+        """用户中途停止、关掉页面：厂商照收已经读进去的提示词和已经写出来的部分。没等到用量就按字数估，
+        不估就一分钱不记。多轮对话服务端保存的上文也计费，这里估不到，只会少记。"""
+
+        if self.usage:
+            return
+        self.usage = {
+            "input_tokens": math.ceil(len(prompt) * TOKENS_PER_CHAR),
+            "output_tokens": math.ceil(self.output_chars * TOKENS_PER_CHAR),
+        }
+        self.estimated = True
 
     @property
     def empty(self) -> bool:
@@ -74,6 +94,9 @@ async def record_call(kind: str, model: LlmModel, tally: CallTally, actor: Actor
             await session.commit()
     except Exception:  # 记账失败不影响用户已经拿到的回答
         logger.exception("call_usage_record_failed kind=%s model=%s", kind, model.id)
+        return
+    if tally.estimated:
+        logger.info("call_usage_estimated kind=%s model=%s tokens=%s", kind, model.id, tally.usage)
 
 
 def _bounds(date_from: date, date_to: date) -> tuple[datetime, datetime]:

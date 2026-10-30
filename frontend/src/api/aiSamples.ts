@@ -32,6 +32,8 @@ export interface SampleRunState {
   /** 最近 20 次，新的在前 */
   history: SampleBrief[]
   compare: SampleCompare | null
+  /** 执行进程（ai-worker）在不在；不在时排队的试跑不会开始 */
+  worker_online?: boolean
 }
 
 /** 测试样本前 100 行，每格只有开头 200 字，lengths 是整格的字数：试发选行、发之前看数据用 */

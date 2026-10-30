@@ -5,14 +5,17 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from platform_common.clock import utcnow
 from platform_common.errors import ApiError
 
 from app.application import asking, batch_execute, batch_runs, pipeline_runs, row_asking
 from app.application.legacy_import import _overwrite
+from app.application.run_costs import Ledger, Spend
 from app.core import storage
 from app.domain.models import RUN_SOURCE_PIPELINE, PromptTemplate
 from tests.helpers import RUN_ID, FakeSession, run, xlsx
@@ -60,13 +63,23 @@ async def test_watchdog_survives_a_database_hiccup(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(batch_execute, "_progress", lambda _job: {})
     monkeypatch.setattr(batch_execute.repo, "update_if_running", update_fields)
     monkeypatch.setattr(batch_execute.repo, "cancel_flag", cancel_flag)
-    job = SimpleNamespace(run=SimpleNamespace(id="r1"), stop=asyncio.Event())
+    booked: list[dict[Any, Any]] = []
+
+    async def book(_session: Any, _run_id: str, taken: dict[Any, Any]) -> None:
+        booked.append(dict(taken))
+
+    monkeypatch.setattr(batch_execute, "book", book)
+    ledger = Ledger()
+    ledger.add(utcnow(), Spend(1, 1, 0, Decimal("0.5"), Decimal(0)))
+    job = SimpleNamespace(run=SimpleNamespace(id="r1"), stop=asyncio.Event(), ledger=ledger)
     watcher = asyncio.create_task(batch_execute._watch(job))  # type: ignore[arg-type]
     await asyncio.wait_for(job.stop.wait(), timeout=2)
     watcher.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await watcher
     assert beats == ["r1", "r1"]  # 炸的那次没心跳，后面两次正常，停止标志也认到了
+    # 炸的那次没记上的花费放回去了，下一次记上，只记一次。
+    assert [sum(spend.inference_cost for spend in item.values()) for item in booked] == [Decimal("0.5"), 0]
 
 
 async def test_disabled_model_message_says_where_to_fix_it(model_table: list[Any]) -> None:

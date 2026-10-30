@@ -7,7 +7,7 @@ from decimal import Decimal
 import pytest
 
 from app.application.model_configs import to_model
-from app.domain.llm_models import build_body, calc_costs, in_peak
+from app.domain.llm_models import build_body, calc_costs, in_peak, parse_peak_hours
 from app.domain.templating import (
     CODE_TABLE_FIELD,
     build_myid,
@@ -95,6 +95,16 @@ _BEIJING = timezone(timedelta(hours=8))
 )
 def test_peak_hours_follow_beijing_weekdays(moment: datetime, peak: bool) -> None:
     assert in_peak(moment, "09:00-12:00,14:00-18:00") is peak
+
+
+def test_peak_hours_can_end_at_midnight_and_bad_clock_times_name_the_part() -> None:
+    """「18:00-24:00」是常见写法；time 只到 23 点，原来报的是英文的 hour must be in 0..23。"""
+
+    assert in_peak(datetime(2026, 10, 21, 23, 59, tzinfo=_BEIJING), "18:00-24:00") is True
+    assert in_peak(datetime(2026, 10, 21, 17, 59, tzinfo=_BEIJING), "18:00-24:00") is False
+    for text in ("24:00-25:00", "09:60-10:00", "10:00-09:00"):
+        with pytest.raises(ValueError, match=text.split(",")[0]):
+            parse_peak_hours(text)
 
 
 def test_time_of_day_prices_switch_between_peak_and_idle() -> None:

@@ -10,7 +10,7 @@ import contextlib
 from pathlib import Path
 from typing import Any
 
-from app.application.batch_output import RowResult, iter_raw
+from app.application.batch_output import RowResult, iter_outcomes, iter_raw
 from app.application.row_asking import needs_retry
 from app.application.sheets import run_input_head, run_input_rows
 from app.core import storage
@@ -59,10 +59,14 @@ def _first_answers(raw: Path, count: int, fields: list[str]) -> dict[int, RowRes
 
 
 def _failures(raw: Path, total: int) -> dict[int, RowResult]:
-    """前 total 行里最后一次失败（含格式不对）的行，按行号排。只看失败时才用：失败的行可能在任何位置，要读完整份。"""
+    """前 total 行里最后一次失败（含格式不对）的行，按行号排。只看失败时才用：失败的行可能在任何位置，要读完整份。
+
+    读每行的结果记录（几十万行也只有几 MB）；记录功能上线前开始的任务没有它，才整份读原始返回。
+    """
 
     latest: dict[str, RowResult | None] = {}
-    for result in iter_raw(raw, with_prompt=False):
+    results = iter_outcomes(raw)
+    for result in iter_raw(raw, with_prompt=False) if results is None else results:
         latest[result.myid] = result if result.error else None
     found: dict[int, RowResult] = {}
     for index in range(total):

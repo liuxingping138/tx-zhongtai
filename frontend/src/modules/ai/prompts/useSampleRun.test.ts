@@ -7,6 +7,9 @@ import type { SampleRunState } from '@/api/aiSamples'
 const message = vi.hoisted(() => ({ error: vi.fn() }))
 const api = vi.hoisted(() => ({ getSampleRun: vi.fn(), startSampleRun: vi.fn(), stopSampleRun: vi.fn(), retrySampleRun: vi.fn() }))
 const download = vi.hoisted(() => vi.fn())
+// 组合函数不在组件里跑，onBeforeUnmount 记下来，测试里手动调用就等于离开页面。
+const unmountHooks = vi.hoisted(() => [] as (() => void)[])
+vi.mock('vue', async original => ({ ...await original<typeof import('vue')>(), onBeforeUnmount: (hook: () => void) => { unmountHooks.push(hook) } }))
 vi.mock('element-plus', () => ({ ElMessage: message }))
 vi.mock('@/api/aiSamples', () => api)
 vi.mock('../shared/downloads', () => ({ downloadSampleFile: download }))
@@ -98,6 +101,25 @@ describe('样本试跑的数据：右栏、抽屉、试发共用一份', () => {
     expect(await sample.retry()).toBe(false)
     await sample.download()
     expect(download).not.toHaveBeenCalled()
+  })
+
+  it('离开页面后，晚回来的开始请求不再接着轮询；执行进程不在线时说出来', async () => {
+    unmountHooks.length = 0
+    const { sample } = setup()
+    await settle()
+    let finish: (value: SampleRunState) => void = () => undefined
+    api.startSampleRun.mockReturnValue(new Promise<SampleRunState>(resolve => { finish = resolve }))
+    api.getSampleRun.mockResolvedValue({ ...state('r4', 'queued'), worker_online: false })
+    const started = sample.start(5, false)
+    unmountHooks.forEach(hook => hook())
+    finish(state('r4', 'queued'))
+    await started
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(api.getSampleRun).toHaveBeenCalledTimes(1)
+
+    const { sample: again } = setup()
+    await settle()
+    expect(again.workerOffline.value).toBe(true)
   })
 
   it('取结果失败时提示，安静刷新时不打扰', async () => {

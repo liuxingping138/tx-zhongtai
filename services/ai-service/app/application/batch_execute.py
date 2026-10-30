@@ -38,6 +38,7 @@ from app.application.batch_output import (
     write_failed,
 )
 from app.application.row_asking import FORMAT_RETRIES, ask_row, needs_retry, round_retry
+from app.application.run_costs import Ledger, Spend, book
 from app.application.sheets import read_run_input
 from app.core import storage
 from app.core.config import get_settings
@@ -87,6 +88,8 @@ class Job:
     search_calls: int = 0
     inference_cost: Decimal = Decimal(0)
     search_cost: Decimal = Decimal(0)
+    # 这次执行花的钱按天记账（见 run_costs）：重跑、跨零点的钱记到实际花钱那天。
+    ledger: Ledger = field(default_factory=Ledger)
 
     def path(self, kind: str) -> Any:
         return storage.run_file(self.run.id, kind)
@@ -117,9 +120,11 @@ async def _record(job: Job, result: RowResult) -> None:
     job.input_tokens += result.input_tokens
     job.output_tokens += result.output_tokens
     job.search_calls += result.search_calls
-    inference, search = calc_costs(job.model, result.input_tokens, result.output_tokens, result.search_calls, utcnow())
+    now = utcnow()
+    inference, search = calc_costs(job.model, result.input_tokens, result.output_tokens, result.search_calls, now)
     job.inference_cost += inference
     job.search_cost += search
+    job.ledger.add(now, Spend(result.input_tokens, result.output_tokens, result.search_calls, inference, search))
     limit = job.run.cost_limit
     if limit is not None and job.inference_cost + job.search_cost >= limit and not job.stop.is_set():
         # 在途的几行仍会返回并计费，所以实际花费会略超上限，超出部分不超过并发数那几行。
@@ -196,14 +201,21 @@ async def _watch(job: Job) -> None:
     while True:
         await asyncio.sleep(PROGRESS_SECONDS)
         # 库连接抖一下不能让它死掉：它一死心跳就停，任务被误判中断、停止按钮失效、跑完还被记成失败。
+        taken, booked = job.ledger.take(), False
         try:
             async with SessionLocal() as session:
                 alive = await repo.update_if_running(session, job.run.id, _progress(job))
                 cancelled = await repo.cancel_flag(session, job.run.id)
+                await book(session, job.run.id, taken)
                 await session.commit()
+            booked = True
         except Exception:
             logger.exception("batch_run_watch_failed run=%s", job.run.id)
             continue
+        finally:
+            # 没记上（写库失败，或者收尾时被取消在半路）就放回去，由下一次或收尾时再记。
+            if not booked:
+                job.ledger.restore(taken)
         if not alive and not job.stop.is_set():
             # 心跳断过一阵、任务已被纠正成「中断」：页面上停止按钮已经没了，这里不停就会一直花钱。
             logger.warning("batch_run_no_longer_running run=%s", job.run.id)
@@ -284,8 +296,10 @@ async def _finish(job: Job, status: str, message: str = "") -> None:
         "cancel_requested": False,
         "round_starts_at": None,
     }
+    # 钱已经花出去了：任务被纠正成「中断」、这次的进度写不上，流水照样记。
     async with SessionLocal() as session:
         written = await repo.update_if_running(session, job.run.id, values, also=(RUN_INTERRUPTED,))
+        await book(session, job.run.id, job.ledger.take())
         await session.commit()
     if not written:
         # 被纠正成「中断」后又被人点了重跑：排队中的任务下次会沿用这次已跑好的行，不拿这次的结果盖掉排队状态。

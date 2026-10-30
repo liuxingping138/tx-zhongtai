@@ -190,6 +190,21 @@ async def test_list_only_queries_readable_categories_and_marks_editable(monkeypa
     assert [(item["title"], item["category_name"], item["editable"]) for item in data] == [("企业行业", "政策", False)]
 
 
+async def test_editor_gets_one_template_and_hides_unreadable_ones(monkeypatch: pytest.MonkeyPatch) -> None:
+    """编辑页只取这一个模板；看不到的类型和不存在一样回 404。"""
+
+    async def get(*_: Any, **__: Any) -> Any:
+        return template()
+
+    monkeypatch.setattr(repo, "get", get)
+    reader = CategoryAccess(readable=frozenset({"policy"}), editable=frozenset())
+    data = await service.get_prompt(FakeSession(), reader, PROMPT_ID)  # type: ignore[arg-type]
+    assert (data["id"], data["editable"]) == (PROMPT_ID, False)
+    other = CategoryAccess(readable=frozenset({"tender"}), editable=frozenset({"tender"}))
+    with pytest.raises(NotFoundError):
+        await service.get_prompt(FakeSession(), other, PROMPT_ID)  # type: ignore[arg-type]
+
+
 def test_category_access_follows_grant_levels() -> None:
     access = CategoryAccess.from_levels({"ai.category.policy": "READ", "ai.category.tender": "FULL"})
     assert (access.readable, access.editable) == (frozenset({"policy", "tender"}), frozenset({"tender"}))
@@ -268,6 +283,40 @@ async def test_stream_answer_echoes_prompt_then_model_events_then_done(monkeypat
     assert chunks[2:] == ['data: {"text": "答"}\n\n', 'data: {"response_id": "r1"}\n\n', "data: [DONE]\n\n"]
 
 
+async def test_cut_off_answers_are_billed_by_estimate_in_the_background(monkeypatch: pytest.MonkeyPatch) -> None:
+    """用户中途停止、关掉页面：厂商照收读进去的提示词和写出来的部分。没等到用量就按字数估，另起任务记。"""
+
+    import asyncio
+
+    _with_keys(monkeypatch, ark="k")
+    events = [{"reasoning": "想" * 10}, {"text": "答" * 20}, {"text": "还没完"}]
+    monkeypatch.setattr(asking, "stream_responses", fake_stream(events))
+    model, message = await asking.prepare_chat(FakeSession(), "deepseek-v4-flash", "问" * 100)
+    recorded: list[Any] = []
+
+    async def record(tally: Any) -> None:
+        recorded.append(tally)
+
+    stream = asking.stream_answer(model, message, thinking=False, on_done=record)
+    async for chunk in stream:
+        if "答" in chunk:
+            break
+    await stream.aclose()
+    await asyncio.sleep(0)
+    assert len(recorded) == 1 and recorded[0].estimated
+    assert recorded[0].usage == {"input_tokens": 60, "output_tokens": 18}
+
+    # 报错的调用不收钱，断开也不估。
+    monkeypatch.setattr(asking, "stream_responses", fake_stream([{"error": "密钥错误"}, {"text": "x"}]))
+    stream = asking.stream_answer(model, message, thinking=False, on_done=record)
+    async for chunk in stream:
+        if "密钥" in chunk:
+            break
+    await stream.aclose()
+    await asyncio.sleep(0)
+    assert len(recorded) == 1
+
+
 async def test_trial_can_pick_any_row_of_the_sample(monkeypatch: pytest.MonkeyPatch) -> None:
     _with_keys(monkeypatch, baidu="k")
     _use(monkeypatch, template(excel_name="a.xlsx"))
@@ -331,5 +380,16 @@ async def test_trial_uses_the_code_table_chosen_on_the_page_even_before_saving(m
     ask = {"content": "问：@【上传码表】", "model_id": "baidu-deepseek-v3.2", "prompt_id": PROMPT_ID}
     _, prompt = await asking.prepare_trial(FakeSession(), FULL_ACCESS, code_table="policy_types", **ask)  # type: ignore[arg-type]
     assert prompt == "问：政策类型码表全文" and fetched == ["policy_types"]
-    _, prompt = await asking.prepare_trial(FakeSession(), FULL_ACCESS, **ask)  # type: ignore[arg-type]
-    assert prompt == "问："  # 不传就按模板存的（没选码表），替换成空
+    # 不传就按模板存的：没选码表。原来替换成空串照样问，模型拿不到码表瞎答；现在发之前拦下。
+    with pytest.raises(ApiError, match="码表是空的"):
+        await asking.prepare_trial(FakeSession(), FULL_ACCESS, **ask)  # type: ignore[arg-type]
+
+    async def blank(_name: str) -> str:
+        return "  \n"
+
+    monkeypatch.setattr(service, "fetch_code_table", blank)
+    with pytest.raises(ApiError, match="码表是空的"):
+        await asking.prepare_trial(FakeSession(), FULL_ACCESS, code_table="policy_types", **ask)  # type: ignore[arg-type]
+    with pytest.raises(ApiError, match="码表是空的"):
+        service.require_code("问：@【上传码表】", None)
+    service.require_code("问：@【名称】", None)  # 没引用码表的不管

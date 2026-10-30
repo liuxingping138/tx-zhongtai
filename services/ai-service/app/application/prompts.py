@@ -21,7 +21,7 @@ from app.domain.categories import CategoryAccess, category_name, checked_categor
 from app.domain.code_tables import checked_code_table, code_table_name
 from app.domain.models import RUN_SOURCE_SAMPLE, BatchRun, PromptTemplate, TemplateRelease, new_id
 from app.domain.releases import release_summary
-from app.domain.templating import split_fields
+from app.domain.templating import CODE_TABLE_FIELD, split_fields, template_variables
 from app.repositories import batch_runs as run_repo
 from app.repositories import prompts as repo
 from app.repositories import releases as release_repo
@@ -133,6 +133,15 @@ async def list_prompts(session: AsyncSession, access: CategoryAccess) -> list[di
     releases = await release_repo.by_ids(session, [item.release_id for item in items if item.release_id])
     samples = await run_repo.latest_samples(session, [item.id for item in items])
     return [to_dict(item, names, access, releases.get(item.release_id or ""), samples.get(item.id)) for item in items]
+
+
+async def get_prompt(session: AsyncSession, access: CategoryAccess, prompt_id: str) -> dict[str, Any]:
+    """看不到这个类型的模板和不存在一样回 404，不透露有这个模板。"""
+
+    template = await require(session, prompt_id)
+    if template.category not in access.readable:
+        raise NotFoundError("模板不存在或已被删除")
+    return await to_out(session, template, access)
 
 
 async def online(session: AsyncSession, category: str) -> list[PromptTemplate]:
@@ -357,6 +366,17 @@ async def preview_uploaded_code(session: AsyncSession, access: CategoryAccess, p
     if not template.code_name or not await path.is_file():
         raise NotFoundError("这个模板还没上传码表")
     return _code_preview(template.code_name, await path.read_text(encoding="utf-8"))
+
+
+def require_code(content: str, code: str | None) -> None:
+    """提示词引用了 @【上传码表】却没有码表（或码表是空的）：替换成空字符串照样问，模型拿不到码表瞎答，钱白花。"""
+
+    if CODE_TABLE_FIELD in template_variables(content) and not (code or "").strip():
+        raise ApiError(
+            f"提示词引用了 @【{CODE_TABLE_FIELD}】，但码表是空的：先上传码表或选一张系统码表",
+            code=ErrorCode.VALIDATION_ERROR,
+            http_status=422,
+        )
 
 
 async def code_text(template: PromptTemplate, *, code_table: str | None = None) -> str | None:

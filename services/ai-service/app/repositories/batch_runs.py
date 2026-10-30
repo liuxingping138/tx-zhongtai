@@ -18,6 +18,7 @@ from app.domain.models import (
     RUN_SOURCE_SAMPLE,
     RUN_STOPPING,
     BatchRun,
+    WorkerHeartbeat,
 )
 
 _RUNNING = (RUN_RUNNING, RUN_STOPPING)
@@ -164,16 +165,13 @@ async def mark_stale_interrupted(session: AsyncSession, *, cutoff: datetime, mes
     return int(result.rowcount or 0)  # type: ignore[attr-defined]  # UPDATE 的结果才有 rowcount，类型上看不到
 
 
-async def claim_next(session: AsyncSession, *, now: datetime) -> BatchRun | None:
-    """认领最早排队的任务。SKIP LOCKED：多实例时不会重复认领同一条。"""
+async def claim_next(session: AsyncSession, *, now: datetime, exclude_sources: Collection[str] = ()) -> BatchRun | None:
+    """认领最早排队的任务。SKIP LOCKED：多实例时不会重复认领同一条。exclude_sources 里的来源这次不认领。"""
 
-    statement = (
-        select(BatchRun)
-        .where(BatchRun.status == RUN_QUEUED, LIVE)
-        .order_by(BatchRun.created_at, BatchRun.id)
-        .limit(1)
-        .with_for_update(skip_locked=True)
-    )
+    statement = select(BatchRun).where(BatchRun.status == RUN_QUEUED, LIVE)
+    if exclude_sources:
+        statement = statement.where(BatchRun.source.not_in(exclude_sources))
+    statement = statement.order_by(BatchRun.created_at, BatchRun.id).limit(1).with_for_update(skip_locked=True)
     run = (await session.scalars(statement)).first()
     if run is None:
         return None
@@ -181,6 +179,11 @@ async def claim_next(session: AsyncSession, *, now: datetime) -> BatchRun | None
     run.started_at = now
     run.heartbeat_at = now
     return run
+
+
+async def worker_seen_at(session: AsyncSession) -> datetime | None:
+    row = await session.get(WorkerHeartbeat, 1)
+    return row.seen_at if row else None
 
 
 async def running_ids(session: AsyncSession) -> list[str]:
