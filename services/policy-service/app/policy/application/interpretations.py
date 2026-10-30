@@ -22,6 +22,7 @@ from app.policy.domain.fields import (
     DATA_STATUS_CHOICES,
     DATA_STATUS_PENDING,
     INTERPRETATION_COLUMNS,
+    POLICY_TITLE_MAX,
     SCENARIO_CODE_FIELDS,
     SCENARIO_NAME_FIELDS,
 )
@@ -29,7 +30,7 @@ from app.policy.domain.models import INTERPRETATION_WRITE_FIELDS, Interpretation
 from app.policy.repositories import interpretations as repo
 from app.policy.repositories import options as options_repo
 
-INTERPRETATION_LENGTHS = string_lengths(Interpretation)
+INTERPRETATION_LENGTHS = {**string_lengths(Interpretation), "policy_title": POLICY_TITLE_MAX}
 
 logger = logging.getLogger("policy.interpretations")
 

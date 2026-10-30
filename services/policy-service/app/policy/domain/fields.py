@@ -109,6 +109,9 @@ AI_NOTE_TYPE_UNKNOWN = "AI 返回的类型不在码表里"
 AI_NOTE_TYPE_EMPTY = "AI 没有判断出政策类型"
 AI_NOTE_INTERPRET_FAILED = "AI 解读失败"
 AI_NOTE_OPPORTUNITY_FAILED = "AI 市场机会失败"
+# 解读的「政策原文名称」最多这么多字：列表默认按它排序，列上有 btree 索引，单条索引项约 2704 字节封顶，
+# 源库把整段脚本当标题的（上千字）一写进去整批回滚。真实标题远短于此。
+POLICY_TITLE_MAX = 500
 AI_STATUS_CHOICES: tuple[str, ...] = (
     "类型判断失败",
     "解读失败",

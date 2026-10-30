@@ -23,7 +23,7 @@ from app.aitag.repositories import tagging as repo
 from app.common import internal_clients
 from app.common.audit_emit import enqueue_event
 from app.core.database import SessionLocal
-from app.policy.domain.fields import DATA_STATUS_PENDING
+from app.policy.domain.fields import DATA_STATUS_PENDING, POLICY_TITLE_MAX
 from app.policy.domain.models import BaseTag, Interpretation
 
 
@@ -76,7 +76,7 @@ def _new_row(tag: BaseTag, values: dict[str, str], key: str) -> Interpretation:
         record_id=str(uuid.uuid4()),
         tenant_id="",
         policy_uid=str(tag.source_content_id)[: rules.UID_MAX],
-        policy_title=tag.policy_name,
+        policy_title=tag.policy_name[:POLICY_TITLE_MAX],
         relation_key=key,
         source_content_id=str(tag.source_content_id),
         tagged_at=now,
