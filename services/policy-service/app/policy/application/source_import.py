@@ -31,12 +31,14 @@ from app.policy.application.region import (
 )
 from app.policy.application.source_status import beijing_today, online_date_after
 from app.policy.application.sources import (
+    NON_NUMERIC_AREA_CODE,
     ONLINE_DATE_ERROR,
     SITE_CODE_MAX_LENGTH,
     _has_any_area_code,
     _normalized_values,
     _overlong,
     normalize_online_date,
+    site_code_prefix_of,
 )
 from app.policy.domain.fields import SOURCE_COLUMNS, crawler_status_error
 from app.policy.domain.models import SOURCE_FIELDS, Source
@@ -82,8 +84,9 @@ def _check_rows(staged: list[_StagedSource], db_internal: set[str], db_site: set
     for row in staged:
         reasons: list[str] = []
         # 省市区编码只用来分配网站编码，自带网站编码的行可以不填。
-        if not row.site_code and not _has_any_area_code(row.values):
-            reasons.append(missing_area_reason(row.carried_reason))
+        if not row.site_code and not site_code_prefix_of(row.values):
+            filled = _has_any_area_code(row.values)
+            reasons.append(NON_NUMERIC_AREA_CODE if filled else missing_area_reason(row.carried_reason))
         if message := region_conflict(
             row.values["province_code"], row.values["city_code"], row.values["district_code"]
         ):

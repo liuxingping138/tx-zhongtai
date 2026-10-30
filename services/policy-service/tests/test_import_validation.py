@@ -114,6 +114,18 @@ class TestImportSources:
 
         assert _reasons(source_env) == ["区县不标准", "省市区编码为空"]
 
+    async def test_area_codes_that_cannot_make_a_site_code_prefix_are_rejected(
+        self, source_env: dict[str, Any]
+    ) -> None:
+        """「北京」、1 位数字分不出网站编码前缀：原来分到 000000 下，新建时还按空前缀锁整张信源表。"""
+
+        source_env["rows"] = [_source(site_name="甲", province_code="北京"), _source(site_name="乙", province_code="1")]
+        result = await source_import.import_sources(_Session(), ACTOR, b"")  # type: ignore[arg-type]
+        assert result["rejected"] is True
+        assert _reasons(source_env) == [sources.NON_NUMERIC_AREA_CODE] * 2
+        with pytest.raises(sources.ApiError, match="省至少 2 位"):
+            await sources.create_source(_Session(), ACTOR, _source(site_name="丙", province_code="北京"))  # type: ignore[arg-type]
+
     async def test_given_site_code_makes_area_code_optional(self, source_env: dict[str, Any]) -> None:
         source_env["rows"] = [_source(site_code="11010100001")]
         result = await source_import.import_sources(_Session(), ACTOR, b"")  # type: ignore[arg-type]

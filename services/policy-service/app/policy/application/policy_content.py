@@ -31,12 +31,10 @@ async def policy_content(source_content_id: str | None) -> dict[str, Any]:
 
     if not source_content_id:
         raise NotFoundError(NO_SOURCE)
-    rows = await _read(source.read_by_ids, [source_content_id])
-    contents = await _read(source.read_contents, [source_content_id])
-    html = contents.get(source_content_id)
-    if not rows or html is None:
+    # 人在页面上等：短超时、不重试（source.read_page），源库出故障二十几秒内回 503，不占着线程几分钟。
+    row, html = await _read(source.read_page, source_content_id)
+    if row is None or html is None:
         raise NotFoundError(GONE)
-    row = rows[0]
     text = rules.clean_content(html, 0)
     return {
         "title": rules.policy_title(row.get("name"))[0],

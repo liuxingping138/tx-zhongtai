@@ -16,7 +16,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.audit_emit import enqueue_event
 from app.core.config import get_settings
 from app.policy.application.region import (
-    digits_only,
     make_internal_id,
     next_site_code,
     normalize_region,
@@ -99,9 +98,8 @@ def _require_valid(values: dict[str, str], *, allocate_site_code: bool) -> None:
 
     if not values["site_name"]:
         raise ApiError("网站名称不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    if allocate_site_code and not _has_numeric_area_code(values):
-        # 填了「北京」这类非数字时，编码前缀是空的，网站编码会分到 000000 前缀下。
-        raise ApiError("省市区编码要填数字编码，分配网站编码要用", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    if allocate_site_code and not site_code_prefix_of(values):
+        raise ApiError(NON_NUMERIC_AREA_CODE, code=ErrorCode.VALIDATION_ERROR, http_status=422)
     if message := region_conflict(values["province_code"], values["city_code"], values["district_code"]):
         raise ApiError(message, code=ErrorCode.VALIDATION_ERROR, http_status=422)
     if normalize_online_date(values["online_date"]) is None:
@@ -118,8 +116,17 @@ def _overlong(values: dict[str, str]) -> list[str]:
     return overlong_reasons(normalized, SOURCE_COLUMNS, SOURCE_LENGTHS)
 
 
-def _has_numeric_area_code(item: dict[str, str]) -> bool:
-    return any(digits_only(item.get(field)) for field in ("province_code", "city_code", "district_code"))
+# 填了「北京」、或者只有 1 位数字时，网站编码前缀是空的：原来会分到 000000 前缀下，取号时还按空前缀
+# LIKE '%' FOR UPDATE 锁住整张信源表。
+NON_NUMERIC_AREA_CODE = "省市区编码要填数字编码（省至少 2 位，如 11、1101、110101），分配网站编码要用"
+
+
+def site_code_prefix_of(item: dict[str, str]) -> str:
+    """按这行的省市区编码分配网站编码用的 6 位前缀；编码不够用时为空。"""
+
+    return site_code_prefix(
+        item.get("province_code") or "", item.get("city_code") or "", item.get("district_code") or ""
+    )
 
 
 def _has_any_area_code(item: dict[str, str]) -> bool:
@@ -132,6 +139,8 @@ def _has_any_area_code(item: dict[str, str]) -> bool:
 
 async def _allocate_site_code(session: AsyncSession, province_code: str, city_code: str, district_code: str) -> str:
     prefix = site_code_prefix(province_code, city_code, district_code)
+    if not prefix:
+        raise ApiError(NON_NUMERIC_AREA_CODE, code=ErrorCode.VALIDATION_ERROR, http_status=422)
     existing = await repo.list_site_codes_for_district(session, prefix)
     return next_site_code(prefix, existing)
 

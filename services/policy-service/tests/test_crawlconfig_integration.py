@@ -24,7 +24,7 @@ pytestmark = pytest.mark.skipif(os.environ.get("SCHEDULER_INTEGRATION") != "1", 
 NOW = datetime(2026, 10, 1, tzinfo=UTC)
 
 
-def _source(code: str, status: str, online_date: str = "", province: str = "北京市") -> Source:
+def _source(code: str, status: str, online_date: str = "", province: str = "北京市", rule_date: str = "") -> Source:
     return Source(
         internal_id=uuid.uuid4().hex,
         site_code=code,
@@ -32,6 +32,7 @@ def _source(code: str, status: str, online_date: str = "", province: str = "北�
         province_name=province,
         crawler_status=status,
         online_date=online_date,
+        rule_date=rule_date,
         created_at=NOW,
         created_by_id="u1",
         created_by_name="测试",
@@ -61,13 +62,16 @@ async def test_sync_dates_sites_by_rule_creation_and_leaves_abnormal_alone(monke
                 _source("A4", "异常", "2026-09-01"),
                 _source("A5", "未爬"),  # 规则表里没有
                 _source("A6", "已爬", "2026-10-16"),  # 已经对齐，不算修改
-                _source("A7", "已爬", "2026-10-01"),  # 最早的规则被删，剩下的规则更晚：不往后挪
+                # 同步见过它 10-01 的规则，后来最早的规则被删，剩下的更晚：不往后挪
+                _source("A7", "已爬", "2026-10-01", rule_date="2026-10-01"),
+                # 导入时直接标了已爬、上线时间随手填的，规则是后来才建的：第一次见到规则时对齐，算进建规则那一周
+                _source("A8", "已爬", "2024-10-01"),
             ]
         )
         await session.commit()
     first = {"A1": date(2026, 10, 23), "A2": date(2024, 10, 15), "A3": date(2026, 10, 23), "A4": date(2026, 10, 10)}
-    later = {"A6": date(2026, 10, 16), "A7": date(2026, 10, 20), "Z9": date(2026, 10, 23)}
-    rules = RuleCodes(rows=8, first_dates={**first, **later}, blank_rows=1)
+    later = {"A6": date(2026, 10, 16), "A7": date(2026, 10, 20), "A8": date(2026, 10, 30), "Z9": date(2026, 10, 23)}
+    rules = RuleCodes(rows=9, first_dates={**first, **later}, blank_rows=1)
     monkeypatch.setattr(rules_source, "read_rule_codes", lambda: rules)
     sync_id = uuid.uuid4()
     await rules_sync.run(sync_id)
@@ -82,17 +86,24 @@ async def test_sync_dates_sites_by_rule_creation_and_leaves_abnormal_alone(monke
             "A5": ("未爬", ""),
             "A6": ("已爬", "2026-10-16"),
             "A7": ("已爬", "2026-10-01"),
+            "A8": ("已爬", "2026-10-30"),
         }
         assert rows["A1"].version == 2 and rows["A1"].updated_by_name == "爬虫配置同步"
         assert rows["A6"].version == 1
+        # 见过的规则日期都记下了，A7 记的是更早那次见到的。
+        assert {code: row.rule_date for code, row in rows.items() if code in ("A1", "A6", "A7")} == {
+            "A1": "2026-10-23",
+            "A6": "2026-10-16",
+            "A7": "2026-10-01",
+        }
         assert await rules_sync.summary(session, sync_id) == {
             "status": "success",
-            "rule_rows": 8,
-            "rule_codes": 7,
+            "rule_rows": 9,
+            "rule_codes": 8,
             "blank_code_rows": 1,
-            "matched": 6,
+            "matched": 7,
             "marked": 2,
-            "redated": 1,
+            "redated": 2,
             "unknown_codes": 1,
         }
 

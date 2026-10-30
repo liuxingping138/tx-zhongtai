@@ -23,6 +23,12 @@ _BATCH_SQL = """
 _CONTENT_CHUNK = 200
 # 重新判断类型：按源政策 ID 直接取，和按天读取用同一组字段。
 _BY_IDS_SQL = _BATCH_SQL.split("WHERE", maxsplit=1)[0] + "WHERE content_id IN ({marks})"
+_CONTENT_SQL = "SELECT content_id, content FROM csys_policy_info_content WHERE content_id IN ({marks})"
+# 页面上点开一条政策看正文：人在页面上等（前端 30 秒超时），源库出故障要很快说清。
+# 不能沿用同步任务的 30 秒连接、20 分钟读取和重试：每次请求占一个线程，
+# 几十个卡住的请求会把同服务的 Excel 导入导出一起堵住。源库单条读取实测 0.2 秒。
+PAGE_CONNECT_TIMEOUT = 5
+PAGE_READ_TIMEOUT = 20
 
 
 @retry_mysql_read
@@ -65,10 +71,27 @@ def read_contents(content_ids: list[str]) -> dict[str, str]:
         for start in range(0, len(content_ids), _CONTENT_CHUNK):
             chunk = content_ids[start : start + _CONTENT_CHUNK]
             marks = ", ".join(["%s"] * len(chunk))
-            cursor.execute(
-                f"SELECT content_id, content FROM csys_policy_info_content WHERE content_id IN ({marks})",  # noqa: S608  只拼占位符，值走参数
-                chunk,
-            )
+            cursor.execute(_CONTENT_SQL.format(marks=marks), chunk)
             found = cast(list[dict[str, Any]], cursor.fetchall())
             contents.update({str(row["content_id"]): str(row["content"] or "") for row in found})
     return contents
+
+
+def read_page(content_id: str) -> tuple[dict[str, Any] | None, str | None]:
+    """页面看正文用：一条政策和它的正文（网页源码），源库里没有的是 None。
+
+    一次连接读两张表；连接 5 秒、读 20 秒超时，不重试，连不上直接抛出，由调用方回 503。
+    """
+
+    database = get_settings().policy_source_db
+    with (
+        mysql_connect(database, connect_timeout=PAGE_CONNECT_TIMEOUT, read_timeout=PAGE_READ_TIMEOUT) as connection,
+        connection.cursor() as cursor,
+    ):
+        cursor.execute(_BY_IDS_SQL.format(marks="%s"), [content_id])
+        row = cast(dict[str, Any] | None, cursor.fetchone())
+        if row is None:
+            return None, None
+        cursor.execute(_CONTENT_SQL.format(marks="%s"), [content_id])
+        content = cast(dict[str, Any] | None, cursor.fetchone())
+    return row, None if content is None else str(content["content"] or "")

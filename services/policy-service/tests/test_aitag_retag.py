@@ -77,6 +77,36 @@ async def test_type_and_opportunity_retags(tags: dict[uuid.UUID, Any]) -> None:
         await retag.request(None, ACTOR, [typed.id], "nope")  # type: ignore[arg-type]
 
 
+async def test_asking_to_rejudge_types_clears_the_old_failure_and_keeps_the_place_in_the_queue(
+    tags: dict[uuid.UUID, Any],
+) -> None:
+    from app.aitag.domain.rules import DUPLICATE_NOTE, MISSING_NOTE
+    from app.policy.domain.fields import AI_NOTE_TYPE_FAILED, AI_NOTE_TYPE_UNKNOWN, ai_status
+
+    failed = _tag(remark=f"人工备注；{AI_NOTE_TYPE_FAILED}：超时；{AI_NOTE_TYPE_UNKNOWN}：数字经济；{MISSING_NOTE}")
+    copied = _tag(remark=f"{DUPLICATE_NOTE}（源政策ID c1）")
+    tags.update({failed.id: failed, copied.id: copied})
+    out = await retag.request(None, ACTOR, [failed.id, copied.id], "type")  # type: ignore[arg-type]
+    assert out["queued"] == 2
+    # 失败说明当场去掉，列表上马上是「等待重新判断类型」，人写的备注留着。
+    assert (failed.remark, copied.remark) == ("人工备注", "")
+    assert (failed.version, copied.version) == (2, 2)
+    status = ai_status(
+        remark=failed.remark,
+        source_content_id=failed.source_content_id,
+        need_interpret=failed.need_interpret,
+        type_retag_at=failed.type_retag_at,
+        interpreted_at=failed.interpreted_at,
+        opportunity_at=failed.opportunity_at,
+    )
+    assert status == "等待重新判断类型"
+
+    # 再点一次：还在原来的位置，没有要改的也不加版本号。
+    queued_at = failed.type_retag_at
+    again = await retag.request(None, ACTOR, [failed.id], "type")  # type: ignore[arg-type]
+    assert again["queued"] == 1 and failed.type_retag_at == queued_at and failed.version == 2
+
+
 def test_read_by_ids_keeps_the_requested_order(monkeypatch: pytest.MonkeyPatch) -> None:
     executed: list[tuple[str, list[str]]] = []
 
@@ -140,6 +170,8 @@ def test_ai_status_filter_finds_failures_and_queues() -> None:
     (failed,) = base_tags._conditions({"ai_status": ["类型判断失败", "解读失败"]})
     sql = str(failed.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
     assert "AI 类型判断失败%" in sql and "%；AI 解读失败%" in sql and "AI 没有判断出政策类型%" in sql
+    # 已经排进重新判断的不算类型判断失败，和「打标状态」列一致。
+    assert "type_retag_at IS NULL" in sql
     assert base_tags._conditions({"ai_status": []}) == []
     with pytest.raises(KeyError):
         base_tags._conditions({"ai_status": ["不存在"]})
@@ -164,3 +196,5 @@ def test_ai_status_column_uses_the_filter_rules_failures_first() -> None:
     assert status(type_retag_at=now, interpreted_at=None) == "等待重新判断类型"
     assert status(remark=f"人工备注；{AI_NOTE_INTERPRET_FAILED}：超时", interpreted_at=None) == "解读失败"
     assert status(remark=f"{AI_NOTE_TYPE_UNKNOWN}：数字经济；{AI_NOTE_INTERPRET_FAILED}：超时") == "类型判断失败"
+    # 申请重新判断之前留下的失败说明：排着队就显示排队，不再显示失败。
+    assert status(remark=f"{AI_NOTE_TYPE_UNKNOWN}：数字经济", type_retag_at=now) == "等待重新判断类型"

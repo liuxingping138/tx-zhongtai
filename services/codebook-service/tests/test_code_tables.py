@@ -90,3 +90,27 @@ async def test_scenarios_are_grouped_by_industry_and_keep_parent_scenarios(monke
         "低空经济 > 低空物流配送 > 无人机货运；边坡/尾矿库监测",
         "互联网行业一部：CDN与边缘云",
     ]
+
+
+def test_only_policy_service_may_write_scenarios_and_the_person_is_recorded(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AI 服务也持有本服务的密钥（取系统码表），不能拿它往场景码表里建场景；建场景记点同步的那个人。"""
+
+    from app.api import internal
+
+    seen: list[Any] = []
+
+    async def sync(_session: Any, caller: Any, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        seen.append(caller)
+        return []
+
+    monkeypatch.setattr(internal.scenario_sync, "sync", sync)
+    body = {"items": [], "caller_name": "张三", "caller_id": "u-1"}
+    denied = client.post("/internal/v1/scenarios/sync", json=body, headers=internal_headers("ai-service", "s3cret"))
+    assert denied.status_code == 401 and seen == []
+    settings = get_settings().model_copy(update={"internal_caller_secrets": {"policy-service": "p0licy"}})
+    app.dependency_overrides[get_settings] = lambda: settings
+    ok = client.post("/internal/v1/scenarios/sync", json=body, headers=internal_headers("policy-service", "p0licy"))
+    assert ok.status_code == 200
+    assert (seen[0].id, seen[0].name) == ("u-1", "张三")

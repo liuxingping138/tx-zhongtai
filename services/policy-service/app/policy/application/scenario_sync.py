@@ -48,7 +48,7 @@ async def sync(session: AsyncSession, actor: Actor) -> dict[str, Any]:
     results = await internal_clients.codebook(
         "POST",
         "/internal/v1/scenarios/sync",
-        json={"items": [_item(row) for row in rows], "caller_name": actor.name},
+        json={"items": [_item(row) for row in rows], "caller_name": actor.name, "caller_id": actor.id},
     )
     by_key = {str(item["key"]): item for item in results}
     now = utcnow()

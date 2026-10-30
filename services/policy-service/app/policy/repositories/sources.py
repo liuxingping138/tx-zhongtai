@@ -58,6 +58,9 @@ async def list_site_codes(session: AsyncSession) -> set[str]:
 
 async def list_site_codes_for_district(session: AsyncSession, district_code: str) -> list[str]:
     prefix = district_code or ""
+    if not prefix:
+        # 空前缀是 LIKE '%'：会把整张信源表锁住。调用方先校验编码。
+        raise ValueError("网站编码前缀为空")
     result = await session.execute(
         select(Source.site_code)
         .where(or_(Source.district_code == prefix, Source.site_code.startswith(prefix)))

@@ -1,6 +1,8 @@
-"""外部爬虫 MySQL（前面挂 ShardingSphere 代理）的只读连接，爬虫监测同步和政策 AI 打标共用。服务的 HTTP 进程不连。
+"""外部爬虫 MySQL（前面挂 ShardingSphere 代理）的只读连接，爬虫监测同步和政策 AI 打标共用。
 
 同一个实例上有多个库：爬虫监测读 crawler2021 的采集总表，政策 AI 打标读 bid_analyse 的政策表和正文表。
+默认的超时按 worker 里跑的同步定：连接 30 秒、读 20 分钟，瞬时错误重试。HTTP 进程里只有点开政策看正文会连，
+它有自己的短超时、不重试（``app.aitag.repositories.source.read_page``）。
 """
 
 from __future__ import annotations
@@ -39,7 +41,14 @@ def retry_mysql_read[**P, R](operation: Callable[P, R]) -> Callable[P, R]:
     return read
 
 
-def mysql_connect(database: str) -> pymysql.connections.Connection:
+# 批量导入日单天可达数十万行，实测单日聚合最长约 7 分钟，留足余量。
+SYNC_CONNECT_TIMEOUT = 30
+SYNC_READ_TIMEOUT = 1200
+
+
+def mysql_connect(
+    database: str, *, connect_timeout: int = SYNC_CONNECT_TIMEOUT, read_timeout: int = SYNC_READ_TIMEOUT
+) -> pymysql.connections.Connection:
     settings = get_settings()
     if not settings.crawler_mysql_host:
         raise RuntimeError("未配置 POLICY_CRAWLER_MYSQL_HOST，无法读取爬虫库")
@@ -51,7 +60,7 @@ def mysql_connect(database: str) -> pymysql.connections.Connection:
         database=database,
         charset="utf8mb4",
         cursorclass=pymysql.cursors.DictCursor,
-        connect_timeout=30,
-        # 批量导入日单天可达数十万行，实测单日聚合最长约 7 分钟，留足余量。
-        read_timeout=1200,
+        connect_timeout=connect_timeout,
+        read_timeout=read_timeout,
+        write_timeout=read_timeout,
     )

@@ -1752,6 +1752,12 @@
             "maxLength": 100,
             "title": "Caller Name",
             "default": "政策解读同步"
+          },
+          "caller_id": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Caller Id",
+            "default": ""
           }
         },
         "additionalProperties": false,

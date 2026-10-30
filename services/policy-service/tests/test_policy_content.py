@@ -6,6 +6,7 @@ import uuid
 from types import SimpleNamespace
 from typing import Any
 
+import pymysql
 import pytest
 from platform_common.errors import DependencyUnavailableError, NotFoundError
 
@@ -18,17 +19,17 @@ HTML = "<html><body><div class='nav'>首页</div><p>第一段。</p><p>第二段
 async def test_content_is_the_same_text_the_model_sees(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         source,
-        "read_by_ids",
-        lambda ids: [
+        "read_page",
+        lambda content_id: (
             {
-                "content_id": ids[0],
+                "content_id": content_id,
                 "name": 'document.write("x".length>9?"":"真标题")',
                 "original_link": "https://a.gov.cn/1",
                 "introduced_date": "2026-10-01",
-            }
-        ],
+            },
+            HTML,
+        ),
     )
-    monkeypatch.setattr(source, "read_contents", lambda ids: {ids[0]: HTML})
     data = await policy_content.policy_content("c1")
     assert data == {
         "title": "真标题",
@@ -42,17 +43,87 @@ async def test_content_is_the_same_text_the_model_sees(monkeypatch: pytest.Monke
 async def test_rows_without_a_source_id_and_missing_sources_are_explained(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(NotFoundError, match="没有正文"):
         await policy_content.policy_content(None)
-    monkeypatch.setattr(source, "read_by_ids", lambda _ids: [])
-    monkeypatch.setattr(source, "read_contents", lambda _ids: {})
+    monkeypatch.setattr(source, "read_page", lambda _id: (None, None))
     with pytest.raises(NotFoundError, match="已经找不到"):
         await policy_content.policy_content("gone")
+    monkeypatch.setattr(source, "read_page", lambda _id: ({"content_id": "c1"}, None))
+    with pytest.raises(NotFoundError, match="已经找不到"):
+        await policy_content.policy_content("c1")
 
-    def down(_ids: list[str]) -> Any:
+    def down(_id: str) -> Any:
         raise OSError("mysql down")
 
-    monkeypatch.setattr(source, "read_by_ids", down)
+    monkeypatch.setattr(source, "read_page", down)
     with pytest.raises(DependencyUnavailableError, match="源库暂时连不上"):
         await policy_content.policy_content("c1")
+
+
+class _Cursor:
+    def __init__(self, replies: list[Any]) -> None:
+        self.replies = replies
+        self.queries: list[tuple[str, list[str]]] = []
+
+    def execute(self, sql: str, params: list[str]) -> None:
+        self.queries.append((sql, params))
+
+    def fetchone(self) -> Any:
+        return self.replies.pop(0)
+
+    def __enter__(self) -> _Cursor:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        return None
+
+
+class _Connection:
+    def __init__(self, cursor: _Cursor) -> None:
+        self._cursor = cursor
+
+    def cursor(self) -> _Cursor:
+        return self._cursor
+
+    def __enter__(self) -> _Connection:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        return None
+
+
+def test_page_reads_one_policy_and_its_html_over_a_single_short_lived_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    opened: list[dict[str, Any]] = []
+    cursor = _Cursor([{"content_id": "c1", "name": "标题"}, {"content_id": "c1", "content": "<p>正文</p>"}])
+
+    def connect(database: str, **timeouts: Any) -> _Connection:
+        opened.append(timeouts)
+        return _Connection(cursor)
+
+    monkeypatch.setattr(source, "mysql_connect", connect)
+    assert source.read_page("c1") == ({"content_id": "c1", "name": "标题"}, "<p>正文</p>")
+    # 人在页面上等：几秒连不上、二十秒读不回就放弃，不沿用同步任务的 30 秒连接、20 分钟读取。
+    assert opened == [{"connect_timeout": 5, "read_timeout": 20}]
+    assert [params for _sql, params in cursor.queries] == [["c1"], ["c1"]]
+    assert "csys_policy_info_content" in cursor.queries[1][0]
+
+    # 源库里没有这条政策：不再去读正文表。
+    cursor = _Cursor([None])
+    assert source.read_page("gone") == (None, None)
+    assert len(cursor.queries) == 1
+
+
+def test_page_read_does_not_retry_when_the_source_is_down(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
+    def connect(database: str, **_timeouts: Any) -> _Connection:
+        calls.append(database)
+        raise pymysql.err.OperationalError(2003, "can't connect")
+
+    monkeypatch.setattr(source, "mysql_connect", connect)
+    with pytest.raises(pymysql.err.OperationalError):
+        source.read_page("c1")
+    assert len(calls) == 1
 
 
 async def test_both_tables_look_up_the_row_then_its_source_id(monkeypatch: pytest.MonkeyPatch) -> None:

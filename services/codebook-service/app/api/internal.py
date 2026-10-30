@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from platform_common.actors import Actor
+from platform_common.errors import InternalCallerRejectedError
 from platform_common.http_utils import success_json
 from platform_common.internal_calls import verify_internal_caller
 from pydantic import BaseModel, ConfigDict, Field
@@ -18,6 +19,8 @@ from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
 
 router = APIRouter(prefix="/internal/v1", tags=["internal"])
+# 往场景码表里写的只有政策解读同步：AI 服务也持有本服务的内部密钥（取系统码表），不能拿它建场景。
+SCENARIO_WRITERS = frozenset({"policy-service"})
 
 
 @router.get("/code-tables/{name}")
@@ -40,6 +43,8 @@ class ScenarioItems(BaseModel):
     # 每条：key（调用方用来对回结果）、三级行业名、三级场景名，可带 source_policy（来源政策名称，新建的场景记下它）。
     items: list[dict[str, Any]] = Field(max_length=5000)
     caller_name: str = Field(default="政策解读同步", max_length=100)
+    # 页面上点「同步新增场景」的那个人：码表里新建的场景记他是入库人，审计也记他，不记成服务名。
+    caller_id: str = Field(default="", max_length=64)
 
 
 @router.post("/scenarios/lookup")
@@ -67,5 +72,7 @@ async def sync_scenarios(
     """人工确认过的新增场景写进码表，按现有编码规则分配编码。同一场景重复同步返回原编码，不重复建。"""
 
     service = verify_internal_caller(request, settings.internal_caller_secrets)
-    caller = Actor(id=service, name=body.caller_name)
+    if service not in SCENARIO_WRITERS:
+        raise InternalCallerRejectedError(f"{service} 不能往场景码表里写")
+    caller = Actor(id=body.caller_id or service, name=body.caller_name)
     return success_json(await scenario_sync.sync(session, caller, body.items))
