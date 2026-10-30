@@ -200,7 +200,8 @@ async def create_model(session: AsyncSession, actor: Actor, values: dict[str, An
     model_id = _check_id(str(values.get("id") or ""))
     fields = _validated(values)
     if await repo.get(session, model_id) is not None:
-        raise ApiError(f"模型ID「{model_id}」已存在", code=ErrorCode.VERSION_CONFLICT, http_status=409)
+        # 业务重复不是版本冲突：前端按 VERSION_CONFLICT 提示「被别人改过、重新打开」，用户看不到真正原因。
+        raise ApiError(f"模型ID「{model_id}」已存在", code=ErrorCode.DUPLICATE, http_status=409)
     now = utcnow()
     row = AiModel(
         id=model_id,

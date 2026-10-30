@@ -50,8 +50,10 @@ async def test_create_validates_and_fills_default_peak_hours(events: list[dict[s
     assert (out["input_price"], out["peak_output_price"], out["flex_input_price"]) == ("0.0008", "0.0064", "")
     # 审计内容要能存 JSONB：价格是文本不是 Decimal。
     assert events[0]["event_type"] == "ai.model.created" and events[0]["changes"]["input_price"] == "0.0008"
-    with pytest.raises(ApiError, match="已存在"):
+    # 业务重复回 DUPLICATE：前端按 VERSION_CONFLICT 会提示「被别人改过」，看不到「已存在」这个真正原因。
+    with pytest.raises(ApiError, match="已存在") as raised:
         await model_configs.create_model(FakeSession(), ACTOR, {**_FORM, "id": "deepseek-v41-flash"})  # type: ignore[arg-type]
+    assert raised.value.code == "DUPLICATE"
 
 
 @pytest.mark.parametrize(
