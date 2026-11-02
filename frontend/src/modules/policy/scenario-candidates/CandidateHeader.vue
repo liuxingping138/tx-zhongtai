@@ -73,7 +73,7 @@ const reason = computed(() => props.candidate.reasons[0]?.text ?? '')
             {{ candidate.policy_count.toLocaleString() }} 条政策
           </el-button>
           <template v-if="first">
-            ：<RouterLink :to="{ name: 'policy-interpretation-review', params: { id: first.id } }">
+            <span>：</span><RouterLink :to="{ name: 'policy-interpretation-review', params: { id: first.id } }">
               {{ first.policy_title }}
             </RouterLink>
             <span class="head__muted"> · {{ first.created_at.slice(0, 10) }} · {{ first.industry }}{{ candidate.policy_count > 1 ? ' 等' : '' }}</span>
@@ -146,6 +146,12 @@ const reason = computed(() => props.candidate.reasons[0]?.text ?? '')
 .head__facts dd {
   margin: 0;
   min-width: 0;
+}
+
+.head__facts dd .el-button {
+  height: auto;
+  padding: 0;
+  vertical-align: baseline;
 }
 
 .head__muted {
