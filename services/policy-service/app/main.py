@@ -24,6 +24,7 @@ from app.crawlconfig.api.report import router as crawler_config_router
 from app.crawler.api.crawler_monitoring import router as crawler_monitoring_router
 from app.policy.api.base_tags import router as base_tags_router
 from app.policy.api.interpretations import router as interpretations_router
+from app.policy.api.scenario_candidates import router as scenario_candidates_router
 from app.policy.api.sources import router as sources_router
 from app.scheduler.api.config_sync import router as crawler_config_sync_router
 from app.scheduler.api.jobs import router as scheduler_router
@@ -74,6 +75,7 @@ def create_app() -> FastAPI:
     app.include_router(crawler_config_router)
     app.include_router(crawler_config_sync_router)
     app.include_router(interpretations_router)
+    app.include_router(scenario_candidates_router)
     return app
 
 

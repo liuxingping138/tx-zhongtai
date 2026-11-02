@@ -11,6 +11,7 @@ export const MODULE_LABELS: Record<string, string> = {
   'policy.sources': '信源管理',
   'policy.base_tags': '政策基础标签表',
   'policy.interpretations': '政策解读列表',
+  'policy.scenario_candidates': '新增场景审核',
   'policy.crawler_monitoring': '爬虫监测',
   'policy.crawler_config': '爬虫配置统计',
   codebook: '码表管理',
@@ -59,6 +60,7 @@ export const ACTION_LABELS: Record<string, string> = {
   ask: '试发 / 样本试跑',
   publish: '上线 / 下线',
   sync_scenarios: '同步新增场景',
+  decide: '决定新增场景',
   resolve: '补码',
   sync: '同步',
 }

@@ -25,6 +25,41 @@ class InterpretationStatusRequest(BaseModel):
     data_status: str = Field(min_length=1, max_length=32)
 
 
+class InterpretationScenarioRequest(BaseModel):
+    """逐行改场景：六级名称（行业从码表选好带过来），加这一行的版本号。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    version: int
+    industry_l1: str = Field(min_length=1, max_length=128)
+    industry_l2: str = Field(default="", max_length=128)
+    industry_l3: str = Field(default="", max_length=128)
+    scenario_l1_name: str = Field(min_length=1, max_length=255)
+    scenario_l2_name: str = Field(default="", max_length=255)
+    scenario_l3_name: str = Field(default="", max_length=255)
+
+
+class CandidateVersion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: int
+
+
+class CandidateAdoptRequest(CandidateVersion):
+    # 采纳时可以把新的那一级换个说法；不填就用 AI 写的名称
+    name: str = Field(default="", max_length=255)
+
+
+class CandidateMergeRequest(CandidateVersion):
+    # 合并到码表里已有的场景：一级到三级场景名称，从码表里选
+    target: list[str] = Field(min_length=1, max_length=3)
+
+
+class CandidateRejectRequest(CandidateVersion):
+    reason: str = Field(min_length=1, max_length=64)
+    note: str = Field(default="", max_length=2000)
+
+
 class SourceWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

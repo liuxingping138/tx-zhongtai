@@ -84,10 +84,14 @@ export interface InterpretationItem {
   new_scenario_level: string
   remark: string
   data_status: string
+  /** 和行业场景码表比对的结果：码表已有、待审、已采纳、已合并、已驳回、重复、行业不在码表、场景不完整；空为还没比对 */
+  scenario_state: string
+  /** 新增场景归到的候选（新增场景审核里的一个场景） */
+  candidate_id: string
   /** AI 解读写入的行才有：源政策ID、解读时间 */
   source_content_id: string
   tagged_at: string
-  /** 新增场景同步进码表的时间，没同步为空 */
+  /** 新增场景按决定写进码表、回填编码的时间 */
   scenario_synced_at: string
   version: number
   created_at: string
@@ -186,6 +190,7 @@ export function listInterpretations(params: {
   new_scenario_level?: FilterParam
   info_level?: FilterParam
   data_status?: FilterParam
+  scenario_state?: FilterParam
   page?: number
   page_size?: number
 }): Promise<Page<InterpretationItem>> {
@@ -230,22 +235,4 @@ export function getBaseTagContent(id: string): Promise<PolicyContent> {
 
 export function getInterpretationContent(id: string): Promise<PolicyContent> {
   return request(http.get(`/policy/interpretations/${id}/content`))
-}
-
-/** 人工验证过、还没同步进行业场景码表的新增场景条数 */
-export function pendingNewScenarios(): Promise<{ pending: number }> {
-  return request(http.get('/policy/interpretations/new-scenarios'))
-}
-
-export interface ScenarioSyncResult {
-  synced: number
-  /** 码表里新建的场景数；已有同名同路径的只回填编码 */
-  created: number
-  failed: { policy_title: string; reason: string }[]
-  /** 没同步的总条数；failed 只带前 50 条 */
-  failed_total: number
-}
-
-export function syncNewScenarios(): Promise<ScenarioSyncResult> {
-  return request(http.post('/policy/interpretations/new-scenarios/sync'))
 }

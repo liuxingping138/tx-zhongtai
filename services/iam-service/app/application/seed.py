@@ -13,6 +13,7 @@ from app.domain.catalog import (
     ACTION_SPECS,
     MENU_SPECS,
     RESOURCE_SPECS,
+    RETIRED_ACTIONS,
     RETIRED_RESOURCE_CODES,
     SUPERADMIN_ROLE_CODE,
     SUPERADMIN_ROLE_NAME,
@@ -173,8 +174,21 @@ async def _retire_resources(session: AsyncSession) -> int:
     return len(ids)
 
 
+async def _retire_actions(session: AsyncSession) -> None:
+    """删除已下线的动作（资源还在）。重复执行没有副作用。"""
+
+    for resource_code, action_code in RETIRED_ACTIONS:
+        resource = select(Resource.id).where(Resource.code == resource_code).scalar_subquery()
+        await session.execute(
+            delete(ResourceAction).where(
+                ResourceAction.resource_id == resource, ResourceAction.action_code == action_code
+            )
+        )
+
+
 async def sync_catalog(session: AsyncSession) -> dict[str, int]:
     await _retire_resources(session)
+    await _retire_actions(session)
     resources = await _upsert_resources(session)
     await _upsert_actions(session, resources)
     await _upsert_menus(session, resources)

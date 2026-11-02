@@ -109,6 +109,20 @@ async def fake_codebook(_method: str, _path: str, **kwargs: Any) -> list[dict[st
     ]
 
 
+def _stub_scenario_engine(state: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> None:
+    """新增场景归集在别处测：这里只记下删掉的旧行要重算哪些候选、写完有没有接着比对。"""
+
+    async def recount(_session: Any, ids: Any) -> None:
+        state.recounted.append(set(ids))
+
+    async def sweep() -> int:
+        state.swept += 1
+        return 0
+
+    monkeypatch.setattr(interpreting.scenario_engine, "recount", recount)
+    monkeypatch.setattr(interpreting.scenario_engine, "classify_backlog", sweep)
+
+
 @pytest.fixture
 def world(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     session = Session()
@@ -116,7 +130,9 @@ def world(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
         cost=Decimal(0), interpret_rows=0, interpret_failed=0, opportunity_rows=0, opportunity_failed=0
     )
     ai = FakeAi()
-    state = SimpleNamespace(session=session, run=run, created=ai.created, events=[], deleted=[], tags=[], rows={})
+    state = SimpleNamespace(
+        session=session, run=run, created=ai.created, events=[], deleted=[], tags=[], rows={}, recounted=[], swept=0
+    )
 
     async def backlog(*_: Any) -> list[Any]:
         return state.tags
@@ -153,6 +169,7 @@ def world(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     monkeypatch.setattr(repo, "delete_rows", delete)
     monkeypatch.setattr(repo, "get_run", get_run)
     monkeypatch.setattr(interpreting, "enqueue_event", record)
+    _stub_scenario_engine(state, monkeypatch)
     return state
 
 
@@ -179,14 +196,25 @@ async def test_interpretation_writes_rows_codes_and_remarks(world: SimpleNamespa
 
 async def test_reinterpretation_replaces_only_untouched_ai_rows(world: SimpleNamespace) -> None:
     now = pipeline.datetime.now(pipeline.UTC)
-    untouched = SimpleNamespace(data_status="待验证", tagged_at=now, updated_at=now, source_content_id="c1")
-    edited = SimpleNamespace(
-        data_status="待验证", tagged_at=now, updated_at=now + timedelta(minutes=1), source_content_id="c1"
+    candidate = uuid.uuid4()
+    untouched = SimpleNamespace(
+        data_status="待验证", tagged_at=now, updated_at=now, source_content_id="c1", candidate_id=candidate
     )
-    verified = SimpleNamespace(data_status="人工验证", tagged_at=now, updated_at=now, source_content_id="c1")
+    edited = SimpleNamespace(
+        data_status="待验证",
+        tagged_at=now,
+        updated_at=now + timedelta(minutes=1),
+        source_content_id="c1",
+        candidate_id=None,
+    )
+    verified = SimpleNamespace(
+        data_status="人工验证", tagged_at=now, updated_at=now, source_content_id="c1", candidate_id=None
+    )
     world.tags, world.rows = [_tag("c1")], {"c1": [untouched, edited, verified]}
     await interpreting.interpret_step(uuid.uuid4(), CONFIG, Spend(limit=Decimal(10), before=Decimal(0)))  # type: ignore[arg-type]
     assert world.deleted == [untouched]
+    # 删掉的旧行归属的新增场景候选少了几行，要重算；写完新行接着和码表比对
+    assert world.recounted == [{candidate}] and world.swept == 1
 
 
 async def test_opportunities_fill_matching_untouched_rows(world: SimpleNamespace) -> None:

@@ -42,6 +42,21 @@ class Codes:
         return self.industry_code + self.scenario_code
 
 
+# 一组行业场景名称和码表比对的结果（classify）：
+EXISTS = "exists"  # 码表里已有，带编码
+NEW = "new"  # 有一级场景路径码表里没有：new_level 是第一个查不到的那一级
+ASSOCIATION = "association"  # 各级场景码表里都有，只是没挂在这个行业下
+BAD_INDUSTRY = "bad_industry"  # 三级行业不在码表里：新场景不新增行业，只能改行
+INVALID = "invalid"  # 一级场景为空，或有三级没二级，编不了码
+
+
+@dataclass(frozen=True)
+class Classification:
+    kind: str
+    new_level: int = 0
+    codes: Codes | None = None
+
+
 @dataclass
 class CodeBook:
     industries: dict[Names, str] = field(default_factory=dict)
@@ -72,6 +87,25 @@ class CodeBook:
         if found or not (item.industry[1] or item.industry[2]):
             return found
         return self.existing.get(((item.industry[0], "", ""), item.scenario))
+
+    def classify(self, item: ScenarioItem) -> Classification:
+        """比对一组名称：码表已有、哪一级是新的、只是新挂一个行业，还是行业本身不在码表。只查不建。
+
+        各级场景号按场景路径全局唯一、不分行业（见 _segment），所以「哪一级是新的」也只看场景路径。
+        """
+
+        found = self.lookup(item)
+        if found:
+            return Classification(EXISTS, codes=found)
+        scenario = item.scenario
+        if not scenario[0] or (not scenario[1] and scenario[2]):
+            return Classification(INVALID)
+        if item.industry not in self.industries:
+            return Classification(BAD_INDUSTRY)
+        for level in range(3):
+            if scenario[level] and scenario[: level + 1] not in self.levels[level]:
+                return Classification(NEW, new_level=level + 1)
+        return Classification(ASSOCIATION)
 
     def _segment(self, level: int, path: tuple[str, ...]) -> str:
         if not path[-1]:

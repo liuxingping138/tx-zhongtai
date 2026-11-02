@@ -103,6 +103,29 @@ SCENARIO_NAME_FIELDS = (
 )
 SCENARIO_CODE_FIELDS = ("industry_code", "scenario_code", "industry_scenario_code")
 
+# 政策解读行的「场景状态」：系统拿六级名称和行业场景码表比对后写（app.policy.application.scenario_classify），
+# 不进 Excel。空串表示还没比对过。新增场景不再逐行同步，而是归成候选在「新增场景审核」里按场景决定。
+SCENARIO_STATE_UNCLASSIFIED = ""
+SCENARIO_STATE_EXISTS = "码表已有"
+SCENARIO_STATE_PENDING = "待审"
+SCENARIO_STATE_ADOPTED = "已采纳"
+SCENARIO_STATE_MERGED = "已合并"
+SCENARIO_STATE_REJECTED = "已驳回"
+# 改成码表编码后，和同一政策的另一行成了同一场景、同一机会类型：保留另一行，这一行标出来，不删
+SCENARIO_STATE_DUPLICATE = "重复"
+SCENARIO_STATE_BAD_INDUSTRY = "行业不在码表"
+SCENARIO_STATE_INCOMPLETE = "场景不完整"
+SCENARIO_STATE_CHOICES: tuple[str, ...] = (
+    SCENARIO_STATE_EXISTS,
+    SCENARIO_STATE_PENDING,
+    SCENARIO_STATE_ADOPTED,
+    SCENARIO_STATE_MERGED,
+    SCENARIO_STATE_REJECTED,
+    SCENARIO_STATE_DUPLICATE,
+    SCENARIO_STATE_BAD_INDUSTRY,
+    SCENARIO_STATE_INCOMPLETE,
+)
+
 # AI 打标失败时写进基础标签备注的说明开头（app.aitag 写），基础标签列表的「打标状态」按它筛出要重打的政策。
 AI_NOTE_TYPE_FAILED = "AI 类型判断失败"
 AI_NOTE_TYPE_UNKNOWN = "AI 返回的类型不在码表里"

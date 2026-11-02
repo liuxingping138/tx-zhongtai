@@ -14,6 +14,7 @@ export const ROUTE_BY_NAME: Record<string, string> = {
   'policy-crawler-config': '/policy/crawler-config',
   'policy-base-tags': '/policy/base-tags',
   'policy-interpretations': '/policy/interpretations',
+  'policy-scenario-candidates': '/policy/scenario-candidates',
   'ai-prompts': '/ai/prompts',
   'ai-batch-runs': '/ai/batch-runs',
   'ai-chat': '/ai/chat',

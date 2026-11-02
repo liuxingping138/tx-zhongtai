@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Any
 
@@ -23,8 +24,11 @@ from app.aitag.repositories import tagging as repo
 from app.common import internal_clients
 from app.common.audit_emit import enqueue_event
 from app.core.database import SessionLocal
+from app.policy.application import scenario_engine
 from app.policy.domain.fields import DATA_STATUS_PENDING, POLICY_TITLE_MAX
 from app.policy.domain.models import BaseTag, Interpretation
+
+logger = logging.getLogger("policy.aitag.interpreting")
 
 
 def untouched(row: Interpretation) -> bool:
@@ -109,6 +113,7 @@ async def _save_interpretations(
     run_id: uuid.UUID, tags: list[BaseTag], results: list[dict[str, Any]], codes: dict[str, dict[str, str]]
 ) -> dict[str, int]:
     written = failed = 0
+    stale: set[uuid.UUID] = set()
     async with SessionLocal() as session:
         locked = await repo.base_tags_by_ids(session, [tag.id for tag in tags])
         old = await repo.ai_interpretations(session, [str(tag.source_content_id) for tag in tags])
@@ -122,8 +127,9 @@ async def _save_interpretations(
                 failed += 1
                 _append_remark(tag, f"{INTERPRET_FAILED}：{str(result.get('error') or '没有解读出内容')[:200]}")
                 continue
-            rows = old.get(str(tag.source_content_id), [])
-            await repo.delete_rows(session, [row for row in rows if untouched(row)])
+            rows = [row for row in old.get(str(tag.source_content_id), []) if untouched(row)]
+            stale.update(row.candidate_id for row in rows if row.candidate_id)
+            await repo.delete_rows(session, rows)
             planned = []
             for position, item in enumerate(result["items"]):
                 values = _row_values(item, codes.get(f"{index}:{position}"))
@@ -131,6 +137,7 @@ async def _save_interpretations(
             plans.append((tag, planned))
         # 先删旧行再写新行：同一个关联主键先删后插，不先落库删除会撞唯一约束。
         await session.flush()
+        await scenario_engine.recount(session, stale)  # 旧行删掉了，它们归属的候选少了几行
         taken = await repo.taken_relation_keys(session, [key for _, planned in plans for key, _ in planned])
         for tag, planned in plans:
             for key, values in planned:
@@ -150,6 +157,15 @@ async def _save_interpretations(
     return {"rows": written, "failed": failed}
 
 
+async def _classify_new_rows() -> None:
+    """刚写进去的行和码表比对、归到新增场景候选。比对出错不影响已写入的解读，下一批或补数时接着比。"""
+
+    try:
+        await scenario_engine.classify_backlog()
+    except Exception:  # 比对失败不该让这批解读记成失败，行留着「还没比对」下次补
+        logger.exception("解读行和码表比对失败，下次补比对")
+
+
 async def interpret_step(run_id: uuid.UUID, config: PolicyAiTask, spend: Spend) -> str:
     async with SessionLocal() as session:
         tags = await repo.interpret_backlog(session, config.batch_size)
@@ -166,6 +182,7 @@ async def interpret_step(run_id: uuid.UUID, config: PolicyAiTask, spend: Spend) 
         run_field="interpret_run_id",
     )
     counts = await _save_interpretations(run_id, tags, results, await _codes(results))
+    await _classify_new_rows()
     await update_run(run_id, interpret_rows=counts["rows"], interpret_failed=counts["failed"])
     left = sum(1 for result in results if not_run(result))
     note = f"{len(tags)} 条政策{reused_note(status)}写入解读 {counts['rows']} 行，解读失败 {counts['failed']} 条"

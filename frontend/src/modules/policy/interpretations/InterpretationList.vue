@@ -15,7 +15,6 @@ import { errorMessage } from '@/api/errors'
 import { reportImportResult, runExcelImport } from '@/api/excelImport'
 import AuditLogButton from '@/components/AuditLogButton.vue'
 import BatchChoiceDialog from '@/components/BatchChoiceDialog.vue'
-import SyncScenariosButton from './SyncScenariosButton.vue'
 import BusinessTable from '@/components/BusinessTable.vue'
 import { reviewQuery } from '../shared/reviewQuery'
 import ColumnPicker from '@/components/ColumnPicker.vue'
@@ -39,8 +38,8 @@ import { EDITOR_DEFAULTS, EDITOR_GROUPS, SUMMARY_KEYS, TABLE_COLUMNS } from './f
 const RESOURCE = 'policy.interpretations'
 const auth = useAuthStore()
 const canWrite = computed(() => auth.canFull(RESOURCE))
-// 同步写的是行业场景码表：还要码表可管理，没有码表编辑权的人不能借这里往码表加行。
-const canSyncScenarios = computed(() => canWrite.value && auth.canFull('codebook.scenarios'))
+// 新增场景不在这里逐行同步，统一到「新增场景审核」按场景决定
+const canReviewScenarios = computed(() => auth.canRead('policy.scenario_candidates'))
 
 const query = reactive({
   policy_title: [] as string[],
@@ -51,6 +50,7 @@ const query = reactive({
   new_scenario_level: [] as string[],
   info_level: [] as string[],
   data_status: [] as string[],
+  scenario_state: [] as string[],
   page: 1,
   page_size: 20,
 })
@@ -64,10 +64,8 @@ const { items, total, loading, loadError, resultFiltered, load } = useListLoader
 })
 const { columns, defaults, selected } = useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)
 
-// 改成「人工验证」、导入之后，同步按钮上的待同步条数要跟着变。
-const scenarioSync = ref<InstanceType<typeof SyncScenariosButton>>()
 async function refresh() {
-  await Promise.all([load(), filters.load(), scenarioSync.value?.refresh()])
+  await Promise.all([load(), filters.load()])
 }
 
 // AI 写的行都是「待验证」：人工核对完勾选多条，一次改成「人工验证」。
@@ -75,7 +73,7 @@ const selection = useTableSelection<InterpretationItem>()
 const checked = selection.checked
 const statusOpen = ref(false)
 const STATUS_CHOICES = [
-  { value: '人工验证', label: '人工验证', hint: '核对过、内容可用。之后 AI 重新解读、回填市场机会都不会再覆盖这些行；新增场景改成人工验证后才能同步进码表。' },
+  { value: '人工验证', label: '人工验证', hint: '核对过、内容可用。之后 AI 重新解读、回填市场机会都不会再覆盖这些行。新增场景进不进码表在「新增场景审核」里按场景决定，和这里无关。' },
   { value: '待验证', label: '待验证', hint: '退回待核对。AI 重新解读时可以替换这些行。' },
 ]
 async function submitStatus(status: string) {
@@ -166,12 +164,18 @@ onMounted(() => {
         >
           批量改数据状态{{ checked.length ? `（${checked.length}）` : '' }}
         </el-button>
-        <SyncScenariosButton
-          v-if="canSyncScenarios"
-          ref="scenarioSync"
-          @synced="load"
-        />
         <AuditLogButton :module="RESOURCE" />
+      </template>
+      <template
+        v-if="canReviewScenarios"
+        #summary
+      >
+        <p class="interpretations__notice">
+          AI 解读出的新增场景按场景归在一起，在「新增场景审核」里一次决定进不进码表，不用在这里逐行改。
+          <RouterLink :to="{ name: 'policy-scenario-candidates' }">
+            去新增场景审核 →
+          </RouterLink>
+        </p>
       </template>
       <template #filters>
         <FilterBar
@@ -214,6 +218,13 @@ onMounted(() => {
               <FilterSelect
                 v-model="query.new_scenario_level"
                 v-bind="filters.bind('new_scenario_level')"
+                size="short"
+              />
+            </el-form-item>
+            <el-form-item label="场景状态">
+              <FilterSelect
+                v-model="query.scenario_state"
+                v-bind="filters.bind('scenario_state')"
                 size="short"
               />
             </el-form-item>
@@ -281,3 +292,11 @@ onMounted(() => {
     />
   </div>
 </template>
+
+<style scoped>
+.interpretations__notice {
+  margin: 0;
+  color: var(--zt-ink-700);
+  font-size: 13px;
+}
+</style>

@@ -3,8 +3,8 @@ from __future__ import annotations
 import uuid
 from collections.abc import Collection
 
-from platform_common.filters import Filters, ilike_any, in_any
-from sqlalchemy import ColumnElement, func, select
+from platform_common.filters import Filters, contains_ilike, ilike_any, in_any
+from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
@@ -99,6 +99,34 @@ async def list_filtered(session: AsyncSession, filters: Filters) -> list[Scenari
         .order_by(Scenario.industry_scenario_code, Scenario.scenario_tag, Scenario.id)
     )
     return list(result.scalars())
+
+
+_PATH_COLUMNS = (
+    Scenario.industry_l1,
+    Scenario.industry_l2,
+    Scenario.industry_l3,
+    Scenario.scenario_l1_name,
+    Scenario.scenario_l2_name,
+    Scenario.scenario_l3_name,
+)
+
+
+async def search_paths(
+    session: AsyncSession, *, keyword: str, industry_l1: str | None, limit: int
+) -> list[tuple[str, ...]]:
+    """六级名称里包含关键词的行业场景路径，按客群去重。给页面上选场景用，码表只有几千条路径，不建索引。"""
+
+    conds = [or_(*(contains_ilike(column, keyword) for column in _PATH_COLUMNS))]
+    if industry_l1:
+        conds.append(Scenario.industry_l1 == industry_l1)
+    result = await session.execute(
+        select(Scenario.industry_scenario_code, *_PATH_COLUMNS)
+        .where(*conds)
+        .distinct()
+        .order_by(Scenario.industry_scenario_code, *_PATH_COLUMNS)
+        .limit(limit)
+    )
+    return [tuple(str(value or "") for value in row) for row in result]
 
 
 async def list_all(session: AsyncSession) -> list[Scenario]:

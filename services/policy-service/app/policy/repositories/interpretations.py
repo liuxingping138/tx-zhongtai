@@ -8,7 +8,7 @@ from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
-from app.policy.domain.models import Interpretation, unsynced_new_scenario
+from app.policy.domain.models import Interpretation, unclassified_interpretation
 
 # 列表、导出共用的排序。最后按 ID 兜底：同名的记录每次查询先后一致，翻页不重复不漏，
 # 详情页按位置取上一条、下一条也不会跳乱。
@@ -64,12 +64,21 @@ FILTER_COLUMNS: dict[str, InstrumentedAttribute[str]] = {
     "new_scenario_level": Interpretation.new_scenario_level,
     "info_level": Interpretation.info_level,
     "data_status": Interpretation.data_status,
+    "scenario_state": Interpretation.scenario_state,
 }
 
 # 取值有限的枚举字段用精确匹配：模糊匹配下选「一级」会把「一级场景」之类的值一并查出来。
 # 一级行业、一级场景的候选值来自行业场景码表，按码表名称精确匹配，走各自的索引。
 EXACT_FILTERS = frozenset(
-    {"industry_l1", "scenario_l1_name", "is_new_scenario", "new_scenario_level", "info_level", "data_status"}
+    {
+        "industry_l1",
+        "scenario_l1_name",
+        "is_new_scenario",
+        "new_scenario_level",
+        "info_level",
+        "data_status",
+        "scenario_state",
+    }
 )
 
 
@@ -117,20 +126,17 @@ async def list_all(session: AsyncSession) -> list[Interpretation]:
     return await list_filtered(session, {})
 
 
-async def count_unsynced_new_scenarios(session: AsyncSession) -> int:
-    """解读列表每次打开都数一遍：只读部分索引 ix_policy_interpretations_unsynced_scenarios，不扫整表。"""
+async def unclassified_rows(session: AsyncSession, limit: int) -> list[Interpretation]:
+    """还没和码表比对过的行，锁住取一批；别的进程正在比对的跳过。
 
-    return int(
-        await session.scalar(select(func.count()).select_from(Interpretation).where(unsynced_new_scenario())) or 0
-    )
+    只读部分索引 ix_policy_interpretations_unclassified。
+    """
 
-
-async def unsynced_new_scenarios(session: AsyncSession, limit: int) -> list[Interpretation]:
-    rows = await session.scalars(
+    result = await session.execute(
         select(Interpretation)
-        .where(unsynced_new_scenario())
-        .order_by(Interpretation.updated_at, Interpretation.id)
+        .where(unclassified_interpretation())
+        .order_by(Interpretation.id)
         .limit(limit)
         .with_for_update(skip_locked=True)
     )
-    return list(rows)
+    return list(result.scalars())

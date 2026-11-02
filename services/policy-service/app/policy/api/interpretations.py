@@ -14,8 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.security import classified, require_policy_permission
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
-from app.policy.api.schemas import InterpretationPatch, InterpretationStatusRequest, InterpretationWrite
-from app.policy.application import interpretation_status, scenario_sync
+from app.policy.api.schemas import (
+    InterpretationPatch,
+    InterpretationScenarioRequest,
+    InterpretationStatusRequest,
+    InterpretationWrite,
+)
+from app.policy.application import interpretation_status, scenario_decisions
 from app.policy.application import interpretations as service
 
 router = APIRouter(prefix="/api/v1/policy/interpretations", tags=["policy-interpretations"])
@@ -31,6 +36,7 @@ def interpretation_filters(
     new_scenario_level: list[str] | None = Query(default=None),
     info_level: list[str] | None = Query(default=None),
     data_status: list[str] | None = Query(default=None),
+    scenario_state: list[str] | None = Query(default=None),
 ) -> Filters:
     return {
         "policy_title": policy_title,
@@ -41,6 +47,7 @@ def interpretation_filters(
         "new_scenario_level": new_scenario_level,
         "info_level": info_level,
         "data_status": data_status,
+        "scenario_state": scenario_state,
     }
 
 
@@ -136,32 +143,6 @@ async def create_item(
     )
 
 
-@router.get("/new-scenarios")
-@classified(SecurityClass.RESOURCE_AUTHORIZED)
-async def new_scenarios(
-    session: AsyncSession = Depends(get_db_session, scope="function"),
-    _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
-) -> JSONResponse:
-    """人工验证过、还没同步进码表的新增场景条数，按钮上显示。"""
-
-    return success_json(await scenario_sync.pending(session))
-
-
-@router.post("/new-scenarios/sync")
-@classified(SecurityClass.RESOURCE_AUTHORIZED)
-async def sync_new_scenarios(
-    session: AsyncSession = Depends(get_db_session, scope="function"),
-    actor: Actor = Depends(require_policy_permission(RESOURCE, "sync_scenarios")),
-    _codebook: Actor = Depends(require_policy_permission("codebook.scenarios", "update")),
-) -> JSONResponse:
-    """把人工验证过的新增场景写进行业场景码表，编码回填到解读行。
-
-    写的是码表，所以还要行业场景码表可管理：没有码表编辑权的人不能借这里往码表加行。
-    """
-
-    return success_json(await scenario_sync.sync(session, actor))
-
-
 @router.post("/data-status")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def set_data_status(
@@ -206,4 +187,20 @@ async def update_item(
 ) -> JSONResponse:
     return success_json(
         await service.update_interpretation(session, actor, item_id, body.model_dump(exclude_unset=True))
+    )
+
+
+@router.post("/{item_id}/scenario")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def change_scenario(
+    item_id: uuid.UUID,
+    body: InterpretationScenarioRequest,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    actor: Actor = Depends(require_policy_permission(RESOURCE, "update")),
+) -> JSONResponse:
+    """只改这一行的行业场景（新增场景审核里逐行纠正）：编码按码表回填，改完重新归集。"""
+
+    names = body.model_dump(exclude={"version"})
+    return success_json(
+        await scenario_decisions.change_row_scenario(session, actor, item_id, version=body.version, names=names)
     )

@@ -61,6 +61,27 @@ async def lookup_scenarios(
     return success_json(await scenario_sync.lookup(session, body.items))
 
 
+class ScenarioPaths(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # 每条：key、path（场景路径，最多三级）、industry_l1（这个场景出现过的一级行业）。
+    items: list[dict[str, Any]] = Field(max_length=500)
+
+
+@router.post("/scenarios/context")
+@classified(SecurityClass.INTERNAL)
+async def scenario_context(
+    body: ScenarioPaths,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    settings: Settings = Depends(get_settings),
+) -> JSONResponse:
+    """新增场景审核看的码表上下文：同一上级下已有的场景、字面最像的已有场景。只读。"""
+
+    verify_internal_caller(request, settings.internal_caller_secrets)
+    return success_json(await scenario_sync.context(session, body.items))
+
+
 @router.post("/scenarios/sync")
 @classified(SecurityClass.INTERNAL)
 async def sync_scenarios(

@@ -81,6 +81,25 @@ async def search_scenario_options(session: AsyncSession, *, field: str, keyword:
     return await options_repo.search(session, options_repo.SCENARIO_OPTION_COLUMNS, field=field, keyword=keyword)
 
 
+PATH_SEARCH_LIMIT = 50
+_PATH_KEYS = (
+    "industry_scenario_code",
+    "industry_l1",
+    "industry_l2",
+    "industry_l3",
+    "scenario_l1_name",
+    "scenario_l2_name",
+    "scenario_l3_name",
+)
+
+
+async def search_paths(session: AsyncSession, *, keyword: str, industry_l1: str | None) -> list[dict[str, str]]:
+    rows = await repo.search_paths(
+        session, keyword=keyword.strip(), industry_l1=(industry_l1 or "").strip() or None, limit=PATH_SEARCH_LIMIT
+    )
+    return [dict(zip(_PATH_KEYS, row, strict=True)) for row in rows]
+
+
 async def get_scenario(session: AsyncSession, item_id: uuid.UUID) -> dict[str, Any]:
     row = await repo.get_by_id(session, item_id)
     if row is None:

@@ -106,8 +106,9 @@ function editRoute(row: T, index: number): RouteLocationRaw {
         </template>
         <template #default="{ row, $index }">
           <template v-if="col.prop === titleKey">
+            <!-- Element Plus 注册列时会拿空行（没有 id）试渲染一次插槽，不判断就会按空 id 生成地址、控制台报错 -->
             <RouterLink
-              v-if="detailRoute"
+              v-if="detailRoute && row.id"
               class="record-title"
               :to="detailRoute(row, $index)"
               :title="text(row, col)"
@@ -150,14 +151,14 @@ function editRoute(row: T, index: number): RouteLocationRaw {
       >
         <template #default="{ row, $index }">
           <RouterLink
-            v-if="detailRoute"
+            v-if="detailRoute && row.id"
             class="table-link"
             :to="detailRoute(row, $index)"
           >
             查看
           </RouterLink>
           <RouterLink
-            v-if="detailRoute && canWrite"
+            v-if="detailRoute && canWrite && row.id"
             class="table-link"
             :to="editRoute(row, $index)"
           >
@@ -232,7 +233,7 @@ function editRoute(row: T, index: number): RouteLocationRaw {
             查看详情
           </RouterLink>
           <RouterLink
-            v-if="detailRoute && canWrite"
+            v-if="detailRoute && canWrite && row.id"
             class="table-link"
             :to="editRoute(row, index)"
           >

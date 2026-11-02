@@ -56,6 +56,31 @@ async def scenario_codes(session: AsyncSession) -> list[tuple[str, tuple[str, st
     ]
 
 
+async def scenario_nodes(
+    session: AsyncSession,
+) -> list[tuple[tuple[str, str, str], tuple[str, str, str], tuple[str, str, str], str]]:
+    """场景节点和描述，给新增场景审核看同级场景、找相似场景。按客群重复的行去重后读。"""
+
+    rows = await session.execute(
+        select(
+            *_SCENARIO_LEVELS,
+            Scenario.scenario_l1_desc,
+            Scenario.scenario_l2_desc,
+            Scenario.scenario_l3_desc,
+            Scenario.desc_90,
+        ).distinct()
+    )
+    return [
+        (
+            (str(i1 or ""), str(i2 or ""), str(i3 or "")),
+            (str(s1 or "").strip(), str(s2 or "").strip(), str(s3 or "").strip()),
+            (str(d1 or ""), str(d2 or ""), str(d3 or "")),
+            str(d90 or ""),
+        )
+        for i1, i2, i3, s1, s2, s3, d1, d2, d3, d90 in rows
+    ]
+
+
 async def lock_scenario_codes(session: AsyncSession) -> None:
     """分配新编码要「读最大号 → 加一 → 写入」，两个同步并发会拿到同一个号。事务级锁串行化。"""
 

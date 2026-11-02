@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.application.audit_emit import enqueue_event
 from app.domain.models import SCENARIO_FIELDS, Scenario, content_hash
 from app.domain.scenario_codes import CodeBook, Codes, ScenarioItem
+from app.domain.scenario_similarity import ScenarioNodes, similarity_level
 from app.repositories import code_tables as repo
 
 
@@ -36,10 +37,53 @@ def _codes_out(key: str, codes: Codes | None, **extra: Any) -> dict[str, Any]:
 
 
 async def lookup(session: AsyncSession, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """只查不建：六级名称对上已有场景，或按一级行业对上通用场景，才返回编码。"""
+    """只查不建：六级名称对上已有场景，或按一级行业对上通用场景，才返回编码。
+
+    同时给出比对结果（kind、new_level，见 scenario_codes.classify）：政策服务据此把新增场景归成待审的候选。
+    """
 
     book = CodeBook.from_rows(await repo.scenario_codes(session))
-    return [_codes_out(str(raw.get("key") or ""), book.lookup(_item(raw))) for raw in items]
+    out = []
+    for raw in items:
+        found = book.classify(_item(raw))
+        out.append(_codes_out(str(raw.get("key") or ""), found.codes, kind=found.kind, new_level=found.new_level))
+    return out
+
+
+def _path(raw: dict[str, Any]) -> tuple[str, ...]:
+    names = [str(name or "").strip() for name in raw.get("path") or []][:3]
+    while names and not names[-1]:
+        names.pop()
+    return tuple(names)
+
+
+async def context(session: AsyncSession, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """新增场景审核的码表上下文：要挂的位置下已有的场景、字面最像的已有场景、这个场景已经挂在哪些行业下。
+
+    每条：key、path（场景路径，到新的那一级为止）、industry_l1（新的一级场景跟同一个一级行业下的比）。
+    """
+
+    nodes = ScenarioNodes.from_rows(await repo.scenario_nodes(session))
+    out: list[dict[str, Any]] = []
+    for raw in items:
+        path = _path(raw)
+        key = str(raw.get("key") or "")
+        if not path:
+            out.append({"key": key, "siblings": [], "similar": [], "industries": [], "best_level": "无"})
+            continue
+        industries = [str(name) for name in raw.get("industry_l1") or [] if name]
+        similar = nodes.similar(path)
+        best = float(similar[0]["score"]) if similar else 0.0
+        out.append(
+            {
+                "key": key,
+                "siblings": nodes.siblings(path, industries),
+                "similar": similar,
+                "industries": nodes.industries_of(path),
+                "best_level": similarity_level(best),
+            }
+        )
+    return out
 
 
 def _new_row(item: ScenarioItem, codes: Codes, caller: Actor, source_policy: str) -> Scenario:

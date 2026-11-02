@@ -29,8 +29,8 @@ export function useVerify(review: ReviewState) {
         ElMessage.error(errorMessage(error, '没能改成人工验证，请重试'))
         return
       }
-      // 新增场景标完还要同步才进码表，顺带提醒入口在哪。
-      const sync = row.is_new_scenario === '是' ? '。新增场景回列表点「同步新增场景」写进码表' : ''
+      // 新增场景进不进码表不看这里，顺带提醒入口在哪。
+      const sync = row.scenario_state === '待审' ? '。这一行的场景还在「新增场景审核」里待审' : ''
       try {
         const moved = await review.advance()
         ElMessage.success(`${moved ? '已标为人工验证，打开了下一条' : '已标为人工验证'}${sync}`)

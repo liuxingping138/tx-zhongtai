@@ -1,5 +1,5 @@
 import { computed, type Component } from 'vue'
-import { ChatDotRound, Collection, Connection, Cpu, DataAnalysis, EditPen, Files, Key, Link, MapLocation, Menu, Money, Monitor, PriceTag, Reading, Tickets, Timer, User, UserFilled, Unlock } from '@element-plus/icons-vue'
+import { ChatDotRound, Collection, Connection, Cpu, DataAnalysis, EditPen, Files, Finished, Key, Link, MapLocation, Menu, Money, Monitor, PriceTag, Reading, Tickets, Timer, User, UserFilled, Unlock } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { pathForRouteName } from '@/router/menu'
 
@@ -12,6 +12,7 @@ export const ENTRY_DESCRIPTIONS: Record<string, string> = {
   '/policy/crawler-monitoring': '按网站查看采集健康状况',
   '/policy/crawler-config': '按周、按省统计上线的爬虫栏目数',
   '/policy/interpretations': '整理政策内容与业务解读',
+  '/policy/scenario-candidates': 'AI 解读出的新场景按场景决定进不进码表',
   '/policy/base-tags': '维护政策分类与基础标签',
   '/codebook/policy-types': '统一政策分类口径',
   '/codebook/scenarios': '管理行业与业务场景',
@@ -35,6 +36,7 @@ const entryIcons: Record<string, Component> = {
   '/policy/crawler-monitoring': Monitor,
   '/policy/crawler-config': DataAnalysis,
   '/policy/interpretations': Reading,
+  '/policy/scenario-candidates': Finished,
   '/policy/base-tags': PriceTag,
   '/codebook/policy-types': Collection,
   '/codebook/scenarios': Connection,

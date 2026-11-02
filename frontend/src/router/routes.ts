@@ -155,6 +155,23 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '政策解读详情', resource: 'policy.interpretations', menuPath: '/policy/interpretations' },
       },
       {
+        path: 'policy/scenario-candidates',
+        name: 'policy-scenario-candidates',
+        component: () => import('@/modules/policy/scenario-candidates/CandidateList.vue'),
+        meta: { title: '新增场景审核', resource: 'policy.scenario_candidates' },
+      },
+      {
+        // 审核页：从列表带着筛选和位置进来，做完决定自动打开下一个。
+        path: 'policy/scenario-candidates/:id',
+        name: 'policy-scenario-candidate-review',
+        component: () => import('@/modules/policy/scenario-candidates/CandidateReview.vue'),
+        meta: {
+          title: '新增场景审核',
+          resource: 'policy.scenario_candidates',
+          menuPath: '/policy/scenario-candidates',
+        },
+      },
+      {
         path: 'ai/prompts',
         name: 'ai-prompts',
         component: () => import('@/modules/ai/prompts/PromptListPage.vue'),

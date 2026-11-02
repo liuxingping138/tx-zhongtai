@@ -642,6 +642,66 @@
         }
       }
     },
+    "/api/v1/codebook/scenarios/paths": {
+      "get": {
+        "tags": [
+          "codebook-scenarios"
+        ],
+        "summary": "Search Paths",
+        "description": "按名称找码表里的行业场景路径（按客群去重），页面上选场景用：合并目标、改某一行的场景。",
+        "operationId": "search_paths_api_v1_codebook_scenarios_paths_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "title": "Q"
+            }
+          },
+          {
+            "name": "industry_l1",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Industry L1"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/codebook/scenarios/export": {
       "get": {
         "tags": [
@@ -1458,6 +1518,46 @@
         }
       }
     },
+    "/internal/v1/scenarios/context": {
+      "post": {
+        "tags": [
+          "internal"
+        ],
+        "summary": "Scenario Context",
+        "description": "新增场景审核看的码表上下文：同一上级下已有的场景、字面最像的已有场景。只读。",
+        "operationId": "scenario_context_internal_v1_scenarios_context_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScenarioPaths"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/internal/v1/scenarios/sync": {
       "post": {
         "tags": [
@@ -1937,6 +2037,25 @@
         ],
         "title": "ScenarioPatch",
         "description": "仅修改显式提供的字段；空字符串表示显式清空。"
+      },
+      "ScenarioPaths": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ScenarioPaths"
       },
       "ScenarioWrite": {
         "properties": {

@@ -116,6 +116,21 @@ export function importScenarios(
   return postExcelImport('/codebook/scenarios/import', file, onProgress, 180_000)
 }
 
+/** 码表里的一条行业场景路径（按客群去重），选场景用 */
+export interface ScenarioPath {
+  industry_scenario_code: string
+  industry_l1: string
+  industry_l2: string
+  industry_l3: string
+  scenario_l1_name: string
+  scenario_l2_name: string
+  scenario_l3_name: string
+}
+
+export function searchScenarioPaths(q: string, industryL1?: string): Promise<{ items: ScenarioPath[] }> {
+  return request(http.get('/codebook/scenarios/paths', { params: { q, industry_l1: industryL1 || undefined } }))
+}
+
 export interface AreaCodeItem {
   id: string
   version: number

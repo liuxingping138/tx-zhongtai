@@ -10,7 +10,7 @@ import { ApiRequestError } from '@/api/errors'
 import type { InterpretationItem } from '@/api/policy'
 import { useVerify } from './useVerify'
 
-const row = (id: string, isNew = '否') => ({ id, is_new_scenario: isNew, data_status: '待验证' }) as InterpretationItem
+const row = (id: string, state = '码表已有') => ({ id, scenario_state: state, data_status: '待验证' }) as InterpretationItem
 const failure = (text: string) => new ApiRequestError({ status: 503, code: 'UNAVAILABLE', message: text, requestId: null })
 
 function setup(current = row('a'), advance = vi.fn(() => Promise.resolve(true))) {
@@ -41,11 +41,11 @@ describe('marking a record as verified', () => {
 
   it('says the record is verified even when the next one fails to open', async () => {
     api.setInterpretationsDataStatus.mockResolvedValueOnce({ updated: 1, unchanged: 0 })
-    const { verify } = setup(row('a', '是'), vi.fn(() => Promise.reject(failure('列表暂时取不到'))))
-    await verify(row('a', '是'))
+    const { verify } = setup(row('a', '待审'), vi.fn(() => Promise.reject(failure('列表暂时取不到'))))
+    await verify(row('a', '待审'))
     expect(message.error).not.toHaveBeenCalled()
     expect(message.warning).toHaveBeenCalledWith(
-      '已标为人工验证。新增场景回列表点「同步新增场景」写进码表。没能打开下一条：列表暂时取不到',
+      '已标为人工验证。这一行的场景还在「新增场景审核」里待审。没能打开下一条：列表暂时取不到',
     )
   })
 

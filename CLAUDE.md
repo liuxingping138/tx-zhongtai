@@ -307,15 +307,18 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
 - 解读、市场机会按待办做：基础标签「是否解读 = 是」且 `interpreted_at` 为空的政策做解读，一条展开成多行写解读表（「政策概览」写进「政策要文」，
   非新增场景到码表查编码，名称对不上的写备注）；解读过、`opportunity_at` 为空的做市场机会，按一级行业 + 一级场景回填。
   费用到上限没轮到的不记时间，下批接着做；AI 行只要人工验证过或改过就不再覆盖（`app/aitag/application/interpreting.py`）。
-  待办（以及解读列表「待同步」的新增场景）都有部分索引，查询条件写在 `policy.domain.models` 的 `awaiting_interpretation` 等函数里、和索引条件一字不差，
+  待办（以及还没和码表比对的解读行）都有部分索引，查询条件写在 `policy.domain.models` 的 `awaiting_interpretation` 等函数里、和索引条件一字不差，
   常量用 `literal_execute` 直接写进 SQL：写成绑定参数的话通用执行计划用不上部分索引，几百万行时又是整表扫描（`tests/test_backlog_indexes.py` 会拦）
-- 解读列表「同步新增场景」：是否新增场景 = 是、人工验证、未同步的行，经 codebook `/internal/v1/scenarios/sync` 按编码规则
-  （`app/domain/scenario_codes.py`：各级号全局最大 + 1，已有上级沿用，行业只查不建）写进场景码表并回填编码；动作 `policy.interpretations:sync_scenarios`，写的是码表所以还要 `codebook.scenarios:update`。
-  回填编码时关联主键换成编码形式（和导入、重新解读的算法一致，否则之后会插出重复行）；换完和同一政策已有的同场景、同机会类型的行撞上，
-  这行不回填、进失败清单让人核对（用户定的：不替人删、不自动合并）
-  码表里同步进来的行标「是否新增场景 = 是」、记「来源政策」（这两列不在 Excel 导入列和内容哈希里），不写业务自己的「场景来源」「三级场景描述」。
-  码表有约 700 行通用场景只挂在一级行业下，查编码时六级对不上就按「一级行业 + 场景」再找；名称带「（新增）」标记的拦下不同步（AI 写入时已去掉）。
-  解读表单保存时六级名称改了（或编码还空着）按名称重查编码，同步过的改了名称清掉同步时间（`policy/application/interpretations._refresh_codes`）
+- 新增场景不再逐行同步，按场景审核（菜单「新增场景审核」`/policy/scenario-candidates`，资源 `policy.scenario_candidates`：查看档看，完整档 `decide` 采纳 / 合并 / 驳回 / 改判，采纳、合并写码表还要 `codebook.scenarios:update`）。
+  解读行和码表比对、归成候选、套用决定都在 `app/policy/application/scenario_engine.py`：AI 每批写完（`interpreting._classify_new_rows` 扫「待归集」部分索引）、手工新建和编辑（名称或编码变了）、导入后都走它，
+  码表服务连不上时行留着 `scenario_state = ''`，`python -m app.cli.classify_scenarios`（policy-worker 里跑）补。比对用 codebook `/internal/v1/scenarios/lookup` 返回的 `kind` / `new_level`（`scenario_codes.classify`）：
+  码表已有的回填编码，AI 说新增的改成「否」并在备注注明；三级行业不在码表的标「行业不在码表」；新场景按「第一个新出现的那一级」的场景路径归成候选（不分行业，和各级场景号全局唯一一致），
+  各级场景都有、只是没挂在这个行业下的是「新关联」候选（连行业一起算）。「是否新增场景」「新增场景级别」由比对结果覆盖 AI 的写法。
+  候选表 `policy_scenario_candidates` 的 `key` 就是规则：决定过的候选，以后 AI 再写同样的说法直接按决定处理（合并的说法等于别名）。
+  系统归集、套用决定只加版本号，不动 `updated_at` / 操作人：AI 按「更新时间 ≤ 打标时间」认没人改过的行，动了会让重新解读、补市场机会跳过它；只有来源政策里逐行「改场景」（`POST /interpretations/{id}/scenario`）算人工编辑。
+  采纳、合并经 codebook `/internal/v1/scenarios/sync` 写码表（按编码规则 `app/domain/scenario_codes.py`：各级号全局最大 + 1，已有上级沿用，行业只查不建；合并到没挂在这个行业下的场景只新建关联行），合并前先确认目标码表里有；
+  回填编码后关联主键换成编码形式，撞上同一政策同场景、同机会类型的另一行时这行标「重复」、留原主键，不删（用户定的）。码表里新建的行标「是否新增场景 = 是」、记「来源政策」（不进 Excel 导入列和内容哈希）。
+  审核页的「码表里的位置」「相似的已有场景」现取 codebook `/internal/v1/scenarios/context`（字符二元组相似度，`app/domain/scenario_similarity.py`），新候选建好时缓存最像的一个给列表用；选场景用 codebook `GET /scenarios/paths?q=`
 - 费用：批次记 `task` 和各步费用列（`type_cost` 等），任务列表的「今日已花」按费用列（`tasks.TASK_COST`）算，拆分前三步合跑的旧批次也能各归各的任务；
   `/tasks` 的 `current` 给出每个任务正在跑的那批和 AI 已答条数。按天账单不在政策服务里做，统一看 AI提问 → 费用账单
 - 内部调用密钥：`AI_POLICY_CALLER_SECRET`（政策→AI）、`CODEBOOK_POLICY_CALLER_SECRET`（政策→码表），compose 把同一个值传给两边

@@ -10,6 +10,7 @@ from app.crawler.domain.models import (
     CrawlerSiteDaily,
     CrawlerSyncRun,
 )
+from app.policy.domain.candidates import ScenarioCandidate
 from app.policy.domain.models import BaseTag, Interpretation, Source
 from app.scheduler.domain.models import ScheduledJob, ScheduledRun, SchedulerHeartbeat
 
@@ -23,6 +24,7 @@ __all__ = [
     "OutboxEvent",
     "PolicyAiRun",
     "PolicyAiTask",
+    "ScenarioCandidate",
     "ScheduledJob",
     "ScheduledRun",
     "SchedulerHeartbeat",

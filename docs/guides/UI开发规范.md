@@ -36,6 +36,7 @@
 | 上传状态与结果 | `components/ExcelImportProgress.vue`、`ExcelImportResult.vue` | 原模块导入接口及结果，不复制业务去重逻辑；结果文件不是校验报告时（如用户导入的初始密码）用 `report_note` 换掉默认说明 |
 | 下载入口 | `components/ExportButton.vue` + `composables/useExcelExport.ts` | `useExcelExport({ path, filename, filters: () => filtersForExport(listQuery.applied) })` 给出 `exporting/onExport`；按钮 `:allowed="auth.canExport(资源)"`，没有导出档时保留但禁用并悬停说明。按钮文字可用默认插槽改写 |
 | Excel 下载底层 | `api/download.ts` | `downloadFile` 负责 401 续期和统一中文错误；页面一般经 useExcelExport 调用，不要用裸 fetch。导出传 applied 不传 query |
+| 选码表里的行业场景 | `components/ScenarioPicker.vue` | `v-model` 是一条码表路径（`ScenarioPath`），可传 `industryL1` 只在一个一级行业下找。按名称远程搜码表（按客群去重），不要让人手打六级名称：打错一个字就成了新场景 |
 | 操作记录入口 | `components/AuditLogButton.vue` | `module` 填资源编码，点击跳到操作日志并按该模块筛选；没有操作日志查看权限时自动隐藏 |
 | 图表 | `components/charts/BaseChart.vue`、`echarts.ts` | 传 `option`、中文 `label`、`height`，点击图形发 `select`。option 由纯函数生成并写单测（参照 `modules/policy/crawler-monitoring/charts.ts`），配色用 `chartPalette()`；新图表类型先在 `echarts.ts` 注册。ECharts 按需注册、随页面懒加载，不进公共 vendor |
 | 权限展示 | `permissions/catalog.ts`、`permissions/matrix.ts`、`modules/system/roles/PermissionTable.vue` | 按菜单分组，名称与菜单一致，一项一档。有导出动作才出现「导出」，有写操作才出现「管理」。说明从资源树推导，不在页面里手写模块清单。勾选联动、整组勾选、锁定、搜索等纯逻辑在 `matrix.ts`（有单测），组件只渲染。新增模块只需在 iam 目录登记动作并给导出动作标 `EXPORT` |
@@ -137,6 +138,8 @@ frontend 目录运行 `pnpm run type-check`、`pnpm run lint`、`pnpm run test`�
 - `ListPage` 检测到 `summary` 插槽后解除一屏上限，结果高度为 `clamp(440px, calc(100dvh - 220px), 880px)`；页面自然纵向滚动，表格保留 `ScrollPort` 双向滚动
 
 ## 核对页（政策基础标签、政策解读）
+
+新增场景审核的审核页（`modules/policy/scenario-candidates/CandidateReview.vue`）也用 `useReviewRecord` 翻条（不传 `groups`、`update`，不在这里编辑），做完决定调 `advance()` 打开下一个（`useAfterDecision.ts`）。
 
 `modules/policy/shared/`：`PolicyReviewPage.vue` 是页面骨架（概要、按分组的字段表、右栏正文），`useReviewRecord.ts` 管取记录、翻条和编辑，两张表的 `BaseTagReview.vue`、`InterpretationReview.vue` 只给字段、概要字段、状态标签和右上角动作。
 

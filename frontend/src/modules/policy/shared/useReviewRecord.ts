@@ -15,11 +15,13 @@ export interface ReviewOptions<Row> {
   listName: string
   /** 列表的筛选字段，只有它们会从地址栏带进查询。 */
   filterKeys: readonly string[]
-  groups: readonly EditorGroup[]
+  /** 编辑表单的分组；只看、不在这里编辑的页面（如新增场景审核）不传。 */
+  groups?: readonly EditorGroup[]
   get: (id: string) => Promise<Row>
-  list: (params: Record<string, unknown>) => Promise<Page<Row>>
-  /** 由调用方带上版本号等额外字段，和列表页编辑抽屉的保存一致。 */
-  update: (row: Row, form: RecordForm) => Promise<Row>
+  /** 按筛选和位置找相邻的那一条：只用到 id，列表行和详情可以是不同的类型。 */
+  list: (params: Record<string, unknown>) => Promise<Page<{ id: string }>>
+  /** 由调用方带上版本号等额外字段，和列表页编辑抽屉的保存一致。不传就不能编辑。 */
+  update?: (row: Row, form: RecordForm) => Promise<Row>
   /** 有没有编辑权限：列表点「编辑」进来（地址栏带 edit=1）时据此直接打开编辑。 */
   canEdit?: () => boolean
 }
@@ -127,7 +129,7 @@ export function useReviewRecord<Row extends { id: string }>(options: ReviewOptio
   const hasNext = computed(() => position.value !== null && total.value !== null && position.value + 1 < total.value)
 
   /** 换到 at 位置上的这一条；count 是刚查到的筛选结果总数，换过去不用再数。 */
-  async function open(row: Row, at: number, count: number) {
+  async function open(row: { id: string }, at: number, count: number) {
     knownTotal = { id: row.id, position: at, total: count }
     await router.replace({
       name: options.routeName,
@@ -195,11 +197,11 @@ export function useReviewRecord<Row extends { id: string }>(options: ReviewOptio
 
   function formOf(row: Row): RecordForm {
     const values = row as Record<string, unknown>
-    return Object.fromEntries(options.groups.flatMap(group => group.fields.map(field => [field.key, formText(values[field.key])])))
+    return Object.fromEntries((options.groups ?? []).flatMap(group => group.fields.map(field => [field.key, formText(values[field.key])])))
   }
 
   function startEdit() {
-    if (!ready.value || !record.value || editing.value) return
+    if (!ready.value || !record.value || editing.value || !options.update) return
     for (const key of Object.keys(draft)) delete draft[key]
     Object.assign(draft, formOf(record.value))
     saveError.value = ''
@@ -225,12 +227,13 @@ export function useReviewRecord<Row extends { id: string }>(options: ReviewOptio
 
   async function saveEdit() {
     const row = record.value
-    if (!row || saving.value || row.id !== id.value) return
+    const update = options.update
+    if (!row || !update || saving.value || row.id !== id.value) return
     saveError.value = ''
     if (fields.value && !await fields.value.validate()) return
     saving.value = true
     try {
-      record.value = await options.update(row, { ...formOf(row), ...draft })
+      record.value = await update(row, { ...formOf(row), ...draft })
       guard.markSaved()
       editing.value = false
       ElMessage.success('已保存')

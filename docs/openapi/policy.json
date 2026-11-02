@@ -2662,6 +2662,25 @@
               ],
               "title": "Data Status"
             }
+          },
+          {
+            "name": "scenario_state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scenario State"
+            }
           }
         ],
         "responses": {
@@ -2963,6 +2982,25 @@
               ],
               "title": "Data Status"
             }
+          },
+          {
+            "name": "scenario_state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scenario State"
+            }
           }
         ],
         "responses": {
@@ -3013,46 +3051,6 @@
           },
           "required": true
         },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/policy/interpretations/new-scenarios": {
-      "get": {
-        "tags": [
-          "policy-interpretations"
-        ],
-        "summary": "New Scenarios",
-        "description": "人工验证过、还没同步进码表的新增场景条数，按钮上显示。",
-        "operationId": "new_scenarios_api_v1_policy_interpretations_new_scenarios_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/policy/interpretations/new-scenarios/sync": {
-      "post": {
-        "tags": [
-          "policy-interpretations"
-        ],
-        "summary": "Sync New Scenarios",
-        "description": "把人工验证过的新增场景写进行业场景码表，编码回填到解读行。\n\n写的是码表，所以还要行业场景码表可管理：没有码表编辑权的人不能借这里往码表加行。",
-        "operationId": "sync_new_scenarios_api_v1_policy_interpretations_new_scenarios_sync_post",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -3215,6 +3213,619 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/interpretations/{item_id}/scenario": {
+      "post": {
+        "tags": [
+          "policy-interpretations"
+        ],
+        "summary": "Change Scenario",
+        "description": "只改这一行的行业场景（新增场景审核里逐行纠正）：编码按码表回填，改完重新归集。",
+        "operationId": "change_scenario_api_v1_policy_interpretations__item_id__scenario_post",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InterpretationScenarioRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/scenario-candidates": {
+      "get": {
+        "tags": [
+          "policy-scenario-candidates"
+        ],
+        "summary": "List Items",
+        "description": "按政策数从多到少；带各状态的数和一句话结论用的汇总。",
+        "operationId": "list_items_api_v1_policy_scenario_candidates_get",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "待审、已采纳、已合并、已驳回",
+              "title": "Status"
+            },
+            "description": "待审、已采纳、已合并、已驳回"
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "场景名称关键词",
+              "title": "Keyword"
+            },
+            "description": "场景名称关键词"
+          },
+          {
+            "name": "industry_l1",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Industry L1"
+            }
+          },
+          {
+            "name": "level_label",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Level Label"
+            }
+          },
+          {
+            "name": "similar_level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Similar Level"
+            }
+          },
+          {
+            "name": "min_policies",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 100000,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Policies"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/scenario-candidates/options": {
+      "get": {
+        "tags": [
+          "policy-scenario-candidates"
+        ],
+        "summary": "List Options",
+        "operationId": "list_options_api_v1_policy_scenario_candidates_options_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/scenario-candidates/{candidate_id}": {
+      "get": {
+        "tags": [
+          "policy-scenario-candidates"
+        ],
+        "summary": "Get Item",
+        "operationId": "get_item_api_v1_policy_scenario_candidates__candidate_id__get",
+        "parameters": [
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Candidate Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/scenario-candidates/{candidate_id}/context": {
+      "get": {
+        "tags": [
+          "policy-scenario-candidates"
+        ],
+        "summary": "Get Context",
+        "description": "码表里同一上级下已有的场景、字面最像的已有场景。",
+        "operationId": "get_context_api_v1_policy_scenario_candidates__candidate_id__context_get",
+        "parameters": [
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Candidate Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/scenario-candidates/{candidate_id}/rows": {
+      "get": {
+        "tags": [
+          "policy-scenario-candidates"
+        ],
+        "summary": "Get Rows",
+        "description": "提出这个场景的解读行（来源政策），最近的在前。",
+        "operationId": "get_rows_api_v1_policy_scenario_candidates__candidate_id__rows_get",
+        "parameters": [
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Candidate Id"
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/scenario-candidates/{candidate_id}/adopt": {
+      "post": {
+        "tags": [
+          "policy-scenario-candidates"
+        ],
+        "summary": "Adopt",
+        "operationId": "adopt_api_v1_policy_scenario_candidates__candidate_id__adopt_post",
+        "parameters": [
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Candidate Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CandidateAdoptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/scenario-candidates/{candidate_id}/merge": {
+      "post": {
+        "tags": [
+          "policy-scenario-candidates"
+        ],
+        "summary": "Merge",
+        "operationId": "merge_api_v1_policy_scenario_candidates__candidate_id__merge_post",
+        "parameters": [
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Candidate Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CandidateMergeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/scenario-candidates/{candidate_id}/reject": {
+      "post": {
+        "tags": [
+          "policy-scenario-candidates"
+        ],
+        "summary": "Reject",
+        "operationId": "reject_api_v1_policy_scenario_candidates__candidate_id__reject_post",
+        "parameters": [
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Candidate Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CandidateRejectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/scenario-candidates/{candidate_id}/reopen": {
+      "post": {
+        "tags": [
+          "policy-scenario-candidates"
+        ],
+        "summary": "Reopen",
+        "description": "驳回的改判回待审。",
+        "operationId": "reopen_api_v1_policy_scenario_candidates__candidate_id__reopen_post",
+        "parameters": [
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Candidate Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CandidateVersion"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -3436,6 +4047,91 @@
         ],
         "title": "BaseTagWrite"
       },
+      "CandidateAdoptRequest": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Name",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version"
+        ],
+        "title": "CandidateAdoptRequest"
+      },
+      "CandidateMergeRequest": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "target": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Target"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version",
+          "target"
+        ],
+        "title": "CandidateMergeRequest"
+      },
+      "CandidateRejectRequest": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Reason"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Note",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version",
+          "reason"
+        ],
+        "title": "CandidateRejectRequest"
+      },
+      "CandidateVersion": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version"
+        ],
+        "title": "CandidateVersion"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -3589,6 +4285,59 @@
         ],
         "title": "InterpretationPatch",
         "description": "仅修改显式提供的字段；空字符串表示显式清空。"
+      },
+      "InterpretationScenarioRequest": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "industry_l1": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Industry L1"
+          },
+          "industry_l2": {
+            "type": "string",
+            "maxLength": 128,
+            "title": "Industry L2",
+            "default": ""
+          },
+          "industry_l3": {
+            "type": "string",
+            "maxLength": 128,
+            "title": "Industry L3",
+            "default": ""
+          },
+          "scenario_l1_name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Scenario L1 Name"
+          },
+          "scenario_l2_name": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Scenario L2 Name",
+            "default": ""
+          },
+          "scenario_l3_name": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Scenario L3 Name",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version",
+          "industry_l1",
+          "scenario_l1_name"
+        ],
+        "title": "InterpretationScenarioRequest",
+        "description": "逐行改场景：六级名称（行业从码表选好带过来），加这一行的版本号。"
       },
       "InterpretationStatusRequest": {
         "properties": {

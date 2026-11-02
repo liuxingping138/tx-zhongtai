@@ -12,7 +12,7 @@ from sqlalchemy import ColumnElement, DateTime, Index, Integer, String, Text, Un
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.policy.domain.fields import BASE_TAG_COLUMNS, DATA_STATUS_VERIFIED
+from app.policy.domain.fields import BASE_TAG_COLUMNS
 
 YES = "是"
 
@@ -176,14 +176,9 @@ class Interpretation(Base):
     __tablename__ = "policy_interpretations"
     __table_args__ = (
         UniqueConstraint("relation_key", name="uq_policy_interpretations_relation_key"),
-        # 人工验证过、还没同步进码表的新增场景：列表每次打开都数一遍、同步时按更新时间取，只给这些行建索引。
-        # 条件和 unsynced_new_scenario 一字不差。
-        Index(
-            "ix_policy_interpretations_unsynced_scenarios",
-            "updated_at",
-            "id",
-            postgresql_where=text("is_new_scenario = '是' AND data_status = '人工验证' AND scenario_synced_at IS NULL"),
-        ),
+        # 还没和码表比对过的行：AI 每批写完、导入后按它补比对，几百万行里只有刚写进来的几行。
+        # 条件和 unclassified_interpretation 一字不差。
+        Index("ix_policy_interpretations_unclassified", "id", postgresql_where=text("scenario_state = ''")),
         Index(
             "ix_policy_interpretations_policy_title_trgm",
             "policy_title",
@@ -235,6 +230,13 @@ class Interpretation(Base):
     data_status: Mapped[str] = mapped_column(
         String(16), nullable=False, default="待验证", server_default="待验证", comment="数据状态"
     )
+    # 和码表比对的结果（见 fields.SCENARIO_STATE_*）；新增场景归到哪个候选。系统写，不进 Excel。
+    scenario_state: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="", server_default="", index=True, comment="场景状态"
+    )
+    candidate_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True, comment="新增场景候选ID"
+    )
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, comment="版本号")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="入库时间")
     created_by_id: Mapped[str] = mapped_column(String(64), nullable=False, comment="入库人ID")
@@ -264,14 +266,10 @@ def awaiting_opportunity() -> ColumnElement[bool]:
     return and_(BaseTag.interpreted_at.is_not(None), BaseTag.opportunity_at.is_(None))
 
 
-def unsynced_new_scenario() -> ColumnElement[bool]:
-    """人工验证过、还没同步进行业场景码表的新增场景。"""
+def unclassified_interpretation() -> ColumnElement[bool]:
+    """还没和行业场景码表比对过的解读行。"""
 
-    return and_(
-        Interpretation.is_new_scenario == _const(YES),
-        Interpretation.data_status == _const(DATA_STATUS_VERIFIED),
-        Interpretation.scenario_synced_at.is_(None),
-    )
+    return Interpretation.scenario_state == _const("")
 
 
 SOURCE_FIELDS = (

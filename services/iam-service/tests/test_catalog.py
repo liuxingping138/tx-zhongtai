@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.domain.catalog import ACTION_SPECS, MENU_SPECS, RESOURCE_SPECS, RETIRED_RESOURCE_CODES
+from app.domain.catalog import ACTION_SPECS, MENU_SPECS, RESOURCE_SPECS, RETIRED_ACTIONS, RETIRED_RESOURCE_CODES
 from app.domain.enums import GrantLevel
 
 
@@ -94,3 +94,13 @@ def test_crawler_config_report_is_read_for_leaders_and_full_to_sync() -> None:
     assert levels == {"list": GrantLevel.READ, "export": GrantLevel.EXPORT, "sync": GrantLevel.FULL}
     menu = {spec.code: spec for spec in MENU_SPECS}["menu.policy.crawler_config"]
     assert (menu.route_name, menu.parent_code, menu.enabled) == ("policy-crawler-config", "menu.policy", True)
+
+
+def test_scenario_review_has_its_own_resource_and_the_old_sync_action_is_retired() -> None:
+    by_code = {spec.code: spec for spec in RESOURCE_SPECS}
+    assert by_code["policy.scenario_candidates"].published is True
+    levels = {(spec.resource_code, spec.action_code): spec.required_level for spec in ACTION_SPECS}
+    assert levels[("policy.scenario_candidates", "decide")] == GrantLevel.FULL
+    assert levels[("policy.scenario_candidates", "list")] == GrantLevel.READ
+    for retired in RETIRED_ACTIONS:
+        assert retired not in levels  # 留在清单里会被建回来，又被退役步骤删掉

@@ -8,7 +8,8 @@ from platform_common.options import OptionColumns, preview_options, search_optio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.policy.domain.fields import DATA_STATUS_CHOICES
+from app.policy.domain.candidates import LEVEL_CHOICES
+from app.policy.domain.fields import DATA_STATUS_CHOICES, SCENARIO_STATE_CHOICES
 from app.policy.domain.models import BaseTag, Interpretation, Source
 
 SOURCE_OPTION_COLUMNS: OptionColumns = {
@@ -30,13 +31,17 @@ BASE_TAG_OPTION_COLUMNS: OptionColumns = {
     "need_interpret": BaseTag.need_interpret,
 }
 
-# 一级行业、一级场景的候选值取行业场景码表。
+# 一级行业、一级场景的候选值取行业场景码表；是否新增、新增级别、数据状态、场景状态是固定几项（系统写的），
+# 不在几百万行上去重。剩下的两列才从库里取。
 INTERPRETATION_OPTION_COLUMNS: OptionColumns = {
     "opportunity_type": Interpretation.opportunity_type,
-    "is_new_scenario": Interpretation.is_new_scenario,
-    "new_scenario_level": Interpretation.new_scenario_level,
     "info_level": Interpretation.info_level,
-    "data_status": Interpretation.data_status,
+}
+INTERPRETATION_FIXED_OPTIONS: dict[str, tuple[str, ...]] = {
+    "is_new_scenario": ("是", "否"),
+    "new_scenario_level": LEVEL_CHOICES,
+    "data_status": DATA_STATUS_CHOICES,
+    "scenario_state": SCENARIO_STATE_CHOICES,
 }
 
 
@@ -66,8 +71,9 @@ async def base_tag_options(session: AsyncSession) -> dict[str, Any]:
 
 async def interpretation_options(session: AsyncSession) -> dict[str, Any]:
     options = await preview_options(session, INTERPRETATION_OPTION_COLUMNS)
-    # 数据状态是固定两项：取库里去重值的话，还没有人工验证的数据时下拉里就选不到它。
-    options["data_status"] = {"items": list(DATA_STATUS_CHOICES), "truncated": False}
+    # 固定几项直接给：取库里去重值的话，还没有人工验证的数据时下拉里就选不到它。
+    for field, choices in INTERPRETATION_FIXED_OPTIONS.items():
+        options[field] = {"items": list(choices), "truncated": False}
     return {"options": options}
 
 

@@ -44,6 +44,11 @@ class MenuSpec:
 # 已下线的资源：同步清单时连同它的菜单、授权和动作一起清掉，否则角色权限页还会列出已不存在的模块。
 # 只放真正下线的编码；改名用迁移原地改，不能写在这里，否则授权会被删掉。
 RETIRED_RESOURCE_CODES: tuple[str, ...] = ()
+# 已下线的动作（资源还在）：同步清单时删掉，角色权限页不再列出。
+RETIRED_ACTIONS: tuple[tuple[str, str], ...] = (
+    # 新增场景改成在「新增场景审核」里按场景决定，解读列表不再有「同步新增场景」
+    ("policy.interpretations", "sync_scenarios"),
+)
 
 RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("system", "系统管理", "iam-service", NodeType.DIRECTORY, True, 10),
@@ -56,11 +61,13 @@ RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("policy.sources", "信源管理", "policy-service", NodeType.RESOURCE, True, 21, "policy"),
     ResourceSpec("policy.crawler_monitoring", "爬虫监测", "policy-service", NodeType.RESOURCE, True, 22, "policy"),
     ResourceSpec("policy.interpretations", "政策解读列表", "policy-service", NodeType.RESOURCE, True, 23, "policy"),
-    ResourceSpec("policy.base_tags", "政策基础标签表", "policy-service", NodeType.RESOURCE, True, 24, "policy"),
+    # AI 解读出的新场景按场景归成候选，在这里采纳、合并或驳回；采纳、合并还要码表可管理。
+    ResourceSpec("policy.scenario_candidates", "新增场景审核", "policy-service", NodeType.RESOURCE, True, 24, "policy"),
+    ResourceSpec("policy.base_tags", "政策基础标签表", "policy-service", NodeType.RESOURCE, True, 25, "policy"),
     # 给领导看的按周、按省配置栏目数；完整档才能手动同步规则表。
-    ResourceSpec("policy.crawler_config", "爬虫配置统计", "policy-service", NodeType.RESOURCE, True, 25, "policy"),
+    ResourceSpec("policy.crawler_config", "爬虫配置统计", "policy-service", NodeType.RESOURCE, True, 26, "policy"),
     # 政策 AI 打标会花钱：改任务设置和每日费用上限、启用或改时间、立即执行，在任务调度之外单独授权。没有菜单。
-    ResourceSpec("policy.ai_tagging", "政策AI打标", "policy-service", NodeType.RESOURCE, True, 26, "policy"),
+    ResourceSpec("policy.ai_tagging", "政策AI打标", "policy-service", NodeType.RESOURCE, True, 27, "policy"),
     ResourceSpec("customer", "客户", "customer-service", NodeType.RESOURCE, False, 30),
     ResourceSpec("tender", "招投标", "tender-service", NodeType.RESOURCE, False, 40),
     ResourceSpec("codebook", "码表管理", "codebook-service", NodeType.DIRECTORY, True, 50),
@@ -146,8 +153,10 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ActionSpec("policy.interpretations", "create", GrantLevel.FULL),
     ActionSpec("policy.interpretations", "update", GrantLevel.FULL),
     ActionSpec("policy.interpretations", "import", GrantLevel.FULL),
-    # 写的是码表：确认过的新增场景按编码规则建进行业场景码表。
-    ActionSpec("policy.interpretations", "sync_scenarios", GrantLevel.FULL),
+    ActionSpec("policy.scenario_candidates", "list", GrantLevel.READ),
+    ActionSpec("policy.scenario_candidates", "read", GrantLevel.READ),
+    # 采纳、合并、驳回、改判：采纳和合并写的是码表，接口另外要码表的「更新」
+    ActionSpec("policy.scenario_candidates", "decide", GrantLevel.FULL),
     ActionSpec("policy.ai_tagging", "update", GrantLevel.FULL),
     ActionSpec("policy.ai_tagging", "execute", GrantLevel.FULL),
     # 试发、批量运行和对话会调用大模型产生费用：试发和批量要「管理」档；多轮对话页本身就是对话，「仅查看」即可使用。
@@ -209,7 +218,7 @@ MENU_SPECS: tuple[MenuSpec, ...] = (
     MenuSpec(
         "menu.policy.crawler_config",
         "爬虫配置统计",
-        25,
+        26,
         "policy-crawler-config",
         "policy.crawler_config",
         "menu.policy",
@@ -225,9 +234,18 @@ MENU_SPECS: tuple[MenuSpec, ...] = (
         enabled=True,
     ),
     MenuSpec(
+        "menu.policy.scenario_candidates",
+        "新增场景审核",
+        24,
+        "policy-scenario-candidates",
+        "policy.scenario_candidates",
+        "menu.policy",
+        enabled=True,
+    ),
+    MenuSpec(
         "menu.policy.base_tags",
         "政策基础标签表",
-        24,
+        25,
         "policy-base-tags",
         "policy.base_tags",
         "menu.policy",

@@ -115,3 +115,44 @@ async def test_sync_writes_only_new_scenarios_and_reports_each_item(monkeypatch:
     assert len(session.added) == 1 and events[0]["extra"] == {"items": 3, "created": 1}
     lookups = await scenario_sync.lookup(session, items[1:])  # type: ignore[arg-type]
     assert [item["scenario_code"] for item in lookups] == ["234569261000", ""]
+
+
+@pytest.mark.parametrize(
+    ("industry", "scenario", "expected"),
+    [
+        # 六级名称对上，或按一级行业对上通用场景：码表已有，带编码
+        (CAR, ("车路云", "车路协同", "5G 全息路况出行服务"), ("exists", 0, "234569261000")),
+        (TRAFFIC, ("视联网", "千里眼", ""), ("exists", 0, "221549000000")),
+        # 第一个查不到的那一级就是新的那一级；后面的级别跟着它一起新
+        (TRAFFIC, ("中医药数智化", "中医药国际交流合作平台", ""), ("new", 1, "")),
+        (TRAFFIC, ("车路云", "绿色算力中心协同", "算电算水协同调度"), ("new", 2, "")),
+        (TRAFFIC, ("车路云", "车路协同", "隧道智能巡检"), ("new", 3, "")),
+        # 各级场景都有，只是没挂在这个行业下：新关联，不新增编号
+        (CAR, ("物联网", "", ""), ("association", 0, "")),
+        (("医卫行业", "卫生", "卫生"), ("车路云", "", ""), ("bad_industry", 0, "")),
+        (TRAFFIC, ("", "", ""), ("invalid", 0, "")),
+        (TRAFFIC, ("车路云", "", "某三级"), ("invalid", 0, "")),
+    ],
+)
+def test_classify_tells_which_level_is_new(
+    industry: tuple[str, str, str], scenario: tuple[str, str, str], expected: tuple[str, int, str]
+) -> None:
+    found = CodeBook.from_rows(ROWS).classify(ScenarioItem(industry, scenario))
+    assert (found.kind, found.new_level, found.codes.scenario_code if found.codes else "") == expected
+
+
+async def test_lookup_reports_the_classification_with_the_codes(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def rows(_session: Any) -> list[Any]:
+        return ROWS
+
+    monkeypatch.setattr(scenario_sync.repo, "scenario_codes", rows)
+    names = ("industry_l1", "industry_l2", "industry_l3", "scenario_l1_name", "scenario_l2_name", "scenario_l3_name")
+    items = [
+        {"key": "a", **dict(zip(names, (*TRAFFIC, "车路云", "车路协同", "隧道智能巡检"), strict=True))},
+        {"key": "b", **dict(zip(names, (*CAR, "物联网", "", ""), strict=True))},
+    ]
+    found = await scenario_sync.lookup(None, items)  # type: ignore[arg-type]  # 只用到打桩的仓储
+    assert [(item["key"], item["kind"], item["new_level"], item["scenario_code"]) for item in found] == [
+        ("a", "new", 3, ""),
+        ("b", "association", 0, ""),
+    ]

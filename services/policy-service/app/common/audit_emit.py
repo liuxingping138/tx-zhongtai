@@ -15,11 +15,35 @@ _EVENT_META = {
     "policy.ai_tagging.config_updated": ("system.scheduler", "update", "scheduled_job", "修改政策 AI 打标设置"),
     "policy.ai_tagging.tagged": ("policy.base_tags", "import", "base_tag", "政策 AI 打标写入基础标签"),
     "policy.ai_tagging.interpreted": ("policy.interpretations", "import", "interpretation", "政策 AI 解读写入解读列表"),
-    "policy.interpretation.scenarios_synced": (
+    "policy.scenario_candidate.adopted": (
+        "policy.scenario_candidates",
+        "decide",
+        "scenario_candidate",
+        "新增场景采纳进行业场景码表",
+    ),
+    "policy.scenario_candidate.merged": (
+        "policy.scenario_candidates",
+        "decide",
+        "scenario_candidate",
+        "新增场景合并到已有场景",
+    ),
+    "policy.scenario_candidate.rejected": (
+        "policy.scenario_candidates",
+        "decide",
+        "scenario_candidate",
+        "驳回新增场景",
+    ),
+    "policy.scenario_candidate.reopened": (
+        "policy.scenario_candidates",
+        "decide",
+        "scenario_candidate",
+        "已驳回的新增场景改判回待审",
+    ),
+    "policy.interpretation.scenario_changed": (
         "policy.interpretations",
-        "sync_scenarios",
+        "update",
         "interpretation",
-        "新增场景同步到行业场景码表",
+        "改政策解读的行业场景",
     ),
     "policy.ai_tagging.opportunity": ("policy.interpretations", "update", "interpretation", "政策 AI 回填市场机会"),
     "policy.ai_tagging.retag_requested": ("policy.base_tags", "update", "base_tag", "政策重新打标"),

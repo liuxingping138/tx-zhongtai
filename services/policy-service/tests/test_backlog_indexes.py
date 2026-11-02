@@ -1,6 +1,6 @@
-"""打标待办、待同步新增场景的查询要用上各自的部分索引：条件和索引一字不差，常量直接写进 SQL。
+"""打标待办、还没和码表比对的解读行，查询要用上各自的部分索引：条件和索引一字不差，常量直接写进 SQL。
 
-几百万行时用不上部分索引就是整表扫描：任务调度页每 5 秒数一次待办，解读列表每次打开都数一遍待同步。
+几百万行时用不上部分索引就是整表扫描：任务调度页每 5 秒数一次待办，AI 每批写完都要找出还没比对的行。
 """
 
 from __future__ import annotations
@@ -20,16 +20,18 @@ from app.policy.domain.models import (
     Interpretation,
     awaiting_interpretation,
     awaiting_opportunity,
-    unsynced_new_scenario,
+    unclassified_interpretation,
 )
 from app.policy.repositories import base_tags
 from app.policy.repositories import interpretations as interpretation_repo
 
-MIGRATION = Path(__file__).parents[1] / "migrations" / "versions" / "f4a5b6c7d581_policy_backlog_indexes.py"
+VERSIONS = Path(__file__).parents[1] / "migrations" / "versions"
+# 建部分索引的几步迁移，按先后：后一步删掉的（DROPPED）不再算
+MIGRATIONS = ("f4a5b6c7d581_policy_backlog_indexes.py", "a2b3c4d5e6f9_scenario_candidates.py")
 
 
-def _migration() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("backlog_indexes", MIGRATION)
+def _migration(name: str) -> ModuleType:
+    spec = importlib.util.spec_from_file_location(name.removesuffix(".py"), VERSIONS / name)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -61,16 +63,26 @@ def _condition_sql(condition: ColumnElement[bool], table: str) -> str:
     [
         ("ix_policy_base_tags_interpret_backlog", awaiting_interpretation, "policy_base_tags"),
         ("ix_policy_base_tags_opportunity_backlog", awaiting_opportunity, "policy_base_tags"),
-        ("ix_policy_interpretations_unsynced_scenarios", unsynced_new_scenario, "policy_interpretations"),
+        ("ix_policy_interpretations_unclassified", unclassified_interpretation, "policy_interpretations"),
     ],
 )
 def test_each_query_condition_is_word_for_word_its_partial_index(index: str, condition: Any, table: str) -> None:
     assert _condition_sql(condition(), table) == _where(_indexes()[index])
 
 
-def test_the_migration_builds_the_same_indexes_as_the_models() -> None:
+def _built() -> list[tuple[str, str, str, str, str]]:
+    built: dict[str, tuple[str, str, str, str, str]] = {}
+    for name in MIGRATIONS:
+        module = _migration(name)
+        for dropped in getattr(module, "DROPPED", ()):
+            built.pop(dropped[0], None)
+        built.update({spec[0]: spec for spec in module.INDEXES})
+    return list(built.values())
+
+
+def test_the_migrations_build_the_same_indexes_as_the_models() -> None:
     indexes = _indexes()
-    for name, table, columns, where, comment in _migration().INDEXES:
+    for name, table, columns, where, comment in _built():
         index = indexes[name]
         assert index.table is not None and index.table.name == table
         assert ", ".join(column.name for column in index.columns) == columns
@@ -82,8 +94,8 @@ def test_constants_are_sent_inline_so_generic_plans_still_use_the_partial_indexe
     # 绑定参数（need_interpret = $1）在通用执行计划里证明不了落在部分索引里，会退回整表扫描。
     sql = _as_executed(select(BaseTag.id).where(awaiting_interpretation()))
     assert "need_interpret = '是'" in sql
-    sql = _as_executed(select(Interpretation.id).where(unsynced_new_scenario()))
-    assert "is_new_scenario = '是'" in sql and "data_status = '人工验证'" in sql
+    sql = _as_executed(select(Interpretation.id).where(unclassified_interpretation()))
+    assert "scenario_state = ''" in sql
 
 
 class _Session:
@@ -112,9 +124,11 @@ async def test_pending_counts_count_each_backlog_on_its_own_index() -> None:
     assert "type_retag_at IS NOT NULL" in sql and "need_interpret = '是'" in sql and "opportunity_at IS NULL" in sql
 
 
-async def test_unsynced_count_and_the_status_filters_use_the_same_conditions() -> None:
-    session = _Session(4)
-    assert await interpretation_repo.count_unsynced_new_scenarios(session) == 4  # type: ignore[arg-type]
-    assert "data_status = '人工验证'" in _as_executed(session.statements[0])
+async def test_unclassified_rows_and_the_status_filters_use_the_same_conditions() -> None:
+    session = _Session(None)
+    session.scalars = lambda: []  # type: ignore[method-assign]  # 只看发出去的 SQL
+    assert await interpretation_repo.unclassified_rows(session, 10) == []  # type: ignore[arg-type]
+    sql = _as_executed(session.statements[0])
+    assert "scenario_state = ''" in sql and "SKIP LOCKED" in sql
     (waiting,) = base_tags._conditions({"ai_status": ["待解读"]})
     assert _condition_sql(waiting, "policy_base_tags") == _where(_indexes()["ix_policy_base_tags_interpret_backlog"])

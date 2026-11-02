@@ -25,6 +25,7 @@ import * as auth from './auth'
 import * as codebook from './codebook'
 import * as crawler from './crawlerMonitoring'
 import * as policy from './policy'
+import * as scenarioCandidates from './scenarioCandidates'
 import * as scheduler from './scheduler'
 import * as system from './system'
 
@@ -42,7 +43,7 @@ const operations = Object.values(specs).flatMap((spec) =>
   ),
 )
 
-const modules = { ai, aiSamples, audit, auth, codebook, crawler, policy, scheduler, system }
+const modules = { ai, aiSamples, audit, auth, codebook, crawler, policy, scenarioCandidates, scheduler, system }
 
 const wrappers = Object.entries(modules).flatMap(([module, exports]) =>
   Object.entries(exports)

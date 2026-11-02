@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common import internal_clients
 from app.common.audit_emit import enqueue_event
 from app.core.config import get_settings
+from app.policy.application import scenario_engine
 from app.policy.application.importing import add_in_batches
 from app.policy.application.policy_content import policy_content
 from app.policy.application.region import make_policy_uid, make_relation_key
@@ -35,7 +36,7 @@ INTERPRETATION_LENGTHS = {**string_lengths(Interpretation), "policy_title": POLI
 logger = logging.getLogger("policy.interpretations")
 
 
-def _to_out(row: Interpretation) -> dict[str, Any]:
+def to_out(row: Interpretation) -> dict[str, Any]:
     return {
         "id": str(row.id),
         "record_id": row.record_id,
@@ -65,6 +66,8 @@ def _to_out(row: Interpretation) -> dict[str, Any]:
         "new_scenario_level": row.new_scenario_level,
         "remark": row.remark,
         "data_status": row.data_status,
+        "scenario_state": row.scenario_state,
+        "candidate_id": str(row.candidate_id) if row.candidate_id else "",
         "source_content_id": row.source_content_id or "",
         "tagged_at": format_beijing(row.tagged_at),
         "scenario_synced_at": format_beijing(row.scenario_synced_at),
@@ -150,7 +153,7 @@ async def list_interpretations(
         page=page,
         page_size=page_size,
     )
-    return {"items": [_to_out(item) for item in items], "total": total, "page": page, "page_size": page_size}
+    return {"items": [to_out(item) for item in items], "total": total, "page": page, "page_size": page_size}
 
 
 async def list_interpretation_options(session: AsyncSession) -> dict[str, Any]:
@@ -176,7 +179,7 @@ async def get_interpretation(session: AsyncSession, item_id: uuid.UUID) -> dict[
     row = await repo.get_by_id(session, item_id)
     if row is None:
         raise NotFoundError("政策解读不存在")
-    return _to_out(row)
+    return to_out(row)
 
 
 async def interpretation_content(session: AsyncSession, item_id: uuid.UUID) -> dict[str, Any]:
@@ -216,6 +219,7 @@ async def create_interpretation(session: AsyncSession, actor: Actor, data: dict[
     )
     session.add(row)
     await session.flush()
+    await scenario_engine.classify_quietly(session, [row])
     await enqueue_event(
         session,
         event_type="policy.interpretation.created",
@@ -223,7 +227,7 @@ async def create_interpretation(session: AsyncSession, actor: Actor, data: dict[
         target_id=str(row.id),
         changes={"policy_title": row.policy_title, "relation_key": row.relation_key},
     )
-    return _to_out(row)
+    return to_out(row)
 
 
 def _apply_changes(row: Interpretation, values: dict[str, str], *, renamed: bool) -> dict[str, Any]:
@@ -267,11 +271,16 @@ async def update_interpretation(
         )
     changes = _apply_changes(row, values, renamed=renamed)
     if not changes:
-        return _to_out(row)
+        return to_out(row)
     row.version += 1
     row.updated_at = utcnow()
     row.updated_by_id = actor.id
     row.updated_by_name = actor.name
+    if renamed or any(field in changes for field in SCENARIO_CODE_FIELDS):
+        # 场景换了：重新和码表比对、归集（可能落到已经决定过的候选，按决定处理）
+        old_candidate = row.candidate_id
+        row.scenario_state, row.candidate_id = "", None
+        await scenario_engine.classify_quietly(session, [row], also=[old_candidate])
     await enqueue_event(
         session,
         event_type="policy.interpretation.updated",
@@ -279,7 +288,7 @@ async def update_interpretation(
         target_id=str(row.id),
         changes=changes,
     )
-    return _to_out(row)
+    return to_out(row)
 
 
 def _import_skip_reason(values: dict[str, str], seen: set[str]) -> str | None:
@@ -327,7 +336,9 @@ async def import_interpretations(session: AsyncSession, actor: Actor, content: b
             continue
         seen.add(values["relation_key"])
         accepted.append(values)
-    inserted = await add_in_batches(session, _build_rows(actor, accepted))
+    built = _build_rows(actor, accepted)
+    inserted = await add_in_batches(session, built)
+    await scenario_engine.classify_quietly(session, built)
     await enqueue_event(
         session,
         event_type="policy.interpretation.imported",
@@ -363,7 +374,7 @@ async def _assert_exportable(session: AsyncSession, filters: Filters) -> None:
 
 async def export_interpretations(session: AsyncSession, actor: Actor, filters: Filters) -> bytes:
     await _assert_exportable(session, filters)
-    rows = [_to_out(item) for item in await repo.list_filtered(session, filters)]
+    rows = [to_out(item) for item in await repo.list_filtered(session, filters)]
     await enqueue_event(
         session,
         event_type="policy.interpretation.exported",

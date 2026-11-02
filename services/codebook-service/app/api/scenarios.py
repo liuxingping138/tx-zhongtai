@@ -82,6 +82,19 @@ async def search_filter_options(
     return success_json({"items": values})
 
 
+@router.get("/paths")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def search_paths(
+    q: str = Query(..., min_length=1, max_length=100),
+    industry_l1: str | None = Query(default=None, max_length=128),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    _: Actor = Depends(require_codebook_permission(RESOURCE, "list")),
+) -> JSONResponse:
+    """按名称找码表里的行业场景路径（按客群去重），页面上选场景用：合并目标、改某一行的场景。"""
+
+    return success_json({"items": await service.search_paths(session, keyword=q, industry_l1=industry_l1)})
+
+
 @router.get("/export")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def export_items(
