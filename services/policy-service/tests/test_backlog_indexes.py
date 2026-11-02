@@ -98,6 +98,11 @@ def test_constants_are_sent_inline_so_generic_plans_still_use_the_partial_indexe
     assert "scenario_state = ''" in sql
 
 
+async def _scalar(session: Any, statement: Any, value: Any) -> Any:
+    session.statements.append(statement)
+    return value
+
+
 class _Session:
     def __init__(self, reply: Any) -> None:
         self.reply = reply
@@ -117,7 +122,9 @@ class _Session:
 
 async def test_pending_counts_count_each_backlog_on_its_own_index() -> None:
     session = _Session((2, 5, 7))
-    assert await tagging.pending_counts(session) == {"type": 2, "interpret": 5, "opportunity": 7}  # type: ignore[arg-type]
+    session.scalar = lambda statement: _scalar(session, statement, 3)  # type: ignore[method-assign]  # 新增场景候选单独数
+    counts = await tagging.pending_counts(session)  # type: ignore[arg-type]
+    assert counts == {"type": 2, "interpret": 5, "opportunity": 7, "scenario": 3}
     sql = _as_executed(session.statements[0])
     # 三个数各数各的，不用一条 count(*) FILTER 整表扫。
     assert "FILTER" not in sql and sql.count("count(*)") == 3

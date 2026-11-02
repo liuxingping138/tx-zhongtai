@@ -6,6 +6,8 @@ import { KIND_NEW, pathText, type DecisionMode, type Suggestion } from './candid
 defineProps<{
   candidate: CandidateItem
   suggestion: Suggestion
+  /** 为什么建议这样做，写在建议的那张卡片上 */
+  reason: string
   mergeTarget: string[] | null
   canWriteCodebook: boolean
 }>()
@@ -21,7 +23,7 @@ const emit = defineEmits<{ open: [mode: DecisionMode, target?: string[] | null] 
       <span
         v-if="suggestion === 'merge'"
         class="option__badge"
-      >系统建议 · 码表里有高度相似的</span>
+      >系统建议 · {{ reason }}</span>
       <h2>{{ mergeTarget ? `合并到「${mergeTarget[mergeTarget.length - 1]}」` : '合并到已有场景' }}</h2>
       <p class="option__path">
         {{ mergeTarget ? pathText(mergeTarget) : '在码表里选一个已有场景' }}
@@ -44,7 +46,7 @@ const emit = defineEmits<{ open: [mode: DecisionMode, target?: string[] | null] 
       <span
         v-if="suggestion === 'adopt'"
         class="option__badge"
-      >系统建议</span>
+      >系统建议 · {{ reason }}</span>
       <h2>采纳为新场景</h2>
       <p class="option__path">
         {{ candidate.kind === KIND_NEW ? `${candidate.parent || '一级场景'}下新增「${candidate.name}」` : `挂到 ${candidate.industry}` }}

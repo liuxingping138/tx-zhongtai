@@ -1,9 +1,10 @@
-/** 政策类模板放进三个打标任务前的检查。规则和政策服务的 aitag.domain.contract 一致：页面上按草稿实时提示，保存任务设置时后端再拦一次。 */
+/** 政策类模板放进各打标任务前的检查。规则和政策服务的 aitag.domain.contract 一致：页面上按草稿实时提示，保存任务设置时后端再拦一次。 */
 import type { ContractTask, TemplateCheck } from '@/api/aiTagging'
 import { CODE_TABLE_FIELD } from '../shared/aiText'
 
 const BODY = '政策正文'
 const SCENES = '行业场景'
+const SCENARIO_PATHS = '同行业已有场景'
 
 const quoted = (names: string[]) => names.map(name => `@【${name}】`).join('、')
 
@@ -16,15 +17,23 @@ export function checkTemplate(task: ContractTask, variables: string[], fields: s
   // 顺序、说法和政策服务 aitag.domain.contract 一致。
   const warnings = [
     ...emptyFieldWarnings(task, fields),
-    ...bodyWarnings(variables),
+    ...bodyWarnings(task, variables),
+    ...scenarioWarnings(task, variables),
     ...opportunityWarnings(task, variables, fields),
     ...codeWarnings(variables, systemCode),
   ]
   return { errors, warnings }
 }
 
-function bodyWarnings(variables: string[]): string[] {
-  return variables.includes(BODY) ? [] : [`没有用 @【${BODY}】，模型只看得到标题，判断会不准`]
+function bodyWarnings(task: ContractTask, variables: string[]): string[] {
+  if (!task.columns.includes(BODY) || variables.includes(BODY)) return []
+  return [`没有用 @【${BODY}】，模型只看得到标题，判断会不准`]
+}
+
+/** 新增场景找相似：看不到码表清单就找不出相似的。 */
+function scenarioWarnings(task: ContractTask, variables: string[]): string[] {
+  if (task.code !== 'scenario' || variables.includes(SCENARIO_PATHS)) return []
+  return [`没有用 @【${SCENARIO_PATHS}】，模型看不到码表里这个行业下有哪些场景，找不出相似的`]
 }
 
 function codeWarnings(variables: string[], systemCode: boolean): string[] {

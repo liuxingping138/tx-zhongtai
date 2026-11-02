@@ -26,7 +26,7 @@ from app.core.database import get_db_session
 
 router = APIRouter(prefix="/api/v1/policy/ai-tagging", tags=["政策AI打标"])
 RESOURCE = "system.scheduler"
-Task = Literal["type", "interpret", "opportunity"]
+Task = Literal["type", "interpret", "opportunity", "scenario"]
 
 
 class RetagBody(BaseModel):

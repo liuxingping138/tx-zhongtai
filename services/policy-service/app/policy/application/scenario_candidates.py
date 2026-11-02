@@ -66,6 +66,11 @@ def candidate_out(row: ScenarioCandidate) -> dict[str, Any]:
         "similar_name": row.similar_name,
         "similar_score": row.similar_score,
         "similar_level": row.similar_level,
+        "ai_verdict": row.ai_verdict,
+        "ai_similar": row.ai_similar,
+        "ai_target": row.ai_target,
+        "ai_reason": row.ai_reason,
+        "ai_checked_at": format_beijing(row.ai_checked_at),
         "first_seen_at": format_beijing(row.first_seen_at),
         "last_seen_at": format_beijing(row.last_seen_at),
         "version": row.version,
@@ -105,6 +110,21 @@ async def candidate_options() -> dict[str, Any]:
     }
 
 
+async def locked(session: AsyncSession, candidate_id: uuid.UUID) -> ScenarioCandidate | None:
+    return await repo.get_for_update(session, candidate_id)
+
+
+async def ai_inputs(session: AsyncSession, candidates: list[ScenarioCandidate]) -> dict[str, dict[str, list[str]]]:
+    """交给 AI 找相似场景的材料：每个场景出现在哪些一级行业、AI 解读时给的理由（最常见的几条）。"""
+
+    out: dict[str, dict[str, list[str]]] = {}
+    for candidate in candidates:
+        industries = [str(row[0]) for row in await repo.breakdown(session, candidate.id, Interpretation.industry_l1)]
+        top = reasons(await repo.breakdown(session, candidate.id, Interpretation.remark))
+        out[str(candidate.id)] = {"industries": industries, "reasons": [item["text"] for item in top]}
+    return out
+
+
 async def _get(session: AsyncSession, candidate_id: uuid.UUID) -> ScenarioCandidate:
     candidate = await repo.get(session, candidate_id)
     if candidate is None:
@@ -112,7 +132,9 @@ async def _get(session: AsyncSession, candidate_id: uuid.UUID) -> ScenarioCandid
     return candidate
 
 
-def _reasons(rows: list[tuple[Any, ...]]) -> list[dict[str, Any]]:
+def reasons(rows: list[tuple[Any, ...]]) -> list[dict[str, Any]]:
+    """AI 解读时给的理由（解读行备注），同样的合在一起数，多的在前，去掉系统追加的说明。"""
+
     out = []
     for remark, count in rows:
         text = str(remark or "").strip()
@@ -138,12 +160,12 @@ async def candidate_detail(session: AsyncSession, candidate_id: uuid.UUID) -> di
             names, count = row[:-1], row[-1]
             if any(names):
                 children.append({"path": _path_text(tuple(str(name) for name in names)), "rows": int(count)})
-    reasons = _reasons(await repo.breakdown(session, candidate.id, Interpretation.remark))
+    top = reasons(await repo.breakdown(session, candidate.id, Interpretation.remark))
     return {
         **candidate_out(candidate),
         "industries": [{"path": "/".join(name for name in row[:3] if name), "rows": int(row[3])} for row in industries],
         "children": children,
-        "reasons": reasons,
+        "reasons": top,
     }
 
 

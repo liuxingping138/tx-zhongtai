@@ -275,7 +275,8 @@
               "enum": [
                 "type",
                 "interpret",
-                "opportunity"
+                "opportunity",
+                "scenario"
               ],
               "type": "string",
               "title": "Task"
@@ -391,7 +392,8 @@
               "enum": [
                 "type",
                 "interpret",
-                "opportunity"
+                "opportunity",
+                "scenario"
               ],
               "type": "string",
               "title": "Task"
@@ -4554,7 +4556,8 @@
             "enum": [
               "type",
               "interpret",
-              "opportunity"
+              "opportunity",
+              "scenario"
             ],
             "title": "Step"
           }

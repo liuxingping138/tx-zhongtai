@@ -46,6 +46,43 @@ REJECT_REASONS: tuple[str, ...] = ("不是信息化场景", "太细，属于已�
 PATH_SEP = ">"
 Names = tuple[str, str, str]
 
+# AI 找相似场景（打标任务「新增场景找相似」，app.aitag.application.scenario_similar）：
+# 交给模板的列（模板里 @【列名】 引用）、要模板输出的字段、判断的三种结论。
+AI_ID = "场景编号"
+AI_PATHS = "同行业已有场景"
+AI_COLUMNS: tuple[str, ...] = (AI_ID, "新增场景", "新增级别", "一级行业", "AI理由", AI_PATHS)
+AI_VERDICT_FIELD = "判断"
+AI_SIMILAR_FIELD = "最像的已有场景"
+AI_REASON_FIELD = "理由"
+AI_SAME = "同一个场景"
+AI_NEW = "新场景"
+AI_UNDER = "归到已有场景下"
+AI_FAILED = "判断失败"
+AI_VERDICTS: tuple[str, ...] = (AI_SAME, AI_NEW, AI_UNDER)
+_AI_SEPARATORS = ("›", "＞", "/", "／", "》", "→")
+
+
+def ai_verdict(text: str) -> str:
+    """模型写的「判断」归成三种结论；对不上的原样留着（截短），页面照样显示。"""
+
+    value = text.strip()
+    if "同一" in value or "一回事" in value:
+        return AI_SAME
+    if "归到" in value or "太细" in value or "下级" in value or "下面" in value:
+        return AI_UNDER
+    if "新" in value:
+        return AI_NEW
+    return value[:16]
+
+
+def ai_path(text: str) -> str:
+    """模型写的场景路径统一成「一级 > 二级 > 三级」，好和码表里的路径对上。"""
+
+    value = text.strip().strip("「」\"'“”")
+    for separator in _AI_SEPARATORS:
+        value = value.replace(separator, PATH_SEP)
+    return " > ".join(part.strip() for part in value.split(PATH_SEP) if part.strip())
+
 
 def _joined(names: tuple[str, ...]) -> str:
     return PATH_SEP.join(name for name in names if name)
@@ -120,6 +157,12 @@ class ScenarioCandidate(Base):
     similar_name: Mapped[str] = mapped_column(String(800), nullable=False, default="", comment="最像的已有场景")
     similar_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, comment="相似度")
     similar_level: Mapped[str] = mapped_column(String(8), nullable=False, default="", comment="码表相似")
+    ai_verdict: Mapped[str] = mapped_column(String(16), nullable=False, default="", comment="AI判断")
+    ai_similar: Mapped[str] = mapped_column(String(800), nullable=False, default="", comment="AI说最像的已有场景")
+    # AI 说的那个场景在码表里对得上时记下（一级 > 二级 > 三级），审核页据此预选合并目标；对不上为空
+    ai_target: Mapped[str] = mapped_column(String(800), nullable=False, default="", comment="AI建议合并到")
+    ai_reason: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="AI理由")
+    ai_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, comment="AI判断时间")
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="首次出现")
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="最近出现")
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, comment="版本号")

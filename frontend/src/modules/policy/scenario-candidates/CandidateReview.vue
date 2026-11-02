@@ -20,7 +20,7 @@ import CandidateEvidence from './CandidateEvidence.vue'
 import CandidateRowsDrawer from './CandidateRowsDrawer.vue'
 import DecisionDialog from './DecisionDialog.vue'
 import DecisionOptions from './DecisionOptions.vue'
-import { FILTER_KEYS, KIND_NEW, PENDING, RESOURCE, decisionText, suggest, type DecisionMode } from './candidates'
+import { FILTER_KEYS, KIND_NEW, PENDING, RESOURCE, aiText, decisionText, mergeTargetOf, positionParts, suggest, suggestionText, type DecisionMode } from './candidates'
 import { useAfterDecision } from './useAfterDecision'
 
 const auth = useAuthStore()
@@ -53,11 +53,9 @@ watch(() => candidate.value?.id, async (id) => {
 })
 
 const suggestion = computed(() => (candidate.value ? suggest(candidate.value) : null))
-// 只有高度相似（同一个一级行业下）的才预选成合并目标；其余让人自己在确认框里选
-const mergeTarget = computed(() => {
-  const best = context.value?.similar[0]
-  return best?.level === '高' ? best.path : null
-})
+// 合并时预选的目标：AI 说的、码表里对得上的；AI 没看过时用同一行业下名称很像的。其余让人自己在确认框里选
+const mergeTarget = computed(() => (candidate.value ? mergeTargetOf(candidate.value, context.value?.similar ?? []) : null))
+const reasonText = computed(() => (candidate.value ? suggestionText(candidate.value, suggestion.value) : ''))
 const dialog = ref<DecisionMode | null>(null)
 const presetTarget = ref<string[] | null>(null)
 const drawer = ref(false)
@@ -143,6 +141,29 @@ async function reopen() {
           </el-tag>
           <AuditLogButton :module="RESOURCE" />
         </div>
+        <p
+          class="candidate__where"
+          aria-label="在码表里的位置"
+        >
+          <span class="candidate__where-label">位置</span>
+          <span>{{ candidate.kind === KIND_NEW ? candidate.main_industry : candidate.industry }}</span>
+          <template
+            v-for="part in positionParts(candidate)"
+            :key="part.level"
+          >
+            <span aria-hidden="true">›</span>
+            <span :class="['candidate__part', { 'candidate__part--new': part.added }]">
+              {{ part.name }}<small>{{ part.level }} · {{ part.added ? '新增' : '码表已有' }}</small>
+            </span>
+          </template>
+          <span
+            v-if="candidate.kind !== KIND_NEW"
+            class="candidate__where-label"
+          >场景码表里都有，这次是新挂到这个行业下</span>
+        </p>
+        <p class="candidate__ai">
+          {{ aiText(candidate) }}
+        </p>
         <dl class="candidate__facts">
           <div><dt>挂在</dt><dd>{{ candidate.kind === KIND_NEW ? (candidate.parent || '（新的一级场景）') : candidate.industry }}</dd></div>
           <div><dt>一级行业</dt><dd>{{ candidate.main_industry }}{{ candidate.industry_count > 1 ? ` 等 ${candidate.industry_count} 个` : '' }}</dd></div>
@@ -168,6 +189,7 @@ async function reopen() {
         v-if="candidate.status === PENDING && canDecide"
         :candidate="candidate"
         :suggestion="suggestion"
+        :reason="reasonText"
         :merge-target="mergeTarget"
         :can-write-codebook="canWriteCodebook"
         @open="open"
@@ -255,6 +277,53 @@ async function reopen() {
 
 .candidate__title > :last-child {
   margin-left: auto;
+}
+
+.candidate__where {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--zt-space-2);
+  align-items: center;
+  margin: var(--zt-space-3) 0 0;
+  font-size: 14px;
+}
+
+.candidate__where-label {
+  color: var(--zt-ink-500);
+  font-size: 13px;
+}
+
+.candidate__part {
+  display: inline-flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: 2px 10px;
+  border: 1px solid var(--zt-border);
+  border-radius: var(--zt-radius);
+  background: var(--zt-surface-subtle);
+}
+
+.candidate__part small {
+  color: var(--zt-ink-500);
+  font-size: 12px;
+}
+
+.candidate__part--new {
+  border: 1px dashed var(--zt-warning);
+  background: var(--zt-warning-soft);
+  color: var(--zt-warning-text);
+  font-weight: 600;
+}
+
+.candidate__part--new small {
+  color: var(--zt-warning-text);
+}
+
+.candidate__ai {
+  margin: var(--zt-space-3) 0 0;
+  color: var(--zt-ink-700);
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .candidate__facts {

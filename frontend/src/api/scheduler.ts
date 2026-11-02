@@ -33,6 +33,8 @@ export interface AiTaggingResult {
   opportunity_rows: number; opportunity_failed: number
   type_run_id: string; interpret_run_id: string; opportunity_run_id: string
   cost: string; type_cost: string; interpret_cost: string; opportunity_cost: string
+  /** 新增场景找相似：判断了几个、失败几个 */
+  scenario_rows?: number; scenario_failed?: number; scenario_run_id?: string; scenario_cost?: string
   note: string; error_message: string
 }
 export interface ScheduledJob {

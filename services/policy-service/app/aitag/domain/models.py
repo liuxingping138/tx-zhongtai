@@ -85,6 +85,12 @@ class PolicyAiRun(Base):
     opportunity_cost: Mapped[Decimal] = mapped_column(
         Numeric(12, 6), nullable=False, default=Decimal(0), comment="市场机会费用(元)"
     )
+    scenario_run_id: Mapped[str] = mapped_column(String(32), nullable=False, default="", comment="找相似场景任务ID")
+    scenario_rows: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="判断过的新增场景数")
+    scenario_failed: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="找相似失败数")
+    scenario_cost: Mapped[Decimal] = mapped_column(
+        Numeric(12, 6), nullable=False, default=Decimal(0), comment="找相似场景费用(元)"
+    )
     note: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="说明")
     error_message: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="失败原因")
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="开始时间")

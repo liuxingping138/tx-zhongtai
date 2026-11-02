@@ -88,3 +88,10 @@ def test_similar_scenarios_of_other_industries_are_at_most_medium() -> None:
         "中",
         "重要客户服务一部",
     )
+
+
+def test_paths_under_lists_every_node_of_those_industries() -> None:
+    nodes = ScenarioNodes.from_rows(ROWS)
+    paths = nodes.paths_under(["医卫行业"])
+    assert paths == ["基层医卫", "基层医卫 > 县域医共体"]
+    assert "智慧航空 > 智慧空侧" in nodes.paths_under(["交通行业"])

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CandidateItem } from '@/api/scenarioCandidates'
-import { decisionText, pathLabel, splitPath, suggest, summaryText } from './candidates'
+import { aiText, decisionText, mergeTargetOf, pathLabel, positionParts, similarLabel, splitPath, suggest, suggestionText, summaryText } from './candidates'
 
 function item(extra: Partial<CandidateItem>): CandidateItem {
   return {
@@ -10,6 +10,7 @@ function item(extra: Partial<CandidateItem>): CandidateItem {
     status: '待审', adopted_name: '', target: '', target_l1: '', target_l2: '', target_l3: '', reject_reason: '', note: '',
     decided_at: '', decided_by_name: '', row_count: 52, policy_count: 37, industry_count: 1, main_industry: '交通行业',
     sample_title: '', similar_name: '', similar_score: 0, similar_level: '无', first_seen_at: '', last_seen_at: '', version: 1,
+    ai_verdict: '', ai_similar: '', ai_target: '', ai_reason: '', ai_checked_at: '',
     ...extra,
   }
 }
@@ -50,5 +51,40 @@ describe('文案', () => {
       industry_scenario_code: 'x', industry_l1: '交通行业', industry_l2: '交通运输', industry_l3: '',
       scenario_l1_name: '智慧航空', scenario_l2_name: '智慧空侧', scenario_l3_name: '',
     })).toBe('智慧航空 › 智慧空侧（交通行业/交通运输）')
+  })
+})
+
+describe('给业务人员看的说法', () => {
+  it('完整位置逐级标出已有和新增，下级新场景一并列出', () => {
+    const detail = { ...item({}), industries: [], reasons: [], children: [{ path: '施工进度管理', rows: 12 }, { path: '工程质量安全监测', rows: 6 }] }
+    expect(positionParts(detail)).toEqual([
+      { name: '智慧航空', level: '一级', added: false },
+      { name: '智慧机场工程建设管理', level: '二级', added: true },
+      { name: '施工进度管理 等 2 个', level: '三级', added: true },
+    ])
+  })
+  it('新关联：各级都是码表已有的', () => {
+    const detail = { ...item({ kind: '新关联', scenario_l2: '智慧空侧' }), industries: [], reasons: [], children: [] }
+    expect(positionParts(detail).every(part => !part.added)).toBe(true)
+  })
+  it('相似程度写成很像、有点像、没有', () => {
+    expect([similarLabel('高'), similarLabel('中'), similarLabel('无'), similarLabel('')]).toEqual(['很像', '有点像', '没有', '还没算'])
+  })
+})
+
+describe('AI 找相似', () => {
+  it('AI 看过的按 AI 的判断建议，码表里对得上才建议合并', () => {
+    const same = item({ ai_verdict: '同一个场景', ai_similar: '智慧航空 > 智慧航站楼', ai_target: '智慧航空 > 智慧航站楼' })
+    expect(suggest(same)).toBe('merge')
+    expect(suggestionText(same, 'merge')).toBe('AI 判断：和「智慧航空 > 智慧航站楼」是同一个场景')
+    expect(mergeTargetOf(same, [])).toEqual(['智慧航空', '智慧航站楼'])
+    expect(suggest(item({ ai_verdict: '同一个场景', ai_similar: '智慧机场' }))).toBeNull()
+    expect(suggest(item({ ai_verdict: '新场景', similar_level: '高', policy_count: 1 }))).toBe('adopt')
+  })
+  it('AI 没看过时按名称相似', () => {
+    expect(mergeTargetOf(item({}), [{ path: ['a', 'b'], level: '高' }])).toEqual(['a', 'b'])
+    expect(mergeTargetOf(item({}), [{ path: ['a', 'b'], level: '中' }])).toBeNull()
+    expect(aiText(item({}))).toMatch(/^AI 还没看过/)
+    expect(aiText(item({ ai_verdict: '新场景', ai_reason: '码表没有建设期管理' }))).toBe('AI 判断：新场景。理由：码表没有建设期管理')
   })
 })

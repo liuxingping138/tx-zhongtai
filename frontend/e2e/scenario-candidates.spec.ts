@@ -84,7 +84,7 @@ test('按场景审核：看来源政策，按建议合并后自动打开下一�
 
   await page.getByRole('link', { name: '智慧机场工程建设管理' }).first().click()
   await expect(page.getByRole('heading', { name: '智慧机场工程建设管理', level: 1 })).toBeVisible()
-  await expect(page.getByText('系统建议 · 码表里有高度相似的')).toBeVisible()
+  await expect(page.getByText('系统建议 · 码表里有名称很像的')).toBeVisible()
   await expect(page.getByText('＋ 智慧机场工程建设管理')).toBeVisible()
 
   await page.getByRole('button', { name: '按建议合并…' }).click()

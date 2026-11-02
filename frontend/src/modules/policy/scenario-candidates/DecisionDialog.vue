@@ -12,7 +12,7 @@ import {
   type CandidateItem,
 } from '@/api/scenarioCandidates'
 import ScenarioPicker from '@/components/ScenarioPicker.vue'
-import { KIND_NEW, REJECT_REASONS, pathText, scenarioNames, type DecisionMode } from './candidates'
+import { KIND_NEW, REJECT_REASONS, pathText, scenarioNames, similarLabel, type DecisionMode } from './candidates'
 
 /** 采纳、合并、驳回的确认框：写清楚确定后会发生什么，再提交。 */
 const props = defineProps<{
@@ -131,7 +131,7 @@ async function submit() {
             :key="pathText(item.path)"
             :value="pathText(item.path)"
           >
-            {{ pathText(item.path) }}<span class="decision__hint">　{{ item.industry }} · 相似度{{ item.level }}</span>
+            {{ pathText(item.path) }}<span class="decision__hint">　{{ item.industry }} · {{ similarLabel(item.level) }}</span>
           </el-radio>
         </el-radio-group>
         <ScenarioPicker v-model="picked" />

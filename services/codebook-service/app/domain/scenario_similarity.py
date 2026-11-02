@@ -134,6 +134,12 @@ class ScenarioNodes:
             for score, node_path in best[:limit]
         ]
 
+    def paths_under(self, industry_l1: Iterable[str]) -> list[str]:
+        """挂在这些一级行业下的全部场景路径（各级都列），给 AI 找相似场景当参照。"""
+
+        wanted = {name for name in industry_l1 if name}
+        return [" > ".join(path) for path in sorted(self.nodes) if self.nodes[path].industry_l1 & wanted]
+
     def industries_of(self, path: Path) -> list[str]:
         node = self.nodes.get(path)
         return sorted(node.industries) if node else []

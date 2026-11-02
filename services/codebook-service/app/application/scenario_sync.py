@@ -60,7 +60,8 @@ def _path(raw: dict[str, Any]) -> tuple[str, ...]:
 async def context(session: AsyncSession, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """新增场景审核的码表上下文：要挂的位置下已有的场景、字面最像的已有场景、这个场景已经挂在哪些行业下。
 
-    每条：key、path（场景路径，到新的那一级为止）、industry_l1（新的一级场景跟同一个一级行业下的比）。
+    每条：key、path（场景路径，到新的那一级为止）、industry_l1（新的一级场景跟同一个一级行业下的比），
+    with_paths 为真时再给出这些一级行业下的全部场景路径（AI 找相似场景当参照）。
     """
 
     nodes = ScenarioNodes.from_rows(await repo.scenario_nodes(session))
@@ -74,15 +75,16 @@ async def context(session: AsyncSession, items: list[dict[str, Any]]) -> list[di
         industries = [str(name) for name in raw.get("industry_l1") or [] if name]
         similar = nodes.similar(path, industries)
         best = float(similar[0]["score"]) if similar else 0.0
-        out.append(
-            {
-                "key": key,
-                "siblings": nodes.siblings(path, industries),
-                "similar": similar,
-                "industries": nodes.industries_of(path),
-                "best_level": similarity_level(best),
-            }
-        )
+        item = {
+            "key": key,
+            "siblings": nodes.siblings(path, industries),
+            "similar": similar,
+            "industries": nodes.industries_of(path),
+            "best_level": similarity_level(best),
+        }
+        if raw.get("with_paths"):
+            item["industry_paths"] = nodes.paths_under(industries)
+        out.append(item)
     return out
 
 

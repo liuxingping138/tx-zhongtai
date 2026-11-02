@@ -304,6 +304,8 @@ async def test_abandon_marks_failed_and_stops_the_ai_run(
         type_cost=Decimal(0),
         interpret_cost=Decimal(0),
         opportunity_cost=Decimal(0),
+        scenario_cost=Decimal(0),
+        scenario_run_id="",
         type_run_id="r" * 32,
         interpret_run_id="i" * 32,
         opportunity_run_id="",
@@ -418,7 +420,9 @@ async def test_task_list_still_shows_progress_when_ai_service_is_down(monkeypatc
         return {code: _task(code) for code in ("opportunity", "type", "interpret")}
 
     async def spent(_session: Any, code: str, _since: Any) -> Decimal:
-        return {"type": Decimal("1.5"), "interpret": Decimal(2), "opportunity": Decimal(0)}[code]
+        return {"type": Decimal("1.5"), "interpret": Decimal(2), "opportunity": Decimal(0), "scenario": Decimal(0)}[
+            code
+        ]
 
     async def down(*_: Any, **__: Any) -> Any:
         raise DependencyUnavailableError("ai-service 暂时不可用")
@@ -652,6 +656,8 @@ async def test_abandon_books_the_interrupted_stage_cost(
         type_cost=Decimal("1"),
         interpret_cost=Decimal(0),
         opportunity_cost=Decimal(0),
+        scenario_cost=Decimal(0),
+        scenario_run_id="",
         type_run_id="a",
         interpret_run_id="b",
         opportunity_run_id=None,
@@ -669,9 +675,11 @@ def _run_row(**values: Any) -> SimpleNamespace:
         "type_cost": Decimal(0),
         "interpret_cost": Decimal(0),
         "opportunity_cost": Decimal(0),
+        "scenario_cost": Decimal(0),
         "type_run_id": "",
         "interpret_run_id": "",
         "opportunity_run_id": "",
+        "scenario_run_id": "",
         "error_message": "",
         "finished_at": None,
     }

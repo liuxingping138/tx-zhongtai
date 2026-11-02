@@ -11,6 +11,7 @@ from sqlalchemy.orm import InstrumentedAttribute
 
 from app.aitag.domain.models import PolicyAiRun, PolicyAiTask, SkippedSource
 from app.aitag.domain.tasks import TASK_COST
+from app.policy.domain.candidates import STATUS_PENDING, ScenarioCandidate
 from app.policy.domain.models import BaseTag, Interpretation, awaiting_interpretation, awaiting_opportunity
 
 
@@ -191,8 +192,40 @@ def _count(condition: ColumnElement[bool]) -> ScalarSelect[int]:
     return select(func.count()).select_from(BaseTag).where(condition).scalar_subquery()
 
 
+def awaiting_similar() -> ColumnElement[bool]:
+    """待找相似：新增场景审核里待审、还有解读行、还没让 AI 看过的场景。候选表只有几千行，不建部分索引。"""
+
+    candidate = ScenarioCandidate
+    return (candidate.status == STATUS_PENDING) & (candidate.row_count > 0) & candidate.ai_checked_at.is_(None)
+
+
+async def scenario_backlog(session: AsyncSession, limit: int) -> list[ScenarioCandidate]:
+    """政策数多的先看：影响大的场景先有 AI 的判断。"""
+
+    rows = await session.scalars(
+        select(ScenarioCandidate)
+        .where(awaiting_similar())
+        .order_by(ScenarioCandidate.policy_count.desc(), ScenarioCandidate.id)
+        .limit(limit)
+    )
+    return list(rows)
+
+
+async def pending_candidates(session: AsyncSession, limit: int) -> list[ScenarioCandidate]:
+    """取测试数据用：待审的新增场景（AI 看没看过都算），政策数多的在前。"""
+
+    candidate = ScenarioCandidate
+    rows = await session.scalars(
+        select(candidate)
+        .where((candidate.status == STATUS_PENDING) & (candidate.row_count > 0))
+        .order_by(candidate.policy_count.desc(), candidate.id)
+        .limit(limit)
+    )
+    return list(rows)
+
+
 async def pending_counts(session: AsyncSession) -> dict[str, int]:
-    """三个任务各有多少待办：待重新判断类型的、待解读的、待补市场机会的。
+    """各任务有多少待办：待重新判断类型的、待解读的、待补市场机会的、待找相似的新增场景。
 
     任务调度页开着时每 5 秒问一次。三个数各数各的、条件和取待办一样，每个都只读自己的部分索引；
     合成一条 count(*) FILTER 的话只能整表扫一遍，几百万行时一次就要半秒以上。
@@ -202,7 +235,8 @@ async def pending_counts(session: AsyncSession) -> dict[str, int]:
     row = (
         await session.execute(select(_count(retag), _count(awaiting_interpretation()), _count(awaiting_opportunity())))
     ).one()
-    return {"type": int(row[0]), "interpret": int(row[1]), "opportunity": int(row[2])}
+    scenario = await session.scalar(select(func.count()).select_from(ScenarioCandidate).where(awaiting_similar()))
+    return {"type": int(row[0]), "interpret": int(row[1]), "opportunity": int(row[2]), "scenario": int(scenario or 0)}
 
 
 async def recent_tags(session: AsyncSession, *, interpreted: bool, limit: int) -> list[BaseTag]:

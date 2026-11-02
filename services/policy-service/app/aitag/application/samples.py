@@ -17,6 +17,7 @@ import anyio
 from platform_common.errors import ApiError, DependencyUnavailableError, ErrorCode, NotFoundError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.aitag.application import scenario_similar
 from app.aitag.domain import interpret_rules, rules
 from app.aitag.domain.contract import COLUMNS, OPTIONAL_FIELDS, REQUIRED_FIELDS
 from app.aitag.domain.tasks import TASKS
@@ -104,7 +105,13 @@ async def samples(session: AsyncSession, task: str, day: date | None, limit: int
         )
     # 正文长度按这个任务的设置截，和正式跑一致。
     max_chars = (await repo.task(session, task)).content_max_chars
-    if task == "type":
+    if task == "scenario":
+        candidates = await repo.scenario_backlog(session, limit) or await repo.pending_candidates(session, limit)
+        if not candidates:
+            raise _empty("新增场景审核里还没有待审的场景：先跑一批政策解读")
+        rows, _ = await scenario_similar.prompt_rows(session, candidates)
+        origin = "待审的新增场景"
+    elif task == "type":
         if day is None:
             raise ApiError("请选择采集日期", code=ErrorCode.VALIDATION_ERROR, http_status=422)
         rows = await _source_rows(day, limit, max_chars)

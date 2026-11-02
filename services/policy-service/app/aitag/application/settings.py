@@ -150,12 +150,18 @@ async def update_task(session: AsyncSession, actor: Actor, code: str, values: di
 
 
 # 进行到哪一步 -> 这一步在 ai-service 的任务ID列。
-_STAGE_RUN = {"typing": "type_run_id", "interpreting": "interpret_run_id", "opportunity": "opportunity_run_id"}
+_STAGE_RUN = {
+    "typing": "type_run_id",
+    "interpreting": "interpret_run_id",
+    "opportunity": "opportunity_run_id",
+    "similar": "scenario_run_id",
+}
 STAGE_NAMES = {
     "reading": "读取源政策",
     "typing": "模型判断中",
     "interpreting": "模型解读中",
     "opportunity": "模型回答中",
+    "similar": "模型找相似场景中",
 }
 
 

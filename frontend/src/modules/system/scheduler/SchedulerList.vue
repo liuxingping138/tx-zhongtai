@@ -69,6 +69,7 @@ function progress(job: ScheduledJob): string {
   if (own) return own(job)
   const task = aiTask(job)
   if (!task) return '—'
+  if (task.code === 'scenario') return task.pending ? `待找相似 ${task.pending} 个场景` : '没有待办'
   if (task.code !== 'type') return task.pending ? `待${task.code === 'interpret' ? '解读' : '补'} ${task.pending} 条` : '没有待办'
   const read = task.cursor_date ? `读到 ${task.cursor_date}` : '—'
   return task.pending ? `${read} · 待重判 ${task.pending}` : read
@@ -77,6 +78,9 @@ function progress(job: ScheduledJob): string {
 const PENDING_STATUS: Record<string, string> = { type: '等待重新判断类型', interpret: '待解读', opportunity: '待补市场机会' }
 function pendingLink(job: ScheduledJob) {
   const task = aiTask(job)
+  if (task?.code === 'scenario') {
+    return task.pending && auth.canRead('policy.scenario_candidates') ? { name: 'policy-scenario-candidates' } : null
+  }
   const status = task?.pending ? PENDING_STATUS[task.code] : undefined
   if (!status || !auth.canRead('policy.base_tags')) return null
   return { name: 'policy-base-tags', query: { ai_status: status } }

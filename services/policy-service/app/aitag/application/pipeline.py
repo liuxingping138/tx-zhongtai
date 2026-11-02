@@ -42,6 +42,7 @@ STAGE_COST = {
     "type_run_id": "type_cost",
     "interpret_run_id": "interpret_cost",
     "opportunity_run_id": "opportunity_cost",
+    "scenario_run_id": "scenario_cost",
 }
 
 

@@ -45,6 +45,12 @@ _EVENT_META = {
         "interpretation",
         "改政策解读的行业场景",
     ),
+    "policy.ai_tagging.scenario_judged": (
+        "policy.scenario_candidates",
+        "update",
+        "scenario_candidate",
+        "政策 AI 给新增场景找相似",
+    ),
     "policy.ai_tagging.opportunity": ("policy.interpretations", "update", "interpretation", "政策 AI 回填市场机会"),
     "policy.ai_tagging.retag_requested": ("policy.base_tags", "update", "base_tag", "政策重新打标"),
     "policy.source.created": ("policy.sources", "create", "source", "新增信源"),

@@ -13,7 +13,7 @@ import { hasActiveFilters, useListLoader } from '@/composables/useListLoader'
 import { useListQuery } from '@/composables/useListQuery'
 import { reviewQuery } from '../shared/reviewQuery'
 import CandidateRowsDrawer from './CandidateRowsDrawer.vue'
-import { PENDING, RESOURCE, STATUSES, decisionText, splitPath, summaryText } from './candidates'
+import { PENDING, RESOURCE, SIMILAR_LABELS, STATUSES, decisionText, similarLabel, splitPath, summaryText } from './candidates'
 
 const query = reactive({
   status: PENDING,
@@ -140,10 +140,11 @@ onMounted(() => {
             />
           </el-form-item>
           <template #advanced>
-            <el-form-item label="码表相似">
+            <el-form-item label="名称相似">
               <FilterSelect
                 v-model="query.similar_level"
                 v-bind="filters.bind('similar_level')"
+                :labels="SIMILAR_LABELS"
                 size="short"
               />
             </el-form-item>
@@ -236,7 +237,15 @@ onMounted(() => {
         </el-table-column>
         <template v-if="pending">
           <el-table-column
-            label="码表相似"
+            label="AI 判断"
+            width="130"
+          >
+            <template #default="{ row }">
+              <span :class="{ candidates__none: !row.ai_verdict }">{{ row.ai_verdict || '还没看' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="名称相似"
             width="96"
           >
             <template #default="{ row }">
@@ -245,12 +254,12 @@ onMounted(() => {
                 :type="row.similar_level === '高' ? 'warning' : 'info'"
                 effect="plain"
               >
-                {{ row.similar_level }}
+                {{ similarLabel(row.similar_level) }}
               </el-tag>
               <span
                 v-else
                 class="candidates__none"
-              >{{ row.similar_level || '—' }}</span>
+              >{{ similarLabel(row.similar_level) }}</span>
             </template>
           </el-table-column>
           <el-table-column
@@ -259,7 +268,7 @@ onMounted(() => {
             show-overflow-tooltip
           >
             <template #default="{ row }">
-              {{ row.similar_name || '—' }}
+              {{ row.ai_similar || row.similar_name || '—' }}
             </template>
           </el-table-column>
         </template>

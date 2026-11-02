@@ -39,7 +39,12 @@ class _Db:
 def test_jobs_are_listed_in_page_order_with_their_own_timeouts() -> None:
     registered = jobs.scheduler.jobs
     assert list(registered) == ["crawler", "crawler_config", *(job_code(task) for task in TASKS)]
-    assert [registered[job_code(task)].name for task in TASKS] == ["政策类型判断", "政策解读", "政策市场机会"]
+    assert [registered[job_code(task)].name for task in TASKS] == [
+        "政策类型判断",
+        "政策解读",
+        "政策市场机会",
+        "新增场景找相似",
+    ]
     assert registered["crawler"].timeout_seconds == 1800 and registered["crawler_config"].timeout_seconds == 600
     assert all(registered[job_code(task)].timeout_seconds == 6 * 3600 for task in TASKS)
     # 每个任务都能收尾和给出摘要：执行记录只认批次写成 success。

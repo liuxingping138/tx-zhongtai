@@ -270,7 +270,7 @@ policy / codebook / ai 走公共 Outbox，默认 5 分钟。审计服务按 `eve
 现有任务：iam-service 的清理失效会话（`iam_session_cleanup`，默认 03:30，在 iam-worker 里与 Outbox 投递同进程）；
 audit-service 的清理到期操作日志（`audit_cleanup`，默认 04:30，在 audit-worker 里）；
 policy-service 的三类（`policy-worker`，`app/scheduler/application/jobs.py` 登记）：爬虫监测增量同步
-（任务编码 `crawler`，默认 10:10，时刻可在页面改）、爬虫配置同步（`crawler_config`，默认 18:00）和政策 AI 打标的三个任务（`policy_ai_type` / `policy_ai_interpret` / `policy_ai_opportunity`，
+（任务编码 `crawler`，默认 10:10，时刻可在页面改）、爬虫配置同步（`crawler_config`，默认 18:00）和政策 AI 打标的四个任务（`policy_ai_type` / `policy_ai_interpret` / `policy_ai_opportunity` / `policy_ai_scenario`，
 上线时默认停用、页面手动执行）。
 执行、结果摘要、中断收尾、超时都写在各自的 `Job` 上，引擎不认识具体业务。重启错过多天只合并一次。
 初始化无成功水位时拒绝自动同步，需要先完成历史回填，不能自动退回短窗口。
@@ -283,7 +283,7 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
   （正文，按 `content_id` 一对一），只读不回写。正文其实是整页网页源码，发给模型前由 `rules.page_text` 提取成看得见的文字（只剩约 6%），并去掉导航、页头页脚（语义标签，或 class / id 拆开后含 header、footer、nav、menu、crumb 等词的块，否定词开头的如 `no-breadNav-padd` 不算；去完把原文最长一段弄丢了、或导航块到结尾没闭合，就退回整页文字。400 页实测再少约四分之一、没丢正文句子），
   不提取既浪费十几倍的输入费用，又和业务人员用 Excel 测试时的输入口径不一致。按采集日逐天读、日内按 `content_id` 分页，只读到前天整天（源政策 ID 是哈希、不按入库先后排，读过一天之后再入库的会漏；源库每个采集日的数据第二天才入库完，实测最晚到第二天晚上），读到的政策已打过类型标的跳过（和已有基础标签内容相同、没写进去的记在 `policy_ai_skipped_sources`，也算打过）（读取进度往回调重扫补漏时不重复花钱）；批次进行中有人改了起始日期，收尾不把它改回去；每批开始前按模板现在的上线版本复核任务契约（`tagging.check_template_now`）；读取进度（采集日 + 正文ID）存在
   `policy_ai_tasks` 的类型判断那一行，一批写完才前移，费用到上限没跑到的行下批重读
-- 类型判断、政策解读、市场机会是三个独立的调度任务（`app/aitag/domain/tasks.py`），各有模板、每批条数、正文长度和每日上限（`policy_ai_tasks` 一任务一行），
+- 类型判断、政策解读、市场机会、新增场景找相似是四个独立的调度任务（`app/aitag/domain/tasks.py`），各有模板、每批条数、正文长度和每日上限（`policy_ai_tasks` 一任务一行），
   一次执行只跑一个任务的一批。后两个按待办取数据，前一个没跑后一个就没有待办，彼此不串联
 - 每批调 ai-service 的 `/internal/v1/pipeline-runs`：用模板**上线版本**、低优档、以这个任务当日剩余额度为费用上限跑，worker 到上限自停；
   一批最多发 `pipeline.PIPELINE_ROWS_BUDGET`（56MB，ai-service 这个前缀收 64MB），超出的行记成未执行、下一批接着做；内部调用的 JSON 按 UTF-8 发（转义的话一个汉字 6 字节）；
@@ -299,7 +299,7 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
   任务设置换模板时后端按它拦下；提示词模板编辑页按草稿实时提示（前端 `modules/ai/prompts/taskFit.ts` 同一套规则，两边改要一起改）
 - 「从数据库取测试数据」（`app/aitag/application/samples.py`，`GET /api/v1/policy/ai-tagging/samples`，权限 `policy.base_tags:list`）：按任务生成和正式打标一样的行，
   前端再存成模板测试 Excel（ai-service `POST /api/v1/ai/prompts/{id}/test-data`）。接口只能挂本服务资源，所以不用 AI 模块的模板权限
-- 打标会花钱，单独授权：改任务设置（模板、条数、每日费用上限）挂 `policy.ai_tagging:update`；三个打标调度任务的 `Job.cost_resource` 是它，
+- 打标会花钱，单独授权：改任务设置（模板、条数、每日费用上限）挂 `policy.ai_tagging:update`；打标调度任务的 `Job.cost_resource` 都是它，
   任务调度改计划、立即执行除了 `system.scheduler` 还要它的完整档（`build_scheduler_router` 的 `check_permission`）。新增花钱的调度任务照此设 `cost_resource`
 - 政策正文不进平台库：基础标签、解读详情里的「政策正文」由 `policy/application/policy_content.py`（`GET /base-tags/{id}/content`、`/interpretations/{id}/content`，各挂自己的 `read`）按 `source_content_id` 现读源库，
   用 `rules.clean_content` 提取成和打标同一口径的文字；源库单条实测 0.2 秒。读源库用 `source.read_page`：一次连接、连接 5 秒读 20 秒超时、不重试，
@@ -318,7 +318,7 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
   系统归集、套用决定只加版本号，不动 `updated_at` / 操作人：AI 按「更新时间 ≤ 打标时间」认没人改过的行，动了会让重新解读、补市场机会跳过它；只有来源政策里逐行「改场景」（`POST /interpretations/{id}/scenario`）算人工编辑。
   采纳、合并经 codebook `/internal/v1/scenarios/sync` 写码表（按编码规则 `app/domain/scenario_codes.py`：各级号全局最大 + 1，已有上级沿用，行业只查不建；合并到没挂在这个行业下的场景只新建关联行），合并前先确认目标码表里有；
   回填编码后关联主键换成编码形式，撞上同一政策同场景、同机会类型的另一行时这行标「重复」、留原主键，不删（用户定的）。码表里新建的行标「是否新增场景 = 是」、记「来源政策」（不进 Excel 导入列和内容哈希）。
-  审核页的「码表里的位置」「相似的已有场景」现取 codebook `/internal/v1/scenarios/context`（字符二元组相似度，`app/domain/scenario_similarity.py`），别的一级行业下的已有场景字面再像也最多算「中」（不据此建议合并，「智慧机场工程建设管理」≠ 工会的「工程建设管理」）；新候选建好时缓存最像的一个给列表用，口径改了用 `classify_scenarios --resimilar` 重算待审的；选场景用 codebook `GET /scenarios/paths?q=`
+  审核页的「码表里的位置」「相似的已有场景」现取 codebook `/internal/v1/scenarios/context`（字符二元组相似度，`app/domain/scenario_similarity.py`），名称相似只看字面，意思近、说法不同的找不出来，所以另有打标任务「新增场景找相似」（`app/aitag/application/scenario_similar.py`，`policy_ai_scenario`，默认停用）：待审、还没看过的场景一个只问一次，把码表里同一个一级行业下的全部场景（context 的 `with_paths`）交给上线模板，要它输出「判断」「最像的已有场景」「理由」，结论归成同一个场景 / 新场景 / 归到已有场景下，AI 说的场景码表里对得上才记 `ai_target`（审核页预选成合并目标），系统建议先看 AI 的判断。别的一级行业下的已有场景字面再像也最多算「中」（不据此建议合并，「智慧机场工程建设管理」≠ 工会的「工程建设管理」）；新候选建好时缓存最像的一个给列表用，口径改了用 `classify_scenarios --resimilar` 重算待审的；选场景用 codebook `GET /scenarios/paths?q=`
 - 费用：批次记 `task` 和各步费用列（`type_cost` 等），任务列表的「今日已花」按费用列（`tasks.TASK_COST`）算，拆分前三步合跑的旧批次也能各归各的任务；
   `/tasks` 的 `current` 给出每个任务正在跑的那批和 AI 已答条数。按天账单不在政策服务里做，统一看 AI提问 → 费用账单
 - 内部调用密钥：`AI_POLICY_CALLER_SECRET`（政策→AI）、`CODEBOOK_POLICY_CALLER_SECRET`（政策→码表），compose 把同一个值传给两边

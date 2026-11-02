@@ -42,6 +42,7 @@ async def ensure(session: AsyncSession, specs: list[dict[str, Any]], now: dateti
             "industry_count": 0,
             "similar_score": 0.0,
             "decided_at": None,
+            "ai_checked_at": None,
             **spec,
         }
         for spec in specs
@@ -70,6 +71,10 @@ _TEXT_DEFAULTS = (
     "sample_title",
     "similar_name",
     "similar_level",
+    "ai_verdict",
+    "ai_similar",
+    "ai_target",
+    "ai_reason",
 )
 
 

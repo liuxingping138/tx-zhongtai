@@ -1,4 +1,4 @@
-import type { CandidateItem, CandidateSummary } from '@/api/scenarioCandidates'
+import type { CandidateDetail, CandidateItem, CandidateSummary } from '@/api/scenarioCandidates'
 import type { ScenarioPath } from '@/api/codebook'
 
 export const RESOURCE = 'policy.scenario_candidates'
@@ -20,7 +20,14 @@ export type DecisionMode = 'adopt' | 'merge' | 'reject'
  * - 其余（只有一两条政策提、或相似度一般）不标，交给人判断
  */
 export const ADOPT_MIN_POLICIES = 3
-export function suggest(candidate: Pick<CandidateItem, 'kind' | 'similar_level' | 'policy_count'>): Suggestion {
+export const AI_SAME = '同一个场景'
+export const AI_UNDER = '归到已有场景下'
+export const AI_NEW = '新场景'
+type SuggestFields = 'kind' | 'similar_level' | 'policy_count' | 'ai_verdict' | 'ai_target'
+export function suggest(candidate: Pick<CandidateItem, SuggestFields>): Suggestion {
+  // AI 看过的按 AI 的判断：它对照了码表里整个行业的场景，比只看名称字面靠得住
+  if (candidate.ai_verdict === AI_SAME || candidate.ai_verdict === AI_UNDER) return candidate.ai_target ? 'merge' : null
+  if (candidate.ai_verdict === AI_NEW) return 'adopt'
   if (candidate.similar_level === '高') return 'merge'
   if (candidate.kind !== KIND_NEW) return 'adopt'
   if (candidate.similar_level !== '中' && candidate.policy_count >= ADOPT_MIN_POLICIES) return 'adopt'
@@ -68,4 +75,64 @@ export function scenarioNames(path: ScenarioPath): string[] {
 export function pathLabel(path: ScenarioPath): string {
   const industry = [path.industry_l1, path.industry_l2, path.industry_l3].filter(Boolean).join('/')
   return `${pathText(scenarioNames(path))}（${industry}）`
+}
+
+/** 相似程度给业务人员看的说法：后端存高 / 中 / 无。 */
+export const SIMILAR_LABELS: Record<string, string> = { 高: '很像', 中: '有点像', 无: '没有' }
+export function similarLabel(level: string): string {
+  return SIMILAR_LABELS[level] ?? (level || '还没算')
+}
+
+const LEVEL_NAMES = ['', '一级', '二级', '三级']
+export function levelName(level: number): string {
+  return LEVEL_NAMES[level] ?? ''
+}
+
+export interface PositionPart {
+  name: string
+  /** 一级、二级、三级 */
+  level: string
+  /** 码表里已有的、这次新增的 */
+  added: boolean
+}
+
+/**
+ * 这个场景在码表里的完整位置，逐级标出哪一级码表已有、哪一级是新增的。
+ * 新增那一级下面 AI 还写了下级的，一并列出（取行数最多的那个，其余写「等 N 个」）。
+ */
+export function positionParts(candidate: Pick<CandidateDetail, 'kind' | 'new_level' | 'scenario_l1' | 'scenario_l2' | 'scenario_l3' | 'children'>): PositionPart[] {
+  const names = [candidate.scenario_l1, candidate.scenario_l2, candidate.scenario_l3].filter(Boolean)
+  const isNew = candidate.kind === KIND_NEW
+  const parts = names.map((name, index) => ({ name, level: levelName(index + 1), added: isNew && index + 1 >= candidate.new_level }))
+  const child = candidate.children[0]
+  if (isNew && child && names.length < 3) {
+    const more = candidate.children.length > 1 ? ` 等 ${candidate.children.length} 个` : ''
+    parts.push({ name: `${child.path.split(' › ')[0] ?? child.path}${more}`, level: levelName(names.length + 1), added: true })
+  }
+  return parts
+}
+
+/** 合并时预选的目标：AI 说的、码表里对得上的那个；AI 没看过时用名称很像的那个。 */
+export function mergeTargetOf(candidate: Pick<CandidateItem, 'ai_target'>, similar: { path: string[]; level: string }[]): string[] | null {
+  if (candidate.ai_target) return candidate.ai_target.split(' > ')
+  const best = similar[0]
+  return best?.level === '高' ? best.path : null
+}
+
+/** 系统建议那张卡片上的一句话：为什么建议这么做。 */
+export function suggestionText(candidate: Pick<CandidateItem, 'ai_verdict' | 'ai_similar'>, suggestion: Suggestion): string {
+  if (!suggestion) return ''
+  if (candidate.ai_verdict === AI_SAME) return `AI 判断：和「${candidate.ai_similar}」是同一个场景`
+  if (candidate.ai_verdict === AI_UNDER) return `AI 判断：太细，应归到「${candidate.ai_similar}」`
+  if (candidate.ai_verdict === AI_NEW) return 'AI 判断：码表里没有同样的场景'
+  return suggestion === 'merge' ? '码表里有名称很像的' : '没有相似的，且不止一两条政策这么说'
+}
+
+/** AI 找相似的结果写成一句话；还没让 AI 看过的说明怎么才会有。 */
+export function aiText(candidate: Pick<CandidateItem, 'ai_verdict' | 'ai_similar' | 'ai_reason' | 'ai_checked_at'>): string {
+  if (!candidate.ai_verdict) return 'AI 还没看过：任务调度里的「新增场景找相似」跑过一批后才有'
+  if (candidate.ai_verdict === '判断失败') return `AI 没判断出来：${candidate.ai_reason}`
+  const similar = candidate.ai_similar ? `，最像的是「${candidate.ai_similar}」` : ''
+  const reason = candidate.ai_reason ? `。理由：${candidate.ai_reason}` : ''
+  return `AI 判断：${candidate.ai_verdict}${similar}${reason}`
 }

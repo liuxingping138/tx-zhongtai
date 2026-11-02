@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import type { CandidateContext, CandidateDetail, CandidateRow } from '@/api/scenarioCandidates'
-import { KIND_NEW, PENDING, pathText } from './candidates'
+import { computed } from 'vue'
+
+import { KIND_NEW, PENDING, levelName, pathText, similarLabel } from './candidates'
 
 /** 审核页下半部分：判断依据（码表里的位置、相似的已有场景、AI 理由）在左，来源政策在右。 */
-defineProps<{
+const props = defineProps<{
   candidate: CandidateDetail
   context: CandidateContext | null
   contextError: string
@@ -11,6 +13,13 @@ defineProps<{
   canMerge: boolean
 }>()
 const emit = defineEmits<{ merge: [path: string[]]; openRows: [] }>()
+
+/** 一句话说清码表里有没有很像的：有就点名，没有就说只有一般像的。 */
+const similarSummary = computed(() => {
+  const close = props.context?.similar.filter(item => item.level === '高') ?? []
+  if (close.length) return `有 ${close.length} 个名称很像的：${close.map(item => `「${pathText(item.path)}」`).join('、')}，看看是不是同一个场景换了说法。`
+  return '没有名称很像的，下面几个只是部分字相同，供参考。'
+})
 </script>
 
 <template>
@@ -56,7 +65,13 @@ const emit = defineEmits<{ merge: [path: string[]]; openRows: [] }>()
         <p>这次要新挂到：{{ candidate.industry }}</p>
       </template>
 
-      <h2>相似的已有场景</h2>
+      <h2>码表里相似的场景</h2>
+      <p
+        v-if="context?.similar.length"
+        class="evidence__muted"
+      >
+        {{ similarSummary }}
+      </p>
       <ul
         v-if="context?.similar.length"
         class="evidence__similar"
@@ -69,13 +84,13 @@ const emit = defineEmits<{ merge: [path: string[]]; openRows: [] }>()
             :type="item.level === '高' ? 'warning' : 'info'"
             effect="plain"
           >
-            {{ item.level }}
+            {{ similarLabel(item.level) }}
           </el-tag>
           <div class="evidence__similar-body">
-            <strong>{{ pathText(item.path) }}</strong><span
-              v-if="item.industry"
-              class="evidence__muted"
-            >（{{ item.industry }}）</span>
+            <strong>{{ pathText(item.path) }}</strong>
+            <p class="evidence__muted">
+              {{ levelName(item.path.length) }}场景{{ item.industry ? ` · ${item.industry}` : '' }}{{ item.level === '中' && item.industry && !item.industry.includes(candidate.main_industry) ? ' · 不在同一个行业下，多半不是一回事' : '' }}
+            </p>
             <p
               v-if="item.desc"
               class="evidence__muted"
@@ -96,7 +111,7 @@ const emit = defineEmits<{ merge: [path: string[]]; openRows: [] }>()
         v-else
         class="evidence__muted"
       >
-        {{ contextError ? '—' : '码表里没有字面相似的场景；意思相近但说法不同的，请对照上面同级的场景判断。' }}
+        {{ contextError ? '—' : '码表里没有名称相近的场景；意思相近但说法不同的，请对照上面同级的场景判断。' }}
       </p>
 
       <template v-if="candidate.reasons.length">

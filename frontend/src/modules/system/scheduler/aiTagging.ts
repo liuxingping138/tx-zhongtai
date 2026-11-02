@@ -1,9 +1,9 @@
-/** 政策 AI 打标三个任务在任务调度页上的文案、写入量和金额格式。 */
+/** 政策 AI 打标各任务在任务调度页上的文案、写入量和金额格式。 */
 import type { AiTaskCode } from '@/api/aiTagging'
 import type { AiTaggingResult } from '@/api/scheduler'
 
 const PREFIX = 'policy_ai_'
-const CODES: AiTaskCode[] = ['type', 'interpret', 'opportunity']
+const CODES: AiTaskCode[] = ['type', 'interpret', 'opportunity', 'scenario']
 
 /** 任务调度编码 -> 打标任务；不是打标任务返回 null。 */
 export function taskOfJob(jobCode: string): AiTaskCode | null {
@@ -16,6 +16,7 @@ export const TASK_INTRO: Record<AiTaskCode, string> = {
   type: '从读取进度往后读一批源政策，判断政策类型写入「政策基础标签」，信息化建设类标为需要解读。',
   interpret: '对基础标签里「是否解读 = 是」、还没解读的政策逐条解读，一条政策展开成多行写入「政策解读」。',
   opportunity: '对解读过、还没补市场机会的政策写市场机会，按一级行业 + 一级场景回填到它的解读行。',
+  scenario: '「新增场景审核」里待审、还没让 AI 看过的场景，对照码表里同一个一级行业下的全部场景找出最像的，说是不是同一个场景。一个场景只问一次。',
 }
 
 /** 费用账单里这个任务的「用途」：政策服务发起批量任务时报的发起方名字。 */
@@ -23,6 +24,7 @@ export const TASK_PURPOSE: Record<AiTaskCode, string> = {
   type: '政策AI打标·类型判断',
   interpret: '政策AI打标·政策解读',
   opportunity: '政策AI打标·市场机会',
+  scenario: '政策AI打标·新增场景找相似',
 }
 
 /** 执行记录「结果」列：失败写原因，成功写说明和花费。 */

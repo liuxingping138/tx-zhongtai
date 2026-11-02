@@ -18,7 +18,7 @@ import anyio
 from platform_common.clock import utcnow
 from platform_common.errors import ApiError
 
-from app.aitag.application import base_tag_rows, interpreting, retag
+from app.aitag.application import base_tag_rows, interpreting, retag, scenario_similar
 from app.aitag.application.interpreting import untouched
 from app.aitag.application.pipeline import (
     NOT_RUN,
@@ -46,7 +46,12 @@ from app.policy.domain.models import BASE_TAG_FIELDS, content_hash
 __all__ = ["abandon", "day_start", "policy_type_names", "run_batch", "run_summary", "summary", "today"]
 
 
-STAGE_COLUMN = {"typing": "type_cost", "interpreting": "interpret_cost", "opportunity": "opportunity_cost"}
+STAGE_COLUMN = {
+    "typing": "type_cost",
+    "interpreting": "interpret_cost",
+    "opportunity": "opportunity_cost",
+    "similar": "scenario_cost",
+}
 # 读取源库只读到这么多天以前（含）：源库每个采集日的数据第二天才入库完。
 SOURCE_SETTLE_DAYS = 2
 
@@ -203,8 +208,13 @@ async def _tag(
     return note
 
 
-STEPS = {"type": _type_step, "interpret": interpreting.interpret_step, "opportunity": interpreting.opportunity_step}
-FIRST_STAGE = {"type": "reading", "interpret": "interpreting", "opportunity": "opportunity"}
+STEPS = {
+    "type": _type_step,
+    "interpret": interpreting.interpret_step,
+    "opportunity": interpreting.opportunity_step,
+    "scenario": scenario_similar.similar_step,
+}
+FIRST_STAGE = {"type": "reading", "interpret": "interpreting", "opportunity": "opportunity", "scenario": "similar"}
 
 
 async def run_batch(run_id: uuid.UUID, task: str) -> None:
@@ -252,12 +262,12 @@ async def _close(run_id: uuid.UUID, message: str, *, only_running: bool) -> list
             return []
         run.status, run.error_message, run.finished_at = "failed", message[:2000], utcnow()
         column = STAGE_COLUMN.get(run.stage)
-        costs = [run.type_cost, run.interpret_cost, run.opportunity_cost]
+        costs = [run.type_cost, run.interpret_cost, run.opportunity_cost, run.scenario_cost]
         booked = sum((value or Decimal(0) for value in costs), Decimal(0))
         spent = run.cost or Decimal(0)
         if column is not None and spent > booked:
             setattr(run, column, (getattr(run, column) or Decimal(0)) + (spent - booked))
-        ai_runs = [run.type_run_id, run.interpret_run_id, run.opportunity_run_id]
+        ai_runs = [run.type_run_id, run.interpret_run_id, run.opportunity_run_id, run.scenario_run_id]
         await session.commit()
     return [ai_run_id for ai_run_id in ai_runs if ai_run_id]
 
@@ -327,6 +337,10 @@ def run_summary(run: PolicyAiRun) -> dict[str, Any]:
         "type_cost": str(run.type_cost),
         "interpret_cost": str(run.interpret_cost),
         "opportunity_cost": str(run.opportunity_cost),
+        "scenario_run_id": run.scenario_run_id,
+        "scenario_rows": run.scenario_rows,
+        "scenario_failed": run.scenario_failed,
+        "scenario_cost": str(run.scenario_cost),
         "note": run.note,
         "error_message": run.error_message,
     }

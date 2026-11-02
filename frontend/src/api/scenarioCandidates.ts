@@ -37,6 +37,13 @@ export interface CandidateItem {
   similar_score: number
   /** 高、中、无；空为还没算 */
   similar_level: string
+  /** AI 找相似的结论：同一个场景、新场景、归到已有场景下、判断失败；空为还没让 AI 看 */
+  ai_verdict: string
+  ai_similar: string
+  /** AI 说的场景码表里对得上时的路径（一级 > 二级 > 三级），合并时预选它 */
+  ai_target: string
+  ai_reason: string
+  ai_checked_at: string
   first_seen_at: string
   last_seen_at: string
   version: number
