@@ -44,8 +44,10 @@ const { items, total, loading, loadError, load } = useListLoader({
 })
 
 const pending = computed(() => listQuery.applied.status === PENDING)
-// 页签不算筛选：待审为空时写「暂无记录」，不给「清除筛选」
-const filtered = computed(() => hasActiveFilters({ ...listQuery.applied, status: '' }))
+// 页签不算筛选：不计入「已筛选 N 项」，待审为空时写「暂无记录」、不给「清除筛选」
+const draftFilters = computed(() => ({ ...query, status: '' }))
+const appliedFilters = computed(() => ({ ...listQuery.applied, status: '' }))
+const filtered = computed(() => hasActiveFilters(appliedFilters.value))
 const counts = computed(() => summary.value?.by_status ?? {})
 
 function switchStatus(value: string | number | boolean | undefined) {
@@ -110,8 +112,8 @@ onMounted(() => {
       </template>
       <template #filters>
         <FilterBar
-          :query="query"
-          :applied="listQuery.applied"
+          :query="draftFilters"
+          :applied="appliedFilters"
           @search="listQuery.search"
           @reset="resetFilters"
         >
