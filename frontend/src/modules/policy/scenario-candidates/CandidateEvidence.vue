@@ -72,7 +72,10 @@ const emit = defineEmits<{ merge: [path: string[]]; openRows: [] }>()
             {{ item.level }}
           </el-tag>
           <div class="evidence__similar-body">
-            <strong>{{ pathText(item.path) }}</strong>
+            <strong>{{ pathText(item.path) }}</strong><span
+              v-if="item.industry"
+              class="evidence__muted"
+            >（{{ item.industry }}）</span>
             <p
               v-if="item.desc"
               class="evidence__muted"

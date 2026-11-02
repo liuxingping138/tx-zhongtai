@@ -318,7 +318,7 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
   系统归集、套用决定只加版本号，不动 `updated_at` / 操作人：AI 按「更新时间 ≤ 打标时间」认没人改过的行，动了会让重新解读、补市场机会跳过它；只有来源政策里逐行「改场景」（`POST /interpretations/{id}/scenario`）算人工编辑。
   采纳、合并经 codebook `/internal/v1/scenarios/sync` 写码表（按编码规则 `app/domain/scenario_codes.py`：各级号全局最大 + 1，已有上级沿用，行业只查不建；合并到没挂在这个行业下的场景只新建关联行），合并前先确认目标码表里有；
   回填编码后关联主键换成编码形式，撞上同一政策同场景、同机会类型的另一行时这行标「重复」、留原主键，不删（用户定的）。码表里新建的行标「是否新增场景 = 是」、记「来源政策」（不进 Excel 导入列和内容哈希）。
-  审核页的「码表里的位置」「相似的已有场景」现取 codebook `/internal/v1/scenarios/context`（字符二元组相似度，`app/domain/scenario_similarity.py`），新候选建好时缓存最像的一个给列表用；选场景用 codebook `GET /scenarios/paths?q=`
+  审核页的「码表里的位置」「相似的已有场景」现取 codebook `/internal/v1/scenarios/context`（字符二元组相似度，`app/domain/scenario_similarity.py`），别的一级行业下的已有场景字面再像也最多算「中」（不据此建议合并，「智慧机场工程建设管理」≠ 工会的「工程建设管理」）；新候选建好时缓存最像的一个给列表用，口径改了用 `classify_scenarios --resimilar` 重算待审的；选场景用 codebook `GET /scenarios/paths?q=`
 - 费用：批次记 `task` 和各步费用列（`type_cost` 等），任务列表的「今日已花」按费用列（`tasks.TASK_COST`）算，拆分前三步合跑的旧批次也能各归各的任务；
   `/tasks` 的 `current` 给出每个任务正在跑的那批和 AI 已答条数。按天账单不在政策服务里做，统一看 AI提问 → 费用账单
 - 内部调用密钥：`AI_POLICY_CALLER_SECRET`（政策→AI）、`CODEBOOK_POLICY_CALLER_SECRET`（政策→码表），compose 把同一个值传给两边

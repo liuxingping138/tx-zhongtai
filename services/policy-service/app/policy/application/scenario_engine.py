@@ -340,6 +340,18 @@ async def settle(session: AsyncSession, candidate_ids: Iterable[uuid.UUID | None
     await refresh_similar(await repo.by_ids(session, ids))
 
 
+async def refresh_pending_similar() -> int:
+    """待审候选重算一遍「最像的已有场景」：相似度的口径改了、码表里加了一批场景之后跑。"""
+
+    async with SessionLocal() as session:
+        candidates = await repo.pending(session)
+        for candidate in candidates:
+            candidate.similar_level = ""
+        await refresh_similar(candidates)
+        await session.commit()
+    return len(candidates)
+
+
 async def classify_quietly(
     session: AsyncSession, rows: Iterable[Interpretation], also: Iterable[uuid.UUID | None] = ()
 ) -> None:

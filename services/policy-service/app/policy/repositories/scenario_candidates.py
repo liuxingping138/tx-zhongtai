@@ -87,6 +87,12 @@ async def by_ids(session: AsyncSession, ids: list[uuid.UUID]) -> list[ScenarioCa
     return list(await session.scalars(select(C).where(C.id.in_(ids))))
 
 
+async def pending(session: AsyncSession) -> list[ScenarioCandidate]:
+    """待审的候选，锁住取（重算相似场景用，几千个以内）。"""
+
+    return list(await session.scalars(select(C).where(C.status == STATUS_PENDING).with_for_update()))
+
+
 async def stats(session: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, tuple[Any, ...]]:
     """每个候选下的行数、政策数、一级行业数、最常见的一级行业、最近一行的入库时间和政策名称。"""
 

@@ -38,7 +38,8 @@ const error = ref('')
 watch(() => props.mode, (mode) => {
   if (!mode) return
   name.value = props.candidate.name
-  target.value = props.presetTarget ?? props.context?.similar[0]?.path ?? null
+  // 只预选从「合并到这里」或系统建议带进来的目标，不替人默认选一个相似度一般的
+  target.value = props.presetTarget ?? null
   chosen.value = target.value ? pathText(target.value) : ''
   picked.value = null
   reason.value = REJECT_REASONS[0] ?? ''
@@ -130,7 +131,7 @@ async function submit() {
             :key="pathText(item.path)"
             :value="pathText(item.path)"
           >
-            {{ pathText(item.path) }}<span class="decision__hint">　相似度{{ item.level }}</span>
+            {{ pathText(item.path) }}<span class="decision__hint">　{{ item.industry }} · 相似度{{ item.level }}</span>
           </el-radio>
         </el-radio-group>
         <ScenarioPicker v-model="picked" />

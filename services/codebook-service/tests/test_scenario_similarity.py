@@ -18,6 +18,7 @@ ROWS = [
     (AIR, ("智慧航空", "智慧航站楼", "统一联动安防"), DESCS, ""),
     (AIR, ("智慧航空", "智慧陆侧", ""), ("", "陆侧描述", ""), ""),
     (ROAD, ("智慧交通工程建设", "交通工程建设信息化", ""), DESCS, "交通工程建设信息化通过构建工程管理云平台"),
+    (("重要客户服务一部", "", ""), ("智慧工会", "工程建设管理", ""), DESCS, ""),
     (("医卫行业", "卫生", "卫生"), ("基层医卫", "县域医共体", ""), DESCS, ""),
 ]
 
@@ -72,3 +73,18 @@ async def test_context_answers_each_item(monkeypatch: pytest.MonkeyPatch) -> Non
     out = await scenario_sync.context(None, items)  # type: ignore[arg-type]  # 只用到打桩的仓储
     assert (out[0]["key"], out[0]["best_level"], [s["name"] for s in out[0]["siblings"]]) == ("a", "高", ["县域医共体"])
     assert out[1] == {"key": "b", "siblings": [], "similar": [], "industries": [], "best_level": "无"}
+
+
+def test_similar_scenarios_of_other_industries_are_at_most_medium() -> None:
+    nodes = ScenarioNodes.from_rows(ROWS)
+    path = ("智慧航空", "智慧机场工程建设管理")
+    # 不给行业：字面包含就是「高」
+    assert nodes.similar(path)[0]["path"] == ["智慧工会", "工程建设管理"]
+    assert nodes.similar(path)[0]["level"] == "高"
+    # 给了「交通行业」：工会下的那个最多算「中」，写明它在哪个行业下
+    found = nodes.similar(path, ["交通行业"])
+    assert (found[0]["path"], found[0]["level"], found[0]["industry"]) == (
+        ["智慧工会", "工程建设管理"],
+        "中",
+        "重要客户服务一部",
+    )

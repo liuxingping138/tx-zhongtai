@@ -72,7 +72,7 @@ async def context(session: AsyncSession, items: list[dict[str, Any]]) -> list[di
             out.append({"key": key, "siblings": [], "similar": [], "industries": [], "best_level": "无"})
             continue
         industries = [str(name) for name in raw.get("industry_l1") or [] if name]
-        similar = nodes.similar(path)
+        similar = nodes.similar(path, industries)
         best = float(similar[0]["score"]) if similar else 0.0
         out.append(
             {

@@ -20,6 +20,7 @@ MIN_CONTAIN = 3
 HIGH = 0.6
 MEDIUM = 0.35
 SIMILAR_LIMIT = 5
+CROSS_INDUSTRY_CAP = 0.59  # 低于 HIGH
 DESC_CHARS = 80
 LEVEL_HIGH = "高"
 LEVEL_MEDIUM = "中"
@@ -62,6 +63,7 @@ def similarity_level(score: float) -> str:
 class _Node:
     desc: str = ""
     industries: set[str] = field(default_factory=set)
+    industry_l1: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -87,6 +89,7 @@ class ScenarioNodes:
                     break
                 node = book.nodes.setdefault(path, _Node())
                 node.industries.add(industry_path)
+                node.industry_l1.add(industry[0])
                 node.desc = node.desc or descs[level] or (desc_90 if level == depth - 1 else "")
                 if level == 0:
                     book.roots.setdefault(industry[0], set()).add(path[0])
@@ -104,11 +107,21 @@ class ScenarioNodes:
             names = set().union(*(self.roots.get(name, set()) for name in industry_l1))
         return [{"name": name, "children": len(self.children.get((*parent, name), set()))} for name in sorted(names)]
 
-    def similar(self, path: Path, limit: int = SIMILAR_LIMIT) -> list[dict[str, Any]]:
-        """码表里字面上最像的已有场景（任意一级），只给相似度到「中」的。"""
+    def _score(self, name: str, node_path: Path, industry_l1: set[str]) -> float:
+        score = similarity(name, node_path[-1])
+        # 不在这些一级行业下的已有场景，字面再像也多半不是一回事（「智慧机场工程建设管理」和工会的「工程建设管理」）：
+        # 最多算「中」，照样列出来给人看，但不据此建议合并
+        if industry_l1 and not (self.nodes[node_path].industry_l1 & industry_l1):
+            score = min(score, CROSS_INDUSTRY_CAP)
+        return score
 
-        name = path[-1]
-        scored = [(similarity(name, node_path[-1]), node_path) for node_path in self.nodes if node_path != path]
+    def similar(self, path: Path, industry_l1: Iterable[str] = (), limit: int = SIMILAR_LIMIT) -> list[dict[str, Any]]:
+        """码表里字面上最像的已有场景（任意一级），只给相似度到「中」的。传了一级行业时，别的行业下的最多算「中」。"""
+
+        name, industries = path[-1], {item for item in industry_l1 if item}
+        scored = [
+            (self._score(name, node_path, industries), node_path) for node_path in self.nodes if node_path != path
+        ]
         best = sorted((item for item in scored if item[0] >= MEDIUM), key=lambda item: (-item[0], item[1]))
         return [
             {
@@ -116,6 +129,7 @@ class ScenarioNodes:
                 "score": score,
                 "level": similarity_level(score),
                 "desc": self.nodes[node_path].desc[:DESC_CHARS],
+                "industry": "、".join(sorted(self.nodes[node_path].industry_l1)[:3]),
             }
             for score, node_path in best[:limit]
         ]

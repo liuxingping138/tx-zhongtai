@@ -60,8 +60,8 @@ export interface CandidateDetail extends CandidateItem {
 export interface CandidateContext {
   /** 要挂的位置下码表里已有的场景和它们的下级数 */
   siblings: { name: string; children: number }[]
-  /** 码表里字面最像的已有场景 */
-  similar: { path: string[]; score: number; level: string; desc: string }[]
+  /** 码表里字面最像的已有场景；不在这个场景的一级行业下的最多算「中」，industry 是它挂的一级行业 */
+  similar: { path: string[]; score: number; level: string; desc: string; industry: string }[]
   /** 这个场景路径已经挂在哪些行业下（新关联用） */
   industries: string[]
 }
