@@ -48,7 +48,8 @@ Names = tuple[str, str, str]
 
 # AI 找相似场景（打标任务「新增场景找相似」，app.aitag.application.scenario_similar）：
 # 交给模板的列（模板里 @【列名】 引用）、要模板输出的字段、判断的三种结论。
-AI_ID = "场景编号"
+# ai-service 的流水线靠每行的「源ID」把结果对回来（和政策打标同一列名），这里放场景编号
+AI_ID = "源ID"
 AI_PATHS = "同行业已有场景"
 AI_COLUMNS: tuple[str, ...] = (AI_ID, "新增场景", "新增级别", "一级行业", "AI理由", AI_PATHS)
 AI_VERDICT_FIELD = "判断"

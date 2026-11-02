@@ -9,7 +9,7 @@ import uuid
 from typing import Any
 
 from app.aitag.application.pipeline import Spend, ask, not_run, reused_note, update_run
-from app.aitag.domain.describing import FIELD_COLUMNS, LEVEL_NAMES, NONE, PATH_COLUMN
+from app.aitag.domain.describing import FIELD_COLUMNS, LEVEL_NAMES, NONE, PATH_COLUMN, SOURCE_ID
 from app.aitag.domain.models import PolicyAiTask
 from app.common import internal_clients
 
@@ -29,6 +29,7 @@ def prompt_rows(items: list[dict[str, Any]]) -> list[dict[str, str]]:
         examples = "\n".join(f"{e.get('name')}：{e.get('desc')}" for e in item.get("examples") or [])
         rows.append(
             {
+                SOURCE_ID: str(item.get("key") or ""),
                 PATH_COLUMN: str(item.get("key") or ""),
                 "新增级别": LEVEL_NAMES.get(int(item.get("level") or 0), ""),
                 "所属行业": "、".join(item.get("industries") or []),

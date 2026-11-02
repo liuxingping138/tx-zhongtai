@@ -28,6 +28,7 @@ ITEM = {
 def test_rows_carry_references_for_writing_in_the_codebook_style() -> None:
     (row,) = scenario_describing.prompt_rows([ITEM])
     assert row["场景路径"] == "智慧航空 > 智慧机场工程建设管理" and row["新增级别"] == "二级"
+    assert row["源ID"] == "智慧航空 > 智慧机场工程建设管理"  # ai-service 要求每行都有，结果按它对回来
     assert row["同级场景示例"] == "智慧空侧：空侧的描述" and row["上级场景描述"] == "航空的描述"
     assert (
         scenario_describing.prompt_rows([{**ITEM, "examples": [], "parent_desc": ""}])[0]["同级场景示例"] == "（没有）"

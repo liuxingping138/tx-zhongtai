@@ -139,6 +139,7 @@ async def test_a_batch_asks_once_per_scenario_and_writes_back(monkeypatch: pytes
     config = SimpleNamespace(batch_size=10, prompt_id="p" * 32)
     note = await scenario_similar.similar_step(uuid.uuid4(), config, Spend(limit=Decimal(20), before=Decimal(0)))  # type: ignore[arg-type]
     rows = sent["rows"]
+    assert all(row["源ID"] for row in rows)  # ai-service 要求每行都有，结果按它对回来
     assert [row["新增场景"] for row in rows] == ["智慧航空 > 航站楼智能化", "智慧航空 > 低空飞行服务保障"]
     assert rows[0]["同行业已有场景"] == "智慧航空\n智慧航空 > 智慧航站楼" and rows[0]["AI理由"] == "码表无对应场景"
     assert (first.ai_verdict, first.ai_target) == ("同一个场景", "智慧航空 > 智慧航站楼")

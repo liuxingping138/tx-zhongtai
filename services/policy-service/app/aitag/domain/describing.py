@@ -7,7 +7,9 @@
 from __future__ import annotations
 
 PATH_COLUMN = "场景路径"
-COLUMNS: tuple[str, ...] = (PATH_COLUMN, "新增级别", "所属行业", "来源政策", "上级场景描述", "同级场景示例")
+# ai-service 的流水线靠每行的「源ID」把结果对回来，这里放场景路径
+SOURCE_ID = "源ID"
+COLUMNS: tuple[str, ...] = (SOURCE_ID, PATH_COLUMN, "新增级别", "所属行业", "来源政策", "上级场景描述", "同级场景示例")
 DESC_90 = "场景描述90字"
 DESC_130 = "场景描述130字"
 DESC_PEST = "场景描述PEST"
