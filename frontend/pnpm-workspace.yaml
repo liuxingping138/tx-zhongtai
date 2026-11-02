@@ -1,3 +1,7 @@
 allowBuilds:
   esbuild: true
   vue-demi: true
+# 传递依赖的已知漏洞（pnpm audit）：直接依赖还没跟上时在这里抬到修复版本，上游跟上后删掉
+overrides:
+  follow-redirects@<1.16.2: '>=1.16.2'
+  minimatch@<11.0.1: '>=11.0.1'
