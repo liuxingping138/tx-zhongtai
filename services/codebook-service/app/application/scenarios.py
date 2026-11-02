@@ -31,6 +31,7 @@ def _to_out(row: Scenario) -> dict[str, Any]:
     data: dict[str, Any] = row.business_values()
     data["is_new_scenario"] = row.is_new_scenario
     data["source_policy"] = row.source_policy
+    data["enrich_status"] = row.enrich_status
     data["id"] = str(row.id)
     data["version"] = row.version
     data["created_at"] = format_beijing(row.created_at)

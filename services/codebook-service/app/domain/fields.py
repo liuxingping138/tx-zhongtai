@@ -45,11 +45,16 @@ SCENARIO_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec("product_l2_sort", "二级产品排序（正序）"),
 )
 
-# 同步新增场景时写的两列，导出带上，导入不认。
+# 同步新增场景时写的几列，导出带上，导入不认。
 SCENARIO_SYNC_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec("is_new_scenario", "是否新增场景"),
     ColumnSpec("source_policy", "来源政策"),
+    ColumnSpec("enrich_status", "补充状态"),
 )
+ENRICH_PENDING = "待补充"
+ENRICH_REVIEW = "待确认"
+ENRICH_DONE = "已确认"
+ENRICH_CHOICES: tuple[str, ...] = (ENRICH_PENDING, ENRICH_REVIEW, ENRICH_DONE)
 
 AREA_CODE_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec("prov_id", "省份编码"),

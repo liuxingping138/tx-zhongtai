@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from app.aitag.domain import describing
 from app.aitag.domain.interpret_rules import ANSWER_FIELDS, SCENES_COLUMN
 from app.aitag.domain.rules import PROMPT_COLUMNS, SOURCE_ID, TYPE_FIELD
 from app.policy.domain.candidates import AI_COLUMNS, AI_PATHS, AI_REASON_FIELD, AI_SIMILAR_FIELD, AI_VERDICT_FIELD
@@ -21,6 +22,7 @@ COLUMNS: dict[str, tuple[str, ...]] = {
     "interpret": (SOURCE_ID, *PROMPT_COLUMNS),
     "opportunity": (SOURCE_ID, *PROMPT_COLUMNS, SCENES_COLUMN),
     "scenario": AI_COLUMNS,
+    "enrich": describing.COLUMNS,
 }
 # 少了这些输出字段，结果写不回表：类型判断靠「政策类型名称」，解读至少要一级行业和一级场景，市场机会要「市场机会」。
 REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
@@ -28,6 +30,7 @@ REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "interpret": ("一级行业", "一级场景"),
     "opportunity": ("市场机会",),
     "scenario": (AI_VERDICT_FIELD, AI_SIMILAR_FIELD),
+    "enrich": describing.REQUIRED,
 }
 
 
@@ -49,6 +52,7 @@ OPTIONAL_FIELDS: dict[str, tuple[tuple[str, ...], ...]] = {
     "interpret": _optional_interpret_fields(),
     "opportunity": (),
     "scenario": ((AI_REASON_FIELD,),),
+    "enrich": describing.OPTIONAL,
 }
 
 

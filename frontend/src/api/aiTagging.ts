@@ -1,7 +1,7 @@
 import { http, request } from './http'
 
-/** 政策 AI 打标的几个任务，在任务调度里各是一个任务（调度编码 = job_code）。scenario 是给新增场景找相似。 */
-export type AiTaskCode = 'type' | 'interpret' | 'opportunity' | 'scenario'
+/** 政策 AI 打标的几个任务，在任务调度里各是一个任务（调度编码 = job_code）。scenario 是给新增场景找相似，enrich 是给采纳进码表的新场景补描述。 */
+export type AiTaskCode = 'type' | 'interpret' | 'opportunity' | 'scenario' | 'enrich'
 
 /** 正在跑的那一批：在做什么、AI 答到第几条（ai-service 暂时取不到时 done、total 为空） */
 export interface AiTaggingCurrent {

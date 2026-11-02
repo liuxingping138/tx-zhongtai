@@ -8,7 +8,7 @@ from typing import Any
 
 from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
-from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionConflictError
+from platform_common.errors import ApiError, DependencyUnavailableError, ErrorCode, NotFoundError, VersionConflictError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.aitag.application.tagging import day_start, today
@@ -41,12 +41,22 @@ def _task_out(task: PolicyAiTask) -> dict[str, Any]:
     }
 
 
+async def _enrich_pending() -> int:
+    """补描述的待办在码表服务里；取不到就当 0，不影响任务调度页。"""
+
+    try:
+        found = await internal_clients.codebook("GET", "/internal/v1/scenarios/enrich-count")
+    except (ApiError, DependencyUnavailableError):
+        return 0
+    return int(found.get("pending") or 0)
+
+
 async def list_tasks(session: AsyncSession) -> dict[str, Any]:
-    """三个任务的设置、今天和本月已花、正在跑的那一批进度。任务调度页每几秒刷新一次，这里不取模板列表。"""
+    """各任务的设置、今天和本月已花、正在跑的那一批进度。任务调度页每几秒刷新一次，这里不取模板列表。"""
 
     rows = await repo.tasks(session)
     running = await repo.running_runs(session)
-    pending = await repo.pending_counts(session)
+    pending = {**await repo.pending_counts(session), "enrich": await _enrich_pending()}
     first_of_month = today().replace(day=1)
     items = []
     for code in TASKS:
@@ -155,6 +165,7 @@ _STAGE_RUN = {
     "interpreting": "interpret_run_id",
     "opportunity": "opportunity_run_id",
     "similar": "scenario_run_id",
+    "describing": "enrich_run_id",
 }
 STAGE_NAMES = {
     "reading": "读取源政策",
@@ -162,6 +173,7 @@ STAGE_NAMES = {
     "interpreting": "模型解读中",
     "opportunity": "模型回答中",
     "similar": "模型找相似场景中",
+    "describing": "模型写描述中",
 }
 
 

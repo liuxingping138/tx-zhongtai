@@ -11,6 +11,7 @@ from platform_common.similarity import similarity_level
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.audit_emit import enqueue_event
+from app.domain.fields import ENRICH_PENDING
 from app.domain.models import SCENARIO_FIELDS, Scenario, content_hash
 from app.domain.scenario_codes import NEW_MARK, CodeBook, Codes, ScenarioItem
 from app.domain.scenario_similarity import ScenarioNodes
@@ -108,6 +109,7 @@ def _new_row(item: ScenarioItem, codes: Codes, caller: Actor, source_policy: str
         content_hash=content_hash(values, SCENARIO_FIELDS),
         is_new_scenario="是",
         source_policy=source_policy[:500],
+        enrich_status=ENRICH_PENDING,
         version=1,
         created_at=now,
         created_by_id=caller.id,

@@ -11,8 +11,9 @@ from platform_common.filters import Filters
 from platform_common.http_utils import IMPORT_FILE_OPENAPI, import_result_response, read_import_upload, success_json
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas import ScenarioPatch, ScenarioWrite
+from app.api.schemas import EnrichConfirm, ScenarioPatch, ScenarioWrite
 from app.api.security import classified, require_codebook_permission
+from app.application import scenario_enrich
 from app.application import scenarios as service
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
@@ -27,6 +28,7 @@ def scenario_filters(
     scenario_tag: list[str] | None = Query(default=None),
     customer_group_name: list[str] | None = Query(default=None),
     is_new_scenario: list[str] | None = Query(default=None),
+    enrich_status: list[str] | None = Query(default=None),
 ) -> Filters:
     return {
         "industry_scenario_code": industry_scenario_code,
@@ -34,6 +36,7 @@ def scenario_filters(
         "scenario_tag": scenario_tag,
         "customer_group_name": customer_group_name,
         "is_new_scenario": is_new_scenario,
+        "enrich_status": enrich_status,
     }
 
 
@@ -93,6 +96,30 @@ async def search_paths(
     """按名称找码表里的行业场景路径（按客群去重），页面上选场景用：合并目标、改某一行的场景。"""
 
     return success_json({"items": await service.search_paths(session, keyword=q, industry_l1=industry_l1)})
+
+
+@router.get("/enrich-pending")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def enrich_pending(
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    _: Actor = Depends(require_codebook_permission(RESOURCE, "list")),
+) -> JSONResponse:
+    """AI 补好描述、等人确认的新增场景（按场景路径合并）。"""
+
+    return success_json({"items": await scenario_enrich.pending_review(session)})
+
+
+@router.post("/enrich-confirm")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def enrich_confirm(
+    body: EnrichConfirm,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    actor: Actor = Depends(require_codebook_permission(RESOURCE, "update")),
+) -> JSONResponse:
+    """核对（可改）后确认：这个场景各行业、各客群的行一起写上描述，改成已确认。"""
+
+    values = body.model_dump(exclude={"path"})
+    return success_json(await scenario_enrich.confirm(session, actor, body.path, values))
 
 
 @router.get("/export")

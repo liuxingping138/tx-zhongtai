@@ -84,3 +84,15 @@ class AreaCodePatch(AreaCodeWrite):
     """仅修改显式提供的字段；空字符串表示显式清空。"""
 
     version: int = Field(ge=1)
+
+
+class EnrichConfirm(BaseModel):
+    """确认 AI 给新增场景补的描述：场景路径，加核对后的描述（不改的照原样传回）。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    path: list[str] = Field(min_length=1, max_length=3)
+    desc_90: str = Field(default="", max_length=4000)
+    desc_130: str = Field(default="", max_length=4000)
+    desc_pest: str = Field(default="", max_length=4000)
+    level_desc: str = Field(default="", max_length=4000)

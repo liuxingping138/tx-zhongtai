@@ -17,7 +17,7 @@ import anyio
 from platform_common.errors import ApiError, DependencyUnavailableError, ErrorCode, NotFoundError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.aitag.application import scenario_similar
+from app.aitag.application import scenario_describing, scenario_similar
 from app.aitag.domain import interpret_rules, rules
 from app.aitag.domain.contract import COLUMNS, OPTIONAL_FIELDS, REQUIRED_FIELDS
 from app.aitag.domain.tasks import TASKS
@@ -105,7 +105,13 @@ async def samples(session: AsyncSession, task: str, day: date | None, limit: int
         )
     # 正文长度按这个任务的设置截，和正式跑一致。
     max_chars = (await repo.task(session, task)).content_max_chars
-    if task == "scenario":
+    if task == "enrich":
+        items = await scenario_describing.backlog(limit)
+        if not items:
+            raise _empty("码表里没有待补描述的新增场景：先在新增场景审核里采纳几个")
+        rows = scenario_describing.prompt_rows(items)
+        origin = "待补描述的新增场景"
+    elif task == "scenario":
         candidates = await repo.scenario_backlog(session, limit) or await repo.pending_candidates(session, limit)
         if not candidates:
             raise _empty("新增场景审核里还没有待审的场景：先跑一批政策解读")

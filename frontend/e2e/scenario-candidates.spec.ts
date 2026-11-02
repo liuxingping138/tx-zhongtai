@@ -96,3 +96,47 @@ test('按场景审核：看来源政策，按建议合并后自动打开下一�
   await expect(page.getByRole('heading', { name: '再生水循环利用', level: 1 })).toBeVisible()
   await expect(page.getByText('已合并到已有场景，打开了下一个')).toBeVisible()
 })
+
+test('补充待确认：核对 AI 写的描述，改好后确认，接着看下一个', async ({ page }) => {
+  let confirmed: unknown = null
+  const item = (name: string, desc: string) => ({
+    key: `智慧航空 > ${name}`, path: ['智慧航空', name], level: 2, industries: ['交通行业/交通运输、仓储和邮政业/航空'],
+    rows: 2, source_policy: '蓝图变实景三晋崛起空港新地标', desc_90: desc, desc_130: '', desc_pest: '', level_desc: '',
+  })
+  await page.route('**/api/v1/**', (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path.endsWith('/auth/csrf')) return respond(route, { csrf_token: 'test' })
+    if (path.endsWith('/auth/refresh')) return respond(route, { access_token: 'test', expires_in: 3600, must_change_password: false })
+    if (path.endsWith('/auth/me')) return respond(route, { id: 'admin', username: 'admin', display_name: '测试管理员', status: 'active', roles: ['超级管理员'] })
+    if (path.endsWith('/auth/permissions')) {
+      return respond(route, {
+        resources: ['policy.scenario_candidates', 'codebook.scenarios'].map(code => ({ code, level: 'FULL' })),
+        menus: [{ id: 'm', parent_id: null, title: '新增场景审核', route_name: 'policy-scenario-candidates', resource_code: 'policy.scenario_candidates', sort_order: 1 }],
+      })
+    }
+    if (path.endsWith('/scenarios/enrich-pending')) {
+      return respond(route, { items: confirmed ? [item('施工管理', '')] : [item('智慧机场工程建设管理', 'AI 写的描述'), item('施工管理', '')] })
+    }
+    if (path.endsWith('/scenarios/enrich-confirm')) {
+      confirmed = route.request().postDataJSON()
+      return respond(route, { rows: 2 })
+    }
+    if (path.endsWith('/scenario-candidates')) {
+      return respond(route, { items: [], total: 0, page: 1, page_size: 20, summary: { by_status: {}, pending_rows: 0, pending_similar: 0, new_today: 0 } })
+    }
+    return respond(route, { items: [], total: 0, page: 1, page_size: 20 })
+  })
+
+  await page.goto('/policy/scenario-candidates')
+  // Element Plus 的单选按钮原生输入框是隐藏的，点可见的标签
+  await page.locator('.el-radio-button').filter({ hasText: /补充待确认 2/ }).click()
+  await expect(page.getByRole('heading', { name: '智慧航空 › 智慧机场工程建设管理' })).toBeVisible()
+  const desc = page.getByLabel('场景描述（90字）')
+  await expect(desc).toHaveValue('AI 写的描述')
+  await desc.fill('改过的描述')
+  await page.getByRole('button', { name: '确认无误，下一个' }).click()
+  await expect.poll(() => confirmed).toMatchObject({ path: ['智慧航空', '智慧机场工程建设管理'], desc_90: '改过的描述' })
+  await expect(page.getByRole('heading', { name: '智慧航空 › 施工管理' })).toBeVisible()
+  await expect(page.getByText('AI 没写出来，请自己补上。')).toBeVisible()
+  await expect(page.locator('.el-radio-button').filter({ hasText: /补充待确认 1/ })).toBeVisible()
+})

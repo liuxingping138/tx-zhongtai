@@ -502,6 +502,25 @@
               ],
               "title": "Is New Scenario"
             }
+          },
+          {
+            "name": "enrich_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Enrich Status"
+            }
           }
         ],
         "responses": {
@@ -702,6 +721,66 @@
         }
       }
     },
+    "/api/v1/codebook/scenarios/enrich-pending": {
+      "get": {
+        "tags": [
+          "codebook-scenarios"
+        ],
+        "summary": "Enrich Pending",
+        "description": "AI 补好描述、等人确认的新增场景（按场景路径合并）。",
+        "operationId": "enrich_pending_api_v1_codebook_scenarios_enrich_pending_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/codebook/scenarios/enrich-confirm": {
+      "post": {
+        "tags": [
+          "codebook-scenarios"
+        ],
+        "summary": "Enrich Confirm",
+        "description": "核对（可改）后确认：这个场景各行业、各客群的行一起写上描述，改成已确认。",
+        "operationId": "enrich_confirm_api_v1_codebook_scenarios_enrich_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrichConfirm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/codebook/scenarios/export": {
       "get": {
         "tags": [
@@ -803,6 +882,25 @@
                 }
               ],
               "title": "Is New Scenario"
+            }
+          },
+          {
+            "name": "enrich_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Enrich Status"
             }
           }
         ],
@@ -1558,6 +1656,106 @@
         }
       }
     },
+    "/internal/v1/scenarios/enrich-backlog": {
+      "post": {
+        "tags": [
+          "internal"
+        ],
+        "summary": "Enrich Backlog",
+        "description": "待补描述的新增场景（按场景路径合并），带上上级描述和同级示例给 AI 参照。",
+        "operationId": "enrich_backlog_internal_v1_scenarios_enrich_backlog_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrichBacklog"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/scenarios/enrich-count": {
+      "get": {
+        "tags": [
+          "internal"
+        ],
+        "summary": "Enrich Count",
+        "description": "待补描述的场景数，任务调度页的「数据进度」用。",
+        "operationId": "enrich_count_internal_v1_scenarios_enrich_count_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/v1/scenarios/enrich": {
+      "post": {
+        "tags": [
+          "internal"
+        ],
+        "summary": "Enrich Write",
+        "description": "AI 写好的描述写进去，改成待确认。",
+        "operationId": "enrich_write_internal_v1_scenarios_enrich_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrichItems"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/internal/v1/scenarios/rename": {
       "post": {
         "tags": [
@@ -1784,6 +1982,83 @@
         "additionalProperties": false,
         "type": "object",
         "title": "AreaCodeWrite"
+      },
+      "EnrichBacklog": {
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "maximum": 2000.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "default": 200
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "EnrichBacklog"
+      },
+      "EnrichConfirm": {
+        "properties": {
+          "path": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Path"
+          },
+          "desc_90": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Desc 90",
+            "default": ""
+          },
+          "desc_130": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Desc 130",
+            "default": ""
+          },
+          "desc_pest": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Desc Pest",
+            "default": ""
+          },
+          "level_desc": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Level Desc",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "title": "EnrichConfirm",
+        "description": "确认 AI 给新增场景补的描述：场景路径，加核对后的描述（不改的照原样传回）。"
+      },
+      "EnrichItems": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "maxItems": 2000,
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "EnrichItems"
       },
       "HTTPValidationError": {
         "properties": {

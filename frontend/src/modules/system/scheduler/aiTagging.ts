@@ -3,7 +3,7 @@ import type { AiTaskCode } from '@/api/aiTagging'
 import type { AiTaggingResult } from '@/api/scheduler'
 
 const PREFIX = 'policy_ai_'
-const CODES: AiTaskCode[] = ['type', 'interpret', 'opportunity', 'scenario']
+const CODES: AiTaskCode[] = ['type', 'interpret', 'opportunity', 'scenario', 'enrich']
 
 /** 任务调度编码 -> 打标任务；不是打标任务返回 null。 */
 export function taskOfJob(jobCode: string): AiTaskCode | null {
@@ -17,6 +17,7 @@ export const TASK_INTRO: Record<AiTaskCode, string> = {
   interpret: '对基础标签里「是否解读 = 是」、还没解读的政策逐条解读，一条政策展开成多行写入「政策解读」。',
   opportunity: '对解读过、还没补市场机会的政策写市场机会，按一级行业 + 一级场景回填到它的解读行。',
   scenario: '「新增场景审核」里待审、还没让 AI 看过的场景，对照码表里同一个一级行业下的全部场景找出最像的，说是不是同一个场景。一个场景只问一次。',
+  enrich: '采纳进行业场景码表的新场景只有名称：照同级场景的写法让 AI 写描述，写回码表标「待确认」，在新增场景审核的「补充待确认」里核对。',
 }
 
 /** 费用账单里这个任务的「用途」：政策服务发起批量任务时报的发起方名字。 */
@@ -25,6 +26,7 @@ export const TASK_PURPOSE: Record<AiTaskCode, string> = {
   interpret: '政策AI打标·政策解读',
   opportunity: '政策AI打标·市场机会',
   scenario: '政策AI打标·新增场景找相似',
+  enrich: '政策AI打标·新增场景补描述',
 }
 
 /** 执行记录「结果」列：失败写原因，成功写说明和花费。 */

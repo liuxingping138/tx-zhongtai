@@ -7,6 +7,7 @@ from typing import Any
 from platform_common.options import OptionColumns, preview_options, search_options
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.fields import ENRICH_CHOICES
 from app.domain.models import AreaCode, PolicyType, Scenario
 
 SCENARIO_OPTION_COLUMNS: OptionColumns = {
@@ -30,7 +31,10 @@ AREA_CODE_OPTION_COLUMNS: OptionColumns = {
 
 
 async def scenario_options(session: AsyncSession) -> dict[str, Any]:
-    return {"options": await preview_options(session, SCENARIO_OPTION_COLUMNS)}
+    options = await preview_options(session, SCENARIO_OPTION_COLUMNS)
+    # 补充状态是固定几项（系统写的），不在表上去重
+    options["enrich_status"] = {"items": list(ENRICH_CHOICES), "truncated": False}
+    return {"options": options}
 
 
 async def policy_type_options(session: AsyncSession) -> dict[str, Any]:

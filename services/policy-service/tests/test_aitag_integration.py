@@ -206,8 +206,8 @@ async def test_each_task_has_its_own_daily_budget_and_old_combined_runs_split_by
         )
         await session.commit()
         listed = {item["code"]: item for item in (await settings.list_tasks(session))["items"]}
-    assert list(listed) == ["type", "interpret", "opportunity", "scenario"]
-    assert [listed[code]["spent_today"] for code in listed] == ["0.300000", "0.200000", "0.100000", "0"]
+    assert list(listed) == ["type", "interpret", "opportunity", "scenario", "enrich"]
+    assert [listed[code]["spent_today"] for code in listed] == ["0.300000", "0.200000", "0.100000", "0", "0"]
     assert listed["type"]["cursor_date"] == DAY.isoformat() and listed["interpret"]["cursor_date"] == ""
 
 

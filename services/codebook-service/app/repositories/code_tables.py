@@ -94,6 +94,21 @@ async def rows_with_path(session: AsyncSession, path: tuple[str, ...], *, lock: 
     return list(await session.scalars(statement))
 
 
+async def rows_with_enrich(
+    session: AsyncSession, status: str, *, lock: bool, path: tuple[str, ...] = ()
+) -> list[Scenario]:
+    """补充状态是 status 的行（可只取一个场景路径的），按路径排好。新增场景几百个以内。"""
+
+    conds = [Scenario.enrich_status == status]
+    if path:
+        conds.extend(_path_conditions(path))
+        conds.extend(column == "" for column in _SCENARIO_LEVELS[3 + len(path) :])
+    statement = select(Scenario).where(*conds).order_by(*_SCENARIO_LEVELS[3:], Scenario.id)
+    if lock:
+        statement = statement.with_for_update()
+    return list(await session.scalars(statement))
+
+
 async def path_exists(session: AsyncSession, path: tuple[str, ...]) -> bool:
     found = await session.scalar(select(Scenario.id).where(*_path_conditions(path)).limit(1))
     return found is not None

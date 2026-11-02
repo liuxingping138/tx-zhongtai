@@ -96,6 +96,10 @@ class Scenario(Base):
     source_policy: Mapped[str] = mapped_column(
         String(500), nullable=False, default="", server_default="", comment="来源政策"
     )
+    # 新增场景采纳进来时只有名称：AI 补描述（待补充 → 待确认），人在新增场景审核里确认（已确认）。原有的行为空。
+    enrich_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="", server_default="", comment="补充状态"
+    )
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, comment="版本号")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="入库时间")
     created_by_id: Mapped[str] = mapped_column(String(64), nullable=False, comment="入库人ID")

@@ -44,6 +44,7 @@ def test_jobs_are_listed_in_page_order_with_their_own_timeouts() -> None:
         "政策解读",
         "政策市场机会",
         "新增场景找相似",
+        "新增场景补描述",
     ]
     assert registered["crawler"].timeout_seconds == 1800 and registered["crawler_config"].timeout_seconds == 600
     assert all(registered[job_code(task)].timeout_seconds == 6 * 3600 for task in TASKS)

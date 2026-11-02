@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.security import SecurityClass, classified
-from app.application import code_tables, scenario_sync
+from app.application import code_tables, scenario_enrich, scenario_sync
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
 
@@ -80,6 +80,62 @@ async def scenario_context(
 
     verify_internal_caller(request, settings.internal_caller_secrets)
     return success_json(await scenario_sync.context(session, body.items))
+
+
+class EnrichBacklog(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    limit: int = Field(default=200, ge=1, le=2000)
+
+
+class EnrichItems(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # 每条：path（场景路径），desc_90、desc_130、desc_pest、level_desc（新增那一级的描述），没写出来的为空
+    items: list[dict[str, Any]] = Field(max_length=2000)
+
+
+@router.post("/scenarios/enrich-backlog")
+@classified(SecurityClass.INTERNAL)
+async def enrich_backlog(
+    body: EnrichBacklog,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    settings: Settings = Depends(get_settings),
+) -> JSONResponse:
+    """待补描述的新增场景（按场景路径合并），带上上级描述和同级示例给 AI 参照。"""
+
+    verify_internal_caller(request, settings.internal_caller_secrets)
+    return success_json(await scenario_enrich.backlog(session, body.limit))
+
+
+@router.get("/scenarios/enrich-count")
+@classified(SecurityClass.INTERNAL)
+async def enrich_count(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    settings: Settings = Depends(get_settings),
+) -> JSONResponse:
+    """待补描述的场景数，任务调度页的「数据进度」用。"""
+
+    verify_internal_caller(request, settings.internal_caller_secrets)
+    return success_json({"pending": await scenario_enrich.count(session, "待补充")})
+
+
+@router.post("/scenarios/enrich")
+@classified(SecurityClass.INTERNAL)
+async def enrich_write(
+    body: EnrichItems,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    settings: Settings = Depends(get_settings),
+) -> JSONResponse:
+    """AI 写好的描述写进去，改成待确认。"""
+
+    service = verify_internal_caller(request, settings.internal_caller_secrets)
+    if service not in SCENARIO_WRITERS:
+        raise InternalCallerRejectedError(f"{service} 不能改场景码表")
+    return success_json(await scenario_enrich.write(session, body.items))
 
 
 class ScenarioRename(BaseModel):

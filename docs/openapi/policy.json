@@ -276,7 +276,8 @@
                 "type",
                 "interpret",
                 "opportunity",
-                "scenario"
+                "scenario",
+                "enrich"
               ],
               "type": "string",
               "title": "Task"
@@ -393,7 +394,8 @@
                 "type",
                 "interpret",
                 "opportunity",
-                "scenario"
+                "scenario",
+                "enrich"
               ],
               "type": "string",
               "title": "Task"
@@ -4918,7 +4920,8 @@
               "type",
               "interpret",
               "opportunity",
-              "scenario"
+              "scenario",
+              "enrich"
             ],
             "title": "Step"
           }

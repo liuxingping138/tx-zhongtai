@@ -111,6 +111,7 @@ async def test_sync_writes_only_new_scenarios_and_reports_each_item(monkeypatch:
     added = session.added[0]
     # 来源记在自己的两列里，场景来源、三级场景描述留给业务填。
     assert (added.is_new_scenario, added.source_policy, added.created_by_name) == ("是", "某政策", "张三")
+    assert added.enrich_status == "待补充"  # 只有名称，排进 AI 补描述
     assert (added.scenario_source, added.scenario_l3_desc) == ("", "")
     assert len(session.added) == 1 and events[0]["extra"] == {"items": 3, "created": 1}
     lookups = await scenario_sync.lookup(session, items[1:])  # type: ignore[arg-type]

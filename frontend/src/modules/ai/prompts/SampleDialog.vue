@@ -17,6 +17,7 @@ const HINTS: Record<AiTaskCode, string> = {
   interpret: '取最近被判为「需要解读」的政策，要先跑过政策类型判断才有。',
   opportunity: '取最近解读过的政策，多一列 @【行业场景】：这条政策解读出的一级行业/一级场景。',
   scenario: '取「新增场景审核」里待审的场景，带上 @【同行业已有场景】：码表里同一个一级行业下的全部场景。',
+  enrich: '取码表里待补描述的新增场景，带上 @【上级场景描述】 @【同级场景示例】当范文。',
 }
 const yesterday = () => new Date(Date.now() - 86_400_000).toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' })
 const task = ref<AiTaskCode>('type')

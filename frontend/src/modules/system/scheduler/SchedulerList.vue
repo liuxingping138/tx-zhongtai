@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { RouteLocationRaw } from 'vue-router'
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
@@ -64,26 +65,35 @@ const PROGRESS: Record<string, (job: ScheduledJob) => string> = {
   [SESSION_CLEANUP_JOB]: job => cleanupProgress(job.last_run),
   [AUDIT_CLEANUP_JOB]: job => auditCleanupProgress(job.last_run),
 }
+/** 按待办做的打标任务，「数据进度」写还有多少待办。 */
+const PENDING_TEXT: Record<string, (count: number) => string> = {
+  interpret: count => `待解读 ${count} 条`,
+  opportunity: count => `待补 ${count} 条`,
+  scenario: count => `待找相似 ${count} 个场景`,
+  enrich: count => `待补描述 ${count} 个场景`,
+}
 function progress(job: ScheduledJob): string {
   const own = PROGRESS[job.code]
   if (own) return own(job)
   const task = aiTask(job)
   if (!task) return '—'
-  if (task.code === 'scenario') return task.pending ? `待找相似 ${task.pending} 个场景` : '没有待办'
-  if (task.code !== 'type') return task.pending ? `待${task.code === 'interpret' ? '解读' : '补'} ${task.pending} 条` : '没有待办'
+  const pendingText = PENDING_TEXT[task.code]
+  if (pendingText) return task.pending ? pendingText(task.pending) : '没有待办'
   const read = task.cursor_date ? `读到 ${task.cursor_date}` : '—'
   return task.pending ? `${read} · 待重判 ${task.pending}` : read
 }
-/** 待办点进基础标签表、按「打标状态」筛好，看的就是这几条；没有基础标签查看权限时只显示文字。 */
-const PENDING_STATUS: Record<string, string> = { type: '等待重新判断类型', interpret: '待解读', opportunity: '待补市场机会' }
-function pendingLink(job: ScheduledJob) {
+/** 待办点进去看的就是这几条：基础标签按「打标状态」筛好，新增场景进审核页，补描述进码表按「补充状态」筛好。没有查看权限时只显示文字。 */
+const PENDING_LINKS: Record<string, { resource: string; to: RouteLocationRaw }> = {
+  type: { resource: 'policy.base_tags', to: { name: 'policy-base-tags', query: { ai_status: '等待重新判断类型' } } },
+  interpret: { resource: 'policy.base_tags', to: { name: 'policy-base-tags', query: { ai_status: '待解读' } } },
+  opportunity: { resource: 'policy.base_tags', to: { name: 'policy-base-tags', query: { ai_status: '待补市场机会' } } },
+  scenario: { resource: 'policy.scenario_candidates', to: { name: 'policy-scenario-candidates' } },
+  enrich: { resource: 'codebook.scenarios', to: { name: 'codebook-scenarios', query: { enrich_status: '待补充' } } },
+}
+function pendingLink(job: ScheduledJob): RouteLocationRaw | null {
   const task = aiTask(job)
-  if (task?.code === 'scenario') {
-    return task.pending && auth.canRead('policy.scenario_candidates') ? { name: 'policy-scenario-candidates' } : null
-  }
-  const status = task?.pending ? PENDING_STATUS[task.code] : undefined
-  if (!status || !auth.canRead('policy.base_tags')) return null
-  return { name: 'policy-base-tags', query: { ai_status: status } }
+  const link = task?.pending ? PENDING_LINKS[task.code] : undefined
+  return link && auth.canRead(link.resource) ? link.to : null
 }
 function cost(job: ScheduledJob): string {
   const task = aiTask(job)
@@ -334,7 +344,7 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
       </el-table>
     </ListPage>
     <p class="scheduler-note">
-      政策类型判断、政策解读、政策市场机会、新增场景找相似是四个独立任务：解读只做类型判断标为「是否解读 = 是」的政策，市场机会只做解读过的，找相似只看「新增场景审核」里待审、还没看过的场景，前一步没跑后一步就没有待办。
+      政策类型判断、政策解读、政策市场机会、新增场景找相似、新增场景补描述是五个独立任务：解读只做类型判断标为「是否解读 = 是」的政策，市场机会只做解读过的，找相似只看「新增场景审核」里待审、还没看过的场景，补描述只写采纳进码表、描述还空着的，前一步没跑后一步就没有待办。
       “数据进度”对爬虫是源数据的入库时间，对类型判断是源政策读到的采集日。失败后最多重试 2 次，分别等待 1 分钟、5 分钟；没选模板这类设置问题不重试，直接失败并写明原因。同一任务不会重复执行。
     </p>
     <JobSettingsDrawer

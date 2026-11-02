@@ -49,9 +49,10 @@ FILTER_COLUMNS: dict[str, InstrumentedAttribute[str]] = {
     "scenario_tag": Scenario.scenario_tag,
     "customer_group_name": Scenario.customer_group_name,
     "is_new_scenario": Scenario.is_new_scenario,
+    "enrich_status": Scenario.enrich_status,
 }
-# 取值固定（是 / 否）的列精确匹配，其余按关键词模糊匹配。
-EXACT_FILTERS = {"is_new_scenario"}
+# 取值固定（是 / 否、补充状态）的列精确匹配，其余按关键词模糊匹配。
+EXACT_FILTERS = {"is_new_scenario", "enrich_status"}
 
 
 def _conditions(filters: Filters) -> list[ColumnElement[bool]]:

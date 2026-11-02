@@ -58,6 +58,8 @@ export interface ScenarioItem {
   product_l2_sort: string
   /** 同步新增场景时写：政策解读里人工确认后进码表的标「是」。 */
   is_new_scenario: string
+  /** 补充状态：新增场景采纳进来后 AI 补描述（待补充、待确认、已确认），原有的为空 */
+  enrich_status: string
   source_policy: string
 }
 
@@ -91,6 +93,7 @@ export function listScenarios(params: {
   scenario_tag?: FilterParam
   customer_group_name?: FilterParam
   is_new_scenario?: FilterParam
+  enrich_status?: FilterParam
   page?: number
   page_size?: number
 }): Promise<Page<ScenarioItem>> {
@@ -216,3 +219,31 @@ export async function importAfterAreaResolve(
   return importer(ready, onProgress)
 }
 
+
+/** AI 补好描述、等人确认的新增场景（按场景路径合并） */
+export interface EnrichItem {
+  key: string
+  path: string[]
+  level: number
+  industries: string[]
+  rows: number
+  source_policy: string
+  desc_90: string
+  desc_130: string
+  desc_pest: string
+  level_desc: string
+}
+
+export function listEnrichPending(): Promise<{ items: EnrichItem[] }> {
+  return request(http.get('/codebook/scenarios/enrich-pending'))
+}
+
+export function confirmEnrich(body: {
+  path: string[]
+  desc_90: string
+  desc_130: string
+  desc_pest: string
+  level_desc: string
+}): Promise<{ rows: number }> {
+  return request(http.post('/codebook/scenarios/enrich-confirm', body))
+}

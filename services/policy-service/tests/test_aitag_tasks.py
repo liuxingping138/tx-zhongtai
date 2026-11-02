@@ -11,4 +11,5 @@ def test_each_task_has_its_own_job_code() -> None:
         "policy_ai_interpret",
         "policy_ai_opportunity",
         "policy_ai_scenario",
+        "policy_ai_enrich",
     ]

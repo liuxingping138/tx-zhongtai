@@ -14,8 +14,11 @@ import { hasActiveFilters, useListLoader } from '@/composables/useListLoader'
 import { useListQuery } from '@/composables/useListQuery'
 import { reviewQuery } from '../shared/reviewQuery'
 import CandidateBatchActions from './CandidateBatchActions.vue'
+import EnrichConfirm from './EnrichConfirm.vue'
+import StatusTabs from './StatusTabs.vue'
+import { listEnrichPending } from '@/api/codebook'
 import CandidateRowsDrawer from './CandidateRowsDrawer.vue'
-import { PENDING, RESOURCE, SIMILAR_LABELS, STATUSES, decisionText, similarLabel, splitPath, summaryText } from './candidates'
+import { PENDING, RESOURCE, SIMILAR_LABELS, decisionText, similarLabel, splitPath, summaryText } from './candidates'
 
 const query = reactive({
   status: PENDING,
@@ -27,11 +30,17 @@ const query = reactive({
   page: 1,
   page_size: 20,
 })
+const auth = useAuthStore()
 const filters = useFilterOptions('/policy/scenario-candidates')
 const summary = ref<CandidateSummary | null>(null)
 const listQuery = useListQuery(query, (): Promise<void> => load())
 
 async function fetchPage(params: Record<string, unknown>) {
+  if (params.status === ENRICH_TAB) {
+    // 补充待确认是码表里的数据，不查候选列表；只取一下各页签的数
+    summary.value = (await listCandidates({ status: PENDING, page_size: 1 })).summary
+    return { items: [], total: 0 }
+  }
   const cleaned = Object.fromEntries(Object.entries(params).filter(([, value]) => value !== '')) as CandidateQuery
   const page = await listCandidates(cleaned)
   summary.value = page.summary
@@ -46,6 +55,18 @@ const { items, total, loading, loadError, load } = useListLoader({
 })
 
 const pending = computed(() => listQuery.applied.status === PENDING)
+// 「补充待确认」页签：采纳进码表的新场景，AI 补好描述等人确认（码表的数据，要能看码表）
+const ENRICH_TAB = '补充待确认'
+const enriching = computed(() => listQuery.applied.status === ENRICH_TAB)
+const enrichCount = ref(0)
+async function loadEnrichCount() {
+  if (!auth.canRead('codebook.scenarios')) return
+  try {
+    enrichCount.value = (await listEnrichPending()).items.length
+  } catch {
+    enrichCount.value = 0
+  }
+}
 // 页签不算筛选：不计入「已筛选 N 项」，待审为空时写「暂无记录」、不给「清除筛选」
 const draftFilters = computed(() => ({ ...query, status: '' }))
 const appliedFilters = computed(() => ({ ...listQuery.applied, status: '' }))
@@ -70,7 +91,6 @@ function reviewRoute(row: CandidateItem, index: number) {
 
 const drawer = ref<CandidateItem | null>(null)
 
-const auth = useAuthStore()
 const canDecide = computed(() => auth.canFull(RESOURCE))
 const canWriteCodebook = computed(() => canDecide.value && auth.canFull('codebook.scenarios'))
 // 批量只在待审页签、只勾当前页
@@ -85,6 +105,7 @@ async function afterBatch() {
 onMounted(() => {
   void load()
   void filters.load()
+  void loadEnrichCount()
 })
 </script>
 
@@ -97,6 +118,7 @@ onMounted(() => {
       :page-size="query.page_size"
       :loading="loading"
       :error="loadError"
+      :hide-pager="enriching"
       @retry="load"
       @update:page="query.page = $event"
       @update:page-size="query.page_size = $event"
@@ -109,19 +131,13 @@ onMounted(() => {
         </p>
       </template>
       <template #actions>
-        <el-radio-group
-          :model-value="listQuery.applied.status"
-          aria-label="按状态看"
-          @update:model-value="switchStatus"
-        >
-          <el-radio-button
-            v-for="status in STATUSES"
-            :key="status"
-            :value="status"
-          >
-            {{ status }} {{ (counts[status] ?? 0).toLocaleString() }}
-          </el-radio-button>
-        </el-radio-group>
+        <StatusTabs
+          :value="String(listQuery.applied.status)"
+          :counts="counts"
+          :enrich-tab="auth.canRead('codebook.scenarios') ? ENRICH_TAB : ''"
+          :enrich-count="enrichCount"
+          @change="switchStatus"
+        />
         <CandidateBatchActions
           v-if="pending && canDecide"
           :checked="checked"
@@ -130,7 +146,10 @@ onMounted(() => {
         />
         <AuditLogButton :module="RESOURCE" />
       </template>
-      <template #filters>
+      <template
+        v-if="!enriching"
+        #filters
+      >
         <FilterBar
           :query="draftFilters"
           :applied="appliedFilters"
@@ -180,7 +199,12 @@ onMounted(() => {
           </template>
         </FilterBar>
       </template>
+      <EnrichConfirm
+        v-if="enriching"
+        @count="enrichCount = $event"
+      />
       <el-table
+        v-else
         ref="table"
         v-loading="loading"
         class="data-table"
