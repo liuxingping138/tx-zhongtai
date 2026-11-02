@@ -156,3 +156,53 @@ async def test_lookup_reports_the_classification_with_the_codes(monkeypatch: pyt
         ("a", "new", 3, ""),
         ("b", "association", 0, ""),
     ]
+
+
+async def test_rename_changes_every_row_of_the_scenario_and_keeps_codes(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    from platform_common.errors import ApiError
+
+    rows = [
+        SimpleNamespace(
+            scenario_l1_name="车路云",
+            scenario_l2_name="车路协同",
+            scenario_tag="车路协同",
+            version=1,
+            refresh_hash=lambda: None,
+            scenario_code="234569000000",
+        )
+        for _ in range(2)
+    ]
+    events: list[dict[str, Any]] = []
+    taken: set[tuple[str, ...]] = set()
+
+    async def with_path(_session: Any, path: tuple[str, ...], *, lock: bool) -> list[Any]:
+        return rows if path == ("车路云", "车路协同") else []
+
+    async def exists(_session: Any, path: tuple[str, ...]) -> bool:
+        return path in taken
+
+    async def nothing(_session: Any) -> None:
+        return None
+
+    async def record(_session: Any, **kwargs: Any) -> None:
+        events.append(kwargs)
+
+    monkeypatch.setattr(scenario_sync.repo, "rows_with_path", with_path)
+    monkeypatch.setattr(scenario_sync.repo, "path_exists", exists)
+    monkeypatch.setattr(scenario_sync.repo, "lock_scenario_codes", nothing)
+    monkeypatch.setattr(scenario_sync, "enqueue_event", record)
+    actor = Actor(id="u1", name="张三")
+    preview = await scenario_sync.rename(_Session(), actor, ["车路云", "车路协同"], "车路云协同", dry_run=True)  # type: ignore[arg-type]
+    assert preview == {"rows": 2} and rows[0].scenario_l2_name == "车路协同"
+    taken.add(("车路云", "车路云协同"))
+    with pytest.raises(ApiError, match="已经有"):
+        await scenario_sync.rename(_Session(), actor, ["车路云", "车路协同"], "车路云协同", dry_run=False)  # type: ignore[arg-type]
+    taken.clear()
+    done = await scenario_sync.rename(_Session(), actor, ["车路云", "车路协同"], "车路云协同", dry_run=False)  # type: ignore[arg-type]
+    assert done == {"rows": 2}
+    assert [(row.scenario_l2_name, row.scenario_tag, row.scenario_code, row.version) for row in rows] == [
+        ("车路云协同", "车路云协同", "234569000000", 2)
+    ] * 2
+    assert events[0]["event_type"] == "codebook.scenario.renamed"

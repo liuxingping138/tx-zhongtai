@@ -27,6 +27,12 @@ _EVENT_META = {
         "scenario_candidate",
         "新增场景合并到已有场景",
     ),
+    "policy.scenario_candidate.absorbed": (
+        "policy.scenario_candidates",
+        "decide",
+        "scenario_candidate",
+        "把相似的新增场景并成一个",
+    ),
     "policy.scenario_candidate.rejected": (
         "policy.scenario_candidates",
         "decide",

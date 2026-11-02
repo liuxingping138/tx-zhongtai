@@ -5,6 +5,7 @@ import type { ScenarioPath } from '@/api/codebook'
 import { errorMessage } from '@/api/errors'
 import {
   adoptCandidate,
+  candidateRenameImpact,
   mergeCandidate,
   rejectCandidate,
   type CandidateContext,
@@ -33,6 +34,19 @@ const chosen = ref('')
 const reason = ref(REJECT_REASONS[0] ?? '')
 const note = ref('')
 const submitting = ref(false)
+/** 合并后叫什么：沿用原名称，或原场景改用这个新说法（编码不变，码表和解读里用它的行一起改名） */
+const rename = ref(false)
+const impact = ref<{ codebook_rows: number; interpretation_rows: number } | null>(null)
+const canRename = computed(() => Boolean(target.value?.length) && target.value?.[target.value.length - 1] !== props.candidate.name)
+watch([rename, target], async ([on, path]) => {
+  impact.value = null
+  if (!on || !path?.length || props.mode !== 'merge') return
+  try {
+    impact.value = await candidateRenameImpact(props.candidate.id, path)
+  } catch {
+    impact.value = null
+  }
+})
 const error = ref('')
 
 watch(() => props.mode, (mode) => {
@@ -41,6 +55,7 @@ watch(() => props.mode, (mode) => {
   // 只预选从「合并到这里」或系统建议带进来的目标，不替人默认选一个相似度一般的
   target.value = props.presetTarget ?? null
   chosen.value = target.value ? pathText(target.value) : ''
+  rename.value = false
   picked.value = null
   reason.value = REJECT_REASONS[0] ?? ''
   note.value = ''
@@ -77,7 +92,9 @@ async function submit() {
   try {
     let row: CandidateItem
     if (props.mode === 'adopt') row = await adoptCandidate(id, { version, name: isNew.value ? name.value.trim() : '' })
-    else if (props.mode === 'merge') row = await mergeCandidate(id, { version, target: target.value ?? [] })
+    else if (props.mode === 'merge') {
+      row = await mergeCandidate(id, { version, target: target.value ?? [], rename: rename.value && canRename.value })
+    }
     else row = await rejectCandidate(id, { version, reason: reason.value, note: note.value.trim() })
     emit('done', row)
   } catch (failure) {
@@ -141,6 +158,28 @@ async function submit() {
         >
           已选：{{ targetText }}
         </p>
+        <template v-if="canRename">
+          <p class="decision__label">
+            合并后叫什么
+          </p>
+          <el-radio-group
+            v-model="rename"
+            class="decision__choices"
+          >
+            <el-radio :value="false">
+              沿用原名称「{{ target?.[target.length - 1] }}」
+            </el-radio>
+            <el-radio :value="true">
+              原场景改用新名称「{{ candidate.name }}」
+            </el-radio>
+          </el-radio-group>
+          <p
+            v-if="rename"
+            class="decision__hint"
+          >
+            编码不变；{{ impact ? `码表 ${impact.codebook_rows.toLocaleString()} 行、政策解读 ${impact.interpretation_rows.toLocaleString()} 行的名称一起改` : '正在数会改多少行…' }}
+          </p>
+        </template>
       </template>
 
       <template v-else-if="mode === 'reject'">

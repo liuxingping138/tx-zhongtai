@@ -6,12 +6,14 @@ from typing import Any
 
 from platform_common.actors import Actor
 from platform_common.clock import utcnow
+from platform_common.errors import ApiError, ErrorCode
+from platform_common.similarity import similarity_level
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.audit_emit import enqueue_event
 from app.domain.models import SCENARIO_FIELDS, Scenario, content_hash
-from app.domain.scenario_codes import CodeBook, Codes, ScenarioItem
-from app.domain.scenario_similarity import ScenarioNodes, similarity_level
+from app.domain.scenario_codes import NEW_MARK, CodeBook, Codes, ScenarioItem
+from app.domain.scenario_similarity import ScenarioNodes
 from app.repositories import code_tables as repo
 
 
@@ -144,3 +146,49 @@ async def sync(session: AsyncSession, caller: Actor, items: list[dict[str, Any]]
         extra={"items": len(items), "created": created},
     )
     return results
+
+
+NAME_MAX = 255
+LEVELS = 3
+
+
+async def rename(
+    session: AsyncSession, caller: Actor, path: list[str], new_name: str, *, dry_run: bool
+) -> dict[str, Any]:
+    """把一个已有场景（path 的最后一级）改名，各行业、各客群下的行一起改；编码不变。dry_run 只数会改多少行。
+
+    新增场景审核里「合并到已有场景、原场景改用新说法」时用。同一上级下已经有这个名字就拒绝，免得两个场景并成一个名。
+    """
+
+    names = tuple(str(name or "").strip() for name in path if str(name or "").strip())
+    new_name = new_name.strip()
+    if not names or len(names) > LEVELS:
+        raise ApiError("要改名的场景路径不对", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    if not new_name or len(new_name) > NAME_MAX or NEW_MARK.search(new_name):
+        raise ApiError(
+            f"新名称不能为空、最多 {NAME_MAX} 字、不能带「（新增）」", code=ErrorCode.VALIDATION_ERROR, http_status=422
+        )
+    rows = await repo.rows_with_path(session, names, lock=not dry_run)
+    if not rows:
+        raise ApiError("码表里没有这个场景", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    if dry_run or new_name == names[-1]:
+        return {"rows": len(rows)}
+    await repo.lock_scenario_codes(session)
+    if await repo.path_exists(session, (*names[:-1], new_name)):
+        raise ApiError(f"同一上级下已经有「{new_name}」，不能改成这个名字", code=ErrorCode.DUPLICATE, http_status=409)
+    level, now = len(names), utcnow()
+    for row in rows:
+        setattr(row, f"scenario_l{level}_name", new_name)
+        if row.scenario_tag == names[-1]:
+            row.scenario_tag = new_name
+        row.refresh_hash()
+        row.version += 1
+        row.updated_at, row.updated_by_id, row.updated_by_name = now, caller.id, caller.name
+    await session.flush()
+    await enqueue_event(
+        session,
+        event_type="codebook.scenario.renamed",
+        actor=caller,
+        extra={"path": " > ".join(names), "new_name": new_name, "rows": len(rows)},
+    )
+    return {"rows": len(rows)}

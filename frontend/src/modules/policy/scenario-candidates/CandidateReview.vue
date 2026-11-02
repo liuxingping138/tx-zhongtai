@@ -22,6 +22,7 @@ import DecisionDialog from './DecisionDialog.vue'
 import DecisionOptions from './DecisionOptions.vue'
 import { FILTER_KEYS, KIND_NEW, PENDING, RESOURCE, aiText, decisionText, mergeTargetOf, positionParts, suggest, suggestionText, type DecisionMode } from './candidates'
 import { useAfterDecision } from './useAfterDecision'
+import { useCandidatePeers } from './useCandidatePeers'
 
 const auth = useAuthStore()
 const canDecide = computed(() => auth.canFull(RESOURCE))
@@ -53,6 +54,7 @@ watch(() => candidate.value?.id, async (id) => {
 })
 
 const suggestion = computed(() => (candidate.value ? suggest(candidate.value) : null))
+const { peers, absorbing, absorb } = useCandidatePeers(candidate, () => review.load())
 // 合并时预选的目标：AI 说的、码表里对得上的；AI 没看过时用同一行业下名称很像的。其余让人自己在确认框里选
 const mergeTarget = computed(() => (candidate.value ? mergeTargetOf(candidate.value, context.value?.similar ?? []) : null))
 const reasonText = computed(() => (candidate.value ? suggestionText(candidate.value, suggestion.value) : ''))
@@ -214,7 +216,11 @@ async function reopen() {
         :context-error="contextError"
         :rows="rows"
         :can-merge="canWriteCodebook"
+        :peers="peers"
+        :can-absorb="canDecide && candidate.status === PENDING"
+        :absorbing="absorbing"
         @merge="path => open('merge', path)"
+        @absorb="absorb"
         @open-rows="drawer = true"
       />
 

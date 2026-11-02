@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { CandidateContext, CandidateDetail, CandidateRow } from '@/api/scenarioCandidates'
+import type { Peer } from './useCandidatePeers'
 import { computed, ref, watch } from 'vue'
 
 import { KIND_NEW, PENDING, levelName, pathText, similarLabel } from './candidates'
@@ -11,8 +12,12 @@ const props = defineProps<{
   contextError: string
   rows: CandidateRow[]
   canMerge: boolean
+  /** 别的待审场景里名称和它相似的 */
+  peers: Peer[]
+  canAbsorb: boolean
+  absorbing: boolean
 }>()
-const emit = defineEmits<{ merge: [path: string[]]; openRows: [] }>()
+const emit = defineEmits<{ merge: [path: string[]]; openRows: []; absorb: [peer: Peer] }>()
 
 // 新的一级场景要和整个行业的一级场景比，常有几十个：下级多的（业务成型的）排前面，默认只露一部分
 const SIBLINGS_SHOWN = 12
@@ -129,6 +134,42 @@ const similarSummary = computed(() => {
       >
         {{ contextError ? '—' : '码表里没有名称相近的场景；意思相近但说法不同的，请对照上面同级的场景判断。' }}
       </p>
+
+      <template v-if="peers.length">
+        <h2>还在待审的相似场景</h2>
+        <p class="evidence__muted">
+          可能是同一个场景换了说法：并进来以后一起决定，以后 AI 再写那个说法也归到这里。
+        </p>
+        <ul class="evidence__similar">
+          <li
+            v-for="peer in peers"
+            :key="peer.id"
+          >
+            <el-tag
+              :type="peer.level === '高' ? 'warning' : 'info'"
+              effect="plain"
+            >
+              {{ similarLabel(peer.level) }}
+            </el-tag>
+            <div class="evidence__similar-body">
+              <strong>{{ pathText([peer.scenario_l1, peer.scenario_l2, peer.scenario_l3]) }}</strong>
+              <p class="evidence__muted">
+                新增{{ peer.level_label }} · {{ peer.policy_count }} 条政策 · {{ peer.main_industry }}
+              </p>
+            </div>
+            <el-button
+              v-if="canAbsorb"
+              size="small"
+              :loading="absorbing"
+              :disabled="peer.level_label !== candidate.level_label"
+              :title="peer.level_label !== candidate.level_label ? '新增级别不同，不能合成一个，请分别决定' : ''"
+              @click="emit('absorb', peer)"
+            >
+              并入本场景
+            </el-button>
+          </li>
+        </ul>
+      </template>
 
       <template v-if="candidate.reasons.length">
         <h2>AI 给的理由</h2>

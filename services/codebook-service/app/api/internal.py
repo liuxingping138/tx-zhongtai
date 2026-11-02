@@ -82,6 +82,33 @@ async def scenario_context(
     return success_json(await scenario_sync.context(session, body.items))
 
 
+class ScenarioRename(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    path: list[str] = Field(min_length=1, max_length=3)
+    new_name: str = Field(min_length=1, max_length=255)
+    dry_run: bool = False
+    caller_name: str = Field(default="新增场景审核", max_length=100)
+    caller_id: str = Field(default="", max_length=64)
+
+
+@router.post("/scenarios/rename")
+@classified(SecurityClass.INTERNAL)
+async def rename_scenario(
+    body: ScenarioRename,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    settings: Settings = Depends(get_settings),
+) -> JSONResponse:
+    """已有场景改名（各行业、各客群的行一起改，编码不变）。dry_run 只数会改多少行。"""
+
+    service = verify_internal_caller(request, settings.internal_caller_secrets)
+    if service not in SCENARIO_WRITERS:
+        raise InternalCallerRejectedError(f"{service} 不能改场景码表")
+    caller = Actor(id=body.caller_id or service, name=body.caller_name)
+    return success_json(await scenario_sync.rename(session, caller, body.path, body.new_name, dry_run=body.dry_run))
+
+
 @router.post("/scenarios/sync")
 @classified(SecurityClass.INTERNAL)
 async def sync_scenarios(

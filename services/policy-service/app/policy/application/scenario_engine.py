@@ -20,7 +20,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common import internal_clients
 from app.core.database import SessionLocal
-from app.policy.application.region import make_relation_key
+from app.policy.application.scenario_rows import (
+    Pair,
+    final_candidate,
+    lookup,
+    move_rows,
+    names_payload,
+    rekey,
+    row_names,
+    set_codes,
+    system_touch,
+)
 from app.policy.domain.candidates import (
     KIND_NEW,
     STATUS_ADOPTED,
@@ -34,8 +44,6 @@ from app.policy.domain.candidates import (
     renamed_path,
 )
 from app.policy.domain.fields import (
-    SCENARIO_CODE_FIELDS,
-    SCENARIO_NAME_FIELDS,
     SCENARIO_STATE_BAD_INDUSTRY,
     SCENARIO_STATE_DUPLICATE,
     SCENARIO_STATE_EXISTS,
@@ -46,82 +54,33 @@ from app.policy.domain.models import YES, Interpretation
 from app.policy.repositories import interpretations as interpretations_repo
 from app.policy.repositories import scenario_candidates as repo
 
+# 底层操作在 scenario_rows，别处照旧经这里用
+__all__ = [
+    "Pair",
+    "apply_decision",
+    "classify_backlog",
+    "classify_quietly",
+    "classify_rows",
+    "lookup",
+    "move_rows",
+    "names_payload",
+    "recount",
+    "refresh_pending_similar",
+    "refresh_similar",
+    "rekey",
+    "row_names",
+    "settle",
+]
+
 logger = logging.getLogger("policy.scenario_engine")
 
-LOOKUP_CHUNK = 5000
 BACKLOG_BATCH = 1000
 AUTO_EXISTS_NOTE = "AI 标为新增，码表里已有这个场景，已自动改为已有场景"
 DEFAULT_DECIDER = "新增场景审核"
-Pair = tuple[Names, Names]
-
-
-def row_names(row: Interpretation) -> Pair:
-    values = [str(getattr(row, field) or "").strip() for field in SCENARIO_NAME_FIELDS]
-    return (values[0], values[1], values[2]), (values[3], values[4], values[5])
-
-
-def names_payload(industry: Names, scenario: Names) -> dict[str, str]:
-    return dict(zip(SCENARIO_NAME_FIELDS, (*industry, *scenario), strict=True))
-
-
-def _set_codes(row: Interpretation, codes: dict[str, Any] | None) -> None:
-    for field in SCENARIO_CODE_FIELDS:
-        setattr(row, field, str((codes or {}).get(field) or ""))
-
-
-def _system_touch(row: Interpretation) -> None:
-    """系统改了这一行：只加版本号（开着编辑框的人保存时会提示被改过），更新时间和操作人不动。"""
-
-    row.version += 1
-
-
-async def lookup(pairs: list[Pair]) -> dict[Pair, dict[str, Any]]:
-    """一组行业场景名称去码表比对，同样的名称只问一次。"""
-
-    unique = list(dict.fromkeys(pairs))
-    out: dict[Pair, dict[str, Any]] = {}
-    for start in range(0, len(unique), LOOKUP_CHUNK):
-        chunk = unique[start : start + LOOKUP_CHUNK]
-        items = [{"key": str(i), **names_payload(*pair)} for i, pair in enumerate(chunk)]
-        found = await internal_clients.codebook("POST", "/internal/v1/scenarios/lookup", json={"items": items})
-        by_key = {str(item.get("key")): item for item in found}
-        out.update({pair: by_key.get(str(i), {}) for i, pair in enumerate(chunk)})
-    return out
-
-
-async def rekey(session: AsyncSession, rows: list[Interpretation]) -> None:
-    """按现在的编码、名称重算关联主键。撞上同一政策另一行（同场景、同机会类型）的标「重复」，留着原主键，不删。
-
-    本批行原来的主键也算占用：一行换走的主键不让本批另一行马上接过去，免得按更新顺序撞上唯一约束。
-    """
-
-    planned = {
-        row.id: make_relation_key(
-            row.policy_uid,
-            row.industry_scenario_code,
-            row.opportunity_type,
-            [str(getattr(row, field) or "") for field in SCENARIO_NAME_FIELDS],
-        )
-        for row in rows
-    }
-    changing = [key for row in rows if (key := planned[row.id]) != row.relation_key]
-    if not changing:
-        return
-    taken = await repo.taken_relation_keys(session, changing, exclude={row.id for row in rows})
-    taken.update(row.relation_key for row in rows)
-    for row in rows:
-        key = planned[row.id]
-        if key == row.relation_key:
-            continue
-        if key in taken:
-            row.scenario_state = SCENARIO_STATE_DUPLICATE
-            continue
-        taken.add(key)
-        row.relation_key = key
 
 
 def _mark_exists(row: Interpretation, verdict: dict[str, Any]) -> None:
-    _set_codes(row, verdict)
+    set_codes(row, verdict)
     if row.is_new_scenario == YES:
         row.is_new_scenario = "否"
         row.remark = f"{row.remark}；{AUTO_EXISTS_NOTE}" if row.remark else AUTO_EXISTS_NOTE
@@ -182,9 +141,16 @@ async def _attach(
     touched: set[uuid.UUID] = set()
     for key, rows_of in members.items():
         candidate = candidates[key]
+        final = await final_candidate(session, candidate)
+        if final is not candidate:
+            move_rows(rows_of, candidate, final)
+            touched.add(candidate.id)
+            candidate = final
         touched.add(candidate.id)
         for row in rows_of:
             row.candidate_id, row.scenario_state = candidate.id, SCENARIO_STATE_PENDING
+        if final is not candidates[key]:
+            await rekey(session, rows_of)
         if candidate.status != STATUS_PENDING:
             for row, reason in await apply_decision(session, candidate, rows_of, now):
                 logger.warning("新增场景规则没能套用到解读行 %s：%s", row.id, reason)
@@ -199,7 +165,7 @@ async def classify_rows(session: AsyncSession, rows: Iterable[Interpretation], n
 
     todo = [row for row in rows if not row.scenario_state]
     for row in todo:
-        _system_touch(row)
+        system_touch(row)
         if row.industry_scenario_code:  # 导入时带了编码、AI 说已有且查到了编码：认它
             row.scenario_state, row.candidate_id = SCENARIO_STATE_EXISTS, None
     todo = [row for row in todo if not row.industry_scenario_code]
@@ -251,6 +217,8 @@ async def apply_decision(
     待审、驳回只改场景状态；采纳、合并把名称换成最终的说法、回填编码、重算关联主键。返回没能写进码表的行和原因。
     """
 
+    if candidate.merged_into is not None:
+        return []  # 并到别的场景了：它的行已经搬过去，按那个场景的决定处理
     state = candidate.row_state()
     if rows is None:
         rows = await repo.rows_to_apply(session, candidate.id, state)
@@ -260,7 +228,7 @@ async def apply_decision(
     if candidate.status not in (STATUS_ADOPTED, STATUS_MERGED):
         for row in rows:
             row.scenario_state = state
-            _system_touch(row)
+            system_touch(row)
         return []
     finals = {row.id: _final_pair(candidate, row) for row in rows}
     results = await _write_to_codebook(candidate, list(finals.values()))
@@ -274,9 +242,9 @@ async def apply_decision(
             continue
         for field, value in names_payload(industry, scenario).items():
             setattr(row, field, value)
-        _set_codes(row, result)
+        set_codes(row, result)
         row.scenario_state, row.scenario_synced_at = state, now
-        _system_touch(row)
+        system_touch(row)
         done.append(row)
     await rekey(session, done)
     return failed

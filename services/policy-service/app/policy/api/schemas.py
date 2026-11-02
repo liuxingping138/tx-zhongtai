@@ -53,6 +53,35 @@ class CandidateAdoptRequest(CandidateVersion):
 class CandidateMergeRequest(CandidateVersion):
     # 合并到码表里已有的场景：一级到三级场景名称，从码表里选
     target: list[str] = Field(min_length=1, max_length=3)
+    # 原场景改用这个新说法（码表和解读里用它的行一起改名，编码不变）
+    rename: bool = False
+
+
+class CandidateAbsorbRequest(CandidateVersion):
+    peer_id: uuid.UUID
+    peer_version: int
+
+
+class CandidateRef(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: uuid.UUID
+    version: int
+
+
+class CandidateBatchReject(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[CandidateRef] = Field(min_length=1, max_length=100)
+    reason: str = Field(min_length=1, max_length=64)
+    note: str = Field(default="", max_length=2000)
+
+
+class CandidateBatchMerge(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[CandidateRef] = Field(min_length=1, max_length=100)
+    target: list[str] = Field(min_length=1, max_length=3)
 
 
 class CandidateRejectRequest(CandidateVersion):

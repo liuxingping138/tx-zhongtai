@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 
 import { listCandidates, type CandidateItem, type CandidateQuery, type CandidateSummary } from '@/api/scenarioCandidates'
 import AuditLogButton from '@/components/AuditLogButton.vue'
+import { useAuthStore } from '@/stores/auth'
 import FilterBar from '@/components/FilterBar.vue'
 import FilterKeyword from '@/components/FilterKeyword.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
@@ -12,6 +13,7 @@ import { useFilterOptions } from '@/composables/useFilterOptions'
 import { hasActiveFilters, useListLoader } from '@/composables/useListLoader'
 import { useListQuery } from '@/composables/useListQuery'
 import { reviewQuery } from '../shared/reviewQuery'
+import CandidateBatchActions from './CandidateBatchActions.vue'
 import CandidateRowsDrawer from './CandidateRowsDrawer.vue'
 import { PENDING, RESOURCE, SIMILAR_LABELS, STATUSES, decisionText, similarLabel, splitPath, summaryText } from './candidates'
 
@@ -68,6 +70,18 @@ function reviewRoute(row: CandidateItem, index: number) {
 
 const drawer = ref<CandidateItem | null>(null)
 
+const auth = useAuthStore()
+const canDecide = computed(() => auth.canFull(RESOURCE))
+const canWriteCodebook = computed(() => canDecide.value && auth.canFull('codebook.scenarios'))
+// 批量只在待审页签、只勾当前页
+const table = ref<{ clearSelection: () => void }>()
+const checked = ref<CandidateItem[]>([])
+async function afterBatch() {
+  table.value?.clearSelection()
+  checked.value = []
+  await load()
+}
+
 onMounted(() => {
   void load()
   void filters.load()
@@ -108,6 +122,12 @@ onMounted(() => {
             {{ status }} {{ (counts[status] ?? 0).toLocaleString() }}
           </el-radio-button>
         </el-radio-group>
+        <CandidateBatchActions
+          v-if="pending && canDecide"
+          :checked="checked"
+          :can-write-codebook="canWriteCodebook"
+          @done="afterBatch"
+        />
         <AuditLogButton :module="RESOURCE" />
       </template>
       <template #filters>
@@ -161,9 +181,11 @@ onMounted(() => {
         </FilterBar>
       </template>
       <el-table
+        ref="table"
         v-loading="loading"
         class="data-table"
         :data="items"
+        @selection-change="checked = $event"
       >
         <template #empty>
           <ListEmpty
@@ -172,6 +194,11 @@ onMounted(() => {
             @reset="resetFilters"
           />
         </template>
+        <el-table-column
+          v-if="pending && canDecide"
+          type="selection"
+          width="44"
+        />
         <el-table-column
           label="新增场景"
           min-width="200"

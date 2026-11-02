@@ -92,7 +92,7 @@ test('按场景审核：看来源政策，按建议合并后自动打开下一�
   await expect(dialog.getByText('已选：智慧交通工程建设 › 交通工程建设信息化')).toBeVisible()
   await dialog.getByRole('button', { name: '确定合并' }).click()
 
-  await expect.poll(() => merged).toEqual({ version: 1, target: ['智慧交通工程建设', '交通工程建设信息化'] })
+  await expect.poll(() => merged).toEqual({ version: 1, target: ['智慧交通工程建设', '交通工程建设信息化'], rename: false })
   await expect(page.getByRole('heading', { name: '再生水循环利用', level: 1 })).toBeVisible()
   await expect(page.getByText('已合并到已有场景，打开了下一个')).toBeVisible()
 })

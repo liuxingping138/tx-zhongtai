@@ -3,9 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from platform_common.similarity import similarity, similarity_level
 
 from app.application import scenario_sync
-from app.domain.scenario_similarity import ScenarioNodes, similarity, similarity_level
+from app.domain.scenario_similarity import ScenarioNodes
 
 AIR = ("交通行业", "交通运输、仓储和邮政业", "航空")
 ROAD = ("交通行业", "交通运输、仓储和邮政业", "道路运输")

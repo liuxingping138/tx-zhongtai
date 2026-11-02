@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from platform_common.filters import Filters, contains_ilike, filter_values, in_any
-from sqlalchemy import ColumnElement, Select, distinct, exists, func, or_, select
+from sqlalchemy import ColumnElement, Select, distinct, exists, func, or_, select, update
 from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -229,6 +229,76 @@ async def rows_to_apply(session: AsyncSession, candidate_id: uuid.UUID, state: s
         .with_for_update()
     )
     return list(result)
+
+
+async def rows_of(session: AsyncSession, candidate_id: uuid.UUID) -> list[Interpretation]:
+    result = await session.scalars(
+        select(Interpretation)
+        .where(Interpretation.candidate_id == candidate_id)
+        .order_by(Interpretation.id)
+        .with_for_update()
+    )
+    return list(result)
+
+
+async def pending_count(session: AsyncSession) -> int:
+    return int(
+        await session.scalar(select(func.count()).select_from(C).where(C.status == STATUS_PENDING, C.row_count > 0))
+        or 0
+    )
+
+
+async def pending_others(session: AsyncSession, exclude: uuid.UUID) -> list[ScenarioCandidate]:
+    """别的待审场景（找彼此相似的用，几千个以内）。"""
+
+    result = await session.scalars(select(C).where(C.status == STATUS_PENDING, C.row_count > 0, C.id != exclude))
+    return list(result)
+
+
+_NAME_COLUMNS = (Interpretation.scenario_l1_name, Interpretation.scenario_l2_name, Interpretation.scenario_l3_name)
+_CANDIDATE_COLUMNS = (C.scenario_l1, C.scenario_l2, C.scenario_l3)
+
+
+def _prefix(columns: tuple[Any, ...], path: tuple[str, ...]) -> list[ColumnElement[bool]]:
+    return [column == name for column, name in zip(columns, path, strict=False)]
+
+
+async def count_rows_with_prefix(session: AsyncSession, path: tuple[str, ...]) -> int:
+    """场景路径以 path 开头的解读行有多少（已有场景改名的影响面）。"""
+
+    return int(
+        await session.scalar(select(func.count()).select_from(Interpretation).where(*_prefix(_NAME_COLUMNS, path))) or 0
+    )
+
+
+async def rename_rows(session: AsyncSession, path: tuple[str, ...], new_name: str) -> int:
+    """已有场景改名：场景路径以 path 开头的解读行一起改名（编码不变），整批一条语句；只加版本号，不动更新时间。"""
+
+    column = f"scenario_l{len(path)}_name"
+    result = await session.execute(
+        update(Interpretation)
+        .where(*_prefix(_NAME_COLUMNS, path))
+        .values({column: new_name, "version": Interpretation.version + 1})
+        .execution_options(synchronize_session=False)
+    )
+    return int(getattr(result, "rowcount", 0) or 0)
+
+
+async def codeless_rows_with_prefix(session: AsyncSession, path: tuple[str, ...]) -> list[Interpretation]:
+    result = await session.scalars(
+        select(Interpretation)
+        .where(*_prefix(_NAME_COLUMNS, path), Interpretation.industry_scenario_code == "")
+        .with_for_update()
+    )
+    return list(result)
+
+
+async def candidates_with_prefix(session: AsyncSession, path: tuple[str, ...]) -> list[ScenarioCandidate]:
+    return list(await session.scalars(select(C).where(*_prefix(_CANDIDATE_COLUMNS, path)).with_for_update()))
+
+
+async def key_taken(session: AsyncSession, key: str) -> bool:
+    return await session.scalar(select(C.id).where(C.key == key)) is not None
 
 
 async def taken_relation_keys(session: AsyncSession, keys: list[str], exclude: set[uuid.UUID]) -> set[str]:

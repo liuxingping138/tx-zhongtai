@@ -1558,6 +1558,46 @@
         }
       }
     },
+    "/internal/v1/scenarios/rename": {
+      "post": {
+        "tags": [
+          "internal"
+        ],
+        "summary": "Rename Scenario",
+        "description": "已有场景改名（各行业、各客群的行一起改，编码不变）。dry_run 只数会改多少行。",
+        "operationId": "rename_scenario_internal_v1_scenarios_rename_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScenarioRename"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/internal/v1/scenarios/sync": {
       "post": {
         "tags": [
@@ -2056,6 +2096,49 @@
           "items"
         ],
         "title": "ScenarioPaths"
+      },
+      "ScenarioRename": {
+        "properties": {
+          "path": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Path"
+          },
+          "new_name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "New Name"
+          },
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run",
+            "default": false
+          },
+          "caller_name": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Caller Name",
+            "default": "新增场景审核"
+          },
+          "caller_id": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Caller Id",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "path",
+          "new_name"
+        ],
+        "title": "ScenarioRename"
       },
       "ScenarioWrite": {
         "properties": {

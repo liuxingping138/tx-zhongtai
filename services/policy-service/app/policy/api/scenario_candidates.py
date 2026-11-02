@@ -16,13 +16,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.security import classified, require_policy_permission
 from app.core.database import get_db_session
 from app.policy.api.schemas import (
+    CandidateAbsorbRequest,
     CandidateAdoptRequest,
+    CandidateBatchMerge,
+    CandidateBatchReject,
     CandidateMergeRequest,
     CandidateRejectRequest,
     CandidateVersion,
 )
+from app.policy.application import scenario_batch as batch
 from app.policy.application import scenario_candidates as service
 from app.policy.application import scenario_decisions as decisions
+from app.policy.application import scenario_merging as merging
 
 router = APIRouter(prefix="/api/v1/policy/scenario-candidates", tags=["policy-scenario-candidates"])
 RESOURCE = "policy.scenario_candidates"
@@ -73,6 +78,44 @@ async def list_options(
     return success_json(await service.candidate_options())
 
 
+@router.get("/pending-count")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def pending_count(
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    _: Actor = Depends(require_policy_permission(RESOURCE, "list")),
+) -> JSONResponse:
+    """侧栏「新增场景审核」旁的待审数。"""
+
+    return success_json({"pending": await service.pending_count(session)})
+
+
+@router.post("/batch-reject")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def batch_reject(
+    body: CandidateBatchReject,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    actor: Actor = Depends(require_policy_permission(RESOURCE, "decide")),
+) -> JSONResponse:
+    """勾选的几个一起驳回；被人改过、已经决定过的跳过并写明原因。"""
+
+    items = [(item.id, item.version) for item in body.items]
+    return success_json(await batch.batch_reject(session, actor, items, reason=body.reason, note=body.note))
+
+
+@router.post("/batch-merge")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def batch_merge(
+    body: CandidateBatchMerge,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    actor: Actor = Depends(require_policy_permission(RESOURCE, "decide")),
+    _codebook: Actor = Depends(require_policy_permission(*CODEBOOK)),
+) -> JSONResponse:
+    """勾选的几个一起合并到同一个已有场景。"""
+
+    items = [(item.id, item.version) for item in body.items]
+    return success_json(await batch.batch_merge(session, actor, items, target=body.target))
+
+
 @router.get("/{candidate_id}")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def get_item(
@@ -112,6 +155,49 @@ async def get_rows(
     )
 
 
+@router.get("/{candidate_id}/peers")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def get_peers(
+    candidate_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    _: Actor = Depends(require_policy_permission(RESOURCE, "read")),
+) -> JSONResponse:
+    """别的待审场景里名称和它相似的（可能是同一个场景换了说法）。"""
+
+    return success_json({"items": await merging.peers(session, candidate_id)})
+
+
+@router.get("/{candidate_id}/rename-impact")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def get_rename_impact(
+    candidate_id: uuid.UUID,
+    target: list[str] = Query(..., min_length=1, max_length=3),
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    _: Actor = Depends(require_policy_permission(RESOURCE, "read")),
+) -> JSONResponse:
+    """合并时让原场景改用新说法会改多少行。"""
+
+    path = tuple(name.strip() for name in target if name.strip())
+    return success_json(await merging.rename_impact(session, path))
+
+
+@router.post("/{candidate_id}/absorb")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def absorb(
+    candidate_id: uuid.UUID,
+    body: CandidateAbsorbRequest,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    actor: Actor = Depends(require_policy_permission(RESOURCE, "decide")),
+) -> JSONResponse:
+    """把另一个相似的待审场景并进这个。"""
+
+    return success_json(
+        await merging.absorb(
+            session, actor, candidate_id, version=body.version, peer_id=body.peer_id, peer_version=body.peer_version
+        )
+    )
+
+
 @router.post("/{candidate_id}/adopt")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def adopt(
@@ -133,7 +219,11 @@ async def merge(
     actor: Actor = Depends(require_policy_permission(RESOURCE, "decide")),
     _codebook: Actor = Depends(require_policy_permission(*CODEBOOK)),
 ) -> JSONResponse:
-    return success_json(await decisions.merge(session, actor, candidate_id, version=body.version, target=body.target))
+    return success_json(
+        await decisions.merge(
+            session, actor, candidate_id, version=body.version, target=body.target, rename=body.rename
+        )
+    )
 
 
 @router.post("/{candidate_id}/reject")

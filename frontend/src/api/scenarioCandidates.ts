@@ -24,6 +24,8 @@ export interface CandidateItem {
   target_l1: string
   target_l2: string
   target_l3: string
+  /** 并到了另一个待审场景（两个说法是同一个） */
+  merged_into: string
   reject_reason: string
   note: string
   decided_at: string
@@ -131,7 +133,10 @@ export function adoptCandidate(id: string, body: { version: number; name?: strin
   return request(http.post(`/policy/scenario-candidates/${id}/adopt`, body))
 }
 
-export function mergeCandidate(id: string, body: { version: number; target: string[] }): Promise<CandidateItem> {
+export function mergeCandidate(
+  id: string,
+  body: { version: number; target: string[]; rename?: boolean },
+): Promise<CandidateItem> {
   return request(http.post(`/policy/scenario-candidates/${id}/merge`, body))
 }
 
@@ -160,4 +165,50 @@ export function changeRowScenario(
   },
 ): Promise<{ id: string; scenario_state: string; version: number }> {
   return request(http.post(`/policy/interpretations/${id}/scenario`, body))
+}
+
+/** 侧栏上的待审数 */
+export function candidatePendingCount(): Promise<{ pending: number }> {
+  return request(http.get('/policy/scenario-candidates/pending-count'))
+}
+
+/** 别的待审场景里名称和它相似的（可能是同一个场景换了说法） */
+export function getCandidatePeers(id: string): Promise<{ items: (CandidateItem & { score: number; level: string })[] }> {
+  return request(http.get(`/policy/scenario-candidates/${id}/peers`))
+}
+
+/** 把相似的另一个待审场景并进这个 */
+export function absorbCandidate(
+  id: string,
+  body: { version: number; peer_id: string; peer_version: number },
+): Promise<CandidateItem> {
+  return request(http.post(`/policy/scenario-candidates/${id}/absorb`, body))
+}
+
+/** 合并时让原场景改用新说法会改多少行 */
+export function candidateRenameImpact(
+  id: string,
+  target: string[],
+): Promise<{ codebook_rows: number; interpretation_rows: number }> {
+  return request(http.get(`/policy/scenario-candidates/${id}/rename-impact`, { params: { target } }))
+}
+
+export interface BatchResult {
+  done: number
+  skipped: { name: string; reason: string }[]
+}
+
+export function batchRejectCandidates(body: {
+  items: { id: string; version: number }[]
+  reason: string
+  note?: string
+}): Promise<BatchResult> {
+  return request(http.post('/policy/scenario-candidates/batch-reject', body))
+}
+
+export function batchMergeCandidates(body: {
+  items: { id: string; version: number }[]
+  target: string[]
+}): Promise<BatchResult> {
+  return request(http.post('/policy/scenario-candidates/batch-merge', body))
 }

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.audit_emit import enqueue_event
 from app.policy.application import scenario_engine as engine
+from app.policy.application import scenario_merging
 from app.policy.application.interpretations import to_out as interpretation_out
 from app.policy.application.region import make_relation_key
 from app.policy.application.scenario_candidates import candidate_out
@@ -110,9 +111,18 @@ async def adopt(
 
 
 async def merge(
-    session: AsyncSession, actor: Actor, candidate_id: uuid.UUID, *, version: int, target: list[str]
+    session: AsyncSession,
+    actor: Actor,
+    candidate_id: uuid.UUID,
+    *,
+    version: int,
+    target: list[str],
+    rename: bool = False,
 ) -> dict[str, Any]:
-    """合并到码表里已有的场景：候选下的行改用那个场景和它的编码，这个说法记成它的别名（以后自动归过去）。"""
+    """合并到码表里已有的场景：候选下的行改用那个场景和它的编码，这个说法记成它的别名（以后自动归过去）。
+
+    rename：原场景改用这个新说法（码表和解读里用它的行一起改名，编码不变）。
+    """
 
     candidate = await _locked(session, candidate_id, version)
     _pending(candidate)
@@ -124,6 +134,12 @@ async def merge(
     verdict = (await engine.lookup([(industry, path)])).get((industry, path), {})
     if verdict.get("kind") not in ("exists", "association"):
         raise _error("码表里没有这个场景，合并只能选已有的场景；要新建请用「采纳」")
+    if rename:
+        named = await scenario_merging.rename_target(
+            session, actor, tuple(n for n in path if n), scenario_merging.display_name(candidate)
+        )
+        padded = [*named, "", "", ""]
+        path = (padded[0], padded[1], padded[2])
     candidate.target_l1, candidate.target_l2, candidate.target_l3 = path
     _decided(candidate, actor, STATUS_MERGED)
     return await _apply(session, candidate, actor, "policy.scenario_candidate.merged")

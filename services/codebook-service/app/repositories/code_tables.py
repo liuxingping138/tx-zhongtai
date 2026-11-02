@@ -81,6 +81,24 @@ async def scenario_nodes(
     ]
 
 
+def _path_conditions(path: tuple[str, ...]) -> list[Any]:
+    return [column == name for column, name in zip(_SCENARIO_LEVELS[3:], path, strict=False)]
+
+
+async def rows_with_path(session: AsyncSession, path: tuple[str, ...], *, lock: bool) -> list[Scenario]:
+    """场景路径以 path 开头的全部行（各行业、各客群），改名要一起改。"""
+
+    statement = select(Scenario).where(*_path_conditions(path)).order_by(Scenario.id)
+    if lock:
+        statement = statement.with_for_update()
+    return list(await session.scalars(statement))
+
+
+async def path_exists(session: AsyncSession, path: tuple[str, ...]) -> bool:
+    found = await session.scalar(select(Scenario.id).where(*_path_conditions(path)).limit(1))
+    return found is not None
+
+
 async def lock_scenario_codes(session: AsyncSession) -> None:
     """分配新编码要「读最大号 → 加一 → 写入」，两个同步并发会拿到同一个号。事务级锁串行化。"""
 

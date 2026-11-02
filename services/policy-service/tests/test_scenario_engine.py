@@ -13,8 +13,10 @@ from platform_common.errors import ApiError
 
 from app.common import internal_clients
 from app.policy.application import scenario_decisions, scenario_engine
+from app.policy.application.region import make_relation_key
 from app.policy.domain import candidates as domain
 from app.policy.domain.candidates import ScenarioCandidate
+from app.policy.domain.fields import SCENARIO_NAME_FIELDS
 from app.policy.domain.models import Interpretation
 from app.policy.repositories import scenario_candidates as repo
 
@@ -104,7 +106,7 @@ def _row(industry: tuple[str, str, str], scenario: tuple[str, str, str], **extra
         **extra,
     }
     row = Interpretation(**values)
-    row.relation_key = scenario_engine.make_relation_key(
+    row.relation_key = make_relation_key(
         row.policy_uid, row.industry_scenario_code, row.opportunity_type, [*industry, *scenario]
     )
     return row
@@ -337,10 +339,10 @@ async def test_changing_one_row_is_a_human_edit_and_reclassifies_it(
 
     monkeypatch.setattr(interpretations_repo, "get_for_update", get_for_update)
     monkeypatch.setattr(interpretations_repo, "get_by_relation_key", by_key)
-    names = dict(zip(scenario_engine.SCENARIO_NAME_FIELDS, (*AIR, "智慧航空", "另一个", ""), strict=True))
+    names = dict(zip(SCENARIO_NAME_FIELDS, (*AIR, "智慧航空", "另一个", ""), strict=True))
     with pytest.raises(ApiError, match="同一场景"):
         await scenario_decisions.change_row_scenario(Session(), ACTOR, row.id, version=row.version, names=names)  # type: ignore[arg-type]
-    names = dict(zip(scenario_engine.SCENARIO_NAME_FIELDS, (*AIR, "智慧航空", "智慧空侧", "行李自动化"), strict=True))
+    names = dict(zip(SCENARIO_NAME_FIELDS, (*AIR, "智慧航空", "智慧空侧", "行李自动化"), strict=True))
     out = await scenario_decisions.change_row_scenario(Session(), ACTOR, row.id, version=row.version, names=names)  # type: ignore[arg-type]
     assert (out["scenario_state"], out["industry_scenario_code"], out["updated_by_name"]) == (
         "码表已有",
@@ -349,3 +351,163 @@ async def test_changing_one_row_is_a_human_edit_and_reclassifies_it(
     )
     assert row.candidate_id is None and old_candidate is not None
     assert world.events[-1]["event_type"] == "policy.interpretation.scenario_changed"
+
+
+def _merging_fakes(world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.policy.application import scenario_merging
+
+    async def rows_of(_session: Any, cid: Any) -> list[Any]:
+        return [row for row in world.rows if row.candidate_id == cid]
+
+    async def others(_session: Any, exclude: Any) -> list[Any]:
+        return [c for c in world.candidates.values() if c.id != exclude and c.status == "待审"]
+
+    async def get(_session: Any, cid: Any) -> Any:
+        return next((c for c in world.candidates.values() if c.id == cid), None)
+
+    async def with_prefix(_session: Any, _path: Any) -> list[Any]:
+        return []
+
+    async def renamed(_session: Any, path: Any, new_name: str) -> int:
+        world.renamed = (path, new_name)
+        return 3
+
+    async def no(_session: Any, _key: str) -> bool:
+        return False
+
+    for name, fake in {
+        "rows_of": rows_of,
+        "pending_others": others,
+        "get": get,
+        "candidates_with_prefix": with_prefix,
+        "codeless_rows_with_prefix": with_prefix,
+        "rename_rows": renamed,
+        "key_taken": no,
+    }.items():
+        monkeypatch.setattr(repo, name, fake)
+    monkeypatch.setattr(scenario_merging, "enqueue_event", world_record(world))
+
+
+def world_record(world: SimpleNamespace) -> Any:
+    async def record(_session: Any, **kwargs: Any) -> None:
+        world.events.append(kwargs)
+
+    return record
+
+
+async def test_two_pending_scenarios_merge_into_one_and_the_alias_follows(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.policy.application import scenario_merging
+
+    _merging_fakes(world, monkeypatch)
+    main = _row(AIR, ("智慧航空", "智慧机场工程建设管理", ""))
+    alias = _row(AIR, ("智慧航空", "机场建设数字化管理", "施工进度管理"), policy_uid="p2")
+    world.rows = [main, alias]
+    await scenario_engine.classify_rows(Session(), [main, alias], NOW)  # type: ignore[arg-type]
+    target = world.candidates["新|智慧航空>智慧机场工程建设管理"]
+    peer = world.candidates["新|智慧航空>机场建设数字化管理"]
+    found = await scenario_merging.peers(Session(), target.id)  # type: ignore[arg-type]
+    assert [item["name"] for item in found] == []  # 字面不像：只列名称相近的
+    await scenario_merging.absorb(Session(), ACTOR, target.id, version=1, peer_id=peer.id, peer_version=1)  # type: ignore[arg-type]
+    # 被并入的说法换成目标的说法，下级保留，行搬过来
+    assert (alias.scenario_l2_name, alias.scenario_l3_name, alias.candidate_id) == (
+        "智慧机场工程建设管理",
+        "施工进度管理",
+        target.id,
+    )
+    assert (peer.status, peer.merged_into) == ("已合并", target.id)
+    # 以后 AI 再写被并入的说法：顺着归到目标场景
+    later = _row(AIR, ("智慧航空", "机场建设数字化管理", ""), policy_uid="p3")
+    world.rows.append(later)
+    await scenario_engine.classify_rows(Session(), [later], NOW)  # type: ignore[arg-type]
+    assert (later.candidate_id, later.scenario_l2_name, later.scenario_state) == (
+        target.id,
+        "智慧机场工程建设管理",
+        "待审",
+    )
+
+
+async def test_absorb_refuses_scenarios_of_different_levels(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.policy.application import scenario_merging
+
+    _merging_fakes(world, monkeypatch)
+    rows = [_row(AIR, ("智慧航空", "智慧机场工程建设管理", "")), _row(HEALTH, ("中医药数智化", "", ""))]
+    world.rows = rows
+    await scenario_engine.classify_rows(Session(), rows, NOW)  # type: ignore[arg-type]
+    first, second = world.candidates["新|智慧航空>智慧机场工程建设管理"], world.candidates["新|中医药数智化"]
+    with pytest.raises(ApiError, match="级别不同"):
+        await scenario_merging.absorb(Session(), ACTOR, first.id, version=1, peer_id=second.id, peer_version=1)  # type: ignore[arg-type]
+
+
+async def test_merge_can_rename_the_existing_scenario_to_the_new_wording(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _merging_fakes(world, monkeypatch)
+    calls: list[dict[str, Any]] = []
+    original = world.codebook
+
+    async def codebook(method: str, path: str, **kwargs: Any) -> Any:
+        if path.endswith("/rename"):
+            calls.append(kwargs["json"])
+            CODEBOOK[(ROAD, ("智慧交通工程建设", "智慧机场工程建设管理", ""))] = "300400000000"
+            return {"rows": 3}
+        return await original(method, path, **kwargs)
+
+    monkeypatch.setattr(internal_clients, "codebook", codebook)
+    row = _row(AIR, ("智慧航空", "智慧机场工程建设管理", ""))
+    world.rows = [row]
+    await scenario_engine.classify_rows(Session(), [row], NOW)  # type: ignore[arg-type]
+    candidate = world.candidates["新|智慧航空>智慧机场工程建设管理"]
+    try:
+        await scenario_decisions.merge(
+            Session(),
+            ACTOR,
+            candidate.id,
+            version=1,
+            target=list(TARGET[:2]),
+            rename=True,  # type: ignore[arg-type]
+        )
+    finally:
+        CODEBOOK.pop((ROAD, ("智慧交通工程建设", "智慧机场工程建设管理", "")), None)
+    assert calls[0]["path"] == list(TARGET[:2]) and calls[0]["new_name"] == "智慧机场工程建设管理"
+    assert world.renamed == (TARGET[:2], "智慧机场工程建设管理")
+    assert (candidate.target_l2, row.scenario_l1_name, row.scenario_l2_name, row.scenario_state) == (
+        "智慧机场工程建设管理",
+        "智慧交通工程建设",
+        "智慧机场工程建设管理",
+        "已合并",
+    )
+
+
+async def test_batch_reject_skips_ones_already_decided(world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.policy.application import scenario_batch
+
+    _merging_fakes(world, monkeypatch)
+    rows = [_row(AIR, ("智慧航空", "智慧机场工程建设管理", "")), _row(HEALTH, ("中医药数智化", "", ""))]
+    world.rows = rows
+    await scenario_engine.classify_rows(Session(), rows, NOW)  # type: ignore[arg-type]
+    first, second = world.candidates["新|智慧航空>智慧机场工程建设管理"], world.candidates["新|中医药数智化"]
+    second.status = "已采纳"
+
+    class Nested(Session):
+        def begin_nested(self) -> Any:
+            return self
+
+        async def __aenter__(self) -> Any:
+            return self
+
+        async def __aexit__(self, *exc: Any) -> bool:
+            return False
+
+    out = await scenario_batch.batch_reject(
+        Nested(),
+        ACTOR,
+        [(first.id, 1), (second.id, 1)],
+        reason="说法不对",
+        note="",  # type: ignore[arg-type]
+    )
+    assert out["done"] == 1 and out["skipped"][0]["name"] == "中医药数智化" and "已采纳" in out["skipped"][0]["reason"]
+    assert first.status == "已驳回"

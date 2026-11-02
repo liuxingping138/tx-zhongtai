@@ -7,7 +7,7 @@ function item(extra: Partial<CandidateItem>): CandidateItem {
   return {
     id: 'c1', kind: '新场景', new_level: 2, level_label: '二级', name: '智慧机场工程建设管理',
     scenario_l1: '智慧航空', scenario_l2: '智慧机场工程建设管理', scenario_l3: '', parent: '智慧航空', industry: '',
-    status: '待审', adopted_name: '', target: '', target_l1: '', target_l2: '', target_l3: '', reject_reason: '', note: '',
+    status: '待审', merged_into: '', adopted_name: '', target: '', target_l1: '', target_l2: '', target_l3: '', reject_reason: '', note: '',
     decided_at: '', decided_by_name: '', row_count: 52, policy_count: 37, industry_count: 1, main_industry: '交通行业',
     sample_title: '', similar_name: '', similar_score: 0, similar_level: '无', first_seen_at: '', last_seen_at: '', version: 1,
     ai_verdict: '', ai_similar: '', ai_target: '', ai_reason: '', ai_checked_at: '',

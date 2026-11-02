@@ -4,10 +4,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowRight, Search, User } from '@element-plus/icons-vue'
 import UserAccountMenu from '@/layouts/UserAccountMenu.vue'
 import { useWorkspace } from './workspace'
+import { useMenuBadges } from './menuBadges'
 import logoUrl from '@/assets/brand/telelands-logo.svg'
 import '@/styles/workspace.css'
 
 const { groups } = useWorkspace()
+const { counts: badges } = useMenuBadges()
 const route = useRoute()
 const router = useRouter()
 const activePath = computed(() => (typeof route.meta.menuPath === 'string' && route.meta.menuPath) || route.path)
@@ -101,6 +103,13 @@ function navigate(path: string) { searchOpen.value = false; void router.push(pat
                 <component :is="entry.icon" />
               </el-icon>
               <span>{{ entry.title }}</span>
+              <span
+                v-if="badges[entry.path]"
+                class="workspace-badge"
+                :title="`待审 ${badges[entry.path]} 个`"
+              >
+                <span class="sr-only">待审</span>{{ badges[entry.path]?.toLocaleString() }}
+              </span>
             </router-link>
           </template>
           <template v-else>

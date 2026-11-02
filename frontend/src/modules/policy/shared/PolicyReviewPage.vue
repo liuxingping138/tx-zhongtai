@@ -204,6 +204,10 @@ function setContentOpen(open: boolean) {
             <dd>{{ fact.text }}</dd>
           </div>
         </dl>
+        <slot
+          name="summary-extra"
+          :row="record"
+        />
       </section>
 
       <div

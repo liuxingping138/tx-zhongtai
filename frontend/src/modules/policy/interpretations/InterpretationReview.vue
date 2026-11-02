@@ -15,6 +15,7 @@ import PolicyReviewPage from '../shared/PolicyReviewPage.vue'
 import { useReviewRecord } from '../shared/useReviewRecord'
 import { EDITOR_GROUPS, FILTER_KEYS, TABLE_COLUMNS } from './fields'
 import { useVerify } from './useVerify'
+import ScenarioInlineCard from '../scenario-candidates/ScenarioInlineCard.vue'
 
 const RESOURCE = 'policy.interpretations'
 const FACTS = ['industry_l1', 'opportunity_type', 'has_subsidy', 'info_level']
@@ -56,6 +57,12 @@ const { verifying, verify } = useVerify(review)
     :status="status"
     :load-content="getInterpretationContent"
   >
+    <template #summary-extra="{ row }">
+      <ScenarioInlineCard
+        :row="row"
+        @changed="review.load"
+      />
+    </template>
     <template #actions="{ row, editing, ready }">
       <AuditLogButton :module="RESOURCE" />
       <el-button

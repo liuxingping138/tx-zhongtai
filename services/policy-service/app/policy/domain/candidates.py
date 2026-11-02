@@ -144,6 +144,8 @@ class ScenarioCandidate(Base):
     target_l1: Mapped[str] = mapped_column(String(255), nullable=False, default="", comment="合并到的一级场景")
     target_l2: Mapped[str] = mapped_column(String(255), nullable=False, default="", comment="合并到的二级场景")
     target_l3: Mapped[str] = mapped_column(String(255), nullable=False, default="", comment="合并到的三级场景")
+    # 并到另一个待审场景（两个说法是同一个场景）：它的行搬过去，以后这个说法也归到那个场景
+    merged_into: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, comment="并入的新增场景ID")
     reject_reason: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="驳回原因")
     note: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="决定说明")
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, comment="决定时间")

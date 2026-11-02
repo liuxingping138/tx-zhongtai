@@ -139,6 +139,8 @@ frontend 目录运行 `pnpm run type-check`、`pnpm run lint`、`pnpm run test`�
 
 ## 核对页（政策基础标签、政策解读）
 
+核对页概要下面要放额外内容用 `PolicyReviewPage` 的 `#summary-extra="{ row }"`（解读核对页在这里放新增场景的就地卡片 `ScenarioInlineCard`）。侧栏入口旁的数字在 `layouts/menuBadges.ts` 登记取数函数和要的资源。
+
 新增场景审核的审核页（`modules/policy/scenario-candidates/CandidateReview.vue`）也用 `useReviewRecord` 翻条（不传 `groups`、`update`，不在这里编辑），做完决定调 `advance()` 打开下一个（`useAfterDecision.ts`）。
 
 `modules/policy/shared/`：`PolicyReviewPage.vue` 是页面骨架（概要、按分组的字段表、右栏正文），`useReviewRecord.ts` 管取记录、翻条和编辑，两张表的 `BaseTagReview.vue`、`InterpretationReview.vue` 只给字段、概要字段、状态标签和右上角动作。

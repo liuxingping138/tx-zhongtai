@@ -54,6 +54,7 @@ def candidate_out(row: ScenarioCandidate) -> dict[str, Any]:
         "target_l1": row.target_l1,
         "target_l2": row.target_l2,
         "target_l3": row.target_l3,
+        "merged_into": str(row.merged_into) if row.merged_into else "",
         "reject_reason": row.reject_reason,
         "note": row.note,
         "decided_at": format_beijing(row.decided_at),
@@ -108,6 +109,10 @@ async def candidate_options() -> dict[str, Any]:
         "options": {field: {"items": list(items), "truncated": False} for field, items in fixed.items()},
         "reject_reasons": list(REJECT_REASONS),
     }
+
+
+async def pending_count(session: AsyncSession) -> int:
+    return await repo.pending_count(session)
 
 
 async def locked(session: AsyncSession, candidate_id: uuid.UUID) -> ScenarioCandidate | None:
