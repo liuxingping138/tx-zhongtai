@@ -60,6 +60,12 @@ AI_NEW = "新场景"
 AI_UNDER = "归到已有场景下"
 AI_FAILED = "判断失败"
 AI_VERDICTS: tuple[str, ...] = (AI_SAME, AI_NEW, AI_UNDER)
+# 列表「码表里像它的」一格和筛选：AI 说该合并的在前，其次按名称相似；每个场景只落在一类
+MATCH_AI = "AI 建议合并"
+MATCH_HIGH = "名称很像"
+MATCH_MEDIUM = "名称有点像"
+MATCH_NONE = "没有像的"
+MATCH_CHOICES: tuple[str, ...] = (MATCH_AI, MATCH_HIGH, MATCH_MEDIUM, MATCH_NONE)
 _AI_SEPARATORS = ("›", "＞", "/", "／", "》", "→")
 
 

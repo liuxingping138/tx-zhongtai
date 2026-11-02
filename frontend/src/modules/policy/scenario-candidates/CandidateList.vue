@@ -18,14 +18,14 @@ import EnrichConfirm from './EnrichConfirm.vue'
 import StatusTabs from './StatusTabs.vue'
 import { listEnrichPending } from '@/api/codebook'
 import CandidateRowsDrawer from './CandidateRowsDrawer.vue'
-import { PENDING, RESOURCE, SIMILAR_LABELS, decisionText, similarLabel, splitPath, summaryText } from './candidates'
+import { PENDING, RESOURCE, decisionText, levelTag, matchOf, summaryText, whereText } from './candidates'
 
 const query = reactive({
   status: PENDING,
   keyword: [] as string[],
   industry_l1: [] as string[],
   level_label: [] as string[],
-  similar_level: [] as string[],
+  match: [] as string[],
   min_policies: '',
   page: 1,
   page_size: 20,
@@ -80,7 +80,7 @@ function switchStatus(value: string | number | boolean | undefined) {
 
 /** 「重置」只清筛选条件，留在当前页签。 */
 function resetFilters() {
-  Object.assign(query, { keyword: [], industry_l1: [], level_label: [], similar_level: [], min_policies: '' })
+  Object.assign(query, { keyword: [], industry_l1: [], level_label: [], match: [], min_policies: '' })
   listQuery.search()
 }
 
@@ -127,7 +127,7 @@ onMounted(() => {
       <template #summary>
         <p class="candidates__summary">
           {{ summaryText(summary) }}
-          <span class="candidates__note">一行是一个场景：同一个说法被多少条政策提出都在这一行，决定一次对它们一起生效，以后再出现自动按决定处理。</span>
+          <span class="candidates__note">AI 从政策解读里写出来、码表里没有的场景，一行一个。看清是几级、码表里有没有像它的，再决定；决定一次，提出它的政策一起生效。</span>
         </p>
       </template>
       <template #actions>
@@ -171,22 +171,21 @@ onMounted(() => {
               size="short"
             />
           </el-form-item>
-          <el-form-item label="新增级别">
+          <el-form-item label="几级">
             <FilterSelect
               v-model="query.level_label"
               v-bind="filters.bind('level_label')"
               size="short"
             />
           </el-form-item>
+          <el-form-item label="码表里像它的">
+            <FilterSelect
+              v-model="query.match"
+              v-bind="filters.bind('match')"
+              size="short"
+            />
+          </el-form-item>
           <template #advanced>
-            <el-form-item label="名称相似">
-              <FilterSelect
-                v-model="query.similar_level"
-                v-bind="filters.bind('similar_level')"
-                :labels="SIMILAR_LABELS"
-                size="short"
-              />
-            </el-form-item>
             <el-form-item label="政策数不少于">
               <el-input
                 v-model="query.min_policies"
@@ -239,26 +238,46 @@ onMounted(() => {
           </template>
         </el-table-column>
         <el-table-column
-          label="上级场景"
-          min-width="150"
-          show-overflow-tooltip
+          label="几级"
+          width="88"
         >
           <template #default="{ row }">
-            {{ row.kind === '新场景' ? (splitPath(row).known.join(' › ') || '—（新的一级场景）') : `挂到 ${row.industry}` }}
+            <span class="candidates__level">{{ levelTag(row) }}</span>
           </template>
         </el-table-column>
         <el-table-column
-          prop="level_label"
-          label="新增级别"
-          width="96"
-        />
-        <el-table-column
-          label="一级行业"
-          min-width="150"
+          label="挂在哪"
+          min-width="200"
           show-overflow-tooltip
         >
           <template #default="{ row }">
-            {{ row.main_industry }}{{ row.industry_count > 1 ? ` 等 ${row.industry_count} 个` : '' }}
+            {{ whereText(row) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          v-if="pending"
+          label="码表里像它的"
+          min-width="280"
+          show-overflow-tooltip
+        >
+          <template #default="{ row }">
+            <template v-if="row.id">
+              <span :class="['candidates__match', `candidates__match--${matchOf(row).kind}`]">{{ matchOf(row).label }}</span>
+              {{ matchOf(row).name }}<span
+                v-if="matchOf(row).note"
+                class="candidates__none"
+              > · {{ matchOf(row).note }}</span>
+            </template>
+          </template>
+        </el-table-column>
+        <el-table-column
+          v-else
+          label="决定"
+          min-width="320"
+          show-overflow-tooltip
+        >
+          <template #default="{ row }">
+            {{ decisionText(row) }}
           </template>
         </el-table-column>
         <el-table-column
@@ -277,67 +296,6 @@ onMounted(() => {
             </el-button>
           </template>
         </el-table-column>
-        <el-table-column
-          label="解读行数"
-          width="96"
-          align="right"
-        >
-          <template #default="{ row }">
-            {{ row.row_count.toLocaleString() }}
-          </template>
-        </el-table-column>
-        <template v-if="pending">
-          <el-table-column
-            label="AI 判断"
-            width="130"
-          >
-            <template #default="{ row }">
-              <span :class="{ candidates__none: !row.ai_verdict }">{{ row.ai_verdict || '还没看' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column
-            label="名称相似"
-            width="96"
-          >
-            <template #default="{ row }">
-              <el-tag
-                v-if="row.similar_level === '高' || row.similar_level === '中'"
-                :type="row.similar_level === '高' ? 'warning' : 'info'"
-                effect="plain"
-              >
-                {{ similarLabel(row.similar_level) }}
-              </el-tag>
-              <span
-                v-else
-                class="candidates__none"
-              >{{ similarLabel(row.similar_level) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column
-            label="最像的已有场景"
-            min-width="200"
-            show-overflow-tooltip
-          >
-            <template #default="{ row }">
-              {{ row.ai_similar || row.similar_name || '—' }}
-            </template>
-          </el-table-column>
-        </template>
-        <el-table-column
-          v-else
-          label="决定"
-          min-width="320"
-          show-overflow-tooltip
-        >
-          <template #default="{ row }">
-            {{ decisionText(row) }}
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="last_seen_at"
-          label="最近出现"
-          width="170"
-        />
         <el-table-column
           label="操作"
           width="80"
@@ -381,7 +339,41 @@ onMounted(() => {
 }
 
 .candidates__none {
-  color: var(--zt-ink-400);
+  color: var(--zt-ink-500);
+}
+
+.candidates__level {
+  padding: 1px 8px;
+  border: 1px solid var(--zt-warning-border);
+  border-radius: 4px;
+  background: var(--zt-warning-soft);
+  color: var(--zt-warning-text);
+  font-size: 12px;
+}
+
+.candidates__match {
+  margin-right: 6px;
+  padding: 1px 8px;
+  border: 1px solid var(--zt-border);
+  border-radius: 4px;
+  background: var(--zt-soft);
+  color: var(--zt-ink-700);
+  font-size: 12px;
+}
+
+.candidates__match--ai {
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary);
+  color: var(--zt-panel);
+}
+
+.candidates__match--none {
+  margin-right: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--zt-ink-500);
+  font-size: 14px;
 }
 
 .candidates__min {

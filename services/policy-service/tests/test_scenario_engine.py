@@ -511,3 +511,20 @@ async def test_batch_reject_skips_ones_already_decided(world: SimpleNamespace, m
     )
     assert out["done"] == 1 and out["skipped"][0]["name"] == "中医药数智化" and "已采纳" in out["skipped"][0]["reason"]
     assert first.status == "已驳回"
+
+
+def test_match_filter_puts_each_scenario_in_exactly_one_bucket() -> None:
+    """列表「码表里像它的」：AI 说该合并的单独一类，其余按名称相似分，不会一个场景落两类。"""
+
+    from sqlalchemy.dialects import postgresql
+
+    def sql(value: str) -> str:
+        _, condition = repo._conditions({"match": [value]})
+        return str(condition.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+
+    assert sql(domain.MATCH_AI) == "policy_scenario_candidates.ai_verdict IN ('同一个场景', '归到已有场景下')"
+    for value in (domain.MATCH_HIGH, domain.MATCH_MEDIUM, domain.MATCH_NONE):
+        assert "ai_verdict NOT IN ('同一个场景', '归到已有场景下')" in sql(value)
+    assert "similar_level NOT IN ('高', '中')" in sql(domain.MATCH_NONE)
+    with pytest.raises(KeyError):
+        repo._conditions({"match": ["随便写的"]})

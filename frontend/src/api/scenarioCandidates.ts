@@ -98,6 +98,8 @@ export interface CandidateQuery {
   industry_l1?: FilterParam
   level_label?: FilterParam
   similar_level?: FilterParam
+  /** 码表里像它的：AI 建议合并、名称很像、名称有点像、没有像的 */
+  match?: FilterParam
   min_policies?: number | string
   page?: number
   page_size?: number

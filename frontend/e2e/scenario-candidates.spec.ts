@@ -23,8 +23,9 @@ const detail = (item: Record<string, unknown>) => ({
   reasons: [{ text: '新增二级场景对应建设期数字化管理需求', count: 21 }],
 })
 
-test('按场景审核：看来源政策，按建议合并后自动打开下一个', async ({ page }) => {
+test('按场景审核：看来源政策，合并到像它的场景后自动打开下一个，改个名再采纳', async ({ page }) => {
   let merged: unknown = null
+  let adopted: unknown = null
   await page.route('**/api/v1/**', (route) => {
     const url = new URL(route.request().url())
     const path = url.pathname
@@ -43,6 +44,10 @@ test('按场景审核：看来源政策，按建议合并后自动打开下一�
     if (path.endsWith('/scenario-candidates/c1/merge')) {
       merged = route.request().postDataJSON()
       return respond(route, { ...airport, status: '已合并', version: 2 })
+    }
+    if (path.endsWith('/scenario-candidates/c2/adopt')) {
+      adopted = route.request().postDataJSON()
+      return respond(route, { ...water, status: '已采纳', version: 2 })
     }
     if (path.endsWith('/context')) {
       return respond(route, {
@@ -84,17 +89,32 @@ test('按场景审核：看来源政策，按建议合并后自动打开下一�
 
   await page.getByRole('link', { name: '智慧机场工程建设管理' }).first().click()
   await expect(page.getByRole('heading', { name: '智慧机场工程建设管理', level: 1 })).toBeVisible()
-  await expect(page.getByText('系统建议 · 码表里有名称很像的')).toBeVisible()
-  await expect(page.getByText('＋ 智慧机场工程建设管理')).toBeVisible()
+  // 几级、挂在哪、码表里像它的，三件事一屏看清
+  await expect(page.getByText('AI 新增的二级场景')).toBeVisible()
+  await expect(page.getByText('交通行业 › 智慧航空 下，和 智慧空侧、智慧航站楼 并列')).toBeVisible()
+  const matches = page.getByRole('region', { name: '码表里像它的场景' })
+  await expect(matches.getByText('名称很像')).toBeVisible()
+  await expect(page.getByText('码表里有名称很像的，看看是不是同一个；要合并在上面点「合并到这里」')).toBeVisible()
 
-  await page.getByRole('button', { name: '按建议合并…' }).click()
+  await matches.getByRole('button', { name: '合并到这里' }).click()
   const dialog = page.getByRole('dialog', { name: '合并到已有场景' })
-  await expect(dialog.getByText('已选：智慧交通工程建设 › 交通工程建设信息化')).toBeVisible()
+  await expect(dialog.getByText('智慧交通工程建设 › 交通工程建设信息化', { exact: true })).toBeVisible()
+  await expect(dialog.getByText('以后 AI 再写「智慧机场工程建设管理」，自动归到这里')).toBeVisible()
   await dialog.getByRole('button', { name: '确定合并' }).click()
 
   await expect.poll(() => merged).toEqual({ version: 1, target: ['智慧交通工程建设', '交通工程建设信息化'], rename: false })
   await expect(page.getByRole('heading', { name: '再生水循环利用', level: 1 })).toBeVisible()
   await expect(page.getByText('已合并到已有场景，打开了下一个')).toBeVisible()
+
+  await page.getByRole('button', { name: '改个名再采纳' }).click()
+  const rename = page.getByRole('dialog', { name: '改个名再采纳' })
+  const confirm = rename.getByRole('button', { name: '采纳并写进码表' })
+  // 名字没改不能提交（那就是直接采纳）
+  await expect(confirm).toBeDisabled()
+  await rename.getByLabel('场景名称（AI 写的是「再生水循环利用」）').fill('再生水利用')
+  await expect(rename.getByText('提出它的 63 行解读改成这个名字并回填编码')).toBeVisible()
+  await confirm.click()
+  await expect.poll(() => adopted).toEqual({ version: 1, name: '再生水利用' })
 })
 
 test('补充待确认：核对 AI 写的描述，改好后确认，接着看下一个', async ({ page }) => {

@@ -1,16 +1,16 @@
-import type { CandidateDetail, CandidateItem, CandidateSummary } from '@/api/scenarioCandidates'
+import type { CandidateContext, CandidateItem, CandidateSummary } from '@/api/scenarioCandidates'
 import type { ScenarioPath } from '@/api/codebook'
 
 export const RESOURCE = 'policy.scenario_candidates'
 /** 列表的筛选字段：审核页靠它从地址栏带上筛选，翻上一个、下一个。 */
-export const FILTER_KEYS = ['status', 'keyword', 'industry_l1', 'level_label', 'similar_level', 'min_policies'] as const
+export const FILTER_KEYS = ['status', 'keyword', 'industry_l1', 'level_label', 'match', 'min_policies'] as const
 export const STATUSES = ['待审', '已采纳', '已合并', '已驳回'] as const
 export const PENDING = '待审'
 export const KIND_NEW = '新场景'
 export const REJECT_REASONS = ['不是信息化场景', '太细，属于已有场景的一部分', '说法不对', '其他']
 
 export type Suggestion = 'merge' | 'adopt' | null
-export type DecisionMode = 'adopt' | 'merge' | 'reject'
+export type DecisionMode = 'adopt' | 'rename' | 'merge' | 'reject'
 
 /**
  * 审核页三种处理里给哪一种标「系统建议」。只是提示，人照样可以选别的。
@@ -36,13 +36,6 @@ export function suggest(candidate: Pick<CandidateItem, SuggestFields>): Suggesti
 
 export function pathText(names: readonly string[]): string {
   return names.filter(Boolean).join(' › ')
-}
-
-/** 候选自己的场景路径，新的那一级单独拿出来，页面上标「新」。 */
-export function splitPath(candidate: Pick<CandidateItem, 'scenario_l1' | 'scenario_l2' | 'scenario_l3' | 'new_level' | 'kind'>): { known: string[]; added: string } {
-  const names = [candidate.scenario_l1, candidate.scenario_l2, candidate.scenario_l3].filter(Boolean)
-  if (candidate.kind !== KIND_NEW) return { known: names, added: '' }
-  return { known: names.slice(0, candidate.new_level - 1), added: names[candidate.new_level - 1] ?? '' }
 }
 
 /** 已经决定过的候选，结果写成一句话。 */
@@ -78,7 +71,7 @@ export function pathLabel(path: ScenarioPath): string {
 }
 
 /** 相似程度给业务人员看的说法：后端存高 / 中 / 无。 */
-export const SIMILAR_LABELS: Record<string, string> = { 高: '很像', 中: '有点像', 无: '没有' }
+export const SIMILAR_LABELS: Record<string, string> = { 高: '名称很像', 中: '名称有点像', 无: '没有' }
 export function similarLabel(level: string): string {
   return SIMILAR_LABELS[level] ?? (level || '还没算')
 }
@@ -88,51 +81,131 @@ export function levelName(level: number): string {
   return LEVEL_NAMES[level] ?? ''
 }
 
-export interface PositionPart {
-  name: string
-  /** 一级、二级、三级 */
-  level: string
-  /** 码表里已有的、这次新增的 */
-  added: boolean
+/** AI 和码表里的路径写成「一级 > 二级」，页面上统一用 › */
+export function arrow(text: string): string {
+  return text.split(' > ').filter(Boolean).join(' › ')
 }
+
+type Where = Pick<CandidateItem, 'kind' | 'new_level' | 'level_label' | 'parent' | 'industry' | 'main_industry'>
+
+/** 「新二级」「新一级」「新关联」：几级一眼看清。 */
+export function levelTag(candidate: Where): string {
+  return candidate.kind === KIND_NEW ? `新${candidate.level_label}` : '新关联'
+}
+
+/** 审核页标题旁的一句：AI 新增的是第几级。 */
+export function levelTitle(candidate: Where): string {
+  return candidate.kind === KIND_NEW ? `AI 新增的${levelName(candidate.new_level)}场景` : '码表已有场景，新挂到这个行业'
+}
+
+/** 列表「挂在哪」一格。 */
+export function whereText(candidate: Where): string {
+  if (candidate.kind !== KIND_NEW) return `挂到 ${candidate.industry}`
+  return candidate.parent ? `${candidate.main_industry} › ${candidate.parent} 下` : `${candidate.main_industry} · 新的一级场景`
+}
+
+/** 同级已有的几个场景，写成「A、B、C 等 12 个」。下级多的（业务成型的）排前面。 */
+export function siblingsText(siblings: { name: string; children: number }[], shown = 3): string {
+  const names = [...siblings].sort((a, b) => b.children - a.children).map(item => item.name)
+  if (!names.length) return ''
+  const more = names.length > shown ? ` 等 ${names.length} 个` : ''
+  return `${names.slice(0, shown).join('、')}${more}`
+}
+
+export type MatchKind = 'ai' | 'high' | 'medium' | 'none'
+export interface Match {
+  kind: MatchKind
+  label: string
+  /** 像它的那个已有场景（路径，› 分隔） */
+  name: string
+  /** 补一句 AI 怎么看 */
+  note: string
+}
+
+type MatchFields = 'ai_verdict' | 'ai_similar' | 'similar_level' | 'similar_name'
 
 /**
- * 这个场景在码表里的完整位置，逐级标出哪一级码表已有、哪一级是新增的。
- * 新增那一级下面 AI 还写了下级的，一并列出（取行数最多的那个，其余写「等 N 个」）。
+ * 列表「码表里像它的」一格：AI 说该合并的排在最前，其余按名称相似分。和后端筛选 match 是同一套分法
+ * （repositories/scenario_candidates._match_conditions），一个场景只落一类。
  */
-export function positionParts(candidate: Pick<CandidateDetail, 'kind' | 'new_level' | 'scenario_l1' | 'scenario_l2' | 'scenario_l3' | 'children'>): PositionPart[] {
-  const names = [candidate.scenario_l1, candidate.scenario_l2, candidate.scenario_l3].filter(Boolean)
-  const isNew = candidate.kind === KIND_NEW
-  const parts = names.map((name, index) => ({ name, level: levelName(index + 1), added: isNew && index + 1 >= candidate.new_level }))
-  const child = candidate.children[0]
-  if (isNew && child && names.length < 3) {
-    const more = candidate.children.length > 1 ? ` 等 ${candidate.children.length} 个` : ''
-    parts.push({ name: `${child.path.split(' › ')[0] ?? child.path}${more}`, level: levelName(names.length + 1), added: true })
+export function matchOf(candidate: Pick<CandidateItem, MatchFields>): Match {
+  const verdict = candidate.ai_verdict
+  if (verdict === AI_SAME || verdict === AI_UNDER) {
+    return { kind: 'ai', label: verdict === AI_SAME ? 'AI 认为是同一个' : 'AI 认为应归到这里', name: arrow(candidate.ai_similar), note: '' }
   }
-  return parts
+  const aiNote = verdict === AI_NEW ? 'AI 认为是新场景' : verdict ? 'AI 没判断出来' : 'AI 还没看'
+  if (candidate.similar_level === '高' || candidate.similar_level === '中') {
+    return { kind: candidate.similar_level === '高' ? 'high' : 'medium', label: similarLabel(candidate.similar_level), name: arrow(candidate.similar_name), note: aiNote }
+  }
+  return { kind: 'none', label: '没有', name: '', note: verdict === AI_NEW ? 'AI 也认为是新场景' : aiNote }
 }
 
-/** 合并时预选的目标：AI 说的、码表里对得上的那个；AI 没看过时用名称很像的那个。 */
-export function mergeTargetOf(candidate: Pick<CandidateItem, 'ai_target'>, similar: { path: string[]; level: string }[]): string[] | null {
-  if (candidate.ai_target) return candidate.ai_target.split(' > ')
-  const best = similar[0]
-  return best?.level === '高' ? best.path : null
+/** 审核页「码表里有没有和它是同一个的」列表里的一项。 */
+export interface MatchItem {
+  /** 码表里对得上的路径，能直接合并；AI 说的名字码表里对不上时为 null */
+  path: string[] | null
+  text: string
+  badge: string
+  /** AI 认为是同一个的那项：排第一、加框、按钮用主色 */
+  ai: boolean
+  /** 几级 · 哪个行业 · 是不是同一个行业 */
+  note: string
+  /** AI 的理由，或码表里的描述 */
+  detail: string
 }
 
-/** 系统建议那张卡片上的一句话：为什么建议这么做。 */
-export function suggestionText(candidate: Pick<CandidateItem, 'ai_verdict' | 'ai_similar'>, suggestion: Suggestion): string {
-  if (!suggestion) return ''
-  if (candidate.ai_verdict === AI_SAME) return `AI 判断：和「${candidate.ai_similar}」是同一个场景`
-  if (candidate.ai_verdict === AI_UNDER) return `AI 判断：太细，应归到「${candidate.ai_similar}」`
-  if (candidate.ai_verdict === AI_NEW) return 'AI 判断：码表里没有同样的场景'
-  return suggestion === 'merge' ? '码表里有名称很像的' : '没有相似的，且不止一两条政策这么说'
+type MatchSource = Pick<CandidateItem, MatchFields | 'ai_target' | 'ai_reason' | 'main_industry'>
+type Similar = CandidateContext['similar'][number]
+
+function similarNote(item: Similar, industry: string): string {
+  const level = `${levelName(item.path.filter(Boolean).length)}场景`
+  if (!item.industry) return level
+  const same = item.industry.includes(industry)
+  return `${level} · ${item.industry} · ${same ? '同一个行业' : '不是同一个行业，多半不是一回事'}`
 }
 
-/** AI 找相似的结果写成一句话；还没让 AI 看过的说明怎么才会有。 */
+/** AI 认为是同一个的那项；AI 没说该合并时为 null。 */
+function aiItem(candidate: MatchSource, similar: Similar[]): MatchItem | null {
+  const match = matchOf(candidate)
+  if (match.kind !== 'ai' || !match.name) return null
+  const path = candidate.ai_target ? candidate.ai_target.split(' > ') : null
+  const text = path ? pathText(path) : ''
+  const same = text ? similar.find(item => pathText(item.path) === text) : undefined
+  return {
+    path,
+    text: text || match.name,
+    badge: match.label,
+    ai: true,
+    note: same ? similarNote(same, candidate.main_industry) : path ? '' : '码表里没对上这个名字，请自己在码表里选',
+    detail: candidate.ai_reason ? `AI：${candidate.ai_reason}` : '',
+  }
+}
+
+/** AI 认为是同一个的排第一，名称相近的排后面；两边指的是同一个场景时只列一次。 */
+export function matchItems(candidate: MatchSource, similar: Similar[]): MatchItem[] {
+  const ai = aiItem(candidate, similar)
+  const rest = similar
+    .filter(item => !ai?.path || pathText(item.path) !== ai.text)
+    .map(item => ({ path: item.path, text: pathText(item.path), badge: similarLabel(item.level), ai: false, note: similarNote(item, candidate.main_industry), detail: item.desc }))
+  return ai ? [ai, ...rest] : rest
+}
+
+/** 列表上方那句「AI 怎么看」：AI 的结论在前，名称相近的只是参考。 */
+export function matchHeadline(candidate: Pick<CandidateItem, 'ai_verdict'>, items: MatchItem[]): string {
+  const verdict = candidate.ai_verdict
+  const rest = items.filter(item => !item.ai).length
+  if (verdict === AI_SAME || verdict === AI_UNDER) return `找到 ${items.length} 个，AI 认为是同一个的排在最前`
+  const lead = verdict === AI_NEW
+    ? 'AI 对照了同一行业的场景，认为码表里没有同样的'
+    : verdict ? 'AI 没判断出来' : 'AI 还没看过（任务调度里「新增场景找相似」跑过后才有）'
+  return rest ? `${lead}；下面 ${rest} 个只是名称相近，供参考` : `${lead}；名称相近的也没有`
+}
+
+/** AI 找相似的结果写成一句话（解读核对页的场景卡片用）；还没让 AI 看过的说明怎么才会有。 */
 export function aiText(candidate: Pick<CandidateItem, 'ai_verdict' | 'ai_similar' | 'ai_reason' | 'ai_checked_at'>): string {
   if (!candidate.ai_verdict) return 'AI 还没看过：任务调度里的「新增场景找相似」跑过一批后才有'
   if (candidate.ai_verdict === '判断失败') return `AI 没判断出来：${candidate.ai_reason}`
-  const similar = candidate.ai_similar ? `，最像的是「${candidate.ai_similar}」` : ''
+  const similar = candidate.ai_similar ? `，最像的是「${arrow(candidate.ai_similar)}」` : ''
   const reason = candidate.ai_reason ? `。理由：${candidate.ai_reason}` : ''
   return `AI 判断：${candidate.ai_verdict}${similar}${reason}`
 }

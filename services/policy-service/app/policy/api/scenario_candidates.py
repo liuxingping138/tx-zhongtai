@@ -41,6 +41,9 @@ def candidate_filters(
     industry_l1: list[str] | None = Query(default=None),
     level_label: list[str] | None = Query(default=None),
     similar_level: list[str] | None = Query(default=None),
+    match: list[str] | None = Query(
+        default=None, description="码表里像它的：AI 建议合并、名称很像、名称有点像、没有像的"
+    ),
     min_policies: int | None = Query(default=None, ge=1, le=100000),
 ) -> Filters:
     return {
@@ -49,6 +52,7 @@ def candidate_filters(
         "industry_l1": industry_l1,
         "level_label": level_label,
         "similar_level": similar_level,
+        "match": match,
         "min_policies": min_policies,
     }
 

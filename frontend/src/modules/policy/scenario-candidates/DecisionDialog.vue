@@ -13,9 +13,9 @@ import {
   type CandidateItem,
 } from '@/api/scenarioCandidates'
 import ScenarioPicker from '@/components/ScenarioPicker.vue'
-import { KIND_NEW, REJECT_REASONS, pathText, scenarioNames, similarLabel, type DecisionMode } from './candidates'
+import { KIND_NEW, REJECT_REASONS, levelName, pathText, scenarioNames, similarLabel, type DecisionMode } from './candidates'
 
-/** 采纳、合并、驳回的确认框：写清楚确定后会发生什么，再提交。 */
+/** 采纳、改名再采纳、合并、驳回的确认框：写清楚确定后会发生什么，再提交。 */
 const props = defineProps<{
   mode: DecisionMode | null
   candidate: CandidateDetail
@@ -25,13 +25,15 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ close: []; done: [row: CandidateItem] }>()
 
-const TITLES: Record<DecisionMode, string> = { adopt: '采纳为新场景', merge: '合并到已有场景', reject: '驳回这个新增场景' }
+const TITLES: Record<DecisionMode, string> = { adopt: '采纳为新场景', rename: '改个名再采纳', merge: '合并到已有场景', reject: '驳回这个新增场景' }
 const name = ref('')
 const target = ref<string[] | null>(null)
 const picked = ref<ScenarioPath | null>(null)
 /** 在「相似的已有场景」里点选的那一条（路径文字） */
 const chosen = ref('')
 const reason = ref(REJECT_REASONS[0] ?? '')
+/** 合并：从页面上点「合并到这里」带进来的目标直接显示，「换一个」才展开选择 */
+const changing = ref(false)
 const note = ref('')
 const submitting = ref(false)
 /** 合并后叫什么：沿用原名称，或原场景改用这个新说法（编码不变，码表和解读里用它的行一起改名） */
@@ -55,6 +57,7 @@ watch(() => props.mode, (mode) => {
   // 只预选从「合并到这里」或系统建议带进来的目标，不替人默认选一个相似度一般的
   target.value = props.presetTarget ?? null
   chosen.value = target.value ? pathText(target.value) : ''
+  changing.value = !target.value
   rename.value = false
   picked.value = null
   reason.value = REJECT_REASONS[0] ?? ''
@@ -74,29 +77,59 @@ watch(chosen, (text) => {
   }
 })
 
-const rows = computed(() => props.candidate.row_count.toLocaleString())
 const isNew = computed(() => props.candidate.kind === KIND_NEW)
-const where = computed(() => props.candidate.parent || (isNew.value ? '（新的一级场景）' : pathText([props.candidate.scenario_l1, props.candidate.scenario_l2, props.candidate.scenario_l3])))
 const targetText = computed(() => (target.value ? pathText(target.value) : ''))
 const ready = computed(() => {
   if (props.mode === 'merge') return Boolean(target.value?.[0])
-  if (props.mode === 'adopt') return !isNew.value || Boolean(name.value.trim())
+  if (props.mode === 'rename') return Boolean(name.value.trim()) && name.value.trim() !== props.candidate.name
+  if (props.mode === 'adopt') return true
   return Boolean(reason.value)
 })
+
+/** 「确定后会」：几行大白话，写清码表和解读各会怎样。 */
+const effects = computed(() => {
+  const c = props.candidate
+  const rows = c.row_count.toLocaleString()
+  if (props.mode === 'merge') {
+    return [
+      `${rows} 行解读改用${targetText.value ? `「${targetText.value}」` : '选中的场景'}，回填它的编码；码表不新增编号`,
+      `以后 AI 再写「${c.name}」，自动归到这里`,
+      '同一条政策本来就有这个场景（机会类型也相同）的那行标「重复」，不删',
+    ]
+  }
+  if (props.mode === 'reject') {
+    return [
+      `${rows} 行解读都留着，场景状态标「已驳回」`,
+      '以后 AI 再写这个说法自动驳回；可以在「已驳回」里改判',
+      '其中几条其实该归到别的场景：先在来源政策里逐条「改场景」，再驳回',
+    ]
+  }
+  const renaming = props.mode === 'rename'
+  const lines = isNew.value
+    ? [
+        `挂在 ${[c.main_industry, c.parent].filter(Boolean).join(' › ')} 下，作为新的${levelName(c.new_level)}场景`,
+        '码表里新增一行，按现有规则顺延编号，标「AI 新增」',
+      ]
+    : [`挂到 ${c.industry}`, '码表加一行行业关联，场景编号沿用']
+  if (c.children.length) lines.push(`AI 写的下级 ${c.children.map(child => child.path).join('、')} 一起采纳`)
+  lines.push(`提出它的 ${rows} 行解读${renaming ? '改成这个名字并' : ''}回填编码`)
+  lines.push(renaming ? `以后 AI 再写「${c.name}」，自动归到这里` : '以后 AI 再写这个说法直接回填，不再进待审')
+  return lines
+})
+
+function send(mode: DecisionMode): Promise<CandidateItem> {
+  const { id, version } = props.candidate
+  if (mode === 'merge') return mergeCandidate(id, { version, target: target.value ?? [], rename: rename.value && canRename.value })
+  if (mode === 'reject') return rejectCandidate(id, { version, reason: reason.value, note: note.value.trim() })
+  return adoptCandidate(id, { version, name: mode === 'rename' ? name.value.trim() : '' })
+}
 
 async function submit() {
   if (!props.mode || !ready.value || submitting.value) return
   submitting.value = true
   error.value = ''
-  const { id, version } = props.candidate
   try {
-    let row: CandidateItem
-    if (props.mode === 'adopt') row = await adoptCandidate(id, { version, name: isNew.value ? name.value.trim() : '' })
-    else if (props.mode === 'merge') {
-      row = await mergeCandidate(id, { version, target: target.value ?? [], rename: rename.value && canRename.value })
-    }
-    else row = await rejectCandidate(id, { version, reason: reason.value, note: note.value.trim() })
-    emit('done', row)
+    emit('done', await send(props.mode))
   } catch (failure) {
     error.value = errorMessage(failure, '没有成功，请重试')
   } finally {
@@ -113,51 +146,56 @@ async function submit() {
     @close="emit('close')"
   >
     <div class="decision">
-      <template v-if="mode === 'adopt'">
-        <el-form-item
-          v-if="isNew"
-          label="场景名称"
-          label-position="top"
-        >
-          <el-input
-            v-model="name"
-            maxlength="255"
-          />
-          <p class="decision__hint">
-            可以改成更通用的说法；AI 原来的说法照样记着，以后再出现也归到这里
-          </p>
-        </el-form-item>
-        <p><span class="decision__label">挂在</span>{{ where }}</p>
-        <p v-if="candidate.children.length">
-          <span class="decision__label">下级新场景</span>{{ candidate.children.map(child => child.path).join('、') }}（一起采纳）
-        </p>
-        <p><span class="decision__label">涉及行业</span>{{ candidate.industries.map(item => `${item.path}（${item.rows} 行）`).join('；') }}</p>
-      </template>
+      <el-form-item
+        v-if="mode === 'rename'"
+        :label="`场景名称（AI 写的是「${candidate.name}」）`"
+        label-position="top"
+      >
+        <el-input
+          v-model="name"
+          maxlength="255"
+        />
+      </el-form-item>
 
       <template v-else-if="mode === 'merge'">
-        <p class="decision__label">
-          合并到
-        </p>
-        <el-radio-group
-          v-if="context?.similar.length"
-          v-model="chosen"
-          class="decision__choices"
-        >
-          <el-radio
-            v-for="item in context.similar"
-            :key="pathText(item.path)"
-            :value="pathText(item.path)"
-          >
-            {{ pathText(item.path) }}<span class="decision__hint">　{{ item.industry }} · {{ similarLabel(item.level) }}</span>
-          </el-radio>
-        </el-radio-group>
-        <ScenarioPicker v-model="picked" />
         <p
-          v-if="targetText"
-          class="decision__picked"
+          v-if="!changing"
+          class="decision__target"
         >
-          已选：{{ targetText }}
+          <span class="decision__label">合并到</span><strong>{{ targetText }}</strong>
+          <el-button
+            link
+            type="primary"
+            @click="changing = true"
+          >
+            换一个
+          </el-button>
         </p>
+        <template v-else>
+          <p class="decision__label">
+            合并到
+          </p>
+          <el-radio-group
+            v-if="context?.similar.length"
+            v-model="chosen"
+            class="decision__choices"
+          >
+            <el-radio
+              v-for="item in context.similar"
+              :key="pathText(item.path)"
+              :value="pathText(item.path)"
+            >
+              {{ pathText(item.path) }}<span class="decision__hint">　{{ item.industry }} · {{ similarLabel(item.level) }}</span>
+            </el-radio>
+          </el-radio-group>
+          <ScenarioPicker v-model="picked" />
+          <p
+            v-if="targetText"
+            class="decision__picked"
+          >
+            已选：{{ targetText }}
+          </p>
+        </template>
         <template v-if="canRename">
           <p class="decision__label">
             合并后叫什么
@@ -207,27 +245,17 @@ async function submit() {
         />
       </template>
 
-      <section
+      <ul
         class="decision__what"
         aria-label="确定后会"
       >
-        <h3>确定后会</h3>
-        <ul v-if="mode === 'adopt'">
-          <li>写进行业场景码表，按现有规则顺延编号，标「AI 新增」</li>
-          <li>{{ rows }} 行解读回填编码；以后 AI 再写这个说法直接回填，不再进待审</li>
-        </ul>
-        <ul v-else-if="mode === 'merge'">
-          <li>{{ rows }} 行解读改用{{ targetText ? `「${targetText}」` : '目标场景' }}，回填它的编码；码表不新增编号</li>
-          <li>「{{ candidate.name }}」记成它的别名，以后 AI 再写自动归过去</li>
-          <li>目标场景还没挂在这些行的行业下时，码表加一行行业关联，场景编号沿用</li>
-          <li>同一条政策本来就有这个场景、机会类型也相同的行，标「重复」，不删</li>
-        </ul>
-        <ul v-else>
-          <li>{{ rows }} 行解读都留着，场景状态标「已驳回」</li>
-          <li>以后 AI 再写这个说法自动驳回，不再进待审；可以在「已驳回」里改判</li>
-          <li>其中有几条其实该归到别的场景：先在来源政策里逐条「改场景」，再驳回剩下的</li>
-        </ul>
-      </section>
+        <li
+          v-for="line in effects"
+          :key="line"
+        >
+          {{ line }}
+        </li>
+      </ul>
       <el-alert
         v-if="error"
         type="error"
@@ -246,7 +274,7 @@ async function submit() {
         :disabled="!ready"
         @click="submit"
       >
-        {{ mode === 'adopt' ? '确定采纳' : mode === 'merge' ? '确定合并' : '驳回' }}
+        {{ mode === 'merge' ? '确定合并' : mode === 'reject' ? '驳回' : '采纳并写进码表' }}
       </el-button>
     </template>
   </el-dialog>
@@ -295,21 +323,23 @@ async function submit() {
 }
 
 .decision__what {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
   padding: var(--zt-space-3) var(--zt-space-4);
   border: 1px solid var(--zt-border);
   border-radius: var(--zt-radius);
   background: var(--zt-surface-subtle);
-}
-
-.decision__what h3 {
-  margin: 0 0 6px;
   color: var(--zt-ink-700);
   font-size: 13px;
+  list-style: none;
 }
 
-.decision__what ul {
-  margin: 0;
-  padding-left: 18px;
-  font-size: 13px;
+.decision__target {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--zt-space-2);
+  align-items: baseline;
 }
 </style>

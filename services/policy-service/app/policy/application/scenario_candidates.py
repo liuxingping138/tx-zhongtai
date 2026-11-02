@@ -16,6 +16,7 @@ from app.common import internal_clients
 from app.policy.domain.candidates import (
     KIND_NEW,
     LEVEL_CHOICES,
+    MATCH_CHOICES,
     REJECT_REASONS,
     STATUS_CHOICES,
     ScenarioCandidate,
@@ -104,6 +105,7 @@ async def candidate_options() -> dict[str, Any]:
         "industry_l1": tuple(dict.fromkeys(industries)),
         "level_label": LEVEL_CHOICES,
         "similar_level": SIMILAR_LEVELS,
+        "match": MATCH_CHOICES,
     }
     return {
         "options": {field: {"items": list(items), "truncated": False} for field, items in fixed.items()},

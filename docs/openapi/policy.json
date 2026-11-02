@@ -3423,6 +3423,27 @@
             }
           },
           {
+            "name": "match",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "码表里像它的：AI 建议合并、名称很像、名称有点像、没有像的",
+              "title": "Match"
+            },
+            "description": "码表里像它的：AI 建议合并、名称很像、名称有点像、没有像的"
+          },
+          {
             "name": "min_policies",
             "in": "query",
             "required": false,

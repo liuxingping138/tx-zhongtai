@@ -13,14 +13,15 @@ import {
   type CandidateDetail,
   type CandidateRow,
 } from '@/api/scenarioCandidates'
-import AuditLogButton from '@/components/AuditLogButton.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useReviewRecord } from '../shared/useReviewRecord'
-import CandidateEvidence from './CandidateEvidence.vue'
+import CandidateHeader from './CandidateHeader.vue'
+import CandidateMatches from './CandidateMatches.vue'
+import CandidateMore from './CandidateMore.vue'
 import CandidateRowsDrawer from './CandidateRowsDrawer.vue'
+import DecisionBar from './DecisionBar.vue'
 import DecisionDialog from './DecisionDialog.vue'
-import DecisionOptions from './DecisionOptions.vue'
-import { FILTER_KEYS, KIND_NEW, PENDING, RESOURCE, aiText, decisionText, mergeTargetOf, positionParts, suggest, suggestionText, type DecisionMode } from './candidates'
+import { FILTER_KEYS, PENDING, RESOURCE, decisionText, suggest, type DecisionMode } from './candidates'
 import { useAfterDecision } from './useAfterDecision'
 import { useCandidatePeers } from './useCandidatePeers'
 
@@ -55,9 +56,6 @@ watch(() => candidate.value?.id, async (id) => {
 
 const suggestion = computed(() => (candidate.value ? suggest(candidate.value) : null))
 const { peers, absorbing, absorb } = useCandidatePeers(candidate, () => review.load())
-// 合并时预选的目标：AI 说的、码表里对得上的；AI 没看过时用同一行业下名称很像的。其余让人自己在确认框里选
-const mergeTarget = computed(() => (candidate.value ? mergeTargetOf(candidate.value, context.value?.similar ?? []) : null))
-const reasonText = computed(() => (candidate.value ? suggestionText(candidate.value, suggestion.value) : ''))
 const dialog = ref<DecisionMode | null>(null)
 const presetTarget = ref<string[] | null>(null)
 const drawer = ref(false)
@@ -98,12 +96,12 @@ async function reopen() {
         type="primary"
         @click="review.backToList"
       >
-        ‹ 返回新增场景审核
+        ‹ 返回列表
       </el-button>
       <span
         v-if="review.position.value !== null && review.total.value !== null"
         class="candidate__position"
-      >第 {{ review.position.value + 1 }} 个，共 {{ review.total.value.toLocaleString() }} 个（当前筛选）</span>
+      >第 {{ review.position.value + 1 }} / {{ review.total.value.toLocaleString() }} 个</span>
       <el-button
         :disabled="!review.hasPrev.value || review.moving.value"
         @click="review.move(-1)"
@@ -126,103 +124,52 @@ async function reopen() {
       show-icon
     />
     <template v-else-if="candidate">
-      <section
+      <div
         v-loading="review.loading.value"
-        class="candidate__summary"
+        class="candidate__body"
       >
-        <div class="candidate__title">
-          <h1>{{ candidate.name }}</h1>
-          <el-tag effect="plain">
-            新增{{ candidate.level_label === '新关联' ? '关联' : candidate.level_label }}
-          </el-tag>
-          <el-tag
-            :type="candidate.status === PENDING ? 'warning' : 'info'"
-            effect="plain"
-          >
-            {{ candidate.status }}
-          </el-tag>
-          <AuditLogButton :module="RESOURCE" />
-        </div>
-        <p
-          class="candidate__where"
-          aria-label="在码表里的位置"
+        <CandidateHeader
+          :candidate="candidate"
+          :context="context"
+          :rows="rows"
+          @open-rows="drawer = true"
+        />
+        <CandidateMatches
+          :candidate="candidate"
+          :context="context"
+          :context-error="contextError"
+          :can-merge="canWriteCodebook"
+          :peers="peers"
+          :can-absorb="canDecide && candidate.status === PENDING"
+          :absorbing="absorbing"
+          @merge="path => open('merge', path)"
+          @absorb="absorb"
+        />
+        <DecisionBar
+          v-if="candidate.status === PENDING && canDecide"
+          :candidate="candidate"
+          :suggestion="suggestion"
+          :can-write-codebook="canWriteCodebook"
+          @open="mode => open(mode)"
+        />
+        <section
+          v-else
+          class="candidate__decided"
         >
-          <span class="candidate__where-label">位置</span>
-          <span>{{ candidate.kind === KIND_NEW ? candidate.main_industry : candidate.industry }}</span>
-          <template
-            v-for="part in positionParts(candidate)"
-            :key="part.level"
+          <p>{{ decisionText(candidate) || '待审。你只有查看权限，决定要「新增场景审核」的管理权限。' }}</p>
+          <el-button
+            v-if="candidate.status === '已驳回' && canDecide"
+            :loading="reopening"
+            @click="reopen"
           >
-            <span aria-hidden="true">›</span>
-            <span :class="['candidate__part', { 'candidate__part--new': part.added }]">
-              {{ part.name }}<small>{{ part.level }} · {{ part.added ? '新增' : '码表已有' }}</small>
-            </span>
-          </template>
-          <span
-            v-if="candidate.kind !== KIND_NEW"
-            class="candidate__where-label"
-          >场景码表里都有，这次是新挂到这个行业下</span>
-        </p>
-        <p class="candidate__ai">
-          {{ aiText(candidate) }}
-        </p>
-        <dl class="candidate__facts">
-          <div><dt>挂在</dt><dd>{{ candidate.kind === KIND_NEW ? (candidate.parent || '（新的一级场景）') : candidate.industry }}</dd></div>
-          <div><dt>一级行业</dt><dd>{{ candidate.main_industry }}{{ candidate.industry_count > 1 ? ` 等 ${candidate.industry_count} 个` : '' }}</dd></div>
-          <div>
-            <dt>来源政策</dt>
-            <dd>
-              <el-button
-                link
-                type="primary"
-                @click="drawer = true"
-              >
-                {{ candidate.policy_count.toLocaleString() }} 条
-              </el-button>
-            </dd>
-          </div>
-          <div><dt>解读行数</dt><dd>{{ candidate.row_count.toLocaleString() }}</dd></div>
-          <div><dt>首次出现</dt><dd>{{ candidate.first_seen_at.slice(0, 10) }}</dd></div>
-          <div><dt>最近出现</dt><dd>{{ candidate.last_seen_at.slice(0, 10) }}</dd></div>
-        </dl>
-      </section>
-
-      <DecisionOptions
-        v-if="candidate.status === PENDING && canDecide"
-        :candidate="candidate"
-        :suggestion="suggestion"
-        :reason="reasonText"
-        :merge-target="mergeTarget"
-        :can-write-codebook="canWriteCodebook"
-        @open="open"
-      />
-      <section
-        v-else
-        class="candidate__decided"
-      >
-        <p>{{ decisionText(candidate) || '待审。你只有查看权限，决定要「新增场景审核」的管理权限。' }}</p>
-        <el-button
-          v-if="candidate.status === '已驳回' && canDecide"
-          :loading="reopening"
-          @click="reopen"
-        >
-          改判回待审
-        </el-button>
-      </section>
-
-      <CandidateEvidence
-        :candidate="candidate"
-        :context="context"
-        :context-error="contextError"
-        :rows="rows"
-        :can-merge="canWriteCodebook"
-        :peers="peers"
-        :can-absorb="canDecide && candidate.status === PENDING"
-        :absorbing="absorbing"
-        @merge="path => open('merge', path)"
-        @absorb="absorb"
-        @open-rows="drawer = true"
-      />
+            改判回待审
+          </el-button>
+        </section>
+        <CandidateMore
+          :candidate="candidate"
+          :context="context"
+        />
+      </div>
 
       <DecisionDialog
         :mode="dialog"
@@ -261,97 +208,17 @@ async function reopen() {
   font-size: 13px;
 }
 
-.candidate__summary,
+.candidate__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--zt-space-4);
+}
+
 .candidate__decided {
   padding: var(--zt-space-4) var(--zt-space-6);
   border: 1px solid var(--zt-border);
   border-radius: var(--zt-radius);
   background: var(--zt-panel);
-}
-
-.candidate__title {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--zt-space-3);
-  align-items: center;
-}
-
-.candidate__title h1 {
-  margin: 0;
-  font-size: 22px;
-}
-
-.candidate__title > :last-child {
-  margin-left: auto;
-}
-
-.candidate__where {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--zt-space-2);
-  align-items: center;
-  margin: var(--zt-space-3) 0 0;
-  font-size: 14px;
-}
-
-.candidate__where-label {
-  color: var(--zt-ink-500);
-  font-size: 13px;
-}
-
-.candidate__part {
-  display: inline-flex;
-  gap: 6px;
-  align-items: baseline;
-  padding: 2px 10px;
-  border: 1px solid var(--zt-border);
-  border-radius: var(--zt-radius);
-  background: var(--zt-surface-subtle);
-}
-
-.candidate__part small {
-  color: var(--zt-ink-500);
-  font-size: 12px;
-}
-
-.candidate__part--new {
-  border: 1px dashed var(--zt-warning);
-  background: var(--zt-warning-soft);
-  color: var(--zt-warning-text);
-  font-weight: 600;
-}
-
-.candidate__part--new small {
-  color: var(--zt-warning-text);
-}
-
-.candidate__ai {
-  margin: var(--zt-space-3) 0 0;
-  color: var(--zt-ink-700);
-  font-size: 13px;
-  line-height: 20px;
-}
-
-.candidate__facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--zt-space-2) var(--zt-space-8);
-  margin: var(--zt-space-3) 0 0;
-  font-size: 13px;
-}
-
-.candidate__facts div {
-  display: flex;
-  gap: var(--zt-space-2);
-  align-items: baseline;
-}
-
-.candidate__facts dt {
-  color: var(--zt-ink-500);
-}
-
-.candidate__facts dd {
-  margin: 0;
 }
 
 .candidate__decided {

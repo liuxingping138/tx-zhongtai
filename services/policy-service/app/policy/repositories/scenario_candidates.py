@@ -12,14 +12,23 @@ from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.policy.domain.candidates import STATUS_PENDING, ScenarioCandidate
+from app.policy.domain.candidates import (
+    AI_SAME,
+    AI_UNDER,
+    MATCH_AI,
+    MATCH_HIGH,
+    MATCH_MEDIUM,
+    MATCH_NONE,
+    STATUS_PENDING,
+    ScenarioCandidate,
+)
 from app.policy.domain.fields import SCENARIO_STATE_DUPLICATE
 from app.policy.domain.models import Interpretation
 
 C = ScenarioCandidate
 
-# 列表筛选：页签（状态）、名称关键词、一级行业（候选下有这个行业的行）、新增级别、码表相似、政策数下限。
-FILTER_KEYS = ("status", "keyword", "industry_l1", "level_label", "similar_level", "min_policies")
+# 列表筛选：页签（状态）、名称关键词、一级行业（候选下有这个行业的行）、新增级别、码表相似、码表里像它的、政策数下限。
+FILTER_KEYS = ("status", "keyword", "industry_l1", "level_label", "similar_level", "match", "min_policies")
 
 
 async def ensure(session: AsyncSession, specs: list[dict[str, Any]], now: datetime) -> dict[str, ScenarioCandidate]:
@@ -119,6 +128,16 @@ async def stats(session: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, 
     return {row[0]: tuple(row[1:]) for row in rows}
 
 
+def _match_conditions() -> dict[str, ColumnElement[bool]]:
+    ai_merge = C.ai_verdict.in_((AI_SAME, AI_UNDER))
+    return {
+        MATCH_AI: ai_merge,
+        MATCH_HIGH: ~ai_merge & (C.similar_level == "高"),
+        MATCH_MEDIUM: ~ai_merge & (C.similar_level == "中"),
+        MATCH_NONE: ~ai_merge & C.similar_level.not_in(("高", "中")),
+    }
+
+
 def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
     conds: list[ColumnElement[bool]] = [C.row_count > 0]
     for key, value in filters.items():
@@ -141,6 +160,9 @@ def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
             conds.append(exists().where(Interpretation.candidate_id == C.id, Interpretation.industry_l1.in_(values)))
         elif key == "min_policies":
             conds.append(C.policy_count >= int(values[0]))
+        elif key == "match":
+            matches = _match_conditions()
+            conds.append(or_(*(matches[text] for text in values)))  # 不认识的写法 KeyError，接口转 422
         else:
             cond = in_any(getattr(C, key), values)
             if cond is not None:
