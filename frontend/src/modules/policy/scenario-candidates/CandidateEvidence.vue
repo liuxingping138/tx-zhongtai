@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { CandidateContext, CandidateDetail, CandidateRow } from '@/api/scenarioCandidates'
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import { KIND_NEW, PENDING, levelName, pathText, similarLabel } from './candidates'
 
@@ -13,6 +13,14 @@ const props = defineProps<{
   canMerge: boolean
 }>()
 const emit = defineEmits<{ merge: [path: string[]]; openRows: [] }>()
+
+// 新的一级场景要和整个行业的一级场景比，常有几十个：下级多的（业务成型的）排前面，默认只露一部分
+const SIBLINGS_SHOWN = 12
+const showAll = ref(false)
+watch(() => props.candidate.id, () => { showAll.value = false })
+const sortedSiblings = computed(() => [...(props.context?.siblings ?? [])].sort((a, b) => b.children - a.children))
+const shownSiblings = computed(() => (showAll.value ? sortedSiblings.value : sortedSiblings.value.slice(0, SIBLINGS_SHOWN)))
+const hiddenSiblings = computed(() => sortedSiblings.value.length - shownSiblings.value.length)
 
 /** 一句话说清码表里有没有很像的：有就点名，没有就说只有一般像的。 */
 const similarSummary = computed(() => {
@@ -41,11 +49,19 @@ const similarSummary = computed(() => {
         </p>
         <div class="evidence__chips">
           <span
-            v-for="item in context?.siblings ?? []"
+            v-for="item in shownSiblings"
             :key="item.name"
             class="evidence__chip"
           >{{ item.name }}<small v-if="item.children">{{ item.children }} 个下级</small></span>
           <span class="evidence__chip evidence__chip--new">＋ {{ candidate.name }}<small>新</small></span>
+          <el-button
+            v-if="hiddenSiblings"
+            link
+            type="primary"
+            @click="showAll = true"
+          >
+            还有 {{ hiddenSiblings }} 个，展开
+          </el-button>
         </div>
         <p
           v-if="!context?.siblings.length"
