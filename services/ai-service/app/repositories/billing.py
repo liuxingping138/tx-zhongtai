@@ -16,7 +16,7 @@ from app.domain.models import CALL_CHAT, RUN_SOURCE_PIPELINE, RUN_SOURCE_SAMPLE,
 # 定时任务发起的写发起方（如「政策AI打标·类型判断」）。
 BATCH_PURPOSE = "批量任务"
 SAMPLE_PURPOSE = "样本试跑"
-CALL_PURPOSES = {CALL_CHAT: "多轮对话"}
+CALL_PURPOSES = {CALL_CHAT: "多轮对话（已下线）"}
 TRIAL_PURPOSE = "试发"
 
 

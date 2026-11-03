@@ -226,7 +226,7 @@ async def test_billing_groups_batches_pipelines_and_calls_by_beijing_day() -> No
         ("批量任务", 2, "0.350000", 7),
         ("样本试跑", 1, "0.040000", 0),
         ("政策AI打标·政策解读", 1, "0.300000", 0),
-        ("多轮对话", 2, "0.020000", 0),
+        ("多轮对话（已下线）", 2, "0.020000", 0),
         ("试发", 1, "0.010000", 0),
     }
     assert {item["day"] for item in data["items"]} == {"2026-10-22"} and earlier["items"] == []
