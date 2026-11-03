@@ -66,7 +66,7 @@ async function open(mode: DecisionMode) {
       context.value = { siblings: [], similar: [], industries: [] }
     }
   }
-  // 和列表一样：「合并到它」预选这一行写着的那个场景
+  // 和列表一样：「合并」预选这一行写着的那个场景
   preset.value = mode === 'merge' ? defaultMergeTarget(current, context.value.similar) : null
   opening.value = null
   dialog.value = mode

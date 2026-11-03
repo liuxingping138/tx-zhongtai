@@ -6,7 +6,7 @@ import { KIND_NEW, suggest, type DecisionMode } from './candidates'
 
 /**
  * 一个新增场景的决定：能做的都摆出来，不收进「其他」（2026-11-03 用户：别硬藏了）。
- * 系统建议的那个排第一、实心主色、写全「采纳为新场景」「合并到它」；其余是描边小按钮，驳回用危险色字。
+ * 系统建议的那个排第一、实心主色带图标；其余是描边小按钮，驳回用危险色字。
  * 各自分开、不连成一组（连成一组的四个按钮用户嫌丑）。没有建议时全是描边按钮。
  * 新增场景审核列表每行、解读核对页上场景那一行共用。点了都先开确认框。
  */
@@ -19,12 +19,13 @@ const props = defineProps<{
 const emit = defineEmits<{ open: [mode: DecisionMode] }>()
 
 const NO_CODEBOOK = '采纳、合并要写行业场景码表，需要码表的管理权限'
-const LABEL: Record<DecisionMode, string> = { adopt: '采纳为新场景', merge: '合并到…', rename: '改个名再采纳', reject: '驳回' }
+// 按钮只写两三个字，完整意思在悬停提示里（2026-11-03 用户：别那么长，知道意思就行）
+const LABEL: Record<DecisionMode, string> = { adopt: '采纳', merge: '合并', rename: '改名采纳', reject: '驳回' }
 const HINT: Record<DecisionMode, string> = {
-  adopt: '写进行业场景码表，作为新场景',
-  merge: '合并到一个已有场景，以后这个说法都归到那里',
-  rename: '换个名称再写进码表',
-  reject: '不进码表，以后 AI 再写这个说法也直接驳回',
+  adopt: '采纳为新场景：写进行业场景码表',
+  merge: '合并到已有场景：以后这个说法都归到那里',
+  rename: '改个名再采纳：换个名称再写进码表',
+  reject: '驳回：不进码表，以后 AI 再写这个说法也直接驳回',
 }
 
 const suggested = computed(() => suggest(props.candidate))
@@ -39,7 +40,7 @@ const actions = computed(() => {
     return {
       mode,
       primary,
-      label: primary && mode === 'merge' ? '合并到它' : LABEL[mode],
+      label: LABEL[mode],
       title: locked ? NO_CODEBOOK : primary && mode === 'merge' ? '合并到这一行写着的那个已有场景' : HINT[mode],
       disabled: locked || Boolean(props.busy),
     }
@@ -101,9 +102,9 @@ const actions = computed(() => {
   color: var(--zt-ink-700);
 }
 
-/* 建议的那个：「采纳为新场景」「合并到它」一样宽，上下几行对得齐 */
+/* 建议的那个：「采纳」「合并」一样宽，上下几行对得齐 */
 .decide .decide__btn--main {
-  min-width: 108px;
+  min-width: 68px;
   padding: 0 12px;
   font-weight: 500;
 }
