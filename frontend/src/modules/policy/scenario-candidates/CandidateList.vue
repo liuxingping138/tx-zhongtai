@@ -1,25 +1,42 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
+import { ElMessage } from 'element-plus'
 
-import { listCandidates, type CandidateItem, type CandidateQuery, type CandidateSummary } from '@/api/scenarioCandidates'
+import { listEnrichPending } from '@/api/codebook'
+import { errorMessage } from '@/api/errors'
+import {
+  getCandidate,
+  listCandidates,
+  reopenCandidate,
+  type CandidateItem,
+  type CandidateQuery,
+  type CandidateSummary,
+} from '@/api/scenarioCandidates'
 import AuditLogButton from '@/components/AuditLogButton.vue'
-import { useAuthStore } from '@/stores/auth'
 import FilterBar from '@/components/FilterBar.vue'
 import FilterKeyword from '@/components/FilterKeyword.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
-import ListEmpty from '@/components/ListEmpty.vue'
 import ListPage from '@/components/ListPage.vue'
 import { useFilterOptions } from '@/composables/useFilterOptions'
 import { hasActiveFilters, useListLoader } from '@/composables/useListLoader'
 import { useListQuery } from '@/composables/useListQuery'
-import { reviewQuery } from '../shared/reviewQuery'
+import { refreshMenuBadges } from '@/layouts/menuBadges'
+import { useAuthStore } from '@/stores/auth'
 import CandidateBatchActions from './CandidateBatchActions.vue'
+import CandidateRowsDrawer from './CandidateRowsDrawer.vue'
+import CandidateTable from './CandidateTable.vue'
+import DecisionDialog from './DecisionDialog.vue'
 import EnrichConfirm from './EnrichConfirm.vue'
 import StatusTabs from './StatusTabs.vue'
-import { listEnrichPending } from '@/api/codebook'
-import CandidateRowsDrawer from './CandidateRowsDrawer.vue'
-import { PENDING, RESOURCE, decisionText, levelTag, matchOf, summaryText, whereText } from './candidates'
+import { PENDING, RESOURCE, summaryText } from './candidates'
+import { useCandidateExtras } from './useCandidateExtras'
+import { useListDecision } from './useListDecision'
 
+/**
+ * 新增场景审核：一行一个场景，就在这一行决定（采纳、合并、改名、驳回都先开确认框），点名称展开看依据。
+ * 不再有单个场景的页面；从别处带 ?focus=<场景ID> 过来时，按它的名称筛出来并展开这一行。
+ */
 const query = reactive({
   status: PENDING,
   keyword: [] as string[],
@@ -31,6 +48,7 @@ const query = reactive({
   page_size: 20,
 })
 const auth = useAuthStore()
+const route = useRoute()
 const filters = useFilterOptions('/policy/scenario-candidates')
 const summary = ref<CandidateSummary | null>(null)
 const listQuery = useListQuery(query, (): Promise<void> => load())
@@ -54,9 +72,9 @@ const { items, total, loading, loadError, load } = useListLoader({
   errorText: '加载新增场景失败',
 })
 
-const pending = computed(() => listQuery.applied.status === PENDING)
 // 「补充待确认」页签：采纳进码表的新场景，AI 补好描述等人确认（码表的数据，要能看码表）
 const ENRICH_TAB = '补充待确认'
+const pending = computed(() => listQuery.applied.status === PENDING)
 const enriching = computed(() => listQuery.applied.status === ENRICH_TAB)
 const enrichCount = ref(0)
 async function loadEnrichCount() {
@@ -84,26 +102,54 @@ function resetFilters() {
   listQuery.search()
 }
 
-function reviewRoute(row: CandidateItem, index: number) {
-  const position = (query.page - 1) * query.page_size + index
-  return { name: 'policy-scenario-candidate-review', params: { id: row.id }, query: reviewQuery(listQuery.applied, position, query.page_size) }
-}
-
-const drawer = ref<CandidateItem | null>(null)
-
 const canDecide = computed(() => auth.canFull(RESOURCE))
 const canWriteCodebook = computed(() => canDecide.value && auth.canFull('codebook.scenarios'))
-// 批量只在待审页签、只勾当前页
+
+const extras = useCandidateExtras()
 const table = ref<{ clearSelection: () => void }>()
 const checked = ref<CandidateItem[]>([])
-async function afterBatch() {
+/** 做完决定、批量、并入、改判之后：丢掉缓存的依据，重新载入，侧栏待审数跟着变 */
+async function refreshAfter(ids: string[] = []) {
+  extras.drop(...ids)
   table.value?.clearSelection()
   checked.value = []
   await load()
+  refreshMenuBadges()
+}
+const decision = useListDecision(extras, () => refreshAfter())
+
+const drawer = ref<CandidateItem | null>(null)
+const drawerIndustries = computed(() => (drawer.value ? extras.get(drawer.value.id)?.detail?.industries ?? [] : []))
+function openRows(row: CandidateItem) {
+  drawer.value = row
+  void extras.ensure(row.id)
+}
+
+async function reopen(row: CandidateItem) {
+  try {
+    await reopenCandidate(row.id, { version: row.version })
+    ElMessage.success(`「${row.name}」已改判回待审`)
+    await refreshAfter([row.id])
+  } catch (error) {
+    ElMessage.error(errorMessage(error, '没能改判，请重试'))
+  }
+}
+
+/** ?focus=<场景ID>：从解读核对页、旧的审核页地址过来，筛出这个场景并展开 */
+const focus = typeof route.query.focus === 'string' ? route.query.focus : ''
+async function openFocus() {
+  try {
+    const found = await getCandidate(focus)
+    Object.assign(query, { status: found.status, keyword: [found.name], industry_l1: [], level_label: [], match: [], min_policies: '' })
+    listQuery.search()
+  } catch {
+    void load()
+  }
 }
 
 onMounted(() => {
-  void load()
+  if (focus) void openFocus()
+  else void load()
   void filters.load()
   void loadEnrichCount()
 })
@@ -127,7 +173,7 @@ onMounted(() => {
       <template #summary>
         <p class="candidates__summary">
           {{ summaryText(summary) }}
-          <span class="candidates__note">AI 从政策解读里写出来、码表里没有的场景，一行一个。看清是几级、码表里有没有像它的，再决定；决定一次，提出它的政策一起生效。</span>
+          <span class="candidates__note">AI 从政策解读里写出来、码表里没有的场景，一行一个。看清几级、挂在哪、码表里有没有像它的，就在这一行决定；点名称展开看依据。决定一次，提出它的政策一起生效。</span>
         </p>
       </template>
       <template #actions>
@@ -142,7 +188,7 @@ onMounted(() => {
           v-if="pending && canDecide"
           :checked="checked"
           :can-write-codebook="canWriteCodebook"
-          @done="afterBatch"
+          @done="refreshAfter(checked.map(row => row.id))"
         />
         <AuditLogButton :module="RESOURCE" />
       </template>
@@ -202,121 +248,40 @@ onMounted(() => {
         v-if="enriching"
         @count="enrichCount = $event"
       />
-      <el-table
+      <CandidateTable
         v-else
         ref="table"
-        v-loading="loading"
-        class="data-table"
-        :data="items"
-        @selection-change="checked = $event"
-      >
-        <template #empty>
-          <ListEmpty
-            :loading="loading"
-            :filtered="filtered"
-            @reset="resetFilters"
-          />
-        </template>
-        <el-table-column
-          v-if="pending && canDecide"
-          type="selection"
-          width="44"
-        />
-        <el-table-column
-          label="新增场景"
-          min-width="200"
-          show-overflow-tooltip
-        >
-          <template #default="{ row, $index }">
-            <RouterLink
-              v-if="row.id"
-              class="candidates__name"
-              :to="reviewRoute(row, $index)"
-            >
-              {{ row.name }}
-            </RouterLink>
-          </template>
-        </el-table-column>
-        <el-table-column
-          label="几级"
-          width="88"
-        >
-          <template #default="{ row }">
-            <span class="candidates__level">{{ levelTag(row) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          label="挂在哪"
-          min-width="200"
-          show-overflow-tooltip
-        >
-          <template #default="{ row }">
-            {{ whereText(row) }}
-          </template>
-        </el-table-column>
-        <el-table-column
-          v-if="pending"
-          label="码表里像它的"
-          min-width="280"
-          show-overflow-tooltip
-        >
-          <template #default="{ row }">
-            <template v-if="row.id">
-              <span :class="['candidates__match', `candidates__match--${matchOf(row).kind}`]">{{ matchOf(row).label }}</span>
-              {{ matchOf(row).name }}<span
-                v-if="matchOf(row).note"
-                class="candidates__none"
-              > · {{ matchOf(row).note }}</span>
-            </template>
-          </template>
-        </el-table-column>
-        <el-table-column
-          v-else
-          label="决定"
-          min-width="320"
-          show-overflow-tooltip
-        >
-          <template #default="{ row }">
-            {{ decisionText(row) }}
-          </template>
-        </el-table-column>
-        <el-table-column
-          label="政策数"
-          width="90"
-          align="right"
-        >
-          <template #default="{ row }">
-            <el-button
-              link
-              type="primary"
-              :aria-label="`看提出「${row.name}」的 ${row.policy_count} 条政策`"
-              @click="drawer = row"
-            >
-              {{ row.policy_count.toLocaleString() }}
-            </el-button>
-          </template>
-        </el-table-column>
-        <el-table-column
-          label="操作"
-          width="80"
-          class-name="table-action"
-        >
-          <template #default="{ row, $index }">
-            <RouterLink
-              v-if="row.id"
-              class="table-link"
-              :to="reviewRoute(row, $index)"
-            >
-              {{ pending ? '审核' : '查看' }}
-            </RouterLink>
-          </template>
-        </el-table-column>
-      </el-table>
+        :items="items"
+        :loading="loading"
+        :filtered="filtered"
+        :status="String(listQuery.applied.status)"
+        :can-decide="canDecide"
+        :can-write-codebook="canWriteCodebook"
+        :extras="extras"
+        :busy="decision.busy.value"
+        :focus="focus"
+        @open="decision.open"
+        @rows="openRows"
+        @reopen="reopen"
+        @changed="refreshAfter"
+        @selection="checked = $event"
+        @reset="resetFilters"
+      />
     </ListPage>
+    <DecisionDialog
+      v-if="decision.current.value"
+      :mode="decision.mode.value"
+      :candidate="decision.current.value.candidate"
+      :context="decision.current.value.context"
+      :preset-target="decision.current.value.target"
+      @close="decision.close"
+      @done="decision.done"
+    />
     <CandidateRowsDrawer
       :candidate="drawer"
+      :industries="drawerIndustries"
       @close="drawer = null"
-      @changed="load"
+      @changed="refreshAfter(drawer ? [drawer.id] : [])"
     />
   </div>
 </template>
@@ -332,48 +297,6 @@ onMounted(() => {
   display: block;
   color: var(--zt-ink-500);
   font-size: 13px;
-}
-
-.candidates__name {
-  font-weight: 600;
-}
-
-.candidates__none {
-  color: var(--zt-ink-500);
-}
-
-.candidates__level {
-  padding: 1px 8px;
-  border: 1px solid var(--zt-warning-border);
-  border-radius: 4px;
-  background: var(--zt-warning-soft);
-  color: var(--zt-warning-text);
-  font-size: 12px;
-}
-
-.candidates__match {
-  margin-right: 6px;
-  padding: 1px 8px;
-  border: 1px solid var(--zt-border);
-  border-radius: 4px;
-  background: var(--zt-soft);
-  color: var(--zt-ink-700);
-  font-size: 12px;
-}
-
-.candidates__match--ai {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary);
-  color: var(--zt-panel);
-}
-
-.candidates__match--none {
-  margin-right: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--zt-ink-500);
-  font-size: 14px;
 }
 
 .candidates__min {

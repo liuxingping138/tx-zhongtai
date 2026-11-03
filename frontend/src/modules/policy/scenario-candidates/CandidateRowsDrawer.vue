@@ -4,12 +4,15 @@ import { ElMessage } from 'element-plus'
 
 import type { ScenarioPath } from '@/api/codebook'
 import { errorMessage } from '@/api/errors'
-import { changeRowScenario, listCandidateRows, type CandidateItem, type CandidateRow } from '@/api/scenarioCandidates'
+import { changeRowScenario, listCandidateRows, type CandidateDetail, type CandidateItem, type CandidateRow } from '@/api/scenarioCandidates'
 import ScenarioPicker from '@/components/ScenarioPicker.vue'
 import { pathText } from './candidates'
 
-/** 提出这个场景的来源政策（解读行）。个别政策该归到别的场景时在这里逐行改，不影响这个场景的决定。 */
-const props = defineProps<{ candidate: CandidateItem | null }>()
+/**
+ * 提出这个场景的来源政策（解读行），可以按行业看、按政策名称搜，分页。上万条也只是翻页。
+ * 个别政策该归到别的场景时在这里逐行改，不影响这个场景的决定。
+ */
+const props = defineProps<{ candidate: CandidateItem | null; industries?: CandidateDetail['industries'] }>()
 const emit = defineEmits<{ close: []; changed: [] }>()
 
 const PAGE_SIZE = 20
@@ -17,6 +20,8 @@ const rows = ref<CandidateRow[]>([])
 const total = ref(0)
 const page = ref(1)
 const keyword = ref('')
+/** 选中的行业（详情 industries 的 path），空 = 全部 */
+const industry = ref('')
 const loading = ref(false)
 const loadError = ref('')
 const editing = ref<string | null>(null)
@@ -31,7 +36,8 @@ async function load() {
   loading.value = true
   loadError.value = ''
   try {
-    const result = await listCandidateRows(id, { keyword: keyword.value.trim() || undefined, page: page.value, page_size: PAGE_SIZE })
+    const names = props.industries?.find(item => item.path === industry.value)?.names
+    const result = await listCandidateRows(id, { keyword: keyword.value.trim() || undefined, industry: names, page: page.value, page_size: PAGE_SIZE })
     if (current !== sequence) return
     rows.value = result.items
     total.value = result.total
@@ -46,6 +52,7 @@ watch(() => props.candidate?.id, (id) => {
   rows.value = []
   page.value = 1
   keyword.value = ''
+  industry.value = ''
   editing.value = null
   if (id) void load()
 })
@@ -94,6 +101,22 @@ async function save(row: CandidateRow) {
     @close="emit('close')"
   >
     <div class="rows__toolbar">
+      <el-select
+        v-if="(industries?.length ?? 0) > 1"
+        v-model="industry"
+        class="rows__industry"
+        clearable
+        :placeholder="`全部行业（${industries?.length} 个）`"
+        aria-label="按行业看"
+        @change="search"
+      >
+        <el-option
+          v-for="item in industries"
+          :key="item.path"
+          :value="item.path"
+          :label="`${item.path} · ${item.rows.toLocaleString()} 行`"
+        />
+      </el-select>
       <el-input
         v-model="keyword"
         clearable
@@ -158,6 +181,12 @@ async function save(row: CandidateRow) {
         </template>
       </el-table-column>
       <el-table-column
+        prop="industry"
+        label="行业"
+        min-width="160"
+        show-overflow-tooltip
+      />
+      <el-table-column
         prop="created_at"
         label="入库"
         width="170"
@@ -213,6 +242,10 @@ async function save(row: CandidateRow) {
   display: flex;
   gap: var(--zt-space-2);
   margin-bottom: var(--zt-space-3);
+}
+
+.rows__industry {
+  flex: 0 0 320px;
 }
 
 .rows__title {

@@ -15,7 +15,7 @@ export interface ReviewOptions<Row> {
   listName: string
   /** 列表的筛选字段，只有它们会从地址栏带进查询。 */
   filterKeys: readonly string[]
-  /** 编辑表单的分组；只看、不在这里编辑的页面（如新增场景审核）不传。 */
+  /** 编辑表单的分组；只看、不在这里编辑的页面不传。 */
   groups?: readonly EditorGroup[]
   get: (id: string) => Promise<Row>
   /** 按筛选和位置找相邻的那一条：只用到 id，列表行和详情可以是不同的类型。 */

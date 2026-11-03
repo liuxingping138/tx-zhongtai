@@ -18,6 +18,7 @@ from app.core.database import get_db_session
 from app.policy.api.schemas import (
     CandidateAbsorbRequest,
     CandidateAdoptRequest,
+    CandidateBatchAdopt,
     CandidateBatchMerge,
     CandidateBatchReject,
     CandidateMergeRequest,
@@ -93,6 +94,20 @@ async def pending_count(
     return success_json({"pending": await service.pending_count(session)})
 
 
+@router.post("/batch-adopt")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def batch_adopt(
+    body: CandidateBatchAdopt,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    actor: Actor = Depends(require_policy_permission(RESOURCE, "decide")),
+    _codebook: Actor = Depends(require_policy_permission(*CODEBOOK)),
+) -> JSONResponse:
+    """勾选的几个一起采纳为新场景，各用 AI 写的名称；被人改过、已经决定过的跳过并写明原因。"""
+
+    items = [(item.id, item.version) for item in body.items]
+    return success_json(await batch.batch_adopt(session, actor, items))
+
+
 @router.post("/batch-reject")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def batch_reject(
@@ -147,6 +162,9 @@ async def get_context(
 async def get_rows(
     candidate_id: uuid.UUID,
     keyword: str | None = Query(default=None, max_length=200),
+    industry: list[str] | None = Query(
+        default=None, max_length=3, description="只看这个行业的：一级、二级、三级行业，和详情 industries 的 names 一样"
+    ),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session, scope="function"),
@@ -155,7 +173,9 @@ async def get_rows(
     """提出这个场景的解读行（来源政策），最近的在前。"""
 
     return success_json(
-        await service.candidate_rows(session, candidate_id, keyword=keyword, page=page, page_size=page_size)
+        await service.candidate_rows(
+            session, candidate_id, keyword=keyword, industry=industry, page=page, page_size=page_size
+        )
     )
 
 

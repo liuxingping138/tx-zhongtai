@@ -69,6 +69,12 @@ class CandidateRef(BaseModel):
     version: int
 
 
+class CandidateBatchAdopt(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[CandidateRef] = Field(min_length=1, max_length=100)
+
+
 class CandidateBatchReject(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

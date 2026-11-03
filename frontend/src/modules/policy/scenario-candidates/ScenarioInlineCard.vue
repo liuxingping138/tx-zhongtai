@@ -134,8 +134,8 @@ async function fix() {
           驳回…
         </el-button>
       </template>
-      <RouterLink :to="{ name: 'policy-scenario-candidate-review', params: { id: candidate.id } }">
-        去审核页看全部依据 →
+      <RouterLink :to="{ name: 'policy-scenario-candidates', query: { focus: candidate.id } }">
+        去新增场景审核看全部依据 →
       </RouterLink>
     </div>
     <DecisionDialog

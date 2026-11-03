@@ -513,6 +513,46 @@ async def test_batch_reject_skips_ones_already_decided(world: SimpleNamespace, m
     assert first.status == "已驳回"
 
 
+async def test_batch_adopt_writes_each_into_the_codebook_and_skips_decided_ones(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.policy.application import scenario_batch
+
+    _merging_fakes(world, monkeypatch)
+    rows = [_row(AIR, ("智慧航空", "智慧机场工程建设管理", "")), _row(HEALTH, ("中医药数智化", "", ""))]
+    world.rows = rows
+    await scenario_engine.classify_rows(Session(), rows, NOW)  # type: ignore[arg-type]
+    first, second = world.candidates["新|智慧航空>智慧机场工程建设管理"], world.candidates["新|中医药数智化"]
+    second.status = "已驳回"
+
+    class Nested(Session):
+        def begin_nested(self) -> Any:
+            return self
+
+        async def __aenter__(self) -> Any:
+            return self
+
+        async def __aexit__(self, *exc: Any) -> bool:
+            return False
+
+    out = await scenario_batch.batch_adopt(Nested(), ACTOR, [(first.id, 1), (second.id, 1)])  # type: ignore[arg-type]
+    assert out["done"] == 1 and out["skipped"][0]["name"] == "中医药数智化"
+    # 批量采纳不改名：沿用 AI 写的说法
+    assert (first.status, first.adopted_name) == ("已采纳", "")
+    assert rows[0].scenario_state == "已采纳" and rows[0].industry_scenario_code.startswith("01010600")
+
+
+def test_source_rows_can_be_narrowed_to_one_industry() -> None:
+    """来源政策抽屉「按行业看」：三级行业都对上才算，空的那级也要是空的。"""
+
+    from sqlalchemy.dialects import postgresql
+
+    query = repo._rows_query(uuid.uuid4(), None, ("医卫行业", "卫生", ""))
+    sql = str(query.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+    assert "industry_l1 = '医卫行业'" in sql and "industry_l2 = '卫生'" in sql and "industry_l3 = ''" in sql
+    assert "industry_l1" not in str(repo._rows_query(uuid.uuid4(), None).whereclause)
+
+
 def test_match_filter_puts_each_scenario_in_exactly_one_bucket() -> None:
     """列表「码表里像它的」：AI 说该合并的单独一类，其余按名称相似分，不会一个场景落两类。"""
 

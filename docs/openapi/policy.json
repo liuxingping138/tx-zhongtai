@@ -3523,6 +3523,46 @@
         }
       }
     },
+    "/api/v1/policy/scenario-candidates/batch-adopt": {
+      "post": {
+        "tags": [
+          "policy-scenario-candidates"
+        ],
+        "summary": "Batch Adopt",
+        "description": "勾选的几个一起采纳为新场景，各用 AI 写的名称；被人改过、已经决定过的跳过并写明原因。",
+        "operationId": "batch_adopt_api_v1_policy_scenario_candidates_batch_adopt_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CandidateBatchAdopt"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/policy/scenario-candidates/batch-reject": {
       "post": {
         "tags": [
@@ -3721,6 +3761,28 @@
               ],
               "title": "Keyword"
             }
+          },
+          {
+            "name": "industry",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 3
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "只看这个行业的：一级、二级、三级行业，和详情 industries 的 names 一样",
+              "title": "Industry"
+            },
+            "description": "只看这个行业的：一级、二级、三级行业，和详情 industries 的 names 一样"
           },
           {
             "name": "page",
@@ -4366,6 +4428,25 @@
           "version"
         ],
         "title": "CandidateAdoptRequest"
+      },
+      "CandidateBatchAdopt": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateRef"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "CandidateBatchAdopt"
       },
       "CandidateBatchMerge": {
         "properties": {

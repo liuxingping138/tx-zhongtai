@@ -1,4 +1,4 @@
-"""新增场景列表上勾选几个一起驳回、一起合并到同一个已有场景。逐个做决定，跳过的写明原因。"""
+"""新增场景列表上勾选几个一起采纳、一起驳回、一起合并到同一个已有场景。逐个做决定，跳过的写明原因。"""
 
 from __future__ import annotations
 
@@ -44,5 +44,14 @@ async def batch_merge(
 ) -> dict[str, Any]:
     async def one(candidate_id: uuid.UUID, version: int) -> None:
         await scenario_decisions.merge(session, actor, candidate_id, version=version, target=target)
+
+    return await _each(session, items, one)
+
+
+async def batch_adopt(session: AsyncSession, actor: Actor, items: list[tuple[uuid.UUID, int]]) -> dict[str, Any]:
+    """一起采纳为新场景，各用 AI 写的名称（要改名的单个采纳）。"""
+
+    async def one(candidate_id: uuid.UUID, version: int) -> None:
+        await scenario_decisions.adopt(session, actor, candidate_id, version=version, name="")
 
     return await _each(session, items, one)

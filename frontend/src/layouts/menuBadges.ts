@@ -14,6 +14,12 @@ const SOURCES: Record<string, { resource: string; fetch: () => Promise<number> }
 /** 换页时顺带刷新，但同一个数一分钟内只取一次：每次点菜单都去数一遍没必要。 */
 export const REFRESH_MS = 60_000
 
+/** 页面上做完会改变数字的事（新增场景审核里做了决定）时调一下，侧栏马上重取，不等换页。 */
+const changed = ref(0)
+export function refreshMenuBadges(): void {
+  changed.value += 1
+}
+
 export function useMenuBadges() {
   const auth = useAuthStore()
   const route = useRoute()
@@ -34,7 +40,8 @@ export function useMenuBadges() {
     }))
   }
 
-  // 在新增场景审核里做完决定会换到下一个（地址变了）：这个页面里换页就强制刷新，别处按一分钟一次
+  // 新增场景审核里换页签、筛选（地址变了）强制刷新，别处按一分钟一次；在列表行上做完决定地址不变，靠 refreshMenuBadges
   watch(() => route.fullPath, () => { void refresh(route.path.startsWith('/policy/scenario-candidates')) }, { immediate: true })
+  watch(changed, () => { void refresh(true) })
   return { counts, refresh }
 }

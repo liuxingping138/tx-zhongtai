@@ -218,17 +218,30 @@ async def breakdown(session: AsyncSession, candidate_id: uuid.UUID, *columns: An
     return [tuple(row) for row in rows]
 
 
-def _rows_query(candidate_id: uuid.UUID, keyword: str | None) -> Select[tuple[Interpretation]]:
+def _rows_query(
+    candidate_id: uuid.UUID, keyword: str | None, industry: tuple[str, ...] | None = None
+) -> Select[tuple[Interpretation]]:
     query = select(Interpretation).where(Interpretation.candidate_id == candidate_id)
     if keyword:
         query = query.where(contains_ilike(Interpretation.policy_title, keyword))
+    if industry:
+        l1, l2, l3 = industry
+        query = query.where(
+            Interpretation.industry_l1 == l1, Interpretation.industry_l2 == l2, Interpretation.industry_l3 == l3
+        )
     return query
 
 
 async def rows_page(
-    session: AsyncSession, candidate_id: uuid.UUID, *, keyword: str | None, page: int, page_size: int
+    session: AsyncSession,
+    candidate_id: uuid.UUID,
+    *,
+    keyword: str | None,
+    page: int,
+    page_size: int,
+    industry: tuple[str, ...] | None = None,
 ) -> tuple[list[Interpretation], int]:
-    query = _rows_query(candidate_id, keyword)
+    query = _rows_query(candidate_id, keyword, industry)
     total = int(await session.scalar(select(func.count()).select_from(query.subquery())) or 0)
     result = await session.scalars(
         query.order_by(Interpretation.created_at.desc(), Interpretation.id)

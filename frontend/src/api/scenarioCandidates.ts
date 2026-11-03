@@ -59,7 +59,8 @@ export interface CandidateSummary {
 }
 
 export interface CandidateDetail extends CandidateItem {
-  industries: { path: string; rows: number }[]
+  /** 各行业几行；names 是一级、二级、三级行业，来源政策按行业筛时原样传回 */
+  industries: { path: string; names: string[]; rows: number }[]
   /** 下级新场景，例如新的二级下面 AI 写的三级 */
   children: { path: string; rows: number }[]
   /** AI 给的理由里最常见的几条 */
@@ -126,7 +127,7 @@ export function getCandidateContext(id: string): Promise<CandidateContext> {
 
 export function listCandidateRows(
   id: string,
-  params: { keyword?: string; page?: number; page_size?: number } = {},
+  params: { keyword?: string; industry?: string[]; page?: number; page_size?: number } = {},
 ): Promise<Page<CandidateRow>> {
   return request(http.get(`/policy/scenario-candidates/${id}/rows`, { params }))
 }
@@ -213,4 +214,9 @@ export function batchMergeCandidates(body: {
   target: string[]
 }): Promise<BatchResult> {
   return request(http.post('/policy/scenario-candidates/batch-merge', body))
+}
+
+/** 勾选的几个一起采纳为新场景，各用 AI 写的名称 */
+export function batchAdoptCandidates(body: { items: { id: string; version: number }[] }): Promise<BatchResult> {
+  return request(http.post('/policy/scenario-candidates/batch-adopt', body))
 }

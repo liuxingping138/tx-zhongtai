@@ -8,7 +8,7 @@ vi.mock('vue-router', () => ({ useRoute: () => route }))
 vi.mock('@/api/scenarioCandidates', () => api)
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => auth }))
 
-import { useMenuBadges } from './menuBadges'
+import { refreshMenuBadges, useMenuBadges } from './menuBadges'
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0))
 let scope: EffectScope
@@ -35,10 +35,19 @@ describe('侧栏待审数', () => {
     expect(api.candidatePendingCount).toHaveBeenCalledOnce()
   })
 
-  it('在审核页里换到下一个时强制刷新', async () => {
+  it('在新增场景审核里换页签时强制刷新', async () => {
     setup()
     await flush()
-    Object.assign(route, { fullPath: '/policy/scenario-candidates/c2?pos=0', path: '/policy/scenario-candidates/c2' })
+    Object.assign(route, { fullPath: '/policy/scenario-candidates?status=已驳回', path: '/policy/scenario-candidates' })
+    await nextTick()
+    await flush()
+    expect(api.candidatePendingCount).toHaveBeenCalledTimes(2)
+  })
+
+  it('列表行上做完决定（地址不变）时也马上刷新', async () => {
+    setup()
+    await flush()
+    refreshMenuBadges()
     await nextTick()
     await flush()
     expect(api.candidatePendingCount).toHaveBeenCalledTimes(2)

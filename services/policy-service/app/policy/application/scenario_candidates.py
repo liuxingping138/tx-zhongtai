@@ -170,7 +170,14 @@ async def candidate_detail(session: AsyncSession, candidate_id: uuid.UUID) -> di
     top = reasons(await repo.breakdown(session, candidate.id, Interpretation.remark))
     return {
         **candidate_out(candidate),
-        "industries": [{"path": "/".join(name for name in row[:3] if name), "rows": int(row[3])} for row in industries],
+        "industries": [
+            {
+                "path": "/".join(name for name in row[:3] if name),
+                "names": [str(name) for name in row[:3]],
+                "rows": int(row[3]),
+            }
+            for row in industries
+        ],
         "children": children,
         "reasons": top,
     }
@@ -211,10 +218,19 @@ def _row_out(row: Interpretation) -> dict[str, Any]:
 
 
 async def candidate_rows(
-    session: AsyncSession, candidate_id: uuid.UUID, *, keyword: str | None, page: int, page_size: int
+    session: AsyncSession,
+    candidate_id: uuid.UUID,
+    *,
+    keyword: str | None,
+    page: int,
+    page_size: int,
+    industry: list[str] | None = None,
 ) -> dict[str, Any]:
+    """来源政策分页。industry 是一级、二级、三级行业（少写的几级按空的算），只看这个行业的。"""
+
     candidate = await _get(session, candidate_id)
+    names = tuple([*industry, "", "", ""][:3]) if industry else None
     rows, total = await repo.rows_page(
-        session, candidate.id, keyword=(keyword or "").strip() or None, page=page, page_size=page_size
+        session, candidate.id, keyword=(keyword or "").strip() or None, industry=names, page=page, page_size=page_size
     )
     return {"items": [_row_out(row) for row in rows], "total": total, "page": page, "page_size": page_size}

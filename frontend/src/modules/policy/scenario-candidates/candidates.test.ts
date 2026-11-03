@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CandidateItem } from '@/api/scenarioCandidates'
-import { aiText, decisionText, levelTag, levelTitle, matchHeadline, matchItems, matchOf, pathLabel, siblingsText, similarLabel, suggest, summaryText, whereText } from './candidates'
+import { aiText, decisionText, defaultMergeTarget, doneText, levelTag, matchHeadline, matchItems, matchOf, pathLabel, siblingsText, similarLabel, suggest, summaryText, whereText } from './candidates'
 
 function item(extra: Partial<CandidateItem>): CandidateItem {
   return {
@@ -53,7 +53,6 @@ describe('文案', () => {
 describe('给业务人员看的说法', () => {
   it('几级、挂在哪一眼看清', () => {
     expect(levelTag(item({}))).toBe('新二级')
-    expect(levelTitle(item({}))).toBe('AI 新增的二级场景')
     expect(whereText(item({}))).toBe('交通行业 › 智慧航空 下')
     expect(whereText(item({ new_level: 1, level_label: '一级', parent: '', main_industry: '医卫行业' }))).toBe('医卫行业 · 新的一级场景')
     expect(levelTag(item({ kind: '新关联', level_label: '新关联', industry: '交通行业/道路' }))).toBe('新关联')
@@ -79,7 +78,7 @@ describe('码表里像它的', () => {
     expect(matchOf(item({ ai_verdict: '新场景' }))).toEqual({ kind: 'none', label: '没有', name: '', note: 'AI 也认为是新场景' })
     expect(matchOf(item({})).note).toBe('AI 还没看')
   })
-  it('审核页列表：AI 认为是同一个的排第一，名称相近里同一个场景不重复列', () => {
+  it('展开后的列表：AI 认为是同一个的排第一，名称相近里同一个场景不重复列', () => {
     const similar = [
       { path: ['智慧工会', '工程建设管理'], score: 0.5, level: '中', desc: '工会的工程建设', industry: '重要客户服务一部' },
       { path: ['智慧交通工程建设', '交通工程建设信息化'], score: 0.4, level: '中', desc: '交通工程', industry: '交通行业' },
@@ -103,6 +102,27 @@ describe('码表里像它的', () => {
     expect(matchHeadline(item({ ai_verdict: '新场景' }), matchItems(item({ ai_verdict: '新场景' }), similar)))
       .toBe('AI 对照了同一行业的场景，认为码表里没有同样的；下面 1 个只是名称相近，供参考')
     expect(matchHeadline(item({}), [])).toBe('AI 还没看过（任务调度里「新增场景找相似」跑过后才有）；名称相近的也没有')
+  })
+})
+
+describe('在列表行上决定', () => {
+  const similar = [
+    { path: ['智慧航空', '智慧航站楼'], score: 0.8, level: '高', desc: '', industry: '交通行业' },
+    { path: ['智慧交通工程建设', '交通工程建设信息化'], score: 0.5, level: '中', desc: '', industry: '交通行业' },
+  ]
+  it('点「合并」预选这一行写着的那个：AI 认为是同一个的、或名称很像的', () => {
+    const ai = item({ ai_verdict: '归到已有场景下', ai_similar: '智慧交通工程建设 > 交通工程建设信息化', ai_target: '智慧交通工程建设 > 交通工程建设信息化' })
+    expect(defaultMergeTarget(ai, similar)).toEqual(['智慧交通工程建设', '交通工程建设信息化'])
+    expect(defaultMergeTarget(item({ similar_level: '高', similar_name: '智慧航空 > 智慧航站楼' }), similar)).toEqual(['智慧航空', '智慧航站楼'])
+  })
+  it('名称只是有点像、没有像的、AI 说的码表里对不上的，不替人预选', () => {
+    expect(defaultMergeTarget(item({ similar_level: '中', similar_name: '智慧交通工程建设 > 交通工程建设信息化' }), similar)).toBeNull()
+    expect(defaultMergeTarget(item({}), similar)).toBeNull()
+    expect(defaultMergeTarget(item({ ai_verdict: '同一个场景', ai_similar: '智慧机场' }), similar)).toBeNull()
+  })
+  it('做完的提示说清这个场景去哪了', () => {
+    expect(doneText(item({ status: '已合并' }))).toBe('「智慧机场工程建设管理」已合并到已有场景，提出它的 52 行解读一起改好了')
+    expect(doneText(item({ status: '已采纳', row_count: 12847 }))).toBe('「智慧机场工程建设管理」已采纳进行业场景码表，提出它的 12,847 行解读一起改好了')
   })
 })
 

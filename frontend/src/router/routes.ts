@@ -161,15 +161,9 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '新增场景审核', resource: 'policy.scenario_candidates' },
       },
       {
-        // 审核页：从列表带着筛选和位置进来，做完决定自动打开下一个。
+        // 原来单个场景的审核页，现在在列表行里决定：旧地址转到列表，筛出这个场景并展开
         path: 'policy/scenario-candidates/:id',
-        name: 'policy-scenario-candidate-review',
-        component: () => import('@/modules/policy/scenario-candidates/CandidateReview.vue'),
-        meta: {
-          title: '新增场景审核',
-          resource: 'policy.scenario_candidates',
-          menuPath: '/policy/scenario-candidates',
-        },
+        redirect: to => ({ name: 'policy-scenario-candidates', query: { focus: String(to.params.id) } }),
       },
       {
         path: 'ai/prompts',

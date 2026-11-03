@@ -82,7 +82,7 @@ function progress(job: ScheduledJob): string {
   const read = task.cursor_date ? `读到 ${task.cursor_date}` : '—'
   return task.pending ? `${read} · 待重判 ${task.pending}` : read
 }
-/** 待办点进去看的就是这几条：基础标签按「打标状态」筛好，新增场景进审核页，补描述进码表按「补充状态」筛好。没有查看权限时只显示文字。 */
+/** 待办点进去看的就是这几条：基础标签按「打标状态」筛好，新增场景进新增场景审核，补描述进码表按「补充状态」筛好。没有查看权限时只显示文字。 */
 const PENDING_LINKS: Record<string, { resource: string; to: RouteLocationRaw }> = {
   type: { resource: 'policy.base_tags', to: { name: 'policy-base-tags', query: { ai_status: '等待重新判断类型' } } },
   interpret: { resource: 'policy.base_tags', to: { name: 'policy-base-tags', query: { ai_status: '待解读' } } },

@@ -2,8 +2,6 @@ import type { CandidateContext, CandidateItem, CandidateSummary } from '@/api/sc
 import type { ScenarioPath } from '@/api/codebook'
 
 export const RESOURCE = 'policy.scenario_candidates'
-/** 列表的筛选字段：审核页靠它从地址栏带上筛选，翻上一个、下一个。 */
-export const FILTER_KEYS = ['status', 'keyword', 'industry_l1', 'level_label', 'match', 'min_policies'] as const
 export const STATUSES = ['待审', '已采纳', '已合并', '已驳回'] as const
 export const PENDING = '待审'
 export const KIND_NEW = '新场景'
@@ -13,7 +11,7 @@ export type Suggestion = 'merge' | 'adopt' | null
 export type DecisionMode = 'adopt' | 'rename' | 'merge' | 'reject'
 
 /**
- * 审核页三种处理里给哪一种标「系统建议」。只是提示，人照样可以选别的。
+ * 列表每行的决定按钮里哪一个填主色（系统建议）。只是提示，人照样可以选别的。
  * - 码表里有字面高度相似的已有场景：多半是同一个场景换了说法，建议合并
  * - 只是把码表里已有的场景挂到一个新行业：建议采纳
  * - 没有相似的、而且不止一两条政策这么说：建议采纳
@@ -93,11 +91,6 @@ export function levelTag(candidate: Where): string {
   return candidate.kind === KIND_NEW ? `新${candidate.level_label}` : '新关联'
 }
 
-/** 审核页标题旁的一句：AI 新增的是第几级。 */
-export function levelTitle(candidate: Where): string {
-  return candidate.kind === KIND_NEW ? `AI 新增的${levelName(candidate.new_level)}场景` : '码表已有场景，新挂到这个行业'
-}
-
 /** 列表「挂在哪」一格。 */
 export function whereText(candidate: Where): string {
   if (candidate.kind !== KIND_NEW) return `挂到 ${candidate.industry}`
@@ -140,7 +133,7 @@ export function matchOf(candidate: Pick<CandidateItem, MatchFields>): Match {
   return { kind: 'none', label: '没有', name: '', note: verdict === AI_NEW ? 'AI 也认为是新场景' : aiNote }
 }
 
-/** 审核页「码表里有没有和它是同一个的」列表里的一项。 */
+/** 展开后「码表里像它的」列表里的一项。 */
 export interface MatchItem {
   /** 码表里对得上的路径，能直接合并；AI 说的名字码表里对不上时为 null */
   path: string[] | null
@@ -190,7 +183,7 @@ export function matchItems(candidate: MatchSource, similar: Similar[]): MatchIte
   return ai ? [ai, ...rest] : rest
 }
 
-/** 列表上方那句「AI 怎么看」：AI 的结论在前，名称相近的只是参考。 */
+/** 「AI 怎么看」一句话：AI 的结论在前，名称相近的只是参考（展开后码表里没有像它的时显示）。 */
 export function matchHeadline(candidate: Pick<CandidateItem, 'ai_verdict'>, items: MatchItem[]): string {
   const verdict = candidate.ai_verdict
   const rest = items.filter(item => !item.ai).length
@@ -208,4 +201,29 @@ export function aiText(candidate: Pick<CandidateItem, 'ai_verdict' | 'ai_similar
   const similar = candidate.ai_similar ? `，最像的是「${arrow(candidate.ai_similar)}」` : ''
   const reason = candidate.ai_reason ? `。理由：${candidate.ai_reason}` : ''
   return `AI 判断：${candidate.ai_verdict}${similar}${reason}`
+}
+
+/**
+ * 点这一行的「合并」时预选哪个目标：这一行写着的那个——AI 认为是同一个 / 应归到这里、或名称很像的。
+ * 名称只是有点像、或没有像的，不替人预选，确认框里自己挑。
+ */
+export function defaultMergeTarget(candidate: MatchSource, similar: Similar[]): string[] | null {
+  const match = matchOf(candidate)
+  const items = matchItems(candidate, similar)
+  if (match.kind === 'ai') return items[0]?.ai ? items[0].path : null
+  if (match.kind === 'high') return items.find(item => item.text === match.name)?.path ?? null
+  return null
+}
+
+const DONE: Record<string, string> = {
+  已采纳: '已采纳进行业场景码表',
+  已合并: '已合并到已有场景',
+  已驳回: '已驳回',
+  待审: '已改判回待审',
+}
+
+/** 做完一个决定后的提示：这一行会从当前页签里消失，说清楚它去哪了。 */
+export function doneText(candidate: Pick<CandidateItem, 'name' | 'status' | 'row_count'>): string {
+  const done = DONE[candidate.status] ?? '已处理'
+  return `「${candidate.name}」${done}，提出它的 ${candidate.row_count.toLocaleString()} 行解读一起改好了`
 }

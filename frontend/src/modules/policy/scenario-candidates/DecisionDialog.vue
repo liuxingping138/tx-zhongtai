@@ -20,7 +20,7 @@ const props = defineProps<{
   mode: DecisionMode | null
   candidate: CandidateDetail
   context: CandidateContext | null
-  /** 从「相似的已有场景」点「合并到这里」进来时预选的目标 */
+  /** 点「合并到这里」、或这一行显示着 AI 认为是同一个 / 名称很像的场景时，预选的目标 */
   presetTarget?: string[] | null
 }>()
 const emit = defineEmits<{ close: []; done: [row: CandidateItem] }>()
@@ -63,7 +63,7 @@ watch(() => props.mode, (mode) => {
   reason.value = REJECT_REASONS[0] ?? ''
   note.value = ''
   error.value = ''
-})
+}, { immediate: true })
 watch(picked, (path) => {
   if (!path) return
   target.value = scenarioNames(path)
