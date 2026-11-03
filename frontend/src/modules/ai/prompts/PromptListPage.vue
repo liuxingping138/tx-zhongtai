@@ -175,7 +175,7 @@ function create(): void {
       >
         <el-table-column
           label="模板名称"
-          min-width="190"
+          min-width="210"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -221,7 +221,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="上线状态"
-          min-width="188"
+          min-width="180"
         >
           <template #default="{ row }">
             <!-- 有改动没上线：一行写完，改了什么放悬停提示，「看改动」直接打开逐行对比。 -->
@@ -244,7 +244,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="样本试跑"
-          min-width="178"
+          min-width="170"
         >
           <template #default="{ row }">
             <span
@@ -256,7 +256,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="输出字段"
-          width="72"
+          width="64"
           align="right"
         >
           <template #default="{ row }">
@@ -265,7 +265,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="模型"
-          min-width="150"
+          min-width="128"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -275,12 +275,12 @@ function create(): void {
         <el-table-column
           prop="updated_by_name"
           label="更新人"
-          width="92"
+          width="100"
           show-overflow-tooltip
         />
         <el-table-column
           label="更新时间"
-          width="96"
+          width="108"
         >
           <template #default="{ row }">
             <span
