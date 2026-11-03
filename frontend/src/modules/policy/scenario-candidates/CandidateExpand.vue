@@ -279,9 +279,15 @@ const industries = computed(() => {
   vertical-align: baseline;
 }
 
+/* 条数一列对齐，理由折行时第二行和第一行的字对齐，不顶到最左 */
+.expand__count {
+  display: flex;
+  gap: var(--zt-space-2);
+}
+
 .expand__count span {
-  display: inline-block;
-  min-width: 64px;
+  flex-shrink: 0;
+  min-width: 56px;
   color: var(--zt-ink-500);
 }
 
