@@ -29,13 +29,12 @@ function now(): string {
 }
 
 /**
- * 一段对话的状态：消息列表、是否在回答、最近一次的模型与用量、多轮对话接续用的 response_id。
+ * 试发的状态：消息列表、是否在回答、最近一次的模型与用量。
  * 事件协议见后端 app/application/asking.py。
  */
 export function useAnswerStream() {
   const messages = ref<ChatMessage[]>([])
   const running = ref(false)
-  const responseId = ref<string | null>(null)
   const stats = reactive<StreamStats>({ model: null, thinking: false, usage: { input: 0, output: 0, search: 0 } })
   let controller: AbortController | null = null
 
@@ -51,7 +50,7 @@ export function useAnswerStream() {
     running.value = true
     controller = new AbortController()
     try {
-      const target = { user, reply, stats, setResponseId: (id: string) => { responseId.value = id } }
+      const target = { user, reply, stats }
       await postEventStream(path, body, event => applyStreamEvent(target, event), controller.signal)
       if (!reply.text && !reply.error) reply.error = '模型没有返回内容，请稍后重试'
     } catch (error) {
@@ -70,10 +69,9 @@ export function useAnswerStream() {
   function clear(): void {
     stop()
     messages.value = []
-    responseId.value = null
     stats.model = null
     stats.usage = { input: 0, output: 0, search: 0 }
   }
 
-  return { messages, running, responseId, stats, cost, send, stop, clear }
+  return { messages, running, stats, cost, send, stop, clear }
 }

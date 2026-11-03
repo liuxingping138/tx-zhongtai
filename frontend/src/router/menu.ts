@@ -17,7 +17,6 @@ export const ROUTE_BY_NAME: Record<string, string> = {
   'policy-scenario-candidates': '/policy/scenario-candidates',
   'ai-prompts': '/ai/prompts',
   'ai-batch-runs': '/ai/batch-runs',
-  'ai-chat': '/ai/chat',
   'ai-models': '/ai/models',
   'ai-billing': '/ai/billing',
 }

@@ -3,16 +3,15 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from platform_common.actors import Actor
-from platform_common.http_utils import success_json
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas import AskBody, ChatBody, sse_response
+from app.api.schemas import AskBody, sse_response
 from app.api.security import CategoryAccess, SecurityClass, classified, get_category_access, require_ai_permission
 from app.application import asking, billing
 from app.core.database import get_db_session
-from app.domain.models import CALL_CHAT, CALL_TRIAL
+from app.domain.models import CALL_TRIAL
 from app.domain.templating import split_fields
 
 router = APIRouter(prefix="/api/v1/ai", tags=["ai-stream"])
@@ -46,33 +45,3 @@ async def ask(
             on_done=lambda tally: billing.record_call(CALL_TRIAL, model, tally, actor),
         )
     )
-
-
-@router.post("/stream/chat")
-@classified(SecurityClass.RESOURCE_AUTHORIZED)
-async def chat(
-    body: ChatBody,
-    session: AsyncSession = Depends(get_db_session, scope="function"),
-    actor: Actor = Depends(require_ai_permission("ai.chat", "chat")),
-) -> StreamingResponse:
-    """多轮对话：上下文由模型服务端按 previous_response_id 保存，本服务不存对话内容。"""
-
-    model, message = await asking.prepare_chat(session, body.model_id, body.message)
-    return sse_response(
-        asking.stream_answer(
-            model,
-            message,
-            thinking=body.thinking,
-            previous_response_id=body.previous_response_id,
-            on_done=lambda tally: billing.record_call(CALL_CHAT, model, tally, actor),
-        )
-    )
-
-
-@router.get("/chat/models")
-@classified(SecurityClass.RESOURCE_AUTHORIZED)
-async def chat_models(
-    session: AsyncSession = Depends(get_db_session, scope="function"),
-    _: Actor = Depends(require_ai_permission("ai.chat", "chat")),
-) -> JSONResponse:
-    return success_json(await asking.available_models(session))

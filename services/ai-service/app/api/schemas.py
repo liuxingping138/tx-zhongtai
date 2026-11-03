@@ -87,13 +87,6 @@ class AskBody(_Body):
     code_table: str | None = Field(default=None, max_length=32)
 
 
-class ChatBody(_Body):
-    message: str = Field(max_length=200_000)
-    model_id: str = Field(max_length=100)
-    thinking: bool = False
-    previous_response_id: str | None = Field(default=None, max_length=200)
-
-
 class SampleRunBody(_Body):
     thinking: bool = False
     limit: int = Field(default=10, ge=1, le=50)

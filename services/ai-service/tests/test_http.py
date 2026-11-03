@@ -19,7 +19,7 @@ from app.domain.categories import FULL_ACCESS
 from app.main import app
 from app.repositories import batch_runs as run_repo
 from app.repositories import prompts as prompt_repo
-from tests.helpers import ACTOR, PROMPT_ID, RUN_ID, FakeSession, fake_stream, noop, sample_models, template, xlsx
+from tests.helpers import ACTOR, PROMPT_ID, RUN_ID, FakeSession, fake_stream, noop, template, xlsx
 
 
 async def _db() -> Any:
@@ -80,9 +80,9 @@ def test_download_sets_utf8_filename(client: TestClient, monkeypatch: pytest.Mon
     assert client.get(f"/api/v1/ai/batch-runs/{RUN_ID}/files/other").status_code == 422
 
 
-def test_chat_streams_server_sent_events(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_trial_streams_server_sent_events(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(asking, "stream_responses", fake_stream([{"text": "你好"}]))
-    response = client.post("/api/v1/ai/stream/chat", json={"message": "hi", "model_id": "baidu-deepseek-v3.2"})
+    response = client.post("/api/v1/ai/stream/ask", json={"content": "hi", "model_id": "baidu-deepseek-v3.2"})
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
     assert response.headers["x-accel-buffering"] == "no"
@@ -90,7 +90,7 @@ def test_chat_streams_server_sent_events(client: TestClient, monkeypatch: pytest
 
 
 def test_invalid_requests_fail_before_streaming(client: TestClient) -> None:
-    bad_model = client.post("/api/v1/ai/stream/chat", json={"message": "hi", "model_id": "nope"})
+    bad_model = client.post("/api/v1/ai/stream/ask", json={"content": "hi", "model_id": "nope"})
     assert bad_model.status_code == 422 and "未知模型" in bad_model.json()["message"]
     empty = client.post("/api/v1/ai/stream/ask", json={"content": " ", "model_id": "baidu-deepseek-v3.2"})
     assert empty.status_code == 422
@@ -145,7 +145,6 @@ def test_batch_routes_delegate_to_application(client: TestClient, monkeypatch: p
         "retry_run",
         "delete_run",
     ]
-    assert len(client.get("/api/v1/ai/chat/models").json()["data"]) == len(sample_models())
 
 
 def test_prompt_write_routes(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -164,7 +163,7 @@ def test_prompt_write_routes(client: TestClient, monkeypatch: pytest.MonkeyPatch
     assert client.delete(f"/api/v1/ai/prompts/{PROMPT_ID}").status_code == 200
 
 
-def test_chat_and_trial_hand_their_usage_to_billing(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_trial_hands_its_usage_to_billing(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     recorded: list[tuple[str, str, dict[str, int]]] = []
 
     async def record(kind: str, model: Any, tally: billing.CallTally, actor: Any) -> None:
@@ -173,10 +172,9 @@ def test_chat_and_trial_hand_their_usage_to_billing(client: TestClient, monkeypa
     usage = {"input_tokens": 12, "output_tokens": 3}
     monkeypatch.setattr(billing, "record_call", record)
     monkeypatch.setattr(asking, "stream_responses", fake_stream([{"text": "你好"}, {"usage": usage}]))
-    chat = client.post("/api/v1/ai/stream/chat", json={"message": "hi", "model_id": "baidu-deepseek-v3.2"})
     trial = client.post("/api/v1/ai/stream/ask", json={"content": "问", "model_id": "baidu-deepseek-v3.2"})
-    assert chat.text.endswith("data: [DONE]\n\n") and trial.status_code == 200
-    assert recorded == [("chat", "baidu-deepseek-v3.2", usage), ("trial", "baidu-deepseek-v3.2", usage)]
+    assert trial.text.endswith("data: [DONE]\n\n")
+    assert recorded == [("trial", "baidu-deepseek-v3.2", usage)]
 
 
 def test_billing_route_needs_both_dates(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:

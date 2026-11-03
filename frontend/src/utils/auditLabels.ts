@@ -23,7 +23,6 @@ export const MODULE_LABELS: Record<string, string> = {
   ai: 'AI提问',
   'ai.prompts': '提示词模板',
   'ai.batch_runs': '批量任务',
-  'ai.chat': '多轮对话',
   'ai.models': '模型配置',
   'ai.billing': '费用账单',
   'ai.releases': '模板上线',

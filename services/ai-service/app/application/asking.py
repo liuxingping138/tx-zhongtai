@@ -151,7 +151,6 @@ async def stream_answer(
     message: str,
     *,
     thinking: bool,
-    previous_response_id: str | None = None,
     trial_fields: list[str] | None = None,
     on_done: Callable[[CallTally], Awaitable[None]] | None = None,
 ) -> AsyncIterator[str]:
@@ -166,7 +165,7 @@ async def stream_answer(
     if trial_fields is not None:
         yield _sse({"prompt": message})
     yield _sse({"model": model_info(model)})
-    body = build_body(model, message, previous_response_id=previous_response_id, thinking=thinking)
+    body = build_body(model, message, thinking=thinking)
     tally = CallTally()
     parts: list[str] = []
     failed = False
@@ -198,7 +197,3 @@ def _background(work: Awaitable[None]) -> None:
     task = asyncio.ensure_future(work)
     _pending.add(task)
     task.add_done_callback(_pending.discard)
-
-
-async def prepare_chat(session: AsyncSession, model_id: str, message: str) -> tuple[LlmModel, str]:
-    return await resolve_model(session, model_id), _check_message(message)

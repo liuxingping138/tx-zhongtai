@@ -5,7 +5,6 @@ export interface StreamTarget {
   user: { text: string }
   reply: { text: string; reasoning: string; tip: string; error: string; parsed?: Record<string, string>[] | null }
   stats: { model: AiModel | null; usage: Usage }
-  setResponseId: (id: string) => void
 }
 
 type Handler = (target: StreamTarget, value: unknown) => void
@@ -33,7 +32,6 @@ const HANDLERS: Record<string, { type: 'string' | 'object'; apply: Handler }> = 
   tool_event: { type: 'object', apply: applyTool },
   usage: { type: 'object', apply: applyUsage },
   error: { type: 'string', apply: (t, v) => { t.reply.error = v as string } },
-  response_id: { type: 'string', apply: (t, v) => t.setResponseId(v as string) },
 }
 
 export function applyStreamEvent(target: StreamTarget, event: Record<string, unknown>): void {

@@ -59,7 +59,6 @@ def test_extract_fields_returns_one_empty_row_when_unparseable() -> None:
 def test_build_body_controls_thinking_only_where_supported() -> None:
     ark, baidu = (to_model(row) for row in sample_models())
     assert build_body(baidu, "hi", thinking=False)["thinking"] == {"type": "disabled"}
-    assert build_body(baidu, "hi", thinking=True, previous_response_id="resp_1")["previous_response_id"] == "resp_1"
     assert "service_tier" not in build_body(baidu, "hi") and "reasoning" not in build_body(baidu, "hi")
     ark_body = build_body(ark, "hi", thinking=False)
     assert ark_body["thinking"] == {"type": "enabled"} and ark_body["tools"][0]["type"] == "web_search"

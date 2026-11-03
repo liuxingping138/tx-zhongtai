@@ -45,13 +45,12 @@ def test_retired_resources_are_not_in_the_catalog() -> None:
     assert not {spec.resource_code for spec in MENU_SPECS if spec.resource_code} & set(RETIRED_RESOURCE_CODES)
 
 
-def test_ai_module_has_five_pages_three_template_categories_and_release_control() -> None:
+def test_ai_module_has_four_pages_three_template_categories_and_release_control() -> None:
     by_code = {spec.code: spec for spec in RESOURCE_SPECS}
     assert by_code["ai"].node_type == "directory" and by_code["ai"].parent_code is None
     assert [code for code, spec in by_code.items() if spec.parent_code == "ai"] == [
         "ai.prompts",
         "ai.batch_runs",
-        "ai.chat",
         "ai.models",
         "ai.category.policy",
         "ai.category.customer",
@@ -60,7 +59,7 @@ def test_ai_module_has_five_pages_three_template_categories_and_release_control(
         "ai.billing",
     ]
     routes = {spec.route_name for spec in MENU_SPECS if spec.parent_code == "menu.ai"}
-    assert routes == {"ai-prompts", "ai-batch-runs", "ai-chat", "ai-models", "ai-billing"}
+    assert routes == {"ai-prompts", "ai-batch-runs", "ai-models", "ai-billing"}
 
 
 def test_template_category_needs_full_to_edit_and_has_no_menu() -> None:
@@ -79,7 +78,6 @@ def test_ai_actions_that_spend_money_need_the_right_tier() -> None:
     assert levels[("ai.batch_runs", "run")] == "FULL"
     # 模型配置决定单价和调用参数，改它等于改所有人的花费口径。
     assert levels[("ai.models", "update")] == "FULL"
-    assert levels[("ai.chat", "chat")] == "READ"
     # 上线让模板进定时任务按真实数据花钱，必须是完整档，且不挂菜单（按钮在提问配置页）。
     assert levels[("ai.releases", "publish")] == "FULL"
     assert "ai.releases" not in {spec.resource_code for spec in MENU_SPECS}

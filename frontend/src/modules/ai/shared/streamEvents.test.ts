@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import type { AiModel } from '@/api/ai'
 import { applyStreamEvent, type StreamTarget } from './streamEvents'
@@ -8,12 +8,11 @@ function target(): StreamTarget {
     user: { text: '原文' },
     reply: { text: '', reasoning: '', tip: '', error: '' },
     stats: { model: null, usage: { input: 0, output: 0, search: 0 } },
-    setResponseId: vi.fn(),
   }
 }
 
 describe('流式事件', () => {
-  it('依次处理实际提示词、模型、思考、正文、联网、用量和 response_id', () => {
+  it('依次处理实际提示词、模型、思考、正文、联网和用量，response_id 不用（多轮对话已删）', () => {
     const t = target()
     const model = { id: 'm', name: '模型' } as AiModel
     for (const event of [
@@ -31,7 +30,6 @@ describe('流式事件', () => {
     expect(t.stats.model).toBe(model)
     expect(t.reply).toMatchObject({ text: '你好', reasoning: '想', tip: '已发起联网搜索' })
     expect(t.stats.usage).toEqual({ input: 10, output: 5, search: 2 })
-    expect(t.setResponseId).toHaveBeenCalledWith('resp_1')
   })
 
   it('usage 带权威联网次数时覆盖事件计数；错误和未知事件', () => {

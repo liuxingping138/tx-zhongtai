@@ -1,5 +1,5 @@
 import { computed, type Component } from 'vue'
-import { ChatDotRound, Collection, Connection, Cpu, DataAnalysis, EditPen, Files, Finished, Key, Link, MapLocation, Menu, Money, Monitor, PriceTag, Reading, Tickets, Timer, User, UserFilled, Unlock } from '@element-plus/icons-vue'
+import { Collection, Connection, Cpu, DataAnalysis, EditPen, Files, Finished, Key, Link, MapLocation, Menu, Money, Monitor, PriceTag, Reading, Tickets, Timer, User, UserFilled, Unlock } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { pathForRouteName } from '@/router/menu'
 
@@ -25,7 +25,6 @@ export const ENTRY_DESCRIPTIONS: Record<string, string> = {
   '/system/audit': '追溯操作与权限变更',
   '/ai/prompts': '写提示词、用样本试跑，管理员上线',
   '/ai/batch-runs': '用上线的模板跑这次上传的 Excel',
-  '/ai/chat': '与大模型连续对话',
   '/ai/models': '维护可选模型、接入点和单价',
   '/ai/billing': '按日期、模型和用途看所有模型调用花了多少',
 }
@@ -49,7 +48,6 @@ const entryIcons: Record<string, Component> = {
   '/system/scheduler': Timer,
   '/ai/prompts': EditPen,
   '/ai/batch-runs': Files,
-  '/ai/chat': ChatDotRound,
   '/ai/models': Cpu,
   '/ai/billing': Money,
 }

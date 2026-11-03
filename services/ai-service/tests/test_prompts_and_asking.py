@@ -265,18 +265,16 @@ async def test_models_require_configured_keys(monkeypatch: pytest.MonkeyPatch) -
     available = {item["id"]: item["available"] for item in await asking.available_models(FakeSession())}  # type: ignore[arg-type]
     assert available["deepseek-v4-flash"] is True and available["baidu-deepseek-v3.2"] is False
     with pytest.raises(ApiError) as missing:
-        await asking.prepare_chat(FakeSession(), "baidu-deepseek-v3.2", "hi")
+        await asking.resolve_model(FakeSession(), "baidu-deepseek-v3.2")  # type: ignore[arg-type]
     assert missing.value.http_status == 503
     with pytest.raises(ApiError, match="未知模型"):
-        await asking.prepare_chat(FakeSession(), "nope", "hi")
-    with pytest.raises(ApiError, match="不能为空"):
-        await asking.prepare_chat(FakeSession(), "deepseek-v4-flash", "  ")
+        await asking.resolve_model(FakeSession(), "nope")  # type: ignore[arg-type]
 
 
 async def test_stream_answer_echoes_prompt_then_model_events_then_done(monkeypatch: pytest.MonkeyPatch) -> None:
     _with_keys(monkeypatch, ark="k")
     monkeypatch.setattr(asking, "stream_responses", fake_stream([{"text": "答"}, {"response_id": "r1"}]))
-    model, message = await asking.prepare_chat(FakeSession(), "deepseek-v4-flash", "问")
+    model, message = await asking.resolve_model(FakeSession(), "deepseek-v4-flash"), "问"  # type: ignore[arg-type]
     chunks = [chunk async for chunk in asking.stream_answer(model, message, thinking=False, trial_fields=[])]
     assert chunks[0] == 'data: {"prompt": "问"}\n\n'
     assert chunks[1].startswith('data: {"model": {"id": "deepseek-v4-flash"')
@@ -291,7 +289,7 @@ async def test_cut_off_answers_are_billed_by_estimate_in_the_background(monkeypa
     _with_keys(monkeypatch, ark="k")
     events = [{"reasoning": "想" * 10}, {"text": "答" * 20}, {"text": "还没完"}]
     monkeypatch.setattr(asking, "stream_responses", fake_stream(events))
-    model, message = await asking.prepare_chat(FakeSession(), "deepseek-v4-flash", "问" * 100)
+    model, message = await asking.resolve_model(FakeSession(), "deepseek-v4-flash"), "问" * 100  # type: ignore[arg-type]
     recorded: list[Any] = []
 
     async def record(tally: Any) -> None:
@@ -332,7 +330,7 @@ async def test_trial_answer_is_parsed_by_the_output_fields(monkeypatch: pytest.M
     """试发答完按输出字段解析，和批量任务同一套规则：页面不用自己猜这一行能不能解析。"""
 
     _with_keys(monkeypatch, ark="k")
-    model, message = await asking.prepare_chat(FakeSession(), "deepseek-v4-flash", "问")
+    model, message = await asking.resolve_model(FakeSession(), "deepseek-v4-flash"), "问"  # type: ignore[arg-type]
     answers = {
         '[{"行业": "制造"}]': 'data: {"parsed": [{"行业": "制造"}]}\n\n',
         "说不清": 'data: {"parsed": null}\n\n',
@@ -341,7 +339,7 @@ async def test_trial_answer_is_parsed_by_the_output_fields(monkeypatch: pytest.M
         monkeypatch.setattr(asking, "stream_responses", fake_stream([{"text": text}]))
         chunks = [chunk async for chunk in asking.stream_answer(model, message, thinking=False, trial_fields=["行业"])]
         assert chunks[-2:] == [parsed, "data: [DONE]\n\n"]
-    # 出错的回答没有解析的意义；对话不传输出字段，也不解析。
+    # 出错的回答没有解析的意义；不传输出字段，也不解析。
     monkeypatch.setattr(asking, "stream_responses", fake_stream([{"text": "半"}, {"error": "超时"}]))
     chunks = [chunk async for chunk in asking.stream_answer(model, message, thinking=False, trial_fields=["行业"])]
     assert not any('"parsed"' in chunk for chunk in chunks)

@@ -57,7 +57,7 @@ describe('postEventStream', () => {
       return Promise.resolve(new Response(body(['data: {"text":"ok"}\n\n', 'data: [DONE]\n\n'])))
     }))
     const events: unknown[] = []
-    await postEventStream('/ai/stream/chat', { message: 'hi' }, e => events.push(e))
+    await postEventStream('/ai/stream/ask', { message: 'hi' }, e => events.push(e))
     expect(calls).toEqual([{ auth: 'Bearer old', csrf: 'csrf-1' }, { auth: 'Bearer new', csrf: 'csrf-1' }])
     expect(session.refreshes).toBe(1)
     expect(events).toEqual([{ text: 'ok' }])
@@ -65,15 +65,15 @@ describe('postEventStream', () => {
 
   it('把后端的中文错误还原成 ApiRequestError，非 JSON 时按状态码给提示', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify({ code: 'VALIDATION_ERROR', message: '未知模型：x' }), { status: 422 }))))
-    await expect(postEventStream('/ai/stream/chat', {}, () => undefined)).rejects.toMatchObject({ status: 422, message: '未知模型：x' })
+    await expect(postEventStream('/ai/stream/ask', {}, () => undefined)).rejects.toMatchObject({ status: 422, message: '未知模型：x' })
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response('<html>', { status: 503 }))))
-    await expect(postEventStream('/ai/stream/chat', {}, () => undefined)).rejects.toMatchObject({ status: 503, message: '服务暂时不可用，请稍后重试' })
+    await expect(postEventStream('/ai/stream/ask', {}, () => undefined)).rejects.toMatchObject({ status: 503, message: '服务暂时不可用，请稍后重试' })
   })
 
   it('半截回答不当完整回答，断网不露英文报错', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(body(['data: {"text":"一半"}\n\n'])))))
-    await expect(postEventStream('/ai/stream/chat', {}, () => undefined)).rejects.toMatchObject({ message: '回答中途断了，请重试' })
+    await expect(postEventStream('/ai/stream/ask', {}, () => undefined)).rejects.toMatchObject({ message: '回答中途断了，请重试' })
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))))
-    await expect(postEventStream('/ai/stream/chat', {}, () => undefined)).rejects.toMatchObject({ message: '网络连接中断，请检查网络后重试' })
+    await expect(postEventStream('/ai/stream/ask', {}, () => undefined)).rejects.toMatchObject({ message: '网络连接中断，请检查网络后重试' })
   })
 })

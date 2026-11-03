@@ -349,10 +349,6 @@ export function deleteBatchRun(id: string): Promise<null> {
   return request(http.delete(`${BASE}/batch-runs/${id}`))
 }
 
-export function chatModels(): Promise<AiModel[]> {
-  return request(http.get(`${BASE}/chat/models`))
-}
-
 /** 「模型配置」页的一行。单价是文本，没配的档位为空串；枚举字段是代码值，页面显示前换成中文。 */
 export interface ModelConfig {
   id: string

@@ -221,7 +221,8 @@ class BatchRun(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, comment="删除时间")
 
 
-# 试发、多轮对话一次调用记一行（批量任务的费用记在 BatchRun 上），费用账单把两边合起来。
+# 试发一次调用记一行（批量任务的费用记在 BatchRun 上），费用账单把两边合起来。
+# chat 是已下线的多轮对话（2026-11-03 删）留下的记录，花掉的钱照样进账单。
 CALL_TRIAL = "trial"
 CALL_CHAT = "chat"
 

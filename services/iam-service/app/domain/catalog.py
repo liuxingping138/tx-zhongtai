@@ -43,7 +43,10 @@ class MenuSpec:
 
 # 已下线的资源：同步清单时连同它的菜单、授权和动作一起清掉，否则角色权限页还会列出已不存在的模块。
 # 只放真正下线的编码；改名用迁移原地改，不能写在这里，否则授权会被删掉。
-RETIRED_RESOURCE_CODES: tuple[str, ...] = ()
+RETIRED_RESOURCE_CODES: tuple[str, ...] = (
+    # 多轮对话：上线以来只被调过两次，和模板、打标主线无关（2026-11-03 删）
+    "ai.chat",
+)
 # 已下线的动作（资源还在）：同步清单时删掉，角色权限页不再列出。
 RETIRED_ACTIONS: tuple[tuple[str, str], ...] = (
     # 新增场景改成在「新增场景审核」里按场景决定，解读列表不再有「同步新增场景」
@@ -80,7 +83,6 @@ RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("ai", "AI提问", "ai-service", NodeType.DIRECTORY, True, 60),
     ResourceSpec("ai.prompts", "提示词模板", "ai-service", NodeType.RESOURCE, True, 61, "ai"),
     ResourceSpec("ai.batch_runs", "批量任务", "ai-service", NodeType.RESOURCE, True, 62, "ai"),
-    ResourceSpec("ai.chat", "多轮对话", "ai-service", NodeType.RESOURCE, True, 63, "ai"),
     ResourceSpec("ai.models", "模型配置", "ai-service", NodeType.RESOURCE, True, 64, "ai"),
     # 模板类型：不是菜单，是数据范围。查看档能看到这类模板和批量历史，完整档才能新建、修改、试发、运行。
     ResourceSpec("ai.category.policy", "政策类模板", "ai-service", NodeType.RESOURCE, True, 65, "ai"),
@@ -172,7 +174,6 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ActionSpec("ai.batch_runs", "run", GrantLevel.FULL),
     ActionSpec("ai.batch_runs", "stop", GrantLevel.FULL),
     ActionSpec("ai.batch_runs", "delete", GrantLevel.FULL),
-    ActionSpec("ai.chat", "chat", GrantLevel.READ),
     ActionSpec("ai.models", "list", GrantLevel.READ),
     ActionSpec("ai.models", "create", GrantLevel.FULL),
     ActionSpec("ai.models", "update", GrantLevel.FULL),
@@ -285,7 +286,6 @@ MENU_SPECS: tuple[MenuSpec, ...] = (
     MenuSpec("menu.ai", "AI提问", 60, enabled=True),
     MenuSpec("menu.ai.prompts", "提示词模板", 61, "ai-prompts", "ai.prompts", "menu.ai", enabled=True),
     MenuSpec("menu.ai.batch_runs", "批量任务", 62, "ai-batch-runs", "ai.batch_runs", "menu.ai", enabled=True),
-    MenuSpec("menu.ai.chat", "多轮对话", 63, "ai-chat", "ai.chat", "menu.ai", enabled=True),
     MenuSpec("menu.ai.models", "模型配置", 64, "ai-models", "ai.models", "menu.ai", enabled=True),
     MenuSpec("menu.ai.billing", "费用账单", 65, "ai-billing", "ai.billing", "menu.ai", enabled=True),
 )

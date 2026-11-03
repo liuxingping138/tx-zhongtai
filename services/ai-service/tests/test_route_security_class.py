@@ -4,7 +4,7 @@ from platform_common.route_audit import audit_routes, iter_api_routes, permissio
 
 from app.main import app
 
-# 试发和对话只调用模型、不改数据，但会产生费用，挂的是 ask / chat 动作而不是只读动作。
+# 试发只调用模型、不改数据，但会产生费用，挂的是 ask 动作而不是只读动作。
 READ_ACTIONS = {"list", "read", "export"}
 
 
@@ -41,5 +41,5 @@ def test_write_routes_require_write_actions() -> None:
 def test_stream_routes_live_under_the_unbuffered_prefix() -> None:
     """网关只对 /api/v1/ai/stream 关掉缓冲和压缩，流式接口放错前缀就会攒满才下发。"""
 
-    streaming = {route.path for route in iter_api_routes(app) if route.path.endswith(("/ask", "/chat"))}
-    assert streaming == {"/api/v1/ai/stream/ask", "/api/v1/ai/stream/chat"}
+    streaming = {route.path for route in iter_api_routes(app) if route.path.endswith("/ask")}
+    assert streaming == {"/api/v1/ai/stream/ask"}

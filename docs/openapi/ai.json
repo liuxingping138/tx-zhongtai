@@ -1909,65 +1909,6 @@
         }
       }
     },
-    "/api/v1/ai/stream/chat": {
-      "post": {
-        "tags": [
-          "ai-stream"
-        ],
-        "summary": "Chat",
-        "description": "多轮对话：上下文由模型服务端按 previous_response_id 保存，本服务不存对话内容。",
-        "operationId": "chat_api_v1_ai_stream_chat_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ChatBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ai/chat/models": {
-      "get": {
-        "tags": [
-          "ai-stream"
-        ],
-        "summary": "Chat Models",
-        "operationId": "chat_models_api_v1_ai_chat_models_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
     "/internal/v1/online-templates": {
       "get": {
         "tags": [
@@ -2234,44 +2175,6 @@
         ],
         "title": "AskBody",
         "description": "row：测试样本第几条数据（从 0 数）；output_fields：编辑页上现在的输出字段，答完按它解析。"
-      },
-      "ChatBody": {
-        "properties": {
-          "message": {
-            "type": "string",
-            "maxLength": 200000,
-            "title": "Message"
-          },
-          "model_id": {
-            "type": "string",
-            "maxLength": 100,
-            "title": "Model Id"
-          },
-          "thinking": {
-            "type": "boolean",
-            "title": "Thinking",
-            "default": false
-          },
-          "previous_response_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 200
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Previous Response Id"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "message",
-          "model_id"
-        ],
-        "title": "ChatBody"
       },
       "HTTPValidationError": {
         "properties": {

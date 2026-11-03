@@ -21,7 +21,7 @@ import {
 import { costOption } from './billingChart'
 import '../shared/ai.css'
 
-/** 所有模型调用的花费：批量任务、定时打标、样本试跑、试发、多轮对话。改日期重新取数，模型和用途在页面上直接筛。 */
+/** 所有模型调用的花费：批量任务、定时打标、样本试跑、试发，以及已下线的多轮对话留下的记录。改日期重新取数，模型和用途在页面上直接筛。 */
 const route = useRoute()
 const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' })
 const PRESETS: { value: RangePreset; label: string }[] = [
@@ -304,7 +304,7 @@ onMounted(load)
         </el-table-column>
       </el-table>
       <p class="billing__foot">
-        次数：批量任务、定时任务和样本试跑一个任务算一次（一个任务里有很多行），试发和多轮对话每问一次算一次。试发、多轮对话从 2026-10-22 起记账，之前的没有记录。
+        次数：批量任务、定时任务和样本试跑一个任务算一次（一个任务里有很多行），试发每问一次算一次（已下线的多轮对话也是），从 2026-10-22 起记账，之前的没有记录。
       </p>
     </section>
   </div>

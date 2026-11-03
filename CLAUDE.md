@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 政策三张表（信源、基础标签、解读）与码表三张表（政策类型、行业场景、省市区编码）已接入，
 爬虫监测已接入（只读统计页，数据来自外部爬虫库采集总表的按天聚合，按网站统计），
 爬虫配置统计已接入（按规则表把信源标成已爬，按周按省统计上线栏目数），
-AI提问已接入（独立的 ai-service：提示词模板、样本试跑与上线、按 Excel 逐行跑的批量任务、多轮对话，从旧 Django 项目 difyapi/chat_web 迁来）。
+AI提问已接入（独立的 ai-service：提示词模板、样本试跑与上线、按 Excel 逐行跑的批量任务，从旧 Django 项目 difyapi/chat_web 迁来）。
 **客户、招投标仅有占位目录**，未开发——不要为它们提前暴露无功能入口或做过度抽象。
 其余文档按 设计决策 / 操作手册 分类，索引见 `docs/README.md`。文档只写与现有代码一致的现状，过时内容直接删除，历史留在 git 里。
 
@@ -74,7 +74,7 @@ services/
   audit-service/       审计写入、查询、到期清理
   policy-service/      政策：信源、基础标签、解读、爬虫监测
   codebook-service/    码表：政策类型、行业场景、省市区编码
-  ai-service/          AI提问：提示词模板、批量任务、多轮对话；Compose 里 ai-worker 共用此镜像执行批量任务
+  ai-service/          AI提问：提示词模板、批量任务；Compose 里 ai-worker 共用此镜像执行批量任务
   customer-service/    占位，仅 .gitkeep
   tender-service/      占位，仅 .gitkeep
 packages/platform-common/   跨服务公共包（见下）
@@ -210,9 +210,9 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
 - 模板附件和批量产物在 `ai-data` 卷（`/data/ai`），不在库里；业务备份脚本会一起打包
 - 旧打表系统的模板和批量历史用 `python -m app.cli.import_legacy <导出目录> [--update] [--dry-run]` 导入，保留原 ID，可重复跑；
   `--update` 用旧库最新内容覆盖：模板只覆盖导入后没在新系统里保存过的，任务除排队中、运行中的都覆盖。导出目录结构见 `app/application/legacy_import.py`
-- 对话和试发的内容不进审计，只记谁对哪个模板、哪个任务做了什么。多轮对话的上下文由模型服务端按 response_id 保存，本服务不存
+- 试发的内容不进审计，只记谁对哪个模板、哪个任务做了什么。多轮对话已删（资源 `ai.chat` 在 `RETIRED_RESOURCE_CODES`）
 - 费用账单（`ai.billing`，`/api/v1/ai/billing`）：批量任务、定时任务和样本试跑的费用在 `ai_batch_runs` 上（用途按 `source` 分成「批量任务」「样本试跑」，定时任务的用途是发起方名字，如「政策AI打标·类型判断」），
-  试发和多轮对话答完时在 `ai_call_usages` 记一行（不记内容，`app/application/billing.py`）。新增调模型的入口要么走批量任务，要么也记进 `ai_call_usages`，否则账单漏钱。
+  试发答完时在 `ai_call_usages` 记一行（不记内容，`app/application/billing.py`；`kind = chat` 的是已删的多轮对话留下的，账单里照样算）。新增调模型的入口要么走批量任务，要么也记进 `ai_call_usages`，否则账单漏钱。
   删除批量任务、删模板连带的样本试跑只打 `deleted_at`（用户定的：删了的钱照样算）：除账单外的查询都要带 `repositories.batch_runs.LIVE`
 
 ### 系统管理：给人分配角色即授权，个别人可再单独授权

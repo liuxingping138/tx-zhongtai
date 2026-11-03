@@ -135,9 +135,7 @@ def with_service_tier(model: LlmModel, tier: str) -> LlmModel:
     return replace(model, service_tier=tier)
 
 
-def build_body(
-    model: LlmModel, message: str, *, previous_response_id: str | None = None, thinking: bool = False
-) -> dict[str, Any]:
+def build_body(model: LlmModel, message: str, *, thinking: bool = False) -> dict[str, Any]:
     body: dict[str, Any] = {"model": model.model, "input": [{"role": "user", "content": message}], "stream": True}
     if model.service_tier:
         body["service_tier"] = model.service_tier
@@ -149,8 +147,6 @@ def build_body(
         body["thinking"] = {"type": model.thinking}
     if model.reasoning_effort:
         body["reasoning"] = {"effort": model.reasoning_effort}
-    if previous_response_id:
-        body["previous_response_id"] = previous_response_id
     return body
 
 

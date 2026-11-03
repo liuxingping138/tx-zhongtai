@@ -178,7 +178,7 @@ test('AI提问主流程：写模板 → 试发 → 样本试跑 → 上线 → �
   await expect(page.getByRole('link', { name: title })).toHaveCount(0)
 })
 
-test('批量任务不用等上线，能跑当前草稿；多轮对话能问能答', async ({ page }) => {
+test('批量任务不用等上线，能跑当前草稿', async ({ page }) => {
   test.skip(!currentAdminPassword(), '缺少 ADMIN_PASSWORD')
   test.setTimeout(120_000)
   const title = `e2e 草稿 ${Date.now()}`
@@ -209,18 +209,6 @@ test('批量任务不用等上线，能跑当前草稿；多轮对话能问能�
   await expect(task).toContainText('已完成', { timeout: 60_000 })
   await expect(task).toContainText('草稿 ')
 
-  await page.goto('/ai/chat')
-  await page.getByRole('textbox', { name: '输入问题' }).fill('你好')
-  await page.getByRole('button', { name: '发送' }).click()
-  await expect(page.getByRole('log')).toContainText('模拟回答', { timeout: 20_000 })
-  // 对话不保存：清空前先确认，取消就什么都不动。
-  await page.getByRole('button', { name: '新对话' }).click()
-  const confirm = page.getByRole('dialog', { name: '开始新对话？' })
-  await confirm.getByRole('button', { name: '取消' }).click()
-  await expect(page.getByRole('log')).toContainText('模拟回答')
-  await page.getByRole('button', { name: '新对话' }).click()
-  await confirm.getByRole('button', { name: '清空并开始' }).click()
-  await expect(page.getByRole('log')).not.toContainText('模拟回答')
 })
 
 test('新模板先传样本再写提示词：上传时顺便保存，码表三选一，变量说清换成什么', async ({ page }) => {

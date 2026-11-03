@@ -185,12 +185,6 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '批量任务', resource: 'ai.batch_runs' },
       },
       {
-        path: 'ai/chat',
-        name: 'ai-chat',
-        component: () => import('@/modules/ai/chat/ChatPage.vue'),
-        meta: { title: '多轮对话', resource: 'ai.chat' },
-      },
-      {
         path: 'ai/models',
         name: 'ai-models',
         component: () => import('@/modules/ai/models/ModelList.vue'),

@@ -287,10 +287,10 @@ def test_grant_changes_list_only_modules_whose_level_moved() -> None:
     after = {
         "policy.sources": ("信源管理", "EXPORT"),
         "ai.prompts": ("提示词模板", "FULL"),
-        "ai.chat": ("多轮对话", "READ"),
+        "ai.billing": ("费用账单", "READ"),
     }
     assert role_admin.grant_changes(before, after) == [
-        {"module": "多轮对话", "code": "ai.chat", "from": "NONE", "to": "READ"},
+        {"module": "费用账单", "code": "ai.billing", "from": "NONE", "to": "READ"},
         {"module": "信源管理", "code": "policy.sources", "from": "READ", "to": "EXPORT"},
     ]
     assert role_admin.grant_changes(before, {}) == [
