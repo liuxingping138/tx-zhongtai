@@ -11,12 +11,9 @@ export const EDITOR_DEFAULTS = { data_status: '待验证' }
 // 编码、唯一标识、关联主键这类对人没意义的放后面，留痕列最后。详情按下面的 EDITOR_GROUPS 分组展示。
 export const TABLE_COLUMNS: DataColumn[] = [
   { prop: 'policy_title', label: '政策原文名称', minWidth: 340, grow: 2 },
-  { prop: 'industry_l1', label: '一级行业', width: 120 },
-  { prop: 'industry_l2', label: '二级行业', width: 120 },
-  { prop: 'industry_l3', label: '三级行业', width: 120 },
-  { prop: 'scenario_l1_name', label: '一级场景名称', minWidth: 140 },
-  { prop: 'scenario_l2_name', label: '二级场景名称', minWidth: 140 },
-  { prop: 'scenario_l3_name', label: '三级场景名称', minWidth: 140 },
+  // 行业、场景各叠成一格：上面一级，下面浅色的二级 › 三级（2026-11-03：原来六列都被挤成截断的半句）
+  { prop: 'industry_l1', label: '行业', fullLabel: '一级行业，下面是二级 › 三级行业', minWidth: 200, stack: ['industry_l2', 'industry_l3'] },
+  { prop: 'scenario_l1_name', label: '场景', fullLabel: '一级场景，下面是二级 › 三级场景', minWidth: 200, grow: 1, stack: ['scenario_l2_name', 'scenario_l3_name'] },
   { prop: 'target_customers', label: '目标客户', fullLabel: '目标客户当前政策影响客户群', minWidth: 260, grow: 1, wrap: true },
   { prop: 'adapted_products', label: '适配产品', minWidth: 180 },
   { prop: 'purchase_reason', label: '采买理由', fullLabel: '目标客户采买理由', minWidth: 200 },

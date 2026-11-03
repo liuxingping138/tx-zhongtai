@@ -76,12 +76,17 @@ async function confirm() {
       :closable="false"
       show-icon
     />
-    <p
+    <!-- 和别的列表一样居中的空状态，不在大白框左上角放一行小字 -->
+    <el-empty
       v-else-if="!loading && !items.length"
       class="enrich__empty"
+      :image-size="64"
+      description="没有等确认的描述"
     >
-      没有等确认的描述。采纳进码表的新场景，要在任务调度里跑过「新增场景补描述」，AI 写好描述后才会出现在这里。
-    </p>
+      <p class="enrich__empty-hint">
+        采纳进码表的新场景，在任务调度里跑过「新增场景补描述」、AI 写好描述后会出现在这里。
+      </p>
+    </el-empty>
     <template v-else>
       <nav
         class="enrich__list"
@@ -175,8 +180,15 @@ async function confirm() {
 }
 
 .enrich__empty {
+  flex: 1;
+  align-self: center;
+}
+
+.enrich__empty-hint {
   margin: 0;
   color: var(--zt-ink-500);
+  font-size: 12px;
+  line-height: 1.7;
 }
 
 .enrich__list {

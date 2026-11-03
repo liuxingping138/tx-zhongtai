@@ -142,20 +142,15 @@ async function save(row: CandidateRow) {
       class="data-table"
     >
       <el-table-column
-        label="政策原文名称"
-        min-width="260"
+        label="政策"
+        min-width="300"
       >
         <template #default="{ row }">
           <div class="rows__title">
             <RouterLink :to="{ name: 'policy-interpretation-review', params: { id: row.id } }">
               {{ row.policy_title }}
             </RouterLink>
-            <p
-              v-if="row.remark"
-              class="rows__remark"
-            >
-              {{ row.remark }}
-            </p>
+            <span class="rows__sub">入库 {{ row.created_at.slice(0, 10) }}<template v-if="row.opportunity_type"> · {{ row.opportunity_type }}</template></span>
             <div
               v-if="editing === row.id"
               class="rows__edit"
@@ -181,38 +176,22 @@ async function save(row: CandidateRow) {
         </template>
       </el-table-column>
       <el-table-column
-        prop="industry"
-        label="行业"
-        min-width="160"
-        show-overflow-tooltip
-      />
-      <el-table-column
-        prop="created_at"
-        label="入库"
-        width="170"
-      />
-      <el-table-column
-        label="这一行的场景"
-        min-width="200"
-        show-overflow-tooltip
+        label="行业 · 场景"
+        min-width="260"
       >
         <template #default="{ row }">
-          {{ pathText([row.scenario_l1_name, row.scenario_l2_name, row.scenario_l3_name]) }}
+          <div
+            class="rows__place"
+            :title="`${row.industry}\n${pathText([row.scenario_l1_name, row.scenario_l2_name, row.scenario_l3_name])}`"
+          >
+            <span>{{ pathText(row.industry.split('/')) }}</span>
+            <span class="rows__sub">{{ pathText([row.scenario_l1_name, row.scenario_l2_name, row.scenario_l3_name]) }}<template v-if="row.scenario_state && row.scenario_state !== candidate?.status"> · {{ row.scenario_state }}</template></span>
+          </div>
         </template>
       </el-table-column>
       <el-table-column
-        prop="opportunity_type"
-        label="机会类型"
-        width="110"
-      />
-      <el-table-column
-        prop="scenario_state"
-        label="场景状态"
-        width="100"
-      />
-      <el-table-column
         label="操作"
-        width="90"
+        width="100"
       >
         <template #default="{ row }">
           <el-button
@@ -255,11 +234,16 @@ async function save(row: CandidateRow) {
   white-space: normal;
 }
 
-.rows__remark {
-  margin: 0;
+.rows__sub {
   color: var(--zt-ink-500);
   font-size: 12px;
   line-height: 18px;
+}
+
+.rows__place {
+  display: flex;
+  flex-direction: column;
+  white-space: normal;
 }
 
 .rows__edit {

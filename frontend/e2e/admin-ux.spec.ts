@@ -237,7 +237,8 @@ test('基础标签：按打标状态筛出来，勾选后重新打标，跳过�
   // 表里也有一列打标状态：哪条卡在哪一步，不用先筛选才知道。
   await expect(page.getByRole('row').filter({ hasText: '解读失败的政策' })).toContainText('解读失败')
   const retag = page.getByRole('button', { name: /^重新打标/ })
-  await expect(retag).toBeDisabled()
+  // 没勾选时不摆灰按钮，勾选了才出现
+  await expect(retag).toHaveCount(0)
   // 表头的全选框：样式化的可见替身，点它。
   await page.locator('.el-table__header .el-checkbox').click()
   await expect(retag).toHaveText('重新打标（2）')

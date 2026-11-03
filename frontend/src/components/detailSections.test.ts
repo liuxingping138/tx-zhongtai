@@ -27,6 +27,12 @@ describe('detail sections', () => {
     expect(field.column.time).toBe(true)
   })
 
+  it('列表里叠成一格的列（如「行业」），详情照样按各自的字段名一行一项', () => {
+    const stacked: DataColumn[] = [{ prop: 'industry', label: '行业', stack: ['industry_l2'] }]
+    const sections = buildDetailSections(stacked, [{ title: '行业', hint: '', fields: [{ key: 'industry', label: '一级行业' }, { key: 'industry_l2', label: '二级行业' }] }])
+    expect(sections[0]!.fields.map(field => field.column.label)).toEqual(['一级行业', '二级行业'])
+  })
+
   it('marks long editor fields and wrapping columns as full-width', () => {
     const [, content] = buildDetailSections(columns, groups)
     expect(content!.fields.map(field => field.wide)).toEqual([false, true])

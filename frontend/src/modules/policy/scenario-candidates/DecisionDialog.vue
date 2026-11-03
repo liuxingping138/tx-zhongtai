@@ -101,7 +101,6 @@ const effects = computed(() => {
     return [
       `${rows} 行解读都留着，场景状态标「已驳回」`,
       '以后 AI 再写这个说法自动驳回；可以在「已驳回」里改判',
-      '其中几条其实该归到别的场景：先在来源政策里逐条「改场景」，再驳回',
     ]
   }
   const renaming = props.mode === 'rename'

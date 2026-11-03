@@ -170,10 +170,13 @@ onMounted(() => {
       @update:page-size="query.page_size = $event"
       @change="load"
     >
-      <template #summary>
+      <!-- 顶部只留一句结论；「补充待确认」页签和待审无关，不显示 -->
+      <template
+        v-if="!enriching"
+        #summary
+      >
         <p class="candidates__summary">
           {{ summaryText(summary) }}
-          <span class="candidates__note">AI 从政策解读里写出来、码表里没有的场景，一行一个。看清新增场景级别、挂在哪、码表里有没有像它的，就在这一行决定；点名称展开看依据。决定一次，提出它的政策一起生效。</span>
         </p>
       </template>
       <template #actions>
@@ -291,12 +294,6 @@ onMounted(() => {
   margin: 0;
   font-size: 15px;
   line-height: 24px;
-}
-
-.candidates__note {
-  display: block;
-  color: var(--zt-ink-500);
-  font-size: 13px;
 }
 
 .candidates__min {

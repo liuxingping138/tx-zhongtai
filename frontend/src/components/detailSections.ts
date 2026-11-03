@@ -26,7 +26,9 @@ export function buildDetailSections(columns: readonly DataColumn[], groups: read
     title: group.title,
     fields: group.fields.map((field) => {
       grouped.add(field.key)
-      const column = byProp.get(field.key) ?? { prop: field.key, label: field.label }
+      // 列表里叠成一格的列（如「行业」），详情照样按各自的字段名一行一项
+      const found = byProp.get(field.key)
+      const column = found && !found.stack ? found : { prop: field.key, label: field.label }
       return { column, wide: Boolean(field.long || column.wrap) }
     }),
   }))

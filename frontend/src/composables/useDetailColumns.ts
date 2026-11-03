@@ -8,7 +8,8 @@ import type { EditorGroup } from '@/components/editorGroups'
  * 默认全部显示；用户在列设置里的选择由 ColumnPicker 记在浏览器里。
  */
 export function useDetailColumns(tableColumns: readonly DataColumn[], groups: readonly EditorGroup[]) {
-  const known = new Set(tableColumns.map(col => col.prop))
+  // 叠进别的列里显示的下级字段（stack）不再单独成列
+  const known = new Set(tableColumns.flatMap(col => [col.prop, ...(col.stack ?? [])]))
   const extra = groups
     .flatMap(group => group.fields)
     .filter(field => !known.has(field.key))

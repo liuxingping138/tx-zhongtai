@@ -9,6 +9,7 @@ import { buildDetailSections } from './detailSections'
 import DetailSections from './DetailSections.vue'
 import type { EditorGroup } from './editorGroups'
 import ListEmpty from './ListEmpty.vue'
+import { repeatSpans } from './rowSpans'
 const props = defineProps<{
   items: T[]; columns: readonly DataColumn[]; selected: string[]; titleKey: string; summaryKeys?: string[];
   canWrite: boolean; loading: boolean; filtered: boolean; detailTitle?: string;
@@ -18,6 +19,11 @@ const props = defineProps<{
   detailRoute?: (row: T, index: number) => RouteLocationRaw;
   /** 首列加勾选框，用于批量操作；只勾当前页。 */
   selectable?: boolean;
+  /**
+   * 一条记录拆成好几行时（如一条政策解读出十几行行业场景）：挨着的同一标题合成一格，竖着跨过这几行，
+   * 下面写「共 N 行」。勾选、查看、编辑仍是每行一套；只合并挨着的，翻页后下一页开头再写一次。
+   */
+  mergeRepeatedTitle?: boolean;
 }>()
 const emit = defineEmits<{ edit: [row: T]; reset: []; 'selection-change': [rows: T[]] }>()
 const SELECTION_WIDTH = 44
@@ -51,6 +57,19 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
 const value = fieldValue
 const text = fieldText
 const link = fieldLink
+/** 叠在一格里的下级字段（二级 › 三级），空的跳过 */
+function stackText(row: T, col: DataColumn): string {
+  return (col.stack ?? []).map(key => value(row, key)).filter(Boolean).join(' › ')
+}
+/** 标题这一列每行跨几行：一段相同标题的第一行跨整段，其余为 0（不画） */
+const titleSpans = computed(() => (props.mergeRepeatedTitle
+  ? repeatSpans(props.items.map(row => value(row, props.titleKey)))
+  : props.items.map(() => 1)))
+function spanMethod({ column, rowIndex }: { column: { property?: string }; rowIndex: number }): [number, number] {
+  if (column.property !== props.titleKey) return [1, 1]
+  const span = titleSpans.value[rowIndex] ?? 1
+  return span ? [span, 1] : [0, 0]
+}
 const sections = computed(() => buildDetailSections(props.columns, props.groups))
 function open(row: T) { detail.value = row; detailOpen.value = true }
 function editDetail() { if (detail.value) { emit('edit', detail.value); detailOpen.value = false } }
@@ -74,6 +93,7 @@ function editRoute(row: T, index: number): RouteLocationRaw {
       :fit="false"
       style="width: 100%"
       row-key="id"
+      :span-method="mergeRepeatedTitle ? spanMethod : undefined"
       class="data-table business-table__desktop"
       @selection-change="(rows: T[]) => emit('selection-change', rows)"
     >
@@ -96,7 +116,8 @@ function editRoute(row: T, index: number): RouteLocationRaw {
         :prop="col.prop"
         :label="col.label"
         :width="col.width"
-        :show-overflow-tooltip="col.prop !== titleKey"
+        :show-overflow-tooltip="col.prop !== titleKey && !col.stack"
+        :class-name="mergeRepeatedTitle && col.prop === titleKey ? 'record-title-cell' : undefined"
       >
         <template #header>
           <span
@@ -124,7 +145,22 @@ function editRoute(row: T, index: number): RouteLocationRaw {
             >
               {{ text(row, col) }}
             </button>
+            <span
+              v-if="(titleSpans[$index] ?? 1) > 1"
+              class="record-title__count"
+            >共 {{ titleSpans[$index] }} 行</span>
           </template>
+          <span
+            v-else-if="col.stack"
+            class="cell-stack"
+            :title="[text(row, col), stackText(row, col)].filter(Boolean).join(' › ')"
+          >
+            <span class="cell-stack__main">{{ text(row, col) }}</span>
+            <span
+              v-if="stackText(row, col)"
+              class="cell-stack__sub"
+            >{{ stackText(row, col) }}</span>
+          </span>
           <a
             v-else-if="col.link && link(row, col)"
             :href="link(row, col)"
@@ -312,6 +348,14 @@ function editRoute(row: T, index: number): RouteLocationRaw {
 .record-title { padding: 0; border: 0; font: inherit; font-weight: 500; line-height: 22px; background: none; color: var(--zt-ink-900); text-align: left; cursor: pointer; display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .record-title:hover { color: var(--zt-blue-600); text-decoration: underline; }
 a.record-title { text-decoration: none; }
+/* 合并的标题格：靠上、标题最多三行，下面「共 N 行」 */
+.business-table__desktop :deep(td.record-title-cell) { vertical-align: top; padding-top: 10px; }
+.business-table__desktop :deep(td.record-title-cell .record-title) { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; white-space: normal; }
+.record-title__count { display: block; margin-top: 2px; color: var(--zt-ink-500); font-size: 12px; line-height: 18px; }
+.cell-stack { display: flex; flex-direction: column; min-width: 0; }
+.cell-stack__main, .cell-stack__sub { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.cell-stack__main { color: var(--zt-ink-900); }
+.cell-stack__sub { color: var(--zt-ink-500); font-size: 12px; line-height: 18px; }
 .table-link { color: var(--zt-blue-600); font-size: 14px; text-decoration: none; }
 .table-link + .table-link { margin-left: 12px; }
 .table-link:hover { text-decoration: underline; }

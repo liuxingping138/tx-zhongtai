@@ -38,8 +38,6 @@ import { EDITOR_DEFAULTS, EDITOR_GROUPS, SUMMARY_KEYS, TABLE_COLUMNS } from './f
 const RESOURCE = 'policy.interpretations'
 const auth = useAuthStore()
 const canWrite = computed(() => auth.canFull(RESOURCE))
-// 新增场景不在这里逐行同步，统一到「新增场景审核」按场景决定
-const canReviewScenarios = computed(() => auth.canRead('policy.scenario_candidates'))
 
 const query = reactive({
   policy_title: [] as string[],
@@ -157,25 +155,14 @@ onMounted(() => {
           :loading="exporting"
           @click="onExport"
         />
+        <!-- 勾选了才出现，平时不摆灰按钮 -->
         <el-button
-          v-if="canWrite"
-          :disabled="!checked.length"
+          v-if="canWrite && checked.length"
           @click="statusOpen = true"
         >
-          批量改数据状态{{ checked.length ? `（${checked.length}）` : '' }}
+          批量改数据状态（{{ checked.length }}）
         </el-button>
         <AuditLogButton :module="RESOURCE" />
-      </template>
-      <template
-        v-if="canReviewScenarios"
-        #summary
-      >
-        <p class="interpretations__notice">
-          AI 解读出的新增场景按场景归在一起，在「新增场景审核」里一次决定进不进码表，不用在这里逐行改。
-          <RouterLink :to="{ name: 'policy-scenario-candidates' }">
-            去新增场景审核 →
-          </RouterLink>
-        </p>
       </template>
       <template #filters>
         <FilterBar
@@ -269,6 +256,7 @@ onMounted(() => {
         :selected="selected"
         :summary-keys="SUMMARY_KEYS"
         title-key="policy_title"
+        merge-repeated-title
         :detail-route="detailRoute"
         :can-write="canWrite"
         :loading="loading"
@@ -293,10 +281,3 @@ onMounted(() => {
   </div>
 </template>
 
-<style scoped>
-.interpretations__notice {
-  margin: 0;
-  color: var(--zt-ink-700);
-  font-size: 13px;
-}
-</style>

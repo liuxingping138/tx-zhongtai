@@ -143,12 +143,12 @@ onMounted(() => {
           :loading="exporting"
           @click="onExport"
         />
+        <!-- 勾选了才出现，平时不摆灰按钮 -->
         <el-button
-          v-if="canWrite"
-          :disabled="!checked.length"
+          v-if="canWrite && checked.length"
           @click="retagOpen = true"
         >
-          重新打标{{ checked.length ? `（${checked.length}）` : '' }}
+          重新打标（{{ checked.length }}）
         </el-button>
         <AuditLogButton :module="RESOURCE" />
       </template>

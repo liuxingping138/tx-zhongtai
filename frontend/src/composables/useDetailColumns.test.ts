@@ -14,6 +14,11 @@ describe('useDetailColumns', () => {
     expect(columns[0]?.width).toBe(200)
   })
 
+  it('叠进别的列里显示的下级字段不再单独成列', () => {
+    const { columns } = useDetailColumns([{ prop: 'name', label: '名称', stack: ['remark'] }], groups)
+    expect(columns.map(col => col.prop)).toEqual(['name', 'owner'])
+  })
+
   it('默认显示全部列，选中项是独立的副本', () => {
     const { defaults, selected } = useDetailColumns([], groups)
     expect(selected.value).toEqual(defaults)
