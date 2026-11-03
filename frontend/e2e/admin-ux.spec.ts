@@ -19,16 +19,16 @@ test.beforeEach(async ({ page }) => {
 test('column picker defaults to all fields and can restore the full set', async ({ page }) => {
   await page.goto('/codebook/scenarios')
   const picker = page.getByRole('button', { name: /列设置/ })
-  await expect(picker).toContainText('38/38')
+  await expect(picker).toContainText('34/34')
   await picker.click()
   await expect(page.getByRole('button', { name: '显示全部列', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: '恢复默认列', exact: true })).toBeVisible()
   // Element Plus 的原生 checkbox 被隐藏（opacity:0、0x0），可见的是样式化替身，
   // 直接对原生元素 uncheck() 会一直等它可见。点可见的标签。
   await page.locator('.el-checkbox').filter({ hasText: /^场景标签$/ }).click()
-  await expect(picker).toContainText('37/38')
+  await expect(picker).toContainText('33/34')
   await page.getByRole('button', { name: '恢复默认列', exact: true }).click()
-  await expect(picker).toContainText('38/38')
+  await expect(picker).toContainText('34/34')
 })
 
 for (const [path, count] of [

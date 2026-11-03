@@ -64,8 +64,8 @@ const COLUMN_LABELS: Record<string, string> = {
   product_l2_sort: '二级产品排序',
 }
 
-export const TABLE_COLUMNS: DataColumn[] = [
-  ...FIELDS.map((field) => ({
+function fieldColumn(field: { key: string; label: string }): DataColumn {
+  return {
     prop: field.key,
     label: COLUMN_LABELS[field.key] || field.label,
     fullLabel: field.label,
@@ -75,11 +75,30 @@ export const TABLE_COLUMNS: DataColumn[] = [
       : field.key === 'customer_group_name' ? { minWidth: 230, grow: 2 }
       : field.key === 'product_l1_name' ? { minWidth: 180, grow: 1 }
       : { width: 160 }),
-  })),
-  // 「同步新增场景」写的两列：政策解读里人工确认后进码表的场景标「是」，记下第一次提出它的政策。
+  }
+}
+
+/** 叠进「行业」「场景」两格的下级，和排到最后的编码（2026-11-03：原来先是两列 20 位编码，名称排到第 6 列） */
+const STACKED = new Set(['industry_l2', 'industry_l3', 'scenario_l2_name', 'scenario_l3_name'])
+const CODES = ['industry_scenario_code', 'industry_code', 'scenario_code']
+const byKey = new Map(FIELDS.map(field => [field.key, field]))
+const named = (key: string) => fieldColumn(byKey.get(key)!)
+
+// 名称在前、编码在后：先看行业、场景、场景标签和客群，再是新增场景的来源和补充状态，描述等其余字段，最后才是编码和留痕。
+export const TABLE_COLUMNS: DataColumn[] = [
+  { ...named('industry_l1'), label: '行业', fullLabel: '一级行业，下面是二级 › 三级行业', width: undefined, minWidth: 180, stack: ['industry_l2', 'industry_l3'] },
+  { ...named('scenario_l1_name'), label: '场景', fullLabel: '一级场景，下面是二级 › 三级场景', width: undefined, minWidth: 200, stack: ['scenario_l2_name', 'scenario_l3_name'] },
+  named('scenario_tag'),
+  named('customer_group_name'),
+  // 采纳进码表的新场景：标「是」、记下第一次提出它的政策，AI 补的描述等人确认
   { prop: 'is_new_scenario', label: '是否新增场景', width: 120 },
   { prop: 'enrich_status', label: '补充状态', width: 110 },
   { prop: 'source_policy', label: '来源政策', minWidth: 260 },
+  ...FIELDS
+    .filter(field => !STACKED.has(field.key) && !CODES.includes(field.key)
+      && !['industry_l1', 'scenario_l1_name', 'scenario_tag', 'customer_group_name'].includes(field.key))
+    .map(fieldColumn),
+  ...CODES.map(named),
   { prop: 'created_at', label: '入库时间', width: 190, time: true },
   { prop: 'created_by_name', label: '入库人', width: 110 },
   { prop: 'updated_at', label: '更新时间', width: 190, time: true },

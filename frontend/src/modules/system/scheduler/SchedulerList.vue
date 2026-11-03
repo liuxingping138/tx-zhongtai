@@ -49,7 +49,7 @@ const columns: DataColumn[] = [
   { prop: 'plan', label: '每日计划', width: 230 },
   { prop: 'status', label: '最近执行', width: 190 },
   { prop: 'cost', label: '今日费用 / 上限', width: 150 },
-  { prop: 'watermark', label: '数据进度', width: 170 },
+  { prop: 'watermark', label: '数据进度', fullLabel: '数据进度：爬虫是源数据的入库时间，类型判断是读到的采集日，其余打标任务是还有多少待办，清理类是上次处理了多少', width: 170 },
 ]
 const defaults = columns.map(col => col.prop)
 const selected = ref([...defaults])
@@ -264,6 +264,9 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
           :min-width="col.minWidth"
           show-overflow-tooltip
         >
+          <template #header>
+            <span :title="col.fullLabel || col.label">{{ col.label }}</span>
+          </template>
           <template #default="{ row }">
             <span
               v-if="col.prop === 'plan'"
@@ -343,9 +346,9 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
         </el-table-column>
       </el-table>
     </ListPage>
+    <!-- 页面底下只留一句；每个任务做什么写在它的「设置」里，「数据进度」的含义在表头悬停可见（2026-11-03 原来三行说明太密） -->
     <p class="scheduler-note">
-      政策类型判断、政策解读、政策市场机会、新增场景找相似、新增场景补描述是五个独立任务：解读只做类型判断标为「是否解读 = 是」的政策，市场机会只做解读过的，找相似只看「新增场景审核」里待审、还没看过的场景，补描述只写采纳进码表、描述还空着的，前一步没跑后一步就没有待办。
-      “数据进度”对爬虫是源数据的入库时间，对类型判断是源政策读到的采集日。失败后最多重试 2 次，分别等待 1 分钟、5 分钟；没选模板这类设置问题不重试，直接失败并写明原因。同一任务不会重复执行。
+      五个 AI 打标任务彼此独立，前一步没跑、后一步就没有待办，各做什么点「设置」看；失败自动重试 2 次，同一任务不会同时跑两次。
     </p>
     <JobSettingsDrawer
       ref="settings"
