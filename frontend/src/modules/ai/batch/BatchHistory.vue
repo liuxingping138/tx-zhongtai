@@ -91,7 +91,7 @@ function progressText(run: BatchRun): string {
       </el-table-column>
       <el-table-column
         label="跑的版本"
-        width="130"
+        width="150"
       >
         <template #default="{ row }">
           <span
@@ -269,6 +269,6 @@ function progressText(run: BatchRun): string {
 .history__ops { display: flex; align-items: center; gap: 10px; }
 .history__ops .el-button { margin: 0; }
 .history__pager { justify-content: flex-end; padding: 10px 16px; }
-.history__version { color: var(--zt-blue-700); font-variant-numeric: tabular-nums; }
+.history__version { color: var(--zt-blue-700); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .history__version.is-draft { color: var(--zt-ink-700); }
 </style>
