@@ -38,7 +38,7 @@ function progressText(run: BatchRun): string {
       v-loading="loading"
       :data="items"
       row-key="id"
-      class="history__table"
+      class="data-table history__table"
       :empty-text="filtered ? '没有符合条件的任务' : '还没有批量任务'"
       height="100%"
       @row-click="(row: BatchRun) => emit('open', row)"

@@ -74,6 +74,9 @@ async function load(): Promise<void> {
 onMounted(() => { void load(); void taskFit.load() })
 
 /** 「字节-DeepSeek-V3.2」→「DeepSeek-V3.2」：厂商前缀每行都一样，省下宽度给名称；悬停看全名。 */
+/** 类型用颜色区分，一眼分出政策、客户、招投标；颜色只区分取值，不表示好坏。 */
+const CATEGORY_TAGS: Record<string, 'primary' | 'success' | 'warning'> = { policy: 'primary', customer: 'success', tender: 'warning' }
+
 function shortModel(name: string): string {
   return name ? name.replace(/^(字节|百度)\s*[-－]\s*/, '') : '未选'
 }
@@ -165,14 +168,14 @@ function create(): void {
         v-loading="loading"
         :data="visible"
         row-key="id"
-        class="prompt-list__table"
+        class="data-table prompt-list__table"
         :empty-text="emptyText"
         height="100%"
         @row-click="open"
       >
         <el-table-column
           label="模板名称"
-          min-width="176"
+          min-width="210"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -186,14 +189,23 @@ function create(): void {
           </template>
         </el-table-column>
         <el-table-column
-          prop="category_name"
           label="类型"
-          width="72"
-        />
+          width="84"
+        >
+          <template #default="{ row }">
+            <el-tag
+              size="small"
+              :type="CATEGORY_TAGS[row.category] ?? 'info'"
+              disable-transitions
+            >
+              {{ row.category_name }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column
           v-if="showTasks"
           label="定时任务"
-          min-width="110"
+          min-width="130"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -232,7 +244,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="样本试跑"
-          min-width="162"
+          min-width="180"
         >
           <template #default="{ row }">
             <span
@@ -253,7 +265,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="模型"
-          min-width="140"
+          min-width="170"
           show-overflow-tooltip
         >
           <template #default="{ row }">
