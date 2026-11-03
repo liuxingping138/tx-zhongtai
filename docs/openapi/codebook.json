@@ -409,6 +409,27 @@
             }
           },
           {
+            "name": "scenario_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "一级、二级、三级场景名称任一包含关键词",
+              "title": "Scenario Name"
+            },
+            "description": "一级、二级、三级场景名称任一包含关键词"
+          },
+          {
             "name": "industry_scenario_code",
             "in": "query",
             "required": false,
@@ -789,6 +810,27 @@
         "summary": "Export Items",
         "operationId": "export_items_api_v1_codebook_scenarios_export_get",
         "parameters": [
+          {
+            "name": "scenario_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "一级、二级、三级场景名称任一包含关键词",
+              "title": "Scenario Name"
+            },
+            "description": "一级、二级、三级场景名称任一包含关键词"
+          },
           {
             "name": "industry_scenario_code",
             "in": "query",

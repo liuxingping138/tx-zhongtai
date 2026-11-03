@@ -23,6 +23,7 @@ RESOURCE = "codebook.scenarios"
 
 
 def scenario_filters(
+    scenario_name: list[str] | None = Query(default=None, description="一级、二级、三级场景名称任一包含关键词"),
     industry_scenario_code: list[str] | None = Query(default=None),
     industry_l1: list[str] | None = Query(default=None),
     scenario_tag: list[str] | None = Query(default=None),
@@ -31,6 +32,7 @@ def scenario_filters(
     enrich_status: list[str] | None = Query(default=None),
 ) -> Filters:
     return {
+        "scenario_name": scenario_name,
         "industry_scenario_code": industry_scenario_code,
         "industry_l1": industry_l1,
         "scenario_tag": scenario_tag,

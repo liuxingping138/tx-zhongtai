@@ -17,6 +17,7 @@ import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
 import ExportButton from '@/components/ExportButton.vue'
 import FilterBar from '@/components/FilterBar.vue'
+import FilterKeyword from '@/components/FilterKeyword.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ImportButton from '@/components/ImportButton.vue'
 import ListPage from '@/components/ListPage.vue'
@@ -35,7 +36,8 @@ const auth = useAuthStore()
 const canWrite = computed(() => auth.canFull(RESOURCE))
 
 const query = reactive({
-  industry_scenario_code: [] as string[],
+  // 按场景名称查（一级、二级、三级任一包含），不让人输 20 位编码（2026-11-03）
+  scenario_name: [] as string[],
   industry_l1: [] as string[],
   scenario_tag: [] as string[],
   customer_group_name: [] as string[],
@@ -132,10 +134,12 @@ onMounted(() => {
           @search="listQuery.search"
           @reset="listQuery.resetFilters"
         >
-          <el-form-item label="行业场景编码">
-            <FilterSelect
-              v-model="query.industry_scenario_code"
-              v-bind="filters.bind('industry_scenario_code')"
+          <el-form-item label="场景名称">
+            <FilterKeyword
+              v-model="query.scenario_name"
+              label="场景名称"
+              placeholder="输入场景名称关键词，一二三级都查"
+              @search="listQuery.search"
             />
           </el-form-item>
           <el-form-item label="一级行业">

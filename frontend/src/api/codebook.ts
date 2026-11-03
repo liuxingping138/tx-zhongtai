@@ -88,6 +88,8 @@ export function importPolicyTypes(
 }
 
 export function listScenarios(params: {
+  /** 一级、二级、三级场景名称任一包含关键词 */
+  scenario_name?: FilterParam
   industry_scenario_code?: FilterParam
   industry_l1?: FilterParam
   scenario_tag?: FilterParam

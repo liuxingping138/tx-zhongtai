@@ -43,7 +43,10 @@ async def existing_hashes(session: AsyncSession, values: Collection[str]) -> set
 
 
 # 列表与导出共用同一份筛选定义，避免两边条件逐渐走偏。
-FILTER_COLUMNS: dict[str, InstrumentedAttribute[str]] = {
+# 场景名称：一级、二级、三级场景名称任一包含关键词就算（2026-11-03 页面上按名称查，不再让人输编码）。
+SCENARIO_NAMES = (Scenario.scenario_l1_name, Scenario.scenario_l2_name, Scenario.scenario_l3_name)
+FILTER_COLUMNS: dict[str, InstrumentedAttribute[str] | tuple[InstrumentedAttribute[str], ...]] = {
+    "scenario_name": SCENARIO_NAMES,
     "industry_scenario_code": Scenario.industry_scenario_code,
     "industry_l1": Scenario.industry_l1,
     "scenario_tag": Scenario.scenario_tag,
@@ -58,8 +61,12 @@ EXACT_FILTERS = {"is_new_scenario", "enrich_status"}
 def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
     conds: list[ColumnElement[bool]] = []
     for key, value in filters.items():
-        column = FILTER_COLUMNS[key]  # 未知字段直接报错，避免筛选被静默忽略
-        cond = in_any(column, value) if key in EXACT_FILTERS else ilike_any(column, value)
+        target = FILTER_COLUMNS[key]  # 未知字段直接报错，避免筛选被静默忽略
+        if isinstance(target, tuple):
+            parts = [part for part in (ilike_any(column, value) for column in target) if part is not None]
+            cond = or_(*parts) if parts else None
+        else:
+            cond = in_any(target, value) if key in EXACT_FILTERS else ilike_any(target, value)
         if cond is not None:
             conds.append(cond)
     return conds

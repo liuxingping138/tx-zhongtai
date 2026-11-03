@@ -47,3 +47,16 @@ def test_unknown_filter_key_is_rejected(prefix: str, repo, has_columns: bool) ->
 
     with pytest.raises(KeyError):
         repo._conditions({"zz_not_a_column": "x"})
+
+
+def test_scenario_name_matches_any_level() -> None:
+    """按场景名称查：一级、二级、三级场景名称任一包含关键词就算，多个关键词也是「或」。"""
+
+    from sqlalchemy.dialects import postgresql
+
+    (cond,) = scenarios._conditions({"scenario_name": ["机场", "水务"]})
+    sql = str(cond.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+    for column in ("scenario_l1_name", "scenario_l2_name", "scenario_l3_name"):
+        assert column in sql
+    assert "机场" in sql and "水务" in sql
+    assert scenarios._conditions({"scenario_name": []}) == []
