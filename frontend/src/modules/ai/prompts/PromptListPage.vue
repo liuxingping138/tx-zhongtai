@@ -175,7 +175,7 @@ function create(): void {
       >
         <el-table-column
           label="模板名称"
-          min-width="196"
+          min-width="192"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -190,7 +190,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="类型"
-          width="72"
+          width="80"
         >
           <template #default="{ row }">
             <el-tag
@@ -205,7 +205,7 @@ function create(): void {
         <el-table-column
           v-if="showTasks"
           label="定时任务"
-          min-width="120"
+          min-width="116"
           show-overflow-tooltip
         >
           <template #default="{ row }">
