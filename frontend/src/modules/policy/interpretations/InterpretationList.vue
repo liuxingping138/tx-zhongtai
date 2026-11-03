@@ -57,13 +57,6 @@ const { items, total, loading, loadError, resultFiltered, load } = useListLoader
 })
 const { columns, defaults, selected } = useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)
 
-// 分组标题条上的说明：这一组几条解读、各是什么数据状态（只算本页的行）。
-function groupMeta(rows: InterpretationItem[]): string {
-  const counts = new Map<string, number>()
-  for (const row of rows) counts.set(row.data_status || '待验证', (counts.get(row.data_status || '待验证') ?? 0) + 1)
-  return [`${rows.length} 条解读`, ...[...counts].map(([status, count]) => `${status} ${count}`)].join(' · ')
-}
-
 async function refresh() {
   await Promise.all([load(), filters.load()])
 }
@@ -240,8 +233,6 @@ onMounted(() => {
         :selected="selected"
         :summary-keys="SUMMARY_KEYS"
         title-key="policy_title"
-        group-by-title
-        :group-meta="groupMeta"
         :detail-route="detailRoute"
         :can-write="canWrite"
         :loading="loading"

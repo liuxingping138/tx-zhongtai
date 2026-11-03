@@ -9,9 +9,7 @@ import { buildDetailSections } from './detailSections'
 import DetailSections from './DetailSections.vue'
 import type { EditorGroup } from './editorGroups'
 import ListEmpty from './ListEmpty.vue'
-import type { GroupRow } from './rowGroups'
 import RowActions from './RowActions.vue'
-import { useGroupedRows, type SelectableTable } from './useGroupedRows'
 const props = defineProps<{
   items: T[]; columns: readonly DataColumn[]; selected: string[]; titleKey: string; summaryKeys?: string[];
   canWrite: boolean; loading: boolean; filtered: boolean; detailTitle?: string;
@@ -21,25 +19,15 @@ const props = defineProps<{
   detailRoute?: (row: T, index: number) => RouteLocationRaw;
   /** 首列加勾选框，用于批量操作；只勾当前页。 */
   selectable?: boolean;
-  /**
-   * 一条记录拆成好几行时（如一条政策解读出十几行行业场景）：挨着的同一标题分成一组，组前一行分组标题条
-   * 写标题和 groupMeta 给的说明，表格里不再有标题列。勾选、查看、编辑仍是每行一套，标题条上的勾选框勾整组；
-   * 只分挨着的，翻页后下一页开头再起一组。
-   */
-  groupByTitle?: boolean;
-  /** 分组标题条上标题下面的一句说明，如「11 条解读 · 待验证 9」。 */
-  groupMeta?: (rows: T[]) => string;
 }>()
 const emit = defineEmits<{ edit: [row: T]; reset: []; 'selection-change': [rows: T[]] }>()
 const SELECTION_WIDTH = 44
-const table = ref<SelectableTable<T | GroupRow<T>>>()
+const table = ref<{ clearSelection: () => void }>()
 defineExpose({ clearSelection: () => table.value?.clearSelection() })
 const detail: ShallowRef<T | null> = shallowRef(null)
 const detailOpen = ref(false)
 const narrow = useNarrowViewport()
-// 分组时标题写在分组标题条上，表格里不再出标题列。
-const displayed = computed(() => props.columns.filter(col => props.selected.includes(col.prop)
-  && !(props.groupByTitle && col.prop === props.titleKey)))
+const displayed = computed(() => props.columns.filter(col => props.selected.includes(col.prop)))
 const summaryColumns = computed(() => (props.summaryKeys ?? props.selected)
   .map(key => displayed.value.find(col => col.prop === key))
   .filter((col): col is DataColumn => !!col && col.prop !== props.titleKey)
@@ -68,16 +56,6 @@ const link = fieldLink
 function stackText(row: T, col: DataColumn): string {
   return (col.stack ?? []).map(key => value(row, key)).filter(Boolean).join(' › ')
 }
-const { rows, at, isGroup, spanMethod, rowClass, onSelect, onSelectionChange } = useGroupedRows<T>({
-  items: () => props.items,
-  titleOf: row => value(row, props.titleKey),
-  enabled: () => !!props.groupByTitle,
-  selectable: () => !!props.selectable,
-  otherColumns: computed(() => laidOut.value.length + (availableWidth.value > totalWidth.value ? 1 : 0) + 1),
-  table,
-  emitSelection: selection => emit('selection-change', selection),
-})
-const firstColumn = computed(() => laidOut.value[0]?.prop)
 const sections = computed(() => buildDetailSections(props.columns, props.groups))
 function open(row: T) { detail.value = row; detailOpen.value = true }
 function editDetail() { if (detail.value) { emit('edit', detail.value); detailOpen.value = false } }
@@ -92,22 +70,17 @@ function editRoute(row: T, index: number): RouteLocationRaw {
   <div
     ref="root"
     class="business-table"
-    :style="{ '--business-table-view': `${availableWidth}px` }"
   >
     <el-table
       v-if="!narrow"
       ref="table"
       v-loading="loading"
-      :data="rows"
+      :data="items"
       :fit="false"
       style="width: 100%"
       row-key="id"
-      :span-method="groupByTitle ? spanMethod : undefined"
-      :row-class-name="groupByTitle ? rowClass : undefined"
       class="data-table business-table__desktop"
-      :class="{ 'business-table--grouped': groupByTitle }"
-      @select="onSelect"
-      @selection-change="onSelectionChange"
+      @selection-change="(rows: T[]) => emit('selection-change', rows)"
     >
       <template #empty>
         <ListEmpty
@@ -141,36 +114,13 @@ function editRoute(row: T, index: number): RouteLocationRaw {
             aria-label="AI 打标"
           >AI</span>{{ col.label }}</span>
         </template>
-        <template #default="{ row }">
-          <div
-            v-if="isGroup(row)"
-            class="group-bar"
-          >
-            <template v-if="col.prop === firstColumn">
-              <RouterLink
-                v-if="detailRoute && row.group.rows[0]"
-                class="group-bar__title"
-                :to="detailRoute(row.group.rows[0], at(row.group.rows[0]))"
-                :title="row.group.title"
-              >
-                {{ row.group.title || '未命名记录' }}
-              </RouterLink>
-              <span
-                v-else
-                class="group-bar__title"
-              >{{ row.group.title || '未命名记录' }}</span>
-              <span
-                v-if="groupMeta"
-                class="group-bar__meta"
-              >{{ groupMeta(row.group.rows) }}</span>
-            </template>
-          </div>
-          <template v-else-if="col.prop === titleKey">
+        <template #default="{ row, $index }">
+          <template v-if="col.prop === titleKey">
             <!-- Element Plus 注册列时会拿空行（没有 id）试渲染一次插槽，不判断就会按空 id 生成地址、控制台报错 -->
             <RouterLink
               v-if="detailRoute && row.id"
               class="record-title"
-              :to="detailRoute(row, at(row))"
+              :to="detailRoute(row, $index)"
               :title="text(row, col)"
             >
               {{ text(row, col) }}
@@ -220,11 +170,11 @@ function editRoute(row: T, index: number): RouteLocationRaw {
         :width="actionWidth"
         class-name="table-action"
       >
-        <template #default="{ row }">
+        <template #default="{ row, $index }">
           <RowActions
-            v-if="!isGroup(row) && row.id"
-            :view="detailRoute ? detailRoute(row, at(row)) : undefined"
-            :edit="detailRoute ? editRoute(row, at(row)) : undefined"
+            v-if="row.id"
+            :view="detailRoute ? detailRoute(row, $index) : undefined"
+            :edit="detailRoute ? editRoute(row, $index) : undefined"
             :can-edit="canWrite"
             @view="open(row)"
             @edit="emit('edit', row)"
@@ -365,15 +315,6 @@ a.record-title { text-decoration: none; }
 .business-table__desktop :deep(th.column-ai + th:not(.column-ai)) { box-shadow: inset 1px 0 0 var(--zt-ai-line); }
 .ai-mark { display: inline-block; margin-right: 6px; padding: 0 4px; border: 1px solid var(--zt-ai-line); border-radius: 3px; color: var(--zt-ai-text); background: var(--zt-panel); font-size: 11px; font-weight: 600; line-height: 16px; vertical-align: 1px; }
 
-/* 分组标题条：一条政策一条，横跨整行；横向滚动时标题停在左边 */
-.business-table__desktop :deep(tr.group-row > td.el-table__cell) { height: auto; padding: 10px 0 8px; background: var(--zt-surface-subtle); border-top: 1px solid var(--zt-border); }
-.business-table__desktop :deep(tr.group-row > td.el-table__cell .cell) { overflow: visible; }
-.business-table__desktop :deep(tr.group-row:hover > td.el-table__cell) { background: var(--zt-surface-subtle); }
-.business-table__desktop :deep(tr.group-row + tr > td.el-table__cell) { border-top: 0; }
-.group-bar { position: sticky; left: 12px; display: flex; flex-direction: column; gap: 2px; max-width: min(960px, calc(var(--business-table-view, 100vw) - 96px)); }
-.group-bar__title { overflow: hidden; color: var(--zt-ink-900); font-size: 15px; font-weight: 600; line-height: 22px; text-decoration: none; white-space: nowrap; text-overflow: ellipsis; }
-a.group-bar__title:hover { color: var(--zt-blue-600); text-decoration: underline; }
-.group-bar__meta { color: var(--zt-ink-500); font-size: 12px; line-height: 18px; }
 .cell-stack { display: flex; flex-direction: column; min-width: 0; }
 .cell-stack__main, .cell-stack__sub { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .cell-stack__main { color: var(--zt-ink-900); }

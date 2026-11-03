@@ -6,7 +6,7 @@ export const DATA_STATUS_CHOICES = ['待验证', '人工验证']
 
 // 列的先后按核对的顺序：先是这一行解读出的行业、场景，紧跟着核对时最先看的机会类型、信息化等级和两个状态，
 // 再是 AI 写的客户、产品、要文、补贴、市场机会；编码、唯一标识、关联主键这类对人没意义的放后面，留痕列最后。
-// 政策原文名称在列表里写在分组标题条上（同一条政策的几行一组），列设置里仍有这一项。ai 标的是 AI 打标写入的列
+// ai 标的是 AI 打标写入的列
 // （aitag/domain/interpret_rules.ANSWER_FIELDS 和市场机会那一步）；是否新增场景、新增场景级别由码表比对结果覆盖，不算。
 // 详情按下面的 EDITOR_GROUPS 分组展示。
 export const TABLE_COLUMNS: DataColumn[] = [
