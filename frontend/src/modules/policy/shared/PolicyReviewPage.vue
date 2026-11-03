@@ -29,6 +29,8 @@ const props = defineProps<{
   canWrite: boolean
   status?: { text: string; type: 'success' | 'warning' | 'danger' | 'info' }
   loadContent: (id: string) => Promise<PolicyContentData>
+  /** 要提醒的分组：页签旁一个小圆点，值是说明（悬停可见，读屏也读得到） */
+  tabMarks?: Record<string, string>
 }>()
 
 // 拆成顶层 ref，模板里才会自动解包。
@@ -229,7 +231,11 @@ function setContentOpen(open: boolean) {
               :class="{ 'is-active': (active || sections[0]?.title) === section.title }"
               @click="scrollToSection(section.title)"
             >
-              {{ section.title }}
+              {{ section.title }}<span
+                v-if="tabMarks?.[section.title]"
+                class="review__mark"
+                :title="tabMarks[section.title]"
+              ><span class="sr-only">（{{ tabMarks[section.title] }}）</span></span>
             </button>
             <el-button
               v-if="canWrite && !editing"
@@ -257,6 +263,11 @@ function setContentOpen(open: boolean) {
                 :sections="sections"
               >
                 <template #body="{ section }">
+                  <slot
+                    name="section-extra"
+                    :section="section.title"
+                    :row="record"
+                  />
                   <div
                     v-if="editing && groupOf(section.title).length"
                     class="review__editor"
@@ -368,6 +379,7 @@ function setContentOpen(open: boolean) {
 .review__tabs { flex: none; display: flex; gap: 28px; padding: 0 20px; border-bottom: 1px solid var(--zt-border); }
 .review__tabs button { height: 44px; padding: 0; border: 0; background: none; color: var(--zt-ink-700); font: inherit; font-size: 14px; cursor: pointer; }
 .review__tabs button.is-active { color: var(--zt-blue-600); font-weight: 600; box-shadow: inset 0 -2px 0 var(--zt-blue-600); }
+.review__mark { display: inline-block; width: 6px; height: 6px; margin-left: 5px; border-radius: 50%; background: var(--zt-warning); vertical-align: 2px; }
 .review__scroll { position: relative; flex: 1; min-height: 0; overflow-y: auto; padding: 16px 20px 24px; }
 .review__edit { align-self: center; margin-left: auto; }
 .review__edit-bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--zt-border); }

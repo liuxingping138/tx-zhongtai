@@ -5,11 +5,13 @@ import type { CandidateItem } from '@/api/scenarioCandidates'
 import ListEmpty from '@/components/ListEmpty.vue'
 import CandidateExpand from './CandidateExpand.vue'
 import DecisionButtons from './DecisionButtons.vue'
-import { KIND_NEW, PENDING, decisionText, levelTag, matchOf, whereText, type DecisionMode } from './candidates'
+import MatchCell from './MatchCell.vue'
+import PlaceCell from './PlaceCell.vue'
+import { KIND_NEW, PENDING, decisionText, levelTag, type DecisionMode } from './candidates'
 import type { useCandidateExtras } from './useCandidateExtras'
 
 /**
- * 新增场景列表：一行一个场景，看清几级、挂在哪、码表里像它的，就在这一行决定（不再进单个场景的页面）。
+ * 新增场景列表：一行一个场景，看清新增场景级别、挂在哪、码表里像它的，就在这一行决定（不再进单个场景的页面）。
  * 点名称或行首箭头展开看依据；展开时才去取这一行的详情和码表上下文。
  */
 const props = defineProps<{
@@ -120,8 +122,8 @@ defineExpose({ clearSelection: () => table.value?.clearSelection() })
       </template>
     </el-table-column>
     <el-table-column
-      label="几级"
-      width="88"
+      label="新增场景级别"
+      width="116"
     >
       <template #default="{ row }">
         <span :class="['candidates-table__level', { 'candidates-table__level--link': row.kind && row.kind !== KIND_NEW }]">{{ levelTag(row) }}</span>
@@ -129,41 +131,25 @@ defineExpose({ clearSelection: () => table.value?.clearSelection() })
     </el-table-column>
     <el-table-column
       label="挂在哪"
-      min-width="190"
+      min-width="180"
     >
       <template #default="{ row }">
-        <template v-if="row.id">
-          {{ whereText(row) }}
-          <span
-            v-if="row.industry_count > 1"
-            class="candidates-table__sub"
-          >另涉及 {{ row.industry_count - 1 }} 个行业</span>
-        </template>
+        <PlaceCell
+          v-if="row.id"
+          :candidate="row"
+        />
       </template>
     </el-table-column>
     <el-table-column
       v-if="pending"
       label="码表里像它的"
-      min-width="280"
+      min-width="270"
     >
       <template #default="{ row }">
-        <template v-if="row.id">
-          <!-- 上一行是像它的那个场景，下一行是谁说像、AI 怎么看；路径长了只折第一行，和「挂在哪」一样两行 -->
-          <span
-            v-if="matchOf(row).kind !== 'none'"
-            class="candidates-table__main"
-          >{{ matchOf(row).name }}</span>
-          <span
-            v-else
-            class="candidates-table__main candidates-table__none"
-          >没有像的</span>
-          <span class="candidates-table__sub">
-            <span
-              v-if="matchOf(row).kind !== 'none'"
-              :class="['candidates-table__match', `candidates-table__match--${matchOf(row).kind}`]"
-            >{{ matchOf(row).label }}</span>{{ matchOf(row).note }}
-          </span>
-        </template>
+        <MatchCell
+          v-if="row.id"
+          :candidate="row"
+        />
       </template>
     </el-table-column>
     <el-table-column
@@ -194,7 +180,7 @@ defineExpose({ clearSelection: () => table.value?.clearSelection() })
     <el-table-column
       v-if="pending && canDecide"
       label="决定"
-      width="244"
+      width="236"
       fixed="right"
       class-name="candidates-table__decide"
     >
@@ -239,7 +225,7 @@ defineExpose({ clearSelection: () => table.value?.clearSelection() })
   background: var(--zt-surface-subtle);
 }
 
-/* 四个按钮是一组，宽度刚好；别让单元格的省略号规则在后面多画一个「…」 */
+/* 按钮宽度刚好；别让单元格的省略号规则在后面多画一个「…」 */
 .candidates-table :deep(td.candidates-table__decide .cell) {
   overflow: visible;
   text-overflow: clip;
@@ -260,23 +246,6 @@ defineExpose({ clearSelection: () => table.value?.clearSelection() })
   color: var(--el-color-primary);
 }
 
-.candidates-table__main {
-  display: block;
-  color: var(--zt-ink-900);
-}
-
-.candidates-table__sub {
-  display: block;
-  margin-top: 2px;
-  color: var(--zt-ink-500);
-  font-size: 12px;
-  line-height: 18px;
-}
-
-.candidates-table__none {
-  color: var(--zt-ink-500);
-}
-
 .candidates-table__level {
   padding: 1px 8px;
   border: 1px solid var(--zt-warning-border);
@@ -291,24 +260,5 @@ defineExpose({ clearSelection: () => table.value?.clearSelection() })
   border-color: var(--zt-teal-line);
   background: var(--zt-teal-soft);
   color: var(--zt-teal-text);
-}
-
-.candidates-table__match {
-  display: inline-block;
-  margin-right: 6px;
-  padding: 0 6px;
-  border: 1px solid var(--zt-border);
-  border-radius: 4px;
-  background: var(--zt-soft);
-  color: var(--zt-ink-700);
-  font-size: 12px;
-  line-height: 16px;
-  white-space: nowrap;
-}
-
-.candidates-table__match--ai {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary);
-  color: var(--zt-panel);
 }
 </style>

@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { ArrowDown } from '@element-plus/icons-vue'
 
 import type { CandidateItem } from '@/api/scenarioCandidates'
 import { KIND_NEW, suggest, type DecisionMode } from './candidates'
 
 /**
- * 列表每行的四个决定，连成一组、每行位置一样；系统建议的那个填主色。
- * 新关联是码表已有的场景，不能改名，那一格置灰、不挪位置。点了都先开确认框。
+ * 一个新增场景的决定（2026-11-03 用户挑的样式 C）：只露出系统建议的那个，写全「采纳为新场景」「合并到它」，
+ * 其余（另选一个合并、改个名再采纳、驳回）收进「其他」；没有建议时只有一个「决定」。
+ * 新增场景审核列表每行、解读核对页上场景那一行共用。点了都先开确认框。
  */
 const props = defineProps<{
   candidate: CandidateItem
@@ -17,62 +19,118 @@ const props = defineProps<{
 const emit = defineEmits<{ open: [mode: DecisionMode] }>()
 
 const NO_CODEBOOK = '采纳、合并要写行业场景码表，需要码表的管理权限'
-const buttons = computed(() => {
-  const suggested = suggest(props.candidate)
-  const codebook = props.canWriteCodebook ? '' : NO_CODEBOOK
+const MENU: Record<DecisionMode, string> = { adopt: '采纳为新场景', merge: '合并到已有场景…', rename: '改个名再采纳', reject: '驳回' }
+
+const suggested = computed(() => suggest(props.candidate))
+const main = computed(() => {
+  const mode = suggested.value
+  if (!mode) return null
+  return {
+    mode,
+    label: mode === 'adopt' ? '采纳为新场景' : '合并到它',
+    title: props.canWriteCodebook ? (mode === 'adopt' ? '写进行业场景码表，作为新场景' : '合并到这一行写着的那个已有场景') : NO_CODEBOOK,
+  }
+})
+const others = computed(() => {
   const isNew = props.candidate.kind === KIND_NEW
-  return [
-    { mode: 'adopt' as const, label: '采纳', primary: suggested === 'adopt', disabled: !props.canWriteCodebook, title: codebook || '采纳为新场景，写进行业场景码表' },
-    { mode: 'merge' as const, label: '合并', primary: suggested === 'merge', disabled: !props.canWriteCodebook, title: codebook || '合并到码表里已有的场景' },
-    {
-      mode: 'rename' as const,
-      label: '改名',
-      primary: false,
-      disabled: !props.canWriteCodebook || !isNew,
-      title: codebook || (isNew ? '改个名再采纳' : '新关联是码表已有的场景，不能改名'),
-    },
-    { mode: 'reject' as const, label: '驳回', primary: false, disabled: false, title: '驳回这个新增场景' },
-  ]
+  return (['adopt', 'merge', 'rename', 'reject'] as const)
+    .filter(mode => mode !== suggested.value && (mode !== 'rename' || isNew))
+    .map(mode => ({ mode, label: MENU[mode], disabled: mode !== 'reject' && !props.canWriteCodebook }))
 })
 </script>
 
 <template>
-  <el-button-group
+  <div
     class="decide"
     role="group"
     :aria-label="`决定「${candidate.name}」`"
   >
     <el-button
-      v-for="item in buttons"
-      :key="item.mode"
-      :type="item.primary ? 'primary' : 'default'"
-      :disabled="item.disabled || Boolean(busy)"
-      :loading="busy === item.mode"
-      :title="item.title"
-      @click.stop="emit('open', item.mode)"
+      v-if="main"
+      type="primary"
+      class="decide__main"
+      :disabled="!canWriteCodebook || Boolean(busy)"
+      :loading="busy === main.mode"
+      :title="main.title"
+      @click="emit('open', main.mode)"
     >
-      {{ item.label }}
+      <template v-if="busy !== main.mode">
+        <svg
+          v-if="main.mode === 'adopt'"
+          class="decide__icon"
+          viewBox="0 0 12 12"
+          aria-hidden="true"
+        ><path d="M2.5 6.2l2.3 2.3L9.5 3.8" /></svg>
+        <svg
+          v-else
+          class="decide__icon"
+          viewBox="0 0 12 12"
+          aria-hidden="true"
+        ><path d="M1.5 6h7M6 3l3 3-3 3M10.5 2v8" /></svg>
+      </template>
+      {{ main.label }}
     </el-button>
-  </el-button-group>
+    <el-dropdown
+      trigger="click"
+      :disabled="Boolean(busy)"
+      @command="(mode: DecisionMode) => emit('open', mode)"
+    >
+      <el-button
+        class="decide__more"
+        :loading="Boolean(busy) && busy !== main?.mode"
+      >
+        {{ main ? '其他' : '决定' }}<el-icon class="el-icon--right">
+          <ArrowDown />
+        </el-icon>
+      </el-button>
+      <template #dropdown>
+        <el-dropdown-menu>
+          <el-dropdown-item
+            v-for="item in others"
+            :key="item.mode"
+            :command="item.mode"
+            :disabled="item.disabled"
+          >
+            {{ item.label }}
+          </el-dropdown-item>
+        </el-dropdown-menu>
+      </template>
+    </el-dropdown>
+  </div>
 </template>
 
 <style scoped>
 .decide {
   display: inline-flex;
   flex-wrap: nowrap;
+  gap: var(--zt-space-2);
+  align-items: center;
 }
 
 .decide .el-button {
-  height: 28px;
-  padding: 0 13px;
+  height: 30px;
+  margin: 0;
   font-size: 13px;
 }
 
-.decide .el-button--default:not(.is-disabled) {
-  color: var(--zt-ink-900);
+/* 主按钮一样宽：「采纳为新场景」「合并到它」上下几行对得齐 */
+.decide__main {
+  min-width: 112px;
+  padding: 0 14px;
+  font-weight: 500;
 }
 
-.decide .el-button--primary {
-  font-weight: 500;
+.decide__more {
+  padding: 0 10px;
+  color: var(--zt-ink-700);
+}
+
+.decide__icon {
+  width: 12px;
+  height: 12px;
+  margin-right: 6px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.7;
 }
 </style>

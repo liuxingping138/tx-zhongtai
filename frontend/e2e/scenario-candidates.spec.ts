@@ -25,6 +25,11 @@ const detail = (item: Record<string, unknown>) => ({
 
 type Mocks = { merged: unknown; adopted: unknown; batchAdopted: unknown }
 
+const interpretation = {
+  id: 'i1', policy_title: '蓝图变实景三晋崛起空港新地标', data_status: '待验证', version: 2, candidate_id: 'c1', scenario_state: '待审',
+  industry_l1: '交通行业', scenario_l1_name: '智慧航空', scenario_l2_name: '智慧机场工程建设管理', is_new_scenario: '是',
+}
+
 /** 待审两个场景：机场（码表里有名称很像的）、再生水（没有像的）。合并后机场出列表。 */
 async function mockCandidates(page: import('@playwright/test').Page, seen: Mocks) {
   await page.route('**/api/v1/**', (route) => {
@@ -68,6 +73,10 @@ async function mockCandidates(page: import('@playwright/test').Page, seen: Mocks
         total: 1, page: 1, page_size: 20,
       })
     }
+    // 解读核对页：这一行的场景就是待审的机场
+    if (path.endsWith('/policy/interpretations/i1/content')) return route.fulfill({ status: 404, json: { code: 'RESOURCE_NOT_FOUND', message: '没有正文' } })
+    if (path.endsWith('/policy/interpretations/i1')) return respond(route, interpretation)
+    if (path.endsWith('/policy/interpretations')) return respond(route, { items: [interpretation], total: 1, page: 1, page_size: 20 })
     if (path.endsWith('/scenario-candidates/c1')) return respond(route, detail(airport))
     if (path.endsWith('/scenario-candidates/c2')) return respond(route, detail(water))
     if (path.endsWith('/scenario-candidates')) {
@@ -89,9 +98,10 @@ test('在列表行上审核：展开看依据，合并到这一行写着的场�
   await expect(page.getByText('待审 2 个新增场景，涉及 115 行政策解读')).toBeVisible()
   const airportRow = page.getByRole('row', { name: /智慧机场工程建设管理/ }).first()
   await expect(airportRow.getByText('名称很像')).toBeVisible()
-  // 系统建议的那个决定填主色：名称很像，建议合并
+  // 只露出系统建议的那个：名称很像，建议「合并到它」；其余收在「其他」里
   const decide = page.getByRole('group', { name: '决定「智慧机场工程建设管理」' })
-  await expect(decide.getByRole('button', { name: '合并' })).toHaveClass(/el-button--primary/)
+  await expect(decide.getByRole('button', { name: '合并到它' })).toHaveClass(/el-button--primary/)
+  await expect(decide.getByRole('button', { name: '其他' })).toBeVisible()
 
   // 点名称展开：左边码表里像它的，右边同一位置已有、AI 的理由、涉及哪些行业
   await page.getByRole('button', { name: '智慧机场工程建设管理', exact: true }).click()
@@ -111,7 +121,7 @@ test('在列表行上审核：展开看依据，合并到这一行写着的场�
   await expect(drawer.getByText('在「交通行业」下搜码表里的场景')).toBeVisible()
   await page.keyboard.press('Escape')
 
-  await decide.getByRole('button', { name: '合并' }).click()
+  await decide.getByRole('button', { name: '合并到它' }).click()
   const dialog = page.getByRole('dialog', { name: '合并到已有场景' })
   await expect(dialog.getByText('智慧交通工程建设 › 交通工程建设信息化', { exact: true })).toBeVisible()
   await expect(dialog.getByText('以后 AI 再写「智慧机场工程建设管理」，自动归到这里')).toBeVisible()
@@ -120,7 +130,10 @@ test('在列表行上审核：展开看依据，合并到这一行写着的场�
   await expect(page.getByText('「智慧机场工程建设管理」已合并到已有场景，提出它的 52 行解读一起改好了')).toBeVisible()
   await expect(page.getByRole('button', { name: '智慧机场工程建设管理', exact: true })).toHaveCount(0)
 
-  await page.getByRole('group', { name: '决定「再生水循环利用」' }).getByRole('button', { name: '改名' }).click()
+  const water = page.getByRole('group', { name: '决定「再生水循环利用」' })
+  await expect(water.getByRole('button', { name: '采纳为新场景' })).toBeVisible()
+  await water.getByRole('button', { name: '其他' }).click()
+  await page.getByRole('menuitem', { name: '改个名再采纳' }).click()
   const rename = page.getByRole('dialog', { name: '改个名再采纳' })
   const confirm = rename.getByRole('button', { name: '采纳并写进码表' })
   // 名字没改不能提交（那就是直接采纳）
@@ -147,6 +160,24 @@ test('旧的单个场景地址转到列表并展开那一行；勾选后批量�
   await expect(dialog.getByText('新二级 · 能源行业 › 智慧水务 下')).toBeVisible()
   await dialog.getByRole('button', { name: '采纳这 1 个' }).click()
   await expect.poll(() => seen.batchAdopted).toEqual({ items: [{ id: 'c2', version: 1 }] })
+})
+
+test('解读核对页：场景还在待审时，「行业与场景」里只占一行，页签上有提醒，按钮和列表一样', async ({ page }) => {
+  const seen: Mocks = { merged: null, adopted: null, batchAdopted: null }
+  await mockCandidates(page, seen)
+
+  await page.goto('/policy/interpretations/i1')
+  const line = page.getByRole('region', { name: '行业与场景' }).getByRole('region', { name: '这一行的新增场景' })
+  await expect(line.getByText('新二级 · 待审')).toBeVisible()
+  await expect(line.getByText('37 条政策 · 码表里名称很像：智慧交通工程建设 › 交通工程建设信息化 · AI 还没看')).toBeVisible()
+  // 停在别的分组也知道：「行业与场景」页签旁有个提醒点
+  await expect(page.getByRole('navigation', { name: '详情分组' }).getByRole('button', { name: /行业与场景.*这一行的场景还在新增场景审核里待审/ })).toBeVisible()
+
+  await line.getByRole('button', { name: '合并到它' }).click()
+  const dialog = page.getByRole('dialog', { name: '合并到已有场景' })
+  await expect(dialog.getByText('智慧交通工程建设 › 交通工程建设信息化', { exact: true })).toBeVisible()
+  await dialog.getByRole('button', { name: '确定合并' }).click()
+  await expect.poll(() => seen.merged).toEqual({ version: 1, target: ['智慧交通工程建设', '交通工程建设信息化'], rename: false })
 })
 
 test('补充待确认：核对 AI 写的描述，改好后确认，接着看下一个', async ({ page }) => {

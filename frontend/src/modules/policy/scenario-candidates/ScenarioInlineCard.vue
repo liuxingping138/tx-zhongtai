@@ -15,12 +15,14 @@ import {
 } from '@/api/scenarioCandidates'
 import ScenarioPicker from '@/components/ScenarioPicker.vue'
 import { useAuthStore } from '@/stores/auth'
+import DecisionButtons from './DecisionButtons.vue'
 import DecisionDialog from './DecisionDialog.vue'
-import { PENDING, RESOURCE, aiText, decisionText, type DecisionMode } from './candidates'
+import { PENDING, RESOURCE, decisionText, defaultMergeTarget, doneText, levelTag, matchSentence, type DecisionMode } from './candidates'
 
 /**
- * 解读核对页上这一行的场景情况：新增场景还在待审的，就地看 AI 的判断、直接采纳 / 合并 / 驳回（对所有提出它的政策一起生效）；
- * 已经决定过的写一句结果；行业不在码表、场景不完整的可以就地改成码表里的场景。
+ * 解读核对页「行业与场景」组里，这一行的场景情况压成一行（2026-11-03 用户嫌原来的橙色大框乱）：
+ * 新增场景还在待审的，一行写几级、名称、几条政策、码表里像它的，按钮和新增场景审核列表同一个（只露建议的那个）；
+ * 已经决定过的只剩一句灰字；行业不在码表、场景不完整的就地改成码表里的场景。码表里本来就有的什么都不显示。
  */
 const props = defineProps<{ row: InterpretationItem }>()
 const emit = defineEmits<{ changed: [] }>()
@@ -31,8 +33,8 @@ const canWriteCodebook = computed(() => canDecide.value && auth.canFull('codeboo
 const canEditRow = computed(() => auth.canFull('policy.interpretations'))
 const FIXABLE = ['行业不在码表', '场景不完整']
 const FIX_HINTS: Record<string, string> = {
-  行业不在码表: '这一行的三级行业在行业场景码表里没有：新场景不新增行业，请改成码表里的行业场景。',
-  场景不完整: '这一行的场景名称不完整（没有一级场景，或有三级没二级），请改成码表里的场景。',
+  行业不在码表: '这一行的三级行业码表里没有；新场景不新增行业，请改成码表里的',
+  场景不完整: '没有一级场景，或有三级没二级，请改成码表里的场景',
 }
 
 const candidate = ref<CandidateDetail | null>(null)
@@ -51,9 +53,12 @@ watch(() => [props.row.candidate_id, props.row.version], async () => {
 }, { immediate: true })
 
 const dialog = ref<DecisionMode | null>(null)
+const opening = ref<DecisionMode | null>(null)
+const preset = ref<string[] | null>(null)
 async function open(mode: DecisionMode) {
   const current = candidate.value
-  if (!current) return
+  if (!current || opening.value) return
+  opening.value = mode
   if (!context.value) {
     try {
       context.value = await getCandidateContext(current.id)
@@ -61,11 +66,14 @@ async function open(mode: DecisionMode) {
       context.value = { siblings: [], similar: [], industries: [] }
     }
   }
+  // 和列表一样：「合并到它」预选这一行写着的那个场景
+  preset.value = mode === 'merge' ? defaultMergeTarget(current, context.value.similar) : null
+  opening.value = null
   dialog.value = mode
 }
 function decided(row: CandidateItem) {
   dialog.value = null
-  ElMessage.success(`已${row.status === '已驳回' ? '驳回' : row.status === '已合并' ? '合并' : '采纳'}，提出这个场景的 ${row.row_count} 行一起改好了`)
+  ElMessage.success(doneText(row))
   emit('changed')
 }
 
@@ -99,83 +107,63 @@ async function fix() {
 </script>
 
 <template>
-  <section
+  <div
     v-if="candidate && candidate.status === PENDING"
-    class="inline-card"
+    class="scenario-line"
+    role="region"
     aria-label="这一行的新增场景"
   >
-    <p>
-      <strong>这一行的场景「{{ candidate.name }}」是新增的（{{ candidate.level_label }}），还在待审</strong>
-      <span class="inline-card__muted">一共 {{ candidate.policy_count }} 条政策提出过，在这里决定对它们一起生效</span>
-    </p>
-    <p class="inline-card__muted">
-      {{ aiText(candidate) }}
-    </p>
-    <div class="inline-card__actions">
-      <template v-if="canDecide">
-        <el-button
-          size="small"
-          :disabled="!canWriteCodebook"
-          @click="open('merge')"
-        >
-          合并到已有场景…
-        </el-button>
-        <el-button
-          size="small"
-          :disabled="!canWriteCodebook"
-          @click="open('adopt')"
-        >
-          采纳为新场景…
-        </el-button>
-        <el-button
-          size="small"
-          @click="open('reject')"
-        >
-          驳回…
-        </el-button>
-      </template>
-      <RouterLink :to="{ name: 'policy-scenario-candidates', query: { focus: candidate.id } }">
-        去新增场景审核看全部依据 →
-      </RouterLink>
-    </div>
+    <span class="scenario-line__tag">{{ levelTag(candidate) }} · 待审</span>
+    <strong>{{ candidate.name }}</strong>
+    <span class="scenario-line__muted">{{ candidate.policy_count.toLocaleString() }} 条政策 · {{ matchSentence(candidate) }}</span>
+    <span class="scenario-line__space" />
+    <DecisionButtons
+      v-if="canDecide"
+      :candidate="candidate"
+      :can-write-codebook="canWriteCodebook"
+      :busy="opening"
+      @open="open"
+    />
+    <RouterLink :to="{ name: 'policy-scenario-candidates', query: { focus: candidate.id } }">
+      去新增场景审核 →
+    </RouterLink>
     <DecisionDialog
       :mode="dialog"
       :candidate="candidate"
       :context="context"
-      :preset-target="candidate.ai_target ? candidate.ai_target.split(' > ') : null"
+      :preset-target="preset"
       @close="dialog = null"
       @done="decided"
     />
-  </section>
+  </div>
   <p
     v-else-if="candidate"
-    class="inline-card__line"
+    class="scenario-line__done"
   >
-    这一行的场景：{{ decisionText(candidate) }}
+    场景{{ decisionText(candidate) }} · <RouterLink :to="{ name: 'policy-scenario-candidates', query: { focus: candidate.id } }">
+      去新增场景审核看
+    </RouterLink>
   </p>
-  <section
+  <div
     v-else-if="FIXABLE.includes(row.scenario_state)"
-    class="inline-card"
+    class="scenario-line"
+    role="region"
     aria-label="这一行的场景要改"
   >
-    <p><strong>场景{{ row.scenario_state }}</strong> <span class="inline-card__muted">{{ FIX_HINTS[row.scenario_state] }}</span></p>
-    <div
-      v-if="canEditRow"
-      class="inline-card__actions"
-    >
+    <span class="scenario-line__tag scenario-line__tag--fix">{{ row.scenario_state }}</span>
+    <span class="scenario-line__muted">{{ FIX_HINTS[row.scenario_state] }}</span>
+    <span class="scenario-line__space" />
+    <template v-if="canEditRow">
       <template v-if="fixing">
         <ScenarioPicker
           v-model="picked"
+          class="scenario-line__picker"
           :industry-l1="row.industry_l1"
         />
-        <el-button
-          size="small"
-          @click="fixing = false"
-        >
+        <el-button @click="fixing = false">
           取消
         </el-button>
         <el-button
-          size="small"
           type="primary"
           :disabled="!picked"
           :loading="saving"
@@ -186,48 +174,73 @@ async function fix() {
       </template>
       <el-button
         v-else
-        size="small"
+        type="primary"
+        plain
         @click="fixing = true"
       >
         改成码表里的场景
       </el-button>
-    </div>
-  </section>
+    </template>
+  </div>
 </template>
 
 <style scoped>
-.inline-card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: var(--zt-space-3);
-  padding: var(--zt-space-3) var(--zt-space-4);
-  border: 1px solid var(--zt-warning-border);
-  border-radius: var(--zt-radius);
-  background: var(--zt-warning-soft);
-}
-
-.inline-card p,
-.inline-card__line {
-  margin: 0;
-  line-height: 22px;
-}
-
-.inline-card__line {
-  margin-top: var(--zt-space-3);
-  color: var(--zt-ink-700);
-  font-size: 13px;
-}
-
-.inline-card__muted {
-  color: var(--zt-ink-700);
-  font-size: 13px;
-}
-
-.inline-card__actions {
+/* 一行浅灰底：不用警告色，不抢「核对无误」的风头 */
+.scenario-line {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--zt-space-2);
+  gap: var(--zt-space-2) var(--zt-space-3);
   align-items: center;
+  margin-bottom: var(--zt-space-3);
+  padding: var(--zt-space-2) var(--zt-space-3);
+  border: 1px solid var(--zt-border);
+  border-radius: var(--zt-radius);
+  background: var(--zt-surface-subtle);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.scenario-line strong {
+  color: var(--zt-ink-900);
+  font-size: 14px;
+}
+
+.scenario-line .el-button {
+  height: 30px;
+  margin: 0;
+}
+
+.scenario-line__tag {
+  padding: 0 8px;
+  border: 1px solid var(--zt-warning-border);
+  border-radius: 4px;
+  background: var(--zt-warning-soft);
+  color: var(--zt-warning-text);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.scenario-line__tag--fix {
+  border-color: var(--zt-danger-border);
+  background: var(--zt-danger-soft);
+  color: var(--zt-danger-text);
+}
+
+.scenario-line__muted {
+  color: var(--zt-ink-500);
+}
+
+.scenario-line__space {
+  flex-grow: 1;
+}
+
+.scenario-line__picker {
+  width: 320px;
+}
+
+.scenario-line__done {
+  margin: 0 0 var(--zt-space-3);
+  color: var(--zt-ink-500);
+  font-size: 13px;
 }
 </style>

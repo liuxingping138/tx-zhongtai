@@ -41,6 +41,18 @@ const status = computed(() => {
   return { text: value, type: value === '人工验证' ? 'success' as const : 'warning' as const }
 })
 
+// 这一行的场景还在新增场景审核里待审、或要改成码表里的：「行业与场景」页签上点个小圆点，停在别的分组也知道
+const SCENARIO_GROUP = '行业与场景'
+const SCENARIO_MARKS: Record<string, string> = {
+  待审: '这一行的场景还在新增场景审核里待审',
+  行业不在码表: '这一行的行业不在码表里，要改成码表里的',
+  场景不完整: '这一行的场景不完整，要改成码表里的',
+}
+const tabMarks = computed((): Record<string, string> => {
+  const mark = SCENARIO_MARKS[review.record.value?.scenario_state ?? '']
+  return mark ? { [SCENARIO_GROUP]: mark } : {}
+})
+
 // 核对无误标为人工验证，接着打开下一条。
 const { verifying, verify } = useVerify(review)
 </script>
@@ -56,9 +68,11 @@ const { verifying, verify } = useVerify(review)
     :can-write="canWrite"
     :status="status"
     :load-content="getInterpretationContent"
+    :tab-marks="tabMarks"
   >
-    <template #summary-extra="{ row }">
+    <template #section-extra="{ section, row }">
       <ScenarioInlineCard
+        v-if="section === SCENARIO_GROUP"
         :row="row"
         @changed="review.load"
       />

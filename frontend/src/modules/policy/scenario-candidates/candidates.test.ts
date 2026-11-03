@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CandidateItem } from '@/api/scenarioCandidates'
-import { aiText, decisionText, defaultMergeTarget, doneText, levelTag, matchHeadline, matchItems, matchOf, pathLabel, siblingsText, similarLabel, suggest, summaryText, whereText } from './candidates'
+import { decisionText, defaultMergeTarget, doneText, levelTag, matchHeadline, matchItems, matchOf, matchSentence, pathLabel, placeOf, siblingsText, similarLabel, splitLeaf, suggest, summaryText, whereText } from './candidates'
 
 function item(extra: Partial<CandidateItem>): CandidateItem {
   return {
@@ -51,12 +51,21 @@ describe('文案', () => {
 })
 
 describe('给业务人员看的说法', () => {
-  it('几级、挂在哪一眼看清', () => {
+  it('新增场景级别、挂在哪一眼看清', () => {
     expect(levelTag(item({}))).toBe('新二级')
     expect(whereText(item({}))).toBe('交通行业 › 智慧航空 下')
     expect(whereText(item({ new_level: 1, level_label: '一级', parent: '', main_industry: '医卫行业' }))).toBe('医卫行业 · 新的一级场景')
     expect(levelTag(item({ kind: '新关联', level_label: '新关联', industry: '交通行业/道路' }))).toBe('新关联')
     expect(whereText(item({ kind: '新关联', industry: '交通行业/道路' }))).toBe('挂到 交通行业/道路')
+  })
+  it('挂在哪拆成浅色的行业和加粗的上级场景，多的行业写个数', () => {
+    expect(placeOf(item({}))).toEqual({ industry: '交通行业', place: '智慧航空', more: 0 })
+    expect(placeOf(item({ new_level: 1, parent: '', main_industry: '医卫行业', industry_count: 2 }))).toEqual({ industry: '医卫行业', place: '作为一级场景', more: 1 })
+    expect(placeOf(item({ kind: '新关联', industry: '民政行业/养老服务' }))).toEqual({ industry: '码表已有，新挂到', place: '民政行业 › 养老服务', more: 0 })
+  })
+  it('像它的场景拆成上级和末级', () => {
+    expect(splitLeaf('智慧交通工程建设 › 交通工程建设信息化')).toEqual({ parent: '智慧交通工程建设', leaf: '交通工程建设信息化' })
+    expect(splitLeaf('智慧航空')).toEqual({ parent: '', leaf: '智慧航空' })
   })
   it('同级场景下级多的排前面，多了写「等 N 个」', () => {
     const siblings = [{ name: '智慧陆侧', children: 2 }, { name: '智慧空侧', children: 9 }, { name: '智慧航站楼', children: 7 }, { name: '通航', children: 0 }]
@@ -132,9 +141,10 @@ describe('AI 找相似', () => {
     expect(suggest(item({ ai_verdict: '同一个场景', ai_similar: '智慧机场' }))).toBeNull()
     expect(suggest(item({ ai_verdict: '新场景', similar_level: '高', policy_count: 1 }))).toBe('adopt')
   })
-  it('解读核对页卡片上的一句话', () => {
-    expect(aiText(item({}))).toMatch(/^AI 还没看过/)
-    expect(aiText(item({ ai_verdict: '新场景', ai_reason: '码表没有建设期管理' }))).toBe('AI 判断：新场景。理由：码表没有建设期管理')
-    expect(aiText(item({ ai_verdict: '同一个场景', ai_similar: 'a > b' }))).toBe('AI 判断：同一个场景，最像的是「a › b」')
+  it('解读核对页上场景那一行的一句话', () => {
+    expect(matchSentence(item({ ai_verdict: '归到已有场景下', ai_similar: 'a > b' }))).toBe('AI 认为应归到「a › b」')
+    expect(matchSentence(item({ ai_verdict: '同一个场景', ai_similar: 'a > b' }))).toBe('AI 认为和「a › b」是同一个')
+    expect(matchSentence(item({ similar_level: '高', similar_name: '智慧航空 > 低空飞行服务' }))).toBe('码表里名称很像：智慧航空 › 低空飞行服务 · AI 还没看')
+    expect(matchSentence(item({ ai_verdict: '新场景' }))).toBe('码表里没有像的 · AI 也认为是新场景')
   })
 })

@@ -139,9 +139,9 @@ frontend 目录运行 `pnpm run type-check`、`pnpm run lint`、`pnpm run test`�
 
 ## 核对页（政策基础标签、政策解读）
 
-核对页概要下面要放额外内容用 `PolicyReviewPage` 的 `#summary-extra="{ row }"`（解读核对页在这里放新增场景的就地卡片 `ScenarioInlineCard`）。侧栏入口旁的数字在 `layouts/menuBadges.ts` 登记取数函数和要的资源。
+核对页概要下面要放额外内容用 `PolicyReviewPage` 的 `#summary-extra="{ row }"`；放进某一组的标题下面用 `#section-extra="{ section, row }"`（解读核对页在「行业与场景」组里放新增场景那一行 `ScenarioInlineCard`），要提醒的分组用 `tab-marks`（组名 → 说明）在页签旁点个小圆点。概要区只放结论，别把操作和大段说明塞进去。侧栏入口旁的数字在 `layouts/menuBadges.ts` 登记取数函数和要的资源。
 
-新增场景审核没有单个场景的页面，在列表行上决定（`CandidateTable.vue` + `DecisionButtons.vue`），展开看依据（`CandidateExpand.vue`，依据按需取、缓存在 `useCandidateExtras`），决定的确认框由 `useListDecision` 打开；做完重新载入列表，侧栏待审数用 `refreshMenuBadges()` 马上刷新。
+新增场景审核没有单个场景的页面，在列表行上决定（`CandidateTable.vue`；决定按钮 `DecisionButtons.vue` 只露建议的那个、其余在「其他」里，解读核对页那一行也用它），展开看依据（`CandidateExpand.vue`，依据按需取、缓存在 `useCandidateExtras`），决定的确认框由 `useListDecision` 打开；做完重新载入列表，侧栏待审数用 `refreshMenuBadges()` 马上刷新。
 
 `modules/policy/shared/`：`PolicyReviewPage.vue` 是页面骨架（概要、按分组的字段表、右栏正文），`useReviewRecord.ts` 管取记录、翻条和编辑，两张表的 `BaseTagReview.vue`、`InterpretationReview.vue` 只给字段、概要字段、状态标签和右上角动作。
 

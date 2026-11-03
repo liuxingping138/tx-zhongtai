@@ -86,7 +86,7 @@ export function arrow(text: string): string {
 
 type Where = Pick<CandidateItem, 'kind' | 'new_level' | 'level_label' | 'parent' | 'industry' | 'main_industry'>
 
-/** 「新二级」「新一级」「新关联」：几级一眼看清。 */
+/** 「新二级」「新一级」「新关联」：新增场景级别一眼看清。 */
 export function levelTag(candidate: Where): string {
   return candidate.kind === KIND_NEW ? `新${candidate.level_label}` : '新关联'
 }
@@ -95,6 +95,22 @@ export function levelTag(candidate: Where): string {
 export function whereText(candidate: Where): string {
   if (candidate.kind !== KIND_NEW) return `挂到 ${candidate.industry}`
   return candidate.parent ? `${candidate.main_industry} › ${candidate.parent} 下` : `${candidate.main_industry} · 新的一级场景`
+}
+
+/**
+ * 列表「挂在哪」一格拆成两行：上面浅色的行业，下面加粗的上级场景（一眼看到挂在谁下面）。
+ * 新的一级场景直接挂在行业下；新关联是码表已有的场景新挂到一个行业，加粗的是那个行业。
+ */
+export function placeOf(candidate: Where & Pick<CandidateItem, 'industry_count'>): { industry: string; place: string; more: number } {
+  const more = Math.max(candidate.industry_count - 1, 0)
+  if (candidate.kind !== KIND_NEW) return { industry: '码表已有，新挂到', place: arrow(candidate.industry.split('/').join(' > ')), more }
+  return { industry: candidate.main_industry, place: candidate.parent || '作为一级场景', more }
+}
+
+/** 「智慧交通工程建设 › 交通工程建设信息化」拆成上级（浅色）和末级（加粗）。 */
+export function splitLeaf(path: string): { parent: string; leaf: string } {
+  const names = path.split(' › ').filter(Boolean)
+  return { parent: names.slice(0, -1).join(' › '), leaf: names[names.length - 1] ?? '' }
 }
 
 /** 同级已有的几个场景，写成「A、B、C 等 12 个」。下级多的（业务成型的）排前面。 */
@@ -194,13 +210,13 @@ export function matchHeadline(candidate: Pick<CandidateItem, 'ai_verdict'>, item
   return rest ? `${lead}；下面 ${rest} 个只是名称相近，供参考` : `${lead}；名称相近的也没有`
 }
 
-/** AI 找相似的结果写成一句话（解读核对页的场景卡片用）；还没让 AI 看过的说明怎么才会有。 */
-export function aiText(candidate: Pick<CandidateItem, 'ai_verdict' | 'ai_similar' | 'ai_reason' | 'ai_checked_at'>): string {
-  if (!candidate.ai_verdict) return 'AI 还没看过：任务调度里的「新增场景找相似」跑过一批后才有'
-  if (candidate.ai_verdict === '判断失败') return `AI 没判断出来：${candidate.ai_reason}`
-  const similar = candidate.ai_similar ? `，最像的是「${arrow(candidate.ai_similar)}」` : ''
-  const reason = candidate.ai_reason ? `。理由：${candidate.ai_reason}` : ''
-  return `AI 判断：${candidate.ai_verdict}${similar}${reason}`
+/** 解读核对页上场景那一行的一句话：码表里像它的、AI 怎么看，和列表「码表里像它的」同一套分法。 */
+export function matchSentence(candidate: Pick<CandidateItem, MatchFields>): string {
+  const match = matchOf(candidate)
+  if (match.kind === 'ai') return candidate.ai_verdict === AI_SAME ? `AI 认为和「${match.name}」是同一个` : `AI 认为应归到「${match.name}」`
+  const note = match.note ? ` · ${match.note}` : ''
+  if (match.kind === 'none') return `码表里没有像的${note}`
+  return `码表里${match.label}：${match.name}${note}`
 }
 
 /**
