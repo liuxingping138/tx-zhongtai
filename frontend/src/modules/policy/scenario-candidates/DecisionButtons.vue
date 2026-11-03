@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { ArrowDown } from '@element-plus/icons-vue'
 
 import type { CandidateItem } from '@/api/scenarioCandidates'
 import { KIND_NEW, suggest, type DecisionMode } from './candidates'
 
 /**
- * 一个新增场景的决定（2026-11-03 用户挑的样式 C）：只露出系统建议的那个，写全「采纳为新场景」「合并到它」，
- * 其余（另选一个合并、改个名再采纳、驳回）收进「其他」；没有建议时只有一个「决定」。
+ * 一个新增场景的决定：能做的都摆出来，不收进「其他」（2026-11-03 用户：别硬藏了）。
+ * 系统建议的那个排第一、实心主色、写全「采纳为新场景」「合并到它」；其余是描边小按钮，驳回用危险色字。
+ * 各自分开、不连成一组（连成一组的四个按钮用户嫌丑）。没有建议时全是描边按钮。
  * 新增场景审核列表每行、解读核对页上场景那一行共用。点了都先开确认框。
  */
 const props = defineProps<{
@@ -19,23 +19,31 @@ const props = defineProps<{
 const emit = defineEmits<{ open: [mode: DecisionMode] }>()
 
 const NO_CODEBOOK = '采纳、合并要写行业场景码表，需要码表的管理权限'
-const MENU: Record<DecisionMode, string> = { adopt: '采纳为新场景', merge: '合并到已有场景…', rename: '改个名再采纳', reject: '驳回' }
+const LABEL: Record<DecisionMode, string> = { adopt: '采纳为新场景', merge: '合并到…', rename: '改个名再采纳', reject: '驳回' }
+const HINT: Record<DecisionMode, string> = {
+  adopt: '写进行业场景码表，作为新场景',
+  merge: '合并到一个已有场景，以后这个说法都归到那里',
+  rename: '换个名称再写进码表',
+  reject: '不进码表，以后 AI 再写这个说法也直接驳回',
+}
 
 const suggested = computed(() => suggest(props.candidate))
-const main = computed(() => {
-  const mode = suggested.value
-  if (!mode) return null
-  return {
-    mode,
-    label: mode === 'adopt' ? '采纳为新场景' : '合并到它',
-    title: props.canWriteCodebook ? (mode === 'adopt' ? '写进行业场景码表，作为新场景' : '合并到这一行写着的那个已有场景') : NO_CODEBOOK,
-  }
-})
-const others = computed(() => {
+const actions = computed(() => {
   const isNew = props.candidate.kind === KIND_NEW
-  return (['adopt', 'merge', 'rename', 'reject'] as const)
-    .filter(mode => mode !== suggested.value && (mode !== 'rename' || isNew))
-    .map(mode => ({ mode, label: MENU[mode], disabled: mode !== 'reject' && !props.canWriteCodebook }))
+  const modes = (['adopt', 'merge', 'rename', 'reject'] as const).filter(mode => mode !== 'rename' || isNew)
+  // 建议的那个挪到最前
+  const ordered = suggested.value ? [suggested.value, ...modes.filter(mode => mode !== suggested.value)] : [...modes]
+  return ordered.map((mode) => {
+    const primary = mode === suggested.value
+    const locked = mode !== 'reject' && !props.canWriteCodebook
+    return {
+      mode,
+      primary,
+      label: primary && mode === 'merge' ? '合并到它' : LABEL[mode],
+      title: locked ? NO_CODEBOOK : primary && mode === 'merge' ? '合并到这一行写着的那个已有场景' : HINT[mode],
+      disabled: locked || Boolean(props.busy),
+    }
+  })
 })
 </script>
 
@@ -46,17 +54,18 @@ const others = computed(() => {
     :aria-label="`决定「${candidate.name}」`"
   >
     <el-button
-      v-if="main"
-      type="primary"
-      class="decide__main"
-      :disabled="!canWriteCodebook || Boolean(busy)"
-      :loading="busy === main.mode"
-      :title="main.title"
-      @click="emit('open', main.mode)"
+      v-for="item in actions"
+      :key="item.mode"
+      :type="item.primary ? 'primary' : undefined"
+      :class="['decide__btn', { 'decide__btn--main': item.primary, 'decide__btn--reject': item.mode === 'reject' }]"
+      :disabled="item.disabled"
+      :loading="busy === item.mode"
+      :title="item.title"
+      @click="emit('open', item.mode)"
     >
-      <template v-if="busy !== main.mode">
+      <template v-if="item.primary && busy !== item.mode">
         <svg
-          v-if="main.mode === 'adopt'"
+          v-if="item.mode === 'adopt'"
           class="decide__icon"
           viewBox="0 0 12 12"
           aria-hidden="true"
@@ -68,61 +77,44 @@ const others = computed(() => {
           aria-hidden="true"
         ><path d="M1.5 6h7M6 3l3 3-3 3M10.5 2v8" /></svg>
       </template>
-      {{ main.label }}
+      {{ item.label }}
     </el-button>
-    <el-dropdown
-      trigger="click"
-      :disabled="Boolean(busy)"
-      @command="(mode: DecisionMode) => emit('open', mode)"
-    >
-      <el-button
-        class="decide__more"
-        :loading="Boolean(busy) && busy !== main?.mode"
-      >
-        {{ main ? '其他' : '决定' }}<el-icon class="el-icon--right">
-          <ArrowDown />
-        </el-icon>
-      </el-button>
-      <template #dropdown>
-        <el-dropdown-menu>
-          <el-dropdown-item
-            v-for="item in others"
-            :key="item.mode"
-            :command="item.mode"
-            :disabled="item.disabled"
-          >
-            {{ item.label }}
-          </el-dropdown-item>
-        </el-dropdown-menu>
-      </template>
-    </el-dropdown>
   </div>
 </template>
 
 <style scoped>
 .decide {
   display: inline-flex;
-  flex-wrap: nowrap;
-  gap: var(--zt-space-2);
+  flex-wrap: wrap;
+  gap: 6px;
   align-items: center;
 }
 
 .decide .el-button {
-  height: 30px;
+  height: 28px;
   margin: 0;
+  padding: 0 10px;
   font-size: 13px;
 }
 
-/* 主按钮一样宽：「采纳为新场景」「合并到它」上下几行对得齐 */
-.decide__main {
-  min-width: 112px;
-  padding: 0 14px;
+.decide__btn:not(.decide__btn--main) {
+  color: var(--zt-ink-700);
+}
+
+/* 建议的那个：「采纳为新场景」「合并到它」一样宽，上下几行对得齐 */
+.decide .decide__btn--main {
+  min-width: 108px;
+  padding: 0 12px;
   font-weight: 500;
 }
 
-.decide__more {
-  padding: 0 10px;
-  color: var(--zt-ink-700);
+.decide .decide__btn--reject:not(.is-disabled) {
+  color: var(--zt-danger-text);
+}
+
+.decide .decide__btn--reject:not(.is-disabled):hover {
+  border-color: var(--zt-danger-border);
+  background: var(--zt-danger-soft);
 }
 
 .decide__icon {

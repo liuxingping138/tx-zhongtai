@@ -98,10 +98,10 @@ test('在列表行上审核：展开看依据，合并到这一行写着的场�
   await expect(page.getByText('待审 2 个新增场景，涉及 115 行政策解读')).toBeVisible()
   const airportRow = page.getByRole('row', { name: /智慧机场工程建设管理/ }).first()
   await expect(airportRow.getByText('名称很像')).toBeVisible()
-  // 只露出系统建议的那个：名称很像，建议「合并到它」；其余收在「其他」里
+  // 能做的都摆出来：名称很像，建议的「合并到它」排第一、实心主色，其余是描边按钮
   const decide = page.getByRole('group', { name: '决定「智慧机场工程建设管理」' })
   await expect(decide.getByRole('button', { name: '合并到它' })).toHaveClass(/el-button--primary/)
-  await expect(decide.getByRole('button', { name: '其他' })).toBeVisible()
+  await expect(decide.getByRole('button')).toHaveText(['合并到它', '采纳为新场景', '改个名再采纳', '驳回'])
 
   // 点名称展开：左边码表里像它的，右边同一位置已有、AI 的理由、涉及哪些行业
   await page.getByRole('button', { name: '智慧机场工程建设管理', exact: true }).click()
@@ -132,8 +132,7 @@ test('在列表行上审核：展开看依据，合并到这一行写着的场�
 
   const water = page.getByRole('group', { name: '决定「再生水循环利用」' })
   await expect(water.getByRole('button', { name: '采纳为新场景' })).toBeVisible()
-  await water.getByRole('button', { name: '其他' }).click()
-  await page.getByRole('menuitem', { name: '改个名再采纳' }).click()
+  await water.getByRole('button', { name: '改个名再采纳' }).click()
   const rename = page.getByRole('dialog', { name: '改个名再采纳' })
   const confirm = rename.getByRole('button', { name: '采纳并写进码表' })
   // 名字没改不能提交（那就是直接采纳）
