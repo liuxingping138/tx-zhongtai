@@ -175,7 +175,7 @@ function create(): void {
       >
         <el-table-column
           label="模板名称"
-          min-width="192"
+          min-width="200"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -265,7 +265,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="模型"
-          min-width="150"
+          min-width="142"
           show-overflow-tooltip
         >
           <template #default="{ row }">

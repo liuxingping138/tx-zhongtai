@@ -260,6 +260,8 @@ function progressText(run: BatchRun): string {
 .history { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .history__table { flex: 1; min-height: 0; }
 .history__table :deep(.el-table__row) { cursor: pointer; }
+/* 和业务列表一样左右各 12px：标准表格的 16px 会把「总消耗(千token)」表头、「草稿 11-03 17:20」挤成两行 */
+.history__table :deep(.cell) { padding: 0 12px; }
 .history__status { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; font-size: 13px; }
 .history__status + .el-progress { margin-top: 6px; }
 .history__round { margin: 4px 0 0; color: var(--zt-ink-500); font-size: 12px; }
