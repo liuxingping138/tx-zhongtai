@@ -160,26 +160,6 @@ async function created(): Promise<void> {
       批量任务
     </h1>
     <div class="ai-panel batch__panel">
-      <div class="ai-panel__head">
-        <h2>批量任务</h2>
-        <div class="batch__tools">
-          <el-button
-            :icon="Refresh"
-            :loading="loadingRuns"
-            @click="loadRuns()"
-          >
-            刷新
-          </el-button>
-          <el-button
-            v-if="canRun && editableCategories.length"
-            type="primary"
-            :icon="Plus"
-            @click="openNew"
-          >
-            新建批量任务
-          </el-button>
-        </div>
-      </div>
       <el-alert
         v-if="loadError"
         :title="loadError"
@@ -253,6 +233,27 @@ async function created(): Promise<void> {
           />
         </el-form-item>
       </FilterBar>
+      <!-- 和别的列表一样：筛选下面一行写总数，右边是工具栏；页面标题只给读屏 -->
+      <div class="batch__toolbar">
+        <span class="batch__total">共 <strong>{{ total }}</strong> 个任务</span>
+        <div class="batch__tools">
+          <el-button
+            :icon="Refresh"
+            :loading="loadingRuns"
+            @click="loadRuns()"
+          >
+            刷新
+          </el-button>
+          <el-button
+            v-if="canRun && editableCategories.length"
+            type="primary"
+            :icon="Plus"
+            @click="openNew"
+          >
+            新建批量任务
+          </el-button>
+        </div>
+      </div>
       <BatchHistory
         v-model:page="page"
         :filtered="filtered"
@@ -285,6 +286,9 @@ async function created(): Promise<void> {
 <style scoped>
 .batch { height: calc(100dvh - var(--workspace-header-height) - 48px); min-height: 520px; }
 .batch__panel { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+.batch__toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; }
+.batch__total { color: var(--zt-ink-700); font-size: 14px; font-variant-numeric: tabular-nums; }
+.batch__total strong { margin: 0 2px; color: var(--zt-ink-900); font-size: 16px; }
 .batch__tools { display: flex; gap: 8px; }
 .batch__tools .el-button { margin: 0; }
 .batch__filters { padding: 12px 16px; border-bottom: 1px solid var(--zt-border); }

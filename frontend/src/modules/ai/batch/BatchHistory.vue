@@ -3,7 +3,7 @@ import { ArrowDown } from '@element-plus/icons-vue'
 
 import type { BatchRun, RunFileKind } from '@/api/ai'
 import { RUN_SOURCE_TEXT, RUN_STATUS_TEXT, formatYuan, isActive, roundText, runModeText, runStatusType } from '../shared/aiText'
-import { versionLabel } from '../prompts/sampleView'
+import { shortTime, versionLabel } from '../prompts/sampleView'
 import { RUN_FILES, deleteRun, downloadRunFile, retryRun, runAllRun, stopRun } from './runActions'
 
 /** 批量任务列表。点一行看详情（逐行结果、冻结的提示词）；常用的下载、停止、重跑、删除也留在操作列。 */
@@ -44,14 +44,20 @@ function progressText(run: BatchRun): string {
       @row-click="(row: BatchRun) => emit('open', row)"
     >
       <el-table-column
-        prop="created_at"
         label="发起时间"
-        width="176"
-      />
+        width="112"
+      >
+        <template #default="{ row }">
+          <span
+            class="history__time"
+            :title="row.created_at"
+          >{{ shortTime(row.created_at) }}</span>
+        </template>
+      </el-table-column>
       <el-table-column
         prop="prompt_title"
         label="模板名称"
-        min-width="160"
+        min-width="200"
         show-overflow-tooltip
       />
       <el-table-column
@@ -166,34 +172,33 @@ function progressText(run: BatchRun): string {
       />
       <el-table-column
         label="操作"
-        width="232"
+        width="276"
         fixed="right"
       >
         <template #default="{ row }">
+          <!-- 行末按钮和别的列表同一套（theme.css 的 .row-action）：详情、下载描边，停止、重跑、跑全部浅底，删除红字 -->
           <div
-            class="history__ops"
+            class="row-actions"
             @click.stop
           >
-            <el-button
-              link
-              type="primary"
+            <button
+              type="button"
+              class="row-action"
               @click="emit('open', row)"
             >
               详情
-            </el-button>
+            </button>
             <el-dropdown
               v-if="canExport && Object.values(row.files).some(Boolean)"
               trigger="click"
               @command="(kind: RunFileKind) => downloadRunFile(row, kind)"
             >
-              <el-button
-                link
-                type="primary"
+              <button
+                type="button"
+                class="row-action"
               >
-                下载<el-icon class="el-icon--right">
-                  <ArrowDown />
-                </el-icon>
-              </el-button>
+                下载<el-icon><ArrowDown /></el-icon>
+              </button>
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item
@@ -206,41 +211,41 @@ function progressText(run: BatchRun): string {
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
-            <el-button
+            <button
               v-if="canManage(row) && row.can_stop"
-              link
-              type="warning"
+              type="button"
+              class="row-action row-action--primary"
               :disabled="row.status === 'stopping'"
               @click="act(stopRun, row)"
             >
               停止
-            </el-button>
-            <el-button
+            </button>
+            <button
               v-if="canManage(row) && row.can_retry"
-              link
-              type="primary"
+              type="button"
+              class="row-action row-action--primary"
               :title="`重新提问失败和没跑到的 ${row.pending_count} 条`"
               @click="act(retryRun, row)"
             >
               重跑失败
-            </el-button>
-            <el-button
+            </button>
+            <button
               v-if="canManage(row) && row.can_run_all"
-              link
-              type="primary"
+              type="button"
+              class="row-action row-action--primary"
               title="这次只跑了前几行：用同一份数据、同一版提示词跑全部"
               @click="act(runAllRun, row)"
             >
               跑全部
-            </el-button>
-            <el-button
+            </button>
+            <button
               v-if="canManage(row) && row.can_delete"
-              link
-              type="danger"
+              type="button"
+              class="row-action row-action--danger"
               @click="act(deleteRun, row)"
             >
               删除
-            </el-button>
+            </button>
           </div>
         </template>
       </el-table-column>
@@ -266,8 +271,7 @@ function progressText(run: BatchRun): string {
 .history__status + .el-progress { margin-top: 6px; }
 .history__round { margin: 4px 0 0; color: var(--zt-ink-500); font-size: 12px; }
 .history__error { margin: 4px 0 0; color: var(--zt-danger-text); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.history__ops { display: flex; align-items: center; gap: 10px; }
-.history__ops .el-button { margin: 0; }
+.history__time { font-variant-numeric: tabular-nums; }
 .history__pager { justify-content: flex-end; padding: 10px 16px; }
 .history__version { color: var(--zt-blue-700); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .history__version.is-draft { color: var(--zt-ink-700); }
