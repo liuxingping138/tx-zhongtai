@@ -143,7 +143,7 @@ defineExpose({ clearSelection: () => table.value?.clearSelection() })
     <el-table-column
       v-if="pending"
       label="码表里像它的"
-      min-width="270"
+      min-width="250"
     >
       <template #default="{ row }">
         <MatchCell
@@ -180,7 +180,7 @@ defineExpose({ clearSelection: () => table.value?.clearSelection() })
     <el-table-column
       v-if="pending && canDecide"
       label="决定"
-      width="270"
+      width="256"
       fixed="right"
       class-name="candidates-table__decide"
     >
