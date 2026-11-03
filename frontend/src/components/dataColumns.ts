@@ -15,6 +15,8 @@ export interface DataColumn {
    * 列表只出这一列，列设置里也只有这一项；详情、编辑、导出仍按各自的字段。
    */
   stack?: string[]
+  /** 枚举值显示成彩色小标签：值 → 标签颜色，没列出的值用灰色。 */
+  tags?: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'>
   /** AI 打标写入的列：表头淡紫底、列名前「AI」标记，让人一眼分出哪些要核对。 */
   ai?: boolean
 }

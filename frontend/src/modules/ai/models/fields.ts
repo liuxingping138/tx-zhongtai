@@ -74,13 +74,15 @@ export const CREATE_DEFAULTS: RecordForm = {
 const PRICE_HINT = '元/千 token'
 
 export const TABLE_COLUMNS: DataColumn[] = [
-  { prop: 'name', label: '显示名称', minWidth: 240, grow: 2 },
-  { prop: 'enabled', label: '状态', width: 80 },
+  // 显示名称写全（2026-11-03 用户：最起码名称要显示全），最长的「字节-DeepSeek-V4.1-Flash经济版（不联网）」约 300px
+  { prop: 'name', label: '显示名称', minWidth: 330, grow: 2 },
+  // 状态是行内开关，和用户管理、任务调度同一种（ModelList 的 #cell-enabled）
+  { prop: 'enabled', label: '状态', width: 110 },
   { prop: 'id', label: '模型ID', width: 200 },
-  { prop: 'provider', label: '厂商', width: 100 },
+  { prop: 'provider', label: '厂商', width: 100, tags: { 字节方舟: 'primary', 百度千帆: 'success' } },
   { prop: 'endpoint', label: '接入点', width: 220 },
-  { prop: 'web_search', label: '联网', width: 90 },
-  { prop: 'service_tier', label: '服务档位', width: 120 },
+  { prop: 'web_search', label: '联网', width: 90, tags: { 联网: 'success', 不联网: 'info' } },
+  { prop: 'service_tier', label: '服务档位', width: 120, tags: { '低优（flex）': 'warning', '常规（auto）': 'primary', 按模型默认: 'info' } },
   { prop: 'thinking', label: '深度思考', width: 110 },
   { prop: 'reasoning_effort', label: '思考强度', width: 110 },
   { prop: 'input_price', label: '常规输入', fullLabel: '常规输入单价（元/千 token）', width: 100 },

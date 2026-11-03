@@ -101,7 +101,7 @@ function editRoute(row: T, index: number): RouteLocationRaw {
         :prop="col.prop"
         :label="col.label"
         :width="col.width"
-        :show-overflow-tooltip="col.prop !== titleKey && !col.stack"
+        :show-overflow-tooltip="col.prop !== titleKey && !col.stack && !col.tags && !$slots[`cell-${col.prop}`]"
         :label-class-name="col.ai ? 'column-ai' : undefined"
       >
         <template #header>
@@ -135,6 +135,20 @@ function editRoute(row: T, index: number): RouteLocationRaw {
               {{ text(row, col) }}
             </button>
           </template>
+          <!-- 模块自己画这一格（如行内启停开关）：插槽名 cell-列名 -->
+          <slot
+            v-else-if="$slots[`cell-${col.prop}`]"
+            :name="`cell-${col.prop}`"
+            :row="row"
+          />
+          <el-tag
+            v-else-if="col.tags && value(row, col.prop)"
+            size="small"
+            :type="col.tags[value(row, col.prop)] ?? 'info'"
+            disable-transitions
+          >
+            {{ text(row, col) }}
+          </el-tag>
           <span
             v-else-if="col.stack"
             class="cell-stack"

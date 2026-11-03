@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Plus } from '@element-plus/icons-vue'
 import { computed, onMounted, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { createModelConfig, listModelConfigs, updateModelConfig } from '@/api/ai'
 import { errorMessage } from '@/api/errors'
@@ -53,6 +54,32 @@ const editor = useRecordEditor<ModelRow>({
 })
 const groups = computed(() => (editor.editing.value ? EDIT_GROUPS : EDITOR_GROUPS))
 
+// 列表上直接启停，和用户管理同一种开关：先确认，成功后提示并刷新。
+const toggling = ref('')
+async function toggle(row: ModelRow) {
+  if (toggling.value) return
+  const enable = row.enabled !== '启用'
+  const verb = enable ? '启用' : '停用'
+  const ok = await ElMessageBox.confirm(
+    enable ? `启用后「${row.name}」会出现在模板和批量任务的模型下拉里。` : `停用后「${row.name}」不再出现在模型下拉里，已排队、运行中的任务照常跑完。`,
+    `${verb}这个模型？`,
+    { confirmButtonText: verb, cancelButtonText: '取消', type: 'warning' },
+  ).then(() => true, () => false)
+  if (!ok) return
+  toggling.value = row.id
+  try {
+    // 其余字段按原样提交，只改启停：和编辑抽屉保存走同一个接口、同一个版本号
+    const form = Object.fromEntries(Object.entries(row).map(([key, value]) => [key, String(value ?? '')]))
+    await updateModelConfig(row.id, { ...toBody(form), enabled: enable, id: row.id, version: row.version })
+    ElMessage.success(`已${verb}`)
+  } catch (error) {
+    ElMessage.error(errorMessage(error, `${verb}失败，请刷新后重试`))
+  } finally {
+    toggling.value = ''
+    await load()
+  }
+}
+
 onMounted(() => { void load() })
 </script>
 
@@ -99,7 +126,31 @@ onMounted(() => { void load() })
         :loading="loading"
         :filtered="false"
         @edit="editor.openEdit"
-      />
+      >
+        <template #cell-enabled="{ row }">
+          <span class="status-line">
+            <el-switch
+              v-if="canWrite"
+              :model-value="row.enabled === '启用'"
+              :loading="toggling === row.id"
+              :disabled="!!toggling && toggling !== row.id"
+              :aria-label="`${row.name} 启用`"
+              @change="toggle(row)"
+            />
+            <el-tag
+              v-else
+              :type="row.enabled === '启用' ? 'success' : 'warning'"
+              size="small"
+            >
+              {{ row.enabled }}
+            </el-tag>
+            <span
+              v-if="canWrite"
+              class="status-text"
+            >{{ row.enabled }}</span>
+          </span>
+        </template>
+      </BusinessTable>
     </ListPage>
     <RecordEditorDrawer
       :editor="editor"
@@ -107,3 +158,8 @@ onMounted(() => { void load() })
     />
   </div>
 </template>
+
+<style scoped>
+.status-line { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.status-text { color: var(--zt-ink-500); font-size: 12px; }
+</style>
