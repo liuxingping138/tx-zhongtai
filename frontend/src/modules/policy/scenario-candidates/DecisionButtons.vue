@@ -86,15 +86,15 @@ const actions = computed(() => {
 <style scoped>
 .decide {
   display: inline-flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-wrap: nowrap;
+  gap: 4px;
   align-items: center;
 }
 
 .decide .el-button {
   height: 28px;
   margin: 0;
-  padding: 0 10px;
+  padding: 0 9px;
   font-size: 13px;
 }
 
@@ -104,8 +104,8 @@ const actions = computed(() => {
 
 /* 建议的那个：「采纳」「合并」一样宽，上下几行对得齐 */
 .decide .decide__btn--main {
-  min-width: 68px;
-  padding: 0 12px;
+  min-width: 64px;
+  padding: 0 10px;
   font-weight: 500;
 }
 
