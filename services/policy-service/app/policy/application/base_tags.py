@@ -111,38 +111,6 @@ def _require_lengths(values: dict[str, str]) -> None:
         raise ApiError("、".join(reasons), code=ErrorCode.VALIDATION_ERROR, http_status=422)
 
 
-async def create_base_tag(session: AsyncSession, actor: Actor, data: dict[str, str]) -> dict[str, Any]:
-    values = _values(data)
-    if not values["policy_name"]:
-        raise ApiError("政策名称不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    _require_lengths(values)
-    digest = content_hash(values, BASE_TAG_FIELDS)
-    if await repo.get_by_hash(session, digest):
-        raise ApiError("已有一条内容完全相同的政策基础标签，不能重复", code=ErrorCode.DUPLICATE, http_status=409)
-    now = utcnow()
-    row = BaseTag(
-        content_hash=digest,
-        version=1,
-        created_at=now,
-        created_by_id=actor.id,
-        created_by_name=actor.name,
-        updated_at=now,
-        updated_by_id=actor.id,
-        updated_by_name=actor.name,
-        **values,
-    )
-    session.add(row)
-    await session.flush()
-    await enqueue_event(
-        session,
-        event_type="policy.base_tag.created",
-        actor=actor,
-        target_id=str(row.id),
-        changes={"policy_name": row.policy_name},
-    )
-    return _to_out(row)
-
-
 async def update_base_tag(
     session: AsyncSession, actor: Actor, item_id: uuid.UUID, data: dict[str, Any]
 ) -> dict[str, Any]:

@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.security import classified, require_policy_permission
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
-from app.policy.api.schemas import BaseTagPatch, BaseTagWrite
+from app.policy.api.schemas import BaseTagPatch
 from app.policy.application import base_tags as service
 from app.policy.domain.fields import AI_STATUS_CHOICES
 
@@ -123,19 +123,6 @@ async def import_items(
 ) -> Response:
     content = await read_import_upload(request, settings.import_max_bytes)
     return import_result_response(await service.import_base_tags(session, actor, content), "base-tags-import.xlsx")
-
-
-@router.post("")
-@classified(SecurityClass.RESOURCE_AUTHORIZED)
-async def create_item(
-    body: BaseTagWrite,
-    session: AsyncSession = Depends(get_db_session, scope="function"),
-    actor: Actor = Depends(require_policy_permission(RESOURCE, "create")),
-) -> JSONResponse:
-    return success_json(
-        await service.create_base_tag(session, actor, body.model_dump(exclude={"version"})),
-        status_code=201,
-    )
 
 
 @router.get("/{item_id}")

@@ -1,14 +1,11 @@
 <script setup lang="ts">
-import { Plus } from '@element-plus/icons-vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import {
-  createInterpretation,
   importInterpretations,
   listInterpretations,
   setInterpretationsDataStatus,
-  updateInterpretation,
   type InterpretationItem,
 } from '@/api/policy'
 import { errorMessage } from '@/api/errors'
@@ -24,16 +21,14 @@ import FilterKeyword from '@/components/FilterKeyword.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ImportButton from '@/components/ImportButton.vue'
 import ListPage from '@/components/ListPage.vue'
-import RecordEditorDrawer from '@/components/RecordEditorDrawer.vue'
 import { useDetailColumns } from '@/composables/useDetailColumns'
 import { useExcelExport } from '@/composables/useExcelExport'
 import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useListLoader } from '@/composables/useListLoader'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
-import { useRecordEditor } from '@/composables/useRecordEditor'
 import { useTableSelection } from '@/composables/useTableSelection'
 import { useAuthStore } from '@/stores/auth'
-import { EDITOR_DEFAULTS, EDITOR_GROUPS, SUMMARY_KEYS, TABLE_COLUMNS } from './fields'
+import { EDITOR_GROUPS, SUMMARY_KEYS, TABLE_COLUMNS } from './fields'
 
 const RESOURCE = 'policy.interpretations'
 const auth = useAuthStore()
@@ -62,6 +57,13 @@ const { items, total, loading, loadError, resultFiltered, load } = useListLoader
 })
 const { columns, defaults, selected } = useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)
 
+// 分组标题条上的说明：这一组几条解读、各是什么数据状态（只算本页的行）。
+function groupMeta(rows: InterpretationItem[]): string {
+  const counts = new Map<string, number>()
+  for (const row of rows) counts.set(row.data_status || '待验证', (counts.get(row.data_status || '待验证') ?? 0) + 1)
+  return [`${rows.length} 条解读`, ...[...counts].map(([status, count]) => `${status} ${count}`)].join(' · ')
+}
+
 async function refresh() {
   await Promise.all([load(), filters.load()])
 }
@@ -87,16 +89,6 @@ function detailRoute(row: InterpretationItem, index: number) {
   const position = (query.page - 1) * query.page_size + index
   return { name: 'policy-interpretation-review', params: { id: row.id }, query: reviewQuery(listQuery.applied, position, query.page_size) }
 }
-
-const editor = useRecordEditor<InterpretationItem>({
-  noun: '政策解读',
-  groups: EDITOR_GROUPS,
-  defaults: EDITOR_DEFAULTS,
-  create: createInterpretation,
-  // 政策唯一标识不在表单里，按原值提交。
-  update: (row, form) => updateInterpretation(row.id, { ...form, policy_uid: row.policy_uid, version: row.version }),
-  refresh,
-})
 
 async function onImport(file: File) {
   try {
@@ -137,14 +129,6 @@ onMounted(() => {
       @change="load"
     >
       <template #actions>
-        <el-button
-          v-if="canWrite"
-          type="primary"
-          :icon="Plus"
-          @click="editor.openCreate"
-        >
-          新增
-        </el-button>
         <ImportButton
           v-if="canWrite"
           hint="政策标识与关联主键可自动生成；重复或校验不通过的记录会跳过并提供报告。"
@@ -256,7 +240,8 @@ onMounted(() => {
         :selected="selected"
         :summary-keys="SUMMARY_KEYS"
         title-key="policy_title"
-        merge-repeated-title
+        group-by-title
+        :group-meta="groupMeta"
         :detail-route="detailRoute"
         :can-write="canWrite"
         :loading="loading"
@@ -273,10 +258,6 @@ onMounted(() => {
       :choices="STATUS_CHOICES"
       :submit="submitStatus"
       @done="afterStatus"
-    />
-    <RecordEditorDrawer
-      :editor="editor"
-      :groups="EDITOR_GROUPS"
     />
   </div>
 </template>

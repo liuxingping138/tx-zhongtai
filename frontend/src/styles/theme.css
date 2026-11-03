@@ -62,6 +62,10 @@
   --zt-teal-text: #1f7a6b;
   --zt-teal-soft: #dcf1ee;
   --zt-teal-line: #82c3b8;
+  /* AI 打标写入的列：表头淡紫底和「AI」小标记，和人填、系统算的列区分开。 */
+  --zt-ai-text: #6a3fc4;
+  --zt-ai-soft: #f1edfb;
+  --zt-ai-line: #d4c7f2;
 
   --chart-normal: var(--zt-success);
   --chart-watch: var(--zt-warning);

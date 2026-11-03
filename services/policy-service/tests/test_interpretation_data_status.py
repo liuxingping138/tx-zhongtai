@@ -76,15 +76,6 @@ def test_status_choices_are_the_two_agreed_values() -> None:
     assert service._data_status_error({"data_status": "已验证"}) is not None
 
 
-def test_create_rejects_unknown_status() -> None:
-    with pytest.raises(ApiError) as exc:
-        asyncio.run(
-            service.create_interpretation(object(), _FakeActor(), {"policy_title": "某政策", "data_status": "已验证"})
-        )
-    assert exc.value.http_status == 422
-    assert "数据状态" in exc.value.message
-
-
 def _row(status: str) -> Interpretation:
     now = datetime.now(UTC)
     values = dict.fromkeys(INTERPRETATION_WRITE_FIELDS, "")

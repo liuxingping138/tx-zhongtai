@@ -48,6 +48,9 @@ RETIRED_RESOURCE_CODES: tuple[str, ...] = ()
 RETIRED_ACTIONS: tuple[tuple[str, str], ...] = (
     # 新增场景改成在「新增场景审核」里按场景决定，解读列表不再有「同步新增场景」
     ("policy.interpretations", "sync_scenarios"),
+    # 基础标签、政策解读都是 AI 打标从源库读来的，没有手工新增，只留导入
+    ("policy.base_tags", "create"),
+    ("policy.interpretations", "create"),
 )
 
 RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
@@ -144,13 +147,11 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ActionSpec("policy.base_tags", "list", GrantLevel.READ),
     ActionSpec("policy.base_tags", "read", GrantLevel.READ),
     ActionSpec("policy.base_tags", "export", GrantLevel.EXPORT),
-    ActionSpec("policy.base_tags", "create", GrantLevel.FULL),
     ActionSpec("policy.base_tags", "update", GrantLevel.FULL),
     ActionSpec("policy.base_tags", "import", GrantLevel.FULL),
     ActionSpec("policy.interpretations", "list", GrantLevel.READ),
     ActionSpec("policy.interpretations", "read", GrantLevel.READ),
     ActionSpec("policy.interpretations", "export", GrantLevel.EXPORT),
-    ActionSpec("policy.interpretations", "create", GrantLevel.FULL),
     ActionSpec("policy.interpretations", "update", GrantLevel.FULL),
     ActionSpec("policy.interpretations", "import", GrantLevel.FULL),
     ActionSpec("policy.scenario_candidates", "list", GrantLevel.READ),

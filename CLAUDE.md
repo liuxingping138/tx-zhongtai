@@ -310,7 +310,7 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
   待办（以及还没和码表比对的解读行）都有部分索引，查询条件写在 `policy.domain.models` 的 `awaiting_interpretation` 等函数里、和索引条件一字不差，
   常量用 `literal_execute` 直接写进 SQL：写成绑定参数的话通用执行计划用不上部分索引，几百万行时又是整表扫描（`tests/test_backlog_indexes.py` 会拦）
 - 新增场景不再逐行同步，按场景审核（菜单「新增场景审核」`/policy/scenario-candidates`，资源 `policy.scenario_candidates`：查看档看，完整档 `decide` 采纳 / 合并 / 驳回 / 改判，采纳、合并写码表还要 `codebook.scenarios:update`）。
-  解读行和码表比对、归成候选、套用决定都在 `app/policy/application/scenario_engine.py`：AI 每批写完（`interpreting._classify_new_rows` 扫「待归集」部分索引）、手工新建和编辑（名称或编码变了）、导入后都走它，
+  解读行和码表比对、归成候选、套用决定都在 `app/policy/application/scenario_engine.py`：AI 每批写完（`interpreting._classify_new_rows` 扫「待归集」部分索引）、手工编辑（名称或编码变了）、导入后都走它，
   码表服务连不上时行留着 `scenario_state = ''`，`python -m app.cli.classify_scenarios`（policy-worker 里跑）补。比对用 codebook `/internal/v1/scenarios/lookup` 返回的 `kind` / `new_level`（`scenario_codes.classify`）：
   码表已有的回填编码，AI 说新增的改成「否」并在备注注明；三级行业不在码表的标「行业不在码表」；新场景按「第一个新出现的那一级」的场景路径归成候选（不分行业，和各级场景号全局唯一一致），
   各级场景都有、只是没挂在这个行业下的是「新关联」候选（连行业一起算）。「是否新增场景」「新增场景级别」由比对结果覆盖 AI 的写法。

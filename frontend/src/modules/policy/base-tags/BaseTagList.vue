@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { Plus } from '@element-plus/icons-vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import { importAfterAreaResolve } from '@/api/codebook'
-import { createBaseTag, importBaseTags, listBaseTags, updateBaseTag, type BaseTagItem } from '@/api/policy'
+import { importBaseTags, listBaseTags, type BaseTagItem } from '@/api/policy'
 import { errorMessage } from '@/api/errors'
 import { reportImportResult, runExcelImport } from '@/api/excelImport'
 import AuditLogButton from '@/components/AuditLogButton.vue'
@@ -17,13 +16,11 @@ import FilterKeyword from '@/components/FilterKeyword.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ImportButton from '@/components/ImportButton.vue'
 import ListPage from '@/components/ListPage.vue'
-import RecordEditorDrawer from '@/components/RecordEditorDrawer.vue'
 import { useDetailColumns } from '@/composables/useDetailColumns'
 import { useExcelExport } from '@/composables/useExcelExport'
 import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useListLoader } from '@/composables/useListLoader'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
-import { useRecordEditor } from '@/composables/useRecordEditor'
 import { useTableSelection } from '@/composables/useTableSelection'
 import { useAuthStore } from '@/stores/auth'
 import { AI_STATUS_CHOICES, EDITOR_GROUPS, SUMMARY_KEYS, TABLE_COLUMNS } from './fields'
@@ -75,14 +72,6 @@ async function afterRetag() {
   await refresh()
 }
 
-const editor = useRecordEditor<BaseTagItem>({
-  noun: '政策基础标签',
-  groups: EDITOR_GROUPS,
-  create: createBaseTag,
-  update: (row, form) => updateBaseTag(row.id, { ...form, version: row.version }),
-  refresh,
-})
-
 async function onImport(file: File) {
   try {
     const result = await runExcelImport(file, (onProgress) =>
@@ -124,14 +113,6 @@ onMounted(() => {
       @change="load"
     >
       <template #actions>
-        <el-button
-          v-if="canWrite"
-          type="primary"
-          :icon="Plus"
-          @click="editor.openCreate"
-        >
-          新增
-        </el-button>
         <ImportButton
           v-if="canWrite"
           hint="上传后关联省市区编码，任一条记录关联失败则整批退回，详情见校验报告。"
@@ -233,10 +214,6 @@ onMounted(() => {
       v-model="retagOpen"
       :ids="selection.ids.value"
       @done="afterRetag"
-    />
-    <RecordEditorDrawer
-      :editor="editor"
-      :groups="EDITOR_GROUPS"
     />
   </div>
 </template>

@@ -4,29 +4,29 @@ import type { EditorGroup } from '@/components/editorGroups'
 /** 与后端 DATA_STATUS_CHOICES 一致，只允许这两项。 */
 export const DATA_STATUS_CHOICES = ['待验证', '人工验证']
 
-/** 新录入默认待验证。 */
-export const EDITOR_DEFAULTS = { data_status: '待验证' }
-
-// 列的先后按业务人员核对的顺序：先是政策和它解读出的行业、场景、客户、机会，再是数据状态和备注，
-// 编码、唯一标识、关联主键这类对人没意义的放后面，留痕列最后。详情按下面的 EDITOR_GROUPS 分组展示。
+// 列的先后按核对的顺序：先是这一行解读出的行业、场景，紧跟着核对时最先看的机会类型、信息化等级和两个状态，
+// 再是 AI 写的客户、产品、要文、补贴、市场机会；编码、唯一标识、关联主键这类对人没意义的放后面，留痕列最后。
+// 政策原文名称在列表里写在分组标题条上（同一条政策的几行一组），列设置里仍有这一项。ai 标的是 AI 打标写入的列
+// （aitag/domain/interpret_rules.ANSWER_FIELDS 和市场机会那一步）；是否新增场景、新增场景级别由码表比对结果覆盖，不算。
+// 详情按下面的 EDITOR_GROUPS 分组展示。
 export const TABLE_COLUMNS: DataColumn[] = [
   { prop: 'policy_title', label: '政策原文名称', minWidth: 340, grow: 2 },
   // 行业、场景各叠成一格：上面一级，下面浅色的二级 › 三级（2026-11-03：原来六列都被挤成截断的半句）
-  { prop: 'industry_l1', label: '行业', fullLabel: '一级行业，下面是二级 › 三级行业', minWidth: 200, stack: ['industry_l2', 'industry_l3'] },
-  { prop: 'scenario_l1_name', label: '场景', fullLabel: '一级场景，下面是二级 › 三级场景', minWidth: 200, grow: 1, stack: ['scenario_l2_name', 'scenario_l3_name'] },
-  { prop: 'target_customers', label: '目标客户', fullLabel: '目标客户当前政策影响客户群', minWidth: 260, grow: 1, wrap: true },
-  { prop: 'adapted_products', label: '适配产品', minWidth: 180 },
-  { prop: 'purchase_reason', label: '采买理由', fullLabel: '目标客户采买理由', minWidth: 200 },
-  { prop: 'opportunity_type', label: '机会类型', width: 110 },
-  { prop: 'policy_summary', label: '政策要文', width: 320, wrap: true },
-  { prop: 'has_subsidy', label: '有无政府补贴', width: 120 },
-  { prop: 'subsidy_content', label: '补贴内容', minWidth: 180 },
-  { prop: 'market_opportunity', label: '政策市场机会', minWidth: 180 },
-  { prop: 'info_level', label: '信息化等级', width: 110 },
-  { prop: 'is_new_scenario', label: '是否新增场景', width: 120 },
-  { prop: 'new_scenario_level', label: '新增场景级别', width: 120 },
+  { prop: 'industry_l1', label: '行业', fullLabel: '一级行业，下面是二级 › 三级行业', minWidth: 220, stack: ['industry_l2', 'industry_l3'], ai: true },
+  { prop: 'scenario_l1_name', label: '场景', fullLabel: '一级场景，下面是二级 › 三级场景', minWidth: 220, grow: 1, stack: ['scenario_l2_name', 'scenario_l3_name'], ai: true },
+  { prop: 'opportunity_type', label: '机会类型', width: 116, ai: true },
+  { prop: 'info_level', label: '信息化等级', width: 124, ai: true },
   { prop: 'scenario_state', label: '场景状态', width: 120 },
   { prop: 'data_status', label: '数据状态', width: 110 },
+  { prop: 'target_customers', label: '目标客户', fullLabel: '目标客户当前政策影响客户群', minWidth: 260, grow: 1, wrap: true, ai: true },
+  { prop: 'adapted_products', label: '适配产品', minWidth: 180, ai: true },
+  { prop: 'purchase_reason', label: '采买理由', fullLabel: '目标客户采买理由', minWidth: 200, ai: true },
+  { prop: 'policy_summary', label: '政策要文', width: 320, wrap: true, ai: true },
+  { prop: 'has_subsidy', label: '有无政府补贴', width: 136, ai: true },
+  { prop: 'subsidy_content', label: '补贴内容', minWidth: 180, ai: true },
+  { prop: 'market_opportunity', label: '政策市场机会', minWidth: 180, ai: true },
+  { prop: 'is_new_scenario', label: '是否新增场景', width: 120 },
+  { prop: 'new_scenario_level', label: '新增场景级别', width: 120 },
   { prop: 'remark', label: '备注', minWidth: 200 },
   { prop: 'industry_scenario_code', label: '行业场景编码', width: 220 },
   { prop: 'industry_code', label: '行业编码', width: 120 },

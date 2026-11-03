@@ -145,18 +145,6 @@ class TestBaseTags:
         monkeypatch.setattr(base_tags.repo, "get_by_id", AsyncMock(side_effect=lambda *_: state.row))
         return state
 
-    async def test_create_stores_a_content_hash_and_audits(self, env: SimpleNamespace) -> None:
-        out = await base_tags.create_base_tag(_Session(), ACTOR, {"policy_name": "某政策", "province_code": "11"})  # type: ignore[arg-type]
-        assert out["policy_name"] == "某政策" and env.events == ["policy.base_tag.created"]
-
-    async def test_create_needs_a_name_and_refuses_identical_content(self, env: SimpleNamespace) -> None:
-        with pytest.raises(ApiError, match="政策名称"):
-            await base_tags.create_base_tag(_Session(), ACTOR, {"policy_name": ""})  # type: ignore[arg-type]
-        env.same = object()
-        with pytest.raises(ApiError, match="完全相同") as err:
-            await base_tags.create_base_tag(_Session(), ACTOR, {"policy_name": "某政策"})  # type: ignore[arg-type]
-        assert err.value.http_status == 409
-
     def _row(self) -> BaseTag:
         row = _stamped(BaseTag, policy_name="某政策", province_code="11")
         row.refresh_hash()

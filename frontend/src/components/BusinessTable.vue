@@ -9,7 +9,9 @@ import { buildDetailSections } from './detailSections'
 import DetailSections from './DetailSections.vue'
 import type { EditorGroup } from './editorGroups'
 import ListEmpty from './ListEmpty.vue'
-import { repeatSpans } from './rowSpans'
+import type { GroupRow } from './rowGroups'
+import RowActions from './RowActions.vue'
+import { useGroupedRows, type SelectableTable } from './useGroupedRows'
 const props = defineProps<{
   items: T[]; columns: readonly DataColumn[]; selected: string[]; titleKey: string; summaryKeys?: string[];
   canWrite: boolean; loading: boolean; filtered: boolean; detailTitle?: string;
@@ -20,26 +22,31 @@ const props = defineProps<{
   /** 首列加勾选框，用于批量操作；只勾当前页。 */
   selectable?: boolean;
   /**
-   * 一条记录拆成好几行时（如一条政策解读出十几行行业场景）：挨着的同一标题合成一格，竖着跨过这几行，
-   * 下面写「共 N 行」。勾选、查看、编辑仍是每行一套；只合并挨着的，翻页后下一页开头再写一次。
+   * 一条记录拆成好几行时（如一条政策解读出十几行行业场景）：挨着的同一标题分成一组，组前一行分组标题条
+   * 写标题和 groupMeta 给的说明，表格里不再有标题列。勾选、查看、编辑仍是每行一套，标题条上的勾选框勾整组；
+   * 只分挨着的，翻页后下一页开头再起一组。
    */
-  mergeRepeatedTitle?: boolean;
+  groupByTitle?: boolean;
+  /** 分组标题条上标题下面的一句说明，如「11 条解读 · 待验证 9」。 */
+  groupMeta?: (rows: T[]) => string;
 }>()
 const emit = defineEmits<{ edit: [row: T]; reset: []; 'selection-change': [rows: T[]] }>()
 const SELECTION_WIDTH = 44
-const table = ref<{ clearSelection: () => void }>()
+const table = ref<SelectableTable<T | GroupRow<T>>>()
 defineExpose({ clearSelection: () => table.value?.clearSelection() })
 const detail: ShallowRef<T | null> = shallowRef(null)
 const detailOpen = ref(false)
 const narrow = useNarrowViewport()
-const displayed = computed(() => props.columns.filter(col => props.selected.includes(col.prop)))
+// 分组时标题写在分组标题条上，表格里不再出标题列。
+const displayed = computed(() => props.columns.filter(col => props.selected.includes(col.prop)
+  && !(props.groupByTitle && col.prop === props.titleKey)))
 const summaryColumns = computed(() => (props.summaryKeys ?? props.selected)
   .map(key => displayed.value.find(col => col.prop === key))
   .filter((col): col is DataColumn => !!col && col.prop !== props.titleKey)
   .slice(0, 3))
 const root = ref<HTMLElement>()
 const availableWidth = ref(0)
-const actionWidth = computed(() => props.canWrite ? 116 : 72)
+const actionWidth = computed(() => props.canWrite ? 140 : 84)
 const fixedWidth = computed(() => actionWidth.value + (props.selectable ? SELECTION_WIDTH : 0))
 const laidOut = computed(() => layoutDataColumns(displayed.value, availableWidth.value - 2, fixedWidth.value))
 const totalWidth = computed(() => laidOut.value.reduce((sum, col) => sum + col.width, fixedWidth.value) + 2)
@@ -61,15 +68,16 @@ const link = fieldLink
 function stackText(row: T, col: DataColumn): string {
   return (col.stack ?? []).map(key => value(row, key)).filter(Boolean).join(' › ')
 }
-/** 标题这一列每行跨几行：一段相同标题的第一行跨整段，其余为 0（不画） */
-const titleSpans = computed(() => (props.mergeRepeatedTitle
-  ? repeatSpans(props.items.map(row => value(row, props.titleKey)))
-  : props.items.map(() => 1)))
-function spanMethod({ column, rowIndex }: { column: { property?: string }; rowIndex: number }): [number, number] {
-  if (column.property !== props.titleKey) return [1, 1]
-  const span = titleSpans.value[rowIndex] ?? 1
-  return span ? [span, 1] : [0, 0]
-}
+const { rows, at, isGroup, spanMethod, rowClass, onSelect, onSelectionChange } = useGroupedRows<T>({
+  items: () => props.items,
+  titleOf: row => value(row, props.titleKey),
+  enabled: () => !!props.groupByTitle,
+  selectable: () => !!props.selectable,
+  otherColumns: computed(() => laidOut.value.length + (availableWidth.value > totalWidth.value ? 1 : 0) + 1),
+  table,
+  emitSelection: selection => emit('selection-change', selection),
+})
+const firstColumn = computed(() => laidOut.value[0]?.prop)
 const sections = computed(() => buildDetailSections(props.columns, props.groups))
 function open(row: T) { detail.value = row; detailOpen.value = true }
 function editDetail() { if (detail.value) { emit('edit', detail.value); detailOpen.value = false } }
@@ -84,18 +92,22 @@ function editRoute(row: T, index: number): RouteLocationRaw {
   <div
     ref="root"
     class="business-table"
+    :style="{ '--business-table-view': `${availableWidth}px` }"
   >
     <el-table
       v-if="!narrow"
       ref="table"
       v-loading="loading"
-      :data="items"
+      :data="rows"
       :fit="false"
       style="width: 100%"
       row-key="id"
-      :span-method="mergeRepeatedTitle ? spanMethod : undefined"
+      :span-method="groupByTitle ? spanMethod : undefined"
+      :row-class-name="groupByTitle ? rowClass : undefined"
       class="data-table business-table__desktop"
-      @selection-change="(rows: T[]) => emit('selection-change', rows)"
+      :class="{ 'business-table--grouped': groupByTitle }"
+      @select="onSelect"
+      @selection-change="onSelectionChange"
     >
       <template #empty>
         <ListEmpty
@@ -117,21 +129,48 @@ function editRoute(row: T, index: number): RouteLocationRaw {
         :label="col.label"
         :width="col.width"
         :show-overflow-tooltip="col.prop !== titleKey && !col.stack"
-        :class-name="mergeRepeatedTitle && col.prop === titleKey ? 'record-title-cell' : undefined"
+        :label-class-name="col.ai ? 'column-ai' : undefined"
       >
         <template #header>
           <span
             class="column-heading"
-            :title="col.fullLabel || col.label"
-          >{{ col.label }}</span>
+            :title="col.ai ? `${col.fullLabel || col.label}：AI 打标写入，人工验证后 AI 不再覆盖` : col.fullLabel || col.label"
+          ><span
+            v-if="col.ai"
+            class="ai-mark"
+            aria-label="AI 打标"
+          >AI</span>{{ col.label }}</span>
         </template>
-        <template #default="{ row, $index }">
-          <template v-if="col.prop === titleKey">
+        <template #default="{ row }">
+          <div
+            v-if="isGroup(row)"
+            class="group-bar"
+          >
+            <template v-if="col.prop === firstColumn">
+              <RouterLink
+                v-if="detailRoute && row.group.rows[0]"
+                class="group-bar__title"
+                :to="detailRoute(row.group.rows[0], at(row.group.rows[0]))"
+                :title="row.group.title"
+              >
+                {{ row.group.title || '未命名记录' }}
+              </RouterLink>
+              <span
+                v-else
+                class="group-bar__title"
+              >{{ row.group.title || '未命名记录' }}</span>
+              <span
+                v-if="groupMeta"
+                class="group-bar__meta"
+              >{{ groupMeta(row.group.rows) }}</span>
+            </template>
+          </div>
+          <template v-else-if="col.prop === titleKey">
             <!-- Element Plus 注册列时会拿空行（没有 id）试渲染一次插槽，不判断就会按空 id 生成地址、控制台报错 -->
             <RouterLink
               v-if="detailRoute && row.id"
               class="record-title"
-              :to="detailRoute(row, $index)"
+              :to="detailRoute(row, at(row))"
               :title="text(row, col)"
             >
               {{ text(row, col) }}
@@ -145,10 +184,6 @@ function editRoute(row: T, index: number): RouteLocationRaw {
             >
               {{ text(row, col) }}
             </button>
-            <span
-              v-if="(titleSpans[$index] ?? 1) > 1"
-              class="record-title__count"
-            >共 {{ titleSpans[$index] }} 行</span>
           </template>
           <span
             v-else-if="col.stack"
@@ -185,37 +220,15 @@ function editRoute(row: T, index: number): RouteLocationRaw {
         :width="actionWidth"
         class-name="table-action"
       >
-        <template #default="{ row, $index }">
-          <RouterLink
-            v-if="detailRoute && row.id"
-            class="table-link"
-            :to="detailRoute(row, $index)"
-          >
-            查看
-          </RouterLink>
-          <RouterLink
-            v-if="detailRoute && canWrite && row.id"
-            class="table-link"
-            :to="editRoute(row, $index)"
-          >
-            编辑
-          </RouterLink>
-          <el-button
-            v-if="!detailRoute"
-            link
-            type="primary"
-            @click="open(row)"
-          >
-            查看
-          </el-button>
-          <el-button
-            v-if="canWrite && !detailRoute"
-            link
-            type="primary"
-            @click="emit('edit', row)"
-          >
-            编辑
-          </el-button>
+        <template #default="{ row }">
+          <RowActions
+            v-if="!isGroup(row) && row.id"
+            :view="detailRoute ? detailRoute(row, at(row)) : undefined"
+            :edit="detailRoute ? editRoute(row, at(row)) : undefined"
+            :can-edit="canWrite"
+            @view="open(row)"
+            @edit="emit('edit', row)"
+          />
         </template>
       </el-table-column>
     </el-table>
@@ -348,10 +361,20 @@ function editRoute(row: T, index: number): RouteLocationRaw {
 .record-title { padding: 0; border: 0; font: inherit; font-weight: 500; line-height: 22px; background: none; color: var(--zt-ink-900); text-align: left; cursor: pointer; display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .record-title:hover { color: var(--zt-blue-600); text-decoration: underline; }
 a.record-title { text-decoration: none; }
-/* 合并的标题格：靠上、标题最多三行，下面「共 N 行」 */
-.business-table__desktop :deep(td.record-title-cell) { vertical-align: top; padding-top: 10px; }
-.business-table__desktop :deep(td.record-title-cell .record-title) { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; white-space: normal; }
-.record-title__count { display: block; margin-top: 2px; color: var(--zt-ink-500); font-size: 12px; line-height: 18px; }
+/* AI 打标写入的列：表头淡紫底，列名前一个小「AI」标记 */
+.business-table__desktop :deep(th.column-ai) { background: var(--zt-ai-soft); }
+.business-table__desktop :deep(th.column-ai + th:not(.column-ai)) { box-shadow: inset 1px 0 0 var(--zt-ai-line); }
+.ai-mark { display: inline-block; margin-right: 6px; padding: 0 4px; border: 1px solid var(--zt-ai-line); border-radius: 3px; color: var(--zt-ai-text); background: var(--zt-panel); font-size: 11px; font-weight: 600; line-height: 16px; vertical-align: 1px; }
+
+/* 分组标题条：一条政策一条，横跨整行；横向滚动时标题停在左边 */
+.business-table__desktop :deep(tr.group-row > td.el-table__cell) { height: auto; padding: 10px 0 8px; background: var(--zt-surface-subtle); border-top: 1px solid var(--zt-border); }
+.business-table__desktop :deep(tr.group-row > td.el-table__cell .cell) { overflow: visible; }
+.business-table__desktop :deep(tr.group-row:hover > td.el-table__cell) { background: var(--zt-surface-subtle); }
+.business-table__desktop :deep(tr.group-row + tr > td.el-table__cell) { border-top: 0; }
+.group-bar { position: sticky; left: 12px; display: flex; flex-direction: column; gap: 2px; max-width: min(960px, calc(var(--business-table-view, 100vw) - 96px)); }
+.group-bar__title { overflow: hidden; color: var(--zt-ink-900); font-size: 15px; font-weight: 600; line-height: 22px; text-decoration: none; white-space: nowrap; text-overflow: ellipsis; }
+a.group-bar__title:hover { color: var(--zt-blue-600); text-decoration: underline; }
+.group-bar__meta { color: var(--zt-ink-500); font-size: 12px; line-height: 18px; }
 .cell-stack { display: flex; flex-direction: column; min-width: 0; }
 .cell-stack__main, .cell-stack__sub { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .cell-stack__main { color: var(--zt-ink-900); }

@@ -189,47 +189,6 @@ async def interpretation_content(session: AsyncSession, item_id: uuid.UUID) -> d
     return await policy_content(row.source_content_id)
 
 
-async def create_interpretation(session: AsyncSession, actor: Actor, data: dict[str, str]) -> dict[str, Any]:
-    data = dict(data)
-    await _refresh_codes(data, None)
-    values = _values(data)
-    if not values["policy_title"]:
-        raise ApiError("政策原文名称不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    if message := _write_error(values):
-        raise ApiError(message, code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    if await repo.get_by_relation_key(session, values["relation_key"]):
-        raise ApiError(
-            "这条政策已有同一场景、同一机会类型的解读记录（关联主键重复），请改一下场景或机会类型",
-            code=ErrorCode.DUPLICATE,
-            http_status=409,
-        )
-    now = utcnow()
-    item_id = uuid.uuid4()
-    row = Interpretation(
-        id=item_id,
-        record_id=str(item_id),
-        version=1,
-        created_at=now,
-        created_by_id=actor.id,
-        created_by_name=actor.name,
-        updated_at=now,
-        updated_by_id=actor.id,
-        updated_by_name=actor.name,
-        **values,
-    )
-    session.add(row)
-    await session.flush()
-    await scenario_engine.classify_quietly(session, [row])
-    await enqueue_event(
-        session,
-        event_type="policy.interpretation.created",
-        actor=actor,
-        target_id=str(row.id),
-        changes={"policy_title": row.policy_title, "relation_key": row.relation_key},
-    )
-    return to_out(row)
-
-
 def _apply_changes(row: Interpretation, values: dict[str, str], *, renamed: bool) -> dict[str, Any]:
     changes: dict[str, Any] = {}
     for field, new in values.items():

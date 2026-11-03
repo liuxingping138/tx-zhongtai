@@ -67,11 +67,9 @@ _EVENT_META = {
     "policy.source.exported": ("policy.sources", "export", "source", "导出信源"),
     "policy.source.purged": ("policy.sources", "purge", "source", "清空信源表"),
     "policy.source.duplicates_removed": ("policy.sources", "delete", "source", "删除重复的信源"),
-    "policy.base_tag.created": ("policy.base_tags", "create", "base_tag", "新增政策基础标签"),
     "policy.base_tag.updated": ("policy.base_tags", "update", "base_tag", "编辑政策基础标签"),
     "policy.base_tag.imported": ("policy.base_tags", "import", "base_tag", "导入政策基础标签表"),
     "policy.base_tag.exported": ("policy.base_tags", "export", "base_tag", "导出政策基础标签表"),
-    "policy.interpretation.created": ("policy.interpretations", "create", "interpretation", "新增政策解读"),
     "policy.interpretation.updated": ("policy.interpretations", "update", "interpretation", "编辑政策解读"),
     "policy.interpretation.status_changed": (
         "policy.interpretations",

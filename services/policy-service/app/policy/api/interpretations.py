@@ -18,7 +18,6 @@ from app.policy.api.schemas import (
     InterpretationPatch,
     InterpretationScenarioRequest,
     InterpretationStatusRequest,
-    InterpretationWrite,
 )
 from app.policy.application import interpretation_status, scenario_decisions
 from app.policy.application import interpretations as service
@@ -127,19 +126,6 @@ async def import_items(
     content = await read_import_upload(request, settings.import_max_bytes)
     return import_result_response(
         await service.import_interpretations(session, actor, content), "interpretations-import.xlsx"
-    )
-
-
-@router.post("")
-@classified(SecurityClass.RESOURCE_AUTHORIZED)
-async def create_item(
-    body: InterpretationWrite,
-    session: AsyncSession = Depends(get_db_session, scope="function"),
-    actor: Actor = Depends(require_policy_permission(RESOURCE, "create")),
-) -> JSONResponse:
-    return success_json(
-        await service.create_interpretation(session, actor, body.model_dump(exclude={"version"})),
-        status_code=201,
     )
 
 
