@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { missingFieldsWarning } from '../shared/outputFields'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { CircleCheckFilled, Download, Upload } from '@element-plus/icons-vue'
 
@@ -51,6 +52,7 @@ const estimate = computed(() => (summary.value
       draftMatchesRun: draftMatchesRun.value,
     })
   : null))
+const noFields = computed(() => (spec.value ? missingFieldsWarning(spec.value.content, spec.value.fields) : ''))
 const blocker = computed(() => {
   if (!template.value || !spec.value) return '选一个模板'
   if (spec.value.problem) return spec.value.problem
@@ -120,17 +122,23 @@ async function downloadTemplate(): Promise<void> {
   }
 }
 
+/** 开始前的确认：用哪个模型、哪一版、处理多少条、大概多少钱；没设输出字段的再提醒一句 */
+function confirmText(title: string, data: NonNullable<typeof summary.value>, rows: number): string {
+  const cost = estimate.value ? `，预计约 ${formatYuan(estimate.value.total)}` : ''
+  const warn = noFields.value ? `\n注意：${noFields.value}。` : ''
+  return `用「${model.value!.name}」按「${title}」${confirmedLabel(spec.value!, data)}处理「${data.name}」${rows === data.rows ? '全部' : '前'} ${rows} 条，会产生模型费用${cost}。${warn}`
+}
+
 async function start(): Promise<void> {
   if (blocker.value || starting.value) return
   const selected = template.value!
   const input = file.value!
   const data = summary.value!
   const rows = count.value
-  const cost = estimate.value ? `，预计约 ${formatYuan(estimate.value.total)}` : ''
   const ok = await ElMessageBox.confirm(
-    `用「${model.value!.name}」按「${selected.title}」${confirmedLabel(spec.value!, data)}处理「${data.name}」${rows === data.rows ? '全部' : '前'} ${rows} 条，会产生模型费用${cost}。`,
+    confirmText(selected.title, data, rows),
     '开始运行？',
-    { confirmButtonText: '开始运行', cancelButtonText: '取消', type: 'warning' },
+    { confirmButtonText: '开始运行', cancelButtonText: '取消', type: 'warning', customClass: 'confirm-lines' },
   ).then(() => true, () => false)
   if (!ok) return
   starting.value = true
@@ -291,6 +299,14 @@ function close(done: () => void): void {
         >
           {{ blocker }}
         </p>
+        <!-- 没设输出字段只提醒、不拦：结果 Excel 里不会有 AI 回答的列 -->
+        <p
+          v-else-if="noFields"
+          class="new-task__warn"
+          role="status"
+        >
+          {{ noFields }}
+        </p>
         <p
           v-else-if="estimate"
           class="new-task__estimate"
@@ -331,7 +347,13 @@ function close(done: () => void): void {
 .new-task__test-rows .el-input-number { width: 100px; }
 .new-task__footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .new-task__footer p { margin: 0; color: var(--zt-ink-500); font-size: 13px; text-align: left; }
-.new-task__footer .new-task__estimate { display: flex; flex-direction: column; font-size: 12px; }
+.new-task__footer .new-task__warn {
+  margin: 0;
+  color: var(--zt-warning-text);
+  font-size: 13px;
+}
+
+.new-task__estimate { display: flex; flex-direction: column; font-size: 12px; }
 .new-task__estimate b { color: var(--zt-ink-900); font-size: 16px; font-variant-numeric: tabular-nums; }
 .new-task__footer .el-button { margin: 0; }
 </style>

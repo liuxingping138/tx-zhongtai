@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import type { AiModel, PromptTemplate, SystemCodeTable, TemplateCategory } from '@/api/ai'
 import type { ContractTask } from '@/api/aiTagging'
 import ModelPicker from '../shared/ModelPicker.vue'
+import { missingFieldsWarning } from '../shared/outputFields'
 import { CODE_TABLE_FIELD, formatState, promptFields, refreshFormatBlock, splitFields } from '../shared/aiText'
 import CodePreviewDialog from './CodePreviewDialog.vue'
 import PromptFiles from './PromptFiles.vue'
@@ -32,6 +33,8 @@ const outputFields = defineModel<string>('outputFields', { required: true })
 const codeTable = defineModel<string>('codeTable', { required: true })
 /** 编辑器里的提示词：看里面的格式要求和输出字段对不对得上，需要时由这里写进去 */
 const content = defineModel<string>('content', { required: true })
+// 没设输出字段：结果里不会有 AI 回答的列，写清楚该填哪几个
+const noFields = computed(() => missingFieldsWarning(content.value, splitFields(outputFields.value)))
 
 // 输出字段在库里按「a|b」存，标签输入框按数组编辑；敲竖线、逗号、顿号也会断开成一个字段。
 const FIELD_DELIMITER = /[|｜,，、]/
@@ -206,7 +209,12 @@ async function setCodeMode(next: CodeMode): Promise<void> {
         />
         <div class="config__fields-foot">
           <span
-            v-if="format === 'stale'"
+            v-if="noFields"
+            class="config__stale"
+            role="status"
+          >{{ noFields }}</span>
+          <span
+            v-else-if="format === 'stale'"
             class="config__stale"
             role="status"
           >提示词里写的返回字段还是「{{ writtenFields }}」，和这里对不上，模型会按旧字段回</span>

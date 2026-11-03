@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { missingFieldsWarning } from '../shared/outputFields'
 
 import type { AiModel, PromptTemplate, RunRow } from '@/api/ai'
 import { RUN_STATUS_TEXT, formatYuan, runStatusType } from '../shared/aiText'
@@ -48,6 +49,7 @@ const stale = computed(() => {
 })
 const retryable = computed(() => Boolean(props.canRun && run.value?.can_retry && !stale.value))
 // 试跑用模板上选定的模型：和上线后跑的是同一个，没选就先选，不拿别的顶替。
+const noFields = computed(() => (props.template ? missingFieldsWarning(props.template.content, props.template.fields) : ''))
 const blocker = computed(() => {
   const template = props.template
   if (!template?.excel_name) return '先上传测试样本 Excel（政策类也可以在左边「测试样本」里从数据库取）'
@@ -136,6 +138,14 @@ async function start(): Promise<void> {
           </el-button>
         </div>
       </div>
+      <!-- 没设输出字段：试跑照样能跑，但解析不出任何列、也不检查格式，「全部成功」是假的；只提醒、不拦 -->
+      <p
+        v-if="canRun && noFields"
+        class="sample__hint is-blocked"
+        role="status"
+      >
+        {{ noFields }}
+      </p>
       <p
         v-if="canRun && (blocker || !run)"
         class="sample__hint"
