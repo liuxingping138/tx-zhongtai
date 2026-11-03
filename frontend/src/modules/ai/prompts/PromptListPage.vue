@@ -175,7 +175,7 @@ function create(): void {
       >
         <el-table-column
           label="模板名称"
-          min-width="210"
+          min-width="190"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -190,7 +190,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="类型"
-          width="84"
+          width="76"
         >
           <template #default="{ row }">
             <el-tag
@@ -205,7 +205,7 @@ function create(): void {
         <el-table-column
           v-if="showTasks"
           label="定时任务"
-          min-width="130"
+          min-width="116"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -221,7 +221,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="上线状态"
-          min-width="204"
+          min-width="188"
         >
           <template #default="{ row }">
             <!-- 有改动没上线：一行写完，改了什么放悬停提示，「看改动」直接打开逐行对比。 -->
@@ -244,7 +244,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="样本试跑"
-          min-width="180"
+          min-width="178"
         >
           <template #default="{ row }">
             <span
@@ -256,7 +256,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="输出字段"
-          width="84"
+          width="72"
           align="right"
         >
           <template #default="{ row }">
@@ -265,7 +265,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="模型"
-          min-width="170"
+          min-width="150"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -275,12 +275,12 @@ function create(): void {
         <el-table-column
           prop="updated_by_name"
           label="更新人"
-          width="96"
+          width="92"
           show-overflow-tooltip
         />
         <el-table-column
           label="更新时间"
-          width="110"
+          width="96"
         >
           <template #default="{ row }">
             <span
@@ -307,6 +307,8 @@ function create(): void {
 .prompt-list :deep(.is-active) .prompt-list__count, .prompt-list :deep(.is-checked) .prompt-list__count { color: inherit; opacity: .8; }
 .prompt-list__table { flex: 1; min-height: 0; }
 .prompt-list__table :deep(.el-table__row) { cursor: pointer; }
+/* 和业务列表一样左右各 12px：九列在常见宽度下放得下，不用横向滚动 */
+.prompt-list__table :deep(.cell) { padding: 0 12px; }
 /* 每格只占一行，所有行一样高：放不下的截断，悬停看全文。 */
 .prompt-list__table :deep(.cell) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prompt-list__name { color: var(--zt-ink-900); font-weight: 600; text-decoration: none; }
