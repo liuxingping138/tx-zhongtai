@@ -180,7 +180,7 @@ defineExpose({ clearSelection: () => table.value?.clearSelection() })
     <el-table-column
       v-if="pending && canDecide"
       label="决定"
-      width="290"
+      width="270"
       fixed="right"
       class-name="candidates-table__decide"
     >

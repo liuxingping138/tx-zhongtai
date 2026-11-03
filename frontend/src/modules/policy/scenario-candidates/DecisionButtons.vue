@@ -20,7 +20,7 @@ const emit = defineEmits<{ open: [mode: DecisionMode] }>()
 
 const NO_CODEBOOK = '采纳、合并要写行业场景码表，需要码表的管理权限'
 // 按钮只写两三个字，完整意思在悬停提示里（2026-11-03 用户：别那么长，知道意思就行）
-const LABEL: Record<DecisionMode, string> = { adopt: '采纳', merge: '合并', rename: '改名采纳', reject: '驳回' }
+const LABEL: Record<DecisionMode, string> = { adopt: '采纳', merge: '合并', rename: '改名', reject: '驳回' }
 const HINT: Record<DecisionMode, string> = {
   adopt: '采纳为新场景：写进行业场景码表',
   merge: '合并到已有场景：以后这个说法都归到那里',
