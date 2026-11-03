@@ -175,7 +175,7 @@ function create(): void {
       >
         <el-table-column
           label="模板名称"
-          min-width="210"
+          min-width="196"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -190,7 +190,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="类型"
-          width="76"
+          width="72"
         >
           <template #default="{ row }">
             <el-tag
@@ -205,7 +205,7 @@ function create(): void {
         <el-table-column
           v-if="showTasks"
           label="定时任务"
-          min-width="116"
+          min-width="120"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -221,7 +221,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="上线状态"
-          min-width="180"
+          min-width="176"
         >
           <template #default="{ row }">
             <!-- 有改动没上线：一行写完，改了什么放悬停提示，「看改动」直接打开逐行对比。 -->
@@ -229,7 +229,7 @@ function create(): void {
               v-if="row.release?.unreleased_changes.length"
               class="prompt-list__state is-changed"
               :title="`草稿改了${row.release.unreleased_changes.join('、')}，还没上线`"
-            >第 {{ row.release.release_no }} 版，草稿有改动<router-link
+            >第 {{ row.release.release_no }} 版，有改动<router-link
               class="prompt-list__diff"
               :to="{ name: 'ai-prompt-edit', params: { id: row.id }, query: { review: '1' } }"
               @click.stop
@@ -244,7 +244,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="样本试跑"
-          min-width="170"
+          min-width="168"
         >
           <template #default="{ row }">
             <span
@@ -255,8 +255,8 @@ function create(): void {
           </template>
         </el-table-column>
         <el-table-column
-          label="输出字段"
-          width="64"
+          label="字段数"
+          width="72"
           align="right"
         >
           <template #default="{ row }">
@@ -265,7 +265,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="模型"
-          min-width="128"
+          min-width="150"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -275,7 +275,7 @@ function create(): void {
         <el-table-column
           prop="updated_by_name"
           label="更新人"
-          width="100"
+          width="96"
           show-overflow-tooltip
         />
         <el-table-column
