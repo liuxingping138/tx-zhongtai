@@ -53,6 +53,8 @@
 .workspace-main .el-button { font-weight: 500; font-size: 13px; }
 .workspace-main .list-page__actions .el-button { padding-right: 11px; padding-left: 11px; }
 .workspace-main .business-table .el-table th.el-table__cell { background: var(--zt-table-head); color: var(--zt-ink-700); font-size: 13px; }
+/* AI 打标写入的列（列定义 ai: true）：表头淡紫底，和人填、系统算的列分开 */
+.workspace-main .business-table .el-table th.el-table__cell.column-ai { background: var(--zt-ai-soft); }
 .workspace-main .business-table .el-table { --el-table-header-bg-color: var(--zt-table-head); --el-table-border-color: var(--zt-border); --el-table-row-hover-bg-color: var(--zt-row-hover); }
 .workspace-main .business-table .record-title { font-weight: 550; }
 .workspace-main .list-page__results { border-radius: 7px; }

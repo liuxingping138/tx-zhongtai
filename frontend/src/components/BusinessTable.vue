@@ -362,7 +362,6 @@ function editRoute(row: T, index: number): RouteLocationRaw {
 .record-title:hover { color: var(--zt-blue-600); text-decoration: underline; }
 a.record-title { text-decoration: none; }
 /* AI 打标写入的列：表头淡紫底，列名前一个小「AI」标记 */
-.business-table__desktop :deep(th.column-ai) { background: var(--zt-ai-soft); }
 .business-table__desktop :deep(th.column-ai + th:not(.column-ai)) { box-shadow: inset 1px 0 0 var(--zt-ai-line); }
 .ai-mark { display: inline-block; margin-right: 6px; padding: 0 4px; border: 1px solid var(--zt-ai-line); border-radius: 3px; color: var(--zt-ai-text); background: var(--zt-panel); font-size: 11px; font-weight: 600; line-height: 16px; vertical-align: 1px; }
 
