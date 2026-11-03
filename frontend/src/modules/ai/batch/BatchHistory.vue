@@ -172,7 +172,7 @@ function progressText(run: BatchRun): string {
       />
       <el-table-column
         label="操作"
-        width="276"
+        width="292"
         fixed="right"
       >
         <template #default="{ row }">
