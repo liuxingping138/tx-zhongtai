@@ -186,6 +186,14 @@ function close(done: () => void): void {
         :spec="spec"
         :disabled="starting"
       />
+      <!-- 没设输出字段只提醒、不拦：一选模板就写出来，不等上传完文件（底部那行会被「上传数据」挡住） -->
+      <p
+        v-if="noFields"
+        class="new-task__warn"
+        role="status"
+      >
+        {{ noFields }}
+      </p>
       <section class="new-task__step">
         <h3><span>{{ stepNo(3) }}</span>上传这次的数据</h3>
         <input
@@ -299,14 +307,7 @@ function close(done: () => void): void {
         >
           {{ blocker }}
         </p>
-        <!-- 没设输出字段只提醒、不拦：结果 Excel 里不会有 AI 回答的列 -->
-        <p
-          v-else-if="noFields"
-          class="new-task__warn"
-          role="status"
-        >
-          {{ noFields }}
-        </p>
+
         <p
           v-else-if="estimate"
           class="new-task__estimate"
@@ -347,11 +348,7 @@ function close(done: () => void): void {
 .new-task__test-rows .el-input-number { width: 100px; }
 .new-task__footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .new-task__footer p { margin: 0; color: var(--zt-ink-500); font-size: 13px; text-align: left; }
-.new-task__footer .new-task__warn {
-  margin: 0;
-  color: var(--zt-warning-text);
-  font-size: 13px;
-}
+.new-task__warn { margin: 0 0 16px; padding: 8px 12px; border: 1px solid var(--zt-warning-border); border-radius: var(--zt-radius); background: var(--zt-warning-soft); color: var(--zt-warning-text); font-size: 13px; line-height: 20px; }
 
 .new-task__estimate { display: flex; flex-direction: column; font-size: 12px; }
 .new-task__estimate b { color: var(--zt-ink-900); font-size: 16px; font-variant-numeric: tabular-nums; }
