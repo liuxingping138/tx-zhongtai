@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { ModelConfig } from '@/api/ai'
-import { CREATE_DEFAULTS, EDIT_GROUPS, EDITOR_GROUPS, toBody, toRow } from './fields'
+import { CREATE_DEFAULTS, EDIT_GROUPS, EDITOR_GROUPS, TABLE_COLUMNS, toBody, toRow } from './fields'
 
 const flash: ModelConfig = {
   id: 'deepseek-v4-flash',
@@ -49,5 +49,11 @@ describe('模型配置表单转换', () => {
     const idField = (groups: typeof EDITOR_GROUPS) => groups[0]?.fields.find(field => field.key === 'id')
     expect(idField(EDITOR_GROUPS)?.disabled).toBeFalsy()
     expect(idField(EDIT_GROUPS)?.disabled).toBe(true)
+  })
+
+  it('列表把名称、状态、档位与价格放前面，模型ID与接入点放留痕列之前', () => {
+    const props = TABLE_COLUMNS.map(col => col.prop)
+    expect(props.slice(0, 6)).toEqual(['name', 'enabled', 'provider', 'web_search', 'service_tier', 'input_price'])
+    expect(props.slice(-4)).toEqual(['id', 'endpoint', 'updated_at', 'updated_by_name'])
   })
 })

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, nextTick, ref, type FunctionalComponent } from 'vue'
+import { computed, h, nextTick, ref, watch, type FunctionalComponent } from 'vue'
 
 import { CODE_TABLE_FIELD, insertMention, mentionAt, mentionOptions } from '../shared/aiText'
 import { promptSegments, unusedColumns, usedVariables, type PromptSegment, type VariableState } from './promptVariables'
@@ -36,6 +36,13 @@ const before = computed(() => promptSegments(trigger.value ? text.value.slice(0,
 const after = computed(() => (trigger.value ? promptSegments(text.value.slice(trigger.value.caret), props.headers, hasCode.value) : []))
 const used = computed(() => usedVariables(text.value, props.headers, hasCode.value))
 const candidates = computed(() => unusedColumns(text.value, props.headers))
+/** 测试样本动辄几十列：未引用的候选列超过 8 个时默认只露前 6 个，避免 sticky 变量栏叠成七八行遮住半个编辑区。 */
+const CANDIDATE_LIMIT = 8
+const CANDIDATE_PREVIEW = 6
+const showAllCandidates = ref(false)
+watch(() => props.headers, () => { showAllCandidates.value = false })
+const foldedCount = computed(() => (candidates.value.length > CANDIDATE_LIMIT ? candidates.value.length - CANDIDATE_PREVIEW : 0))
+const visibleCandidates = computed(() => (showAllCandidates.value || !foldedCount.value ? candidates.value : candidates.value.slice(0, CANDIDATE_PREVIEW)))
 const missing = computed(() => used.value.filter(item => item.state === 'missing').length)
 const noCode = computed(() => used.value.some(item => item.state === 'nocode'))
 const titles = computed<Record<VariableState, string>>(() => ({
@@ -210,7 +217,7 @@ defineExpose({ focus: () => area.value?.focus() })
         :title="titles[item.state]"
       >{{ item.name }}<small>{{ BADGES[item.state] ?? (item.count > 1 ? `×${item.count}` : '') }}</small></span>
       <button
-        v-for="column in candidates"
+        v-for="column in visibleCandidates"
         :key="column"
         type="button"
         class="prompt-editor__add"
@@ -219,6 +226,15 @@ defineExpose({ focus: () => area.value?.focus() })
         @click="insertAtCursor(column)"
       >
         + {{ column }}
+      </button>
+      <button
+        v-if="foldedCount"
+        type="button"
+        class="prompt-editor__more"
+        :aria-expanded="showAllCandidates"
+        @click="showAllCandidates = !showAllCandidates"
+      >
+        {{ showAllCandidates ? '收起列名' : `展开其余 ${foldedCount} 列` }}
       </button>
       <template v-if="!headers.length">
         <el-button
@@ -267,8 +283,8 @@ defineExpose({ focus: () => area.value?.focus() })
 .prompt-editor__menu .prompt-editor__menu-hint { color: var(--zt-ink-500); cursor: default; }
 .prompt-editor__menu .prompt-editor__menu-hint:hover { background: none; color: var(--zt-ink-500); }
 .prompt-editor__menu .prompt-editor__menu-action { color: var(--zt-blue-600); }
-/* 提示词很长、往下滚时变量这一行贴在可见区域底部，随时能插。 */
-.prompt-editor__vars { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 10px 22px; border-top: 1px solid var(--zt-border); background: var(--zt-surface-subtle); font-size: 12px; }
+/* 提示词很长、往下滚时变量这一行贴在可见区域底部，随时能插；限制最大高度，展开几十列时内部滚动不遮编辑区。 */
+.prompt-editor__vars { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; max-height: 116px; overflow-y: auto; padding: 10px 22px; border-top: 1px solid var(--zt-border); background: var(--zt-surface-subtle); font-size: 12px; }
 .prompt-editor__vars-label { margin-right: 4px; color: var(--zt-ink-500); }
 .prompt-editor__vars-hint { color: var(--zt-ink-400); }
 .prompt-editor__var { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; line-height: 18px; }
@@ -281,5 +297,7 @@ defineExpose({ focus: () => area.value?.focus() })
 .prompt-editor__add { padding: 1px 8px; border: 1px dashed var(--zt-border-strong); border-radius: 999px; background: transparent; color: var(--zt-ink-500); font: inherit; line-height: 18px; cursor: pointer; }
 .prompt-editor__add:hover:not(:disabled), .prompt-editor__add:focus-visible { border-color: var(--zt-blue-600); color: var(--zt-blue-600); }
 .prompt-editor__add:disabled { cursor: not-allowed; opacity: 0.5; }
+.prompt-editor__more { padding: 1px 8px; border: 0; border-radius: 999px; background: transparent; color: var(--zt-blue-600); font: inherit; line-height: 18px; cursor: pointer; }
+.prompt-editor__more:hover { text-decoration: underline; }
 .prompt-editor__warn { margin-left: auto; color: var(--zt-warning-text); }
 </style>

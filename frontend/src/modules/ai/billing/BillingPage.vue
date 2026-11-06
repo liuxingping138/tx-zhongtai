@@ -106,6 +106,7 @@ onMounted(load)
     >
       <el-radio-group
         :model-value="preset"
+        class="ai-seg"
         aria-label="快捷范围"
         @update:model-value="pickPreset"
       >
@@ -200,6 +201,7 @@ onMounted(load)
         <el-radio-group
           v-model="colorBy"
           size="small"
+          class="ai-seg"
           aria-label="分色方式"
         >
           <el-radio-button value="model">

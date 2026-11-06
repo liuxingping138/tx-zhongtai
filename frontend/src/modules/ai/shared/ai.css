@@ -4,3 +4,21 @@
 .ai-panel__head h2 { margin: 0; color: var(--zt-ink-900); font-size: 15px; font-weight: 650; }
 .ai-panel__hint { margin: 0; color: var(--zt-ink-500); font-size: 12px; line-height: 1.6; }
 .ai-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+/* AI 页面里的表格不套 ScrollPort，保留 Element Plus 自己的滚动条提示，避免宽表列被截断却看不到滚动条。 */
+.ai-panel .el-table .el-scrollbar__bar { display: block; }
+/* 分段切换器：浅灰内槽 + 细外框，选中项浮起白底卡片，不与页面实心主按钮抢视觉重心。 */
+.ai-seg.el-radio-group {
+  display: inline-flex; align-items: center; gap: 2px; padding: 2px;
+  border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: var(--zt-soft);
+}
+.ai-seg .el-radio-button__inner {
+  display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border: 0 !important; outline: 0;
+  border-radius: calc(var(--zt-radius) - 2px) !important; background: transparent; color: var(--zt-ink-700);
+  font-size: 13px; font-weight: 400; box-shadow: none !important; transition: background-color .15s, color .15s, box-shadow .15s;
+}
+.ai-seg.el-radio-group--small .el-radio-button__inner { height: 22px; padding: 0 9px; font-size: 12px; }
+.ai-seg .el-radio-button:not(.is-active) .el-radio-button__inner:hover { color: var(--zt-ink-900); }
+.ai-seg .el-radio-button.is-active .el-radio-button__inner {
+  background: var(--zt-panel) !important; color: var(--zt-blue-600) !important;
+  font-weight: 600; box-shadow: 0 1px 2px var(--zt-shadow-soft) !important;
+}

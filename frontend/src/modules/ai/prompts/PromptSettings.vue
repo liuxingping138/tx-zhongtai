@@ -135,6 +135,7 @@ async function setCodeMode(next: CodeMode): Promise<void> {
           <el-radio-group
             :model-value="codeMode"
             size="small"
+            class="ai-seg"
             aria-label="码表来源"
             :disabled="!canEdit"
             @change="onCodeMode"

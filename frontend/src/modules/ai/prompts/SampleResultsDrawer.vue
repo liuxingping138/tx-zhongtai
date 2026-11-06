@@ -2,7 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { Download } from '@element-plus/icons-vue'
 
-import type { PromptTemplate, RunRow } from '@/api/ai'
+import type { PromptTemplate } from '@/api/ai'
 import { formatYuan } from '../shared/aiText'
 import SampleRowDetail from './SampleRowDetail.vue'
 import { ROW_STATUS_TEXT, fieldCell, isProblem, previousText, rowCounts, rowMatches, shortTime } from './sampleView'
@@ -65,27 +65,10 @@ function toggle(row: number): void {
   expanded.value = next
 }
 
-function cell(row: RunRow, field: string): { now: string; before: string | null } {
-  return fieldCell(row, field)
-}
-
-function pickRun(id: string): void {
-  void props.sample.view(id, '')
-}
-
-function pickCompare(id: string): void {
-  void props.sample.view(run.value?.id ?? '', id)
-}
-
-function backToEdit(): void {
-  open.value = false
-  emit('edit')
-}
-
-function trial(row: number): void {
-  open.value = false
-  emit('trial', row)
-}
+const pickRun = (id: string) => void props.sample.view(id, '')
+const pickCompare = (id: string) => void props.sample.view(run.value?.id ?? '', id)
+const backToEdit = () => { open.value = false; emit('edit') }
+const trial = (row: number) => { open.value = false; emit('trial', row) }
 </script>
 
 <template>
@@ -151,6 +134,7 @@ function trial(row: number): void {
         <el-radio-group
           v-model="filter"
           size="small"
+          class="ai-seg"
           aria-label="按结果看"
         >
           <el-radio-button value="all">
@@ -183,7 +167,10 @@ function trial(row: number): void {
         <table v-if="rows">
           <thead>
             <tr class="results__group">
-              <th scope="colgroup" />
+              <th
+                scope="colgroup"
+                class="is-no"
+              />
               <th
                 v-if="rows.columns.length"
                 scope="colgroup"
@@ -198,10 +185,16 @@ function trial(row: number): void {
               >
                 {{ fields.length ? '输出字段' : '模型回答' }}
               </th>
-              <th scope="colgroup" />
+              <th
+                scope="colgroup"
+                class="is-status"
+              />
             </tr>
             <tr class="results__cols">
-              <th scope="col">
+              <th
+                scope="col"
+                class="is-no"
+              >
                 行
               </th>
               <th
@@ -224,7 +217,10 @@ function trial(row: number): void {
               >
                 回答
               </th>
-              <th scope="col">
+              <th
+                scope="col"
+                class="is-status"
+              >
                 结果
               </th>
             </tr>
@@ -262,13 +258,14 @@ function trial(row: number): void {
                   v-for="field in fields"
                   :key="field"
                   class="results__field"
-                  :title="cell(row, field).now"
+                  :title="fieldCell(row, field).now"
                 >
-                  <span :class="{ 'is-empty': !cell(row, field).now }">{{ cell(row, field).now || '—' }}</span>
+                  <span :class="{ 'is-empty': !fieldCell(row, field).now }">{{ fieldCell(row, field).now || '—' }}</span>
                   <span
-                    v-if="cell(row, field).before !== null"
+                    v-if="fieldCell(row, field).before !== null"
                     class="results__was"
-                  >上次 <s>{{ cell(row, field).before || '空' }}</s></span>
+                    :title="`上次：${fieldCell(row, field).before || '空'}`"
+                  >上次 <s>{{ fieldCell(row, field).before || '空' }}</s></span>
                 </td>
                 <td
                   v-if="!fields.length"
@@ -363,23 +360,25 @@ th { position: sticky; z-index: 1; background: var(--zt-table-head); text-align:
 .results__group th { top: 0; height: 28px; padding: 0 14px; color: var(--zt-ink-500); font-size: 12px; font-weight: 500; border-bottom: 1px solid var(--zt-border); }
 .results__group th.is-output { border-inline: 1px solid var(--zt-border); color: var(--zt-blue-700); }
 .results__cols th { top: 28px; height: 38px; padding: 0 14px; color: var(--zt-ink-900); font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--zt-border); }
-td { padding: 10px 14px; border-bottom: 1px solid var(--zt-divider); color: var(--zt-ink-700); font-size: 13px; line-height: 1.6; vertical-align: top; }
+th.is-no { left: 0; z-index: 3; }
+th.is-status { right: 0; z-index: 3; border-left: 1px solid var(--zt-border); }
+td { padding: 10px 14px; border-bottom: 1px solid var(--zt-divider); background: var(--zt-panel); color: var(--zt-ink-700); font-size: 13px; line-height: 1.6; vertical-align: top; }
 .results__row { cursor: pointer; }
 .results__row:hover td { background: var(--zt-row-hover); }
 .results__row.is-failed td { background: var(--zt-danger-soft); }
 .results__row.is-format td, .results__row.is-open td, .results__detail td { background: var(--zt-warning-soft); }
 .results__row.is-open td { border-bottom-color: transparent; }
 .results__row.is-changed .results__no { box-shadow: inset 3px 0 0 var(--zt-blue-600); }
-.results__no { width: 52px; }
+.results__no { position: sticky; left: 0; z-index: 2; width: 52px; }
 .results__no button { padding: 0; border: 0; background: none; color: var(--zt-ink-400); font: 600 13px/1.6 var(--zt-font); cursor: pointer; }
 .results__row.is-changed .results__no button { color: var(--zt-blue-700); }
 .results__no button:focus-visible { outline: 2px solid var(--zt-blue-600); outline-offset: 2px; }
 .results__input { max-width: 260px; overflow: hidden; color: var(--zt-ink-900); text-overflow: ellipsis; white-space: nowrap; }
-.results__field { max-width: 300px; color: var(--zt-ink-900); }
+.results__field { min-width: 112px; max-width: 300px; color: var(--zt-ink-900); }
 .results__field > span:first-child { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .results__field .is-empty { color: var(--zt-ink-400); }
-.results__was { display: block; color: var(--zt-ink-400); font-size: 12px; }
-.results__status { width: 170px; white-space: nowrap; }
+.results__was { display: block; overflow: hidden; color: var(--zt-ink-400); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.results__status { position: sticky; right: 0; z-index: 2; width: 148px; border-left: 1px solid var(--zt-divider); white-space: nowrap; }
 .results__status .is-done { color: var(--zt-success-text); font-weight: 600; }
 .results__status .is-failed { color: var(--zt-danger-text); font-weight: 600; }
 .results__status .is-format { color: var(--zt-warning-text); font-weight: 600; }

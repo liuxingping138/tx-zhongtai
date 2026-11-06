@@ -45,7 +45,7 @@ function progressText(run: BatchRun): string {
     >
       <el-table-column
         label="发起时间"
-        width="112"
+        width="108"
       >
         <template #default="{ row }">
           <span
@@ -57,12 +57,12 @@ function progressText(run: BatchRun): string {
       <el-table-column
         prop="prompt_title"
         label="模板名称"
-        min-width="200"
+        min-width="160"
         show-overflow-tooltip
       />
       <el-table-column
         label="状态"
-        width="200"
+        width="176"
       >
         <template #default="{ row }">
           <div class="history__status">
@@ -97,7 +97,7 @@ function progressText(run: BatchRun): string {
       </el-table-column>
       <el-table-column
         label="跑的版本"
-        width="150"
+        width="136"
       >
         <template #default="{ row }">
           <span
@@ -108,7 +108,7 @@ function progressText(run: BatchRun): string {
       </el-table-column>
       <el-table-column
         label="来源"
-        width="90"
+        width="84"
       >
         <template #default="{ row }">
           {{ RUN_SOURCE_TEXT[row.source as 'manual' | 'pipeline'] ?? '页面发起' }}
@@ -116,7 +116,7 @@ function progressText(run: BatchRun): string {
       </el-table-column>
       <el-table-column
         label="输入文件"
-        min-width="160"
+        min-width="136"
         show-overflow-tooltip
       >
         <template #default="{ row }">
@@ -125,7 +125,7 @@ function progressText(run: BatchRun): string {
       </el-table-column>
       <el-table-column
         label="运行范围"
-        width="90"
+        width="84"
       >
         <template #default="{ row }">
           {{ runModeText(row) }}
@@ -134,12 +134,12 @@ function progressText(run: BatchRun): string {
       <el-table-column
         prop="model_name"
         label="模型"
-        min-width="150"
+        min-width="144"
         show-overflow-tooltip
       />
       <el-table-column
         label="总消耗(千token)"
-        width="124"
+        width="116"
         align="right"
       >
         <template #default="{ row }">
@@ -148,7 +148,7 @@ function progressText(run: BatchRun): string {
       </el-table-column>
       <el-table-column
         label="推理费用"
-        width="96"
+        width="88"
         align="right"
       >
         <template #default="{ row }">
@@ -157,7 +157,7 @@ function progressText(run: BatchRun): string {
       </el-table-column>
       <el-table-column
         label="联网费用"
-        width="96"
+        width="88"
         align="right"
       >
         <template #default="{ row }">
@@ -167,7 +167,7 @@ function progressText(run: BatchRun): string {
       <el-table-column
         prop="created_by_name"
         label="发起人"
-        width="120"
+        width="96"
         show-overflow-tooltip
       />
       <el-table-column
@@ -271,7 +271,7 @@ function progressText(run: BatchRun): string {
 .history__status + .el-progress { margin-top: 6px; }
 .history__round { margin: 4px 0 0; color: var(--zt-ink-500); font-size: 12px; }
 .history__error { margin: 4px 0 0; color: var(--zt-danger-text); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.history__time { font-variant-numeric: tabular-nums; }
+.history__time { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .history__pager { justify-content: flex-end; padding: 10px 16px; }
 .history__version { color: var(--zt-blue-700); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .history__version.is-draft { color: var(--zt-ink-700); }

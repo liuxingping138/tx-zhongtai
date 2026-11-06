@@ -162,7 +162,18 @@ async function act(action: (current: BatchRun) => Promise<boolean>, close = fals
       />
 
       <dl class="run-detail__facts">
-        <dt>模板版本</dt><dd>{{ run.release_no !== null ? `第 ${run.release_no} 版` : run.draft_saved_at ? `${run.draft_saved_at.slice(0, 16)} 保存的草稿` : '发起时的草稿' }}</dd>
+        <dt>模板版本</dt>
+        <dd>
+          {{ run.release_no !== null ? `第 ${run.release_no} 版` : run.draft_saved_at ? `${run.draft_saved_at.slice(0, 16)} 保存的草稿` : '发起时的草稿' }}
+          <router-link
+            v-if="run.prompt_id"
+            class="run-detail__link"
+            :to="{ name: 'ai-prompt-edit', params: { id: run.prompt_id } }"
+            @click="emit('close')"
+          >
+            查看模板 →
+          </router-link>
+        </dd>
         <dt>来源</dt><dd>{{ RUN_SOURCE_TEXT[run.source as 'manual' | 'pipeline'] ?? '页面发起' }}</dd>
         <dt>输入文件</dt><dd>{{ run.input_name || '—' }}</dd>
         <dt>运行范围</dt><dd>{{ runModeText(run) }}</dd>
@@ -215,10 +226,12 @@ async function act(action: (current: BatchRun) => Promise<boolean>, close = fals
 .run-detail__spacer { flex: 1; }
 .run-detail .el-progress { margin-top: 10px; }
 .run-detail__error { margin-top: 12px; }
-.run-detail__facts { display: grid; grid-template-columns: 72px minmax(0, 1fr) 72px minmax(0, 1fr); gap: 10px 12px; margin: 16px 0 0; padding: 14px 16px; border-radius: 6px; background: var(--zt-soft); font-size: 13px; }
+.run-detail__facts { display: grid; grid-template-columns: 68px minmax(0, 1.45fr) 64px minmax(0, 1fr); gap: 10px 12px; margin: 16px 0 0; padding: 14px 16px; border-radius: 6px; background: var(--zt-soft); font-size: 13px; }
 .run-detail__facts dt { color: var(--zt-ink-500); }
 .run-detail__facts dd { margin: 0; overflow-wrap: anywhere; }
 .run-detail__facts dd.is-bad { color: var(--zt-danger-text); }
+.run-detail__link { margin-left: 8px; color: var(--zt-blue-600); font-size: 12px; text-decoration: none; white-space: nowrap; }
+.run-detail__link:hover { text-decoration: underline; }
 .run-detail__section { margin-top: 20px; }
 .run-detail__section h3 { margin: 0 0 10px; color: var(--zt-ink-900); font-size: 14px; font-weight: 650; }
 .run-detail__section summary { color: var(--zt-blue-600); font-size: 13px; cursor: pointer; }

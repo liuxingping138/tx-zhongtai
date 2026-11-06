@@ -109,6 +109,7 @@ function create(): void {
         <el-radio-group
           v-if="categories.length > 1"
           v-model="category"
+          class="ai-seg"
           aria-label="按模板类型查看"
         >
           <el-radio-button :value="ALL_CATEGORIES">
@@ -123,11 +124,13 @@ function create(): void {
           </el-radio-button>
         </el-radio-group>
         <span
-          class="prompt-list__label"
+          v-if="categories.length > 1"
+          class="prompt-list__sep"
           aria-hidden="true"
-        >上线状态</span>
+        />
         <el-radio-group
           v-model="status"
+          class="ai-seg"
           aria-label="按上线状态查看"
         >
           <el-radio-button
@@ -141,6 +144,7 @@ function create(): void {
         <el-checkbox-group
           v-if="showTasks"
           v-model="scheduledFilter"
+          class="prompt-list__toggle"
           aria-label="只看定时任务在用的模板"
         >
           <el-checkbox-button value="scheduled">
@@ -175,7 +179,7 @@ function create(): void {
       >
         <el-table-column
           label="模板名称"
-          min-width="200"
+          min-width="148"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -190,7 +194,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="类型"
-          width="80"
+          width="84"
         >
           <template #default="{ row }">
             <el-tag
@@ -205,7 +209,7 @@ function create(): void {
         <el-table-column
           v-if="showTasks"
           label="定时任务"
-          min-width="116"
+          min-width="112"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -221,7 +225,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="上线状态"
-          min-width="176"
+          min-width="128"
         >
           <template #default="{ row }">
             <!-- 有改动没上线：一行写完，改了什么放悬停提示，「看改动」直接打开逐行对比。 -->
@@ -244,7 +248,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="样本试跑"
-          min-width="168"
+          min-width="136"
         >
           <template #default="{ row }">
             <span
@@ -256,7 +260,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="字段数"
-          width="72"
+          width="64"
           align="right"
         >
           <template #default="{ row }">
@@ -265,7 +269,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="模型"
-          min-width="142"
+          min-width="156"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -275,12 +279,12 @@ function create(): void {
         <el-table-column
           prop="updated_by_name"
           label="更新人"
-          width="96"
+          width="84"
           show-overflow-tooltip
         />
         <el-table-column
           label="更新时间"
-          width="108"
+          width="94"
         >
           <template #default="{ row }">
             <span
@@ -297,14 +301,26 @@ function create(): void {
 <style scoped>
 .prompt-list { height: calc(100dvh - var(--workspace-header-height) - 48px); min-height: 480px; }
 .prompt-list__panel { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
-.prompt-list__toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; padding: 12px 16px; border-bottom: 1px solid var(--zt-border); }
-.prompt-list__toolbar .el-button { margin: 0; }
-.prompt-list__search { width: 180px; }
-/* 两组切换前的小标签；和后面的按钮组挨着，组与组之间留开。 */
-.prompt-list__label { margin: 0 -4px 0 8px; color: var(--zt-ink-500); font-size: 13px; }
+.prompt-list__toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--zt-border); }
+.prompt-list__toolbar .el-button { height: 32px; margin: 0; padding: 0 14px; }
+.prompt-list__search { width: 160px; }
+.prompt-list__sep { width: 1px; height: 16px; margin: 0 2px; background: var(--zt-border); }
+/* 独立过滤开关：白底描边按钮，选中变为浅蓝描边态，与左侧分段槽区分职责。 */
+.prompt-list__toggle :deep(.el-checkbox-button__inner) {
+  display: inline-flex; align-items: center; height: 32px; padding: 0 11px; border: 1px solid var(--zt-border) !important; outline: 0;
+  border-radius: var(--zt-radius) !important; background: var(--zt-panel); color: var(--zt-ink-700);
+  font-size: 13px; font-weight: 400; box-shadow: none !important; transition: background-color .15s, border-color .15s, color .15s;
+}
+.prompt-list__toggle :deep(.el-checkbox-button:not(.is-checked) .el-checkbox-button__inner:hover) {
+  border-color: var(--zt-border-strong) !important; background: var(--zt-surface-subtle); color: var(--zt-ink-900);
+}
+.prompt-list__toggle :deep(.el-checkbox-button.is-checked .el-checkbox-button__inner) {
+  border-color: var(--el-color-primary-light-5) !important; background: var(--el-color-primary-light-9) !important;
+  color: var(--zt-blue-600) !important; font-weight: 600;
+}
 .prompt-list__spacer { flex: 1; }
-.prompt-list__count { margin-left: 6px; color: var(--zt-ink-500); font-size: 12px; font-variant-numeric: tabular-nums; }
-.prompt-list :deep(.is-active) .prompt-list__count, .prompt-list :deep(.is-checked) .prompt-list__count { color: inherit; opacity: .8; }
+.prompt-list__count { margin-left: 4px; color: var(--zt-ink-400); font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.prompt-list :deep(.is-active) .prompt-list__count, .prompt-list :deep(.is-checked) .prompt-list__count { color: var(--zt-blue-600); font-weight: 600; }
 .prompt-list__table { flex: 1; min-height: 0; }
 .prompt-list__table :deep(.el-table__row) { cursor: pointer; }
 /* 和业务列表一样左右各 12px：九列在常见宽度下放得下，不用横向滚动 */
