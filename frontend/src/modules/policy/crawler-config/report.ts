@@ -98,10 +98,11 @@ export function provinceTableText(provinces: ConfigProvinceCount[], total: numbe
     .join('\n')
 }
 
-/** 六位十六进制颜色转成带透明度的 rgba：只淡化柱子颜色，柱顶数字不跟着变淡。不是六位十六进制的原样返回。 */
+/** 三位或六位十六进制颜色转成带透明度的 rgba：只淡化柱子颜色，柱顶数字不跟着变淡。 */
 export function tint(color: string, alpha: number): string {
-  const hex = /^#([0-9a-f]{6})$/i.exec(color.trim())?.[1]
-  if (!hex) return color
+  const raw = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim())?.[1]
+  if (!raw) return color
+  const hex = raw.length === 3 ? raw.split('').map(ch => ch + ch).join('') : raw
   const [r, g, b] = [0, 2, 4].map(index => parseInt(hex.slice(index, index + 2), 16))
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }

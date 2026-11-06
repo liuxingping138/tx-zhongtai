@@ -180,12 +180,12 @@ onMounted(() => {
           :loading="exporting"
           @click="onExport"
         />
+        <!-- 勾选了才出现，平时不摆灰按钮（与 DESIGN.md 及政策两张表保持一致） -->
         <el-button
-          v-if="canWrite"
-          :disabled="!checked.length"
+          v-if="canWrite && checked.length"
           @click="batchOpen = true"
         >
-          批量改爬虫状态{{ checked.length ? `（${checked.length}）` : '' }}
+          批量改爬虫状态（{{ checked.length }}）
         </el-button>
         <el-button
           v-if="canPurge"

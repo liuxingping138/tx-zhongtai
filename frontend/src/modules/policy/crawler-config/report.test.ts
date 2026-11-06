@@ -70,7 +70,11 @@ describe('配置数量图和汇报表', () => {
     const [series] = option.series
     const faded = tint(palette.primary, 0.35)
     expect(series?.data.map(item => item.itemStyle.color)).toEqual([faded, palette.primary, faded])
-    expect([tint('#2c68bb', 0.35), tint('var(--x)', 0.5)]).toEqual(['rgba(44, 104, 187, 0.35)', 'var(--x)'])
+    expect([tint('#2c68bb', 0.35), tint('#35d', 0.06), tint('var(--x)', 0.5)]).toEqual([
+      'rgba(44, 104, 187, 0.35)',
+      'rgba(51, 85, 221, 0.06)',
+      'var(--x)',
+    ])
     expect([series?.label.formatter({ value: 0 }), series?.label.formatter({ value: 5 })]).toEqual(['', '5'])
     expect(option.tooltip.formatter([{ dataIndex: 1 }])).toContain('10月19日 – 10月25日</b><br/>配置 267 个网站')
     expect(option.tooltip.formatter([{ dataIndex: 9 }])).toBe('')

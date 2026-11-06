@@ -216,58 +216,70 @@ defineExpose({ reload })
 
 <style scoped>
 .overview-heading, .overview-caption, .overview-actions { display: flex; align-items: center; gap: 12px; }
-.overview-heading { justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px; }
-.overview-caption { flex-wrap: wrap; gap: 8px 16px; }
-.overview-caption h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--zt-ink-900); }
+.overview-heading { justify-content: space-between; flex-wrap: wrap; margin-bottom: 10px; }
+.overview-caption { flex-wrap: wrap; gap: 8px 14px; }
+.overview-caption h2 { margin: 0; font-size: 14px; font-weight: 650; color: var(--zt-ink-900); }
 .sync-time { color: var(--zt-ink-500); font-size: 12px; font-variant-numeric: tabular-nums; }
-.overview-actions { gap: 0; }
+.overview-actions { gap: 2px; }
 .overview-actions .el-button { margin: 0; }
 .sync-notice { margin-bottom: 12px; }
-.overview { display: flex; flex-direction: column; gap: var(--zt-space-3); margin-bottom: var(--zt-space-4); min-height: 110px; }
+.overview { display: flex; flex-direction: column; gap: var(--zt-space-3); margin-bottom: var(--zt-space-3); min-height: 110px; }
 .overview-error { color: var(--zt-ink-700); font-size: 13px; }
+
 .headline {
-  margin: 0; padding: var(--zt-space-3) var(--zt-space-4);
-  background: var(--el-color-primary-light-9); border-left: 3px solid var(--zt-blue-600); border-radius: var(--zt-radius);
-  font-size: 14px; line-height: 1.9; color: var(--zt-ink-700);
+  margin: 0; padding: 10px 16px;
+  background: var(--zt-panel); border: 1px solid var(--zt-border); border-left: 3px solid var(--zt-blue-600);
+  border-radius: var(--zt-radius); box-shadow: var(--zt-shadow);
+  font-size: 13.5px; line-height: 1.8; color: var(--zt-ink-700);
 }
-.headline-strong { font-size: 16px; font-weight: 600; color: var(--zt-ink-900); font-variant-numeric: tabular-nums; }
+.headline-strong { font-size: 15px; font-weight: 650; color: var(--zt-ink-900); font-variant-numeric: tabular-nums; }
 
 .cards { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--zt-space-3); }
 .card, .chart-panel {
-  background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: var(--zt-radius);
+  background: var(--zt-panel); border: 1px solid var(--zt-border);
+  border-radius: var(--zt-radius); box-shadow: var(--zt-shadow);
 }
 .card {
-  display: flex; flex-direction: column; gap: 6px; min-height: 110px;
-  padding: var(--zt-space-3) var(--zt-space-4);
-  font: inherit; text-align: left; color: inherit;
+  display: flex; flex-direction: column; gap: 4px; min-height: 108px;
+  padding: 14px 16px; font: inherit; text-align: left; color: inherit;
 }
-.card-status { cursor: pointer; transition: background-color 160ms ease, border-color 160ms ease; }
-.card-status:hover { background: var(--zt-soft); }
+.card-status {
+  cursor: pointer;
+  transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+.card-status:hover {
+  border-color: var(--zt-border-strong);
+  box-shadow: 0 4px 12px var(--zt-shadow-soft);
+}
 .card-status:focus-visible { outline: 2px solid var(--zt-blue-600); outline-offset: 2px; }
-.card-status.selected { background: var(--el-color-primary-light-9); border-color: var(--el-color-primary-light-5); }
-.card-label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--zt-ink-700); }
-.card-value { font-size: 28px; line-height: 1.2; color: var(--zt-ink-900); font-variant-numeric: tabular-nums; }
+.card-status.selected {
+  background: var(--el-color-primary-light-9);
+  border-color: var(--zt-blue-600);
+  box-shadow: inset 0 0 0 1px var(--zt-blue-600);
+}
+.card-label { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; color: var(--zt-ink-500); }
+.card-value { margin: 2px 0; font-size: 26px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.15; color: var(--zt-ink-900); font-variant-numeric: tabular-nums; }
 .card-foot { font-size: 12px; color: var(--zt-ink-500); }
-.card-delta { font-size: 12px; font-variant-numeric: tabular-nums; }
+.card-delta { font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .delta-good { color: var(--zt-success-text); }
 .delta-bad { color: var(--zt-danger-text); }
 .delta-flat { color: var(--zt-ink-500); }
 .trend-up { color: var(--zt-success-text); }
 .trend-down { color: var(--zt-danger-text); }
-.dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .card-normal .dot { background: var(--chart-normal); }
 .card-watch .dot { background: var(--chart-watch); }
 .card-stale .dot { background: var(--chart-stale); }
 .card-stale .card-value { color: var(--chart-stale); }
 
 .chart-row { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--zt-space-3); }
-.chart-panel { padding: var(--zt-space-3) var(--zt-space-4); min-width: 0; }
+.chart-panel { padding: 14px 18px; min-width: 0; }
 .chart-panel :deep(.chart-head) {
   display: flex; justify-content: space-between; align-items: flex-start; gap: var(--zt-space-3);
   flex-wrap: wrap; margin-bottom: var(--zt-space-2);
 }
-.chart-panel :deep(h3) { margin: 0; font-size: 14px; font-weight: 600; color: var(--zt-ink-900); }
-.chart-panel :deep(.chart-note) { margin: 4px 0 0; font-size: 12px; color: var(--zt-ink-500); }
+.chart-panel :deep(h3) { margin: 0; font-size: 14px; font-weight: 650; color: var(--zt-ink-900); }
+.chart-panel :deep(.chart-note) { margin: 3px 0 0; font-size: 12px; color: var(--zt-ink-500); }
 .chart-panel :deep(.chart-error) { padding: var(--zt-space-6) 0; color: var(--zt-ink-700); font-size: 13px; }
 
 @media (max-width: 1280px) {

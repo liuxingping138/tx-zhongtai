@@ -1,26 +1,27 @@
 import type { DataColumn } from '@/components/dataColumns'
 import type { EditorGroup } from '@/components/editorGroups'
 
-const FIELDS: { key: string; label: string }[] = [
-  { key: 'prov_id', label: '省份编码' },
+/** 按 DESIGN.md「名称在前、编码在后」排列：先看省市区名称与简称别名，编码放最后、留痕列之前。 */
+const NAME_FIELDS: { key: string; label: string }[] = [
   { key: 'prov_name', label: '省份名称' },
-  { key: 'city_id', label: '城市编码' },
   { key: 'city_name', label: '城市名称' },
-  { key: 'county_id', label: '区县编码' },
   { key: 'county_name', label: '区县名称' },
+  { key: 'city_name_short', label: '城市简称' },
+  { key: 'county_name_short', label: '区县简称' },
   { key: 'alias_prov_name', label: '省份别名' },
   { key: 'alias_city_name', label: '城市别名' },
   { key: 'alias_county_name', label: '区县别名' },
-  { key: 'city_name_short', label: '城市简称' },
-  { key: 'county_name_short', label: '区县简称' },
+]
+
+const CODE_FIELDS: { key: string; label: string }[] = [
+  { key: 'prov_id', label: '省份编码' },
+  { key: 'city_id', label: '城市编码' },
+  { key: 'county_id', label: '区县编码' },
 ]
 
 export const TABLE_COLUMNS: DataColumn[] = [
-  ...FIELDS.map((field) => ({
-    prop: field.key,
-    label: field.label,
-    ...(field.key.endsWith('_id') ? { width: 112 } : { width: 160 }),
-  })),
+  ...NAME_FIELDS.map(field => ({ prop: field.key, label: field.label, width: 160 })),
+  ...CODE_FIELDS.map(field => ({ prop: field.key, label: field.label, width: 112 })),
   { prop: 'created_at', label: '入库时间', width: 190, time: true },
   { prop: 'created_by_name', label: '入库人', width: 110 },
   { prop: 'updated_at', label: '更新时间', width: 190, time: true },

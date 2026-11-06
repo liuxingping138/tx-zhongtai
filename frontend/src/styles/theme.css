@@ -1,71 +1,70 @@
 /*
- * 业务平台主题（2026-09-24 确认）。放在根上：弹窗、下拉、消息提示这些挂在 body 下的浮层，
- * 和按根元素取色的图表，都和页面用同一套颜色。登录页沿用原独立视觉，见文件末尾的 .login。
- * 页面和组件只引用这里的变量，不写色值。
+ * 业务平台主题（2026-09-24 确认，现代极简科技风升级版）。
+ * 放在根上：弹窗、下拉、消息提示这些挂在 body 下的浮层，和按根元素取色的图表，都和页面用同一套颜色。
+ * 登录页沿用原独立视觉，见文件末尾的 .login。页面和组件只引用这里的变量，不写色值。
  */
 :root {
-  --zt-blue-900: #203955;
-  --zt-blue-800: #1f4d8f;
-  --zt-blue-700: #2948bb;
-  --zt-blue-600: #3558de;
-  --zt-ink-900: #162638;
-  --zt-ink-700: #435269;
-  --zt-ink-500: #5f6c7b;
+  --zt-blue-900: #172b4d;
+  --zt-blue-800: #1e429f;
+  --zt-blue-700: #2547c7;
+  --zt-blue-600: #3355dd;
+  --zt-ink-900: #0f172a;
+  --zt-ink-700: #334155;
+  --zt-ink-500: #64748b;
   /* 占位文字、禁用、次要标记，不用于正文。 */
-  --zt-ink-400: #8a95a5;
-  --zt-border: #dfe5eb;
+  --zt-ink-400: #94a3b8;
+  --zt-border: #e2e8f0;
   /* 输入框、复选框这类控件的边框，比面板边框深一档。 */
-  --zt-border-strong: #d0d8e3;
+  --zt-border-strong: #cbd5e1;
   /* 表格、列表内部的细分隔线。 */
-  --zt-divider: #eef1f5;
-  --zt-soft: #f4f6f8;
+  --zt-divider: #f1f5f9;
+  --zt-soft: #f6f8fa;
   --zt-panel: #ffffff;
   /* 面板里的浅底区域，如设置区、底部操作条。 */
-  --zt-surface-subtle: #f9fafc;
+  --zt-surface-subtle: #f8fafc;
   /* 业务表格的表头底色和行悬停底色。 */
-  --zt-table-head: #eaf0f5;
-  --zt-row-hover: #f4f6fc;
-  --zt-shadow: 0 3px 12px rgba(30, 52, 82, 0.035);
-  --zt-shadow-soft: rgb(22 38 56 / 7%);
-  --zt-shadow-float: rgb(22 38 56 / 14%);
+  --zt-table-head: #f4f6f9;
+  --zt-row-hover: #f2f5fc;
+  --zt-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02);
+  --zt-shadow-soft: rgb(15 23 42 / 6%);
+  --zt-shadow-float: rgb(15 23 42 / 12%);
   /* 吸附在右侧的操作列压在内容上的阴影。 */
-  --zt-shadow-edge: rgb(22 38 56 / 18%);
-  --zt-overlay: rgb(22 38 56 / 45%);
-  --zt-focus-ring: rgb(53 88 222 / 14%);
+  --zt-shadow-edge: rgb(15 23 42 / 10%);
+  --zt-overlay: rgb(15 23 42 / 40%);
+  --zt-focus-ring: rgb(51 85 221 / 15%);
 
-  /* 状态色：成功、提醒、危险各一组。实色用于圆点、色条、图标，text 用于文字，soft 和 border 用于浅底提示。
-     和图表的正常、关注、停更是同一组颜色，大面积不用荧光色。 */
-  --zt-success: #3d8c6e;
-  --zt-success-text: #2f7558;
-  --zt-success-soft: #e8f5ee;
-  --zt-success-border: #bfdccf;
-  --zt-warning: #c4842a;
-  --zt-warning-text: #8a5a12;
-  --zt-warning-soft: #fdf3e3;
-  --zt-warning-border: #ecd3ac;
-  --zt-danger: #d25b4a;
-  --zt-danger-text: #a3402f;
-  --zt-danger-soft: #fbeceb;
-  --zt-danger-border: #f0cdc6;
+  /* 状态色：成功、提醒、危险各一组。实色用于圆点、色条、图标，text 用于文字，soft 和 border 用于浅底提示。 */
+  --zt-success: #2da471;
+  --zt-success-text: #1f7852;
+  --zt-success-soft: #eafaf2;
+  --zt-success-border: #bce6d2;
+  --zt-warning: #d9822b;
+  --zt-warning-text: #945312;
+  --zt-warning-soft: #fef6eb;
+  --zt-warning-border: #f3d7b0;
+  --zt-danger: #dc4c3e;
+  --zt-danger-text: #a83227;
+  --zt-danger-soft: #fdf0ef;
+  --zt-danger-border: #f4c8c4;
   /* 还没开始、跳过这类中性状态的圆点。 */
-  --zt-muted-mark: #b3bdca;
+  --zt-muted-mark: #94a3b8;
   /* 用户头像底色：蓝、粉、红、橙、绿、紫、青、琥珀，按人固定取一个，白字都在 4.5:1 以上。 */
-  --zt-avatar-1: #1c6fd6;
-  --zt-avatar-2: #d6336c;
-  --zt-avatar-3: #d63a3a;
-  --zt-avatar-4: #c9420c;
-  --zt-avatar-5: #26803a;
-  --zt-avatar-6: #7b4ae2;
-  --zt-avatar-7: #0b7f93;
-  --zt-avatar-8: #a65a08;
+  --zt-avatar-1: #2563eb;
+  --zt-avatar-2: #db2777;
+  --zt-avatar-3: #dc2626;
+  --zt-avatar-4: #ea580c;
+  --zt-avatar-5: #16a34a;
+  --zt-avatar-6: #7c3aed;
+  --zt-avatar-7: #0891b2;
+  --zt-avatar-8: #b45309;
   /* 提示词里引用码表的变量：和 Excel 列（蓝）、找不到的列（提醒色）区分开。 */
-  --zt-teal-text: #1f7a6b;
-  --zt-teal-soft: #dcf1ee;
-  --zt-teal-line: #82c3b8;
+  --zt-teal-text: #0f766e;
+  --zt-teal-soft: #e6f7f5;
+  --zt-teal-line: #99dad3;
   /* AI 打标写入的列：表头淡紫底和「AI」小标记，和人填、系统算的列区分开。 */
-  --zt-ai-text: #6a3fc4;
-  --zt-ai-soft: #f1edfb;
-  --zt-ai-line: #d4c7f2;
+  --zt-ai-text: #6d28d9;
+  --zt-ai-soft: #f5f2ff;
+  --zt-ai-line: #ddd6fe;
 
   --chart-normal: var(--zt-success);
   --chart-watch: var(--zt-warning);
@@ -73,9 +72,9 @@
   --chart-long: #8a7368;
 
   /* 遮罩层（加载中）的半透明底。 */
-  --zt-loading-mask: rgb(247 250 255 / 72%);
+  --zt-loading-mask: rgb(255 255 255 / 78%);
 
-  --zt-title-size: 24px;
+  --zt-title-size: 22px;
   --zt-radius: 6px;
   --zt-font: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
   --zt-space-1: 4px;
@@ -84,29 +83,28 @@
   --zt-space-4: 16px;
   --zt-space-6: 24px;
   --zt-space-8: 32px;
-  --zt-nav: #203955;
-  --zt-nav-active: #33567e;
+  --zt-nav: #172b4d;
+  --zt-nav-active: #284475;
   --zt-nav-text: #c1d0e2;
-  --zt-scroll-thumb: #5d738c;
-  --zt-scroll-track: #d6dee8;
-  --zt-scroll-hover: #4d6480;
-  --zt-scroll-active: #3f546c;
+  --zt-scroll-thumb: #94a3b8;
+  --zt-scroll-track: #edf2f7;
+  --zt-scroll-hover: #64748b;
+  --zt-scroll-active: #475569;
 
-  /* Element Plus 适配：主色和成功、提醒、危险都换成上面的主题色，组件自带的提示框、按钮、消息和页面自己写的状态文字是同一组颜色。
-     Element 的浅色档在它编译时就算好了，只改底色不会跟着变，所以每一档按它的算法（和白色混合）写全。 */
+  /* Element Plus 适配 */
   --el-font-family: var(--zt-font);
   --el-font-size-base: 14px;
   --el-border-radius-base: var(--zt-radius);
   --el-text-color-primary: var(--zt-ink-900);
   --el-text-color-regular: var(--zt-ink-700);
   --el-border-color: var(--zt-border);
-  --el-color-primary: #3558de;
-  --el-color-primary-light-3: #6b85e7;
-  --el-color-primary-light-5: #9aacee;
-  --el-color-primary-light-7: #c2ccf5;
-  --el-color-primary-light-8: #d7def9;
-  --el-color-primary-light-9: #eef1fc;
-  --el-color-primary-dark-2: #2948bb;
+  --el-color-primary: #3355dd;
+  --el-color-primary-light-3: #6680e6;
+  --el-color-primary-light-5: #99aaee;
+  --el-color-primary-light-7: #ccd5f7;
+  --el-color-primary-light-8: #e0e6fa;
+  --el-color-primary-light-9: #f0f3fd;
+  --el-color-primary-dark-2: #2547c7;
   --el-color-success: var(--zt-success);
   --el-color-success-light-3: color-mix(in srgb, var(--zt-success) 70%, white);
   --el-color-success-light-5: color-mix(in srgb, var(--zt-success) 50%, white);
@@ -155,6 +153,7 @@ body {
   font-family: var(--zt-font);
   font-size: 14px;
   line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
 
 .el-card,
@@ -165,22 +164,81 @@ body {
 .el-button,
 .el-pager li,
 .el-pagination button {
-  border-radius: 6px;
+  border-radius: var(--zt-radius);
 }
 
 .el-button {
-  min-height: 34px;
+  min-height: 32px;
   font-weight: 500;
   box-shadow: none;
   transition:
-    background 0.16s ease,
+    background-color 0.16s ease,
     border-color 0.16s ease,
-    box-shadow 0.16s ease,
-    border-color 0.16s ease;
+    color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.el-button--default:not(.is-text):not(.is-link):not(.is-disabled) {
+  border-color: var(--zt-border-strong);
+  color: var(--zt-ink-700);
+}
+
+.el-button--default:not(.is-text):not(.is-link):not(.is-disabled):hover {
+  border-color: var(--zt-blue-600);
+  background-color: var(--el-color-primary-light-9);
+  color: var(--zt-blue-600);
+}
+
+.el-button--primary:not(.is-plain):not(.is-text):not(.is-link) {
+  box-shadow: 0 1px 2px var(--zt-shadow-soft);
 }
 
 .el-button:not(.is-disabled):not(.is-loading):hover {
   filter: brightness(0.98);
+}
+
+/* 全站统一现代分段控制器（替代原本抢眼的实心蓝底 radio-button） */
+.el-radio-group:has(.el-radio-button) {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--zt-border);
+  border-radius: calc(var(--zt-radius) + 1px);
+  background: var(--zt-soft);
+}
+
+.el-radio-group .el-radio-button__inner {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 11px;
+  border: 0 !important;
+  outline: 0;
+  border-radius: calc(var(--zt-radius) - 1px) !important;
+  background: transparent;
+  color: var(--zt-ink-700);
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: none !important;
+  transition: background-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.el-radio-group--small .el-radio-button__inner {
+  height: 22px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+
+.el-radio-group .el-radio-button:not(.is-active) .el-radio-button__inner:hover {
+  color: var(--zt-ink-900);
+}
+
+.el-radio-group .el-radio-button.is-active .el-radio-button__inner {
+  background: var(--zt-panel) !important;
+  color: var(--zt-blue-600) !important;
+  font-weight: 600;
+  box-shadow: 0 1px 2px var(--zt-shadow-soft) !important;
 }
 
 .el-loading-mask {
@@ -191,77 +249,86 @@ body {
 /* 数据表和业务表格同一套表头、悬停底色。 */
 .el-table.data-table {
   --el-table-header-bg-color: var(--zt-table-head);
-  --el-table-header-text-color: var(--zt-ink-900);
+  --el-table-header-text-color: var(--zt-ink-700);
   --el-table-row-hover-bg-color: var(--zt-row-hover);
-  --el-table-border-color: var(--zt-border);
+  --el-table-border-color: var(--zt-divider);
 }
 
 .el-table.data-table th.el-table__cell {
-  padding: 11px 0;
+  padding: 10px 0;
   font-size: 13px;
   font-weight: 600;
+  border-bottom: 1px solid var(--zt-border);
 }
 
 .el-table.data-table td.el-table__cell {
-  padding: 12px 0;
+  padding: 10px 0;
   color: var(--zt-ink-700);
   font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
 
-.el-table.data-table .cell { line-height: 1.6; padding: 0 16px; }
+.el-table.data-table .cell { line-height: 1.55; padding: 0 14px; }
 
-.pagination-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 0; min-height: 64px; }
+.pagination-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px 2px; min-height: 52px; }
 .pagination-range { color: var(--zt-ink-500); font-size: 12px; font-variant-numeric: tabular-nums; }
 
 /* 表格行末操作的小按钮（RowActions、批量任务等）：默认描边，--primary 浅底主色，--danger 红字；一样高，按下有反馈。 */
-.row-actions { display: flex; align-items: center; gap: 8px; }
-.row-action { display: inline-flex; align-items: center; justify-content: center; gap: 2px; height: 26px; padding: 0 11px; border: 1px solid var(--zt-border-strong); border-radius: 4px; background: var(--zt-panel); color: var(--zt-ink-700); font: inherit; font-size: 13px; line-height: 1; text-decoration: none; white-space: nowrap; cursor: pointer; transition: border-color .15s, color .15s, background-color .15s; }
-.row-action:hover { border-color: var(--zt-blue-600); color: var(--zt-blue-600); }
-.row-action--primary { border-color: transparent; background: var(--el-color-primary-light-9); color: var(--zt-blue-700); }
-.row-action--primary:hover { border-color: transparent; background: var(--el-color-primary-light-8); color: var(--zt-blue-800); }
+.row-actions { display: inline-flex; align-items: center; gap: 6px; }
+.row-action { display: inline-flex; align-items: center; justify-content: center; gap: 3px; height: 26px; padding: 0 10px; border: 1px solid var(--zt-border-strong); border-radius: 5px; background: var(--zt-panel); color: var(--zt-ink-700); font: inherit; font-size: 12px; font-weight: 500; line-height: 1; text-decoration: none; white-space: nowrap; cursor: pointer; transition: border-color .15s, color .15s, background-color .15s, box-shadow .15s; }
+.row-action:hover { border-color: var(--zt-blue-600); background: var(--zt-surface-subtle); color: var(--zt-blue-600); }
+.row-action--primary { border-color: var(--el-color-primary-light-8); background: var(--el-color-primary-light-9); color: var(--zt-blue-700); }
+.row-action--primary:hover { border-color: var(--el-color-primary-light-5); background: var(--el-color-primary-light-8); color: var(--zt-blue-800); }
 .row-action--danger { border-color: transparent; background: transparent; color: var(--zt-danger-text); }
 .row-action--danger:hover { border-color: var(--zt-danger-border); background: var(--zt-danger-soft); color: var(--zt-danger-text); }
-.row-action:disabled { opacity: .5; cursor: not-allowed; }
+.row-action:disabled { opacity: .45; cursor: not-allowed; }
 .row-action:focus-visible { outline: 2px solid var(--zt-blue-600); outline-offset: 1px; }
 @media (prefers-reduced-motion: reduce) { .row-action { transition: none; } }
 
 .pagination-row .el-pagination {
   --el-pagination-button-bg-color: var(--zt-panel);
   --el-pagination-hover-color: var(--zt-blue-600);
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
 
-.pagination-row .el-pager li.is-active {
-  background: var(--el-color-primary-light-9);
-  color: var(--zt-blue-700);
-  font-weight: 700;
+.pagination-row .el-pager li {
+  border: 1px solid transparent;
 }
 
-/* Keep wide data and forms usable on smaller workspaces. */
+.pagination-row .el-pager li.is-active {
+  background: var(--el-color-primary-light-9);
+  border-color: var(--el-color-primary-light-7);
+  color: var(--zt-blue-700);
+  font-weight: 600;
+}
+
 .el-dialog {
   max-width: calc(100vw - 32px);
+  box-shadow: 0 20px 48px var(--zt-shadow-float);
 }
 
 .el-drawer {
   max-width: 100vw;
+  box-shadow: -12px 0 36px var(--zt-shadow-float);
 }
 
-/* Shared editor surfaces: the content scrolls while actions remain visible. */
-.editor-overlay.el-drawer .el-drawer__header { margin-bottom: 0; padding: 24px; border-bottom: 1px solid var(--zt-border); color: var(--zt-ink-900); }
-.editor-overlay.el-drawer .el-drawer__title { font-size: 18px; font-weight: 650; }
+/* Shared editor surfaces */
+.editor-overlay.el-drawer .el-drawer__header { margin-bottom: 0; padding: 18px 24px; border-bottom: 1px solid var(--zt-border); color: var(--zt-ink-900); }
+.editor-overlay.el-drawer .el-drawer__title { font-size: 16px; font-weight: 650; }
 .editor-overlay.el-drawer .el-drawer__body { padding: 24px; background: var(--zt-panel); }
-.editor-overlay.el-drawer .el-drawer__footer { padding: 16px 24px; border-top: 1px solid var(--zt-border); background: var(--zt-panel); }
-.editor-overlay.el-dialog { padding: 24px; border-radius: 12px; }
-.editor-overlay.el-dialog .el-dialog__body { max-height: 65vh; overflow-y: auto; padding-top: 16px; }
-.editor-overlay .el-dialog__title { color: var(--zt-ink-900); font-weight: 650; }
-.editor-overlay .el-dialog__footer { padding-top: 20px; }
-.editor-overlay .el-input__wrapper { min-height: 38px; }
-.editor-overlay .el-textarea__inner { padding: 10px 12px; line-height: 1.7; }
+.editor-overlay.el-drawer .el-drawer__footer { padding: 14px 24px; border-top: 1px solid var(--zt-border); background: var(--zt-surface-subtle); }
+.editor-overlay.el-dialog { padding: 22px 24px; border-radius: 10px; }
+.editor-overlay.el-dialog .el-dialog__body { max-height: 65vh; overflow-y: auto; padding-top: 14px; }
+.editor-overlay .el-dialog__title { color: var(--zt-ink-900); font-size: 16px; font-weight: 650; }
+.editor-overlay .el-dialog__footer { padding-top: 18px; }
+.editor-overlay .el-input__wrapper { min-height: 36px; }
+.editor-overlay .el-textarea__inner { padding: 10px 12px; line-height: 1.65; }
 .editor-dirty { display: inline-flex; align-items: center; gap: 6px; margin-right: 16px; color: var(--zt-warning-text); font-size: 12px; vertical-align: middle; }
-.editor-dirty::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--zt-warning); }
+.editor-dirty::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--zt-warning); }
+
+.el-tag { border-radius: 4px; font-weight: 500; }
 .el-tag--success { --el-tag-bg-color: var(--zt-success-soft); --el-tag-border-color: var(--zt-success-border); --el-tag-text-color: var(--zt-success-text); }
 .el-tag--warning { --el-tag-bg-color: var(--zt-warning-soft); --el-tag-border-color: var(--zt-warning-border); --el-tag-text-color: var(--zt-warning-text); }
 .el-tag--danger { --el-tag-bg-color: var(--zt-danger-soft); --el-tag-border-color: var(--zt-danger-border); --el-tag-text-color: var(--zt-danger-text); }
@@ -272,50 +339,50 @@ body {
 .el-message--warning { --el-message-text-color: var(--zt-warning-text); }
 .el-message--error { --el-message-text-color: var(--zt-danger-text); }
 .el-tag--info { --el-tag-bg-color: var(--zt-soft); --el-tag-border-color: var(--zt-border); --el-tag-text-color: var(--zt-ink-500); }
+
 @media (max-width: 540px) { .editor-dirty { display: flex; margin: 0 0 12px; } .editor-overlay.el-drawer .el-drawer__body { padding: 16px; } }
 @media (prefers-reduced-motion: reduce) { .el-button { transition: none; } }
 
-.editor-help { margin: 0 0 20px; color: var(--zt-ink-500); font-size: 12px; line-height: 1.8; }
+.editor-help { margin: 0 0 18px; color: var(--zt-ink-500); font-size: 12px; line-height: 1.7; }
 
-* { scrollbar-width: auto; scrollbar-color: var(--zt-scroll-thumb) var(--zt-scroll-track); }
-*::-webkit-scrollbar { width: 12px; height: 12px; }
+* { scrollbar-width: thin; scrollbar-color: var(--zt-scroll-thumb) var(--zt-scroll-track); }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
 *::-webkit-scrollbar-track { background: var(--zt-scroll-track); }
-*::-webkit-scrollbar-thumb { background: var(--zt-scroll-thumb); border-radius: 6px; }
+*::-webkit-scrollbar-thumb { background: var(--zt-scroll-thumb); border-radius: 4px; }
 *::-webkit-scrollbar-thumb:hover { background: var(--zt-scroll-hover); }
 *::-webkit-scrollbar-thumb:active { background: var(--zt-scroll-active); }
 @media (forced-colors: active) { * { scrollbar-color: auto; } }
 .el-scrollbar__wrap,
 .el-scrollbar__wrap--hidden-default {
-  scrollbar-width: auto;
+  scrollbar-width: thin;
 }
 .el-scrollbar__wrap::-webkit-scrollbar,
 .el-scrollbar__wrap--hidden-default::-webkit-scrollbar {
-  width: 12px;
-  height: 12px;
+  width: 8px;
+  height: 8px;
   display: block;
 }
 .el-table .el-scrollbar__bar { display: none; }
 button:not(:disabled), a, .el-select, .el-checkbox, .el-radio { cursor: pointer; }
-button:focus-visible, a:focus-visible { outline: 2px solid var(--zt-blue-600); outline-offset: 3px; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--zt-blue-600); outline-offset: 2px; }
 button:disabled { cursor: not-allowed; }
 .el-button.is-text, .el-button.is-link { box-shadow: none; }
 .el-button.is-loading .el-icon.is-loading { position: absolute; left: 3px; font-size: 12px; }
 .el-button--primary { box-shadow: none; }
 .el-textarea__inner { resize: none; }
 .el-drawer__body { scrollbar-gutter: stable; }
-.el-drawer__footer { border-top: 1px solid var(--zt-border); padding-bottom: max(16px, env(safe-area-inset-bottom)); }
-.editor-overlay .editor-section { border: 0; border-radius: 0; padding: 0 0 24px; margin-bottom: 24px; border-bottom: 1px solid var(--zt-border); }
+.el-drawer__footer { border-top: 1px solid var(--zt-border); padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+.editor-overlay .editor-section { border: 0; border-radius: 0; padding: 0 0 22px; margin-bottom: 22px; border-bottom: 1px solid var(--zt-border); }
 .editor-overlay .editor-section:last-child { border-bottom: 0; }
-.editor-overlay .editor-section legend { padding: 0; margin-bottom: 12px; font-size: 15px; }
-.editor-overlay .editor-section__hint { margin-bottom: 16px; }
+.editor-overlay .editor-section legend { padding: 0; margin-bottom: 10px; font-size: 14px; }
+.editor-overlay .editor-section__hint { margin-bottom: 14px; }
 .el-message { max-width: calc(100vw - 24px); }
-/* Element Plus 2.9 的确认框是 width:100% + max-width 限宽；只写 100vw 会把限宽覆盖掉，变成整屏宽。 */
-.el-message-box { max-width: min(var(--el-messagebox-width, 420px), calc(100vw - 32px)); }
-/* 确认框里逐行列出的内容（修改清单、跳过原因、失败清单）按行显示，不挤成一段。customClass: 'confirm-lines' */
+.el-message-box { max-width: min(var(--el-messagebox-width, 420px), calc(100vw - 32px)); border-radius: 10px; box-shadow: 0 20px 48px var(--zt-shadow-float); }
 .confirm-lines { --el-messagebox-width: 520px; }
 .confirm-lines .el-message-box__message p { white-space: pre-line; line-height: 1.8; }
+
 @media (max-width: 767px) {
- :root { --zt-title-size: 21px; }
+ :root { --zt-title-size: 20px; }
  .el-button:not(.is-link), .el-input__wrapper, .el-select__wrapper { min-height: 44px; }
  .el-button.is-link { min-height: 36px; }
  .el-drawer, .editor-overlay.el-drawer { width: 100% !important; }
@@ -334,11 +401,12 @@ button:disabled { cursor: not-allowed; }
  .list-page__results > .data-table { min-width: 740px; }
 }
 
-.form-submit-error { margin-bottom: 20px; }
+.form-submit-error { margin-bottom: 18px; }
 
-.workspace-shell { --workspace-rail-width: 216px; --workspace-header-height: 76px; }
+/* 顶栏高度收敛至 60px，侧栏 208px，释放更多垂直空间给业务数据 */
+.workspace-shell { --workspace-rail-width: 208px; --workspace-header-height: 60px; }
 
-/* 登录页沿用原独立视觉（深蓝品牌区 + 认证表单），表单控件也保持原来的蓝。 */
+/* 登录页沿用原独立视觉（深蓝品牌区 + 认证表单） */
 .login {
   --zt-blue-600: #2c68bb; --zt-ink-900: #20324c; --zt-ink-700: #46566d; --zt-ink-500: #697386;
   --zt-border: #e3e9f1; --zt-soft: #f3f6fa;

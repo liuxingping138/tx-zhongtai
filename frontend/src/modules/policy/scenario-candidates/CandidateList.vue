@@ -292,8 +292,16 @@ onMounted(() => {
 <style scoped>
 .candidates__summary {
   margin: 0;
-  font-size: 15px;
-  line-height: 24px;
+  padding: 10px 16px;
+  border: 1px solid var(--zt-border);
+  border-left: 3px solid var(--zt-blue-600);
+  border-radius: var(--zt-radius);
+  background: var(--zt-panel);
+  box-shadow: var(--zt-shadow);
+  color: var(--zt-ink-900);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
 }
 
 .candidates__min {

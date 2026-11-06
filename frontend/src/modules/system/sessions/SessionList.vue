@@ -191,14 +191,14 @@ onMounted(load)
             class="online-muted"
             title="这是你正在用的设备，要退出请点左下角账号里的「退出登录」"
           >正在使用</span>
-          <el-button
+          <button
             v-else-if="deviceAction(row, canRevoke) === 'revoke'"
-            link
-            type="danger"
+            type="button"
+            class="row-action row-action--danger"
             @click="revoke(row)"
           >
             下线
-          </el-button>
+          </button>
           <span
             v-else
             class="online-muted"
@@ -212,9 +212,11 @@ onMounted(load)
 
 <style scoped>
 .online-user { display: inline-flex; align-items: center; gap: 10px; max-width: 100%; vertical-align: middle; }
-.online-user__name { color: var(--zt-ink-900); font-weight: 500; }
+.online-user__name { color: var(--zt-ink-900); font-weight: 550; }
 .online-user__account { overflow: hidden; color: var(--zt-ink-500); font-size: 13px; text-overflow: ellipsis; }
-.online-state { color: var(--zt-ink-500); }
-.online-state.is-online { color: var(--zt-success-text); }
-.online-muted { color: var(--zt-ink-500); font-size: 13px; }
+.online-state { display: inline-flex; align-items: center; gap: 6px; color: var(--zt-ink-500); font-size: 13px; }
+.online-state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--zt-muted-mark); }
+.online-state.is-online { color: var(--zt-success-text); font-weight: 500; }
+.online-state.is-online::before { background: var(--zt-success); }
+.online-muted { color: var(--zt-ink-400); font-size: 12px; }
 </style>

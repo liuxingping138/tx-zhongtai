@@ -313,35 +313,36 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
         </el-table-column>
         <el-table-column
           label="操作"
-          width="210"
+          width="236"
           fixed="right"
         >
           <template #default="{ row }">
-            <el-button
-              v-if="canChange(row)"
-              link
-              type="primary"
-              :disabled="!!row.active_run || !!pending"
-              :loading="pending === row.code"
-              @click="execute(row)"
-            >
-              立即执行
-            </el-button>
-            <el-button
-              v-if="canChange(row)"
-              link
-              type="primary"
-              @click="edit(row)"
-            >
-              设置
-            </el-button>
-            <el-button
-              link
-              type="primary"
-              @click="history.open(row)"
-            >
-              执行记录
-            </el-button>
+            <div class="row-actions">
+              <button
+                v-if="canChange(row)"
+                type="button"
+                class="row-action"
+                :disabled="!!row.active_run || !!pending"
+                @click="execute(row)"
+              >
+                {{ pending === row.code ? '提交中…' : '立即执行' }}
+              </button>
+              <button
+                v-if="canChange(row)"
+                type="button"
+                class="row-action row-action--primary"
+                @click="edit(row)"
+              >
+                设置
+              </button>
+              <button
+                type="button"
+                class="row-action"
+                @click="history.open(row)"
+              >
+                执行记录
+              </button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -360,17 +361,17 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
 
 <style scoped>
 .scheduler-strip, .scheduler-strip > div { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-.scheduler-strip { padding: 14px 16px; border: 1px solid var(--zt-border); background: var(--zt-panel); border-radius: var(--zt-radius); color: var(--zt-ink-500); font-size: 13px; }
+.scheduler-strip {
+  padding: 12px 16px; margin-bottom: 10px; border: 1px solid var(--zt-border);
+  background: var(--zt-panel); border-radius: var(--zt-radius); box-shadow: var(--zt-shadow);
+  color: var(--zt-ink-500); font-size: 13px;
+}
 .job-cell { display: inline-flex; align-items: center; gap: 8px; }
 .job-cell__note { color: var(--zt-ink-500); font-size: 12px; font-variant-numeric: tabular-nums; }
-.job-cell__link { color: var(--zt-blue-600); text-decoration: none; }
+.job-cell__link { color: var(--zt-blue-600); font-weight: 500; text-decoration: none; }
 .job-cell__link:hover { text-decoration: underline; }
-.scheduler-note { color: var(--zt-ink-500); font-size: 13px; line-height: 1.8; margin: 16px 0; }
+.scheduler-note { color: var(--zt-ink-500); font-size: 12.5px; line-height: 1.7; margin: 12px 2px 0; }
 .scheduler-page :deep(.list-page) { min-height: 0; max-height: none; }
-/*
- * 表格按任务数撑开，底下不留白；任务多到一屏放不下时封顶，改在表格里滚，表头吸顶、横向滚动条留在屏幕内。
- * ScrollPort 默认 height: 0 再靠 flex 填满固定高度，这里改成按内容算高、最多到这么高。
- */
 .scheduler-page :deep(.list-page__results) { flex: none; height: auto; max-height: max(360px, calc(100dvh - 250px)); }
 .scheduler-page :deep(.list-page__results .scroll-port__view) { flex: 0 1 auto; }
 </style>

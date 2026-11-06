@@ -275,13 +275,13 @@ onMounted(() => {
           fixed="right"
         >
           <template #default="{ row }">
-            <el-button
-              link
-              type="primary"
+            <button
+              type="button"
+              class="row-action"
               @click="openDetail(row)"
             >
               详情
-            </el-button>
+            </button>
           </template>
         </el-table-column>
       </el-table>

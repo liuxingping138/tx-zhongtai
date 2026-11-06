@@ -11,7 +11,7 @@ const state = reactive({
   yOffset: 0,
 })
 
-const TRACK = 14
+const TRACK = 10
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
@@ -129,13 +129,20 @@ onBeforeUnmount(() => {
 .scroll-port { position: relative; display: flex; flex-direction: column; flex: 1 1 0; min-width: 0; min-height: 0; height: 0; }
 .scroll-port__view { flex: 1 1 0; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: none; }
 .scroll-port__view::-webkit-scrollbar { width: 0; height: 0; display: none; }
-.scroll-port__track { position: absolute; z-index: 6; background: var(--zt-scroll-track); }
-.scroll-port__track.is-y { top: 0; right: 0; bottom: 0; width: 14px; }
-.scroll-port.has-x .scroll-port__track.is-y { bottom: 14px; }
-.scroll-port__track.is-x { left: 0; right: 0; bottom: 0; height: 14px; }
-.scroll-port.has-y .scroll-port__track.is-x { right: 14px; }
-.scroll-port__thumb { display: block; border-radius: 7px; background: var(--zt-scroll-thumb); }
-.scroll-port__track.is-y .scroll-port__thumb { width: 10px; margin: 2px; }
-.scroll-port__track.is-x .scroll-port__thumb { height: 10px; margin: 2px; }
-.scroll-port__track { cursor: pointer; }
+.scroll-port__track {
+  position: absolute; z-index: 6; background: var(--zt-scroll-track);
+  cursor: pointer; transition: background-color 0.15s ease;
+}
+.scroll-port__track.is-y { top: 0; right: 0; bottom: 0; width: 10px; border-left: 1px solid var(--zt-divider); }
+.scroll-port.has-x .scroll-port__track.is-y { bottom: 10px; }
+.scroll-port__track.is-x { left: 0; right: 0; bottom: 0; height: 10px; border-top: 1px solid var(--zt-divider); }
+.scroll-port.has-y .scroll-port__track.is-x { right: 10px; }
+.scroll-port__thumb {
+  display: block; border-radius: 5px; background: var(--zt-scroll-thumb);
+  transition: background-color 0.15s ease;
+}
+.scroll-port__track:hover .scroll-port__thumb { background: var(--zt-scroll-hover); }
+.scroll-port__track:active .scroll-port__thumb { background: var(--zt-scroll-active); }
+.scroll-port__track.is-y .scroll-port__thumb { width: 6px; margin: 2px auto; }
+.scroll-port__track.is-x .scroll-port__thumb { height: 6px; margin: 2px 0; }
 </style>

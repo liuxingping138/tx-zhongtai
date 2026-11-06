@@ -117,7 +117,7 @@ async function onSize(value: number) {
 .list-page__heading h1 { margin: 0; font-size: var(--zt-title-size); line-height: 1.4; font-weight: 650; color: var(--zt-ink-900); }
 .list-page__heading p { margin: 4px 0 0; font-size: 13px; line-height: 1.6; color: var(--zt-ink-500); }
 /* 概览不挤压结果区。监测页自然纵向滚动，表格随窗口高度变化；收起概览可直接专注列表。 */
-.summary-band { flex: 0 0 auto; margin-bottom: 8px; }
+.summary-band { flex: 0 0 auto; margin-bottom: 10px; }
 .list-page:has(.summary-band) { max-height: none; }
 .list-page:has(.summary-band) .table-card { flex: none; }
 .list-page:has(.summary-band) .scroll-port.list-page__results {
@@ -125,7 +125,6 @@ async function onSize(value: number) {
   min-height: 440px;
   flex: none;
 }
-/* Audit trails need more visible rows than a one-screen grid can provide below five filters. */
 .list-page--expanded { max-height: none; }
 .list-page--expanded .table-card { flex: none; }
 .list-page--expanded .scroll-port.list-page__results {
@@ -133,15 +132,24 @@ async function onSize(value: number) {
   min-height: 560px;
   flex: none;
 }
-.filter-card { padding: 14px 16px 16px; margin-bottom: 4px; background: var(--zt-surface-subtle); border: 1px solid var(--zt-border); border-radius: var(--zt-radius); }
-.table-card { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; scroll-margin-top: 12px; }
-.list-page__toolbar { min-height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; }
-.list-page__total { flex-shrink: 0; color: var(--zt-ink-700); font-size: 14px; font-variant-numeric: tabular-nums; }
-.list-page__total strong { color: var(--zt-ink-900); font-weight: 650; }
+.filter-card { padding: 12px 16px; margin-bottom: 10px; background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: var(--zt-radius); box-shadow: var(--zt-shadow); }
+/* 工具栏、表格、分页合为一张完整白底卡片面板 */
+.table-card {
+  flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;
+  background: var(--zt-panel); border: 1px solid var(--zt-border);
+  border-radius: var(--zt-radius); box-shadow: var(--zt-shadow);
+  overflow: hidden; scroll-margin-top: 12px;
+}
+.list-page__toolbar {
+  min-height: 50px; display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--zt-border); background: var(--zt-panel);
+}
+.list-page__total { flex-shrink: 0; color: var(--zt-ink-500); font-size: 13px; font-variant-numeric: tabular-nums; }
+.list-page__total strong { color: var(--zt-ink-900); font-weight: 650; margin: 0 2px; }
 .list-page__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; }
 .list-page__actions :deep(.el-button + .el-button) { margin-left: 0; }
 .list-page__actions :deep(.el-upload) { display: inline-flex; }
-.list-page__results { flex: 1 1 0; min-width: 0; min-height: 0; background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: var(--zt-radius); overflow: hidden; }
+.list-page__results { flex: 1 1 0; min-width: 0; min-height: 0; background: var(--zt-panel); overflow: hidden; }
 .list-page__results :deep(.el-table),
 .list-page__results :deep(.el-table__inner-wrapper),
 .list-page__results :deep(.el-table__header-wrapper),
@@ -152,9 +160,10 @@ async function onSize(value: number) {
 .list-page__results :deep(.el-scrollbar__view) { overflow: visible !important; height: auto !important; max-height: none !important; }
 .list-page__results :deep(.el-scrollbar__bar) { display: none !important; }
 .list-page__results :deep(.el-table__header-wrapper) { position: sticky; top: 0; z-index: 4; }
-.list-error { min-height: max(360px, calc(100dvh - 400px)); display: flex; align-items: center; justify-content: center; flex-direction: column; background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: var(--zt-radius); color: var(--zt-ink-700); text-align: center; padding: 24px; }
-.list-error h2 { font-size: 17px; margin: 16px 0 0; }
-.list-error p { max-width: 560px; overflow-wrap: anywhere; font-size: 14px; line-height: 1.7; }
+.table-card > .pagination-row { padding: 10px 16px; border-top: 1px solid var(--zt-divider); background: var(--zt-surface-subtle); min-height: 48px; }
+.list-error { min-height: max(360px, calc(100dvh - 400px)); display: flex; align-items: center; justify-content: center; flex-direction: column; background: var(--zt-panel); color: var(--zt-ink-700); text-align: center; padding: 24px; }
+.list-error h2 { font-size: 16px; margin: 14px 0 0; color: var(--zt-ink-900); }
+.list-error p { max-width: 560px; overflow-wrap: anywhere; font-size: 13px; line-height: 1.7; color: var(--zt-ink-500); }
 @media (max-width: 1000px) { .list-page { min-height: calc(100dvh - 100px); max-height: calc(100dvh - 100px); } }
 @media (max-width: 767px) {
  .list-page { min-height: calc(100dvh - 92px); max-height: none; }
@@ -162,7 +171,7 @@ async function onSize(value: number) {
  .list-page__heading { padding-bottom: 16px; }
  .list-page__heading p { margin-top: 5px; }
  .filter-card { padding: 12px; }
- .list-page__toolbar { align-items: flex-start; flex-direction: column; padding: 14px 0; }
+ .list-page__toolbar { align-items: flex-start; flex-direction: column; padding: 12px; }
  .list-page__actions { justify-content: flex-start; gap: 8px; width: 100%; }
  .list-page__actions :deep(.el-button) { padding: 0 10px; }
 }

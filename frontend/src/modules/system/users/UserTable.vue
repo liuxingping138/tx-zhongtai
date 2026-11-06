@@ -246,58 +246,60 @@ function roleNames(user: ManagedUser): string {
     </el-table-column>
     <el-table-column
       label="操作"
-      width="150"
+      width="156"
       fixed="right"
     >
       <template #default="{ row }">
-        <el-button
-          link
-          type="primary"
-          @click="$emit('open', row)"
-        >
-          {{ openLabel(row, { edit: canEditUsers, grant: canGrant }) }}
-        </el-button>
-        <el-dropdown
-          v-if="manageable(row) || canAudit"
-          class="ops-more"
-          trigger="click"
-        >
-          <el-button
-            link
-            type="primary"
+        <div class="row-actions">
+          <button
+            type="button"
+            class="row-action"
+            :class="{ 'row-action--primary': openLabel(row, { edit: canEditUsers, grant: canGrant }) !== '查看' }"
+            @click="$emit('open', row)"
           >
-            更多
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item
-                v-if="manageable(row) && row.id !== auth.user?.id"
-                @click="$emit('remove', row)"
-              >
-                删除
-              </el-dropdown-item>
-              <el-dropdown-item
-                v-if="manageable(row)"
-                @click="$emit('reset-password', row)"
-              >
-                重置密码
-              </el-dropdown-item>
-              <el-dropdown-item
-                v-if="manageable(row)"
-                @click="$emit('revoke', row)"
-              >
-                强制下线
-              </el-dropdown-item>
-              <el-dropdown-item
-                v-if="canAudit"
-                :divided="manageable(row)"
-                @click="$emit('audit', row)"
-              >
-                操作记录
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+            {{ openLabel(row, { edit: canEditUsers, grant: canGrant }) }}
+          </button>
+          <el-dropdown
+            v-if="manageable(row) || canAudit"
+            trigger="click"
+          >
+            <button
+              type="button"
+              class="row-action"
+            >
+              更多
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item
+                  v-if="manageable(row) && row.id !== auth.user?.id"
+                  @click="$emit('remove', row)"
+                >
+                  删除
+                </el-dropdown-item>
+                <el-dropdown-item
+                  v-if="manageable(row)"
+                  @click="$emit('reset-password', row)"
+                >
+                  重置密码
+                </el-dropdown-item>
+                <el-dropdown-item
+                  v-if="manageable(row)"
+                  @click="$emit('revoke', row)"
+                >
+                  强制下线
+                </el-dropdown-item>
+                <el-dropdown-item
+                  v-if="canAudit"
+                  :divided="manageable(row)"
+                  @click="$emit('audit', row)"
+                >
+                  操作记录
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
       </template>
     </el-table-column>
   </el-table>
