@@ -36,7 +36,7 @@ const rows = computed(() => detailRows(props.fields))
 </template>
 
 <style scoped>
-.detail-table { display: grid; grid-template-columns: 112px minmax(0, 1fr) 112px minmax(0, 1fr); margin: 0; border-top: 1px solid var(--zt-border); border-left: 1px solid var(--zt-border); }
+.detail-table { display: grid; grid-template-columns: 112px minmax(0, 1fr) 112px minmax(0, 1fr); margin: 0; border-top: 1px solid var(--zt-border); border-left: 1px solid var(--zt-border); border-radius: 8px; overflow: hidden; }
 .detail-table dt, .detail-table dd { margin: 0; padding: 9px 12px; border-right: 1px solid var(--zt-border); border-bottom: 1px solid var(--zt-border); line-height: 1.7; overflow-wrap: anywhere; }
 .detail-table dt { background: var(--zt-soft); color: var(--zt-ink-500); font-size: 13px; }
 .detail-table dd { color: var(--zt-ink-900); font-size: 14px; white-space: pre-wrap; }

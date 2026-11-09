@@ -273,7 +273,7 @@ function editRoute(row: T, index: number): RouteLocationRaw {
     <el-drawer
       v-model="detailOpen"
       :title="detailTitle || '记录详情'"
-      size="min(880px, 100vw)"
+      size="min(720px, 100vw)"
       class="record-detail"
       destroy-on-close
     >
@@ -339,7 +339,7 @@ a.record-title { text-decoration: none; }
 .record-boolean { padding: 2px 9px; background: var(--zt-soft); border: 1px solid var(--zt-border); border-radius: 4px; }
 a { color: var(--zt-blue-600); }
 
-.record-detail h2 { margin: 0 0 20px; line-height: 1.6; font-size: 20px; overflow-wrap: anywhere; }
+.record-detail h2 { margin: 0 0 20px; line-height: 1.4; font-size: 18px; font-weight: 650; color: var(--zt-ink-900); letter-spacing: -0.01em; overflow-wrap: anywhere; }
 @media (max-width: 767px) {
  .business-table__desktop { display: none; }
  .business-table__mobile { display: block; }

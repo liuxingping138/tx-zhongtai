@@ -139,32 +139,97 @@ defineExpose({ validate, setError })
 </template>
 
 <style scoped>
-.editor-submit-error { margin-bottom: 18px; }
-.field-error { margin: 5px 0 0; color: var(--zt-danger-text); font-size: 12px; line-height: 1.5; }
-.editor-intro { margin: 0 0 18px; color: var(--zt-ink-500); font-size: 12px; }
-.editor-intro span { color: var(--zt-danger-text); }
+.editor-submit-error { margin-bottom: 20px; border-radius: 8px; }
+.field-error { margin: 6px 0 0; color: var(--zt-danger-text); font-size: 12px; line-height: 1.5; }
+.editor-intro {
+  margin: 0 0 20px;
+  padding: 10px 14px;
+  background: var(--zt-soft);
+  border: 1px solid var(--zt-divider);
+  border-radius: 8px;
+  color: var(--zt-ink-500);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.editor-intro span { color: var(--zt-danger-text); font-weight: 600; }
 .editor-section {
-  min-width: 0; margin: 0 0 22px; padding: 18px 20px;
-  border: 1px solid var(--zt-border); border-radius: 8px; background: var(--zt-surface-subtle);
+  min-width: 0;
+  margin: 0 0 24px;
+  padding: 0 0 24px;
+  border: 0;
+  border-bottom: 1px solid var(--zt-divider);
+  background: transparent;
 }
-.editor-section:last-child { margin-bottom: 0; }
+.editor-section:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
 .editor-section--bare { margin: 0; padding: 0; border: 0; background: none; }
-.editor-section legend { display: inline-flex; align-items: center; padding: 0 6px; color: var(--zt-ink-900); font-size: 14px; font-weight: 650; }
-.editor-section legend span {
-  display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px;
-  margin-right: 8px; border-radius: 4px; background: var(--el-color-primary-light-9);
-  color: var(--zt-blue-600); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
+.editor-section legend {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  margin-bottom: 6px;
+  color: var(--zt-ink-900);
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
 }
-.editor-section__hint { margin: -2px 0 16px; color: var(--zt-ink-500); font-size: 12px; line-height: 1.65; }
-.editor-section__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 18px; }
-.editor-section :deep(.el-form-item) { margin-bottom: 0; min-width: 0; }
-.editor-section :deep(.el-form-item__label) { font-size: 13px; font-weight: 500; color: var(--zt-ink-700); padding-bottom: 4px; line-height: 1.4; }
-.editor-section :deep(.el-form-item__content) { align-content: flex-start; }
-.editor-field--wide { grid-column: 1 / -1; }
-.editor-section :deep(.el-date-editor.el-input) { width: 100%; }
-.field-help { margin: 5px 0 0; color: var(--zt-ink-500); font-size: 12px; line-height: 1.55; }
+.editor-section legend span {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  margin-right: 8px;
+  border-radius: 6px;
+  background: var(--el-color-primary-light-9);
+  color: var(--zt-blue-600);
+  font-size: 11px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--el-color-primary-light-7);
+}
+.editor-section__hint {
+  margin: 0 0 16px;
+  color: var(--zt-ink-500);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.editor-section__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+}
+.editor-section :deep(.el-form-item) {
+  margin-bottom: 0;
+  min-width: 0;
+}
+.editor-section :deep(.el-form-item__label) {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--zt-ink-700);
+  padding-bottom: 6px;
+  line-height: 1.4;
+}
+.editor-section :deep(.el-form-item__content) {
+  align-content: flex-start;
+}
+.editor-field--wide {
+  grid-column: 1 / -1;
+}
+.editor-section :deep(.el-date-editor.el-input) {
+  width: 100%;
+}
+.field-help {
+  margin: 6px 0 0;
+  color: var(--zt-ink-400);
+  font-size: 12px;
+  line-height: 1.55;
+}
 @media (max-width: 540px) {
-  .editor-section { padding: 14px; }
-  .editor-section__grid { grid-template-columns: minmax(0, 1fr); }
+  .editor-section { padding-bottom: 18px; margin-bottom: 18px; }
+  .editor-section__grid { grid-template-columns: minmax(0, 1fr); gap: 14px; }
 }
 </style>

@@ -6,7 +6,7 @@ import GroupedFields from '@/components/GroupedFields.vue'
 import type { EditorFieldsHandle, RecordEditorView } from '@/composables/useRecordEditor'
 
 const props = withDefaults(defineProps<{ editor: RecordEditorView; groups: EditorGroup[]; size?: string }>(), {
-  size: '700px',
+  size: '720px',
 })
 // 编辑器在页面里只创建一次，拆成顶层 ref 后模板能直接解包。
 const { visible, saving, saveError, title, form, fields, guard, save } = props.editor
