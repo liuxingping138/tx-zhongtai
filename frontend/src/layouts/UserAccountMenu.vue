@@ -63,7 +63,7 @@ async function onLogout() {
         class="user-account__meta"
       >
         <strong>{{ name }}</strong>
-        <small>{{ roleLine }}</small>
+        <small v-if="tone !== 'header'">{{ roleLine }}</small>
       </span>
       <el-icon
         v-if="!compact"
@@ -74,15 +74,16 @@ async function onLogout() {
     </button>
     <template #dropdown>
       <el-dropdown-menu>
-        <el-dropdown-item
-          v-if="compact"
-          disabled
-        >
-          <span class="user-account-identity">
-            <strong>{{ name }}</strong>
-            <small>{{ roleLine }}</small>
-          </span>
-        </el-dropdown-item>
+        <div class="user-menu-header">
+          <span
+            class="user-menu-header__avatar"
+            aria-hidden="true"
+          >{{ initial }}</span>
+          <div class="user-menu-header__info">
+            <strong class="user-menu-header__name">{{ name }}</strong>
+            <span class="user-menu-header__role">{{ roleLine }}</span>
+          </div>
+        </div>
         <el-dropdown-item @click="router.push({ name: 'profile' })">
           个人设置
         </el-dropdown-item>
@@ -159,19 +160,13 @@ async function onLogout() {
 }
 .user-account.is-header .user-account__meta {
   display: flex;
-  align-items: baseline;
-  gap: 6px;
-  max-width: 140px;
+  align-items: center;
+  max-width: 120px;
 }
 .user-account.is-header .user-account__meta strong {
   font-size: 13px;
   font-weight: 600;
   color: var(--zt-ink-900);
-}
-.user-account.is-header .user-account__meta small {
-  font-size: 11px;
-  color: var(--zt-ink-500);
-  margin-top: 0;
 }
 .user-account.is-header .user-account__caret {
   color: var(--zt-ink-400);
@@ -186,6 +181,48 @@ async function onLogout() {
 <style>
 .user-account-dropdown { display: block; width: 100%; }
 .user-account-dropdown.is-header { width: auto; }
+.user-account-popper .user-menu-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 12px;
+  border-bottom: 1px solid var(--zt-divider);
+  margin-bottom: 4px;
+}
+.user-account-popper .user-menu-header__avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--el-color-primary-light-9);
+  color: var(--zt-blue-600);
+  font-size: 14px;
+  font-weight: 650;
+}
+.user-account-popper .user-menu-header__info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.user-account-popper .user-menu-header__name {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--zt-ink-900);
+  line-height: 1.2;
+}
+.user-account-popper .user-menu-header__role {
+  font-size: 11px;
+  color: var(--zt-ink-600);
+  background: var(--zt-surface-subtle);
+  border: 1px solid var(--zt-border);
+  border-radius: 10px;
+  padding: 1px 7px;
+  width: fit-content;
+  line-height: 1.2;
+}
 .user-account-popper .user-account-identity { display: flex; flex-direction: column; gap: 2px; line-height: 1.3; }
 .user-account-popper .user-account-identity strong { font-size: 13px; color: var(--zt-ink-900); }
 .user-account-popper .user-account-identity small { font-size: 11px; color: var(--zt-ink-500); }
