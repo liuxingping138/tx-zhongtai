@@ -35,7 +35,6 @@ const loading = ref(false)
 const loadError = ref('')
 const permissionError = ref('')
 const saveError = ref('')
-const activeTab = ref('info')
 
 const saving = ref(false)
 const grantsVisible = ref(false)
@@ -144,14 +143,22 @@ onMounted(() => {
 <template>
   <div class="user-detail-page">
     <div class="user-detail__bar">
-      <el-button
-        link
-        type="primary"
-        :icon="ArrowLeft"
-        @click="router.push('/system/users')"
-      >
-        返回用户管理
-      </el-button>
+      <div class="user-detail__nav">
+        <el-button
+          link
+          type="primary"
+          :icon="ArrowLeft"
+          @click="router.push('/system/users')"
+        >
+          返回用户管理
+        </el-button>
+        <span class="user-detail__nav-divider">/</span>
+        <span class="user-detail__nav-name">{{ user ? user.display_name : '用户详情' }}</span>
+        <span
+          v-if="user"
+          class="user-detail__nav-sub"
+        >@{{ user.username }}</span>
+      </div>
       <div
         v-if="user"
         class="user-detail__top-actions"
@@ -235,66 +242,57 @@ onMounted(() => {
       </el-button>
     </el-alert>
 
-    <template v-else-if="user">
-      <UserHero :user="user" />
+    <div
+      v-else-if="user"
+      class="user-dashboard"
+    >
+      <!-- 左栏：用户概要、基本资料、角色分配 -->
+      <div class="user-dashboard__sidebar">
+        <UserHero :user="user" />
 
-      <section
-        class="user-panel"
-        aria-label="详细信息"
-      >
-        <el-tabs
-          v-model="activeTab"
-          class="user-tabs"
+        <section
+          class="user-card"
+          aria-label="基本资料"
         >
-          <el-tab-pane
-            label="基本资料"
-            name="info"
-          >
-            <div class="user-pane">
-              <UserInfoForm
-                :user="user"
-                :can-edit="canEditInfo"
-                :saving="saving"
-                :save-error="saveError"
-                @save="onSaveInfo"
-              />
-            </div>
-          </el-tab-pane>
+          <div class="user-card__head">
+            <h3>基本资料</h3>
+          </div>
+          <UserInfoForm
+            :user="user"
+            :can-edit="canEditInfo"
+            :saving="saving"
+            :save-error="saveError"
+            @save="onSaveInfo"
+          />
+        </section>
 
-          <el-tab-pane
-            label="角色分配"
-            name="roles"
-          >
-            <div class="user-pane">
-              <UserRoleAssign
-                :user="user"
-                :roles="roles"
-                :can-grant="canGrant"
-                :direct-count="directCount"
-                :saving="saving"
-                :save-error="saveError"
-                @save="onSaveRoles"
-                @open-grants="grantsVisible = true"
-              />
-            </div>
-          </el-tab-pane>
+        <section
+          class="user-card"
+          aria-label="角色配置"
+        >
+          <UserRoleAssign
+            :user="user"
+            :roles="roles"
+            :can-grant="canGrant"
+            :direct-count="directCount"
+            :saving="saving"
+            :save-error="saveError"
+            @save="onSaveRoles"
+            @open-grants="grantsVisible = true"
+          />
+        </section>
+      </div>
 
-          <el-tab-pane
-            label="有效权限矩阵"
-            name="permissions"
-          >
-            <div class="user-pane">
-              <EffectivePermissions
-                :permissions="permissions"
-                :account-active="accountActive"
-                :pending-role-change="false"
-                :error="permissionError"
-              />
-            </div>
-          </el-tab-pane>
-        </el-tabs>
-      </section>
-    </template>
+      <!-- 右栏：最终生效权限穿透分析看板 -->
+      <div class="user-dashboard__main">
+        <EffectivePermissions
+          :permissions="permissions"
+          :account-active="accountActive"
+          :pending-role-change="false"
+          :error="permissionError"
+        />
+      </div>
+    </div>
 
     <UserGrantsDrawer
       v-model="grantsVisible"
@@ -311,16 +309,28 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.user-detail-page { display: flex; flex-direction: column; gap: 14px; max-width: 1040px; margin: 0 auto; width: 100%; box-sizing: border-box; }
-.user-detail__bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.user-detail-page { display: flex; flex-direction: column; gap: 16px; width: 100%; box-sizing: border-box; padding-bottom: 24px; }
+.user-detail__bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.user-detail__nav { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.user-detail__nav-divider { color: var(--zt-ink-400); }
+.user-detail__nav-name { font-weight: 600; color: var(--zt-ink-900); }
+.user-detail__nav-sub { color: var(--zt-ink-500); font-family: var(--zt-font-mono, monospace); font-size: 13px; }
 .user-detail__top-actions { display: flex; align-items: center; gap: 8px; }
 .user-detail__top-actions :deep(.el-button + .el-button) { margin-left: 0; }
 .user-detail__placeholder { min-height: 280px; }
 
-.user-panel { background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: var(--zt-radius); box-shadow: var(--zt-shadow); overflow: hidden; }
-.user-tabs :deep(.el-tabs__header) { margin: 0; padding: 0 20px; border-bottom: 1px solid var(--zt-border); background: var(--zt-panel); }
-.user-tabs :deep(.el-tabs__nav-wrap::after) { display: none; }
-.user-tabs :deep(.el-tabs__item) { height: 48px; line-height: 48px; font-size: 14px; font-weight: 500; }
-.user-pane { padding: 24px; }
+.user-dashboard { display: flex; align-items: flex-start; gap: 20px; width: 100%; }
+.user-dashboard__sidebar { width: 380px; flex-shrink: 0; display: flex; flex-direction: column; gap: 16px; position: sticky; top: 16px; }
+.user-dashboard__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+
+.user-card { background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: var(--zt-radius); box-shadow: var(--zt-shadow); padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+.user-card__head { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 1px solid var(--zt-divider); padding-bottom: 10px; }
+.user-card__head h3 { margin: 0; font-size: 14px; font-weight: 650; color: var(--zt-ink-900); }
+
 .user-danger-action { color: var(--zt-danger-text) !important; }
+
+@media (max-width: 1080px) {
+  .user-dashboard { flex-direction: column; }
+  .user-dashboard__sidebar { width: 100%; position: static; }
+}
 </style>

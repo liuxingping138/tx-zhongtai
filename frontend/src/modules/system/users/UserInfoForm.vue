@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, reactive, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
+import { Edit } from '@element-plus/icons-vue'
 import type { ManagedUser } from '@/api/system'
 
 const props = defineProps<{
@@ -13,6 +14,7 @@ const emit = defineEmits<{
   save: [form: { display_name: string; phone: string; email: string }]
 }>()
 
+const editing = ref(false)
 const form = reactive({ display_name: '', phone: '', email: '' })
 
 watch(() => props.user, (u) => {
@@ -33,6 +35,7 @@ function onCancel() {
   form.display_name = props.user.display_name
   form.phone = props.user.phone ?? ''
   form.email = props.user.email ?? ''
+  editing.value = false
 }
 
 function onSubmit() {
@@ -42,6 +45,12 @@ function onSubmit() {
     email: form.email.trim(),
   })
 }
+
+watch(() => props.saving, (cur, prev) => {
+  if (prev && !cur && !props.saveError) {
+    editing.value = false
+  }
+})
 </script>
 
 <template>
@@ -54,65 +63,111 @@ function onSubmit() {
       :closable="false"
       class="user-alert"
     />
+
+    <!-- Google 风格只读展示 -->
+    <div
+      v-if="!editing"
+      class="user-view"
+    >
+      <div class="user-kv-list">
+        <div class="user-kv">
+          <span class="user-kv__label">登录账号</span>
+          <span class="user-kv__val user-kv__val--mono">{{ user.username }}</span>
+        </div>
+        <div class="user-kv">
+          <span class="user-kv__label">用户姓名</span>
+          <span class="user-kv__val">{{ user.display_name }}</span>
+        </div>
+        <div class="user-kv">
+          <span class="user-kv__label">联系电话</span>
+          <span class="user-kv__val">{{ user.phone || '未填写' }}</span>
+        </div>
+        <div class="user-kv">
+          <span class="user-kv__label">电子邮箱</span>
+          <span class="user-kv__val user-kv__val--email">{{ user.email || '未填写' }}</span>
+        </div>
+      </div>
+      <div
+        v-if="canEdit"
+        class="user-view__action"
+      >
+        <el-button
+          size="small"
+          :icon="Edit"
+          @click="editing = true"
+        >
+          编辑资料
+        </el-button>
+      </div>
+    </div>
+
+    <!-- 行内编辑表单 -->
     <el-form
+      v-else
       label-position="top"
-      :disabled="saving || !canEdit"
+      :disabled="saving"
       class="user-info-form"
       @submit.prevent="onSubmit"
     >
       <div class="user-form-grid">
-        <el-form-item label="用户名">
-          <el-input
-            :model-value="user.username"
-            disabled
-          />
-        </el-form-item>
-        <el-form-item
-          label="显示名"
-          required
-        >
-          <el-input
-            v-model="form.display_name"
-            autocomplete="off"
-            maxlength="128"
-          />
-        </el-form-item>
-        <el-form-item label="电话">
-          <el-input
-            v-model="form.phone"
-            autocomplete="off"
-            inputmode="tel"
-            maxlength="32"
-            placeholder="11 位手机号，选填"
-          />
-        </el-form-item>
+        <div class="user-form-grid__row">
+          <el-form-item label="用户名">
+            <el-input
+              :model-value="user.username"
+              disabled
+            />
+          </el-form-item>
+          <el-form-item
+            label="显示名"
+            required
+          >
+            <el-input
+              v-model="form.display_name"
+              autocomplete="off"
+              maxlength="128"
+            />
+          </el-form-item>
+        </div>
+        <div class="user-form-grid__row">
+          <el-form-item label="电话">
+            <el-input
+              v-model="form.phone"
+              autocomplete="off"
+              inputmode="tel"
+              maxlength="32"
+              placeholder="11 位手机号，选填"
+            />
+          </el-form-item>
+        </div>
         <el-form-item label="邮箱">
           <el-input
             v-model="form.email"
             autocomplete="off"
             inputmode="email"
             maxlength="254"
-            placeholder="选填"
+            placeholder="常用电子邮箱，选填"
           />
         </el-form-item>
       </div>
-      <div
-        v-if="canEdit && dirty"
-        class="user-form-actions"
-      >
-        <span class="user-dirty-hint">有未保存的修改</span>
+      <div class="user-form-actions">
+        <span
+          v-if="dirty"
+          class="user-dirty-hint"
+        >未保存的修改</span>
         <el-button
           :disabled="saving"
+          size="small"
           @click="onCancel"
         >
           取消
         </el-button>
         <el-button
           type="primary"
+          size="small"
           :loading="saving"
           @click="onSubmit"
         >
-          保存基本信息
+          保存
         </el-button>
       </div>
     </el-form>
@@ -120,10 +175,24 @@ function onSubmit() {
 </template>
 
 <style scoped>
-.user-info-pane { display: flex; flex-direction: column; gap: 16px; }
-.user-alert { margin-bottom: 8px; }
-.user-info-form { display: flex; flex-direction: column; gap: 16px; }
-.user-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; }
-.user-form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 12px; padding-top: 16px; border-top: 1px solid var(--zt-divider); }
-.user-dirty-hint { margin-right: auto; color: var(--zt-warning-text); font-size: 13px; }
+.user-info-pane { display: flex; flex-direction: column; gap: 10px; }
+.user-alert { margin-bottom: 4px; }
+
+.user-view { display: flex; flex-direction: column; gap: 14px; }
+.user-kv-list { display: flex; flex-direction: column; gap: 10px; }
+.user-kv { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 13px; padding-bottom: 8px; border-bottom: 1px solid var(--zt-divider); }
+.user-kv:last-child { border-bottom: none; padding-bottom: 0; }
+.user-kv__label { color: var(--zt-ink-500); flex-shrink: 0; font-size: 12.5px; }
+.user-kv__val { color: var(--zt-ink-900); font-weight: 500; text-align: right; word-break: break-all; }
+.user-kv__val--mono { font-family: var(--zt-font-mono, monospace); }
+.user-kv__val--email { color: var(--zt-primary-text); }
+.user-view__action { display: flex; justify-content: flex-end; padding-top: 4px; }
+
+.user-info-form { display: flex; flex-direction: column; gap: 10px; }
+.user-form-grid { display: flex; flex-direction: column; gap: 10px; }
+.user-form-grid__row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.user-form-grid :deep(.el-form-item) { margin-bottom: 0; }
+.user-form-grid :deep(.el-form-item__label) { padding-bottom: 4px; font-size: 12.5px; color: var(--zt-ink-600); line-height: 1.3; }
+.user-form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--zt-divider); }
+.user-dirty-hint { margin-right: auto; color: var(--zt-warning-text); font-size: 12px; }
 </style>

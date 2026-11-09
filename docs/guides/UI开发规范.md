@@ -163,12 +163,14 @@ frontend 目录运行 `pnpm run type-check`、`pnpm run lint`、`pnpm run test`�
 
 2. **系统用户详情 (`modules/system/users/UserDetailPage.vue`)**
    - 路由：`/system/users/:id`，`meta.menuPath: '/system/users'`。
-   - 遵循 Google Cloud / Google Workspace 管理后台审美：
-     - **头部 Hero 卡片 (`UserHero.vue`)**：64px 渐变色首字头像、用户显示名、`@username` 徽标、状态小标签（正常/停用/锁定/超管），右侧排布关键账号操作（重置密码、启用/停用、强制下线、解锁、删除）。
-     - **Tab 1 基本资料 (`UserInfoForm.vue`)**：账号属性、工号、邮箱、手机号等两列表格排版；行内支持点击「编辑」切换为分组输入表单，带版本并发冲突防护与离开未保存确认。
-     - **Tab 2 角色分配 (`UserRoleAssign.vue`)**：平铺角色卡片，高亮当前用户已分配角色与描述，支持勾选保存；下方支持快捷开启单独授权。
-     - **Tab 3 有效权限矩阵**：复用穿透矩阵（`modules/system/roles/PermissionTable.vue`），直观呈现角色叠加及单独授权后的最终生效权限。
-   - 复杂详情页必须拆分专注子组件（`UserHero`、`UserInfoForm`、`UserRoleAssign`），保证每个单文件严格小于 400 行。
+   - 遵循 Google Cloud IAM 风格全屏双栏仪表盘（Dashboard）设计，占满屏幕、零 Tab 切换、一页尽收眼底：
+     - **左栏（固定约 380px，支持页面滚动时 sticky 常驻）**：
+       - **头部卡片 (`UserHero.vue`)**：60px 渐变色首字头像、用户显示名、`@username` 徽标、状态小标签（正常/停用/锁定/超管），下方清晰展示创建时间与最近登录时间/IP。
+       - **基本资料卡片 (`UserInfoForm.vue`)**：账号属性、工号、电话、邮箱（独立整行，防止超长邮箱截断）；直接行内表单交互，修改后底部动态浮现「取消 / 保存基本信息」，带版本并发冲突防护与离开未保存确认。
+       - **角色配置卡片 (`UserRoleAssign.vue`)**：平铺角色卡片，高亮标记当前用户的直接所属角色与职责说明，超级管理员可直接勾选保存；下方提供「单独授权」穿透配置抽屉入口。
+     - **右栏（自适应拉伸占满全宽）**：
+       - **最终生效权限穿透看板 (`EffectivePermissions.vue`)**：常驻展开，彻底省去页签切换！按菜单层级（政策服务、码表配置、AI与大模型、系统管理等）直观呈现角色叠加及单独授权后的最终生效权限（管理、仅查看、未开通），右上方支持实时关键词搜索过滤。
+   - 复杂详情页必须拆分专注子组件（`UserHero`、`UserInfoForm`、`UserRoleAssign`、`EffectivePermissions`），保证每个单文件严格小于 400 行。
 
 ## 任务调度
 
