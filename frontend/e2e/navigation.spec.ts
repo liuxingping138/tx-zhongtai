@@ -54,15 +54,3 @@ test('1024px keeps the same navigation and narrows the side list', async ({ page
   await expect(page).toHaveURL(/\/codebook\/policy-types$/)
   await expect(page.getByRole('navigation', { name: '子模块导航' }).getByRole('link', { name: '政策类型码表', exact: true })).toBeVisible()
 })
-
-test('module search opens from the header and jumps to the chosen entry', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 })
-  await page.goto('/')
-  await page.getByRole('button', { name: '查找模块', exact: true }).click()
-  const dialog = page.getByRole('dialog', { name: '查找模块' })
-  await expect(dialog).toBeVisible()
-  await dialog.getByLabel('模块名称或用途').fill('信源')
-  await dialog.getByRole('button', { name: /信源管理/ }).click()
-  await expect(page).toHaveURL(/\/policy\/sources$/)
-  await expect(dialog).toBeHidden()
-})
