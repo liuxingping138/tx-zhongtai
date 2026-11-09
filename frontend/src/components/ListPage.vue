@@ -141,11 +141,19 @@ async function onSize(value: number) {
   overflow: hidden; scroll-margin-top: 12px;
 }
 .list-page__toolbar {
-  min-height: 50px; display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--zt-border); background: var(--zt-panel);
+  min-height: 52px; display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; padding: 10px 20px; border-bottom: 1px solid var(--zt-border); background: var(--zt-panel);
 }
-.list-page__total { flex-shrink: 0; color: var(--zt-ink-500); font-size: 13px; font-variant-numeric: tabular-nums; }
-.list-page__total strong { color: var(--zt-ink-900); font-weight: 650; margin: 0 2px; }
+.list-page__total {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--zt-ink-500); font-size: 13px; font-variant-numeric: tabular-nums;
+}
+.list-page__total strong {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 22px; height: 20px; padding: 0 7px;
+  color: var(--zt-ink-900); font-weight: 650; font-size: 12px;
+  background: var(--zt-surface-subtle); border: 1px solid var(--zt-border); border-radius: 10px;
+}
 .list-page__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; }
 .list-page__actions :deep(.el-button + .el-button) { margin-left: 0; }
 .list-page__actions :deep(.el-upload) { display: inline-flex; }

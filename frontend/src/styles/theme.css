@@ -418,7 +418,7 @@ body.el-popup-parent--hidden .workspace-main {
 .record-detail.el-drawer .el-drawer__close-btn {
   width: 32px;
   height: 32px;
-  border-radius: 6px;
+  border-radius: 16px;
   color: var(--zt-ink-500);
   transition: all 0.15s ease;
   display: inline-flex;
@@ -443,8 +443,8 @@ body.el-popup-parent--hidden .workspace-main {
 .editor-overlay.el-drawer .el-drawer__footer,
 .record-detail.el-drawer .el-drawer__footer {
   padding: 14px 24px;
-  border-top: 1px solid var(--zt-border);
-  background: var(--zt-surface-subtle);
+  border-top: 1px solid var(--zt-divider);
+  background: var(--zt-panel);
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -453,9 +453,9 @@ body.el-popup-parent--hidden .workspace-main {
 
 .editor-overlay.el-drawer .el-drawer__footer .el-button,
 .record-detail.el-drawer .el-drawer__footer .el-button {
-  min-height: 34px;
+  min-height: 36px;
   padding: 8px 18px;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
 }
@@ -465,14 +465,15 @@ body.el-popup-parent--hidden .workspace-main {
   font-weight: 600;
 }
 
-.editor-overlay.el-dialog { padding: 22px 24px; border-radius: 10px; }
-.editor-overlay.el-dialog .el-dialog__body { max-height: 65vh; overflow-y: auto; padding-top: 14px; }
+.editor-overlay.el-dialog { padding: 24px; border-radius: 16px; box-shadow: 0 12px 32px var(--zt-shadow-soft); }
+.editor-overlay.el-dialog .el-dialog__header { padding-bottom: 14px; border-bottom: 1px solid var(--zt-divider); margin-right: 0; }
+.editor-overlay.el-dialog .el-dialog__body { max-height: 65vh; overflow-y: auto; padding-top: 18px; }
 .editor-overlay .el-dialog__title { color: var(--zt-ink-900); font-size: 16px; font-weight: 650; }
-.editor-overlay .el-dialog__footer { padding-top: 18px; }
+.editor-overlay .el-dialog__footer { padding-top: 18px; border-top: 1px solid var(--zt-divider); }
 .editor-overlay .el-input__wrapper,
 .editor-overlay .el-select__wrapper {
   min-height: 36px;
-  border-radius: 6px;
+  border-radius: 8px;
   transition: all 0.15s ease;
 }
 .editor-overlay .el-input__wrapper.is-focus,
@@ -482,7 +483,7 @@ body.el-popup-parent--hidden .workspace-main {
 .editor-overlay .el-textarea__inner {
   padding: 10px 12px;
   line-height: 1.65;
-  border-radius: 6px;
+  border-radius: 8px;
   transition: all 0.15s ease;
 }
 .editor-overlay .el-textarea__inner:focus {

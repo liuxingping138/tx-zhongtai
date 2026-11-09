@@ -343,18 +343,12 @@ onMounted(() => {
 
 <style scoped>
 .role-detail { display: flex; flex-direction: column; gap: 16px; min-height: 300px; }
-.role-detail__error {
-  display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 48px 24px; text-align: center;
-  border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: var(--zt-panel); color: var(--zt-ink-700);
-}
+.role-detail__error { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 48px 24px; text-align: center; border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: var(--zt-panel); color: var(--zt-ink-700); }
 .role-detail__error h2 { margin: 0; font-size: 17px; }
 .role-detail__error p { margin: 0; }
 .role-detail__notice { margin-bottom: 0; }
 
-.role-head {
-  display: flex; align-items: flex-start; justify-content: space-between; gap: 24px;
-  padding: 20px 24px; border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: var(--zt-panel);
-}
+.role-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding: 20px 24px; border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: var(--zt-panel); box-shadow: var(--zt-shadow); }
 .role-head__main { min-width: 0; }
 .role-head__title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .role-head__title h2 { margin: 0; font-size: 20px; font-weight: 650; line-height: 1.4; color: var(--zt-ink-900); }
@@ -367,20 +361,19 @@ onMounted(() => {
 .role-head__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; flex: none; }
 .role-head__actions .el-button + .el-button { margin-left: 0; }
 
-.role-body { padding: 4px 24px 24px; border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: var(--zt-panel); }
+.role-body { padding: 4px 24px 24px; border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: var(--zt-panel); box-shadow: var(--zt-shadow); }
 .role-body .role-detail__notice { margin-bottom: 12px; }
 .role-body__guide { margin: 0 0 12px; font-size: 13px; line-height: 1.6; color: var(--zt-ink-700); }
 .role-body__guide strong { color: var(--zt-ink-900); }
-.role-body__badge {
-  display: inline-block; min-width: 20px; margin-left: 4px; padding: 0 6px; border-radius: 10px;
-  background: var(--zt-soft); font-size: 12px; line-height: 18px; text-align: center; color: var(--zt-ink-700);
-}
+.role-body__badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 18px; margin-left: 6px; padding: 0 6px; border-radius: 10px; background: var(--zt-surface-subtle); border: 1px solid var(--zt-border); font-size: 11.5px; line-height: 1; text-align: center; color: var(--zt-ink-700); }
 
-.savebar {
-  position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; justify-content: flex-end; gap: 12px;
-  margin: 16px -24px -24px; padding: 12px 24px; border-top: 1px solid var(--zt-warning-border);
-  border-radius: 0 0 var(--zt-radius) var(--zt-radius); background: var(--zt-warning-soft); box-shadow: 0 -6px 16px var(--zt-shadow-soft);
-}
+.role-tabs :deep(.el-tabs__header) { margin-bottom: 16px; }
+.role-tabs :deep(.el-tabs__nav-wrap::after) { height: 1px; background-color: var(--zt-divider); }
+.role-tabs :deep(.el-tabs__item) { font-size: 14px; font-weight: 500; color: var(--zt-ink-700); padding: 0 16px; height: 42px; }
+.role-tabs :deep(.el-tabs__item.is-active) { font-weight: 600; color: var(--zt-blue-600); }
+.role-tabs :deep(.el-tabs__active-bar) { height: 2.5px; border-radius: 2px 2px 0 0; background-color: var(--zt-blue-600); }
+
+.savebar { position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin: 16px -24px -24px; padding: 12px 24px; border-top: 1px solid var(--zt-warning-border); border-radius: 0 0 var(--zt-radius) var(--zt-radius); background: var(--zt-warning-soft); box-shadow: 0 -6px 16px var(--zt-shadow-soft); }
 .savebar__text { margin-right: auto; font-size: 14px; color: var(--zt-ink-700); }
 .savebar__text strong { color: var(--zt-warning-text); font-variant-numeric: tabular-nums; }
 .savebar .el-button + .el-button { margin-left: 0; }
