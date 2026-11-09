@@ -1,6 +1,7 @@
 import ElementPlus from 'element-plus'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import 'element-plus/dist/index.css'
+import 'element-plus/theme-chalk/dark/css-vars.css'
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 
@@ -8,8 +9,13 @@ import '@/styles/theme.css'
 
 import { setForbiddenHandler, setUnauthorizedHandler } from '@/api/http'
 import { onRemoteLogout } from '@/api/session'
+import { initDensity } from '@/composables/useTableDensity'
+import { initTheme } from '@/composables/useTheme'
 import { registerPermissionDirective } from '@/permissions/directive'
 import { useAuthStore } from '@/stores/auth'
+
+initTheme()
+initDensity()
 
 import App from './App.vue'
 import router from './router'

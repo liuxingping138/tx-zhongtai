@@ -135,6 +135,166 @@
   --el-color-error-dark-2: var(--el-color-danger-dark-2);
 }
 
+/* Google Cloud Console Dark 风格深色主题标准规范 */
+html.dark {
+  --zt-blue-900: #8ab4f8;
+  --zt-blue-800: #669df6;
+  --zt-blue-700: #4285f4;
+  --zt-blue-600: #8ab4f8;
+  --zt-ink-900: #e8eaed;
+  --zt-ink-700: #bdc1c6;
+  --zt-ink-500: #9aa0a6;
+  --zt-ink-400: #80868b;
+  --zt-border: #3c4043;
+  --zt-border-strong: #5f6368;
+  --zt-divider: #2d3135;
+  --zt-soft: #121316;
+  --zt-panel: #1e1f23;
+  --zt-surface-subtle: #282a2e;
+  --zt-table-head: #23252a;
+  --zt-row-hover: #292d36;
+  --zt-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.25);
+  --zt-shadow-soft: rgba(0, 0, 0, 0.45);
+  --zt-shadow-float: rgba(0, 0, 0, 0.65);
+  --zt-shadow-edge: rgba(0, 0, 0, 0.5);
+  --zt-overlay: rgba(0, 0, 0, 0.7);
+  --zt-focus-ring: rgba(138, 180, 248, 0.25);
+
+  --zt-success: #81c995;
+  --zt-success-text: #81c995;
+  --zt-success-soft: #14281c;
+  --zt-success-border: #1e462d;
+
+  --zt-warning: #fdd663;
+  --zt-warning-text: #fdd663;
+  --zt-warning-soft: #2e2610;
+  --zt-warning-border: #4d3e17;
+
+  --zt-danger: #f28b82;
+  --zt-danger-text: #f28b82;
+  --zt-danger-soft: #2e1717;
+  --zt-danger-border: #522323;
+
+  --zt-muted-mark: #80868b;
+
+  --zt-avatar-1: #3b82f6;
+  --zt-avatar-2: #ec4899;
+  --zt-avatar-3: #ef4444;
+  --zt-avatar-4: #f97316;
+  --zt-avatar-5: #22c55e;
+  --zt-avatar-6: #8b5cf6;
+  --zt-avatar-7: #06b6d4;
+  --zt-avatar-8: #d97706;
+
+  --zt-teal-text: #5eead4;
+  --zt-teal-soft: #132d29;
+  --zt-teal-line: #1d514a;
+
+  --zt-ai-text: #c4b5fd;
+  --zt-ai-soft: #271f3d;
+  --zt-ai-line: #4c3a7a;
+
+  --zt-loading-mask: rgba(18, 19, 22, 0.82);
+
+  --zt-nav: #1e1f23;
+  --zt-nav-active: #2b3348;
+  --zt-nav-text: #bdc1c6;
+  --zt-scroll-thumb: #5f6368;
+  --zt-scroll-track: #1e1f23;
+  --zt-scroll-hover: #80868b;
+  --zt-scroll-active: #9aa0a6;
+
+  --el-text-color-primary: var(--zt-ink-900);
+  --el-text-color-regular: var(--zt-ink-700);
+  --el-border-color: var(--zt-border);
+  --el-color-primary: #8ab4f8;
+  --el-color-primary-light-3: #669df6;
+  --el-color-primary-light-5: #4285f4;
+  --el-color-primary-light-7: #264a85;
+  --el-color-primary-light-8: #1d335c;
+  --el-color-primary-light-9: #17243d;
+  --el-color-primary-dark-2: #aecbfa;
+}
+
+html.dark .el-button--primary:not(.is-plain):not(.is-text):not(.is-link) {
+  background-color: var(--zt-blue-600);
+  border-color: var(--zt-blue-600);
+  color: #121316;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+html.dark .el-button--primary:not(.is-plain):not(.is-text):not(.is-link):not(.is-disabled):hover {
+  background-color: #aecbfa;
+  border-color: #aecbfa;
+  color: #121316;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+html.dark .workspace-brand img {
+  filter: invert(0.92) hue-rotate(180deg);
+}
+
+/* 紧凑视图（Dense Mode）：提高数据密度，适合审核与排查大批量数据 */
+html[data-density="compact"] .el-table.data-table th.el-table__cell,
+html[data-density="compact"] .el-table.data-table td.el-table__cell {
+  padding: 5px 0 !important;
+  font-size: 13px !important;
+}
+
+html[data-density="compact"] .el-table.data-table .cell {
+  line-height: 1.4 !important;
+  padding: 0 10px !important;
+}
+
+html[data-density="compact"] .row-actions {
+  gap: 4px;
+}
+
+html[data-density="compact"] .row-action {
+  height: 22px !important;
+  padding: 0 8px !important;
+  font-size: 11.5px !important;
+}
+
+html[data-density="compact"] .workspace-main .filter-card {
+  padding: 8px 14px;
+  margin-bottom: 8px;
+}
+
+html[data-density="compact"] .workspace-main .list-page__toolbar {
+  min-height: 40px;
+}
+
+.density-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--zt-border);
+  border-radius: 6px;
+  background: var(--zt-panel);
+  color: var(--zt-ink-700);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.16s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.density-toggle-btn:hover {
+  border-color: var(--el-color-primary-light-7);
+  background: var(--zt-surface-subtle);
+  color: var(--zt-blue-600);
+}
+
+.density-toggle-btn.is-compact {
+  border-color: var(--el-color-primary-light-7);
+  background: var(--el-color-primary-light-9);
+  color: var(--zt-blue-600);
+  font-weight: 600;
+}
+
 * {
   box-sizing: border-box;
 }

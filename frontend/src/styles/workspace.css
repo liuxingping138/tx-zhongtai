@@ -51,6 +51,43 @@
   display: flex; align-items: center; gap: 12px; margin-left: auto; flex-shrink: 0;
 }
 
+.theme-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--zt-border);
+  background: var(--zt-panel);
+  color: var(--zt-ink-700);
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.theme-toggle-btn:hover {
+  background: var(--zt-surface-subtle);
+  border-color: var(--el-color-primary-light-7);
+  color: var(--zt-blue-600);
+  transform: translateY(-0.5px);
+}
+
+/* Google Material 3 页面微动效：轻微淡入上浮，流畅利落 */
+.page-fade-enter-active {
+  transition: opacity 0.18s cubic-bezier(0.05, 0.7, 0.1, 1), transform 0.18s cubic-bezier(0.05, 0.7, 0.1, 1);
+}
+.page-fade-leave-active {
+  transition: opacity 0.12s cubic-bezier(0.3, 0, 0.8, 0.15);
+}
+.page-fade-enter-from {
+  opacity: 0;
+  transform: translateY(4px);
+}
+.page-fade-leave-to {
+  opacity: 0;
+}
+
 .workspace-body { display: flex; flex: 1; min-height: 0; }
 .workspace-rail {
   display: flex; flex-direction: column; width: var(--workspace-rail-width); flex: 0 0 var(--workspace-rail-width);

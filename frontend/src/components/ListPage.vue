@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, ref } from 'vue'
-import { Warning } from '@element-plus/icons-vue'
+import { Operation, Warning } from '@element-plus/icons-vue'
+import { useTableDensity } from '@/composables/useTableDensity'
 import ScrollPort from './ScrollPort.vue'
 withDefaults(defineProps<{
   title: string; hint?: string; error?: string; total: number; page: number;
@@ -9,6 +10,7 @@ withDefaults(defineProps<{
 const emit = defineEmits<{
   'update:page': [value: number]; 'update:pageSize': [value: number]; change: []; retry: [];
 }>()
+const { isCompact, toggleDensity } = useTableDensity()
 const surface = ref<HTMLElement>()
 async function onPage(value: number) {
   emit('update:page', value)
@@ -66,6 +68,19 @@ async function onSize(value: number) {
         </span>
         <div class="list-page__actions">
           <slot name="actions" /><slot name="tools" />
+          <button
+            type="button"
+            class="density-toggle-btn"
+            :class="{ 'is-compact': isCompact }"
+            :title="isCompact ? '当前紧凑视图，点击切换舒适视图' : '当前舒适视图，点击切换紧凑视图'"
+            :aria-label="isCompact ? '当前紧凑视图，点击切换舒适视图' : '当前舒适视图，点击切换紧凑视图'"
+            @click="toggleDensity"
+          >
+            <el-icon :size="14">
+              <Operation />
+            </el-icon>
+            <span>{{ isCompact ? '紧凑' : '舒适' }}</span>
+          </button>
         </div>
       </div>
       <div

@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { User } from '@element-plus/icons-vue'
+import { Moon, Sunny, User } from '@element-plus/icons-vue'
 import UserAccountMenu from '@/layouts/UserAccountMenu.vue'
 import { useWorkspace } from './workspace'
 import { useMenuBadges } from './menuBadges'
+import { useTheme } from '@/composables/useTheme'
 import logoUrl from '@/assets/brand/telelands-logo.svg'
 import '@/styles/workspace.css'
 
 const { groups } = useWorkspace()
 const { counts: badges } = useMenuBadges()
+const { isDark, toggleTheme } = useTheme()
 const route = useRoute()
 const activePath = computed(() => (typeof route.meta.menuPath === 'string' && route.meta.menuPath) || route.path)
 const activeGroup = computed(() => groups.value.find(group => group.entries.some(entry => entry.path === activePath.value)))
@@ -59,6 +61,18 @@ const firstModulePath = computed(() => groups.value[0]?.entries[0]?.path || '/no
         </router-link>
       </nav>
       <div class="workspace-masthead-actions">
+        <button
+          type="button"
+          class="theme-toggle-btn"
+          :title="isDark ? '切换到浅色模式' : '切换到深色模式'"
+          :aria-label="isDark ? '切换到浅色模式' : '切换到深色模式'"
+          @click="toggleTheme"
+        >
+          <el-icon :size="16">
+            <Sunny v-if="isDark" />
+            <Moon v-else />
+          </el-icon>
+        </button>
         <UserAccountMenu tone="header" />
       </div>
     </header>
@@ -108,7 +122,14 @@ const firstModulePath = computed(() => groups.value[0]?.entries[0]?.path || '/no
         class="workspace-main"
         tabindex="-1"
       >
-        <router-view />
+        <router-view v-slot="{ Component }">
+          <transition
+            name="page-fade"
+            mode="out-in"
+          >
+            <component :is="Component" />
+          </transition>
+        </router-view>
       </main>
     </div>
   </div>
