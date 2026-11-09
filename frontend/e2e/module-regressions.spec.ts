@@ -388,7 +388,7 @@ test('users: excel import shows initial-password note; export carries the applie
   expect(exports[0].searchParams.getAll('status')).toEqual(['disabled'])
 })
 
-test('users: detail drawer shows effective permissions and their source roles', async ({ page }) => {
+test('users: detail page shows effective permissions and their source roles', async ({ page }) => {
   await page.route('**/api/v1/system/roles?**', route => respond(route, { items: [role('1')], total: 1 }))
   await page.route('**/api/v1/system/users?**', route => respond(route, {
     items: [{ id: 'u1', username: 'zhangsan', display_name: '张三', status: 'active', version: 1, created_at: '2026-09-23T08:00:00+00:00', roles: [{ id: '1', name: '角色1', status: 'active', is_builtin: false }] }],
@@ -404,9 +404,10 @@ test('users: detail drawer shows effective permissions and their source roles', 
   }))
   await page.goto('/system/users')
   await page.getByRole('button', { name: 'zhangsan', exact: true }).click()
-  const drawer = page.locator('.el-drawer')
-  await expect(drawer.getByText('实际权限')).toBeVisible()
-  await expect(drawer.locator('.perm-line')).toContainText('信源管理')
-  await expect(drawer.locator('.perm-line')).toContainText('可管理')
-  await expect(drawer.locator('.perm-line')).toContainText('来自 角色1（可管理）')
+  await expect(page).toHaveURL(/\/system\/users\/u1/)
+  await page.getByRole('tab', { name: '有效权限矩阵' }).click()
+  await expect(page.getByText('实际权限')).toBeVisible()
+  await expect(page.locator('.perm-line')).toContainText('信源管理')
+  await expect(page.locator('.perm-line')).toContainText('可管理')
+  await expect(page.locator('.perm-line')).toContainText('来自 角色1（可管理）')
 })

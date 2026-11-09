@@ -137,8 +137,7 @@ function onCreated(result: { username: string; temporaryPassword: string | null 
 }
 
 function openDetail(user: UserItem) {
-  detailUserId.value = user.id
-  detailVisible.value = true
+  void router.push(`/system/users/${user.id}`)
 }
 
 /** 详情里存好了：合进列表那一行（单独授权存好后「+单独授权」标签也跟着变），不整页重载。 */

@@ -152,6 +152,24 @@ frontend 目录运行 `pnpm run type-check`、`pnpm run lint`、`pnpm run test`�
 - 政策解读「核对无误，标为人工验证」（`interpretations/useVerify.ts`）后调 `advance()`：同一位置换成了别的记录（这条出了筛选）就打开它，否则往后一条，最后一条就停在原页。`advance()` 用 `windowAt` 一次取到这个位置和下一个位置，只数一次总数。改状态失败和打开下一条失败分开提示
 - 基础标签核对页右上角有「重新打标」（AI 打标的行才有），和列表页勾选后的是同一个 `base-tags/RetagDialog.vue`；放回待办后重新取这一条，打标状态马上更新
 
+## 独立详情页（信源管理、系统用户）
+
+对于业务核心主体或具备复合管理维度的实体，优先采用独立页面呈现，统一采用 Google Cloud / Workspace Admin 的居中限宽（约 1040px）与清晰层级结构：
+
+1. **信源管理 (`modules/policy/sources/SourceReview.vue`)**
+   - 路由：`/policy/sources/:id`，`meta.menuPath: '/policy/sources'` 保留侧栏选中状态。
+   - 复用 `PolicyReviewPage` 的单栏无正文模式（`has-no-content`）：顶部呈现信源名称、状态标签与来源统计；主体为分组字段展示（信源属性、爬虫配置、系统留痕）。
+   - 支持列表筛选上下文透传翻条（上一条/下一条）、就地编辑模式与版本号并发冲突校验（`useReviewRecord`）。
+
+2. **系统用户详情 (`modules/system/users/UserDetailPage.vue`)**
+   - 路由：`/system/users/:id`，`meta.menuPath: '/system/users'`。
+   - 遵循 Google Cloud / Google Workspace 管理后台审美：
+     - **头部 Hero 卡片 (`UserHero.vue`)**：64px 渐变色首字头像、用户显示名、`@username` 徽标、状态小标签（正常/停用/锁定/超管），右侧排布关键账号操作（重置密码、启用/停用、强制下线、解锁、删除）。
+     - **Tab 1 基本资料 (`UserInfoForm.vue`)**：账号属性、工号、邮箱、手机号等两列表格排版；行内支持点击「编辑」切换为分组输入表单，带版本并发冲突防护与离开未保存确认。
+     - **Tab 2 角色分配 (`UserRoleAssign.vue`)**：平铺角色卡片，高亮当前用户已分配角色与描述，支持勾选保存；下方支持快捷开启单独授权。
+     - **Tab 3 有效权限矩阵**：复用穿透矩阵（`modules/system/roles/PermissionTable.vue`），直观呈现角色叠加及单独授权后的最终生效权限。
+   - 复杂详情页必须拆分专注子组件（`UserHero`、`UserInfoForm`、`UserRoleAssign`），保证每个单文件严格小于 400 行。
+
 ## 任务调度
 
 `modules/system/scheduler/`：`SchedulerList.vue` 汇总各服务的任务（`api/scheduler.ts` 的 `SCHEDULER_SERVICES`），复用 ListPage（隐藏分页）和 ColumnPicker；设置是右侧抽屉 `JobSettingsDrawer.vue`（`useUnsavedForm`），执行记录是可分页抽屉 `SchedulerHistoryDrawer.vue`，状态与请求逻辑在 `useSchedulerHistory.ts`，状态文案和标签颜色在 `runStatus.ts`；各任务自己的显示在 `aiTagging.ts`、`crawlerConfig.ts`、`sessionCleanup.ts`。列表和打开中的记录抽屉每 5 秒静默刷新，页面隐藏时暂停，后台轮询不反复显示加载遮罩。`/system/scheduler` 是页面路径，接口在各服务下（如 `/api/v1/policy/scheduled-jobs`），权限归属由资源目录决定，不按前端 URL 推断。配置表单必须携带版本号；失败保留填写值；执行成功指「已入队」，不把请求成功当成任务已完成。

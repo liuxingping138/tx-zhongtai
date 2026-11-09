@@ -43,6 +43,12 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '用户管理', resource: 'system.users' },
       },
       {
+        path: 'system/users/:id',
+        name: 'system-user-detail',
+        component: () => import('@/modules/system/users/UserDetailPage.vue'),
+        meta: { title: '用户详情', resource: 'system.users', menuPath: '/system/users' },
+      },
+      {
         path: 'system/roles',
         name: 'system-roles',
         component: () => import('@/modules/system/roles/RoleWorkspace.vue'),
