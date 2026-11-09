@@ -55,21 +55,23 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   border-radius: 50%;
-  border: 1px solid var(--zt-border);
-  background: var(--zt-panel);
-  color: var(--zt-ink-700);
+  border: 1px solid var(--zt-border-strong);
+  background: var(--zt-btn-sec-bg);
+  box-shadow: var(--zt-btn-sec-shadow);
+  color: var(--zt-blue-600);
   cursor: pointer;
   transition: all 0.18s cubic-bezier(0.2, 0, 0, 1);
 }
 
 .theme-toggle-btn:hover {
-  background: var(--zt-surface-subtle);
-  border-color: var(--el-color-primary-light-7);
-  color: var(--zt-blue-600);
+  background: var(--zt-btn-sec-hover-bg);
+  border-color: var(--zt-blue-600);
+  box-shadow: var(--zt-btn-sec-hover-shadow);
+  color: var(--zt-blue-700);
   transform: translateY(-0.5px);
 }
 

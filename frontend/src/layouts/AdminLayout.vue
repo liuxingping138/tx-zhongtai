@@ -15,8 +15,8 @@ const { isDark, toggleTheme } = useTheme()
 const route = useRoute()
 const activePath = computed(() => (typeof route.meta.menuPath === 'string' && route.meta.menuPath) || route.path)
 const activeGroup = computed(() => groups.value.find(group => group.entries.some(entry => entry.path === activePath.value)))
-// 403 不在任何菜单下。侧栏继续显示这个角色能进的菜单，避免只剩「个人设置」。
-const sidebarGroup = computed(() => activeGroup.value ?? (route.name === 'forbidden' ? groups.value[0] : undefined))
+// 403、个人设置不在任何菜单下。侧栏继续显示这个角色能进的菜单，避免只剩「个人设置」。
+const sidebarGroup = computed(() => activeGroup.value ?? groups.value[0])
 const firstModulePath = computed(() => groups.value[0]?.entries[0]?.path || '/no-modules')
 </script>
 

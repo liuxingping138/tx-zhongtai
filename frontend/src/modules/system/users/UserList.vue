@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 
 import { NO_ROLE, importUsers, listAllRoles, listUsers } from '@/api/system'
 import { errorMessage } from '@/api/errors'
@@ -203,6 +204,7 @@ onMounted(() => {
         <el-button
           v-if="canEditUsers"
           type="primary"
+          :icon="Plus"
           @click="openCreate"
         >
           新增用户
