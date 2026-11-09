@@ -120,6 +120,10 @@ export function listSources(params: {
   return request(http.get('/policy/sources', { params }))
 }
 
+export function getSource(id: string): Promise<SourceItem> {
+  return request(http.get(`/policy/sources/${id}`))
+}
+
 export function createSource(body: Partial<SourceItem>): Promise<SourceItem> {
   return request(http.post('/policy/sources', body))
 }

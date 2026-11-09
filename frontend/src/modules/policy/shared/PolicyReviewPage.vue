@@ -28,7 +28,7 @@ const props = defineProps<{
   listLabel: string
   canWrite: boolean
   status?: { text: string; type: 'success' | 'warning' | 'danger' | 'info' }
-  loadContent: (id: string) => Promise<PolicyContentData>
+  loadContent?: (id: string) => Promise<PolicyContentData>
   /** 要提醒的分组：页签旁一个小圆点，值是说明（悬停可见，读屏也读得到） */
   tabMarks?: Record<string, string>
 }>()
@@ -103,29 +103,24 @@ function syncActive() {
   active.value = passed.at(-1)?.dataset.section ?? sections.value[0]?.title ?? ''
 }
 
-// 正文默认打开；收起后字段表占满整行。只是本浏览器的习惯，存不了也不影响使用。
+// 正文默认打开；收起后字段表占满整行。
 const CONTENT_KEY = 'zt:policy-review:content'
 function readContentOpen() {
-  try {
-    return localStorage.getItem(CONTENT_KEY) !== 'closed'
-  } catch {
-    return true
-  }
+  try { return localStorage.getItem(CONTENT_KEY) !== 'closed' } catch { return true }
 }
 const contentOpen = ref(readContentOpen())
 function setContentOpen(open: boolean) {
   contentOpen.value = open
-  try {
-    localStorage.setItem(CONTENT_KEY, open ? 'open' : 'closed')
-  } catch {
-    // 浏览器禁用了本地存储时只在本页记住。
-  }
+  try { localStorage.setItem(CONTENT_KEY, open ? 'open' : 'closed') } catch { /* 本地存储不可用时忽略 */ }
 }
 </script>
 
 <template>
   <div class="review">
-    <div class="review__bar">
+    <div
+      class="review__bar"
+      :class="{ 'review__bar--centered': !loadContent }"
+    >
       <el-button
         link
         type="primary"
@@ -177,6 +172,7 @@ function setContentOpen(open: boolean) {
     <template v-else-if="record">
       <section
         class="review__summary"
+        :class="{ 'review__summary--centered': !loadContent }"
         aria-label="概要"
       >
         <div class="review__title-row">
@@ -214,7 +210,7 @@ function setContentOpen(open: boolean) {
 
       <div
         class="review__body"
-        :class="{ 'is-content-closed': !contentOpen }"
+        :class="{ 'is-content-closed': !contentOpen, 'has-no-content': !loadContent }"
       >
         <section
           class="review__panel"
@@ -320,37 +316,39 @@ function setContentOpen(open: boolean) {
           </div>
         </section>
 
-        <section
-          v-if="contentOpen"
-          class="review__panel review__content"
-        >
-          <PolicyContent
-            :key="record.id"
-            panel
-            :load="() => loadContent(record!.id)"
+        <template v-if="loadContent">
+          <section
+            v-if="contentOpen"
+            class="review__panel review__content"
           >
-            <template #actions>
-              <el-button
-                link
-                @click="setContentOpen(false)"
-              >
-                收起<el-icon class="el-icon--right">
-                  <ArrowRight />
-                </el-icon>
-              </el-button>
-            </template>
-          </PolicyContent>
-        </section>
-        <button
-          v-else
-          type="button"
-          class="review__content-rail"
-          aria-label="展开政策正文"
-          @click="setContentOpen(true)"
-        >
-          <el-icon><ArrowLeft /></el-icon>
-          <span>政策正文</span>
-        </button>
+            <PolicyContent
+              :key="record.id"
+              panel
+              :load="() => loadContent!(record!.id)"
+            >
+              <template #actions>
+                <el-button
+                  link
+                  @click="setContentOpen(false)"
+                >
+                  收起<el-icon class="el-icon--right">
+                    <ArrowRight />
+                  </el-icon>
+                </el-button>
+              </template>
+            </PolicyContent>
+          </section>
+          <button
+            v-else
+            type="button"
+            class="review__content-rail"
+            aria-label="展开政策正文"
+            @click="setContentOpen(true)"
+          >
+            <el-icon><ArrowLeft /></el-icon>
+            <span>政策正文</span>
+          </button>
+        </template>
       </div>
     </template>
   </div>
@@ -375,6 +373,8 @@ function setContentOpen(open: boolean) {
 
 .review__body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; }
 .review__body.is-content-closed { grid-template-columns: minmax(0, 1fr) 40px; }
+.review__body.has-no-content { grid-template-columns: minmax(0, 1fr); max-width: 1040px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+.review__summary--centered, .review__bar--centered { max-width: 1040px; width: 100%; margin-left: auto; margin-right: auto; box-sizing: border-box; }
 .review__panel { min-height: 0; display: flex; flex-direction: column; background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: var(--zt-radius); }
 .review__tabs { flex: none; display: flex; gap: 28px; padding: 0 20px; border-bottom: 1px solid var(--zt-border); }
 .review__tabs button { height: 44px; padding: 0; border: 0; background: none; color: var(--zt-ink-700); font: inherit; font-size: 14px; cursor: pointer; }

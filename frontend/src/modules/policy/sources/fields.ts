@@ -73,6 +73,20 @@ export const EDITOR_GROUPS: EditorGroup[] = [
   },
 ]
 
+/** 列表页与核对页同步的筛选字段 */
+export const FILTER_KEYS = [
+  'site_name',
+  'province_name',
+  'city_name',
+  'site_type',
+  'crawler_status',
+  'site_code',
+  'crawl_priority',
+  'tag',
+  'online_date_after',
+  'online_date_before',
+]
+
 /** 省市区编码只用来给新信源分配网站编码：新建时三级至少要有一级，编辑已有网站编码的信源不要求
  * （带编码导入的全国、国央企信源本来就没有区划编码，要求的话改标签、爬虫状态都保存不了，和后端一致）。 */
 export function checkArea(form: RecordForm, editing: unknown): FieldError | undefined {

@@ -118,6 +118,12 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '信源管理', resource: 'policy.sources' },
       },
       {
+        path: 'policy/sources/:id',
+        name: 'policy-source-review',
+        component: () => import('@/modules/policy/sources/SourceReview.vue'),
+        meta: { title: '信源详情', resource: 'policy.sources', menuPath: '/policy/sources' },
+      },
+      {
         path: 'policy/crawler-monitoring',
         name: 'policy-crawler-monitoring',
         component: () => import('@/modules/policy/crawler-monitoring/CrawlerMonitoring.vue'),

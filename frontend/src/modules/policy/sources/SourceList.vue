@@ -26,6 +26,7 @@ import { useTableSelection } from '@/composables/useTableSelection'
 import { useAuthStore } from '@/stores/auth'
 import BatchStatusDialog from './BatchStatusDialog.vue'
 import { EDITOR_GROUPS, SUMMARY_KEYS, TABLE_COLUMNS, checkArea } from './fields'
+import { reviewQuery } from '../shared/reviewQuery'
 
 const RESOURCE = 'policy.sources'
 const auth = useAuthStore()
@@ -81,6 +82,16 @@ async function refresh() {
 async function afterBatch() {
   selection.clear()
   await refresh()
+}
+
+// 标题和「查看」进详情页：带上已生效的筛选和这条的位置，那边能翻上一条、下一条。
+function detailRoute(row: SourceItem, index: number) {
+  const position = (query.page - 1) * query.page_size + index
+  return {
+    name: 'policy-source-review',
+    params: { id: row.id },
+    query: reviewQuery(listQuery.applied, position, query.page_size),
+  }
 }
 
 const editor = useRecordEditor<SourceItem>({
@@ -292,11 +303,11 @@ onMounted(() => {
         :summary-keys="SUMMARY_KEYS"
         title-key="site_name"
         detail-title="信源详情"
+        :detail-route="detailRoute"
         :can-write="canWrite"
         :loading="loading"
         :filtered="resultFiltered"
         @reset="listQuery.resetFilters"
-        @edit="editor.openEdit"
         @selection-change="checked = $event"
       />
     </ListPage>
