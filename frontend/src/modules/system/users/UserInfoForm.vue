@@ -55,6 +55,21 @@ watch(() => props.saving, (cur, prev) => {
 
 <template>
   <div class="user-info-pane">
+    <div class="user-info-head">
+      <h3 class="user-info-title">
+        基本资料
+      </h3>
+      <el-button
+        v-if="canEdit && !editing"
+        size="small"
+        :icon="Edit"
+        class="user-edit-btn"
+        @click="editing = true"
+      >
+        编辑资料
+      </el-button>
+    </div>
+
     <el-alert
       v-if="saveError"
       :title="saveError"
@@ -87,18 +102,6 @@ watch(() => props.saving, (cur, prev) => {
           <span class="user-kv__val user-kv__val--email">{{ user.email || '未填写' }}</span>
         </div>
       </div>
-      <div
-        v-if="canEdit"
-        class="user-view__action"
-      >
-        <el-button
-          size="small"
-          :icon="Edit"
-          @click="editing = true"
-        >
-          编辑资料
-        </el-button>
-      </div>
     </div>
 
     <!-- 行内编辑表单 -->
@@ -111,14 +114,14 @@ watch(() => props.saving, (cur, prev) => {
     >
       <div class="user-form-grid">
         <div class="user-form-grid__row">
-          <el-form-item label="用户名">
+          <el-form-item label="登录账号">
             <el-input
               :model-value="user.username"
               disabled
             />
           </el-form-item>
           <el-form-item
-            label="显示名"
+            label="用户姓名"
             required
           >
             <el-input
@@ -129,7 +132,7 @@ watch(() => props.saving, (cur, prev) => {
           </el-form-item>
         </div>
         <div class="user-form-grid__row">
-          <el-form-item label="电话">
+          <el-form-item label="联系电话">
             <el-input
               v-model="form.phone"
               autocomplete="off"
@@ -138,16 +141,16 @@ watch(() => props.saving, (cur, prev) => {
               placeholder="11 位手机号，选填"
             />
           </el-form-item>
+          <el-form-item label="电子邮箱">
+            <el-input
+              v-model="form.email"
+              autocomplete="off"
+              inputmode="email"
+              maxlength="254"
+              placeholder="常用邮箱，选填"
+            />
+          </el-form-item>
         </div>
-        <el-form-item label="邮箱">
-          <el-input
-            v-model="form.email"
-            autocomplete="off"
-            inputmode="email"
-            maxlength="254"
-            placeholder="常用电子邮箱，选填"
-          />
-        </el-form-item>
       </div>
       <div class="user-form-actions">
         <span
@@ -175,18 +178,20 @@ watch(() => props.saving, (cur, prev) => {
 </template>
 
 <style scoped>
-.user-info-pane { display: flex; flex-direction: column; gap: 10px; }
+.user-info-pane { display: flex; flex-direction: column; gap: 12px; }
+.user-info-head { display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid var(--zt-divider); }
+.user-info-title { margin: 0; font-size: 15px; font-weight: 650; color: var(--zt-ink-900); }
+.user-edit-btn { border-radius: 6px; }
 .user-alert { margin-bottom: 4px; }
 
-.user-view { display: flex; flex-direction: column; gap: 14px; }
-.user-kv-list { display: flex; flex-direction: column; gap: 10px; }
-.user-kv { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 13px; padding-bottom: 8px; border-bottom: 1px solid var(--zt-divider); }
-.user-kv:last-child { border-bottom: none; padding-bottom: 0; }
+.user-view { display: flex; flex-direction: column; }
+.user-kv-list { display: flex; flex-direction: column; }
+.user-kv { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--zt-divider); font-size: 13px; }
+.user-kv:last-child { border-bottom: none; padding-bottom: 2px; }
 .user-kv__label { color: var(--zt-ink-500); flex-shrink: 0; font-size: 12.5px; }
 .user-kv__val { color: var(--zt-ink-900); font-weight: 500; text-align: right; word-break: break-all; }
 .user-kv__val--mono { font-family: var(--zt-font-mono, monospace); }
 .user-kv__val--email { color: var(--zt-primary-text); }
-.user-view__action { display: flex; justify-content: flex-end; padding-top: 4px; }
 
 .user-info-form { display: flex; flex-direction: column; gap: 10px; }
 .user-form-grid { display: flex; flex-direction: column; gap: 10px; }

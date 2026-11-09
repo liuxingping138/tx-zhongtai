@@ -29,6 +29,8 @@ const dirty = computed(() => {
   return JSON.stringify(saved) !== JSON.stringify([...draft.value].sort())
 })
 
+const activeRoleCount = computed(() => (props.user.roles ?? []).filter(r => r.status === 'active').length)
+
 function onCancel() {
   draft.value = [...(props.user.role_ids ?? [])]
 }
@@ -40,6 +42,19 @@ function onSubmit() {
 
 <template>
   <div class="user-role-assign">
+    <div class="user-role-head">
+      <div class="user-role-head__left">
+        <h3 class="user-role-title">
+          角色分配
+        </h3>
+        <span class="user-role-badge">{{ activeRoleCount }} 个角色已启用</span>
+      </div>
+      <span
+        v-if="!canGrant"
+        class="user-role-muted"
+      >需超级管理员权限</span>
+    </div>
+
     <el-alert
       v-if="saveError"
       :title="saveError"
@@ -48,13 +63,6 @@ function onSubmit() {
       :closable="false"
       class="user-alert"
     />
-    <div class="user-role-head">
-      <h3>已绑定的角色</h3>
-      <span
-        v-if="!canGrant"
-        class="user-muted"
-      >分配角色需要超级管理员权限</span>
-    </div>
 
     <template v-if="canGrant">
       <RolePicker
@@ -77,12 +85,14 @@ function onSubmit() {
         <span class="user-dirty-hint">角色分配有未保存的改动</span>
         <el-button
           :disabled="saving"
+          size="small"
           @click="onCancel"
         >
           取消
         </el-button>
         <el-button
           type="primary"
+          size="small"
           :loading="saving"
           @click="onSubmit"
         >
@@ -115,11 +125,12 @@ function onSubmit() {
       v-if="canGrant || directCount"
       class="user-direct-grants"
     >
-      <span>{{ directCount ? `角色之外还单独授权了 ${directCount} 个模块` : '角色之外无单独授权模块' }}</span>
+      <span class="direct-text">{{ directCount ? `角色之外还单独授权了 ${directCount} 个模块` : '角色之外无单独授权模块' }}</span>
       <el-button
         v-if="canGrant"
         link
         type="primary"
+        class="direct-btn"
         @click="emit('open-grants')"
       >
         管理单独授权
@@ -129,13 +140,19 @@ function onSubmit() {
 </template>
 
 <style scoped>
-.user-role-assign { display: flex; flex-direction: column; gap: 16px; }
-.user-alert { margin-bottom: 8px; }
-.user-role-head { display: flex; align-items: baseline; justify-content: space-between; }
-.user-role-head h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--zt-ink-900); }
+.user-role-assign { display: flex; flex-direction: column; gap: 14px; }
+.user-role-head { display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid var(--zt-divider); }
+.user-role-head__left { display: flex; align-items: center; gap: 8px; }
+.user-role-title { margin: 0; font-size: 15px; font-weight: 650; color: var(--zt-ink-900); }
+.user-role-badge { font-size: 11.5px; color: var(--zt-ink-500); background: var(--zt-surface-subtle); padding: 1px 8px; border-radius: 10px; border: 1px solid var(--zt-border); }
+.user-role-muted { color: var(--zt-ink-400); font-size: 12px; }
+.user-alert { margin-bottom: 4px; }
+
 .user-role-tags { display: flex; flex-wrap: wrap; gap: 8px; }
-.user-role-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 12px; padding-top: 16px; border-top: 1px solid var(--zt-divider); }
-.user-dirty-hint { margin-right: auto; color: var(--zt-warning-text); font-size: 13px; }
-.user-direct-grants { display: flex; align-items: center; justify-content: space-between; padding-top: 16px; border-top: 1px solid var(--zt-divider); font-size: 13px; color: var(--zt-ink-700); }
-.user-muted { color: var(--zt-ink-500); font-size: 12px; }
+.user-role-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding-top: 12px; border-top: 1px solid var(--zt-divider); }
+.user-dirty-hint { margin-right: auto; color: var(--zt-warning-text); font-size: 12px; }
+
+.user-direct-grants { display: flex; align-items: center; justify-content: space-between; padding-top: 12px; border-top: 1px solid var(--zt-divider); font-size: 12.5px; color: var(--zt-ink-600); }
+.direct-text { display: flex; align-items: center; gap: 6px; }
+.direct-btn { font-size: 12.5px; }
 </style>

@@ -142,83 +142,21 @@ onMounted(() => {
 
 <template>
   <div class="user-detail-page">
-    <div class="user-detail__bar">
-      <div class="user-detail__nav">
-        <el-button
-          link
-          type="primary"
-          :icon="ArrowLeft"
-          @click="router.push('/system/users')"
-        >
-          返回用户管理
-        </el-button>
-        <span class="user-detail__nav-divider">/</span>
-        <span class="user-detail__nav-name">{{ user ? user.display_name : '用户详情' }}</span>
-        <span
-          v-if="user"
-          class="user-detail__nav-sub"
-        >@{{ user.username }}</span>
-      </div>
-      <div
-        v-if="user"
-        class="user-detail__top-actions"
+    <div class="user-detail__nav">
+      <el-button
+        link
+        type="primary"
+        :icon="ArrowLeft"
+        @click="router.push('/system/users')"
       >
-        <el-button
-          v-if="canAudit"
-          :icon="Document"
-          @click="openAudit"
-        >
-          查看操作记录
-        </el-button>
-        <el-button
-          v-if="canManage"
-          :icon="Key"
-          @click="actions.resetPassword(user)"
-        >
-          重置密码
-        </el-button>
-        <el-button
-          v-if="canManage && user.id !== auth.user?.id"
-          :icon="SwitchButton"
-          :type="user.status === 'active' ? 'warning' : 'success'"
-          plain
-          @click="actions.toggleStatus(user)"
-        >
-          {{ user.status === 'active' ? '停用账号' : '启用账号' }}
-        </el-button>
-        <el-dropdown
-          v-if="canManage"
-          trigger="click"
-        >
-          <el-button>更多操作</el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item
-                v-if="user.locked_seconds"
-                :icon="Unlock"
-                @click="actions.unlock(user)"
-              >
-                解锁账号
-              </el-dropdown-item>
-              <el-dropdown-item
-                :icon="Lock"
-                @click="actions.revokeSessions(user)"
-              >
-                强制下线会话
-              </el-dropdown-item>
-              <el-dropdown-item
-                v-if="user.id !== auth.user?.id"
-                divided
-                :icon="Delete"
-                class="user-danger-action"
-                @click="actions.remove(user)"
-              >
-                删除账号
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-      </div>
+        返回用户管理
+      </el-button>
+      <span class="user-detail__nav-divider">/</span>
+      <span class="user-detail__nav-name">{{ user ? user.display_name : '用户详情' }}</span>
+      <span
+        v-if="user"
+        class="user-detail__nav-sub"
+      >@{{ user.username }}</span>
     </div>
 
     <div
@@ -242,57 +180,111 @@ onMounted(() => {
       </el-button>
     </el-alert>
 
-    <div
-      v-else-if="user"
-      class="user-dashboard"
-    >
-      <!-- 左栏：用户概要、基本资料、角色分配 -->
-      <div class="user-dashboard__sidebar">
-        <UserHero :user="user" />
+    <template v-else-if="user">
+      <!-- 顶部宽幅 Hero Banner (Google Workspace / Cloud IAM 风格) -->
+      <UserHero :user="user">
+        <template #actions>
+          <el-button
+            v-if="canAudit"
+            :icon="Document"
+            @click="openAudit"
+          >
+            查看操作记录
+          </el-button>
+          <el-button
+            v-if="canManage"
+            :icon="Key"
+            @click="actions.resetPassword(user)"
+          >
+            重置密码
+          </el-button>
+          <el-button
+            v-if="canManage && user.id !== auth.user?.id"
+            :icon="SwitchButton"
+            :type="user.status === 'active' ? 'warning' : 'success'"
+            plain
+            @click="actions.toggleStatus(user)"
+          >
+            {{ user.status === 'active' ? '停用账号' : '启用账号' }}
+          </el-button>
+          <el-dropdown
+            v-if="canManage"
+            trigger="click"
+          >
+            <el-button>更多操作</el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item
+                  v-if="user.locked_seconds"
+                  :icon="Unlock"
+                  @click="actions.unlock(user)"
+                >
+                  解锁账号
+                </el-dropdown-item>
+                <el-dropdown-item
+                  :icon="Lock"
+                  @click="actions.revokeSessions(user)"
+                >
+                  强制下线会话
+                </el-dropdown-item>
+                <el-dropdown-item
+                  v-if="user.id !== auth.user?.id"
+                  divided
+                  :icon="Delete"
+                  class="user-danger-action"
+                  @click="actions.remove(user)"
+                >
+                  删除账号
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </template>
+      </UserHero>
 
-        <section
-          class="user-card"
-          aria-label="基本资料"
-        >
-          <div class="user-card__head">
-            <h3>基本资料</h3>
-          </div>
-          <UserInfoForm
-            :user="user"
-            :can-edit="canEditInfo"
-            :saving="saving"
-            :save-error="saveError"
-            @save="onSaveInfo"
+      <!-- 双栏看板：左侧资料与角色，右侧权限穿透表格 -->
+      <div class="user-dashboard">
+        <div class="user-dashboard__sidebar">
+          <section
+            class="user-card"
+            aria-label="基本资料"
+          >
+            <UserInfoForm
+              :user="user"
+              :can-edit="canEditInfo"
+              :saving="saving"
+              :save-error="saveError"
+              @save="onSaveInfo"
+            />
+          </section>
+
+          <section
+            class="user-card"
+            aria-label="角色配置"
+          >
+            <UserRoleAssign
+              :user="user"
+              :roles="roles"
+              :can-grant="canGrant"
+              :direct-count="directCount"
+              :saving="saving"
+              :save-error="saveError"
+              @save="onSaveRoles"
+              @open-grants="grantsVisible = true"
+            />
+          </section>
+        </div>
+
+        <div class="user-dashboard__main">
+          <EffectivePermissions
+            :permissions="permissions"
+            :account-active="accountActive"
+            :pending-role-change="false"
+            :error="permissionError"
           />
-        </section>
-
-        <section
-          class="user-card"
-          aria-label="角色配置"
-        >
-          <UserRoleAssign
-            :user="user"
-            :roles="roles"
-            :can-grant="canGrant"
-            :direct-count="directCount"
-            :saving="saving"
-            :save-error="saveError"
-            @save="onSaveRoles"
-            @open-grants="grantsVisible = true"
-          />
-        </section>
+        </div>
       </div>
-
-      <!-- 右栏：最终生效权限穿透分析看板 -->
-      <div class="user-dashboard__main">
-        <EffectivePermissions
-          :permissions="permissions"
-          :account-active="accountActive"
-          :pending-role-change="false"
-          :error="permissionError"
-        />
-      </div>
-    </div>
+    </template>
 
     <UserGrantsDrawer
       v-model="grantsVisible"
@@ -310,22 +302,17 @@ onMounted(() => {
 
 <style scoped>
 .user-detail-page { display: flex; flex-direction: column; gap: 16px; width: 100%; box-sizing: border-box; padding-bottom: 24px; }
-.user-detail__bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.user-detail__nav { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.user-detail__nav { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
 .user-detail__nav-divider { color: var(--zt-ink-400); }
 .user-detail__nav-name { font-weight: 600; color: var(--zt-ink-900); }
 .user-detail__nav-sub { color: var(--zt-ink-500); font-family: var(--zt-font-mono, monospace); font-size: 13px; }
-.user-detail__top-actions { display: flex; align-items: center; gap: 8px; }
-.user-detail__top-actions :deep(.el-button + .el-button) { margin-left: 0; }
 .user-detail__placeholder { min-height: 280px; }
 
 .user-dashboard { display: flex; align-items: flex-start; gap: 20px; width: 100%; }
 .user-dashboard__sidebar { width: 380px; flex-shrink: 0; display: flex; flex-direction: column; gap: 16px; position: sticky; top: 16px; }
 .user-dashboard__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
 
-.user-card { background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: var(--zt-radius); box-shadow: var(--zt-shadow); padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
-.user-card__head { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 1px solid var(--zt-divider); padding-bottom: 10px; }
-.user-card__head h3 { margin: 0; font-size: 14px; font-weight: 650; color: var(--zt-ink-900); }
+.user-card { background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: var(--zt-radius); box-shadow: var(--zt-shadow); padding: 18px 20px; }
 
 .user-danger-action { color: var(--zt-danger-text) !important; }
 

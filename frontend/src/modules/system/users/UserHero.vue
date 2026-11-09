@@ -12,59 +12,62 @@ defineProps<{ user: ManagedUser }>()
     class="user-hero"
     aria-label="用户概览"
   >
-    <div class="user-hero__top">
+    <div class="user-hero__main">
       <div class="user-hero__avatar">
-        <UserAvatar
-          :user="user"
-          size="large"
-        />
+        <UserAvatar :user="user" />
       </div>
       <div class="user-hero__identity">
-        <h1 class="user-hero__name">
-          {{ user.display_name }}
-        </h1>
-        <span class="user-hero__username">@{{ user.username }}</span>
-        <div class="user-hero__tags">
-          <el-tag
-            size="small"
-            :type="user.status === 'active' ? 'success' : 'warning'"
-          >
-            {{ user.status === 'active' ? '正常' : '已停用' }}
-          </el-tag>
-          <el-tag
-            v-if="user.locked_seconds"
-            size="small"
-            type="danger"
-          >
-            已锁定
-          </el-tag>
-          <el-tag
-            v-if="user.must_change_password"
-            size="small"
-            type="warning"
-            effect="plain"
-          >
-            需改密
-          </el-tag>
+        <div class="user-hero__title-row">
+          <h1 class="user-hero__name">
+            {{ user.display_name }}
+          </h1>
+          <span class="user-hero__username">@{{ user.username }}</span>
+          <div class="user-hero__tags">
+            <span
+              class="user-status-pill"
+              :class="user.status === 'active' ? 'is-active' : 'is-disabled'"
+            >
+              <span class="user-status-dot" />
+              {{ user.status === 'active' ? '正常启用' : '已停用' }}
+            </span>
+            <el-tag
+              v-if="user.locked_seconds"
+              size="small"
+              type="danger"
+            >
+              已锁定
+            </el-tag>
+            <el-tag
+              v-if="user.must_change_password"
+              size="small"
+              type="warning"
+              effect="plain"
+            >
+              需改密
+            </el-tag>
+          </div>
+        </div>
+        <div class="user-hero__meta-row">
+          <span class="user-hero__meta-item">
+            <span class="user-hero__meta-label">创建时间：</span>
+            <span class="user-hero__meta-val">{{ formatTime(user.created_at) }}</span>
+          </span>
+          <span class="user-hero__meta-sep">·</span>
+          <span class="user-hero__meta-item">
+            <span class="user-hero__meta-label">最近登录：</span>
+            <span class="user-hero__meta-val">
+              {{ user.last_login_at ? sinceText(user.last_login_at) : '从未登录' }}
+              <span
+                v-if="user.last_login_ip"
+                class="user-hero__meta-ip"
+              >({{ user.last_login_ip }})</span>
+            </span>
+          </span>
         </div>
       </div>
     </div>
-
-    <div class="user-hero__meta">
-      <div class="user-hero__meta-row">
-        <span class="user-hero__meta-label">创建时间</span>
-        <span class="user-hero__meta-val">{{ formatTime(user.created_at) }}</span>
-      </div>
-      <div class="user-hero__meta-row">
-        <span class="user-hero__meta-label">最近登录</span>
-        <span class="user-hero__meta-val">
-          {{ user.last_login_at ? sinceText(user.last_login_at) : '从未登录' }}
-          <span
-            v-if="user.last_login_ip"
-            class="user-hero__meta-ip"
-          >({{ user.last_login_ip }})</span>
-        </span>
-      </div>
+    <div class="user-hero__actions">
+      <slot name="actions" />
     </div>
   </section>
 </template>
@@ -72,47 +75,56 @@ defineProps<{ user: ManagedUser }>()
 <style scoped>
 .user-hero {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 20px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 24px;
   background: var(--zt-panel);
   border: 1px solid var(--zt-border);
   border-radius: var(--zt-radius);
   box-shadow: var(--zt-shadow);
+  flex-wrap: wrap;
 }
-.user-hero__top {
+.user-hero__main {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 18px;
+  min-width: 0;
+  flex: 1;
 }
 .user-hero__avatar {
   flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 60px;
-  height: 60px;
+  width: 56px;
+  height: 56px;
 }
 .user-hero__avatar :deep(.user-avatar) {
-  width: 60px;
-  height: 60px;
-  font-size: 22px;
+  width: 56px;
+  height: 56px;
+  font-size: 20px;
   border-radius: 50%;
+  box-shadow: var(--zt-shadow);
 }
 .user-hero__identity {
-  min-width: 0;
-  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  min-width: 0;
+}
+.user-hero__title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 .user-hero__name {
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 650;
   color: var(--zt-ink-900);
-  line-height: 1.3;
-  word-break: break-all;
+  line-height: 1.2;
 }
 .user-hero__username {
   color: var(--zt-ink-500);
@@ -123,34 +135,70 @@ defineProps<{ user: ManagedUser }>()
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
-  margin-top: 2px;
 }
-.user-hero__meta {
-  display: flex;
-  flex-direction: column;
+.user-status-pill {
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
-  padding-top: 14px;
-  border-top: 1px solid var(--zt-divider);
-  font-size: 12.5px;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.user-status-pill.is-active {
+  background: var(--zt-success-soft);
+  color: var(--zt-success-text);
+  border: 1px solid var(--zt-success-border);
+}
+.user-status-pill.is-disabled {
+  background: var(--zt-surface-subtle);
+  color: var(--zt-ink-500);
+  border: 1px solid var(--zt-border);
+}
+.user-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.user-status-pill.is-active .user-status-dot {
+  background: var(--zt-success);
+}
+.user-status-pill.is-disabled .user-status-dot {
+  background: var(--zt-ink-400);
 }
 .user-hero__meta-row {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  align-items: center;
   gap: 8px;
+  font-size: 12.5px;
+  color: var(--zt-ink-500);
+  flex-wrap: wrap;
+}
+.user-hero__meta-item {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
 }
 .user-hero__meta-label {
   color: var(--zt-ink-500);
-  flex-shrink: 0;
 }
 .user-hero__meta-val {
   color: var(--zt-ink-800);
-  text-align: right;
-  word-break: break-all;
 }
 .user-hero__meta-ip {
   color: var(--zt-ink-500);
   margin-left: 2px;
+}
+.user-hero__meta-sep {
+  color: var(--zt-ink-300);
+}
+.user-hero__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.user-hero__actions :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 </style>

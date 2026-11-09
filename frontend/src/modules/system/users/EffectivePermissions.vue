@@ -9,14 +9,12 @@ import { LEVEL_TEXT } from '@/permissions/catalog'
 const props = defineProps<{
   permissions: EffectivePermission[]
   accountActive: boolean
-  /** 角色草稿有改动但还没保存：提示这里展示的是已保存的权限。 */
   pendingRoleChange: boolean
   error: string
 }>()
 
 const keyword = ref('')
 
-/** 按分组整理，分组内保持后端的模块顺序。 */
 const grouped = computed(() => {
   const out = new Map<string, EffectivePermission[]>()
   for (const item of props.permissions) {
@@ -67,7 +65,7 @@ const effectiveCount = computed(() => props.permissions.filter(item => item.leve
         v-model="keyword"
         clearable
         size="small"
-        placeholder="搜索模块名称、资源编码或角色来源"
+        placeholder="搜索模块名称、编码或来源"
         :prefix-icon="Search"
         aria-label="搜索权限"
         class="block__search"
@@ -158,14 +156,24 @@ const effectiveCount = computed(() => props.permissions.filter(item => item.leve
               </div>
             </td>
             <td class="col-level">
-              <el-tag
-                size="small"
-                :type="item.level === 'FULL' ? 'success' : item.level === 'NONE' ? 'info' : 'primary'"
-                :effect="item.level === 'NONE' ? 'plain' : 'light'"
-                class="perm-tag"
+              <span
+                class="perm-pill"
+                :class="{
+                  'perm-pill--full': item.level === 'FULL',
+                  'perm-pill--read': item.level === 'READ',
+                  'perm-pill--none': item.level === 'NONE',
+                }"
               >
+                <span
+                  class="pill-dot"
+                  :class="{
+                    'is-full': item.level === 'FULL',
+                    'is-read': item.level === 'READ',
+                    'is-none': item.level === 'NONE',
+                  }"
+                />
                 {{ item.level === 'NONE' ? '未开通' : LEVEL_TEXT[item.level] }}
-              </el-tag>
+              </span>
             </td>
             <td class="col-source">
               <div
@@ -190,16 +198,22 @@ const effectiveCount = computed(() => props.permissions.filter(item => item.leve
             <td class="col-mech">
               <span
                 v-if="item.sources.some(s => !s.active)"
-                class="mech-warn"
-              >角色已停用</span>
+                class="mech-item mech-warn"
+              >
+                <span class="mech-dot is-warn" />角色已停用
+              </span>
               <span
                 v-else-if="item.sources.some(s => s.role_id === null)"
-                class="mech-direct"
-              >单独直接授权</span>
+                class="mech-item mech-direct"
+              >
+                <span class="mech-dot is-direct" />单独直配
+              </span>
               <span
                 v-else-if="item.sources.length"
-                class="mech-inherit"
-              >角色正常继承</span>
+                class="mech-item mech-inherit"
+              >
+                <span class="mech-dot is-inherit" />正常继承
+              </span>
               <span
                 v-else
                 class="mech-none"
@@ -219,41 +233,56 @@ const effectiveCount = computed(() => props.permissions.filter(item => item.leve
 .block__title { margin: 0; font-size: 16px; font-weight: 650; color: var(--zt-ink-900); }
 .block__hint { font-size: 12.5px; color: var(--zt-ink-500); }
 .block__search { width: 260px; }
+.block__search :deep(.el-input__wrapper) { border-radius: 20px; background: var(--zt-surface-subtle); box-shadow: 0 0 0 1px var(--zt-border) inset; }
+.block__search :deep(.el-input__wrapper.is-focus) { box-shadow: 0 0 0 1.5px var(--zt-primary) inset; background: var(--zt-panel); }
 .block__notice { margin-bottom: 0; }
 .muted { color: var(--zt-ink-500); font-size: 13px; }
 
 .perm-table-wrap { width: 100%; overflow-x: auto; border: 1px solid var(--zt-border); border-radius: var(--zt-radius-sm); }
 .perm-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
-.perm-table thead th { background: var(--zt-surface-subtle); color: var(--zt-ink-700); font-weight: 650; font-size: 12.5px; padding: 10px 14px; border-bottom: 1px solid var(--zt-border); white-space: nowrap; }
+.perm-table thead th { background: var(--zt-surface-subtle); color: var(--zt-ink-700); font-weight: 650; font-size: 12px; padding: 10px 16px; border-bottom: 1px solid var(--zt-border); white-space: nowrap; letter-spacing: 0.2px; }
 .col-module { width: 220px; }
 .col-level { width: 110px; }
 .col-source { min-width: 220px; }
-.col-mech { width: 130px; }
+.col-mech { width: 120px; }
 
-.group-row td { background: var(--zt-surface-subtle); padding: 8px 14px; border-top: 1px solid var(--zt-border); border-bottom: 1px solid var(--zt-divider); }
+.group-row td { background: var(--zt-surface-subtle); padding: 8px 16px; border-top: 1px solid var(--zt-border); border-bottom: 1px solid var(--zt-divider); }
 .group-label { display: flex; align-items: center; gap: 8px; }
-.group-bar { width: 3px; height: 13px; background: var(--zt-primary); border-radius: 2px; }
-.group-name { font-size: 13px; font-weight: 650; color: var(--zt-ink-900); }
-.group-count { font-size: 12px; color: var(--zt-ink-500); }
+.group-bar { width: 3px; height: 12px; background: var(--zt-primary); border-radius: 2px; }
+.group-name { font-size: 12.5px; font-weight: 650; color: var(--zt-ink-900); }
+.group-count { font-size: 11.5px; color: var(--zt-ink-500); background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: 10px; padding: 0 6px; }
 
-.data-row td { padding: 10px 14px; border-bottom: 1px solid var(--zt-divider); vertical-align: middle; background: var(--zt-panel); transition: background 0.15s ease; }
+.data-row td { padding: 11px 16px; border-bottom: 1px solid var(--zt-divider); vertical-align: middle; background: var(--zt-panel); transition: background 0.15s ease; }
 .data-row:hover td { background: var(--zt-surface-subtle); }
 .data-row.is-disabled td { background: var(--zt-panel); }
-.data-row.is-disabled .module-title { color: var(--zt-ink-400); text-decoration: line-through; }
+.data-row.is-disabled .module-title { color: var(--zt-ink-400); }
 
 .module-title { font-weight: 550; color: var(--zt-ink-900); line-height: 1.3; }
 .module-code { font-family: var(--zt-font-mono, monospace); font-size: 11.5px; color: var(--zt-ink-400); margin-top: 2px; }
-.perm-tag { font-weight: 500; }
+
+.perm-pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+.perm-pill--full { background: var(--zt-success-soft); color: var(--zt-success-text); border: 1px solid var(--zt-success-border); }
+.perm-pill--read { background: var(--el-color-primary-light-9); color: var(--zt-blue-600); border: 1px solid var(--el-color-primary-light-7); }
+.perm-pill--none { background: var(--zt-surface-subtle); color: var(--zt-ink-400); border: 1px solid var(--zt-border); }
+.pill-dot { width: 6px; height: 6px; border-radius: 50%; }
+.pill-dot.is-full { background: var(--zt-success); }
+.pill-dot.is-read { background: var(--zt-blue-600); }
+.pill-dot.is-none { background: var(--zt-muted-mark); }
 
 .source-list { display: flex; flex-wrap: wrap; gap: 6px; }
-.source-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; background: var(--zt-surface-subtle); border: 1px solid var(--zt-border); border-radius: 12px; font-size: 12px; color: var(--zt-ink-800); }
-.source-badge--direct { background: var(--el-color-primary-light-9); border-color: var(--zt-primary-border); color: var(--zt-primary-text); }
+.source-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; background: var(--zt-surface-subtle); border: 1px solid var(--zt-border); border-radius: 12px; font-size: 12px; color: var(--zt-ink-800); }
+.source-badge--direct { background: var(--el-color-primary-light-9); border-color: var(--el-color-primary-light-7); color: var(--zt-blue-600); }
 .source-badge--inactive { opacity: 0.6; text-decoration: line-through; }
 .source-badge__level { color: var(--zt-ink-500); font-size: 11.5px; }
 .source-empty { color: var(--zt-ink-400); font-size: 12px; }
 
-.mech-warn { color: var(--zt-warning-text); font-size: 12px; }
-.mech-direct { color: var(--zt-primary-text); font-size: 12px; font-weight: 500; }
-.mech-inherit { color: var(--zt-ink-600); font-size: 12px; }
+.mech-item { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+.mech-dot { width: 6px; height: 6px; border-radius: 50%; }
+.mech-warn { color: var(--zt-warning-text); }
+.mech-warn .mech-dot { background: var(--zt-warning-text); }
+.mech-direct { color: var(--zt-primary-text); font-weight: 500; }
+.mech-direct .mech-dot { background: var(--zt-primary); }
+.mech-inherit { color: var(--zt-ink-600); }
+.mech-inherit .mech-dot { background: var(--zt-ink-400); }
 .mech-none { color: var(--zt-ink-400); }
 </style>
