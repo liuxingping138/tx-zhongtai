@@ -1,10 +1,22 @@
 import { computed, type Component } from 'vue'
-import { Collection, Connection, Cpu, DataAnalysis, EditPen, Files, Finished, Key, Link, MapLocation, Menu, Money, Monitor, PriceTag, Reading, Tickets, Timer, User, UserFilled, Unlock } from '@element-plus/icons-vue'
+import {
+  Collection, Connection, Cpu, DataAnalysis, EditPen, Files, Finished,
+  Key, Link, MapLocation, Menu, Money, Monitor, PriceTag, Reading,
+  Setting, Tickets, Timer, User, UserFilled, Unlock,
+} from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { pathForRouteName } from '@/router/menu'
 
 export interface WorkspaceEntry { title: string; path: string; description: string; icon: Component }
-export interface WorkspaceGroup { key: string; title: string; entries: WorkspaceEntry[] }
+export interface WorkspaceGroup { key: string; title: string; icon: Component; entries: WorkspaceEntry[] }
+
+/** 顶部一级分类专属领域图标，践行 Google M3 导航规范 */
+const DOMAIN_ICONS: Record<string, Component> = {
+  policy: Reading,
+  codebook: Collection,
+  ai: Cpu,
+  system: Setting,
+}
 
 /** 顶部「查找模块」里每个入口的用途说明。新菜单要在这里登记，没登记的会显示成「进入业务模块」（有单测兜住）。 */
 export const ENTRY_DESCRIPTIONS: Record<string, string> = {
@@ -61,8 +73,20 @@ export function useWorkspace() {
       if (!path) continue
       const key = path.split('/')[1] || 'other'
       const parent = auth.visibleMenus.find(menu => menu.id === item.parent_id)
-      if (!result.has(key)) result.set(key, { key, title: parent?.title || '业务模块', entries: [] })
-      result.get(key)!.entries.push({ title: item.title, path, description: ENTRY_DESCRIPTIONS[path] || '进入业务模块', icon: entryIcons[path] || Menu })
+      if (!result.has(key)) {
+        result.set(key, {
+          key,
+          title: parent?.title || '业务模块',
+          icon: DOMAIN_ICONS[key] || Menu,
+          entries: [],
+        })
+      }
+      result.get(key)!.entries.push({
+        title: item.title,
+        path,
+        description: ENTRY_DESCRIPTIONS[path] || '进入业务模块',
+        icon: entryIcons[path] || Menu,
+      })
     }
     // 模块顺序以 iam 菜单 sort_order 为准（系统管理、政策、码表管理、AI提问），前端不另行排序。
     return [...result.values()]

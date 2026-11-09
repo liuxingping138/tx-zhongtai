@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ArrowDown, ArrowUp } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowUp, RefreshRight, Search } from '@element-plus/icons-vue'
 import { foldFilterFields } from './filterFold'
 
 const props = defineProps<{ query: Record<string, unknown>; applied?: Record<string, unknown> }>()
@@ -115,11 +115,13 @@ function submit() {
         <el-button
           type="primary"
           native-type="submit"
+          :icon="Search"
         >
           查询
         </el-button>
         <el-button
           :disabled="!canReset"
+          :icon="RefreshRight"
           @click="emit('reset')"
         >
           重置

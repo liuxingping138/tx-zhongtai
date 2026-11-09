@@ -11,35 +11,44 @@
 
 .workspace-masthead {
   display: flex; align-items: center; flex: 0 0 var(--workspace-header-height); min-width: 0;
-  padding-right: 24px; background: var(--zt-panel); color: var(--zt-ink-900);
-  border-bottom: 1px solid var(--zt-border); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02); z-index: 10;
+  padding-right: 20px; background: var(--zt-panel); color: var(--zt-ink-900);
+  border-bottom: 1px solid var(--zt-border); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03); z-index: 10;
 }
 .workspace-brand {
   display: flex; flex: 0 0 var(--workspace-rail-width); align-self: stretch;
   align-items: center; justify-content: center; border-right: 1px solid var(--zt-border);
+  transition: background-color 0.15s ease;
 }
-.workspace-brand img { display: block; width: 142px; height: auto; }
+.workspace-brand:hover { background-color: var(--zt-surface-subtle); }
+.workspace-brand img { display: block; width: 136px; height: auto; }
 .workspace-platform-name {
-  flex-shrink: 0; margin: 0 28px 0 24px; font-size: 16px; line-height: 1.4;
+  flex-shrink: 0; margin: 0 20px 0 20px; font-size: 15px; line-height: 1.4;
   font-weight: 650; letter-spacing: -0.01em; white-space: nowrap; color: var(--zt-ink-900);
 }
 .workspace-domains {
-  display: flex; align-self: stretch; align-items: center; flex: 1; min-width: 0;
-  gap: 6px; overflow-x: auto; scrollbar-width: thin;
+  display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;
+  overflow-x: auto; scrollbar-width: none;
 }
+.workspace-domains::-webkit-scrollbar { display: none; }
 .workspace-domains a {
-  position: relative; display: flex; align-items: center; justify-content: center;
-  height: 36px; padding: 0 16px; border-radius: var(--zt-radius);
-  font-size: 14px; font-weight: 500; white-space: nowrap; color: var(--zt-ink-700);
-  transition: background-color 0.15s ease, color 0.15s ease;
+  position: relative; display: inline-flex; align-items: center; gap: 7px;
+  height: 36px; padding: 0 16px; border-radius: 20px;
+  font-size: 13.5px; font-weight: 500; white-space: nowrap; color: var(--zt-ink-700);
+  border: 1px solid transparent;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
 }
+.workspace-domains a .domain-icon { font-size: 16px; color: var(--zt-ink-500); transition: color 0.18s ease; }
 .workspace-domains a:hover { color: var(--zt-ink-900); background: var(--zt-soft); }
+.workspace-domains a:hover .domain-icon { color: var(--zt-ink-900); }
 .workspace-domains a.is-active {
-  color: var(--zt-blue-600); background: var(--el-color-primary-light-9); font-weight: 600;
+  color: var(--zt-blue-600); background: var(--el-color-primary-light-9);
+  border-color: var(--el-color-primary-light-7); font-weight: 600;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.08);
 }
-.workspace-domains a.is-active::after {
-  content: ""; position: absolute; left: 14px; right: 14px; bottom: -12px;
-  height: 2px; border-radius: 2px 2px 0 0; background: var(--zt-blue-600);
+.workspace-domains a.is-active .domain-icon { color: var(--zt-blue-600); }
+
+.workspace-masthead-actions {
+  display: flex; align-items: center; gap: 12px; margin-left: auto; flex-shrink: 0;
 }
 
 .workspace-body { display: flex; flex: 1; min-height: 0; }

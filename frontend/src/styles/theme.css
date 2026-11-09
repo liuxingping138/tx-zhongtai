@@ -167,34 +167,71 @@ body {
   border-radius: var(--zt-radius);
 }
 
+/* Google Material Design 3 现代按钮规范：层级分明、微阴影、按压回弹与微动效 */
 .el-button {
-  min-height: 32px;
-  font-weight: 500;
+  min-height: 34px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 550;
+  border-radius: 8px;
+  letter-spacing: 0.15px;
   box-shadow: none;
   transition:
-    background-color 0.16s ease,
-    border-color 0.16s ease,
-    color 0.16s ease,
-    box-shadow 0.16s ease;
+    background-color 0.18s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.18s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.18s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.18s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.12s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.el-button:not(.is-disabled):not(.is-loading):active {
+  transform: scale(0.98);
+}
+
+/* Filled 主按钮（科技蓝 + 柔和环境高程投影） */
+.el-button--primary:not(.is-plain):not(.is-text):not(.is-link) {
+  background-color: var(--zt-blue-600);
+  border-color: var(--zt-blue-600);
+  color: var(--el-color-white);
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.22), 0 1px 2px rgba(37, 99, 235, 0.12);
+}
+
+.el-button--primary:not(.is-plain):not(.is-text):not(.is-link):not(.is-disabled):hover {
+  background-color: var(--zt-blue-700);
+  border-color: var(--zt-blue-700);
+  box-shadow: 0 3px 8px rgba(37, 99, 235, 0.32), 0 1px 3px rgba(37, 99, 235, 0.16);
+  transform: translateY(-0.5px);
+}
+
+/* Outlined 次级按钮（细腻描边 + 悬停微投影与主色高亮） */
 .el-button--default:not(.is-text):not(.is-link):not(.is-disabled) {
   border-color: var(--zt-border-strong);
+  background-color: var(--zt-panel);
   color: var(--zt-ink-700);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
 }
 
 .el-button--default:not(.is-text):not(.is-link):not(.is-disabled):hover {
   border-color: var(--zt-blue-600);
+  background-color: var(--zt-surface-subtle);
+  color: var(--zt-blue-600);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
+  transform: translateY(-0.5px);
+}
+
+/* Tonal / Plain 次主按钮（浅色调柔和底 + 主色字） */
+.el-button--primary.is-plain:not(.is-disabled) {
   background-color: var(--el-color-primary-light-9);
+  border-color: var(--el-color-primary-light-7);
   color: var(--zt-blue-600);
 }
 
-.el-button--primary:not(.is-plain):not(.is-text):not(.is-link) {
-  box-shadow: 0 1px 2px var(--zt-shadow-soft);
-}
-
-.el-button:not(.is-disabled):not(.is-loading):hover {
-  filter: brightness(0.98);
+.el-button--primary.is-plain:not(.is-disabled):hover {
+  background-color: var(--el-color-primary-light-8);
+  border-color: var(--el-color-primary-light-5);
+  color: var(--zt-blue-700);
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.15);
+  transform: translateY(-0.5px);
 }
 
 /* 全站统一现代分段控制器（替代原本抢眼的实心蓝底 radio-button） */
@@ -273,15 +310,43 @@ body {
 .pagination-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px 2px; min-height: 52px; }
 .pagination-range { color: var(--zt-ink-500); font-size: 12px; font-variant-numeric: tabular-nums; }
 
-/* 表格行末操作的小按钮（RowActions、批量任务等）：默认描边，--primary 浅底主色，--danger 红字；一样高，按下有反馈。 */
+/* 表格行末操作：Google 风格轻量胶囊按钮，告别生硬方块感 */
 .row-actions { display: inline-flex; align-items: center; gap: 6px; }
-.row-action { display: inline-flex; align-items: center; justify-content: center; gap: 3px; height: 26px; padding: 0 10px; border: 1px solid var(--zt-border-strong); border-radius: 5px; background: var(--zt-panel); color: var(--zt-ink-700); font: inherit; font-size: 12px; font-weight: 500; line-height: 1; text-decoration: none; white-space: nowrap; cursor: pointer; transition: border-color .15s, color .15s, background-color .15s, box-shadow .15s; }
-.row-action:hover { border-color: var(--zt-blue-600); background: var(--zt-surface-subtle); color: var(--zt-blue-600); }
-.row-action--primary { border-color: var(--el-color-primary-light-8); background: var(--el-color-primary-light-9); color: var(--zt-blue-700); }
-.row-action--primary:hover { border-color: var(--el-color-primary-light-5); background: var(--el-color-primary-light-8); color: var(--zt-blue-800); }
-.row-action--danger { border-color: transparent; background: transparent; color: var(--zt-danger-text); }
-.row-action--danger:hover { border-color: var(--zt-danger-border); background: var(--zt-danger-soft); color: var(--zt-danger-text); }
-.row-action:disabled { opacity: .45; cursor: not-allowed; }
+.row-action {
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  height: 26px; padding: 0 11px; border: 1px solid var(--zt-border); border-radius: 13px;
+  background: var(--zt-panel); color: var(--zt-ink-700); font: inherit; font-size: 12px;
+  font-weight: 500; line-height: 1; text-decoration: none; white-space: nowrap; cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.row-action:hover {
+  border-color: var(--el-color-primary-light-7);
+  background: var(--el-color-primary-light-9);
+  color: var(--zt-blue-600);
+}
+.row-action--primary {
+  border-color: var(--el-color-primary-light-7);
+  background: var(--el-color-primary-light-9);
+  color: var(--zt-blue-600);
+  font-weight: 550;
+}
+.row-action--primary:hover {
+  border-color: var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-8);
+  color: var(--zt-blue-700);
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.12);
+}
+.row-action--danger {
+  border-color: transparent;
+  background: transparent;
+  color: var(--zt-danger-text);
+}
+.row-action--danger:hover {
+  border-color: var(--zt-danger-border);
+  background: var(--zt-danger-soft);
+  color: var(--zt-danger-text);
+}
+.row-action:disabled { opacity: 0.45; cursor: not-allowed; }
 .row-action:focus-visible { outline: 2px solid var(--zt-blue-600); outline-offset: 1px; }
 @media (prefers-reduced-motion: reduce) { .row-action { transition: none; } }
 

@@ -37,7 +37,7 @@ const firstModulePath = computed(() => groups.value[0]?.entries[0]?.path || '/no
           height="83"
         >
       </router-link>
-      <strong class="workspace-platform-name">业务数据运营平台</strong>
+      <span class="workspace-platform-name">业务数据运营平台</span>
       <nav
         class="workspace-domains"
         aria-label="一级模块"
@@ -49,9 +49,18 @@ const firstModulePath = computed(() => groups.value[0]?.entries[0]?.path || '/no
           :class="{ 'is-active': activeGroup?.key === group.key }"
           :aria-current="activeGroup?.key === group.key ? 'true' : undefined"
         >
-          {{ group.title }}
+          <el-icon
+            class="domain-icon"
+            aria-hidden="true"
+          >
+            <component :is="group.icon" />
+          </el-icon>
+          <span>{{ group.title }}</span>
         </router-link>
       </nav>
+      <div class="workspace-masthead-actions">
+        <UserAccountMenu tone="header" />
+      </div>
     </header>
     <div class="workspace-body">
       <aside
@@ -93,11 +102,6 @@ const firstModulePath = computed(() => groups.value[0]?.entries[0]?.path || '/no
             </router-link>
           </template>
         </nav>
-        <div class="workspace-rail-footer">
-          <div class="workspace-account">
-            <UserAccountMenu />
-          </div>
-        </div>
       </aside>
       <main
         id="workspace-main"

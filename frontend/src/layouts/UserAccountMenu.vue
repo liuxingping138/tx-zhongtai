@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { ArrowUp } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
@@ -69,7 +69,7 @@ async function onLogout() {
         v-if="!compact"
         class="user-account__caret"
       >
-        <ArrowUp />
+        <component :is="tone === 'header' ? ArrowDown : ArrowUp" />
       </el-icon>
     </button>
     <template #dropdown>
@@ -129,9 +129,54 @@ async function onLogout() {
 .user-account.is-nav .user-account__meta small,
 .user-account.is-nav .user-account__caret { color: var(--zt-ink-500); }
 .user-account.is-nav:hover { background: var(--zt-soft); }
-.user-account.is-header { width: auto; padding: 0; color: var(--zt-ink-700); }
-.user-account.is-header .user-account__avatar { background: var(--el-color-primary-light-9); color: var(--zt-blue-700); }
-.user-account.is-header:hover { background: var(--zt-soft); }
+.user-account.is-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px 0 4px;
+  border-radius: 18px;
+  border: 1px solid var(--zt-border);
+  background: var(--zt-panel);
+  color: var(--zt-ink-800);
+  width: auto;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.user-account.is-header:hover {
+  background: var(--zt-surface-subtle);
+  border-color: var(--zt-border-strong);
+  box-shadow: var(--zt-shadow);
+}
+.user-account.is-header .user-account__avatar {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--el-color-primary-light-9);
+  color: var(--zt-blue-600);
+  font-size: 12px;
+  font-weight: 650;
+}
+.user-account.is-header .user-account__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 140px;
+}
+.user-account.is-header .user-account__meta strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--zt-ink-900);
+}
+.user-account.is-header .user-account__meta small {
+  font-size: 11px;
+  color: var(--zt-ink-500);
+  margin-top: 0;
+}
+.user-account.is-header .user-account__caret {
+  color: var(--zt-ink-400);
+  font-size: 11px;
+}
 .user-account.is-compact { justify-content: center; padding: 6px; }
 .user-account.is-header.is-compact { padding: 2px; border-radius: 10px; }
 .user-account:focus-visible { outline: 2px solid var(--el-color-primary-light-5); outline-offset: 2px; }
