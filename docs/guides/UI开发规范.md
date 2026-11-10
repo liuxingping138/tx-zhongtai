@@ -38,9 +38,10 @@
 | Excel 下载底层 | `api/download.ts` | `downloadFile` 负责 401 续期和统一中文错误；页面一般经 useExcelExport 调用，不要用裸 fetch。导出传 applied 不传 query |
 | 选码表里的行业场景 | `components/ScenarioPicker.vue` | `v-model` 是一条码表路径（`ScenarioPath`），可传 `industryL1` 只在一个一级行业下找。按名称远程搜码表（按客群去重），不要让人手打六级名称：打错一个字就成了新场景 |
 | 操作记录入口 | `components/AuditLogButton.vue` | `module` 填资源编码，点击跳到操作日志并按该模块筛选；没有操作日志查看权限时自动隐藏 |
-| 图表 | `components/charts/BaseChart.vue`、`echarts.ts` | 传 `option`、中文 `label`、`height`，点击图形发 `select`。option 由纯函数生成并写单测（参照 `modules/policy/crawler-monitoring/charts.ts`），配色用 `chartPalette()`；新图表类型先在 `echarts.ts` 注册。ECharts 按需注册、随页面懒加载，不进公共 vendor |
+| 图表 | `components/charts/BaseChart.vue`、`echarts.ts` | 传 `option`、中文 `label`、`height`，点击图形发 `select`。option 由纯函数生成并写单测（参照 `modules/policy/crawler-monitoring/charts.ts`），组件内配色用 `useChartPalette()`（随浅色/深色主题实时响应），纯函数默认参用 `chartPalette()`，统一浮层样式用 `tooltipStyle(palette)`；新图表类型先在 `echarts.ts` 注册。ECharts 按需注册、随页面懒加载，不进公共 vendor |
 | 权限展示 | `permissions/catalog.ts`、`permissions/matrix.ts`、`modules/system/roles/PermissionTable.vue` | 按菜单分组，名称与菜单一致，一项一档。有导出动作才出现「导出」，有写操作才出现「管理」。说明从资源树推导，不在页面里手写模块清单。勾选联动、整组勾选、锁定、搜索等纯逻辑在 `matrix.ts`（有单测），组件只渲染。新增模块只需在 iam 目录登记动作并给导出动作标 `EXPORT` |
-| 账号菜单 | `layouts/UserAccountMenu.vue` | 侧栏底部；显示名 + `/me.roles` |
+| 账号菜单与外观偏好 | `layouts/UserAccountMenu.vue`、`composables/useTheme.ts`、`composables/useDensity.ts` | 顶部栏右侧：表格密度切换（标准/紧凑）、浅色/深色主题切换、账号胶囊按钮（点击弹出 Google Workspace 风格账号浮层卡片：头像、显示名、`@username`、`/me.roles` 角色标签、个人设置/修改密码/退出登录）；左侧栏底部仅放收起按钮 |
+| 个人设置页 | `views/ProfileView.vue` | Google Account 双栏均衡仪表盘：顶部身份横幅 + 左栏基本资料即时编辑卡片、界面偏好设置卡片 + 右栏账号安全卡片、角色与模块权限概览卡片 |
 | 浮层焦点 | `layouts/AdminLayout.vue` | 打开时把焦点送进浮层、关闭后送回触发按钮；落回 body 会让键盘用户从头 Tab |
 | 键盘焦点描边 | `styles/workspace.css` | 全局描边只给链接、按钮、复选框和单选框。能打字的输入框鼠标点一下也算 `:focus-visible`，不要给 `input` 加全局 outline：Element Plus 输入框靠外框变色表示聚焦，再描一圈就是框里套框 |
 | 时间 | `utils/time.ts` | 一律按北京时间显示 |
@@ -191,4 +192,4 @@ frontend 目录运行 `pnpm run type-check`、`pnpm run lint`、`pnpm run test`�
 - 下载走 `shared/downloads.ts`（底层 `downloadFile`），不放在 `api/ai.ts`：契约测试会逐个调用 api 目录导出的函数。
 - 模板编辑用 `useUnsavedForm`：返回列表、离开页面前提示未保存的修改；有未保存的修改时不能样本试跑、不能上线。附件上传、删除、上线、试跑状态变化只更新模板信息，不动表单草稿。
 - 批量任务列表有任务在排队或运行时每 2 秒刷新，全部结束后停止轮询。详情抽屉的逐行结果不跟着每次进度刷新：只列前 50 行，这几行都有结果后再跑也不变，所以只在还有没跑到的行（只看失败时是失败数变了）时重读，至少隔 10 秒；状态变化马上重读。
-- 费用账单的图表系列用 `modules/ai/billing/billing.ts` 里校验过的 8 色分类色板，颜色按名字固定，筛选不重新上色，超过 8 种的并成「其他」。
+- 费用账单（`billing/BillingPage.vue`）顶部汇总采用 4 张独立 Bento KPI 卡片（「合计费用」主卡片带微光渐变），图表系列用 `modules/ai/billing/billing.ts` 里校验过的 8 色分类色板，颜色按名字固定，筛选不重新上色，超过 8 种的并成「其他」；下方明细表的「占比」列采用胶囊进度条轨道且填充色与对应模型/用途序列颜色一致。
