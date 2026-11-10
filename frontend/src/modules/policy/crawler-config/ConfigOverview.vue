@@ -83,20 +83,21 @@ const cards = computed(() => {
 
 <style scoped>
 .headline {
-  margin: 0; padding: 10px 16px;
-  background: var(--zt-panel); border: 1px solid var(--zt-border); border-left: 3px solid var(--zt-blue-600);
-  border-radius: var(--zt-radius); box-shadow: var(--zt-shadow);
+  margin: 0; padding: 12px 18px;
+  background: var(--zt-hero-gradient); border: 1px solid var(--el-color-primary-light-7); border-left: 4px solid var(--zt-blue-600);
+  border-radius: 10px; box-shadow: var(--zt-shadow);
   font-size: 13.5px; line-height: 1.8; color: var(--zt-ink-700);
 }
 .headline-strong { font-size: 15px; font-weight: 650; color: var(--zt-ink-900); font-variant-numeric: tabular-nums; }
 .cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--zt-space-3); }
 .card {
-  display: flex; flex-direction: column; gap: 4px; min-height: 104px; padding: 14px 16px;
-  background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: var(--zt-radius);
+  display: flex; flex-direction: column; gap: 4px; min-height: 108px; padding: 15px 18px;
+  background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: 12px;
   box-shadow: var(--zt-shadow); color: inherit; text-decoration: none;
 }
-.card--link { transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease; }
-.card--link:hover { border-color: var(--zt-border-strong); box-shadow: 0 4px 12px var(--zt-shadow-soft); }
+.card--main { background: var(--zt-hero-gradient); border-color: var(--el-color-primary-light-7); }
+.card--link { transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease; }
+.card--link:hover { border-color: var(--zt-border-strong); box-shadow: 0 4px 12px var(--zt-shadow-soft); transform: translateY(-1px); }
 .card--link:focus-visible { outline: 2px solid var(--zt-blue-600); outline-offset: 2px; }
 .card-label { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; color: var(--zt-ink-500); }
 .card-value { margin: 2px 0; font-size: 26px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.15; color: var(--zt-ink-900); font-variant-numeric: tabular-nums; }

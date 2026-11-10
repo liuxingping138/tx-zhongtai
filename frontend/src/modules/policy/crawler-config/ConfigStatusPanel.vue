@@ -4,7 +4,7 @@ import { useRouter, type RouteLocationRaw } from 'vue-router'
 
 import type { CrawlerConfigReport } from '@/api/crawlerConfig'
 import BaseChart from '@/components/charts/BaseChart.vue'
-import { chartPalette } from '@/components/charts/echarts'
+import { useChartPalette } from '@/components/charts/echarts'
 import { BLANK_PROVINCE, statusOption, statusRows } from './report'
 
 /**
@@ -18,10 +18,10 @@ const VIEWS = [
   { value: 'table', label: '表格' },
 ] as const
 const router = useRouter()
-const palette = chartPalette(getComputedStyle(document.documentElement))
+const palette = useChartPalette()
 const view = ref<(typeof VIEWS)[number]['value']>('chart')
 const rows = computed(() => statusRows(props.report.status))
-const option = computed(() => statusOption(rows.value, palette))
+const option = computed(() => statusOption(rows.value, palette.value))
 
 function pickProvince(params: { dataIndex: number }): void {
   const row = rows.value[params.dataIndex]
@@ -111,10 +111,12 @@ const COLUMNS = [
 </template>
 
 <style scoped>
-.panel { padding: var(--zt-space-3) var(--zt-space-4) var(--zt-space-4); background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: var(--zt-radius); min-width: 0; }
-.panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--zt-space-3); flex-wrap: wrap; margin-bottom: var(--zt-space-2); }
-.panel-head h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--zt-ink-900); }
-.note { margin: 4px 0 0; font-size: 12px; color: var(--zt-ink-500); }
+.panel { padding: 16px 20px; background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: 12px; box-shadow: var(--zt-shadow); min-width: 0; }
+.panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: nowrap; margin-bottom: 10px; }
+.panel-head > :first-child { flex: 1; min-width: 0; }
+.panel-head > :last-child { flex-shrink: 0; }
+.panel-head h2 { margin: 0; font-size: 15px; font-weight: 650; color: var(--zt-ink-900); }
+.note { margin: 4px 0 0; font-size: 12px; line-height: 1.6; color: var(--zt-ink-500); }
 .status-table :deep(.cell) { font-variant-numeric: tabular-nums; }
 .status-table :deep(.el-table__footer .cell) { font-weight: 600; color: var(--zt-ink-900); }
 .count-link { color: var(--zt-blue-600); text-decoration: none; }

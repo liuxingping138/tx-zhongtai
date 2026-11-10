@@ -4,13 +4,13 @@ import { computed, onMounted, ref } from 'vue'
 import { getCrawlerTrend, type CrawlerTrendDays, type CrawlerTrendPoint } from '@/api/crawlerMonitoring'
 import { errorMessage } from '@/api/errors'
 import BaseChart from '@/components/charts/BaseChart.vue'
-import { chartPalette } from '@/components/charts/echarts'
+import { useChartPalette } from '@/components/charts/echarts'
 import { TREND_RANGES, trendOption, trendSummary } from './charts'
 
 const TREND_ERROR = '暂时无法获取采集趋势，请稍后重试。'
 const UNIT_NOTE = { day: '按天', week: '按周，柱高为日均', month: '按月，柱高为日均' } as const
 
-const palette = chartPalette(getComputedStyle(document.documentElement))
+const palette = useChartPalette()
 const days = ref<CrawlerTrendDays>(30)
 const unitNote = computed(() => UNIT_NOTE[TREND_RANGES.find(item => item.value === days.value)?.unit ?? 'day'])
 const points = ref<CrawlerTrendPoint[]>([])
@@ -19,7 +19,7 @@ const loading = ref(false)
 const error = ref('')
 let sequence = 0
 
-const option = computed(() => trendOption(points.value, days.value, palette))
+const option = computed(() => trendOption(points.value, days.value, palette.value))
 const summary = computed(() => trendSummary(points.value, days.value))
 
 async function load() {

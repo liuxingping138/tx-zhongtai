@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CrawlerProvince, CrawlerTrendPoint } from '@/api/crawlerMonitoring'
-import { chartPalette } from '@/components/charts/echarts'
+import { chartPalette, useChartPalette } from '@/components/charts/echarts'
 import {
   changeText,
   countText,
@@ -251,10 +251,12 @@ describe('省份分布', () => {
 })
 
 describe('图表配色', () => {
-  it('读主题变量，读不到时用默认色', () => {
+  it('读主题变量，读不到时用默认色，并支持响应式主题调色盘', () => {
     const style = { getPropertyValue: (name: string) => (name === '--zt-blue-600' ? ' #123456 ' : '') }
     const colors = chartPalette(style)
     expect(colors.primary).toBe('#123456')
     expect(colors.danger).toBe('#d25b4a')
+    const reactivePalette = useChartPalette()
+    expect(reactivePalette.value.primary).toBeTruthy()
   })
 })

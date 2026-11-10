@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 
 import type { CrawlerProvince } from '@/api/crawlerMonitoring'
 import BaseChart from '@/components/charts/BaseChart.vue'
-import { chartPalette } from '@/components/charts/echarts'
+import { useChartPalette } from '@/components/charts/echarts'
 import { percent, provinceOption, sortProvinces } from './charts'
 import CrawlerProvinceTiles from './CrawlerProvinceTiles.vue'
 
@@ -21,10 +21,10 @@ const VIEWS = [
   { value: 'tiles', label: '卡片' },
 ] as const
 
-const palette = chartPalette(getComputedStyle(document.documentElement))
+const palette = useChartPalette()
 const view = ref<(typeof VIEWS)[number]['value']>('bar')
 const rows = computed(() => sortProvinces(props.provinces))
-const option = computed(() => provinceOption(rows.value, palette, props.selected))
+const option = computed(() => provinceOption(rows.value, palette.value, props.selected))
 const label = computed(() =>
   `省份分布：${rows.value.slice(0, 5).map(item => `${item.name} ${item.sites} 个，停更 ${item.stale} 个（${percent(item.stale, item.sites)}）`).join('；')}`,
 )

@@ -1,5 +1,5 @@
 import type { ConfigPeriod, ConfigProvinceCount, ConfigStatusRow, ConfigSyncStatus, ConfigUnit, CrawlerConfigReport } from '@/api/crawlerConfig'
-import type { ChartOption, ChartPalette } from '@/components/charts/echarts'
+import { tooltipStyle, type ChartOption, type ChartPalette } from '@/components/charts/echarts'
 import { provinceShortName } from '../crawler-monitoring/charts'
 
 /** 后端把省份为空的记在这个名下；它不是信源表里的真实省份，不能拿去筛信源管理。 */
@@ -122,6 +122,7 @@ export function periodOption(unit: ConfigUnit, periods: ConfigPeriod[], selected
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow', shadowStyle: { color: tint(palette.primary, 0.06) } },
+      ...tooltipStyle(palette),
       formatter: (params: { dataIndex: number }[]) => {
         const item = periods[params[0]?.dataIndex ?? -1]
         if (!item) return ''
@@ -141,7 +142,7 @@ export function periodOption(unit: ConfigUnit, periods: ConfigPeriod[], selected
         const picked = item.period_from === selected
         return {
           value: item.new,
-          itemStyle: { color: picked ? palette.primary : tint(palette.primary, 0.35), borderRadius: [4, 4, 0, 0] },
+          itemStyle: { color: picked ? palette.primary : tint(palette.primary, 0.35), borderRadius: [5, 5, 0, 0] },
           label: { color: picked ? palette.ink : palette.inkMuted, fontWeight: picked ? 600 : 400 },
         }
       }),
@@ -183,11 +184,12 @@ export function statusRows(rows: ConfigStatusRow[]): ConfigStatusRow[] {
 
 export function statusOption(rows: ConfigStatusRow[], palette: ChartPalette): ChartOption {
   return {
-    legend: { left: 0, top: 0, itemWidth: 12, itemHeight: 12, textStyle: { color: palette.inkMuted } },
-    grid: { left: 4, right: 4, top: 40, bottom: 0, containLabel: true },
+    legend: { left: 0, top: 0, itemWidth: 12, itemHeight: 12, itemGap: 18, icon: 'roundRect', textStyle: { color: palette.inkMuted } },
+    grid: { left: 4, right: 4, top: 44, bottom: 10, containLabel: true },
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow', shadowStyle: { color: tint(palette.primary, 0.06) } },
+      ...tooltipStyle(palette),
       formatter: (params: { dataIndex: number }[]) => {
         const row = rows[params[0]?.dataIndex ?? -1]
         if (!row) return ''

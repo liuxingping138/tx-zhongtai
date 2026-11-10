@@ -6,7 +6,7 @@ import type {
   CrawlerTrendPoint,
   SiteStatus,
 } from '@/api/crawlerMonitoring'
-import type { ChartOption, ChartPalette } from '@/components/charts/echarts'
+import { tooltipStyle, type ChartOption, type ChartPalette } from '@/components/charts/echarts'
 import { compactCount } from './filters'
 
 function parseDay(value: string): Date {
@@ -113,6 +113,7 @@ export function trendOption(raw: CrawlerTrendPoint[], days: CrawlerTrendDays, pa
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
+      ...tooltipStyle(palette),
       formatter: (params: { dataIndex: number }[]) => {
         const bucket = buckets[params[0]?.dataIndex ?? -1]
         if (!bucket) return ''
@@ -127,8 +128,21 @@ export function trendOption(raw: CrawlerTrendPoint[], days: CrawlerTrendDays, pa
       name: daily ? '每日采集量' : `每${unit === 'month' ? '月' : '周'}日均采集量`,
       type: 'bar',
       data: buckets.map(bucket => bucket.average),
-      barMaxWidth: 28,
-      itemStyle: { color: palette.primary, borderRadius: [2, 2, 0, 0] },
+      barMaxWidth: 26,
+      itemStyle: {
+        color: {
+          type: 'linear',
+          x: 0,
+          y: 0,
+          x2: 0,
+          y2: 1,
+          colorStops: [
+            { offset: 0, color: palette.primary },
+            { offset: 1, color: palette.primaryLight },
+          ],
+        },
+        borderRadius: [5, 5, 0, 0],
+      },
     }],
   }
 }
@@ -154,13 +168,13 @@ export function healthSlices(health: CrawlerHealth, thresholds: { normal_days: n
 
 export function healthOption(slices: HealthSlice[], palette: ChartPalette): ChartOption {
   return {
-    tooltip: { trigger: 'item', formatter: '{b}：{c} 个（{d}%）' },
+    tooltip: { trigger: 'item', ...tooltipStyle(palette), formatter: '{b}：{c} 个（{d}%）' },
     series: [{
       type: 'pie',
-      radius: ['54%', '90%'],
+      radius: ['56%', '90%'],
       avoidLabelOverlap: false,
       label: { show: false },
-      itemStyle: { borderColor: palette.surface, borderWidth: 2 },
+      itemStyle: { borderColor: palette.surface, borderWidth: 3, borderRadius: 5 },
       data: slices.map(slice => ({ name: slice.label, value: slice.value, itemStyle: { color: slice.color } })),
     }],
   }
@@ -298,11 +312,12 @@ export const PROVINCE_SERIES = [
 export function provinceOption(items: CrawlerProvince[], palette: ChartPalette, selected: string[] = []): ChartOption {
   const picked = items.findIndex(item => provinceSelected(item, selected))
   return {
-    legend: { left: 0, top: 0, itemWidth: 12, itemHeight: 12, textStyle: { color: palette.inkMuted } },
-    grid: { left: 8, right: 8, top: 48, bottom: 4, containLabel: true },
+    legend: { left: 0, top: 0, itemWidth: 12, itemHeight: 12, itemGap: 18, icon: 'roundRect', textStyle: { color: palette.inkMuted } },
+    grid: { left: 8, right: 8, top: 48, bottom: 10, containLabel: true },
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
+      ...tooltipStyle(palette),
       formatter: (params: { dataIndex: number }[]) => {
         const item = items[params[0]?.dataIndex ?? -1]
         if (!item) return ''
@@ -334,7 +349,7 @@ export function provinceOption(items: CrawlerProvince[], palette: ChartPalette, 
       // 选中一个分类时其余变淡，和卡片、健康图的选中态一样明确。
       data: items.map((item, index) => ({
         value: series.value(item),
-        itemStyle: { color: series.color(palette), opacity: picked < 0 || picked === index ? 1 : 0.3, borderRadius: [2, 2, 0, 0] },
+        itemStyle: { color: series.color(palette), opacity: picked < 0 || picked === index ? 1 : 0.3, borderRadius: [4, 4, 0, 0] },
       })),
       // 柱顶只写网站总数；停更数和停更率在悬停提示里。
       label: {

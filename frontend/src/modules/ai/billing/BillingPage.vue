@@ -5,7 +5,7 @@ import { useRoute } from 'vue-router'
 import { getAiBilling, type BillingRow } from '@/api/aiBilling'
 import { errorMessage } from '@/api/errors'
 import BaseChart from '@/components/charts/BaseChart.vue'
-import { chartPalette } from '@/components/charts/echarts'
+import { useChartPalette } from '@/components/charts/echarts'
 import {
   colorMap,
   dailySeries,
@@ -45,7 +45,7 @@ const models = ref<string[]>([])
 const purposes = ref<string[]>([route.query.purpose].flat().filter((item): item is string => typeof item === 'string' && !!item))
 const colorBy = ref<'model' | 'purpose'>('model')
 const tab = ref<GroupKey>('model')
-const palette = chartPalette(getComputedStyle(document.documentElement))
+const palette = useChartPalette()
 
 const modelOptions = computed(() => [...new Set(rows.value.map(row => row.model))].sort())
 const purposeOptions = computed(() => [...new Set([...rows.value.map(row => row.purpose), ...purposes.value])].sort())
@@ -53,7 +53,7 @@ const shown = computed(() => filterRows(rows.value, models.value, purposes.value
 const total = computed(() => summarize(shown.value))
 const colors = computed(() => colorMap(rows.value, colorBy.value))
 const chart = computed(() => dailySeries(shown.value, range.value[0], range.value[1], colorBy.value, colors.value))
-const option = computed(() => costOption(chart.value.days, chart.value.series, palette))
+const option = computed(() => costOption(chart.value.days, chart.value.series, palette.value))
 const chartLabel = computed(() =>
   `每日费用：${range.value[0]} 至 ${range.value[1]} 合计 ${money(total.value.cost)}。${groupBy(shown.value, colorBy.value)
     .slice(0, 5).map(group => `${group.name} ${money(group.cost)}`).join('；')}`,
@@ -178,18 +178,22 @@ onMounted(load)
       <div class="billing__total">
         <span>合计费用</span>
         <strong>{{ money(total.cost) }}</strong>
+        <small>所选周期模型调用总支出</small>
       </div>
       <div>
-        <span>次数</span>
+        <span>调用次数</span>
         <strong>{{ total.calls.toLocaleString('zh-CN') }}</strong>
+        <small>批量任务与单次请求累计</small>
       </div>
       <div>
         <span>输入 token</span>
         <strong>{{ tokens(total.input_tokens) }}</strong>
+        <small>提示词与文档上下文消耗</small>
       </div>
       <div>
         <span>输出 token</span>
         <strong>{{ tokens(total.output_tokens) }}</strong>
+        <small>模型结构化生成结果消耗</small>
       </div>
     </section>
     <section class="billing__panel">
@@ -292,14 +296,19 @@ onMounted(load)
         </el-table-column>
         <el-table-column
           label="占比"
-          min-width="180"
+          min-width="190"
         >
           <template #default="{ row }">
             <span class="billing__share">
-              <span
-                class="billing__share-bar"
-                :style="{ width: `${Math.max(row.share * 120, row.cost ? 2 : 0)}px` }"
-              />
+              <span class="billing__share-track">
+                <span
+                  class="billing__share-bar"
+                  :style="{
+                    width: `${Math.max(row.share * 100, row.cost ? 2 : 0)}%`,
+                    background: tab !== 'day' && tab === colorBy ? colors.get(row.name) : undefined,
+                  }"
+                />
+              </span>
               <span>{{ (row.share * 100).toFixed(1) }}%</span>
             </span>
           </template>
@@ -313,28 +322,29 @@ onMounted(load)
 </template>
 
 <style scoped>
-.billing { display: flex; flex-direction: column; gap: 12px; }
-.billing__bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; padding: 12px 16px; border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: var(--zt-panel); }
+.billing { display: flex; flex-direction: column; gap: 14px; }
+.billing__bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; padding: 12px 16px; border: 1px solid var(--zt-border); border-radius: 12px; background: var(--zt-panel); box-shadow: var(--zt-shadow); }
 .billing__filter { width: 220px; }
-.billing__totals { display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr)); border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: var(--zt-panel); }
-.billing__totals > div { display: flex; flex-direction: column; gap: 4px; padding: 14px 18px; min-width: 0; }
-.billing__totals > div + div { border-left: 1px solid var(--zt-border); }
-.billing__totals span { color: var(--zt-ink-500); font-size: 13px; }
-.billing__totals strong { color: var(--zt-ink-900); font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.billing__total strong { font-size: 28px; }
-.billing__panel { padding: 14px 18px; border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: var(--zt-panel); min-width: 0; }
-.billing__head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 8px; }
-.billing__head h2 { margin: 0; color: var(--zt-ink-900); font-size: 14px; font-weight: 600; }
+.billing__totals { display: grid; grid-template-columns: minmax(0, 1.35fr) repeat(3, minmax(0, 1fr)); gap: 12px; }
+.billing__totals > div { display: flex; flex-direction: column; gap: 4px; padding: 16px 20px; min-width: 0; border: 1px solid var(--zt-border); border-radius: 12px; background: var(--zt-panel); box-shadow: var(--zt-shadow); }
+.billing__totals > div.billing__total { background: var(--zt-hero-gradient); border-color: var(--el-color-primary-light-7); }
+.billing__totals span { color: var(--zt-ink-500); font-size: 12.5px; font-weight: 500; }
+.billing__totals strong { color: var(--zt-ink-900); font-size: 24px; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.billing__total strong { font-size: 28px; color: var(--zt-blue-600); }
+.billing__totals small { color: var(--zt-ink-500); font-size: 11.5px; }
+.billing__panel { padding: 16px 20px; border: 1px solid var(--zt-border); border-radius: 12px; background: var(--zt-panel); box-shadow: var(--zt-shadow); min-width: 0; }
+.billing__head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; }
+.billing__head h2 { margin: 0; color: var(--zt-ink-900); font-size: 15px; font-weight: 650; }
 .billing__head p, .billing__foot { margin: 4px 0 0; color: var(--zt-ink-500); font-size: 12px; line-height: 1.6; }
 .billing__foot { margin-top: 10px; }
 .billing__empty { margin: 0; padding: 48px 0; color: var(--zt-ink-500); font-size: 13px; text-align: center; }
-.billing__name { display: inline-flex; align-items: center; gap: 8px; }
-.billing__swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; }
-.billing__share { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
-.billing__share-bar { height: 8px; border-radius: 2px; background: var(--zt-blue-600); opacity: 0.55; flex: none; }
+.billing__name { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; }
+.billing__swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.billing__share { display: flex; align-items: center; gap: 10px; font-variant-numeric: tabular-nums; }
+.billing__share-track { width: 108px; height: 8px; border-radius: 999px; background: var(--zt-surface-subtle); overflow: hidden; flex: none; }
+.billing__share-bar { display: block; height: 100%; border-radius: 999px; background: var(--zt-blue-600); }
 .billing :deep(.el-table .cell) { font-variant-numeric: tabular-nums; }
 @media (max-width: 900px) {
   .billing__totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .billing__totals > div:nth-child(3) { border-left: 0; }
 }
 </style>

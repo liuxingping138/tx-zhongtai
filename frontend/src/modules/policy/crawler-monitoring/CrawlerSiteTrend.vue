@@ -4,20 +4,20 @@ import { computed, ref, watch } from 'vue'
 import { getCrawlerSiteTrend, type CrawlerSiteRef, type CrawlerTrendPoint } from '@/api/crawlerMonitoring'
 import { errorMessage } from '@/api/errors'
 import BaseChart from '@/components/charts/BaseChart.vue'
-import { chartPalette } from '@/components/charts/echarts'
+import { useChartPalette } from '@/components/charts/echarts'
 import { siteTrendOption, siteTrendSummary } from './charts'
 
 const props = defineProps<{ site: CrawlerSiteRef }>()
 
 const SITE_TREND_DAYS = 90
 const SITE_TREND_ERROR = '暂时无法获取该网站的采集曲线。'
-const palette = chartPalette(getComputedStyle(document.documentElement))
+const palette = useChartPalette()
 const points = ref<CrawlerTrendPoint[]>([])
 const loading = ref(false)
 const error = ref('')
 let sequence = 0
 
-const option = computed(() => siteTrendOption(points.value, palette))
+const option = computed(() => siteTrendOption(points.value, palette.value))
 const summary = computed(() => siteTrendSummary(points.value))
 
 async function load() {

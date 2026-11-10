@@ -3,15 +3,15 @@ import { computed } from 'vue'
 
 import type { ConfigUnit, CrawlerConfigReport } from '@/api/crawlerConfig'
 import BaseChart from '@/components/charts/BaseChart.vue'
-import { chartPalette } from '@/components/charts/echarts'
+import { useChartPalette } from '@/components/charts/echarts'
 import { UNITS, adjacentPeriods, isFuture, periodOption, periodRange } from './report'
 
 /** 配置数量：按周（近 12 周）、月（今年 12 个月）、季度（今年四个季度）、年看各期配置了多少；点柱子换到那一期并弹出各省配置。 */
 const props = defineProps<{ report: CrawlerConfigReport; periodName: string; loading: boolean }>()
 const emit = defineEmits<{ unit: [unit: ConfigUnit]; period: [from: string]; provinces: [] }>()
 
-const palette = chartPalette(getComputedStyle(document.documentElement))
-const periods = computed(() => periodOption(props.report.unit, props.report.periods, props.report.period_from, props.report.current_from, palette))
+const palette = useChartPalette()
+const periods = computed(() => periodOption(props.report.unit, props.report.periods, props.report.period_from, props.report.current_from, palette.value))
 const unitName = computed(() => UNITS.find(item => item.value === props.report.unit)?.name ?? '期')
 
 function pickPeriod(params: { dataIndex: number }): void {
@@ -85,9 +85,13 @@ const next = computed(() => adjacent.value.next)
 </template>
 
 <style scoped>
-.panel { padding: var(--zt-space-3) var(--zt-space-4) var(--zt-space-4); background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: var(--zt-radius); min-width: 0; }
-.panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--zt-space-3); flex-wrap: wrap; margin-bottom: var(--zt-space-2); }
-.tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.panel-head h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--zt-ink-900); }
+.panel { padding: 16px 20px; background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: 12px; box-shadow: var(--zt-shadow); min-width: 0; }
+.panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: nowrap; margin-bottom: 10px; }
+.panel-head > :first-child { flex: 1; min-width: 0; }
+.tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; flex-shrink: 0; }
+.panel-head h2 { margin: 0; font-size: 15px; font-weight: 650; color: var(--zt-ink-900); }
 .note { margin: 4px 0 0; font-size: 12px; line-height: 1.6; color: var(--zt-ink-500); }
+@media (max-width: 1024px) {
+  .panel-head { flex-wrap: wrap; }
+}
 </style>

@@ -1,5 +1,5 @@
 /** 每日费用堆叠柱：一天一根，按模型（或用途）分段，悬停看每段金额和当天合计。 */
-import type { ChartOption, ChartPalette } from '@/components/charts/echarts'
+import { tooltipStyle, type ChartOption, type ChartPalette } from '@/components/charts/echarts'
 import { money } from './billing'
 
 interface Series {
@@ -10,11 +10,20 @@ interface Series {
 
 export function costOption(days: string[], series: Series[], palette: ChartPalette): ChartOption {
   return {
-    legend: { left: 0, top: 0, itemWidth: 12, itemHeight: 12, textStyle: { color: palette.inkMuted } },
-    grid: { left: 8, right: 8, top: 44, bottom: 4, containLabel: true },
+    legend: {
+      left: 0,
+      top: 0,
+      itemWidth: 12,
+      itemHeight: 12,
+      itemGap: 22,
+      icon: 'roundRect',
+      textStyle: { color: palette.inkMuted, fontSize: 12.5, padding: [0, 0, 0, 2] },
+    },
+    grid: { left: 8, right: 8, top: 52, bottom: 4, containLabel: true },
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
+      ...tooltipStyle(palette),
       formatter: (params: { dataIndex: number; seriesName: string; value: number; marker: string }[]) => {
         const day = days[params[0]?.dataIndex ?? -1] ?? ''
         const parts = params.filter(item => item.value > 0)
@@ -33,7 +42,7 @@ export function costOption(days: string[], series: Series[], palette: ChartPalet
     yAxis: {
       type: 'value',
       name: '元',
-      nameTextStyle: { color: palette.inkMuted },
+      nameTextStyle: { color: palette.inkMuted, padding: [0, 24, 2, 0] },
       axisLabel: { color: palette.inkMuted },
       splitLine: { lineStyle: { color: palette.border, type: 'dashed' } },
     },

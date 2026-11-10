@@ -3,17 +3,17 @@ import { computed } from 'vue'
 
 import type { CrawlerOverviewData, SiteStatus } from '@/api/crawlerMonitoring'
 import BaseChart from '@/components/charts/BaseChart.vue'
-import { chartPalette } from '@/components/charts/echarts'
+import { useChartPalette } from '@/components/charts/echarts'
 import { healthOption, healthSlices, percent, rateDelta } from './charts'
 
 const props = defineProps<{ overview: CrawlerOverviewData; selected: SiteStatus[] }>()
 const emit = defineEmits<{ pick: [status: SiteStatus] }>()
 
-const palette = chartPalette(getComputedStyle(document.documentElement))
-const slices = computed(() => healthSlices(props.overview.health, props.overview.thresholds, palette))
+const palette = useChartPalette()
+const slices = computed(() => healthSlices(props.overview.health, props.overview.thresholds, palette.value))
 const total = computed(() => props.overview.cards.sites)
 const healthRate = computed(() => percent(props.overview.cards.normal, total.value))
-const option = computed(() => healthOption(slices.value, palette))
+const option = computed(() => healthOption(slices.value, palette.value))
 const rateChange = computed(() => {
   const base = props.overview.week_base
   return base ? rateDelta(props.overview.cards.normal, total.value, base.normal, base.sites) : null
