@@ -86,3 +86,22 @@ async def test_skipped_rules_are_kept_in_the_result(rows: list[Source]) -> None:
     result = await expand_app.expand(None, columns, set(), STAMP, apply=False)  # type: ignore[arg-type]
     assert [rule.rule_id for rule, _ in result.plan.duplicates] == ["r_main"]
     assert [(rule.rule_id, row.site_code) for rule, row in result.moved] == [("r_moved", "32070000013")]
+
+
+async def test_abnormal_site_expansion_keeps_abnormal_status(rows: list[Source]) -> None:
+    """人工标成异常的网站展开多条栏目时，新建行也保持异常，不强行改成已爬。"""
+
+    abn = _row("11010100009", "政策", crawler_status="异常", online_date="")
+    rows.append(abn)
+    c1 = ColumnRule("r1", "11010100009", "政策法规", "https://a.gov.cn/1", date(2026, 10, 28))
+    c2 = ColumnRule("r2", "11010100009", "通知公告", "https://a.gov.cn/2", date(2026, 10, 29))
+    added: list[Source] = []
+
+    class Session:
+        def add(self, row: Source) -> None:
+            added.append(row)
+
+    result = await expand_app.expand(Session(), [c1, c2], set(), STAMP)  # type: ignore[arg-type]
+    assert result.added == 1
+    assert abn.crawler_status == "异常"
+    assert added[0].crawler_status == "异常" and added[0].online_date == ""

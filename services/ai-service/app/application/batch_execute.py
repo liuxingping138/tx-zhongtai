@@ -153,7 +153,13 @@ async def _consume(job: Job, client: httpx.AsyncClient) -> None:
         myid = job.pending.popleft()
         prompt = fill_template(job.run.prompt_content, job.by_id[myid], job.code_text)
         result = await ask_row(
-            job.model, prompt, job.run.thinking, job.fields, client, format_retries=job.format_retries
+            job.model,
+            prompt,
+            job.run.thinking,
+            job.fields,
+            client,
+            format_retries=job.format_retries,
+            stop=job.stop,
         )
         result.myid = myid
         await _record(job, result)
@@ -344,7 +350,11 @@ async def _run_job(job: Job) -> None:
             while True:
                 await asyncio.gather(*(_consume(job, client) for _ in range(settings.batch_concurrency)))
                 # 停止（含到了费用上限）就不再开下一轮；全部成功或跑满三轮也结束。
-                if job.stop.is_set() or job.round >= job.rounds or not await _next_round(job):
+                if job.stop.is_set():
+                    if job.round < job.rounds and any(round_retry(item) for item in job.results.values()):
+                        job.rounds_cut = True
+                    break
+                if job.round >= job.rounds or not await _next_round(job):
                     break
     finally:
         watcher.cancel()

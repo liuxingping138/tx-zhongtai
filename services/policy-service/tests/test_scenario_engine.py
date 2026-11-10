@@ -280,6 +280,33 @@ async def test_a_merged_row_that_duplicates_another_row_of_the_same_policy_is_ma
     assert (row.scenario_state, row.relation_key) == ("重复", old_key)
 
 
+async def test_merge_works_when_candidate_has_no_rows(world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> None:
+    """新增候选没待套用行时也能验证码表目标存在并完成合并。"""
+
+    empty_candidate = _candidate(
+        key="新|另一新场景",
+        kind="新",
+        new_level=1,
+        scenario_l1="另一新场景",
+        scenario_l2="",
+        scenario_l3="",
+        industry_l1="",
+        industry_l2="",
+        industry_l3="",
+    )
+    world.candidates[empty_candidate.key] = empty_candidate
+    original = world.codebook
+
+    async def with_context(method: str, path: str, **kwargs: Any) -> list[dict[str, Any]]:
+        if path.endswith("/context"):
+            return [{"key": "target", "industries": ["交通行业"]}]
+        return await original(method, path, **kwargs)
+
+    monkeypatch.setattr(internal_clients, "codebook", with_context)
+    await scenario_decisions.merge(Session(), ACTOR, empty_candidate.id, version=1, target=list(TARGET[:2]))  # type: ignore[arg-type]
+    assert empty_candidate.status == "已合并"
+
+
 async def test_merge_only_into_existing_scenarios(world: SimpleNamespace) -> None:
     row = _row(AIR, ("智慧航空", "智慧机场工程建设管理", ""))
     world.rows = [row]

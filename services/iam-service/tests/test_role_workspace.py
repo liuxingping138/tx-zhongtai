@@ -141,6 +141,7 @@ async def test_add_members_skips_users_who_already_have_the_role(monkeypatch: py
 async def test_remove_member_keeps_other_roles(monkeypatch: pytest.MonkeyPatch) -> None:
     role_id, other = uuid.uuid4(), uuid.uuid4()
     user = SimpleNamespace(id=uuid.uuid4())
+    monkeypatch.setattr(user_admin.user_repo, "lock_superadmin_users", AsyncMock(return_value=[]))
     monkeypatch.setattr(user_admin.user_repo, "get_user_for_update", AsyncMock(return_value=user))
     monkeypatch.setattr(user_admin.user_repo, "list_user_role_ids", AsyncMock(return_value=[role_id, other]))
     set_roles = AsyncMock()

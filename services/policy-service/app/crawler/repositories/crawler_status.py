@@ -29,12 +29,12 @@ _BACKFILL = text(
         SELECT CAST(g AS date) AS d FROM generate_series(CAST(:start AS date), CAST(:end AS date), interval '1 day') g
     )
     INSERT INTO policy_crawler_status_daily (snapshot_date, sites, normal, watch, stale, computed_at)
-    SELECT d, COUNT(*),
-           COUNT(*) FILTER (WHERE d - active_date <= :normal_days),
-           COUNT(*) FILTER (WHERE d - active_date > :normal_days AND d - active_date <= :watch_days),
-           COUNT(*) FILTER (WHERE d - active_date > :watch_days),
+    SELECT d, COUNT(spans.active_date),
+           COUNT(spans.active_date) FILTER (WHERE d - active_date <= :normal_days),
+           COUNT(spans.active_date) FILTER (WHERE d - active_date > :normal_days AND d - active_date <= :watch_days),
+           COUNT(spans.active_date) FILTER (WHERE d - active_date > :watch_days),
            now()
-    FROM days JOIN spans ON spans.active_date <= d AND (spans.next_date IS NULL OR spans.next_date > d)
+    FROM days LEFT JOIN spans ON spans.active_date <= d AND (spans.next_date IS NULL OR spans.next_date > d)
     GROUP BY d
     ON CONFLICT (snapshot_date) DO UPDATE SET
         sites = EXCLUDED.sites, normal = EXCLUDED.normal, watch = EXCLUDED.watch,

@@ -112,12 +112,17 @@ async def clear_user_roles(session: AsyncSession, user_id: uuid.UUID) -> None:
 
 
 async def lock_superadmin_users(session: AsyncSession) -> list[User]:
+    # 先锁内置超级管理员角色行作序列化点，再按用户 ID 升序加锁，避免并发修改不同超管时死锁。
+    await session.execute(
+        select(Role.id).where(Role.code == SUPERADMIN_ROLE_CODE, Role.is_builtin.is_(True)).with_for_update()
+    )
     stmt = (
         select(User)
         .join(UserRole, UserRole.user_id == User.id)
         .join(Role, Role.id == UserRole.role_id)
         .where(Role.code == SUPERADMIN_ROLE_CODE, Role.is_builtin.is_(True))
-        .with_for_update()
+        .order_by(User.id)
+        .with_for_update(of=User)
     )
     result = await session.execute(stmt)
     return list(result.unique().scalars().all())

@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from platform_common.errors import ApiError
 
 from app.application.auth_service import normalize_username
+from app.domain.models import User
 from app.domain.password import validate_password_policy
 
 # 带 @：公司邮箱直接当登录账号。登录前统一转小写（normalize_username），大小写不影响。
@@ -86,3 +87,20 @@ def generate_temporary_password() -> str:
         candidate = secrets.token_urlsafe(18)
         if validate_password_policy(candidate) is None:
             return candidate
+
+
+def user_public(user: User) -> dict[str, object]:
+    return {
+        "id": str(user.id),
+        "username": user.username,
+        "display_name": user.display_name,
+        "phone": user.phone,
+        "email": user.email,
+        "status": user.status,
+        "must_change_password": user.must_change_password,
+        "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
+        "last_login_ip": user.last_login_ip,
+        "version": user.version,
+        "created_at": user.created_at.isoformat(),
+        "updated_at": user.updated_at.isoformat(),
+    }

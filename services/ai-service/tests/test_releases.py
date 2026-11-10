@@ -72,6 +72,9 @@ async def test_publish_requires_output_fields_and_a_fixed_model(monkeypatch: pyt
     _tables(monkeypatch, template(output_fields="行业", model_id=""), saved)
     with pytest.raises(ApiError, match="选定模型"):
         await releases.publish(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID)  # type: ignore[arg-type]
+    _tables(monkeypatch, template(content="用@【上传码表】分类", **READY), saved)
+    with pytest.raises(ApiError, match="码表是空的"):
+        await releases.publish(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID)  # type: ignore[arg-type]
     assert saved == []
 
 

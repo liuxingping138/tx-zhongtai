@@ -154,6 +154,27 @@ NAME_MAX = 255
 LEVELS = 3
 
 
+def _apply_rename(rows: list[Scenario], level: int, old_name: str, new_name: str, caller: Actor) -> None:
+    now = utcnow()
+    seen_hashes: set[str] = set()
+    for row in rows:
+        setattr(row, f"scenario_l{level}_name", new_name)
+        if row.scenario_tag == old_name:
+            row.scenario_tag = new_name
+        row.refresh_hash()
+        digest = getattr(row, "content_hash", None)
+        if digest:
+            if digest in seen_hashes:
+                raise ApiError(
+                    "改名后会出现完全相同的场景记录，请先清理重复行",
+                    code=ErrorCode.DUPLICATE,
+                    http_status=409,
+                )
+            seen_hashes.add(digest)
+        row.version += 1
+        row.updated_at, row.updated_by_id, row.updated_by_name = now, caller.id, caller.name
+
+
 async def rename(
     session: AsyncSession, caller: Actor, path: list[str], new_name: str, *, dry_run: bool
 ) -> dict[str, Any]:
@@ -170,22 +191,16 @@ async def rename(
         raise ApiError(
             f"新名称不能为空、最多 {NAME_MAX} 字、不能带「（新增）」", code=ErrorCode.VALIDATION_ERROR, http_status=422
         )
+    if not dry_run and new_name != names[-1]:
+        await repo.lock_scenario_codes(session)
     rows = await repo.rows_with_path(session, names, lock=not dry_run)
     if not rows:
         raise ApiError("码表里没有这个场景", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     if dry_run or new_name == names[-1]:
         return {"rows": len(rows)}
-    await repo.lock_scenario_codes(session)
     if await repo.path_exists(session, (*names[:-1], new_name)):
         raise ApiError(f"同一上级下已经有「{new_name}」，不能改成这个名字", code=ErrorCode.DUPLICATE, http_status=409)
-    level, now = len(names), utcnow()
-    for row in rows:
-        setattr(row, f"scenario_l{level}_name", new_name)
-        if row.scenario_tag == names[-1]:
-            row.scenario_tag = new_name
-        row.refresh_hash()
-        row.version += 1
-        row.updated_at, row.updated_by_id, row.updated_by_name = now, caller.id, caller.name
+    _apply_rename(rows, len(names), names[-1], new_name, caller)
     await session.flush()
     await enqueue_event(
         session,

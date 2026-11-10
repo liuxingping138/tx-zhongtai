@@ -208,6 +208,22 @@ def test_ingest_keeps_extra_next_to_changes_and_stays_under_the_size_limit() -> 
     fitted = ingest_changes(huge)
     assert fitted["record_ids_总数"] == 2000 and len(fitted["record_ids"]) < 2000
     assert len(json.dumps(fitted, ensure_ascii=False).encode()) <= 24_000
+    # 只有 changes 没有 extra、或只有 extra 没有 changes，超长时一样要截短。
+    huge_only_extra = {**huge, "changes": {}}
+    fitted_extra = ingest_changes(huge_only_extra)
+    assert (
+        fitted_extra["record_ids_总数"] == 2000 and len(json.dumps(fitted_extra, ensure_ascii=False).encode()) <= 24_000
+    )
+    huge_only_changes = {
+        **payload,
+        "changes": {"record_ids": huge["record_ids"]},
+    }
+    huge_only_changes.pop("record_ids")
+    fitted_changes = ingest_changes(huge_only_changes)
+    assert (
+        fitted_changes["record_ids_总数"] == 2000
+        and len(json.dumps(fitted_changes, ensure_ascii=False).encode()) <= 24_000
+    )
 
 
 @pytest.mark.asyncio

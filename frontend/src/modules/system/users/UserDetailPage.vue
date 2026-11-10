@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, Delete, Document, Key, Lock, SwitchButton, Unlock } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -34,9 +34,12 @@ const accountActive = ref(true)
 const loading = ref(false)
 const loadError = ref('')
 const permissionError = ref('')
-const saveError = ref('')
+const infoSaveError = ref('')
+const roleSaveError = ref('')
 
-const saving = ref(false)
+const infoSaving = ref(false)
+const roleSaving = ref(false)
+const pendingRoleChange = ref(false)
 const grantsVisible = ref(false)
 
 const canManage = computed(() => user.value ? canManageRow(user.value, canEditUsers.value) : false)
@@ -50,6 +53,10 @@ async function load() {
   if (!userId.value) return
   loading.value = true
   loadError.value = ''
+  permissionError.value = ''
+  infoSaveError.value = ''
+  roleSaveError.value = ''
+  pendingRoleChange.value = false
   try {
     const [detail, allRoles, permsResult] = await Promise.all([
       getUser(userId.value),
@@ -71,9 +78,9 @@ async function load() {
 }
 
 async function onSaveInfo(formData: { display_name: string; phone: string; email: string }) {
-  if (!user.value || saving.value) return
-  saving.value = true
-  saveError.value = ''
+  if (!user.value || infoSaving.value) return
+  infoSaving.value = true
+  infoSaveError.value = ''
   try {
     const saved = await updateUser(user.value.id, {
       ...formData,
@@ -81,28 +88,35 @@ async function onSaveInfo(formData: { display_name: string; phone: string; email
     })
     user.value = { ...user.value, ...saved }
     ElMessage.success('已保存个人信息')
+    if (user.value.id === auth.user?.id) void auth.loadProfile()
   } catch (error) {
-    saveError.value = saveFailureText(error, false)
+    infoSaveError.value = saveFailureText(error, false)
   } finally {
-    saving.value = false
+    infoSaving.value = false
   }
 }
 
 async function onSaveRoles(roleIds: string[]) {
-  if (!user.value || saving.value || !canGrant.value) return
-  saving.value = true
-  saveError.value = ''
+  if (!user.value || roleSaving.value || !canGrant.value) return
+  roleSaving.value = true
+  roleSaveError.value = ''
   try {
     const saved = await replaceUserRoles(user.value.id, { role_ids: roleIds, version: user.value.version })
     user.value = { ...user.value, ...saved }
-    const perms = await getUserPermissions(user.value.id)
-    permissions.value = perms.items
-    accountActive.value = perms.account_active
+    pendingRoleChange.value = false
     ElMessage.success('已保存角色分配，对方下次操作时即生效')
+    try {
+      const perms = await getUserPermissions(user.value.id)
+      permissions.value = perms.items
+      accountActive.value = perms.account_active
+      permissionError.value = ''
+    } catch (permErr) {
+      permissionError.value = errorMessage(permErr, '无法加载实际权限')
+    }
   } catch (error) {
-    saveError.value = saveFailureText(error, false)
+    roleSaveError.value = saveFailureText(error, false)
   } finally {
-    saving.value = false
+    roleSaving.value = false
   }
 }
 
@@ -124,10 +138,15 @@ const actions = useUserActions({
 function grantsSaved(result: { count: number; version: number }) {
   if (!user.value) return
   user.value = { ...user.value, version: result.version, direct_grant_count: result.count }
-  void getUserPermissions(user.value.id).then(res => {
-    permissions.value = res.items
-    accountActive.value = res.account_active
-  })
+  void getUserPermissions(user.value.id)
+    .then(res => {
+      permissions.value = res.items
+      accountActive.value = res.account_active
+      permissionError.value = ''
+    })
+    .catch(err => {
+      permissionError.value = errorMessage(err, '无法加载实际权限')
+    })
 }
 
 function openAudit() {
@@ -135,9 +154,9 @@ function openAudit() {
   void router.push({ name: 'system-audit', state: { auditActor: user.value.display_name } })
 }
 
-onMounted(() => {
+watch(userId, () => {
   void load()
-})
+}, { immediate: true })
 </script>
 
 <template>
@@ -252,8 +271,8 @@ onMounted(() => {
             <UserInfoForm
               :user="user"
               :can-edit="canEditInfo"
-              :saving="saving"
-              :save-error="saveError"
+              :saving="infoSaving"
+              :save-error="infoSaveError"
               @save="onSaveInfo"
             />
           </section>
@@ -267,9 +286,10 @@ onMounted(() => {
               :roles="roles"
               :can-grant="canGrant"
               :direct-count="directCount"
-              :saving="saving"
-              :save-error="saveError"
+              :saving="roleSaving"
+              :save-error="roleSaveError"
               @save="onSaveRoles"
+              @dirty="pendingRoleChange = $event"
               @open-grants="grantsVisible = true"
             />
           </section>
@@ -279,7 +299,7 @@ onMounted(() => {
           <EffectivePermissions
             :permissions="permissions"
             :account-active="accountActive"
-            :pending-role-change="false"
+            :pending-role-change="pendingRoleChange"
             :error="permissionError"
           />
         </div>

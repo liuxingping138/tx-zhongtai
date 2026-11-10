@@ -110,3 +110,14 @@ async def test_ai_text_goes_to_every_row_then_a_person_confirms(store: list[Any]
     )
     with pytest.raises(ApiError, match="不在待确认"):
         await scenario_enrich.confirm(_Session(), actor, path, {})  # type: ignore[arg-type]
+
+
+async def test_backlog_ignores_empty_or_gapped_scenario_names(
+    store: list[Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """三级场景全空或中间跳级时，不能拼出 scenario_l0_desc 崩掉整个列表，也不把三级名错当二级。"""
+
+    store.extend([_row("交通行业", ("", "", ""), "待补充"), _row("交通行业", ("智慧政务", "", "一网通办"), "待补充")])
+    items = await scenario_enrich.backlog(_Session(), 10)  # type: ignore[arg-type]
+    assert [i["key"] for i in items] == ["智慧航空 > 智慧机场工程建设管理", "智慧政务"]
+    assert scenario_enrich._level_desc(store[0], 0) == ""

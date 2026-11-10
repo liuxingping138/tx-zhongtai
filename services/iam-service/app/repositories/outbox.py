@@ -61,8 +61,7 @@ async def claim_batch(
     current = now or utcnow()
     expired_lease = and_(
         OutboxEvent.status == OutboxStatus.DELIVERING,
-        OutboxEvent.lease_until.is_not(None),
-        OutboxEvent.lease_until < current,
+        or_(OutboxEvent.lease_until.is_(None), OutboxEvent.lease_until < current),
     )
     claimable = or_(
         OutboxEvent.status.in_((OutboxStatus.PENDING, OutboxStatus.FAILED)),
@@ -88,7 +87,11 @@ async def claim_batch(
 async def mark_delivered(session: AsyncSession, event_id: uuid.UUID, expected_lease: datetime) -> bool:
     result = await session.execute(
         update(OutboxEvent)
-        .where(OutboxEvent.event_id == event_id, OutboxEvent.lease_until == expected_lease)
+        .where(
+            OutboxEvent.event_id == event_id,
+            OutboxEvent.status == OutboxStatus.DELIVERING,
+            OutboxEvent.lease_until == expected_lease,
+        )
         .values(status=OutboxStatus.DELIVERED, lease_until=None, error_message=None, next_retry_at=None)
     )
     return int(getattr(result, "rowcount", 0) or 0) == 1
@@ -105,7 +108,11 @@ async def mark_retry(
 ) -> bool:
     result = await session.execute(
         update(OutboxEvent)
-        .where(OutboxEvent.event_id == event_id, OutboxEvent.lease_until == expected_lease)
+        .where(
+            OutboxEvent.event_id == event_id,
+            OutboxEvent.status == OutboxStatus.DELIVERING,
+            OutboxEvent.lease_until == expected_lease,
+        )
         .values(
             status=status,
             lease_until=None,
@@ -131,7 +138,7 @@ async def replay(
         stmt = stmt.where(OutboxEvent.event_id == event_id)
     if event_type:
         stmt = stmt.where(OutboxEvent.event_type == event_type)
-    rows = list((await session.execute(stmt)).scalars().all())
+    rows = list((await session.execute(stmt.with_for_update(skip_locked=True))).scalars().all())
     now = utcnow()
     for event in rows:
         event.status = OutboxStatus.PENDING

@@ -141,8 +141,12 @@ class Scheduler:
                     "next_run_at": row.next_run_at if row.enabled else None,
                     "version": row.version,
                     "watermark": await job.watermark(session) if job.watermark else None,
-                    "active_run": self.run_data(active) if active else None,
-                    "last_run": self.run_data(last) if last else None,
+                    "active_run": {**self.run_data(active), "result": await self.result_of(session, active)}
+                    if active
+                    else None,
+                    "last_run": {**self.run_data(last), "result": await self.result_of(session, last)}
+                    if last
+                    else None,
                 }
             )
         return {

@@ -42,6 +42,15 @@ async function onSubmit() {
     loading.value = false
   }
 }
+
+function goBack() {
+  const state = window.history.state as { back?: unknown }
+  if (state?.back) {
+    router.back()
+    return
+  }
+  void router.push({ name: 'home' })
+}
 </script>
 
 <template>
@@ -51,7 +60,7 @@ async function onSubmit() {
         <span class="change-password__badge">
           <el-icon><Lock /></el-icon>账号安全中心
         </span>
-        <h1>首次登录请修改密码</h1>
+        <h1>{{ auth.mustChangePassword ? '首次登录请修改密码' : '修改登录密码' }}</h1>
         <p class="change-password__desc">
           {{ auth.mustChangePassword ? '当前账号必须修改初始密码后才能使用系统。' : '定期更新高强度登录密码，保障企业数据资产安全。' }}
         </p>
@@ -153,7 +162,7 @@ async function onSubmit() {
         <div class="change-password__actions">
           <el-button
             v-if="!auth.mustChangePassword"
-            @click="router.back()"
+            @click="goBack"
           >
             返回
           </el-button>
@@ -163,7 +172,7 @@ async function onSubmit() {
             :loading="loading"
             native-type="submit"
           >
-            保存并进入系统
+            {{ auth.mustChangePassword ? '保存并进入系统' : '保存新密码' }}
           </el-button>
         </div>
       </el-form>

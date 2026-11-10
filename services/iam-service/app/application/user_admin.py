@@ -16,6 +16,7 @@ from app.application.user_fields import (
     generate_temporary_password,
     normalize_email,
     normalize_phone,
+    user_public,
     validate_display_name,
     validate_username,
 )
@@ -31,23 +32,6 @@ from app.repositories import roles as role_repo
 from app.repositories import sessions as session_repo
 from app.repositories import user_grants as grant_repo
 from app.repositories import users as user_repo
-
-
-def user_public(user: User) -> dict[str, object]:
-    return {
-        "id": str(user.id),
-        "username": user.username,
-        "display_name": user.display_name,
-        "phone": user.phone,
-        "email": user.email,
-        "status": user.status,
-        "must_change_password": user.must_change_password,
-        "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
-        "last_login_ip": user.last_login_ip,
-        "version": user.version,
-        "created_at": user.created_at.isoformat(),
-        "updated_at": user.updated_at.isoformat(),
-    }
 
 
 async def assert_can_manage_target(session: AsyncSession, actor: User, target: User) -> None:
@@ -81,8 +65,10 @@ async def _guard_last_superadmin(
     *,
     new_status: str | None = None,
     remove_role: bool = False,
+    locked: list[User] | None = None,
 ) -> None:
-    locked = await user_repo.lock_superadmin_users(session)
+    if locked is None:
+        locked = await user_repo.lock_superadmin_users(session)
     if not any(row.id == target.id for row in locked) and not remove_role:
         return
     remaining = remaining_loginable_superadmins(
@@ -200,16 +186,19 @@ async def create_user(session: AsyncSession, actor: User, data: NewUser) -> tupl
 async def update_user(
     session: AsyncSession, actor: User, user_id: uuid.UUID, changes: UserChanges
 ) -> dict[str, object]:
+    status = changes.status
+    locked_superadmins: list[User] | None = None
+    if status is not None and status != UserStatus.ACTIVE:
+        if status not in {UserStatus.ACTIVE, UserStatus.DISABLED}:
+            raise ApiError("无效的用户状态")
+        locked_superadmins = await user_repo.lock_superadmin_users(session)
     user = _require_live(await user_repo.get_user_for_update(session, user_id))
     if user.version != changes.version:
         raise VersionConflictError()
     await assert_can_manage_target(session, actor, user)
-    status = changes.status
     if status is not None and status != user.status:
-        if status not in {UserStatus.ACTIVE, UserStatus.DISABLED}:
-            raise ApiError("无效的用户状态")
         if status != UserStatus.ACTIVE:
-            await _guard_last_superadmin(session, user, new_status=status)
+            await _guard_last_superadmin(session, user, new_status=status, locked=locked_superadmins)
         user.status = status
         if status != UserStatus.ACTIVE:
             await session_repo.revoke_user_sessions(session, user.id)
@@ -267,11 +256,12 @@ async def revoke_sessions(session: AsyncSession, actor: User, user_id: uuid.UUID
 async def delete_user(session: AsyncSession, actor: User, user_id: uuid.UUID) -> None:
     """逻辑删除：账号从列表消失、不能登录，行仍留着对操作日志。同名用户名可以再建。"""
 
-    user = _require_live(await user_repo.get_user_for_update(session, user_id))
-    if actor.id == user.id:
+    if actor.id == user_id:
         raise PermissionDeniedError("不能删除当前登录的账号")
+    locked_superadmins = await user_repo.lock_superadmin_users(session)
+    user = _require_live(await user_repo.get_user_for_update(session, user_id))
     await assert_can_manage_target(session, actor, user)
-    await _guard_last_superadmin(session, user, new_status=UserStatus.DELETED)
+    await _guard_last_superadmin(session, user, new_status=UserStatus.DELETED, locked=locked_superadmins)
     user.status = UserStatus.DELETED
     user.updated_at = utcnow()
     user.version += 1
@@ -298,17 +288,18 @@ async def replace_roles(
     *,
     version: int,
 ) -> dict[str, object]:
+    locked_superadmins = await user_repo.lock_superadmin_users(session)
     user = _require_live(await user_repo.get_user_for_update(session, user_id))
     if user.version != version:
         raise VersionConflictError()
-    return await _set_roles(session, actor, user, role_ids)
+    return await _set_roles(session, actor, user, role_ids, locked_superadmins=locked_superadmins)
 
 
 async def add_role_members(session: AsyncSession, actor: User, role_id: uuid.UUID, user_ids: list[uuid.UUID]) -> int:
     """从角色一侧加人：在每个用户现有角色上追加该角色，规则与「给用户分配角色」完全一致。"""
 
     added = 0
-    for user_id in dict.fromkeys(user_ids):
+    for user_id in sorted(dict.fromkeys(user_ids)):
         user = _require_live(await user_repo.get_user_for_update(session, user_id))
         current = await user_repo.list_user_role_ids(session, user.id)
         if role_id in current:
@@ -319,11 +310,14 @@ async def add_role_members(session: AsyncSession, actor: User, role_id: uuid.UUI
 
 
 async def remove_role_member(session: AsyncSession, actor: User, role_id: uuid.UUID, user_id: uuid.UUID) -> None:
+    locked_superadmins = await user_repo.lock_superadmin_users(session)
     user = _require_live(await user_repo.get_user_for_update(session, user_id))
     current = await user_repo.list_user_role_ids(session, user.id)
     if role_id not in current:
         return
-    await _set_roles(session, actor, user, [item for item in current if item != role_id])
+    await _set_roles(
+        session, actor, user, [item for item in current if item != role_id], locked_superadmins=locked_superadmins
+    )
 
 
 async def effective_permissions(session: AsyncSession, user_id: uuid.UUID) -> dict[str, object]:
@@ -358,7 +352,14 @@ async def effective_permissions(session: AsyncSession, user_id: uuid.UUID) -> di
     return {"account_active": user.status == UserStatus.ACTIVE, "items": items}
 
 
-async def _set_roles(session: AsyncSession, actor: User, user: User, role_ids: list[uuid.UUID]) -> dict[str, object]:
+async def _set_roles(
+    session: AsyncSession,
+    actor: User,
+    user: User,
+    role_ids: list[uuid.UUID],
+    *,
+    locked_superadmins: list[User] | None = None,
+) -> dict[str, object]:
     await assert_can_manage_target(session, actor, user)
     unique_ids = list(dict.fromkeys(role_ids))
     roles = await role_repo.get_roles_by_ids(session, unique_ids)
@@ -367,7 +368,7 @@ async def _set_roles(session: AsyncSession, actor: User, user: User, role_ids: l
     had_super = await user_repo.user_has_builtin_superadmin(session, user.id)
     will_have_super = any(role.code == SUPERADMIN_ROLE_CODE and role.is_builtin for role in roles)
     if had_super and not will_have_super:
-        await _guard_last_superadmin(session, user, remove_role=True)
+        await _guard_last_superadmin(session, user, remove_role=True, locked=locked_superadmins)
     before_ids = await user_repo.list_user_role_ids(session, user.id)
     before = {role.id: role.name for role in await role_repo.get_roles_by_ids(session, list(before_ids))}
     after = {role.id: role.name for role in roles}

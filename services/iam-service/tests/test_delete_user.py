@@ -43,6 +43,7 @@ async def test_delete_user_keeps_the_row_and_revokes_access(monkeypatch: pytest.
 
     monkeypatch.setattr(user_admin, "assert_can_manage_target", AsyncMock())
     monkeypatch.setattr(user_admin, "_guard_last_superadmin", AsyncMock())
+    monkeypatch.setattr(user_admin.user_repo, "lock_superadmin_users", AsyncMock(return_value=[]))
     monkeypatch.setattr(user_admin.user_repo, "get_user_for_update", get_for_update)
     monkeypatch.setattr(user_admin.user_repo, "clear_user_roles", AsyncMock())
     monkeypatch.setattr(user_admin.grant_repo, "clear_for_user", AsyncMock())

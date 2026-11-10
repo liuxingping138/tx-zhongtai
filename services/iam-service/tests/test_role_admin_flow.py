@@ -195,6 +195,17 @@ class TestReplaceGrants:
                 object(), ACTOR, env.role.id, version=1, grants=[("system.permissions", "FULL")]
             )  # type: ignore[arg-type]
 
+    async def test_duplicate_resource_code_is_rejected_before_writing(self, env: SimpleNamespace) -> None:
+        with pytest.raises(ApiError, match="出现了两次"):
+            await role_admin.replace_grants(
+                object(),
+                ACTOR,
+                env.role.id,  # type: ignore[arg-type]
+                version=1,
+                grants=[("policy.sources", "READ"), ("policy.sources", "FULL")],
+            )
+        assert env.replaced is None
+
 
 class TestCopyRole:
     async def test_copy_keeps_grants_but_drops_permission_assignment_and_unpublished(

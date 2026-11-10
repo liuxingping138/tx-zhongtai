@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from app.aitag.domain.models import PolicyAiRun, PolicyAiTask
+from app.aitag.domain.models import PolicyAiRun, PolicyAiTask, SkippedSource
 from app.common.models import OutboxEvent
 from app.crawlconfig.domain.models import ConfigSyncRun
 from app.crawler.domain.models import (
     CrawlerSite,
     CrawlerSiteDaily,
+    CrawlerStatusDaily,
     CrawlerSyncRun,
 )
 from app.policy.domain.candidates import ScenarioCandidate
@@ -19,6 +20,7 @@ __all__ = [
     "ConfigSyncRun",
     "CrawlerSite",
     "CrawlerSiteDaily",
+    "CrawlerStatusDaily",
     "CrawlerSyncRun",
     "Interpretation",
     "OutboxEvent",
@@ -28,5 +30,6 @@ __all__ = [
     "ScheduledJob",
     "ScheduledRun",
     "SchedulerHeartbeat",
+    "SkippedSource",
     "Source",
 ]

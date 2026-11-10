@@ -15,6 +15,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   save: [roleIds: string[]]
+  dirty: [changed: boolean]
   'open-grants': []
 }>()
 
@@ -28,6 +29,10 @@ const dirty = computed(() => {
   const saved = [...(props.user.role_ids ?? [])].sort()
   return JSON.stringify(saved) !== JSON.stringify([...draft.value].sort())
 })
+
+watch(dirty, (val) => {
+  emit('dirty', val)
+}, { immediate: true })
 
 const activeRoleCount = computed(() => (props.user.roles ?? []).filter(r => r.status === 'active').length)
 

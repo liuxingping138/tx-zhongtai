@@ -146,7 +146,7 @@ async def update_scenario(
         raise NotFoundError("行业场景码表记录不存在")
     if data.get("version") != row.version:
         raise VersionConflictError()
-    payload = {field: str(data.get(field, getattr(row, field) or "")) for field in SCENARIO_FIELDS}
+    payload = {field: str((data[field] if field in data else getattr(row, field)) or "") for field in SCENARIO_FIELDS}
     _too_long({k: payload[k].strip() for k in SCENARIO_FIELDS})
     digest = content_hash({k: payload[k].strip() for k in SCENARIO_FIELDS}, SCENARIO_FIELDS)
     existing = await repo.get_by_hash(session, digest)

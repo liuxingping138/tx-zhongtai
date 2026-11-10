@@ -24,6 +24,9 @@ _CODE_TITLES = {
 }
 
 
+_HEADER_DELIMITERS = frozenset(" \t(（[【/-:：*·")
+
+
 def _header_role(header: str) -> str | None:
     raw = (header or "").replace("\n", " ").strip()
     if not raw:
@@ -31,7 +34,9 @@ def _header_role(header: str) -> str | None:
     short = raw.split()[0]
     for role, titles in _ROLE_HEADERS:
         for title in titles:
-            if title in (raw, short) or raw.startswith(title):
+            if title in (raw, short):
+                return role
+            if raw.startswith(title) and raw[len(title)] in _HEADER_DELIMITERS:
                 return role
     return None
 

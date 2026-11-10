@@ -123,15 +123,15 @@ async def update_policy_type(
         raise NotFoundError("政策类型不存在")
     if data.get("version") != row.version:
         raise VersionConflictError()
-    type_name = str(data.get("type_name", row.type_name)).strip()
+    type_name = str(data.get("type_name", row.type_name) or "").strip()
     if not type_name:
         raise ApiError("政策类型不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    _too_long({k: data.get(k, getattr(row, k)) for k in _FIELDS})
+    _too_long({k: (data[k] if k in data else getattr(row, k)) or "" for k in _FIELDS})
     if type_name != row.type_name:
         existing = await repo.get_by_name(session, type_name)
         if existing and existing.id != row.id:
             raise ApiError("政策类型已存在", code=ErrorCode.DUPLICATE, http_status=409)
-    changes = _apply_fields(row, {k: str(data.get(k, getattr(row, k))) for k in _FIELDS})
+    changes = _apply_fields(row, {k: str((data[k] if k in data else getattr(row, k)) or "") for k in _FIELDS})
     if not changes:
         return _to_out(row)
     row.version += 1

@@ -199,28 +199,15 @@ async def list_grants(session: AsyncSession, role_id: uuid.UUID) -> dict[str, ob
     }
 
 
-async def replace_grants(
+async def _normalize_grants(
     session: AsyncSession,
     actor: User,
-    role_id: uuid.UUID,
-    *,
-    version: int,
+    role: Role,
     grants: list[tuple[str, str]],
-) -> dict[str, object]:
-    role = await role_repo.get_role_for_update(session, role_id)
-    if role is None:
-        raise NotFoundError("角色不存在")
-    if role.version != version:
-        raise VersionConflictError()
-    if role.is_builtin and role.code == SUPERADMIN_ROLE_CODE:
-        # 超级管理员固定拥有全部模块的全部功能，由 make seed 维护，页面上也是只读。
-        # 放开修改的话，删掉它的「权限分配」后就再没人能给别人分配角色。
-        raise PermissionDeniedError("超级管理员角色固定拥有全部权限，不能修改授权")
-
-    before = {
-        resource.code: (resource.name, str(grant.level))
-        for grant, resource in await role_repo.list_role_grants(session, role.id)
-    }
+) -> tuple[list[tuple[uuid.UUID, str]], dict[str, tuple[str, str]]]:
+    codes = [code for code, level in grants if level != "NONE"]
+    if len(set(codes)) != len(codes):
+        raise ApiError("同一个模块出现了两次，请刷新后重新选择")
     after: dict[str, tuple[str, str]] = {}
     normalized: list[tuple[uuid.UUID, str]] = []
     for resource_code, level in grants:
@@ -247,6 +234,32 @@ async def replace_grants(
             raise PermissionDeniedError("系统权限分配仅能授予超级管理员角色")
         normalized.append((resource.id, str(level)))
         after[resource.code] = (resource.name, str(level))
+    return normalized, after
+
+
+async def replace_grants(
+    session: AsyncSession,
+    actor: User,
+    role_id: uuid.UUID,
+    *,
+    version: int,
+    grants: list[tuple[str, str]],
+) -> dict[str, object]:
+    role = await role_repo.get_role_for_update(session, role_id)
+    if role is None:
+        raise NotFoundError("角色不存在")
+    if role.version != version:
+        raise VersionConflictError()
+    if role.is_builtin and role.code == SUPERADMIN_ROLE_CODE:
+        # 超级管理员固定拥有全部模块的全部功能，由 make seed 维护，页面上也是只读。
+        # 放开修改的话，删掉它的「权限分配」后就再没人能给别人分配角色。
+        raise PermissionDeniedError("超级管理员角色固定拥有全部权限，不能修改授权")
+
+    before = {
+        resource.code: (resource.name, str(grant.level))
+        for grant, resource in await role_repo.list_role_grants(session, role.id)
+    }
+    normalized, after = await _normalize_grants(session, actor, role, grants)
 
     await role_repo.replace_role_grants(session, role.id, normalized, updated_by=actor.id)
     role.updated_at = utcnow()

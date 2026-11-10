@@ -111,6 +111,8 @@ async def absorb(
 async def rename_impact(session: AsyncSession, target: tuple[str, ...]) -> dict[str, int]:
     """合并时让原场景改用新说法，会改多少行：码表里这个场景的行（各行业、各客群）、解读里用这个场景的行。"""
 
+    if not target:
+        raise ApiError("请选择目标场景", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     preview = await internal_clients.codebook(
         "POST", "/internal/v1/scenarios/rename", json={"path": list(target), "new_name": target[-1], "dry_run": True}
     )
@@ -120,7 +122,14 @@ async def rename_impact(session: AsyncSession, target: tuple[str, ...]) -> dict[
     }
 
 
-async def rename_target(session: AsyncSession, actor: Actor, target: tuple[str, ...], new_name: str) -> tuple[str, ...]:
+async def rename_target(
+    session: AsyncSession,
+    actor: Actor,
+    target: tuple[str, ...],
+    new_name: str,
+    *,
+    exclude_id: uuid.UUID | None = None,
+) -> tuple[str, ...]:
     """把已有场景改名：先改码表（同一上级下已有这个名字会被拒绝），再改解读行和挂在它下面的待审场景。返回改名后的路径。"""
 
     renamed = (*target[:-1], new_name)
@@ -135,7 +144,10 @@ async def rename_target(session: AsyncSession, actor: Actor, target: tuple[str, 
     level = len(target)
     # 解读行改了名，没编码的行关联主键里带着名称，要重算
     await engine.rekey(session, await repo.codeless_rows_with_prefix(session, renamed))
+    assigned: set[str] = set()
     for candidate in await repo.candidates_with_prefix(session, target):
+        if exclude_id is not None and candidate.id == exclude_id:
+            continue
         setattr(candidate, f"scenario_l{level}", new_name)
         key = candidate_key(
             candidate.kind,
@@ -144,6 +156,7 @@ async def rename_target(session: AsyncSession, actor: Actor, target: tuple[str, 
             candidate.new_level,
         )
         # 规则跟着改名，以后 AI 按新名称写的也归到它；新名称的规则已经有了就留着旧的
-        if key != candidate.key and not await repo.key_taken(session, key):
+        if key != candidate.key and key not in assigned and not await repo.key_taken(session, key):
             candidate.key = key
+            assigned.add(key)
     return renamed

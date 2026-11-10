@@ -211,7 +211,10 @@ async def update_interpretation(
         raise NotFoundError("政策解读不存在")
     if data.get("version") != row.version:
         raise VersionConflictError()
-    payload = {field: str(data.get(field, getattr(row, field) or "")) for field in INTERPRETATION_WRITE_FIELDS}
+    payload = {
+        field: str((data[field] if field in data else getattr(row, field)) or "")
+        for field in INTERPRETATION_WRITE_FIELDS
+    }
     # 请求没带数据状态时沿用原值，避免旧客户端保存一次就把「人工验证」冲回「待验证」。
     if not payload["data_status"].strip():
         payload["data_status"] = row.data_status

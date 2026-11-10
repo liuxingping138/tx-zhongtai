@@ -26,14 +26,30 @@ def _path(raw: Any) -> tuple[str, ...]:
     return tuple(str(name or "").strip() for name in (raw or []) if str(name or "").strip())
 
 
+def _row_path(row: Scenario) -> tuple[str, ...]:
+    """从一级开始取连续非空的场景层级：空缺或全空的不拼成错位路径。"""
+
+    out: list[str] = []
+    for name in (row.scenario_l1_name, row.scenario_l2_name, row.scenario_l3_name):
+        cleaned = str(name or "").strip()
+        if not cleaned:
+            break
+        out.append(cleaned)
+    return tuple(out)
+
+
 def _level_desc(row: Scenario, level: int) -> str:
+    if level not in (1, 2, 3):
+        return ""
     return str(getattr(row, f"scenario_l{level}_desc") or "")
 
 
 def _group(rows: list[Scenario]) -> dict[tuple[str, ...], list[Scenario]]:
     grouped: dict[tuple[str, ...], list[Scenario]] = {}
     for row in rows:
-        path = _path([row.scenario_l1_name, row.scenario_l2_name, row.scenario_l3_name])
+        path = _row_path(row)
+        if not path:
+            continue
         grouped.setdefault(path, []).append(row)
     return grouped
 
@@ -81,11 +97,12 @@ async def count(session: AsyncSession, status: str) -> int:
 
 def _apply(rows: list[Scenario], path: tuple[str, ...], values: dict[str, Any], actor: Actor, status: str) -> None:
     level, now = len(path), utcnow()
+    seen_hashes: set[str] = set()
     for row in rows:
         for field in DESC_FIELDS:
             if values.get(field) is not None:
                 setattr(row, field, str(values[field]).strip()[:TEXT_MAX])
-        if values.get("level_desc") is not None:
+        if values.get("level_desc") is not None and level in (1, 2, 3):
             setattr(row, f"scenario_l{level}_desc", str(values["level_desc"]).strip()[:TEXT_MAX])
         if not row.scenario_tag:
             row.scenario_tag = path[-1]
@@ -93,6 +110,15 @@ def _apply(rows: list[Scenario], path: tuple[str, ...], values: dict[str, Any], 
             row.scenario_level = str(level)
         row.enrich_status = status
         row.refresh_hash()
+        digest = getattr(row, "content_hash", None)
+        if digest:
+            if digest in seen_hashes:
+                raise ApiError(
+                    "补充描述后有两条场景记录完全相同，请先清理重复行",
+                    code=ErrorCode.DUPLICATE,
+                    http_status=409,
+                )
+            seen_hashes.add(digest)
         row.version += 1
         row.updated_at, row.updated_by_id, row.updated_by_name = now, actor.id, actor.name
 

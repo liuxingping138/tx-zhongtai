@@ -41,6 +41,7 @@ from app.common import internal_clients
 from app.common.audit_emit import enqueue_event
 from app.common.errors import UserFacingError
 from app.core.database import SessionLocal
+from app.policy.application import scenario_engine
 from app.policy.domain.models import BASE_TAG_FIELDS, content_hash
 
 __all__ = ["abandon", "day_start", "policy_type_names", "run_batch", "run_summary", "summary", "today"]
@@ -59,6 +60,18 @@ SOURCE_SETTLE_DAYS = 2
 
 async def policy_type_names() -> list[str]:
     return await internal_clients.policy_type_names()
+
+
+async def _drop_stale_interpretations(session: Any, source_ids: list[str]) -> None:
+    if not source_ids:
+        return
+    stale = await repo.ai_interpretations(session, source_ids)
+    doomed = [item for rows_ in stale.values() for item in rows_ if untouched(item)]
+    affected = {cid for item in doomed if (cid := getattr(item, "candidate_id", None)) is not None}
+    await repo.delete_rows(session, doomed)
+    if affected:
+        await session.flush()
+        await scenario_engine.recount(session, affected)
 
 
 async def _save_types(
@@ -111,9 +124,7 @@ async def _save_types(
                 if was_interpreted and values["need_interpret"] != "是":
                     no_longer_interpreted.append(str(row["content_id"]))
         await repo.mark_skipped(session, copies, rules.COPY_SKIPPED, utcnow())
-        if no_longer_interpreted:
-            stale = await repo.ai_interpretations(session, no_longer_interpreted)
-            await repo.delete_rows(session, [item for rows_ in stale.values() for item in rows_ if untouched(item)])
+        await _drop_stale_interpretations(session, no_longer_interpreted)
         locked = await repo.task(session, "type", lock=True)
         # 重新判断的是列表上点名的旧政策，不动按天读取的进度；这一批跑的时候有人在设置里改了起始日期，
         # 也不能按这一批读到的位置把它改回去。

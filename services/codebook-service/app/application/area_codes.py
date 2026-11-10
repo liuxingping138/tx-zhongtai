@@ -135,7 +135,9 @@ async def update_area_code(
         raise NotFoundError("省市区编码记录不存在")
     if data.get("version") != row.version:
         raise VersionConflictError()
-    payload = {field: str(data.get(field, getattr(row, field) or "")).strip() for field in AREA_CODE_FIELDS}
+    payload = {
+        field: str((data[field] if field in data else getattr(row, field)) or "").strip() for field in AREA_CODE_FIELDS
+    }
     _too_long(payload)
     county_id = _require_county_id(payload)
     existing = await repo.get_by_county_id(session, county_id)

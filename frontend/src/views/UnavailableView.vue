@@ -6,7 +6,8 @@ const route = useRoute()
 const router = useRouter()
 
 function retry(): void {
-  const target = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/') ? route.query.redirect : '/'
+  const raw = route.query.redirect
+  const target = typeof raw === 'string' && raw.startsWith('/') && !raw.startsWith('//') ? raw : '/'
   void router.replace(target)
 }
 </script>

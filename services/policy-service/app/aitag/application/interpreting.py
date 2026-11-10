@@ -240,7 +240,11 @@ async def opportunity_step(run_id: uuid.UUID, config: PolicyAiTask, spend: Spend
         tags = await repo.opportunity_backlog(session, config.batch_size)
         grouped = await repo.ai_interpretations(session, [str(tag.source_content_id) for tag in tags])
         rows_by_source = {
-            source_id: [{"industry_l1": row.industry_l1, "scenario_l1_name": row.scenario_l1_name} for row in rows]
+            source_id: [
+                {"industry_l1": row.industry_l1, "scenario_l1_name": row.scenario_l1_name}
+                for row in rows
+                if untouched(row)
+            ]
             for source_id, rows in grouped.items()
         }
         # 解读失败、没有解读行的政策没东西可补，直接记完成，不去问模型。

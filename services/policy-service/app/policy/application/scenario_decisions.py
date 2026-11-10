@@ -10,6 +10,7 @@ from platform_common.clock import utcnow
 from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionConflictError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common import internal_clients
 from app.common.audit_emit import enqueue_event
 from app.policy.application import scenario_engine as engine
 from app.policy.application import scenario_merging
@@ -128,15 +129,31 @@ async def merge(
     _pending(candidate)
     path = _clean_path(target)
     rows = await repo.rows_to_apply(session, candidate.id, "")
-    industry = (
-        engine.row_names(rows[0])[0] if rows else (candidate.industry_l1, candidate.industry_l2, candidate.industry_l3)
-    )
-    verdict = (await engine.lookup([(industry, path)])).get((industry, path), {})
-    if verdict.get("kind") not in ("exists", "association"):
+    industries = list(dict.fromkeys(engine.row_names(row)[0] for row in rows)) or [
+        (candidate.industry_l1, candidate.industry_l2, candidate.industry_l3)
+    ]
+    verdicts = await engine.lookup([(ind, path) for ind in industries])
+    matched = any(v.get("kind") in ("exists", "association") for v in verdicts.values())
+    if not matched and all(v.get("kind") == "bad_industry" for v in verdicts.values()):
+        ctx = await internal_clients.codebook(
+            "POST",
+            "/internal/v1/scenarios/context",
+            json={"items": [{"key": "target", "path": [n for n in path if n], "industry_l1": []}]},
+        )
+        matched = bool(ctx and ctx[0].get("industries"))
+    if not matched:
         raise _error("码表里没有这个场景，合并只能选已有的场景；要新建请用「采纳」")
+    expire = getattr(session, "expire", None)
+    if callable(expire):
+        for r in rows:
+            expire(r)
     if rename:
         named = await scenario_merging.rename_target(
-            session, actor, tuple(n for n in path if n), scenario_merging.display_name(candidate)
+            session,
+            actor,
+            tuple(n for n in path if n),
+            scenario_merging.display_name(candidate),
+            exclude_id=candidate.id,
         )
         padded = [*named, "", "", ""]
         path = (padded[0], padded[1], padded[2])

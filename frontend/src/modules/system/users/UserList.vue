@@ -19,16 +19,13 @@ import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import { useUserActions } from '@/composables/useUserActions'
 import { useAuthStore } from '@/stores/auth'
 import UserCreateDrawer from './UserCreateDrawer.vue'
-import UserDetailDrawer from './UserDetailDrawer.vue'
 import UserTable from './UserTable.vue'
-import { mergeUserRow } from './userRows'
 
 const auth = useAuthStore()
 const router = useRouter()
 /** 分配角色即授权，与后端同一门槛：需要「权限分配」可管理（只有超级管理员）。 */
 const canGrant = computed(() => auth.canFull('system.permissions'))
 const canReadRoles = computed(() => auth.canRead('system.roles'))
-const canAudit = computed(() => auth.canRead('system.audit'))
 const canEditUsers = computed(() => auth.canFull('system.users'))
 
 const query = reactive({
@@ -124,8 +121,6 @@ function clearOnce() {
 }
 
 const createVisible = ref(false)
-const detailVisible = ref(false)
-const detailUserId = ref<string | null>(null)
 
 function openCreate() {
   createVisible.value = true
@@ -141,14 +136,6 @@ function openDetail(user: UserItem) {
   void router.push(`/system/users/${user.id}`)
 }
 
-/** 详情里存好了：合进列表那一行（单独授权存好后「+单独授权」标签也跟着变），不整页重载。 */
-function onDetailChanged(user: UserItem) {
-  items.value = mergeUserRow(items.value, user)
-  void loadRoles()
-  void loadPendingCount()
-  if (user.id === auth.user?.id) void auth.loadProfile()
-}
-
 function openAudit(user: UserItem) {
   void router.push({ name: 'system-audit', state: { auditActor: user.display_name } })
 }
@@ -156,9 +143,7 @@ function openAudit(user: UserItem) {
 const actions = useUserActions({
   reload: load,
   showPassword,
-  deleted: (userId) => {
-    if (detailUserId.value === userId) detailVisible.value = false
-  },
+  deleted: () => {},
 })
 
 onMounted(() => {
@@ -301,16 +286,6 @@ onMounted(() => {
       :roles="allRoles"
       :can-grant="canGrant"
       @created="onCreated"
-    />
-
-    <UserDetailDrawer
-      v-model="detailVisible"
-      :user-id="detailUserId"
-      :roles="allRoles"
-      :can-edit="canEditUsers"
-      :can-grant="canGrant"
-      :can-audit="canAudit"
-      @changed="onDetailChanged"
     />
 
     <PasswordOnceDialog

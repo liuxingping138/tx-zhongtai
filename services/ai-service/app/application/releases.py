@@ -37,8 +37,7 @@ async def _check_publishable(session: AsyncSession, template: PromptTemplate) ->
     if not template.model_id:
         raise _invalid("上线前要在模板上选定模型，定时任务不会替你挑")
     await resolve_model(session, template.model_id)
-    if template.code_table:
-        await fetch_code_table(template.code_table)
+    prompts.require_code(template.content, await prompts.code_text(template))
 
 
 async def current(session: AsyncSession, template: PromptTemplate, purpose: str) -> TemplateRelease:

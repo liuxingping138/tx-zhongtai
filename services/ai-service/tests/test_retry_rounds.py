@@ -83,6 +83,22 @@ async def test_stopping_while_waiting_for_the_next_round_ends_as_stopped(monkeyp
     assert recorder.updates[-1]["status"] == "cancelled"
 
 
+async def test_cost_limit_hit_on_last_row_of_round_with_failures_ends_as_cancelled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """第一轮最后一行刚好撞到费用上限、且前面有可重问的失败行时，算提前停止（cancelled）并保留停止原因。"""
+
+    from decimal import Decimal
+
+    recorder = _Recorder()
+    _prepare_execution(monkeypatch, recorder, run(cost_limit=Decimal("0.0003")))
+    _script(monkeypatch, {"甲": [NETWORK], "乙": [GOOD], "丙": [GOOD]})
+    await batch_execute.execute(RUN_ID)
+    final = recorder.updates[-1]
+    assert final["status"] == "cancelled"
+    assert "费用上限" in final["error_message"]
+
+
 async def test_bad_format_is_left_to_the_next_round_instead_of_reasked_on_the_spot(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

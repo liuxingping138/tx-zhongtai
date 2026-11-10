@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from collections import Counter
 from collections.abc import Collection
 from dataclasses import dataclass, field
@@ -54,13 +55,20 @@ async def _without_conflicts(session: AsyncSession, steps: list[Step]) -> tuple[
     repeated = Counter(wanted.values())
     kept: list[Step] = []
     conflicts: list[tuple[Step, str]] = []
+    dropped_converts: set[uuid.UUID] = set()
     for step in steps:
         internal_id = wanted.get(step)
         own = step.kind == CONVERT and step.row.internal_id == internal_id
         if internal_id is not None and not own and (internal_id in taken or repeated[internal_id] > 1):
             conflicts.append((step, INTERNAL_ID_TAKEN))
+            if step.kind == CONVERT:
+                dropped_converts.add(step.row.id)
         else:
-            kept.append(step)
+            next_step = step
+            if step.kind == CREATE and step.row.id in dropped_converts:
+                dropped_converts.remove(step.row.id)
+                next_step = Step(CONVERT, step.rule, step.row)
+            kept.append(next_step)
     return kept, conflicts
 
 
@@ -96,14 +104,15 @@ def _settle(row: Source, rule: ColumnRule, result: ExpandResult, *, touched: boo
 def _new_row(step: Step, *, now: datetime, actor: Actor) -> Source:
     template, rule = step.row, step.rule
     copied = {name: getattr(template, name) for name in SOURCE_FIELDS if name not in _OWN_FIELDS}
+    keep_status = template.crawler_status not in (*CRAWLER_STATUS_PENDING, CRAWLER_STATUS_ONLINE)
     return Source(
         **copied,
         internal_id=new_internal_id(step),
         site_code=template.site_code,
         tag=rule.module,
         url=rule.link,
-        crawler_status=CRAWLER_STATUS_ONLINE,
-        online_date=rule.day.isoformat(),
+        crawler_status=template.crawler_status if keep_status else CRAWLER_STATUS_ONLINE,
+        online_date=template.online_date if keep_status else rule.day.isoformat(),
         rule_date=rule.day.isoformat(),
         rule_id=rule.rule_id,
         version=1,

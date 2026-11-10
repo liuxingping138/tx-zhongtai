@@ -250,6 +250,27 @@ class TestTriggerAndOverview:
         assert fresh["items"][0]["watermark"] == NOW and fresh["items"][1]["watermark"] is None
         assert fresh["items"][1]["next_run_at"] is None
 
+    async def test_list_jobs_attaches_result_to_active_and_last_runs(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        async def summary(_s: Any, _id: uuid.UUID) -> dict[str, Any]:
+            return {"processed": 12}
+
+        s = _scheduler(crawler=Job("crawler", "爬虫", _noop, summary=summary))
+        monkeypatch.setattr(s, "run_data", lambda row: {"id": row.id})
+        active = _run(status="running", sync_run_id=uuid.uuid4())
+        last = _run(status="success", result={"processed": 50})
+        monkeypatch.setattr(s, "active_run", AsyncMock(side_effect=[active, None]))
+
+        class Session(_Session):
+            def __init__(self) -> None:
+                super().__init__(scalars=[[_job(), _job(code="other")]], scalar_values=[last, None])
+
+            async def get(self, *_: Any) -> Any:
+                return None
+
+        result = await s.list_jobs(Session())  # type: ignore[arg-type]
+        assert result["items"][0]["active_run"] == {"id": active.id, "result": {"processed": 12}}
+        assert result["items"][0]["last_run"] == {"id": last.id, "result": {"processed": 50}}
+
     async def test_run_status_carries_the_last_result(self, monkeypatch: pytest.MonkeyPatch) -> None:
         s = _scheduler()
         last = _run(status="success", result={"status": "success"})

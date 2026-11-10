@@ -17,8 +17,11 @@ const emit = defineEmits<{
 const editing = ref(false)
 const form = reactive({ display_name: '', phone: '', email: '' })
 
-watch(() => props.user, (u) => {
-  if (u) {
+watch(() => props.user, (u, prev) => {
+  if (!u) return
+  const switchedUser = prev && u.id !== prev.id
+  if (switchedUser) editing.value = false
+  if (!editing.value || switchedUser) {
     form.display_name = u.display_name
     form.phone = u.phone ?? ''
     form.email = u.email ?? ''

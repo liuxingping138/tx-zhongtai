@@ -69,9 +69,9 @@ def ingest_changes(payload: dict[str, Any]) -> Any:
 
     changes = payload.get("changes")
     if not changes:
-        return payload
+        return _fit(payload)
     extra = {key: value for key, value in payload.items() if key not in _BASE_KEYS}
-    return _fit({**changes, **extra}) if extra else changes
+    return _fit({**changes, **extra}) if extra else _fit(changes)
 
 
 # 审计服务拒收、重试也不会变的响应：内容格式不对、超过大小上限、字段校验不过。

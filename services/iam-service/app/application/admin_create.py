@@ -45,9 +45,18 @@ async def create_initial_admin(
     user = existing.scalar_one_or_none()
     now = utcnow()
     if user is not None:
+        changed = False
+        if user.status == UserStatus.DISABLED:
+            user.status = UserStatus.ACTIVE
+            changed = True
         link = await session.execute(select(UserRole).where(UserRole.user_id == user.id, UserRole.role_id == role.id))
         if link.scalar_one_or_none() is None:
             session.add(UserRole(user_id=user.id, role_id=role.id, created_at=now))
+            changed = True
+        if changed:
+            user.updated_at = now
+            if user.version is not None:
+                user.version += 1
         return user, False
 
     user = User(

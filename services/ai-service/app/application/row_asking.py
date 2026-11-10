@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import math
 import random
 import time
@@ -74,7 +75,7 @@ def round_retry(result: RowResult) -> bool:
     return bool(result.error) and (result.retryable or result.format_error)
 
 
-async def ask_row(
+async def ask_row(  # noqa: PLR0913  请求参数与停止信号各自独立，保持直白签名便于测试调用
     model: LlmModel,
     prompt: str,
     thinking: bool,
@@ -82,6 +83,7 @@ async def ask_row(
     client: httpx.AsyncClient,
     *,
     format_retries: int = FORMAT_RETRIES,
+    stop: asyncio.Event | None = None,
 ) -> RowResult:
     """问一行，按规则自动补救。几次尝试的 token 和联网次数都算进这一行：钱已经花出去了。"""
 
@@ -93,7 +95,14 @@ async def ask_row(
         attempts += 1
         spent = [spent[0] + result.input_tokens, spent[1] + result.output_tokens, spent[2] + result.search_calls]
         if result.error and result.retryable and delays:
-            await asyncio.sleep(delays.pop(0) * random.uniform(1.0, 1.5))  # noqa: S311  退避抖动，不涉及安全
+            delay = delays.pop(0) * random.uniform(1.0, 1.5)  # noqa: S311  退避抖动，不涉及安全
+            if stop is None:
+                await asyncio.sleep(delay)
+            else:
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(stop.wait(), timeout=delay)
+                if stop.is_set():
+                    break
             continue
         if not result.error and needs_retry(result, fields):
             if format_retries:

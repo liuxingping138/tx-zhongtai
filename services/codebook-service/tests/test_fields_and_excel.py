@@ -122,6 +122,17 @@ def test_resolve_workbook_writes_reason() -> None:
     assert "不唯一" in marked[0]["skip_reason"]
 
 
+def test_resolve_header_does_not_misread_alias_or_level_columns() -> None:
+    from app.application.area_resolve import _header_role
+
+    assert _header_role("省份（必填）") == "province_name"
+    assert _header_role("城市 *") == "city_name"
+    assert _header_role("省份别名") is None
+    assert _header_role("城市简称") is None
+    assert _header_role("区县简称") is None
+    assert _header_role("城市等级") is None
+
+
 def test_resolve_skips_rows_with_site_code() -> None:
     book = Workbook()
     sheet = book.active

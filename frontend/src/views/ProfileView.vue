@@ -26,15 +26,15 @@ const name = computed(() => auth.user?.display_name || auth.user?.username || '�
 const initial = computed(() => name.value.slice(0, 1))
 const roles = computed(() => auth.user?.roles?.filter(Boolean) || [])
 const isActive = computed(() => auth.user?.status === 'active')
-const primaryRole = computed(() => roles.value[0] || '标准业务角色')
+const primaryRole = computed(() => roles.value[0] || '暂无分配角色')
 const totalModules = computed(() => groups.value.reduce((acc, g) => acc + g.entries.length, 0))
 const ruleLenOk = computed(() => form.newPassword.length >= 8)
 const ruleMixOk = computed(() => /[a-zA-Z]/.test(form.newPassword) && /\d/.test(form.newPassword))
 
 const heroStats = computed(() => [
-  { label: '授权角色', val: `${roles.value.length || 1} 个`, sub: primaryRole.value, safe: false },
+  { label: '授权角色', val: `${roles.value.length} 个`, sub: primaryRole.value, safe: false },
   { label: '可访问模块', val: `${totalModules.value} 项`, sub: `覆盖 ${groups.value.length} 大业务域`, safe: false },
-  { label: '安全状态', val: '高防护', sub: '强密码与会话管控', safe: true },
+  { label: '安全状态', val: isActive.value ? '正常受保护' : '账号已停用', sub: '强密码与会话管控', safe: isActive.value },
 ])
 
 const tierVal = computed(() => (auth.user?.is_superadmin ? '超级管理员' : primaryRole.value))
@@ -45,7 +45,12 @@ const factItems = computed(() => [
   { label: '登录账号', val: `@${auth.user?.username || '—'}`, desc: '系统唯一登录标识', cls: 'fact-mono' },
   { label: '用户姓名', val: auth.user?.display_name || '—', desc: '操作日志实名署名', cls: '' },
   { label: '全局权限档位', val: tierVal.value, desc: tierDesc.value, cls: '' },
-  { label: '账号状态', val: statusVal.value, desc: '全平台业务模块正常通行', cls: 'is-ok' },
+  {
+    label: '账号状态',
+    val: statusVal.value,
+    desc: isActive.value ? '全平台业务模块正常通行' : '当前账号已停用，无法访问业务模块',
+    cls: isActive.value ? 'is-ok' : '',
+  },
 ])
 
 const pwdFields = [
@@ -383,7 +388,8 @@ async function onLogoutAll() {
 .session-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--zt-success); box-shadow: 0 0 0 3px var(--zt-success-soft); }
 .session-indicator strong { display: block; font-size: 13.5px; color: var(--zt-ink-900); margin-bottom: 2px; }
 @media (max-width: 1024px) {
-  .profile-grid, .profile-hero__stats { grid-template-columns: 1fr; }
+  .profile-grid { grid-template-columns: 1fr; }
+  .profile-hero__stats { width: 100%; flex-wrap: wrap; }
   .profile-hero { flex-direction: column; align-items: flex-start; }
 }
 </style>

@@ -13,10 +13,12 @@ from app.aitag.domain.describing import FIELD_COLUMNS, LEVEL_NAMES, NONE, PATH_C
 from app.aitag.domain.models import PolicyAiTask
 from app.common import internal_clients
 
+ENRICH_CHUNK = 2000
+
 
 async def backlog(limit: int) -> list[dict[str, Any]]:
     found: list[dict[str, Any]] = await internal_clients.codebook(
-        "POST", "/internal/v1/scenarios/enrich-backlog", json={"limit": limit}
+        "POST", "/internal/v1/scenarios/enrich-backlog", json={"limit": min(max(limit, 1), ENRICH_CHUNK)}
     )
     return found
 
@@ -75,8 +77,10 @@ async def describe_step(run_id: uuid.UUID, config: PolicyAiTask, spend: Spend) -
         run_field="enrich_run_id",
     )
     written, done, failed = answers(items, results)
-    if written:
-        await internal_clients.codebook("POST", "/internal/v1/scenarios/enrich", json={"items": written})
+    for start in range(0, len(written), ENRICH_CHUNK):
+        await internal_clients.codebook(
+            "POST", "/internal/v1/scenarios/enrich", json={"items": written[start : start + ENRICH_CHUNK]}
+        )
     await update_run(run_id, enrich_rows=done, enrich_failed=failed)
     note = (
         f"{len(items)} 个新增场景{reused_note(status)}，AI 写好描述 {done} 个，没写出来 {failed} 个（描述空着，待人补）"
