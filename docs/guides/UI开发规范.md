@@ -46,7 +46,7 @@
 | 键盘焦点描边 | `styles/workspace.css` | 全局描边只给链接、按钮、复选框和单选框。能打字的输入框鼠标点一下也算 `:focus-visible`，不要给 `input` 加全局 outline：Element Plus 输入框靠外框变色表示聚焦，再描一圈就是框里套框 |
 | 时间 | `utils/time.ts` | 一律按北京时间显示 |
 | 密码规则 | `utils/passwordPolicy.ts` | 与 iam 的 `validate_password_policy` 同一套（至少 8 位，同时有字母和数字），改一边要改另一边 |
-| 登录页 | `views/LoginView.vue`、`assets/login/customer-hub.webp` | 左侧客群关系图（依据 `docs/design/登录页视觉方向.png`），800px 及以下隐藏图、保留简介；图中文字或关系改了要同时换图和替代文字 |
+| 登录页 | `views/LoginView.vue` | 左栏深海蓝网格背景与纯矢量 SVG 客群拓扑卡片（`LEFT_NODES` / `RIGHT_NODES` + `FLOW_PATHS`，爬虫监测独立不连线），右栏点阵底纹与悬浮登录卡片；900px 及以下隐藏拓扑图、保留简介 |
 
 系统用户、角色、审计等专门二维表复用 ListPage，但不强行迁移为业务记录表；原有专门操作和权限语义必须保留。
 
