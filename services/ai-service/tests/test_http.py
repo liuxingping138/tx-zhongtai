@@ -328,3 +328,22 @@ def test_downloading_a_growing_file_sends_the_length_seen_at_the_start(tmp_path:
 
     assert response.headers["content-length"] == "10"
     assert asyncio.run(body()) == b"a" * 10
+
+
+def test_audit_categories_resolve_targets_for_the_audit_log(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.repositories import prompts as prompt_repo_module
+
+    asked: list[set[str]] = []
+
+    async def lookup(_session: Any, ids: set[str]) -> dict[str, str]:
+        asked.append(ids)
+        return {"p1": "tender"}
+
+    monkeypatch.setattr(prompt_repo_module, "categories_by_ids", lookup)
+    found = client.get("/api/v1/ai/audit-categories", params=[("ids", "p1"), ("ids", "r1"), ("ids", "")])
+    assert found.json()["data"]["items"] == {"p1": "tender"}
+    assert asked == [{"p1", "r1"}]  # 空串不查
+    too_many = [("ids", f"x{index}") for index in range(201)]
+    assert client.get("/api/v1/ai/audit-categories", params=too_many).status_code == 422

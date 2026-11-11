@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { actionLabel, businessLineLabel, directoryLabel, moduleLabel } from './auditLabels'
+import { actionLabel, aiTargetsToResolve, businessLineLabel, directoryLabel, moduleLabel } from './auditLabels'
 
 describe('auditLabels', () => {
   it('模块编码转中文', () => {
@@ -31,5 +31,19 @@ describe('auditLabels', () => {
     // AI 的旧事件没记模板类型、系统管理和码表管理不属于哪条业务线：都显示「-」。
     expect([businessLineLabel('ai.models', {}), businessLineLabel('system.users'), businessLineLabel('codebook.scenarios')])
       .toEqual(['-', '-', '-'])
+  })
+
+  it('早先没记类型的 AI 事件，用按目标ID 查到的类型', () => {
+    expect(businessLineLabel('ai.prompts', {}, 'customer')).toBe('客户')
+    // 事件里记了的以记的为准。
+    expect(businessLineLabel('ai.prompts', { category: 'tender' }, 'customer')).toBe('招投标')
+    const rows = [
+      { module_code: 'ai.prompts', target_id: 'p1', changes: {} },
+      { module_code: 'ai.batch_runs', target_id: 'p1', changes: null },
+      { module_code: 'ai.prompts', target_id: 'p2', changes: { category: 'policy' } },
+      { module_code: 'policy.sources', target_id: 's1', changes: null },
+      { module_code: 'ai.models', target_id: null, changes: null },
+    ]
+    expect(aiTargetsToResolve(rows)).toEqual(['p1'])
   })
 })

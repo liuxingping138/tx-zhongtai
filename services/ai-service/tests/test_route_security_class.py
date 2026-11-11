@@ -25,7 +25,11 @@ def test_api_routes_pass_security_audit() -> None:
 def test_every_api_route_carries_an_ai_permission() -> None:
     mapping = permission_map(app)
     assert sorted(mapping) == sorted(_api_route_keys())
-    wrong = {key: marker for key, marker in mapping.items() if not marker[0].startswith("ai.")}
+    # 唯一例外：操作日志按事件目标查模板类型，权限跟着操作日志走（看日志的人未必有 AI 权限）。
+    lookup = ("GET /api/v1/ai/audit-categories", ("system.audit", "list"))
+    wrong = {
+        key: marker for key, marker in mapping.items() if not marker[0].startswith("ai.") and (key, marker) != lookup
+    }
     assert wrong == {}, f"以下路由挂到了别的服务的资源码: {wrong}"
 
 

@@ -99,12 +99,25 @@ export function directoryLabel(code: string | null | undefined): string {
 }
 
 /** 类型 = 业务线（政策 / 客户 / 招投标）。政策、客户、招投标模块按目录；AI提问按事件里记的模板类型
- * （这个字段上线前的旧事件没有，显示「-」）；系统管理、码表管理不属于哪条业务线，显示「-」。 */
-export function businessLineLabel(code: string | null | undefined, changes?: Record<string, unknown> | null): string {
+ * （早先的事件没记，按事件目标回 AI 服务查，模板和任务都删光了才显示「-」）；系统管理、码表管理不属于哪条业务线，显示「-」。 */
+export function businessLineLabel(
+  code: string | null | undefined,
+  changes?: Record<string, unknown> | null,
+  resolved?: string,
+): string {
   const root = (code || '').split('.')[0] || ''
   if (root === 'ai') {
-    const category = changes?.category
-    return (typeof category === 'string' && LINE_LABELS[category]) || '-'
+    // 事件里记了就用记的；早先的事件没记，用按目标ID 回 AI 服务查到的（resolved）。
+    const category = typeof changes?.category === 'string' ? changes.category : resolved
+    return (category && LINE_LABELS[category]) || '-'
   }
   return LINE_LABELS[root] || '-'
+}
+
+/** 这一页里要回 AI 服务查类型的目标ID：AI 事件、事件里没记类型、有目标ID。 */
+export function aiTargetsToResolve(rows: { module_code: string | null; target_id: string | null; changes: Record<string, unknown> | null }[]): string[] {
+  const ids = rows
+    .filter(row => (row.module_code || '').startsWith('ai.') && typeof row.changes?.category !== 'string' && row.target_id)
+    .map(row => row.target_id as string)
+  return [...new Set(ids)]
 }

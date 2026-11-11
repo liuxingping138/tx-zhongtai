@@ -15,6 +15,7 @@ from platform_common.logging_setup import get_logger, setup_logging
 from platform_common.request_context import RequestIdMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
+from app.api.audit_lookup import router as audit_lookup_router
 from app.api.batch_runs import router as batch_runs_router
 from app.api.billing import router as billing_router
 from app.api.internal import router as internal_router
@@ -81,6 +82,7 @@ def create_app() -> FastAPI:
     app.include_router(billing_router)
     app.include_router(stream_router)
     app.include_router(internal_router)
+    app.include_router(audit_lookup_router)
     return app
 
 

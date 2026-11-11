@@ -21,8 +21,9 @@ const templates = ref<OnlineTemplate[]>([])
 const templatesError = ref('')
 const schedule = reactive({ enabled: false, daily_time: '10:00' })
 const ai = reactive({ prompt_id: '', batch_size: 10, content_max_chars: 0, daily_cost_limit: '0', cursor_date: '', provinces: [] as string[] })
-// 省份候选取基础标签表里已有的省份名称：和源库 prov_name 同一写法，类型判断按它原样比对。取不到时可以直接输入。
-const provinceOptions = useFilterOptions('/policy/base-tags')
+// 省份候选取省市区编码表的省份（31 个省级行政区加「全国」，标准写法，和源库 prov_name 一致，用户定的）。
+// 类型判断按它原样比对；没有码表查看权限、取不到时可以直接输入。
+const provinceOptions = useFilterOptions('/codebook/area-codes')
 // 打开时的读取进度：没改就不发（cursorToSend）。
 const openedCursor = ref('')
 const unsaved = useUnsavedForm(visible, () => ({ schedule, ai: task.value ? ai : null }), saving)
@@ -241,7 +242,7 @@ defineExpose({ open })
         >
           <FilterSelect
             v-model="ai.provinces"
-            v-bind="provinceOptions.bind('province_name')"
+            v-bind="provinceOptions.bind('prov_name')"
             placeholder="不选为全部省份"
           />
           <span class="job-settings__hint">只读这些省份的源政策。已经打过类型标的政策会跳过，不会重复入库、不再花钱；改省份不会从头读，要补以前日期里新加省份的政策，把上面的日期往前调</span>

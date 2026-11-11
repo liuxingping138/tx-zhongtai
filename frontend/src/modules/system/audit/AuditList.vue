@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 
-import { getAuditEvent, listAuditEvents } from '@/api/audit'
+import { getAiAuditCategories, getAuditEvent, listAuditEvents } from '@/api/audit'
 import { errorMessage } from '@/api/errors'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
@@ -10,7 +10,7 @@ import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useListQuery } from '@/composables/useListQuery'
 import ListEmpty from '@/components/ListEmpty.vue'
 import type { AuditEventItem } from '@/api/types'
-import { ACTION_LABELS, MODULE_LABELS, actionLabel, businessLineLabel, directoryLabel, moduleLabel } from '@/utils/auditLabels'
+import { ACTION_LABELS, MODULE_LABELS, actionLabel, aiTargetsToResolve, businessLineLabel, directoryLabel, moduleLabel } from '@/utils/auditLabels'
 import { formatTime, toBeijingIso } from '@/utils/time'
 
 const loading = ref(false)
@@ -82,11 +82,26 @@ async function load() {
     events.value = page.items
     total.value = page.total
     resultFiltered.value = filtered
+    void resolveAiCategories(page.items, sequence)
   } catch (error) {
     if (sequence !== loadSequence) return
     loadError.value = errorMessage(error, '加载审计日志失败')
   } finally {
     if (sequence === loadSequence) loading.value = false
+  }
+}
+
+/** 目标ID -> 模板类型编码。早先的 AI 事件没记类型，按目标ID 回 AI 服务查；查不到、没权限、服务不可用都只是显示「-」，不影响列表。 */
+const aiCategories = ref<Record<string, string>>({})
+
+async function resolveAiCategories(rows: AuditEventItem[], sequence: number): Promise<void> {
+  const ids = aiTargetsToResolve(rows).filter(id => !(id in aiCategories.value))
+  if (!ids.length) return
+  try {
+    const { items } = await getAiAuditCategories(ids)
+    if (sequence === loadSequence) aiCategories.value = { ...aiCategories.value, ...items }
+  } catch {
+    /* 类型只是辅助信息 */
   }
 }
 
@@ -253,7 +268,7 @@ onMounted(() => {
           width="80"
         >
           <template #default="{ row }">
-            {{ businessLineLabel(row.module_code, row.changes) }}
+            {{ businessLineLabel(row.module_code, row.changes, row.target_id ? aiCategories[row.target_id] : undefined) }}
           </template>
         </el-table-column>
         <el-table-column
