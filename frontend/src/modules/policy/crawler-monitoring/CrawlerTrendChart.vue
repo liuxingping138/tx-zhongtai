@@ -8,11 +8,14 @@ import { useChartPalette } from '@/components/charts/echarts'
 import { TREND_RANGES, trendOption, trendSummary } from './charts'
 
 const TREND_ERROR = '暂时无法获取采集趋势，请稍后重试。'
-const UNIT_NOTE = { day: '按天', week: '按周，柱高为日均', month: '按月，柱高为日均' } as const
+const UNIT_NOTE = { day: '按天', week: '按周日均', month: '按月日均' } as const
 
 const palette = useChartPalette()
 const days = ref<CrawlerTrendDays>(30)
-const unitNote = computed(() => UNIT_NOTE[TREND_RANGES.find(item => item.value === days.value)?.unit ?? 'day'])
+const unitNote = computed(() => {
+  if (days.value === 30) return '按天，虚线为均值，浅底带为周末'
+  return UNIT_NOTE[TREND_RANGES.find(item => item.value === days.value)?.unit ?? 'day']
+})
 const points = ref<CrawlerTrendPoint[]>([])
 const dateTo = ref('')
 const loading = ref(false)

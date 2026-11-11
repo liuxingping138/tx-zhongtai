@@ -59,7 +59,7 @@ watch(() => [props.site.site_name, props.site.province_name, props.site.city_nam
     </p>
     <template v-else-if="points.length">
       <p class="site-trend-note">
-        {{ summary }}；浅色柱为周末
+        {{ summary }}；虚线为日均，浅底带为周末
       </p>
       <BaseChart
         :option="option"

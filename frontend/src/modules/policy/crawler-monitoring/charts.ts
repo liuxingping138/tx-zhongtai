@@ -1,13 +1,24 @@
 import type {
   CrawlerOverviewData,
   CrawlerHealth,
-  CrawlerProvince,
   CrawlerTrendDays,
   CrawlerTrendPoint,
   SiteStatus,
 } from '@/api/crawlerMonitoring'
 import { tooltipStyle, type ChartOption, type ChartPalette } from '@/components/charts/echarts'
 import { compactCount } from './filters'
+import { percent } from './provinceView'
+
+export {
+  percent,
+  provinceRanks,
+  provinceSelected,
+  provinceShortName,
+  provinceTile,
+  sortProvinces,
+  type ProvinceRankRow,
+  type ProvinceTile,
+} from './provinceView'
 
 function parseDay(value: string): Date {
   const [year = 0, month = 1, day = 1] = value.split('-').map(Number)
@@ -86,9 +97,18 @@ export function trendSummary(points: CrawlerTrendPoint[], days: CrawlerTrendDays
   return `${range}共采集 ${countText(sumRows(points))}，日均 ${average.toLocaleString()} 条`
 }
 
+/** Y 轴大数按万缩写，与顶部卡片统一并节省左侧宽度。 */
+function compactTick(value: number): string {
+  if (value >= 10000) {
+    const wan = value / 10000
+    return Number.isInteger(wan) ? `${wan}万` : `${wan.toFixed(1)}万`
+  }
+  return value.toLocaleString()
+}
+
 function axisStyle(palette: ChartPalette) {
   return {
-    axisLine: { lineStyle: { color: palette.border } },
+    axisLine: { show: false },
     axisTick: { show: false },
     axisLabel: { color: palette.inkMuted },
   }
@@ -99,8 +119,92 @@ function valueAxis(name: string, palette: ChartPalette, showGrid: boolean) {
     type: 'value',
     name,
     nameTextStyle: { color: palette.inkMuted },
-    axisLabel: { color: palette.inkMuted },
-    splitLine: { show: showGrid, lineStyle: { color: palette.border, type: 'dashed' } },
+    axisLabel: { color: palette.inkMuted, formatter: compactTick },
+    splitLine: { show: showGrid, lineStyle: { color: palette.gridLine, type: 'dashed' } },
+  }
+}
+
+function areaGradient(palette: ChartPalette) {
+  return {
+    type: 'linear',
+    x: 0,
+    y: 0,
+    x2: 0,
+    y2: 1,
+    colorStops: [
+      { offset: 0, color: palette.areaTop },
+      { offset: 1, color: palette.areaBottom },
+    ],
+  }
+}
+
+function weekendBands(dates: string[]): [{ xAxis: number; yAxis: 'min' }, { xAxis: number; yAxis: 'max' }][] {
+  const bands: [{ xAxis: number; yAxis: 'min' }, { xAxis: number; yAxis: 'max' }][] = []
+  let start = -1
+  dates.forEach((date, index) => {
+    if (isWeekend(date)) {
+      if (start < 0) start = index
+      return
+    }
+    if (start >= 0 && index - 1 > start) bands.push([{ xAxis: start, yAxis: 'min' }, { xAxis: index - 1, yAxis: 'max' }])
+    start = -1
+  })
+  if (start >= 0 && dates.length - 1 > start) {
+    bands.push([{ xAxis: start, yAxis: 'min' }, { xAxis: dates.length - 1, yAxis: 'max' }])
+  }
+  return bands
+}
+
+function averageMarkLine(value: number, label: string, palette: ChartPalette) {
+  return {
+    silent: true,
+    symbol: ['none', 'none'],
+    lineStyle: { color: palette.inkMuted, type: 'dashed', width: 1.2 },
+    label: { show: true, position: 'insideEndTop', color: palette.inkMuted, formatter: `${label} ${compactTick(value)}` },
+    data: [{ yAxis: value }],
+  }
+}
+
+function trendTooltipText(bucket: TrendBucket, unit: TrendUnit, overallAvg: number, showDelta: boolean): string {
+  if (unit !== 'day') {
+    const title = unit === 'month' ? bucket.start.slice(0, 7) : `${bucket.start} 起一周`
+    return [`<b>${title}</b>`, `日均 ${bucket.average.toLocaleString()} 条`, `共 ${bucket.rows.toLocaleString()} 条（${bucket.days} 天）`].join('<br/>')
+  }
+  const tag = isWeekend(bucket.start) ? '（周末）' : ''
+  const diff = overallAvg ? Math.round(((bucket.rows - overallAvg) / overallAvg) * 100) : 0
+  const vsAvg = showDelta && overallAvg ? `较均值 ${diff >= 0 ? `+${diff}` : diff}%` : ''
+  return [`<b>${bucket.start}${tag}</b>`, `采集 ${bucket.rows.toLocaleString()} 条`, vsAvg].filter(Boolean).join('<br/>')
+}
+
+function trendSeries(buckets: TrendBucket[], unit: TrendUnit, days: CrawlerTrendDays, avg: number, palette: ChartPalette) {
+  const markLine = buckets.length ? averageMarkLine(avg, '均值', palette) : undefined
+  if (days === 7) {
+    return {
+      name: '每日采集量',
+      type: 'bar',
+      barMaxWidth: 28,
+      data: buckets.map(bucket => ({
+        value: bucket.average,
+        itemStyle: { color: isWeekend(bucket.start) ? palette.weekendBar : palette.primary, borderRadius: [4, 4, 0, 0] },
+      })),
+      markLine,
+    }
+  }
+  const daily = unit === 'day'
+  const bands = daily ? weekendBands(buckets.map(bucket => bucket.start)) : []
+  return {
+    name: daily ? '每日采集量' : `每${unit === 'month' ? '月' : '周'}日均采集量`,
+    type: 'line',
+    smooth: 0.22,
+    showSymbol: false,
+    symbol: 'circle',
+    symbolSize: 6,
+    lineStyle: { width: 2.2, color: palette.primary },
+    itemStyle: { color: palette.primary, borderColor: palette.surface, borderWidth: 2 },
+    areaStyle: { color: areaGradient(palette) },
+    data: buckets.map(bucket => bucket.average),
+    markLine,
+    markArea: bands.length ? { silent: true, itemStyle: { color: palette.weekendBand }, data: bands } : undefined,
   }
 }
 
@@ -108,42 +212,25 @@ export function trendOption(raw: CrawlerTrendPoint[], days: CrawlerTrendDays, pa
   const buckets = trendBuckets(raw, days)
   const unit = trendUnit(days)
   const daily = unit === 'day'
+  const isBar = days === 7
+  const avg = buckets.length ? Math.round(buckets.reduce((sum, item) => sum + item.average, 0) / buckets.length) : 0
+
   return {
-    grid: { left: 8, right: 8, top: 28, bottom: 4, containLabel: true },
+    grid: { left: 8, right: 12, top: 28, bottom: 4, containLabel: true },
     tooltip: {
       trigger: 'axis',
-      axisPointer: { type: 'shadow' },
+      axisPointer: isBar
+        ? { type: 'shadow', shadowStyle: { color: palette.weekendBand } }
+        : { type: 'line', lineStyle: { color: palette.border, type: 'dashed' } },
       ...tooltipStyle(palette),
       formatter: (params: { dataIndex: number }[]) => {
         const bucket = buckets[params[0]?.dataIndex ?? -1]
-        if (!bucket) return ''
-        if (daily) return `<b>${bucket.start}${isWeekend(bucket.start) ? '（周末）' : ''}</b><br/>采集 ${bucket.rows.toLocaleString()} 条`
-        const title = unit === 'month' ? bucket.start.slice(0, 7) : `${bucket.start} 起一周`
-        return [`<b>${title}</b>`, `日均 ${bucket.average.toLocaleString()} 条`, `共 ${bucket.rows.toLocaleString()} 条（${bucket.days} 天）`].join('<br/>')
+        return bucket ? trendTooltipText(bucket, unit, avg, !isBar) : ''
       },
     },
     xAxis: { type: 'category', data: buckets.map(bucket => bucket.label), ...axisStyle(palette) },
     yAxis: valueAxis(daily ? '条数' : '日均条数', palette, true),
-    series: [{
-      name: daily ? '每日采集量' : `每${unit === 'month' ? '月' : '周'}日均采集量`,
-      type: 'bar',
-      data: buckets.map(bucket => bucket.average),
-      barMaxWidth: 26,
-      itemStyle: {
-        color: {
-          type: 'linear',
-          x: 0,
-          y: 0,
-          x2: 0,
-          y2: 1,
-          colorStops: [
-            { offset: 0, color: palette.primary },
-            { offset: 1, color: palette.primaryLight },
-          ],
-        },
-        borderRadius: [5, 5, 0, 0],
-      },
-    }],
+    series: [trendSeries(buckets, unit, days, avg, palette)],
   }
 }
 
@@ -166,22 +253,26 @@ export function healthSlices(health: CrawlerHealth, thresholds: { normal_days: n
   ]
 }
 
-export function healthOption(slices: HealthSlice[], palette: ChartPalette): ChartOption {
+export function healthOption(slices: HealthSlice[], palette: ChartPalette, selected: SiteStatus[] = []): ChartOption {
   return {
     tooltip: { trigger: 'item', ...tooltipStyle(palette), formatter: '{b}：{c} 个（{d}%）' },
     series: [{
       type: 'pie',
-      radius: ['56%', '90%'],
+      radius: ['64%', '90%'],
       avoidLabelOverlap: false,
+      cursor: 'pointer',
       label: { show: false },
-      itemStyle: { borderColor: palette.surface, borderWidth: 3, borderRadius: 5 },
-      data: slices.map(slice => ({ name: slice.label, value: slice.value, itemStyle: { color: slice.color } })),
+      itemStyle: { borderColor: palette.surface, borderWidth: 3, borderRadius: 4 },
+      data: slices.map(slice => ({
+        name: slice.label,
+        value: slice.value,
+        itemStyle: {
+          color: slice.color,
+          opacity: selected.length === 0 || selected.includes(slice.status) ? 1 : 0.22,
+        },
+      })),
     }],
   }
-}
-
-export function percent(part: number, total: number): string {
-  return total ? `${((part / total) * 100).toFixed(1)}%` : '0%'
 }
 
 /** 与上一个周期比较的涨跌，上一个周期为 0 时不给百分比。 */
@@ -219,19 +310,35 @@ export function siteTrendSummary(points: CrawlerTrendPoint[]): string {
 }
 
 export function siteTrendOption(points: CrawlerTrendPoint[], palette: ChartPalette): ChartOption {
+  const avg = points.length ? Math.round(sumRows(points) / points.length) : 0
+  const bands = weekendBands(points.map(point => point.date))
   return {
-    grid: { left: 8, right: 8, top: 12, bottom: 4, containLabel: true },
-    tooltip: { trigger: 'axis', valueFormatter: (value: unknown) => (typeof value === 'number' ? `${value.toLocaleString()} 条` : '-') },
+    grid: { left: 8, right: 12, top: 18, bottom: 4, containLabel: true },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'line', lineStyle: { color: palette.border, type: 'dashed' } },
+      ...tooltipStyle(palette),
+      formatter: (params: { dataIndex: number }[]) => {
+        const point = points[params[0]?.dataIndex ?? -1]
+        if (!point) return ''
+        return `<b>${point.date}${isWeekend(point.date) ? '（周末）' : ''}</b><br/>采集 ${point.rows.toLocaleString()} 条`
+      },
+    },
     xAxis: { type: 'category', data: points.map(point => point.date.slice(5)), ...axisStyle(palette) },
     yAxis: valueAxis('', palette, true),
     series: [{
       name: '采集量',
-      type: 'bar',
-      barMaxWidth: 8,
-      data: points.map(point => ({
-        value: point.rows,
-        itemStyle: { color: isWeekend(point.date) ? palette.primaryLight : palette.primary },
-      })),
+      type: 'line',
+      smooth: 0.18,
+      showSymbol: false,
+      symbol: 'circle',
+      symbolSize: 5,
+      lineStyle: { width: 1.9, color: palette.primary },
+      itemStyle: { color: palette.primary, borderColor: palette.surface, borderWidth: 2 },
+      areaStyle: { color: areaGradient(palette) },
+      data: points.map(point => point.rows),
+      markLine: points.length ? averageMarkLine(avg, '日均', palette) : undefined,
+      markArea: bands.length ? { silent: true, itemStyle: { color: palette.weekendBand }, data: bands } : undefined,
     }],
   }
 }
@@ -262,106 +369,4 @@ export function headline(overview: CrawlerOverviewData): HeadlinePart[][] {
     { text: volume.text, tone: volume.trend === 'up' ? 'good' : volume.trend === 'down' ? 'bad' : 'flat' },
   ])
   return sentences
-}
-
-/** 按网站总数从多到少，同数再按停更数；全部分类都保留，网站少的也不剔除：全国、国央企和 31 个省是同一套「省份」字段分类。 */
-export function sortProvinces(items: CrawlerProvince[], limit?: number): CrawlerProvince[] {
-  const sorted = [...items].sort((a, b) => b.sites - a.sites || b.stale - a.stale || a.name.localeCompare(b.name, 'zh'))
-  return limit ? sorted.slice(0, limit) : sorted
-}
-
-export interface ProvinceTile {
-  item: CrawlerProvince
-  /** 「共 466 个 · 停更 89%」；没有网站时写「暂无网站」 */
-  caption: string
-  /** 比例条三段宽度（百分比），没有网站时全为 0 */
-  shares: { normal: number; watch: number; stale: number }
-  /** 悬停提示：各状态数量和合并前的写法 */
-  hint: string
-}
-
-export function provinceTile(item: CrawlerProvince): ProvinceTile {
-  const share = (value: number) => (item.sites ? (value / item.sites) * 100 : 0)
-  return {
-    item,
-    caption: item.sites ? `共 ${item.sites.toLocaleString()} 个 · 停更 ${percent(item.stale, item.sites)}` : '暂无网站',
-    shares: { normal: share(item.normal), watch: share(item.watch), stale: share(item.stale) },
-    hint: [
-      `正常 ${item.normal}　关注 ${item.watch}　停更 ${item.stale}`,
-      item.raw_names.length > 1 ? `含写法：${item.raw_names.map(name => name || '空').join('、')}` : '',
-    ].filter(Boolean).join('\n'),
-  }
-}
-
-/** 下方明细已按这个分类的全部原始写法筛选时，柱子和卡片显示为选中。 */
-export function provinceSelected(item: CrawlerProvince, applied: string[]): boolean {
-  return applied.length > 0 && [...applied].sort().join('|') === [...item.raw_names].sort().join('|')
-}
-
-/** 横轴放不下「新疆维吾尔自治区」，用简称；全国、国央企等原样。完整名称在提示框里。 */
-export function provinceShortName(name: string): string {
-  return name.replace(/(壮族|回族|维吾尔)?自治区$|特别行政区$|[省市]$/, '') || name
-}
-
-/** 每个分类一根柱：柱高是网站总数，其中停更的部分用红色叠在底部，一根柱子看清规模和停更多少。 */
-export const PROVINCE_SERIES = [
-  { name: '网站总数', value: (item: CrawlerProvince) => item.sites, color: (palette: ChartPalette) => palette.primary },
-  { name: '停更网站数', value: (item: CrawlerProvince) => item.stale, color: (palette: ChartPalette) => palette.danger },
-] as const
-
-export function provinceOption(items: CrawlerProvince[], palette: ChartPalette, selected: string[] = []): ChartOption {
-  const picked = items.findIndex(item => provinceSelected(item, selected))
-  return {
-    legend: { left: 0, top: 0, itemWidth: 12, itemHeight: 12, itemGap: 18, icon: 'roundRect', textStyle: { color: palette.inkMuted } },
-    grid: { left: 8, right: 8, top: 48, bottom: 10, containLabel: true },
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow' },
-      ...tooltipStyle(palette),
-      formatter: (params: { dataIndex: number }[]) => {
-        const item = items[params[0]?.dataIndex ?? -1]
-        if (!item) return ''
-        if (!item.sites) return `<b>${item.name}</b><br/>暂无网站`
-        return [
-          `<b>${item.name}</b>（共 ${item.sites} 个）`,
-          `正常 ${item.normal}　关注 ${item.watch}　停更 ${item.stale}`,
-          `停更率 ${percent(item.stale, item.sites)}`,
-          item.raw_names.length > 1 ? `含写法：${item.raw_names.map(name => name || '空').join('、')}` : '',
-          '点击筛选下方列表',
-        ].filter(Boolean).join('<br/>')
-      },
-    },
-    xAxis: {
-      type: 'category',
-      data: items.map(item => provinceShortName(item.name)),
-      ...axisStyle(palette),
-      // 中文竖排，38 个分类挤在一行也不会重叠。
-      axisLabel: { color: palette.inkMuted, interval: 0, lineHeight: 13, formatter: (name: string) => name.split('').join('\n') },
-    },
-    yAxis: valueAxis('网站数', palette, true),
-    series: PROVINCE_SERIES.map(series => ({
-      name: series.name,
-      type: 'bar',
-      color: series.color(palette),
-      barMaxWidth: 22,
-      // 两个系列完全重叠：停更画在网站总数前面，看起来是一根两色的柱子。
-      barGap: '-100%',
-      // 选中一个分类时其余变淡，和卡片、健康图的选中态一样明确。
-      data: items.map((item, index) => ({
-        value: series.value(item),
-        itemStyle: { color: series.color(palette), opacity: picked < 0 || picked === index ? 1 : 0.3, borderRadius: [4, 4, 0, 0] },
-      })),
-      // 柱顶只写网站总数；停更数和停更率在悬停提示里。
-      label: {
-        show: series.name === '网站总数',
-        position: 'top',
-        color: palette.ink,
-        fontSize: 11,
-        formatter: (params: { dataIndex: number }) => {
-          const item = items[params.dataIndex]
-          return item?.sites ? String(series.value(item)) : ''
-        },
-      },
-    })),
-  }
 }

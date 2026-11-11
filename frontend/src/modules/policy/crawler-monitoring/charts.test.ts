@@ -10,7 +10,7 @@ import {
   healthSlices,
   isWeekend,
   percent,
-  provinceOption,
+  provinceRanks,
   provinceSelected,
   provinceShortName,
   provinceTile,
@@ -42,15 +42,24 @@ describe('采集趋势', () => {
   })
 
   type Tooltip = { formatter: (params: { dataIndex: number }[]) => string }
-  type TrendChart = { series: Series[]; xAxis: { data: string[] }; yAxis: { name: string; max?: number }; tooltip: Tooltip }
+  type TrendChart = { series: (Series & { type: string })[]; xAxis: { data: string[] }; yAxis: { name: string; max?: number }; tooltip: Tooltip }
 
-  it('7 天和 1 个月按天画，柱高就是当天条数，高峰日不会被画成一样高', () => {
+  it('7 天用柱状图且周末浅色，1 个月按天画折线面积并含较均值提示', () => {
+    const barOption = trendOption([point('2026-10-09', 100), point('2026-10-10', 40)], 7, palette) as {
+      series: { type: string; data: { value: number; itemStyle: { color: string } }[] }[]
+      tooltip: Tooltip
+    }
+    expect(barOption.series[0]?.type).toBe('bar')
+    expect(barOption.series[0]?.data.map(bar => bar.itemStyle.color)).toEqual([palette.primary, palette.weekendBar])
+    expect(barOption.tooltip.formatter([{ dataIndex: 1 }])).toBe('<b>2026-10-10（周末）</b><br/>采集 40 条')
+
     const option = trendOption([point('2026-07-16', 72_000), point('2026-07-17', 18_000)], 30, palette) as TrendChart
+    expect(option.series[0]?.type).toBe('line')
     expect(option.series.map(series => series.name)).toEqual(['每日采集量'])
     expect(option.series[0]?.data).toEqual([72_000, 18_000])
     expect(option.yAxis.max).toBeUndefined()
     expect(option.xAxis.data).toEqual(['7/16', '7/17'])
-    expect(option.tooltip.formatter([{ dataIndex: 1 }])).toBe('<b>2026-07-17</b><br/>采集 18,000 条')
+    expect(option.tooltip.formatter([{ dataIndex: 1 }])).toBe('<b>2026-07-17</b><br/>采集 18,000 条<br/>较均值 -60%')
     expect(option.tooltip.formatter([{ dataIndex: 9 }])).toBe('')
   })
 
@@ -95,9 +104,13 @@ describe('健康结构', () => {
     expect(slices[2]?.hint).toBe('31–90 天无新数据，优先排查')
   })
 
-  it('环形图每块对应一类', () => {
-    const option = healthOption(slices, palette) as { series: { data: { name: string }[] }[] }
+  it('环形图每块对应一类，选中状态时未选中扇区变淡', () => {
+    const option = healthOption(slices, palette) as { series: { data: { name: string; itemStyle: { opacity: number } }[] }[] }
     expect(option.series[0]?.data.map(item => item.name)).toEqual(['正常', '关注', '近期停更', '长期停更'])
+    expect(option.series[0]?.data.map(item => item.itemStyle.opacity)).toEqual([1, 1, 1, 1])
+
+    const filtered = healthOption(slices, palette, ['normal']) as { series: { data: { itemStyle: { opacity: number } }[] }[] }
+    expect(filtered.series[0]?.data.map(item => item.itemStyle.opacity)).toEqual([1, 0.22, 0.22, 0.22])
   })
 
   it('占比保留一位小数，总数为 0 不报错', () => {
@@ -174,13 +187,16 @@ describe('单个网站的采集曲线', () => {
     expect(siteTrendSummary([point('2026-10-11', 0)])).toBe('近 1 天没有采集到数据')
   })
 
-  it('每天一根柱子，周末浅色', () => {
+  it('画近 90 天折线面积与均值线，且带统一卡片提示框与周末标注', () => {
     const option = siteTrendOption([point('2026-10-09', 3), point('2026-10-10', 1)], palette) as {
-      series: { data: { value: number; itemStyle: { color: string } }[] }[]
-      tooltip: { valueFormatter: (value: unknown) => string }
+      series: { type: string; data: number[] }[]
+      tooltip: { backgroundColor: string; formatter: (params: { dataIndex: number }[]) => string }
     }
-    expect(option.series[0]?.data.map(bar => [bar.value, bar.itemStyle.color])).toEqual([[3, palette.primary], [1, palette.primaryLight]])
-    expect([option.tooltip.valueFormatter(1200), option.tooltip.valueFormatter(null)]).toEqual(['1,200 条', '-'])
+    expect(option.series[0]?.type).toBe('line')
+    expect(option.series[0]?.data).toEqual([3, 1])
+    expect(option.tooltip.backgroundColor).toBe(palette.surface)
+    expect(option.tooltip.formatter([{ dataIndex: 1 }])).toBe('<b>2026-10-10（周末）</b><br/>采集 1 条')
+    expect(option.tooltip.formatter([{ dataIndex: 9 }])).toBe('')
   })
 })
 
@@ -199,27 +215,16 @@ describe('省份分布', () => {
       .toEqual(['新疆', '广西', '宁夏', '西藏', '内蒙古', '黑龙江', '北京', '全国', '国央企'])
   })
 
-  type ProvinceChart = {
-    xAxis: { data: string[]; axisLabel: { formatter: (name: string) => string } }
-    series: { name: string; data: { value: number; itemStyle: { opacity: number } }[]; label: { show: boolean; formatter?: (params: { dataIndex: number }) => string } }[]
-    tooltip: { formatter: (params: { dataIndex: number }[]) => string }
-  }
-
-  it('每个分类一根柱，网站总数打底、停更数叠在前面，图例在左上，提示里写全称和明细', () => {
+  it('双列水平排行计算比例轨、停更率与合并前写法提示', () => {
     const merged = province('新疆维吾尔自治区', 20, 5, 75, ['新疆', '新疆维吾尔族自治区'])
     const empty = province('青海省', 0, 0, 0)
-    const option = provinceOption([merged, empty], palette) as ProvinceChart & { legend: { left: number; top: number } }
-    expect(option.series.map(series => series.name)).toEqual(['网站总数', '停更网站数'])
-    expect(option.series.map(series => series.data.map(bar => bar.value))).toEqual([[100, 0], [75, 0]])
-    expect((option.series as unknown as { barGap: string }[]).map(series => series.barGap)).toEqual(['-100%', '-100%'])
-    expect(option.series.map(series => series.label.show)).toEqual([true, false])
-    expect([0, 1].map(dataIndex => option.series[0]?.label.formatter?.({ dataIndex }))).toEqual(['100', ''])
-    expect([option.legend.left, option.legend.top]).toEqual([0, 0])
-    expect(option.xAxis.data).toEqual(['新疆', '青海'])
-    expect(option.xAxis.axisLabel.formatter('内蒙古')).toBe('内\n蒙\n古')
-    expect(option.tooltip.formatter([{ dataIndex: 0 }])).toContain('含写法：新疆、新疆维吾尔族自治区')
-    expect(option.tooltip.formatter([{ dataIndex: 1 }])).toBe('<b>青海省</b><br/>暂无网站')
-    expect(option.tooltip.formatter([{ dataIndex: 9 }])).toBe('')
+    const rows = provinceRanks([merged, empty])
+    expect(rows.map(row => [row.rank, row.shortName, row.okWidth, row.staleWidth, row.staleRate])).toEqual([
+      [1, '新疆', 25, 75, 75],
+      [2, '青海', 0, 0, 0],
+    ])
+    expect(rows[0]?.hint).toContain('含写法：新疆、新疆维吾尔族自治区')
+    expect(rows[1]?.hint).toBe('青海省：暂无网站')
   })
 
   it('卡片写网站数和停更率，色条按三种状态占比，提示里列出合并前的写法', () => {
@@ -235,13 +240,6 @@ describe('省份分布', () => {
     expect(tile.shares).toEqual({ normal: 0, watch: 0, stale: 0 })
   })
 
-  it('选中一个分类时其余柱子变淡', () => {
-    const items = [province('广东省', 1, 0, 1), province('甘肃省', 1, 0, 1)]
-    const opacity = (selected: string[]) => (provinceOption(items, palette, selected) as ProvinceChart).series.map(series => series.data.map(bar => bar.itemStyle.opacity))
-    expect(opacity([])).toEqual([[1, 1], [1, 1]])
-    expect(opacity(['甘肃省'])).toEqual([[0.3, 1], [0.3, 1]])
-  })
-
   it('明细按该分类全部写法筛选时卡片选中，写法顺序不影响', () => {
     const merged = province('新疆维吾尔自治区', 1, 0, 1, ['新疆', '新疆维吾尔自治区'])
     expect(provinceSelected(merged, ['新疆维吾尔自治区', '新疆'])).toBe(true)
@@ -255,7 +253,7 @@ describe('图表配色', () => {
     const style = { getPropertyValue: (name: string) => (name === '--zt-blue-600' ? ' #123456 ' : '') }
     const colors = chartPalette(style)
     expect(colors.primary).toBe('#123456')
-    expect(colors.danger).toBe('#d25b4a')
+    expect(colors.danger).toBe('#cc584b')
     const reactivePalette = useChartPalette()
     expect(reactivePalette.value.primary).toBeTruthy()
   })

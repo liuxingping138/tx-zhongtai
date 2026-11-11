@@ -66,10 +66,16 @@
   --zt-ai-soft: #f5f2ff;
   --zt-ai-line: #ddd6fe;
 
-  --chart-normal: var(--zt-success);
-  --chart-watch: var(--zt-warning);
-  --chart-stale: var(--zt-danger);
+  /* 图表语义色采用低饱和克制色阶，避免大面积铺陈时和 UI 功能标签一样刺眼。 */
+  --chart-normal: #2e8b67;
+  --chart-watch: #cf8a2e;
+  --chart-stale: #cc584b;
   --chart-long: #8a7368;
+  --chart-area-top: rgba(51, 85, 221, 0.16);
+  --chart-area-bottom: rgba(51, 85, 221, 0);
+  --chart-weekend-band: rgba(15, 23, 42, 0.035);
+  --chart-weekend-bar: rgba(51, 85, 221, 0.28);
+  --chart-tooltip-shadow: 0 12px 32px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.06);
 
   /* 遮罩层（加载中）的半透明底。 */
   --zt-loading-mask: rgb(255 255 255 / 78%);
@@ -191,6 +197,16 @@ html.dark {
   --zt-danger-border: #522323;
 
   --zt-muted-mark: #80868b;
+
+  --chart-normal: #6bb893;
+  --chart-watch: #e0b354;
+  --chart-stale: #de786d;
+  --chart-long: #a69389;
+  --chart-area-top: rgba(138, 180, 248, 0.22);
+  --chart-area-bottom: rgba(138, 180, 248, 0);
+  --chart-weekend-band: rgba(255, 255, 255, 0.035);
+  --chart-weekend-bar: rgba(138, 180, 248, 0.34);
+  --chart-tooltip-shadow: 0 14px 36px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.4);
 
   --zt-avatar-1: #3b82f6;
   --zt-avatar-2: #ec4899;

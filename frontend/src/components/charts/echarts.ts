@@ -1,13 +1,23 @@
 import { computed, type ComputedRef } from 'vue'
 import { BarChart, LineChart, PieChart } from 'echarts/charts'
-import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
+import { GridComponent, LegendComponent, MarkAreaComponent, MarkLineComponent, TooltipComponent } from 'echarts/components'
 import * as echarts from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 
 import { useTheme } from '@/composables/useTheme'
 
 // 只注册用到的图表和组件，体积约为整包的三分之一。新图表类型在这里补注册。
-echarts.use([BarChart, LineChart, PieChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer])
+echarts.use([
+  BarChart,
+  LineChart,
+  PieChart,
+  GridComponent,
+  LegendComponent,
+  MarkAreaComponent,
+  MarkLineComponent,
+  TooltipComponent,
+  CanvasRenderer,
+])
 
 export { echarts }
 export type ChartOption = echarts.EChartsCoreOption
@@ -20,12 +30,18 @@ export interface ChartPalette {
   ink: string
   inkMuted: string
   border: string
+  gridLine: string
   /** 卡片底色：环形图扇区、堆叠柱之间留的缝用它，和卡片融在一起。 */
   surface: string
   success: string
   warning: string
   danger: string
   muted: string
+  areaTop: string
+  areaBottom: string
+  weekendBand: string
+  weekendBar: string
+  tooltipShadow: string
 }
 
 const PALETTE_VARS: Record<keyof ChartPalette, [string, string]> = {
@@ -34,11 +50,17 @@ const PALETTE_VARS: Record<keyof ChartPalette, [string, string]> = {
   ink: ['--zt-ink-900', '#162638'],
   inkMuted: ['--zt-ink-500', '#5f6c7b'],
   border: ['--zt-border', '#dfe5eb'],
+  gridLine: ['--zt-divider', '#f1f5f9'],
   surface: ['--zt-panel', '#ffffff'],
-  success: ['--chart-normal', '#3d8c6e'],
-  warning: ['--chart-watch', '#c4842a'],
-  danger: ['--chart-stale', '#d25b4a'],
+  success: ['--chart-normal', '#2e8b67'],
+  warning: ['--chart-watch', '#cf8a2e'],
+  danger: ['--chart-stale', '#cc584b'],
   muted: ['--chart-long', '#8a7368'],
+  areaTop: ['--chart-area-top', 'rgba(51, 85, 221, 0.16)'],
+  areaBottom: ['--chart-area-bottom', 'rgba(51, 85, 221, 0)'],
+  weekendBand: ['--chart-weekend-band', 'rgba(15, 23, 42, 0.035)'],
+  weekendBar: ['--chart-weekend-bar', 'rgba(51, 85, 221, 0.28)'],
+  tooltipShadow: ['--chart-tooltip-shadow', '0 12px 32px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.06)'],
 }
 
 export function chartPalette(style?: Pick<CSSStyleDeclaration, 'getPropertyValue'>): ChartPalette {
@@ -62,6 +84,6 @@ export function tooltipStyle(palette: ChartPalette) {
     borderWidth: 1,
     padding: [10, 14],
     textStyle: { color: palette.ink, fontSize: 12.5, lineHeight: 20 },
-    extraCssText: 'border-radius: 10px; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.06);',
+    extraCssText: `border-radius: 10px; box-shadow: ${palette.tooltipShadow};`,
   }
 }
