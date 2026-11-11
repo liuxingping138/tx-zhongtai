@@ -201,6 +201,7 @@ async def start_run(
         session,
         event_type="ai.batch_run.started",
         actor=actor,
+        category=run.prompt_category,
         target_id=run.id,
         changes={
             "prompt_id": template.id,

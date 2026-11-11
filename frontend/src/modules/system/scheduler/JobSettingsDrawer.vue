@@ -5,10 +5,12 @@ import { ElMessage } from 'element-plus'
 import { listAiTemplates, updateAiTask, type AiTask, type OnlineTemplate } from '@/api/aiTagging'
 import { updateJob, type ScheduledJob } from '@/api/scheduler'
 import { errorMessage } from '@/api/errors'
+import FilterSelect from '@/components/FilterSelect.vue'
+import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import { TASK_INTRO, cursorToSend, formatYuan } from './aiTagging'
 
-/** 一个任务的设置：每日计划；打标任务再加模板、每批条数、正文长度、每日上限，类型判断还有起始采集日期。 */
+/** 一个任务的设置：每日计划；打标任务再加模板、每批条数、正文长度、每日上限，类型判断还有起始采集日期和采集省份。 */
 const emit = defineEmits<{ saved: [] }>()
 const visible = ref(false)
 const saving = ref(false)
@@ -18,7 +20,9 @@ const task = ref<AiTask | null>(null)
 const templates = ref<OnlineTemplate[]>([])
 const templatesError = ref('')
 const schedule = reactive({ enabled: false, daily_time: '10:00' })
-const ai = reactive({ prompt_id: '', batch_size: 10, content_max_chars: 0, daily_cost_limit: '0', cursor_date: '' })
+const ai = reactive({ prompt_id: '', batch_size: 10, content_max_chars: 0, daily_cost_limit: '0', cursor_date: '', provinces: [] as string[] })
+// 省份候选取基础标签表里已有的省份名称：和源库 prov_name 同一写法，类型判断按它原样比对。取不到时可以直接输入。
+const provinceOptions = useFilterOptions('/policy/base-tags')
 // 打开时的读取进度：没改就不发（cursorToSend）。
 const openedCursor = ref('')
 const unsaved = useUnsavedForm(visible, () => ({ schedule, ai: task.value ? ai : null }), saving)
@@ -49,9 +53,10 @@ function open(target: ScheduledJob, aiTask: AiTask | null): void {
   Object.assign(schedule, { enabled: target.enabled, daily_time: target.daily_time })
   if (aiTask) {
     const { prompt_id, batch_size, content_max_chars, daily_cost_limit, cursor_date } = aiTask
-    Object.assign(ai, { prompt_id, batch_size, content_max_chars, daily_cost_limit, cursor_date })
+    Object.assign(ai, { prompt_id, batch_size, content_max_chars, daily_cost_limit, cursor_date, provinces: [...(aiTask.provinces ?? [])] })
     openedCursor.value = cursor_date
     void loadTemplates()
+    if (aiTask.code === 'type' && !provinceOptions.loaded.value) void provinceOptions.load()
   }
   error.value = ''
   visible.value = true
@@ -229,6 +234,17 @@ defineExpose({ open })
             :clearable="false"
           />
           <span class="job-settings__hint">当前读到：{{ task.cursor_date || '—' }} {{ task.cursor_content_id || '（当日第一条）' }}。改日期就从那天第一条重新读，要补历史就往前调</span>
+        </el-form-item>
+        <el-form-item
+          v-if="task.code === 'type'"
+          label="采集省份"
+        >
+          <FilterSelect
+            v-model="ai.provinces"
+            v-bind="provinceOptions.bind('province_name')"
+            placeholder="不选为全部省份"
+          />
+          <span class="job-settings__hint">只读这些省份的源政策。已经打过类型标的政策会跳过，不会重复入库、不再花钱；改省份不会从头读，要补以前日期里新加省份的政策，把上面的日期往前调</span>
         </el-form-item>
         <h3 class="job-settings__section">
           每日计划

@@ -104,6 +104,7 @@ async def start(
         session,
         event_type="ai.prompt.sample_started",
         actor=actor,
+        category=run.prompt_category,
         target_id=template.id,
         changes={"run_id": run.id, "rows": rows, "model_id": model.id},
     )
@@ -218,6 +219,7 @@ async def download(
         session,
         event_type="ai.prompt.sample_exported",
         actor=actor,
+        category=run.prompt_category,
         target_id=prompt_id,
         changes={"run_id": run.id, "file": kind},
     )

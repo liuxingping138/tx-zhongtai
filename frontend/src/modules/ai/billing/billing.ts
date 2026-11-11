@@ -18,8 +18,48 @@ export const SERIES_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87b
 export const OTHER = '其他'
 const OTHER_COLOR = '#9aa4b2'
 
-export function filterRows(rows: BillingRow[], models: string[], purposes: string[]): BillingRow[] {
-  return rows.filter(row => (!models.length || models.includes(row.model)) && (!purposes.length || purposes.includes(row.purpose)))
+/** 页面上的筛选。scene → category → purpose 三级联动，model 独立；空数组表示不限。 */
+export interface BillingFilters {
+  scenes: string[]
+  categories: string[]
+  purposes: string[]
+  models: string[]
+}
+
+/** 业务分类固定两类，一级业务板块固定三类：没花钱的也列出来，页面上的选项不随日期范围忽有忽无。 */
+export const SCENES = ['日常调度', '测试']
+export const CATEGORIES = ['政策', '客户', '招投标']
+
+const within = (picked: string[], value: string) => !picked.length || picked.includes(value)
+
+export function filterRows(rows: BillingRow[], filters: BillingFilters): BillingRow[] {
+  return rows.filter(row =>
+    within(filters.scenes, row.scene)
+    && within(filters.categories, row.category)
+    && within(filters.purposes, row.purpose)
+    && within(filters.models, row.model))
+}
+
+/** 联动选项：一级业务板块只列所选业务分类下花过钱的，二级业务板块只列所选业务分类 × 一级业务板块下花过钱的。
+ * 已选但不在选项里的值也保留在列表里（从任务调度「查看账单」带进来的用途，这段时间可能还没花钱）。 */
+export function filterOptions(rows: BillingRow[], filters: BillingFilters): { categories: string[]; purposes: string[]; models: string[] } {
+  const inScene = rows.filter(row => within(filters.scenes, row.scene))
+  const inCategory = inScene.filter(row => within(filters.categories, row.category))
+  const used = new Set(inScene.map(row => row.category))
+  const sorted = (values: string[]) => [...new Set(values)].sort((a, b) => a.localeCompare(b, 'zh-CN'))
+  return {
+    categories: filters.scenes.length ? CATEGORIES.filter(name => used.has(name) || filters.categories.includes(name)) : CATEGORIES,
+    purposes: sorted([...inCategory.map(row => row.purpose), ...filters.purposes]),
+    models: sorted([...rows.map(row => row.model), ...filters.models]),
+  }
+}
+
+/** 上一级改了以后，下一级里已经不在选项中的值去掉：不然筛选框里留着一个选不到的值，底下的数也一直是 0。 */
+export function pruneFilters(rows: BillingRow[], filters: BillingFilters): BillingFilters {
+  const options = filterOptions(rows, { ...filters, categories: [], purposes: [] })
+  const categories = filters.categories.filter(name => options.categories.includes(name))
+  const purposes = filters.purposes.filter(name => filterOptions(rows, { ...filters, categories, purposes: [] }).purposes.includes(name))
+  return { ...filters, categories, purposes }
 }
 
 export function summarize(rows: BillingRow[]): Omit<BillingGroup, 'name' | 'share'> {

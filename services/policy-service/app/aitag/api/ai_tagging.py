@@ -45,6 +45,8 @@ class TaskBody(BaseModel):
     daily_cost_limit: str = Field(pattern=r"^\d{1,8}(\.\d{1,2})?$")
     # 只有类型判断有读取进度，其余任务传空串。
     cursor_date: str = Field(default="", pattern=r"^(\d{4}-\d{2}-\d{2})?$")
+    # 类型判断只读这几个省份，空为不限；其余任务忽略。
+    provinces: list[str] = Field(default_factory=list, max_length=100)
     version: int = Field(ge=1)
 
 

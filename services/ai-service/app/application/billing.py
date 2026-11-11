@@ -18,6 +18,7 @@ from platform_common.errors import ApiError, ErrorCode
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import SessionLocal
+from app.domain.categories import DEFAULT_CATEGORY, category_name
 from app.domain.llm_models import LlmModel, calc_costs
 from app.domain.models import CallUsage
 from app.repositories import billing as repo
@@ -63,7 +64,9 @@ class CallTally:
         return not self.usage and not self.search_events
 
 
-async def record_call(kind: str, model: LlmModel, tally: CallTally, actor: Actor) -> None:
+async def record_call(
+    kind: str, model: LlmModel, tally: CallTally, actor: Actor, *, category: str = DEFAULT_CATEGORY
+) -> None:
     """记一次试发或多轮对话的花费。记账失败只写日志，不能让已经答完的回答报错。"""
 
     if tally.empty:
@@ -79,6 +82,7 @@ async def record_call(kind: str, model: LlmModel, tally: CallTally, actor: Actor
                 session,
                 CallUsage(
                     kind=kind,
+                    prompt_category=category,
                     model_id=model.id,
                     model_name=model.name,
                     input_tokens=input_tokens,
@@ -110,25 +114,31 @@ def _bounds(date_from: date, date_to: date) -> tuple[datetime, datetime]:
 
 
 async def daily(session: AsyncSession, date_from: date, date_to: date) -> dict[str, Any]:
-    """北京日期 [date_from, date_to] 里每天、每个模型、每种用途的次数、token 和费用。没花钱的组合不出现。"""
+    """北京日期 [date_from, date_to] 里每天、每个模型、每种用途的次数、token 和费用。没花钱的组合不出现。
+
+    每行带三级归属，页面上联动筛选：业务分类 scene（日常调度 / 测试）→ 一级业务板块 category（政策 / 客户 / 招投标，
+    取模板类型）→ 二级业务板块 purpose（即原来的「用途」）。"""
 
     since, until = _bounds(date_from, date_to)
     rows = await repo.daily(session, since, until)
     names = await repo.model_names(session)
-    merged: dict[tuple[str, str, str], dict[str, Any]] = {}
+    merged: dict[tuple[str, str, str, str, str], dict[str, Any]] = {}
     for row in rows:
         # 同一个模型 ID 一律用模型配置里的当前名字；配置里没有的用任务上记的名字。
         model = names.get(row["model_id"]) or row["model_name"] or row["model_id"]
-        key = (str(row["day"]), model, row["purpose"])
+        category = category_name(row["category"])
+        key = (str(row["day"]), model, row["scene"], category, row["purpose"])
         if key in merged:
             for field in ("calls", "input_tokens", "output_tokens", "cost"):
                 merged[key][field] = (merged[key][field] or 0) + (row[field] or 0)
         else:
-            merged[key] = {**row, "model": model}
+            merged[key] = {**row, "model": model, "category": category}
     items = [
         {
             "day": str(row["day"]),
             "model": row["model"],
+            "scene": row["scene"],
+            "category": row["category"],
             "purpose": row["purpose"],
             "calls": int(row["calls"] or 0),
             "input_tokens": int(row["input_tokens"] or 0),
@@ -137,5 +147,5 @@ async def daily(session: AsyncSession, date_from: date, date_to: date) -> dict[s
         }
         for row in merged.values()
     ]
-    items.sort(key=lambda item: (item["day"], item["model"], item["purpose"]))
+    items.sort(key=lambda item: (item["day"], item["model"], item["scene"], item["category"], item["purpose"]))
     return {"date_from": date_from.isoformat(), "date_to": date_to.isoformat(), "items": items}

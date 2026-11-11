@@ -31,16 +31,29 @@ PAGE_CONNECT_TIMEOUT = 5
 PAGE_READ_TIMEOUT = 20
 
 
+def _batch_sql(provinces: list[str]) -> str:
+    """按天读的 SQL；选了省份就只读这几个省份（prov_name 原样比对，ShardingSphere 支持 IN）。"""
+
+    if not provinces:
+        return _BATCH_SQL
+    marks = ", ".join(["%s"] * len(provinces))
+    return _BATCH_SQL.replace("ORDER BY", f"AND prov_name IN ({marks})\n    ORDER BY")
+
+
 @retry_mysql_read
-def read_batch(cursor_date: date, cursor_id: str, limit: int, until: date) -> list[dict[str, Any]]:
-    """从进度之后读最多 limit 条，跨天往后读到 until（含）为止。"""
+def read_batch(
+    cursor_date: date, cursor_id: str, limit: int, until: date, provinces: list[str] | None = None
+) -> list[dict[str, Any]]:
+    """从进度之后读最多 limit 条，跨天往后读到 until（含）为止。provinces 非空时只读这几个省份。"""
 
     rows: list[dict[str, Any]] = []
     day, last = cursor_date, cursor_id
+    picked = list(provinces or [])
+    sql = _batch_sql(picked)
     with mysql_connect(get_settings().policy_source_db) as connection, connection.cursor() as cursor:
         while day <= until and len(rows) < limit:
             wanted = limit - len(rows)
-            cursor.execute(_BATCH_SQL, (day, last, wanted))
+            cursor.execute(sql, (day, last, *picked, wanted))
             got = cast(list[dict[str, Any]], cursor.fetchall())
             rows.extend(got)
             if len(got) < wanted:

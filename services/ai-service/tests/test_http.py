@@ -34,7 +34,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
             if dep.name in {"_", "actor"}:
                 app.dependency_overrides[dep.call] = lambda: ACTOR
     app.dependency_overrides[get_category_access] = lambda: FULL_ACCESS
-    monkeypatch.setattr(prompts, "enqueue_event", noop)
+    monkeypatch.setattr(prompts, "audit_template", noop)
     monkeypatch.setattr(get_settings(), "baidu_api_key", "k")
     yield TestClient(app)
     app.dependency_overrides.clear()
@@ -164,17 +164,19 @@ def test_prompt_write_routes(client: TestClient, monkeypatch: pytest.MonkeyPatch
 
 
 def test_trial_hands_its_usage_to_billing(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    recorded: list[tuple[str, str, dict[str, int]]] = []
+    recorded: list[tuple[str, str, dict[str, int], str]] = []
 
-    async def record(kind: str, model: Any, tally: billing.CallTally, actor: Any) -> None:
-        recorded.append((kind, model.id, tally.usage))
+    async def record(kind: str, model: Any, tally: billing.CallTally, actor: Any, *, category: str) -> None:
+        recorded.append((kind, model.id, tally.usage, category))
 
     usage = {"input_tokens": 12, "output_tokens": 3}
     monkeypatch.setattr(billing, "record_call", record)
     monkeypatch.setattr(asking, "stream_responses", fake_stream([{"text": "你好"}, {"usage": usage}]))
-    trial = client.post("/api/v1/ai/stream/ask", json={"content": "问", "model_id": "baidu-deepseek-v3.2"})
+    body = {"content": "问", "model_id": "baidu-deepseek-v3.2", "category": "tender"}
+    trial = client.post("/api/v1/ai/stream/ask", json=body)
     assert trial.text.endswith("data: [DONE]\n\n")
-    assert recorded == [("trial", "baidu-deepseek-v3.2", usage)]
+    # 还没保存的新模板：记在编辑页上选的类型下，费用账单据此归到一级业务板块。
+    assert recorded == [("trial", "baidu-deepseek-v3.2", usage, "tender")]
 
 
 def test_billing_route_needs_both_dates(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:

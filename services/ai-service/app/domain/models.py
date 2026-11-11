@@ -255,6 +255,10 @@ class CallUsage(Base):
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id, comment="记录ID")
     kind: Mapped[str] = mapped_column(String(16), nullable=False, comment="调用类型")
+    # 试发的模板类型（还没保存的新模板取编辑页上选的类型），账单按它分一级业务板块；上线前的旧记录算政策。
+    prompt_category: Mapped[str] = mapped_column(
+        String(16), nullable=False, default=DEFAULT_CATEGORY, server_default=DEFAULT_CATEGORY, comment="模板类型"
+    )
     model_id: Mapped[str] = mapped_column(String(100), nullable=False, comment="模型ID")
     model_name: Mapped[str] = mapped_column(String(100), nullable=False, comment="模型名称")
     input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="输入token")

@@ -98,7 +98,7 @@ async def test_publish_freezes_a_numbered_version_and_drafts_show_unreleased_cha
 
 
 async def test_online_template_cannot_be_deleted_and_offline_needs_a_release(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(prompts, "enqueue_event", noop)
+    monkeypatch.setattr(prompts, "audit_template", noop)
     saved: list[TemplateRelease] = []
     _tables(monkeypatch, template(release_id="c" * 32), saved)
     with pytest.raises(ApiError, match="先下线"):

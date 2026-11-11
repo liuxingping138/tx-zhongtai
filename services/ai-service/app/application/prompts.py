@@ -13,7 +13,7 @@ from platform_common.excel import run_excel_parse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application import model_configs
-from app.application.audit_emit import enqueue_event
+from app.application.audit_emit import audit_template
 from app.application.sheets import code_table_from_sheet, decode_code_table, rows_workbook, sheet_summary
 from app.core import storage
 from app.core.codebook import fetch_code_table
@@ -175,7 +175,7 @@ async def create_prompt(
     )
     repo.add(session, template)
     await session.flush()
-    await enqueue_event(session, event_type="ai.prompt.created", actor=actor, target_id=template.id)
+    await audit_template(session, "ai.prompt.created", actor, template)
     return await to_out(session, template, access)
 
 
@@ -207,9 +207,7 @@ async def update_prompt(
     for key, value in changes.items():
         setattr(template, key, value)
     _touch(template, actor)
-    await enqueue_event(
-        session, event_type="ai.prompt.updated", actor=actor, target_id=template.id, changes={"fields": sorted(changes)}
-    )
+    await audit_template(session, "ai.prompt.updated", actor, template, {"fields": sorted(changes)})
     return await to_out(session, template, access)
 
 
@@ -229,7 +227,7 @@ async def delete_prompt(session: AsyncSession, actor: Actor, access: CategoryAcc
     for sample in samples:
         run_repo.mark_deleted(sample, now)
     await repo.delete(session, template)
-    await enqueue_event(session, event_type="ai.prompt.deleted", actor=actor, target_id=prompt_id)
+    await audit_template(session, "ai.prompt.deleted", actor, template)
     await session.flush()
     for folder in (storage.prompt_dir(prompt_id), *(storage.run_dir(sample.id) for sample in samples)):
         await anyio.to_thread.run_sync(storage.remove_tree, folder)
@@ -278,9 +276,7 @@ async def upload_file(
         payload = (await _code_table_text(name, content)).encode("utf-8")
         template.code_name, template.code_digest = name, code_digest(payload)
     _touch(template, actor)
-    await enqueue_event(
-        session, event_type="ai.prompt.file_uploaded", actor=actor, target_id=prompt_id, changes={"kind": kind}
-    )
+    await audit_template(session, "ai.prompt.file_uploaded", actor, template, {"kind": kind})
     await session.flush()
     await anyio.to_thread.run_sync(storage.write_atomic, storage.prompt_file(prompt_id, kind), payload)
     return await to_out(session, template, access)
@@ -311,9 +307,7 @@ async def delete_file(
     else:
         template.code_name, template.code_digest = "", ""
     _touch(template, actor)
-    await enqueue_event(
-        session, event_type="ai.prompt.file_deleted", actor=actor, target_id=prompt_id, changes={"kind": kind}
-    )
+    await audit_template(session, "ai.prompt.file_deleted", actor, template, {"kind": kind})
     await session.flush()
     await anyio.Path(storage.prompt_file(prompt_id, kind)).unlink(missing_ok=True)
     return await to_out(session, template, access)
@@ -330,9 +324,7 @@ async def download_file(
         raise NotFoundError("文件不存在或已删除")
     if kind == "code":
         name = code_download_name(name)
-    await enqueue_event(
-        session, event_type="ai.prompt.file_exported", actor=actor, target_id=prompt_id, changes={"kind": kind}
-    )
+    await audit_template(session, "ai.prompt.file_exported", actor, template, {"kind": kind})
     return await path.read_bytes(), name
 
 

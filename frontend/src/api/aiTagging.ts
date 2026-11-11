@@ -25,6 +25,8 @@ export interface AiTask {
   daily_cost_limit: string
   cursor_date: string
   cursor_content_id: string
+  /** 类型判断只读这几个省份的源政策，空为不限；其余任务为空 */
+  provinces: string[]
   version: number
   updated_at: string
   updated_by_name: string
@@ -76,7 +78,7 @@ export interface TaggingSamples {
   rows: string[][]
 }
 
-export type AiTaskBody = Pick<AiTask, 'prompt_id' | 'batch_size' | 'content_max_chars' | 'daily_cost_limit' | 'cursor_date' | 'version'>
+export type AiTaskBody = Pick<AiTask, 'prompt_id' | 'batch_size' | 'content_max_chars' | 'daily_cost_limit' | 'cursor_date' | 'provinces' | 'version'>
 
 const base = '/policy/ai-tagging'
 export const listAiTasks = () => request<{ items: AiTask[] }>(http.get(`${base}/tasks`))

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { getAiBilling, type BillingRow } from '@/api/aiBilling'
@@ -9,19 +9,24 @@ import { useChartPalette } from '@/components/charts/echarts'
 import {
   colorMap,
   dailySeries,
+  filterOptions,
   filterRows,
   groupBy,
   money,
   presetRange,
+  pruneFilters,
+  SCENES,
   summarize,
   tokens,
+  type BillingFilters,
   type GroupKey,
   type RangePreset,
 } from './billing'
 import { costOption } from './billingChart'
 import '../shared/ai.css'
 
-/** 所有模型调用的花费：批量任务、定时打标、样本试跑、试发，以及已下线的多轮对话留下的记录。改日期重新取数，模型和用途在页面上直接筛。 */
+/** 所有模型调用的花费：批量任务、定时打标、样本试跑、试发，以及已下线的多轮对话留下的记录。改日期重新取数，
+ * 业务分类 → 一级业务板块 → 二级业务板块三级联动、模型独立，都在页面上直接筛，卡片、图表和明细跟着变。 */
 const route = useRoute()
 const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' })
 const PRESETS: { value: RangePreset; label: string }[] = [
@@ -32,7 +37,7 @@ const PRESETS: { value: RangePreset; label: string }[] = [
 ]
 const TABS: { value: GroupKey; label: string }[] = [
   { value: 'model', label: '按模型' },
-  { value: 'purpose', label: '按用途' },
+  { value: 'purpose', label: '按二级业务板块' },
   { value: 'day', label: '按日期' },
 ]
 const preset = ref<RangePreset | ''>('30')
@@ -40,16 +45,19 @@ const range = ref<[string, string]>(presetRange('30', today))
 const rows = ref<BillingRow[]>([])
 const loading = ref(false)
 const error = ref('')
-const models = ref<string[]>([])
-// 从任务调度「查看账单」跳过来时带着用途，进来就筛好。
-const purposes = ref<string[]>([route.query.purpose].flat().filter((item): item is string => typeof item === 'string' && !!item))
+// 从任务调度「查看账单」跳过来时带着用途（二级业务板块），进来就筛好。
+const filters = reactive<BillingFilters>({
+  scenes: [],
+  categories: [],
+  purposes: [route.query.purpose].flat().filter((item): item is string => typeof item === 'string' && !!item),
+  models: [],
+})
 const colorBy = ref<'model' | 'purpose'>('model')
 const tab = ref<GroupKey>('model')
 const palette = useChartPalette()
 
-const modelOptions = computed(() => [...new Set(rows.value.map(row => row.model))].sort())
-const purposeOptions = computed(() => [...new Set([...rows.value.map(row => row.purpose), ...purposes.value])].sort())
-const shown = computed(() => filterRows(rows.value, models.value, purposes.value))
+const options = computed(() => filterOptions(rows.value, filters))
+const shown = computed(() => filterRows(rows.value, filters))
 const total = computed(() => summarize(shown.value))
 const colors = computed(() => colorMap(rows.value, colorBy.value))
 const chart = computed(() => dailySeries(shown.value, range.value[0], range.value[1], colorBy.value, colors.value))
@@ -77,6 +85,11 @@ async function load(): Promise<void> {
   }
 }
 
+/** 上一级改了，下一级选不到的值去掉。只在人改上一级时修剪：刚换日期、数据还没回来时不能把带进来的用途清掉。 */
+function pruneBelow(): void {
+  Object.assign(filters, pruneFilters(rows.value, filters))
+}
+
 function pickPreset(value: string | number | boolean | undefined): void {
   preset.value = value as RangePreset
   range.value = presetRange(preset.value, today)
@@ -88,6 +101,7 @@ function pickRange(value: [string, string] | null): void {
   range.value = value
 }
 
+watch(() => [filters.scenes, filters.categories], pruneBelow)
 watch(range, () => void load())
 onMounted(load)
 </script>
@@ -130,7 +144,58 @@ onMounted(load)
         @update:model-value="pickRange"
       />
       <el-select
-        v-model="models"
+        v-model="filters.scenes"
+        multiple
+        collapse-tags
+        collapse-tags-tooltip
+        clearable
+        placeholder="全部业务分类"
+        aria-label="业务分类"
+        class="billing__filter"
+      >
+        <el-option
+          v-for="item in SCENES"
+          :key="item"
+          :label="item"
+          :value="item"
+        />
+      </el-select>
+      <el-select
+        v-model="filters.categories"
+        multiple
+        collapse-tags
+        collapse-tags-tooltip
+        clearable
+        placeholder="全部一级业务板块"
+        aria-label="一级业务板块"
+        class="billing__filter"
+      >
+        <el-option
+          v-for="item in options.categories"
+          :key="item"
+          :label="item"
+          :value="item"
+        />
+      </el-select>
+      <el-select
+        v-model="filters.purposes"
+        multiple
+        collapse-tags
+        collapse-tags-tooltip
+        clearable
+        placeholder="全部二级业务板块"
+        aria-label="二级业务板块"
+        class="billing__filter"
+      >
+        <el-option
+          v-for="item in options.purposes"
+          :key="item"
+          :label="item"
+          :value="item"
+        />
+      </el-select>
+      <el-select
+        v-model="filters.models"
         multiple
         collapse-tags
         collapse-tags-tooltip
@@ -140,24 +205,7 @@ onMounted(load)
         class="billing__filter"
       >
         <el-option
-          v-for="item in modelOptions"
-          :key="item"
-          :label="item"
-          :value="item"
-        />
-      </el-select>
-      <el-select
-        v-model="purposes"
-        multiple
-        collapse-tags
-        collapse-tags-tooltip
-        clearable
-        placeholder="全部用途"
-        aria-label="用途"
-        class="billing__filter"
-      >
-        <el-option
-          v-for="item in purposeOptions"
+          v-for="item in options.models"
           :key="item"
           :label="item"
           :value="item"
@@ -212,7 +260,7 @@ onMounted(load)
             按模型
           </el-radio-button>
           <el-radio-button value="purpose">
-            按用途
+            按二级业务板块
           </el-radio-button>
         </el-radio-group>
       </header>

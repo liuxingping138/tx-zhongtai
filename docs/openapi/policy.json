@@ -4985,6 +4985,14 @@
             "title": "Cursor Date",
             "default": ""
           },
+          "provinces": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Provinces"
+          },
           "version": {
             "type": "integer",
             "minimum": 1.0,

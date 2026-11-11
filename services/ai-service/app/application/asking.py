@@ -22,7 +22,7 @@ from app.application.billing import CallTally
 from app.application.prompts import code_text, require, require_code, require_editable
 from app.core.config import get_settings
 from app.core.llm import LlmRequest, stream_responses
-from app.domain.categories import CategoryAccess
+from app.domain.categories import CATEGORIES, DEFAULT_CATEGORY, CategoryAccess
 from app.domain.llm_models import LlmModel, build_body
 from app.domain.templating import CODE_TABLE_FIELD, fill_template, parse_fields, template_variables
 
@@ -144,6 +144,19 @@ async def prepare_trial(  # noqa: PLR0913  试发请求体里平铺的几个字�
     if prompt_id and template_variables(text):
         text = await _trial_values(session, prompt_id, text, row, code_table)
     return model, text
+
+
+async def trial_category(
+    session: AsyncSession, access: CategoryAccess, prompt_id: str | None, chosen: str | None
+) -> str:
+    """这次试发记在哪个模板类型下（费用账单的一级业务板块）。存过的模板按它的类型；还没保存的新模板按编辑页上选的，
+    没选或选了没有编辑权的类型，就记在能编辑的第一个类型下。prepare_trial 已经校验过权限，这里只定归属。"""
+
+    if prompt_id:
+        return (await require(session, prompt_id)).category
+    if chosen in CATEGORIES and chosen in access.editable:
+        return chosen
+    return next((code for code in CATEGORIES if code in access.editable), DEFAULT_CATEGORY)
 
 
 async def stream_answer(

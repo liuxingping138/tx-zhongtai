@@ -214,6 +214,8 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
 - 费用账单（`ai.billing`，`/api/v1/ai/billing`）：批量任务、定时任务和样本试跑的费用在 `ai_batch_runs` 上（用途按 `source` 分成「批量任务」「样本试跑」，定时任务的用途是发起方名字，如「政策AI打标·类型判断」），
   试发答完时在 `ai_call_usages` 记一行（不记内容，`app/application/billing.py`；`kind = chat` 的是已删的多轮对话留下的，账单里照样算）。新增调模型的入口要么走批量任务，要么也记进 `ai_call_usages`，否则账单漏钱。
   删除批量任务、删模板连带的样本试跑只打 `deleted_at`（用户定的：删了的钱照样算）：除账单外的查询都要带 `repositories.batch_runs.LIVE`
+  账单每行带三级归属供页面联动筛选：业务分类 `scene`（`source=pipeline` 是「日常调度」，其余都是「测试」）→ 一级业务板块 `category`（模板类型；试发记在 `ai_call_usages.prompt_category`，没保存的新模板取编辑页选的类型）→ 二级业务板块 `purpose`。
+  AI 的审计事件经 `audit_emit.enqueue_event(category=…)` / `audit_template` 带模板类型，操作日志的「类型」列读它；新加模板、任务相关的事件要带上
 
 ### 系统管理：给人分配角色即授权，个别人可再单独授权
 
@@ -281,7 +283,7 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
 
 - `app/aitag/`（与 policy、crawler、scheduler 平级）。源数据是同一 MySQL 实例的 `bid_analyse.csys_policy_info` + `csys_policy_info_content`
   （正文，按 `content_id` 一对一），只读不回写。正文其实是整页网页源码，发给模型前由 `rules.page_text` 提取成看得见的文字（只剩约 6%），并去掉导航、页头页脚（语义标签，或 class / id 拆开后含 header、footer、nav、menu、crumb 等词的块，否定词开头的如 `no-breadNav-padd` 不算；去完把原文最长一段弄丢了、或导航块到结尾没闭合，就退回整页文字。400 页实测再少约四分之一、没丢正文句子），
-  不提取既浪费十几倍的输入费用，又和业务人员用 Excel 测试时的输入口径不一致。按采集日逐天读、日内按 `content_id` 分页，只读到前天整天（源政策 ID 是哈希、不按入库先后排，读过一天之后再入库的会漏；源库每个采集日的数据第二天才入库完，实测最晚到第二天晚上），读到的政策已打过类型标的跳过（和已有基础标签内容相同、没写进去的记在 `policy_ai_skipped_sources`，也算打过）（读取进度往回调重扫补漏时不重复花钱）；批次进行中有人改了起始日期，收尾不把它改回去；每批开始前按模板现在的上线版本复核任务契约（`tagging.check_template_now`）；读取进度（采集日 + 正文ID）存在
+  不提取既浪费十几倍的输入费用，又和业务人员用 Excel 测试时的输入口径不一致。按采集日逐天读、日内按 `content_id` 分页，只读到前天整天（源政策 ID 是哈希、不按入库先后排，读过一天之后再入库的会漏；源库每个采集日的数据第二天才入库完，实测最晚到第二天晚上），类型判断任务可设采集省份（`policy_ai_tasks.provinces`，按源库 `prov_name` 原样 `IN`，空为不限；改省份不动读取进度），读到的政策已打过类型标的跳过（和已有基础标签内容相同、没写进去的记在 `policy_ai_skipped_sources`，也算打过）（读取进度往回调重扫补漏时不重复花钱）；批次进行中有人改了起始日期，收尾不把它改回去；每批开始前按模板现在的上线版本复核任务契约（`tagging.check_template_now`）；读取进度（采集日 + 正文ID）存在
   `policy_ai_tasks` 的类型判断那一行，一批写完才前移，费用到上限没跑到的行下批重读
 - 类型判断、政策解读、市场机会、新增场景找相似、新增场景补描述是五个独立的调度任务（`app/aitag/domain/tasks.py`），各有模板、每批条数、正文长度和每日上限（`policy_ai_tasks` 一任务一行），
   一次执行只跑一个任务的一批。后两个按待办取数据，前一个没跑后一个就没有待办，彼此不串联

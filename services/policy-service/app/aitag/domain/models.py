@@ -7,8 +7,8 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from platform_common.orm_base import Base
-from sqlalchemy import Date, DateTime, Index, Integer, Numeric, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Date, DateTime, Index, Integer, Numeric, String, Text, text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 DEFAULT_BATCH_SIZE = 1000
@@ -39,6 +39,11 @@ class PolicyAiTask(Base):
     cursor_date: Mapped[date | None] = mapped_column(Date, nullable=True, comment="读取进度：采集日期（类型判断用）")
     cursor_content_id: Mapped[str] = mapped_column(
         String(200), nullable=False, default="", comment="读取进度：该日已读到的正文ID"
+    )
+    # 类型判断只读这几个省份的源政策（源库 prov_name 原样比对），空列表为不限。读取进度不随省份重置，
+    # 要补以前日期里新加省份的政策就把起始日期往前调；已打过类型标的按源政策ID跳过，不重复花钱。
+    provinces: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb"), comment="采集省份（空为不限）"
     )
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, comment="版本号")
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, comment="更新时间")

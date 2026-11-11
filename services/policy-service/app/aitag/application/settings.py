@@ -35,6 +35,7 @@ def _task_out(task: PolicyAiTask) -> dict[str, Any]:
         "daily_cost_limit": str(task.daily_cost_limit),
         "cursor_date": task.cursor_date.isoformat() if task.cursor_date else "",
         "cursor_content_id": task.cursor_content_id,
+        "provinces": list(task.provinces or []),
         "version": task.version,
         "updated_at": format_beijing(task.updated_at),
         "updated_by_name": task.updated_by_name,
@@ -118,6 +119,21 @@ def _in_range(value: int, bounds: tuple[int, int], label: str) -> int:
     return value
 
 
+PROVINCE_MAX = 64  # 与基础标签「省份名称」列宽一致
+PROVINCES_MAX = 50
+
+
+def _provinces(values: Any) -> list[str]:
+    """采集省份：去空白、去重、保持选的顺序。源库按 prov_name 原样比对，写法要和基础标签里的省份名称一致。"""
+
+    picked = list(dict.fromkeys(str(item).strip() for item in values or [] if str(item).strip()))
+    if len(picked) > PROVINCES_MAX:
+        raise ApiError(f"采集省份最多选 {PROVINCES_MAX} 个", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    if any(len(item) > PROVINCE_MAX for item in picked):
+        raise ApiError(f"省份名称不能超过 {PROVINCE_MAX} 个字", code=ErrorCode.VALIDATION_ERROR, http_status=422)
+    return picked
+
+
 def _cursor_date(value: Any) -> date:
     cursor_date = date.fromisoformat(str(value))
     if cursor_date > today():
@@ -140,6 +156,8 @@ async def update_task(session: AsyncSession, actor: Actor, code: str, values: di
     content_max = 0 if content_max == 0 else _in_range(content_max, CONTENT_RANGE, "正文截取字数")
     # 只有类型判断读源库，有读取进度。
     cursor_date = _cursor_date(values["cursor_date"]) if code == "type" and values.get("cursor_date") else None
+    # 采集省份也只有类型判断用：其余任务按待办做，待办来自类型判断写进基础标签的政策。
+    provinces = _provinces(values.get("provinces")) if code == "type" else []
     prompt_id = str(values.get("prompt_id") or "").strip()
     if prompt_id and prompt_id != task.prompt_id:
         await _check_prompt(code, prompt_id)
@@ -149,6 +167,8 @@ async def update_task(session: AsyncSession, actor: Actor, code: str, values: di
     # 改了起始日期就从那天的第一条重新读；没改就保持当前进度。
     if cursor_date is not None and cursor_date != task.cursor_date:
         task.cursor_date, task.cursor_content_id = cursor_date, ""
+    # 改省份不动读取进度：已读过的日期里新加省份的政策，要把起始日期往前调才会补读（打过标的跳过，不重复花钱）。
+    task.provinces = provinces
     task.version += 1
     task.updated_at, task.updated_by_name = utcnow(), actor.name
     after = _task_out(task)

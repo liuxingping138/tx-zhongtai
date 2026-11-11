@@ -36,12 +36,13 @@ async def ask(
         row=body.row,
         code_table=body.code_table,
     )
+    category = await asking.trial_category(session, access, body.prompt_id, body.category)
     return sse_response(
         asking.stream_answer(
             model,
             prompt,
             thinking=body.thinking,
             trial_fields=split_fields(body.output_fields),
-            on_done=lambda tally: billing.record_call(CALL_TRIAL, model, tally, actor),
+            on_done=lambda tally: billing.record_call(CALL_TRIAL, model, tally, actor, category=category),
         )
     )

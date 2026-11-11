@@ -5,7 +5,11 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+from platform_common.actors import Actor
 from platform_common.audit_emit import AuditEmitter
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import SessionLocal
@@ -42,6 +46,36 @@ _emitter = AuditEmitter(
     get_settings=get_settings,
 )
 
-enqueue_event = _emitter.enqueue_event
+
+async def enqueue_event(  # noqa: PLR0913  与公共 enqueue_event 同一组关键字参数，只多一个 category
+    session: AsyncSession,
+    *,
+    event_type: str,
+    actor: Actor,
+    category: str | None = None,
+    target_id: str | None = None,
+    changes: dict[str, Any] | None = None,
+    extra: dict[str, Any] | None = None,
+) -> None:
+    """category 是模板类型（policy / customer / tender）：操作日志的「类型」列据此显示政策、客户、招投标。
+    模型配置这类不属于哪条业务线的不传。"""
+
+    if category:
+        extra = {**(extra or {}), "category": category}
+    await _emitter.enqueue_event(
+        session, event_type=event_type, actor=actor, target_id=target_id, changes=changes, extra=extra
+    )
+
+
 deliver_pending = _emitter.deliver_pending
 outbox_loop = _emitter.outbox_loop
+
+
+async def audit_template(
+    session: AsyncSession, event_type: str, actor: Actor, template: Any, changes: dict[str, Any] | None = None
+) -> None:
+    """模板（PromptTemplate）的审计事件：带上模板类型，目标是模板ID。"""
+
+    await enqueue_event(
+        session, event_type=event_type, actor=actor, category=template.category, target_id=template.id, changes=changes
+    )

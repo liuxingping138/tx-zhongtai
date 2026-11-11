@@ -10,7 +10,7 @@ import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useListQuery } from '@/composables/useListQuery'
 import ListEmpty from '@/components/ListEmpty.vue'
 import type { AuditEventItem } from '@/api/types'
-import { ACTION_LABELS, MODULE_LABELS, actionLabel, moduleLabel } from '@/utils/auditLabels'
+import { ACTION_LABELS, MODULE_LABELS, actionLabel, businessLineLabel, directoryLabel, moduleLabel } from '@/utils/auditLabels'
 import { formatTime, toBeijingIso } from '@/utils/time'
 
 const loading = ref(false)
@@ -240,6 +240,22 @@ onMounted(() => {
           label="人员"
           width="120"
         />
+        <el-table-column
+          label="业务模块"
+          width="100"
+        >
+          <template #default="{ row }">
+            {{ directoryLabel(row.module_code) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="类型"
+          width="80"
+        >
+          <template #default="{ row }">
+            {{ businessLineLabel(row.module_code, row.changes) }}
+          </template>
+        </el-table-column>
         <el-table-column
           label="模块"
           width="140"

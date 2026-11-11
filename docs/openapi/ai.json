@@ -2165,6 +2165,18 @@
               }
             ],
             "title": "Code Table"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 16
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
           }
         },
         "additionalProperties": false,

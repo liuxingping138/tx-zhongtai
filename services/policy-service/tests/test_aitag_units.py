@@ -30,18 +30,24 @@ ACTOR = Actor(id="u1", name="管理员")
 class FakeCursor:
     """按 (采集日, 起始ID, 条数) 从内存数据里取，模拟源库的分页查询。"""
 
-    def __init__(self, data: dict[date, list[str]]) -> None:
+    def __init__(self, data: dict[date, list[str]], provinces: dict[str, str] | None = None) -> None:
         self.data = data
+        self.provinces = provinces or {}
         self.queries: list[tuple[Any, ...]] = []
+        self.sql: list[str] = []
         self.result: list[dict[str, Any]] = []
 
     def execute(self, sql: str, params: Any) -> None:
         self.queries.append(tuple(params))
+        self.sql.append(sql)
         if "csys_policy_info_content" in sql:
             self.result = [{"content_id": cid, "content": f"{cid}正文"} for cid in params]
             return
-        day, after, limit = params
-        ids = [cid for cid in self.data.get(day, []) if cid > after][:limit]
+        day, after, *picked, limit = params
+        ids = [
+            cid for cid in self.data.get(day, []) if cid > after and (not picked or self.provinces.get(cid) in picked)
+        ]
+        ids = ids[:limit]
         self.result = [{"content_id": cid, "collect_date": day} for cid in ids]
 
     def fetchall(self) -> list[dict[str, Any]]:
@@ -77,6 +83,18 @@ def test_read_batch_walks_days_and_pages_within_a_day(monkeypatch: pytest.Monkey
     assert [row["content_id"] for row in rows] == ["b", "c", "d"]
     assert [query[:2] for query in cursor.queries] == [(DAY, "a"), (DAY + timedelta(1), ""), (DAY + timedelta(2), "")]
     assert source.read_batch(DAY + timedelta(3), "", 5, DAY + timedelta(3)) == []
+
+
+def test_read_batch_reads_only_the_picked_provinces(monkeypatch: pytest.MonkeyPatch) -> None:
+    cursor = FakeCursor({DAY: ["a", "b", "c", "d"]}, {"a": "北京市", "b": "河北省", "c": "北京市", "d": "天津市"})
+    monkeypatch.setattr(source, "mysql_connect", _connect(cursor))
+    rows = source.read_batch(DAY, "", 5, DAY, ["北京市", "天津市"])
+    assert [row["content_id"] for row in rows] == ["a", "c", "d"]
+    # 省份作为参数绑进 IN，条数仍在最后；不选省份时 SQL 不带省份条件。
+    assert cursor.queries[0] == (DAY, "", "北京市", "天津市", 5)
+    assert "prov_name IN (%s, %s)" in cursor.sql[0]
+    source.read_batch(DAY, "", 5, DAY)
+    assert "prov_name" not in cursor.sql[-1].split("WHERE")[1]
 
 
 def test_read_contents_goes_in_chunks(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -175,6 +193,7 @@ def _config(**overrides: Any) -> Any:
         "daily_cost_limit": Decimal(10),
         "cursor_date": DAY,
         "cursor_content_id": "",
+        "provinces": [],
     }
     values.update(overrides)
     return SimpleNamespace(**values)
@@ -222,6 +241,11 @@ async def test_empty_source_is_a_successful_batch(monkeypatch: pytest.MonkeyPatc
     run_id = uuid.uuid4()
     await tagging.run_batch(run_id, "type")
     assert (run_store[str(run_id)].status, run_store[str(run_id)].note) == ("success", "没有新的源政策")
+    # 选了省份的，说明里写明只读了哪些省份，看执行记录就知道为什么读不到。
+    _use_config(monkeypatch, _config(provinces=["北京市", "河北省"]))
+    scoped = uuid.uuid4()
+    await tagging.run_batch(scoped, "type")
+    assert run_store[str(scoped)].note == "没有新的源政策（只读 北京市、河北省）"
 
 
 async def test_unexpected_errors_hide_details_from_the_page(
@@ -337,6 +361,7 @@ def _task(code: str = "type", **overrides: Any) -> Any:
         "daily_cost_limit": Decimal(100),
         "cursor_date": DAY if code == "type" else None,
         "cursor_content_id": "c9" if code == "type" else "",
+        "provinces": [],
         "version": 3,
         "updated_at": None,
         "updated_by_name": "",
@@ -394,6 +419,18 @@ async def test_settings_validate_ranges_and_reset_the_cursor_on_date_change(monk
     assert full["content_max_chars"] == 0  # 0 = 全文照传
     with pytest.raises(ApiError, match="正文截取字数"):
         await update(FakeSession(), ACTOR, "type", {**body, "content_max_chars": 100, "version": 6})  # type: ignore[arg-type]
+    # 采集省份：去空白、去重；改省份不动读取进度（要补以前的日期就把起始日期往前调）。
+    picked = {**body, "cursor_date": "2026-09-01", "provinces": [" 北京市", "北京市", "", "河北省"], "version": 6}
+    scoped = await update(FakeSession(), ACTOR, "type", picked)  # type: ignore[arg-type]
+    assert (scoped["provinces"], scoped["cursor_date"], scoped["cursor_content_id"]) == (
+        ["北京市", "河北省"],
+        "2026-09-01",
+        "",
+    )
+    assert events[-1]["changes"]["provinces"] == {"from": [], "to": ["北京市", "河北省"]}
+    with pytest.raises(ApiError, match="最多选 50 个"):
+        many = {**body, "provinces": [f"省{index}" for index in range(51)], "version": 7}
+        await update(FakeSession(), ACTOR, "type", many)  # type: ignore[arg-type]
 
 
 async def test_only_the_type_task_has_a_reading_cursor(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -499,7 +536,7 @@ async def test_type_step_reads_only_through_the_day_before_yesterday(
     monkeypatch.setattr(source, "read_batch", lambda *args: windows.append(args) or [])
     await tagging.run_batch(uuid.uuid4(), "type")
     until = tagging.today() - timedelta(days=2)
-    assert windows == [(until, "", 10, until)]
+    assert windows == [(until, "", 10, until, [])]
 
 
 async def test_rereading_days_skips_policies_already_tagged(

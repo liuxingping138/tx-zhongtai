@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 from platform_common.errors import ApiError, NotFoundError, PermissionDeniedError
 
-from app.application import asking, test_rows
+from app.application import asking, audit_emit, test_rows
 from app.application import prompts as service
 from app.core import storage
 from app.core.config import get_settings
@@ -23,7 +23,8 @@ def _quiet_audit(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     async def record(_: Any, **kwargs: Any) -> None:
         events.append(kwargs)
 
-    monkeypatch.setattr(service, "enqueue_event", record)
+    # 模板事件经 audit_emit.audit_template 发出，最终调的是同模块的 enqueue_event。
+    monkeypatch.setattr(audit_emit, "enqueue_event", record)
     return events
 
 

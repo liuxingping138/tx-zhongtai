@@ -105,6 +105,7 @@ async def publish(
         session,
         event_type="ai.prompt.released",
         actor=actor,
+        category=template.category,
         target_id=template.id,
         changes={"release_no": release.release_no},
     )
@@ -119,7 +120,9 @@ async def take_offline(session: AsyncSession, actor: Actor, access: CategoryAcce
     if not template.release_id:
         raise _invalid("模板还没有上线")
     template.release_id = None
-    await enqueue_event(session, event_type="ai.prompt.offlined", actor=actor, target_id=template.id)
+    await enqueue_event(
+        session, event_type="ai.prompt.offlined", actor=actor, category=template.category, target_id=template.id
+    )
     return await prompts.to_out(session, template, access)
 
 

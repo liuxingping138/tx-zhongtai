@@ -159,17 +159,19 @@ async def _type_step(run_id: uuid.UUID, config: PolicyAiTask, spend: Spend) -> s
     # 源政策 ID 是哈希、不按入库先后排，读过一天之后再入库、ID 更小的就永远读不到了。
     until = today() - timedelta(days=SOURCE_SETTLE_DAYS)
     start = (config.cursor_date or until, config.cursor_content_id)
-    rows = await anyio.to_thread.run_sync(source.read_batch, start[0], start[1], config.batch_size, until)
+    provinces = list(config.provinces or [])
+    rows = await anyio.to_thread.run_sync(source.read_batch, start[0], start[1], config.batch_size, until, provinces)
+    scope = f"（只读 {'、'.join(provinces)}）" if provinces else ""
     if not rows:
-        return "没有新的源政策"
+        return f"没有新的源政策{scope}"
     # 打过类型标的跳过：读取进度往回调、重扫某几天补漏时，不能把已经打好的再问一遍模型。
     async with SessionLocal() as session:
         tagged = await repo.tagged_source_ids(session, [str(row["content_id"]) for row in rows])
     fresh = [row for row in rows if str(row["content_id"]) not in tagged]
     if not fresh:
         await _advance_cursor(rows[-1], start)
-        return f"读取 {len(rows)} 条，都已经打过类型标，读取进度前移"
-    return await _tag(run_id, config, spend, fresh, retag=False, start=start)
+        return f"读取 {len(rows)} 条{scope}，都已经打过类型标，读取进度前移"
+    return scope + await _tag(run_id, config, spend, fresh, retag=False, start=start)
 
 
 async def _advance_cursor(last: dict[str, Any], start: tuple[Any, str]) -> None:

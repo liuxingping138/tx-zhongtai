@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { actionLabel, moduleLabel } from './auditLabels'
+import { actionLabel, businessLineLabel, directoryLabel, moduleLabel } from './auditLabels'
 
 describe('auditLabels', () => {
   it('模块编码转中文', () => {
@@ -21,5 +21,15 @@ describe('auditLabels', () => {
   it('未知编码原样返回', () => {
     expect(moduleLabel('unknown.module')).toBe('unknown.module')
     expect(actionLabel('unknown')).toBe('unknown')
+  })
+
+  it('业务模块取菜单目录，类型取业务线', () => {
+    expect(['auth', 'system.users', 'policy.sources', 'codebook.area_codes', 'ai.prompts'].map(directoryLabel))
+      .toEqual(['系统管理', '系统管理', '政策', '码表管理', 'AI提问'])
+    expect(businessLineLabel('policy.base_tags')).toBe('政策')
+    expect(businessLineLabel('ai.batch_runs', { category: 'tender' })).toBe('招投标')
+    // AI 的旧事件没记模板类型、系统管理和码表管理不属于哪条业务线：都显示「-」。
+    expect([businessLineLabel('ai.models', {}), businessLineLabel('system.users'), businessLineLabel('codebook.scenarios')])
+      .toEqual(['-', '-', '-'])
   })
 })

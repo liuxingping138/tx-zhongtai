@@ -85,6 +85,8 @@ class AskBody(_Body):
     output_fields: str = Field(default="", max_length=2000)
     # 编辑页上现在选的系统码表（空串＝不用系统码表，用上传的文件或不用）；不传就按模板存的。
     code_table: str | None = Field(default=None, max_length=32)
+    # 还没保存的新模板在编辑页上选的类型，费用账单据此归到一级业务板块；存过的模板以库里的类型为准。
+    category: str | None = Field(default=None, max_length=16)
 
 
 class SampleRunBody(_Body):

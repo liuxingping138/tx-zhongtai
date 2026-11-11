@@ -18,6 +18,9 @@ BATCH_PURPOSE = "批量任务"
 SAMPLE_PURPOSE = "样本试跑"
 CALL_PURPOSES = {CALL_CHAT: "多轮对话（已下线）"}
 TRIAL_PURPOSE = "试发"
+# 业务分类：定时任务发起的是「日常调度」，其余（页面上的批量任务、样本试跑、试发、多轮对话）都算「测试」（用户定的）。
+SCENE_SCHEDULED = "日常调度"
+SCENE_TEST = "测试"
 
 
 def add_call(session: AsyncSession, usage: CallUsage) -> None:
@@ -50,8 +53,8 @@ def _day(column: Any) -> Any:
 
 
 async def daily(session: AsyncSession, since: datetime, until: datetime) -> list[dict[str, Any]]:
-    """[since, until) 之间每天、每个模型、每种用途的次数、token 和费用。批量任务按费用流水记在实际花钱那天
-    （次数是那天花了钱的任务数）；没有流水的（流水表上线后才导入的旧系统任务）按发起那天算整笔。
+    """[since, until) 之间每天、每个模型、每种业务分类 × 模板类型 × 用途的次数、token 和费用。
+    批量任务按费用流水记在实际花钱那天（次数是那天花了钱的任务数）；没有流水的（流水表上线后才导入的旧系统任务）按发起那天算整笔。
     删除了的任务也算：删除只是不再列出，钱已经花出去了。
 
     按模型 ID 分组：任务上记的是发起当时的模型名，改过名（或旧系统导入）的同一个模型名字不一样。
@@ -63,12 +66,18 @@ async def daily(session: AsyncSession, since: datetime, until: datetime) -> list
         (BatchRun.source == RUN_SOURCE_SAMPLE, literal(SAMPLE_PURPOSE)),
         else_=literal(BATCH_PURPOSE),
     ).label("purpose")
+    batch_scene = case(
+        (BatchRun.source == RUN_SOURCE_PIPELINE, literal(SCENE_SCHEDULED)), else_=literal(SCENE_TEST)
+    ).label("scene")
+    batch_category = BatchRun.prompt_category.label("category")
     ledger_day = RunCost.day.label("day")
     booked = (
         select(
             ledger_day,
             BatchRun.model_id.label("model_id"),
             func.max(BatchRun.model_name).label("model_name"),
+            batch_scene,
+            batch_category,
             batch_purpose,
             func.count().label("calls"),
             func.sum(RunCost.input_tokens).label("input_tokens"),
@@ -77,7 +86,7 @@ async def daily(session: AsyncSession, since: datetime, until: datetime) -> list
         )
         .join(BatchRun, BatchRun.id == RunCost.run_id)
         .where(RunCost.day >= since.astimezone(BEIJING).date(), RunCost.day < until.astimezone(BEIJING).date())
-        .group_by(ledger_day, BatchRun.model_id, batch_purpose)
+        .group_by(ledger_day, BatchRun.model_id, batch_scene, batch_category, batch_purpose)
     )
     batch_day = _day(BatchRun.created_at)
     unbooked = (
@@ -85,6 +94,8 @@ async def daily(session: AsyncSession, since: datetime, until: datetime) -> list
             batch_day,
             BatchRun.model_id.label("model_id"),
             func.max(BatchRun.model_name).label("model_name"),
+            batch_scene,
+            batch_category,
             batch_purpose,
             func.count().label("calls"),
             func.sum(BatchRun.input_tokens).label("input_tokens"),
@@ -99,7 +110,7 @@ async def daily(session: AsyncSession, since: datetime, until: datetime) -> list
             (BatchRun.input_tokens + BatchRun.output_tokens + BatchRun.search_calls > 0)
             | (BatchRun.inference_cost + BatchRun.search_cost > 0),
         )
-        .group_by(batch_day, BatchRun.model_id, batch_purpose)
+        .group_by(batch_day, BatchRun.model_id, batch_scene, batch_category, batch_purpose)
     )
     call_purpose = case(
         *((CallUsage.kind == kind, literal(name)) for kind, name in CALL_PURPOSES.items()),
@@ -111,6 +122,8 @@ async def daily(session: AsyncSession, since: datetime, until: datetime) -> list
             call_day,
             CallUsage.model_id.label("model_id"),
             func.max(CallUsage.model_name).label("model_name"),
+            literal(SCENE_TEST).label("scene"),
+            CallUsage.prompt_category.label("category"),
             call_purpose,
             func.count().label("calls"),
             func.sum(CallUsage.input_tokens).label("input_tokens"),
@@ -118,7 +131,7 @@ async def daily(session: AsyncSession, since: datetime, until: datetime) -> list
             func.sum(CallUsage.inference_cost + CallUsage.search_cost).label("cost"),
         )
         .where(CallUsage.created_at >= since, CallUsage.created_at < until)
-        .group_by(call_day, CallUsage.model_id, call_purpose)
+        .group_by(call_day, CallUsage.model_id, CallUsage.prompt_category, call_purpose)
     )
     rows: list[dict[str, Any]] = []
     for statement in (booked, unbooked, calls):

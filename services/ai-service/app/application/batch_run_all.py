@@ -99,6 +99,7 @@ async def run_all(session: AsyncSession, actor: Actor, access: CategoryAccess, r
         session,
         event_type="ai.batch_run.started",
         actor=actor,
+        category=run.prompt_category,
         target_id=run.id,
         changes={"prompt_id": run.prompt_id, "from_run": source.id, "model_id": model.id, "rows": rows},
         extra={"reused_rows": reused},

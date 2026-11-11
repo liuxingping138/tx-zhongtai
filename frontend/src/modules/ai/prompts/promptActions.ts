@@ -20,6 +20,8 @@ export async function removeTemplate(target: Pick<PromptTemplate, 'id' | 'title'
 }
 
 interface TrialDraft {
+  /** 编辑页上选的模板类型：还没保存的新模板，费用账单按它归到一级业务板块 */
+  category: string
   content: string
   output_fields: string
   code_table: string
@@ -42,6 +44,7 @@ export function trialRequest(
     row: context.row,
     output_fields: draft.output_fields,
     code_table: draft.code_table,
+    category: draft.category,
   }
   const shown = context.template ? `［${context.template.title}］\n${draft.content}` : draft.content
   return { body, shown, thinking }

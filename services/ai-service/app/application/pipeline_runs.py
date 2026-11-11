@@ -177,7 +177,14 @@ async def create(session: AsyncSession, caller: Actor, values: dict[str, Any]) -
     changes: dict[str, Any] = {"prompt_id": release.prompt_id, "release_no": release.release_no, "rows": len(rows)}
     if reused:
         changes["reused_rows"] = reused
-    await enqueue_event(session, event_type="ai.batch_run.started", actor=caller, target_id=run.id, changes=changes)
+    await enqueue_event(
+        session,
+        event_type="ai.batch_run.started",
+        actor=caller,
+        category=run.prompt_category,
+        target_id=run.id,
+        changes=changes,
+    )
     return {**run_to_dict(run), "reused": reused}
 
 

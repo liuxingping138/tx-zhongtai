@@ -77,3 +77,34 @@ export function actionLabel(code: string | null | undefined): string {
   }
   return ACTION_LABELS[code] || code
 }
+
+/** 业务模块 = 顶部菜单目录。登录、退出、改密码（auth / iam）都算系统管理；省市区编码在码表管理下（用户定的）。 */
+const DIRECTORY_LABELS: Record<string, string> = {
+  auth: '系统管理',
+  iam: '系统管理',
+  system: '系统管理',
+  policy: '政策',
+  codebook: '码表管理',
+  ai: 'AI提问',
+  customer: '客户',
+  tender: '招投标',
+}
+
+/** 模板类型编码 -> 类型（与 ai-service 的 domain/categories.py 一致）。 */
+const LINE_LABELS: Record<string, string> = { policy: '政策', customer: '客户', tender: '招投标' }
+
+export function directoryLabel(code: string | null | undefined): string {
+  const root = (code || '').split('.')[0] || ''
+  return DIRECTORY_LABELS[root] || '-'
+}
+
+/** 类型 = 业务线（政策 / 客户 / 招投标）。政策、客户、招投标模块按目录；AI提问按事件里记的模板类型
+ * （这个字段上线前的旧事件没有，显示「-」）；系统管理、码表管理不属于哪条业务线，显示「-」。 */
+export function businessLineLabel(code: string | null | undefined, changes?: Record<string, unknown> | null): string {
+  const root = (code || '').split('.')[0] || ''
+  if (root === 'ai') {
+    const category = changes?.category
+    return (typeof category === 'string' && LINE_LABELS[category]) || '-'
+  }
+  return LINE_LABELS[root] || '-'
+}

@@ -227,7 +227,9 @@ async def retry_run(
     changes: dict[str, Any] = {"rows": pending}
     if run.source == RUN_SOURCE_SAMPLE:
         changes["run_id"] = run.id
-    await enqueue_event(session, event_type=event_type, actor=actor, target_id=target, changes=changes)
+    await enqueue_event(
+        session, event_type=event_type, actor=actor, category=run.prompt_category, target_id=target, changes=changes
+    )
     return to_dict(run)
 
 
@@ -249,7 +251,7 @@ async def stop_run(
         run.status, run.finished_at = RUN_CANCELLED, utcnow()
     else:
         run.status, run.cancel_requested = RUN_STOPPING, True
-    await enqueue_event(session, event_type=event_type, actor=actor, target_id=run.id)
+    await enqueue_event(session, event_type=event_type, actor=actor, category=run.prompt_category, target_id=run.id)
     return to_dict(run)
 
 
@@ -271,7 +273,9 @@ async def delete_run(session: AsyncSession, actor: Actor, access: CategoryAccess
     if run.status in ACTIVE_STATUSES:
         raise ApiError("任务仍在运行，请先停止或等它结束再删除", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     repo.mark_deleted(run, utcnow())
-    await enqueue_event(session, event_type="ai.batch_run.deleted", actor=actor, target_id=run_id)
+    await enqueue_event(
+        session, event_type="ai.batch_run.deleted", actor=actor, category=run.prompt_category, target_id=run_id
+    )
     await session.flush()
     await anyio.to_thread.run_sync(storage.remove_tree, storage.run_dir(run_id))
 
@@ -283,7 +287,12 @@ async def download(
     access.require_read(run.prompt_category)
     path, filename = await run_file_path(run, kind)
     await enqueue_event(
-        session, event_type="ai.batch_run.exported", actor=actor, target_id=run.id, changes={"file": kind}
+        session,
+        event_type="ai.batch_run.exported",
+        actor=actor,
+        category=run.prompt_category,
+        target_id=run.id,
+        changes={"file": kind},
     )
     return path, filename
 
