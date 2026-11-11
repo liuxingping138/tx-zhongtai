@@ -87,7 +87,7 @@ test('爬虫监测：趋势切换范围，健康结构点分类筛选明细', as
   }
   await expect(page.getByRole('heading', { name: '需要关注', exact: true })).toHaveCount(0)
   await expect(page.getByRole('img', { name: /^采集趋势图：/ }).locator('canvas')).toBeVisible()
-  await expect(page.getByRole('img', { name: /^省份分布：/ }).locator('canvas')).toBeVisible()
+  await expect(page.getByRole('list', { name: '省份分布排行第 1 列' })).toBeVisible()
 
   // 切到卡片：点停更最多的那张，明细只剩该省、卡片显示选中；再点取消。
   await page.getByRole('radiogroup', { name: '省份展示方式' }).getByText('卡片', { exact: true }).click()
