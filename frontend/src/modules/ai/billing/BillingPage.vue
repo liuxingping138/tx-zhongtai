@@ -14,7 +14,7 @@ import {
   groupBy,
   money,
   presetRange,
-  pruneFilters,
+  pruneInPlace,
   SCENES,
   summarize,
   tokens,
@@ -87,7 +87,7 @@ async function load(): Promise<void> {
 
 /** 上一级改了，下一级选不到的值去掉。只在人改上一级时修剪：刚换日期、数据还没回来时不能把带进来的用途清掉。 */
 function pruneBelow(): void {
-  Object.assign(filters, pruneFilters(rows.value, filters))
+  pruneInPlace(rows.value, filters)
 }
 
 function pickPreset(value: string | number | boolean | undefined): void {

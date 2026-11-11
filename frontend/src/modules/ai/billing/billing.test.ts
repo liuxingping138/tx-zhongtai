@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { BillingRow } from '@/api/aiBilling'
-import { colorMap, dailySeries, daysBetween, filterOptions, filterRows, groupBy, money, presetRange, pruneFilters, summarize, tokens, type BillingFilters } from './billing'
+import { colorMap, dailySeries, daysBetween, filterOptions, filterRows, groupBy, money, presetRange, pruneFilters, pruneInPlace, summarize, tokens, type BillingFilters } from './billing'
 
 /** owner：业务分类 + 一级业务板块，默认「测试 / 政策」 */
 const row = (day: string, model: string, purpose: string, cost: string, calls = 1, owner: [string, string] = ['测试', '政策']): BillingRow =>
@@ -30,6 +30,17 @@ describe('费用账单', () => {
     // 上一级改了，下一级选不到的值去掉。
     const changed = pruneFilters(ROWS, { ...NONE, scenes: ['日常调度'], categories: ['客户', '政策'], purposes: ['批量任务', '政策AI打标·政策解读'] })
     expect([changed.categories, changed.purposes]).toEqual([['政策'], ['政策AI打标·政策解读']])
+  })
+
+  it('就地修剪：没变时数组引用不换，不会触发页面监听再修剪一轮（曾经死循环卡死页面）', () => {
+    const filters: BillingFilters = { ...NONE, scenes: ['日常调度'], categories: ['政策'], purposes: [] }
+    const before = filters.categories
+    expect(pruneInPlace(ROWS, filters)).toBe(false)
+    expect(filters.categories).toBe(before)
+    filters.categories = ['客户', '政策']
+    expect(pruneInPlace(ROWS, filters)).toBe(true)
+    expect(filters.categories).toEqual(['政策'])
+    expect(pruneInPlace(ROWS, filters)).toBe(false)
   })
 
   it('按模型、用途按费用从高到低，带占比；按日期从近到远', () => {

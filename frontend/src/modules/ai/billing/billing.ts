@@ -139,3 +139,19 @@ export function money(value: number): string {
 export function tokens(value: number): string {
   return value >= 10_000 ? `${(value / 10_000).toFixed(1)}万` : value.toLocaleString('zh-CN')
 }
+
+/** 就地修剪页面上的筛选，返回有没有改。只删不加，长度没变就是没变，这时一个数组也不换：
+ * 页面监听着 categories，换成新数组（哪怕内容一样）就会再触发修剪，修剪 → 赋值 → 再修剪，死循环把页面卡死。 */
+export function pruneInPlace(rows: BillingRow[], filters: BillingFilters): boolean {
+  const next = pruneFilters(rows, filters)
+  let changed = false
+  if (next.categories.length !== filters.categories.length) {
+    filters.categories = next.categories
+    changed = true
+  }
+  if (next.purposes.length !== filters.purposes.length) {
+    filters.purposes = next.purposes
+    changed = true
+  }
+  return changed
+}
