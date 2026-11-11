@@ -36,6 +36,7 @@ def to_out(row: AuditEvent) -> AuditEventOut:
         changes=redact(row.changes) if row.changes is not None else None,
         summary=row.summary,
         duration_ms=row.duration_ms,
+        business_line=row.business_line,
     )
 
 

@@ -2108,54 +2108,6 @@
           }
         }
       }
-    },
-    "/api/v1/ai/audit-categories": {
-      "get": {
-        "tags": [
-          "ai-audit"
-        ],
-        "summary": "Categories",
-        "description": "{目标ID: 模板类型编码}，查不到的不出现。",
-        "operationId": "categories_api_v1_ai_audit_categories_get",
-        "parameters": [
-          {
-            "name": "ids",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "maxItems": 200,
-              "description": "审计事件的目标ID（模板ID或任务ID）",
-              "default": [],
-              "title": "Ids"
-            },
-            "description": "审计事件的目标ID（模板ID或任务ID）"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
     }
   },
   "components": {

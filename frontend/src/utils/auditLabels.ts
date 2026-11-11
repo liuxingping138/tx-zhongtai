@@ -78,46 +78,42 @@ export function actionLabel(code: string | null | undefined): string {
   return ACTION_LABELS[code] || code
 }
 
-/** 业务模块 = 顶部菜单目录。登录、退出、改密码（auth / iam）都算系统管理；省市区编码在码表管理下（用户定的）。 */
-const DIRECTORY_LABELS: Record<string, string> = {
-  auth: '系统管理',
-  iam: '系统管理',
-  system: '系统管理',
-  policy: '政策',
-  codebook: '码表管理',
-  ai: 'AI提问',
-  customer: '客户',
-  tender: '招投标',
+/** 业务模块 = 顶部菜单目录 -> 它包含的模块编码第一段。登录、退出、改密码（auth / iam）都算系统管理；省市区编码在码表管理下（用户定的）。
+ * 客户、招投标还没有模块，不列出来（不给占位业务暴露空入口）。 */
+export const DIRECTORY_ROOTS: Record<string, string[]> = {
+  系统管理: ['auth', 'iam', 'system'],
+  政策: ['policy'],
+  码表管理: ['codebook'],
+  AI提问: ['ai'],
 }
+export const DIRECTORIES = Object.keys(DIRECTORY_ROOTS)
 
-/** 模板类型编码 -> 类型（与 ai-service 的 domain/categories.py 一致）。 */
-const LINE_LABELS: Record<string, string> = { policy: '政策', customer: '客户', tender: '招投标' }
+/** 类型 = 业务线编码 -> 中文。审计服务入库时算好存在 business_line（policy / customer / tender）。 */
+export const LINE_LABELS: Record<string, string> = { policy: '政策', customer: '客户', tender: '招投标' }
+export const LINES = Object.keys(LINE_LABELS)
+
+function rootOf(code: string | null | undefined): string {
+  return (code || '').split('.')[0] || ''
+}
 
 export function directoryLabel(code: string | null | undefined): string {
-  const root = (code || '').split('.')[0] || ''
-  return DIRECTORY_LABELS[root] || '-'
+  const root = rootOf(code)
+  return DIRECTORIES.find(name => DIRECTORY_ROOTS[name]?.includes(root)) || '-'
 }
 
-/** 类型 = 业务线（政策 / 客户 / 招投标）。政策、客户、招投标模块按目录；AI提问按事件里记的模板类型
- * （早先的事件没记，按事件目标回 AI 服务查，模板和任务都删光了才显示「-」）；系统管理、码表管理不属于哪条业务线，显示「-」。 */
-export function businessLineLabel(
-  code: string | null | undefined,
-  changes?: Record<string, unknown> | null,
-  resolved?: string,
-): string {
-  const root = (code || '').split('.')[0] || ''
-  if (root === 'ai') {
-    // 事件里记了就用记的；早先的事件没记，用按目标ID 回 AI 服务查到的（resolved）。
-    const category = typeof changes?.category === 'string' ? changes.category : resolved
-    return (category && LINE_LABELS[category]) || '-'
-  }
-  return LINE_LABELS[root] || '-'
+/** 类型列：系统管理、码表管理不属于哪条业务线，以及查不到模板类型的早先 AI 事件，显示「-」。 */
+export function businessLineLabel(line: string | null | undefined): string {
+  return (line && LINE_LABELS[line]) || '-'
 }
 
-/** 这一页里要回 AI 服务查类型的目标ID：AI 事件、事件里没记类型、有目标ID。 */
-export function aiTargetsToResolve(rows: { module_code: string | null; target_id: string | null; changes: Record<string, unknown> | null }[]): string[] {
-  const ids = rows
-    .filter(row => (row.module_code || '').startsWith('ai.') && typeof row.changes?.category !== 'string' && row.target_id)
-    .map(row => row.target_id as string)
-  return [...new Set(ids)]
+/** 选中的业务模块 -> 请求里的 module_root（模块编码第一段）。 */
+export function directoryRoots(directories: string[]): string[] {
+  return directories.flatMap(name => DIRECTORY_ROOTS[name] ?? [])
+}
+
+/** 「模块」选项随「业务模块」收窄：没选业务模块时全列。 */
+export function modulesInDirectories(codes: string[], directories: string[]): string[] {
+  if (!directories.length) return codes
+  const roots = new Set(directoryRoots(directories))
+  return codes.filter(code => roots.has(rootOf(code)))
 }

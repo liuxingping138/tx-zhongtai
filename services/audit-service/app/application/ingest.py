@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.redact import redact
 from app.application.schemas import IngestRequest
+from app.domain.business_lines import business_line
 from app.domain.models import AuditEvent
 from app.repositories import events as event_repo
 
@@ -27,6 +28,7 @@ def payload_bytes(body: IngestRequest) -> int:
 
 
 def build_event(source_service: str, body: IngestRequest) -> AuditEvent:
+    changes = redact(body.changes) if body.changes is not None else None
     return AuditEvent(
         id=uuid.uuid4(),
         event_id=body.event_id,
@@ -46,9 +48,10 @@ def build_event(source_service: str, body: IngestRequest) -> AuditEvent:
         error_code=body.error_code,
         client_ip=body.client_ip,
         user_agent=body.user_agent,
-        changes=redact(body.changes) if body.changes is not None else None,
+        changes=changes,
         summary=body.summary,
         duration_ms=body.duration_ms,
+        business_line=business_line(body.module_code, changes),
     )
 
 

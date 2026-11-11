@@ -25,8 +25,22 @@ def apply_filters[S: (Select[tuple[AuditEvent]], Select[tuple[int]])](stmt: S, f
         stmt = stmt.where(
             or_(*(AuditEvent.actor_name_snapshot.like(f"%{escape_like(name)}%", escape=LIKE_ESCAPE) for name in names))
         )
+    roots = filter_values(filters.module_root)
+    if roots:
+        stmt = stmt.where(
+            or_(
+                *(
+                    or_(
+                        AuditEvent.module_code == root,
+                        AuditEvent.module_code.like(f"{escape_like(root)}.%", escape=LIKE_ESCAPE),
+                    )
+                    for root in roots
+                )
+            )
+        )
     for column, value in (
         (AuditEvent.module_code, filters.module_code),
+        (AuditEvent.business_line, filters.business_line),
         (AuditEvent.action_code, filters.action_code),
         (AuditEvent.outcome, filters.outcome),
     ):

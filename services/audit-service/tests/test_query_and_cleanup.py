@@ -63,6 +63,31 @@ class TestApplyFilters:
         assert " OR " in sql(stmt)
 
 
+class TestBusinessLine:
+    def test_module_root_matches_the_root_and_its_children_only(self) -> None:
+        stmt = event_repo.apply_filters(select(AuditEvent), EventFilters(module_root=["system", "auth"]))
+        # 「system」本身和「system.」打头的都算，「systemx」这类不算；几个业务模块之间是「或」。
+        params = set(stmt.compile(dialect=postgresql.dialect()).params.values())
+        assert {"system", "system.%", "auth", "auth.%"} <= params
+        assert " OR " in sql(stmt)
+
+    def test_business_line_filter_uses_in(self) -> None:
+        text = sql(event_repo.apply_filters(select(AuditEvent), EventFilters(business_line=["tender"])))
+        assert "business_line IN ('tender')" in text
+
+    def test_ingest_derives_the_business_line(self) -> None:
+        def line(module: str, changes: dict[str, Any] | None = None) -> str | None:
+            return ingest.build_event("x", body(module_code=module, changes=changes)).business_line
+
+        assert line("policy.sources") == "policy"
+        # AI 按事件里记的模板类型；没记的、乱写的为空。系统管理、码表管理不属于哪条业务线。
+        assert line("ai.batch_runs", {"category": "tender"}) == "tender"
+        assert line("ai.batch_runs", {"category": "x"}) is None
+        assert line("ai.models") is None
+        assert line("system.users") is None
+        assert line("codebook.area_codes") is None
+
+
 class _Session:
     def __init__(self, *, commit_error: Exception | None = None) -> None:
         self.added: list[Any] = []

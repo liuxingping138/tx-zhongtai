@@ -24,7 +24,9 @@ def event_filters(
     occurred_to: datetime | None = None,
     actor_id: str | None = None,
     actor_name: list[str] | None = Query(default=None),
+    module_root: list[str] | None = Query(default=None, description="业务模块：模块编码第一段，如 policy、system"),
     module_code: list[str] | None = Query(default=None),
+    business_line: list[str] | None = Query(default=None, description="类型：policy / customer / tender"),
     action_code: list[str] | None = Query(default=None),
     outcome: list[str] | None = Query(default=None),
 ) -> EventFilters:
@@ -33,7 +35,9 @@ def event_filters(
         occurred_to=occurred_to,
         actor_id=actor_id,
         actor_name=actor_name,
+        module_root=module_root,
         module_code=module_code,
+        business_line=business_line,
         action_code=action_code,
         outcome=outcome,
     )

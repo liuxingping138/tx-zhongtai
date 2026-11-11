@@ -215,7 +215,7 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
   试发答完时在 `ai_call_usages` 记一行（不记内容，`app/application/billing.py`；`kind = chat` 的是已删的多轮对话留下的，账单里照样算）。新增调模型的入口要么走批量任务，要么也记进 `ai_call_usages`，否则账单漏钱。
   删除批量任务、删模板连带的样本试跑只打 `deleted_at`（用户定的：删了的钱照样算）：除账单外的查询都要带 `repositories.batch_runs.LIVE`
   账单每行带三级归属供页面联动筛选：业务分类 `scene`（`source=pipeline` 是「日常调度」，其余都是「测试」）→ 一级业务板块 `category`（模板类型；试发记在 `ai_call_usages.prompt_category`，没保存的新模板取编辑页选的类型）→ 二级业务板块 `purpose`。
-  AI 的审计事件经 `audit_emit.enqueue_event(category=…)` / `audit_template` 带模板类型，操作日志的「类型」列读它；新加模板、任务相关的事件要带上。早先没记的，操作日志页把目标ID 传给 `GET /api/v1/ai/audit-categories`（挂 `system.audit:list`，ai-service 唯一挂别的模块资源的路由，路由体检里点名放行）回查
+  AI 的审计事件经 `audit_emit.enqueue_event(category=…)` / `audit_template` 带模板类型，审计服务入库时据此算业务线；新加模板、任务相关的事件要带上
 
 ### 系统管理：给人分配角色即授权，个别人可再单独授权
 
@@ -256,7 +256,7 @@ policy / codebook / ai 走公共 Outbox，默认 5 分钟。审计服务按 `eve
 跑完由 `deploy/compose/scripts/secure-audit-db.sh` 收紧权限，两步都在 `make migrate-audit`（服务器上 `make SERVER=1 migrate-audit`）里，
 新表靠默认权限给应用账号增删改查。到期清理（`AUDIT_RETENTION_DAYS`，180 天）是审计服务自己的定时任务 `audit_cleanup`（每天 04:30），
 在单独的 `audit-worker` 容器里用清理账号分批删：清理账号的连接串只给它，对外提供接口的 audit-service 拿不到。
-新的审计写入逻辑不能依赖 UPDATE/DELETE。已投递的出站记录各服务自己每小时清一次，保留 30 天（`audit_emit.OUTBOX_RETENTION`、IAM 的 `outbox_delivery.OUTBOX_RETENTION`）。
+新的审计写入逻辑不能依赖 UPDATE/DELETE。操作日志的「类型」存在 `audit_events.business_line`（policy / customer / tender），入库时由审计服务按模块编码和 `changes.category` 算好（`app/domain/business_lines.py`），列表可按它和「业务模块」（`module_root`，模块编码第一段）筛；2026-11-11 前的 AI 事件用一次性脚本 `deploy/compose/scripts/backfill-audit-business-line.sh`（超级用户）按目标ID 从 ai 库补过，只补分类标签、不动事件内容。已投递的出站记录各服务自己每小时清一次，保留 30 天（`audit_emit.OUTBOX_RETENTION`、IAM 的 `outbox_delivery.OUTBOX_RETENTION`）。
 
 操作日志的筛选项（操作人、模块、动作）不整表 DISTINCT，而是用递归查询沿索引一个个跳到下一个不同的值
 （`repositories/events.distinct_values_stmt`），步数只和不同值的个数有关；新加筛选项字段要给它建以它打头的索引，

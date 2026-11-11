@@ -189,6 +189,27 @@
             }
           },
           {
+            "name": "module_root",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "业务模块：模块编码第一段，如 policy、system",
+              "title": "Module Root"
+            },
+            "description": "业务模块：模块编码第一段，如 policy、system"
+          },
+          {
             "name": "module_code",
             "in": "query",
             "required": false,
@@ -206,6 +227,27 @@
               ],
               "title": "Module Code"
             }
+          },
+          {
+            "name": "business_line",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "类型：policy / customer / tender",
+              "title": "Business Line"
+            },
+            "description": "类型：policy / customer / tender"
           },
           {
             "name": "action_code",

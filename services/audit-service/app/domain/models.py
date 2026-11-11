@@ -30,6 +30,7 @@ class AuditEvent(Base):
         Index("ix_audit_events_outcome", "outcome"),
         Index("ix_audit_events_actor_name", "actor_name_snapshot"),
         Index("ix_audit_events_action_code", "action_code"),
+        Index("ix_audit_events_business_line", "business_line"),
         {"comment": "操作日志"},
     )
 
@@ -54,6 +55,8 @@ class AuditEvent(Base):
     changes: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True, comment="变更内容")
     summary: Mapped[str | None] = mapped_column(Text, nullable=True, comment="摘要")
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="耗时毫秒")
+    # 政策 / 客户 / 招投标（policy / customer / tender），入库时算好，见 domain.business_lines；系统管理、码表管理为空。
+    business_line: Mapped[str | None] = mapped_column(String(16), nullable=True, comment="业务线")
 
 
 class ScheduledJob(ScheduledJobMixin, Base):

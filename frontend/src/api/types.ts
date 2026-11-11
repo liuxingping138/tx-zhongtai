@@ -143,6 +143,8 @@ export interface AuditEventItem {
   changes: Record<string, unknown> | null
   summary: string | null
   duration_ms: number | null
+  /** 业务线（类型）：policy / customer / tender，系统管理、码表管理为空 */
+  business_line: string | null
 }
 
 export interface ResourceNode {

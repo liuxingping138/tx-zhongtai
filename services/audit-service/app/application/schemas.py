@@ -53,3 +53,4 @@ class AuditEventOut(BaseModel):
     changes: dict[str, Any] | None
     summary: str | None
     duration_ms: int | None
+    business_line: str | None = None

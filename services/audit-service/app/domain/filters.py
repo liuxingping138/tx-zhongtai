@@ -14,6 +14,9 @@ class EventFilters:
     occurred_to: datetime | None = None
     actor_id: str | None = None
     actor_name: FilterValue = None
+    # 业务模块：模块编码的第一段（auth、system、policy……），等于这一段或以「这一段.」打头都算。
+    module_root: FilterValue = None
     module_code: FilterValue = None
+    business_line: FilterValue = None
     action_code: FilterValue = None
     outcome: FilterValue = None

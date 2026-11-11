@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 
-import { getAiAuditCategories, getAuditEvent, listAuditEvents } from '@/api/audit'
+import { getAuditEvent, listAuditEvents } from '@/api/audit'
 import { errorMessage } from '@/api/errors'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
@@ -10,24 +10,30 @@ import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useListQuery } from '@/composables/useListQuery'
 import ListEmpty from '@/components/ListEmpty.vue'
 import type { AuditEventItem } from '@/api/types'
-import { ACTION_LABELS, MODULE_LABELS, actionLabel, aiTargetsToResolve, businessLineLabel, directoryLabel, moduleLabel } from '@/utils/auditLabels'
-import { formatTime, toBeijingIso } from '@/utils/time'
+import {
+  ACTION_LABELS, DIRECTORIES, LINES, LINE_LABELS, MODULE_LABELS,
+  actionLabel, businessLineLabel, directoryLabel, moduleLabel, modulesInDirectories,
+} from '@/utils/auditLabels'
+import { formatTime } from '@/utils/time'
+import { emptyAuditQuery, hasFilters, toRequestParams } from './auditQuery'
 
 const loading = ref(false)
 const loadError = ref('')
 const resultFiltered = ref(false)
 const events = ref<AuditEventItem[]>([])
 const total = ref(0)
-const query = reactive({
-  actor_name: [] as string[],
-  module_code: [] as string[],
-  action_code: [] as string[],
-  outcome: [] as string[],
-  range: [] as string[] | null,
-  page: 1,
-  page_size: 20,
-})
+const query = reactive(emptyAuditQuery())
 const filters = useFilterOptions('/audit/events')
+// 「模块」随「业务模块」收窄：只列所选目录下的模块。
+const moduleBinding = computed(() => {
+  const binding = filters.bind('module_code')
+  return { ...binding, options: modulesInDirectories(binding.options, query.directory) }
+})
+// 业务模块改了，模块里不在这些目录下的选择去掉。只在真的去掉了值时才赋值：换成新数组会再触发监听，来回死循环。
+watch(() => query.directory, directories => {
+  const kept = modulesInDirectories(query.module_code, directories)
+  if (kept.length !== query.module_code.length) query.module_code = kept
+})
 
 const detailVisible = ref(false)
 const detailLoading = ref(false)
@@ -48,27 +54,6 @@ const listQuery = useListQuery(query, load, ['actor_name'])
 
 let loadSequence = 0
 
-type AuditQuery = typeof query
-
-function hasFilters(params: AuditQuery): boolean {
-  return Object.entries(params).some(([key, value]) =>
-    !['page', 'page_size'].includes(key) && (Array.isArray(value) ? value.length > 0 : Boolean(value)),
-  )
-}
-
-function toRequestParams(params: AuditQuery) {
-  return {
-    page: params.page,
-    page_size: params.page_size,
-    actor_name: params.actor_name || undefined,
-    module_code: params.module_code || undefined,
-    action_code: params.action_code || undefined,
-    outcome: params.outcome || undefined,
-    occurred_from: toBeijingIso(params.range?.[0]) || undefined,
-    occurred_to: toBeijingIso(params.range?.[1]) || undefined,
-  }
-}
-
 async function load() {
   const params = listQuery.requested()
   void listQuery.commitPage()
@@ -82,7 +67,6 @@ async function load() {
     events.value = page.items
     total.value = page.total
     resultFiltered.value = filtered
-    void resolveAiCategories(page.items, sequence)
   } catch (error) {
     if (sequence !== loadSequence) return
     loadError.value = errorMessage(error, '加载审计日志失败')
@@ -91,22 +75,10 @@ async function load() {
   }
 }
 
-/** 目标ID -> 模板类型编码。早先的 AI 事件没记类型，按目标ID 回 AI 服务查；查不到、没权限、服务不可用都只是显示「-」，不影响列表。 */
-const aiCategories = ref<Record<string, string>>({})
-
-async function resolveAiCategories(rows: AuditEventItem[], sequence: number): Promise<void> {
-  const ids = aiTargetsToResolve(rows).filter(id => !(id in aiCategories.value))
-  if (!ids.length) return
-  try {
-    const { items } = await getAiAuditCategories(ids)
-    if (sequence === loadSequence) aiCategories.value = { ...aiCategories.value, ...items }
-  } catch {
-    /* 类型只是辅助信息 */
-  }
-}
-
 function onResetFilters() {
   query.actor_name = []
+  query.directory = []
+  query.business_line = []
   query.module_code = []
   query.action_code = []
   query.outcome = []
@@ -186,10 +158,25 @@ onMounted(() => {
               placeholder="输入或选择人员"
             />
           </el-form-item>
+          <el-form-item label="业务模块">
+            <FilterSelect
+              v-model="query.directory"
+              :options="DIRECTORIES"
+              placeholder="选择业务模块"
+            />
+          </el-form-item>
+          <el-form-item label="类型">
+            <FilterSelect
+              v-model="query.business_line"
+              :options="LINES"
+              :labels="LINE_LABELS"
+              placeholder="政策 / 客户 / 招投标"
+            />
+          </el-form-item>
           <el-form-item label="模块">
             <FilterSelect
               v-model="query.module_code"
-              v-bind="filters.bind('module_code')"
+              v-bind="moduleBinding"
               :labels="MODULE_LABELS"
               placeholder="输入或选择模块"
             />
@@ -268,7 +255,7 @@ onMounted(() => {
           width="80"
         >
           <template #default="{ row }">
-            {{ businessLineLabel(row.module_code, row.changes, row.target_id ? aiCategories[row.target_id] : undefined) }}
+            {{ businessLineLabel(row.business_line) }}
           </template>
         </el-table-column>
         <el-table-column
