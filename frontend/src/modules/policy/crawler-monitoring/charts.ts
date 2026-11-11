@@ -160,7 +160,15 @@ function averageMarkLine(value: number, label: string, palette: ChartPalette) {
     silent: true,
     symbol: ['none', 'none'],
     lineStyle: { color: palette.inkMuted, type: 'dashed', width: 1.2 },
-    label: { show: true, position: 'insideEndTop', color: palette.inkMuted, formatter: `${label} ${compactTick(value)}` },
+    label: {
+      show: true,
+      position: 'insideEndTop',
+      color: palette.inkMuted,
+      backgroundColor: palette.surface,
+      padding: [2, 5],
+      borderRadius: 4,
+      formatter: `${label} ${compactTick(value)}`,
+    },
     data: [{ yAxis: value }],
   }
 }
@@ -313,7 +321,7 @@ export function siteTrendOption(points: CrawlerTrendPoint[], palette: ChartPalet
   const avg = points.length ? Math.round(sumRows(points) / points.length) : 0
   const bands = weekendBands(points.map(point => point.date))
   return {
-    grid: { left: 8, right: 12, top: 18, bottom: 4, containLabel: true },
+    grid: { left: 8, right: 16, top: 18, bottom: 4, containLabel: true },
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'line', lineStyle: { color: palette.border, type: 'dashed' } },
