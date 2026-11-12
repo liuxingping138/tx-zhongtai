@@ -750,9 +750,65 @@ body.el-popup-parent--hidden .workspace-main {
 .el-tag--success { --el-tag-bg-color: var(--zt-success-soft); --el-tag-border-color: var(--zt-success-border); --el-tag-text-color: var(--zt-success-text); }
 .el-tag--warning { --el-tag-bg-color: var(--zt-warning-soft); --el-tag-border-color: var(--zt-warning-border); --el-tag-text-color: var(--zt-warning-text); }
 .el-tag--danger { --el-tag-bg-color: var(--zt-danger-soft); --el-tag-border-color: var(--zt-danger-border); --el-tag-text-color: var(--zt-danger-text); }
-.el-alert--success.is-light, .el-alert--success.is-light .el-alert__description { --el-alert-bg-color: var(--zt-success-soft); color: var(--zt-success-text); }
-.el-alert--warning.is-light, .el-alert--warning.is-light .el-alert__description { --el-alert-bg-color: var(--zt-warning-soft); color: var(--zt-warning-text); }
-.el-alert--error.is-light, .el-alert--error.is-light .el-alert__description { --el-alert-bg-color: var(--zt-danger-soft); color: var(--zt-danger-text); }
+.el-alert {
+  border-radius: 8px;
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+.el-alert .el-alert__title {
+  font-weight: 600;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.el-alert .el-alert__description {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.el-alert--info.is-light {
+  --el-alert-bg-color: var(--zt-soft);
+  border-color: var(--zt-border);
+  color: var(--zt-ink-700);
+}
+.el-alert--info.is-light .el-alert__description {
+  color: var(--zt-ink-500);
+}
+.el-alert--success.is-light {
+  --el-alert-bg-color: var(--zt-success-soft);
+  border-color: var(--zt-success-border);
+  color: var(--zt-success-text);
+}
+.el-alert--success.is-light .el-alert__description {
+  color: var(--zt-success-text);
+}
+.el-alert--warning.is-light {
+  --el-alert-bg-color: var(--zt-warning-soft);
+  border-color: var(--zt-warning-border);
+  color: var(--zt-warning-text);
+}
+.el-alert--warning.is-light .el-alert__description {
+  color: var(--zt-warning-text);
+}
+.el-alert--error.is-light {
+  --el-alert-bg-color: var(--zt-danger-soft);
+  border-color: var(--zt-danger-border);
+  color: var(--zt-danger-text);
+}
+.el-alert--error.is-light .el-alert__description {
+  color: var(--zt-danger-text);
+}
+
+.el-empty {
+  padding: 36px 0;
+}
+.el-empty__description p {
+  color: var(--zt-ink-500);
+  font-size: 13px;
+}
+.el-empty__image svg {
+  opacity: 0.75;
+}
 .el-message--success { --el-message-text-color: var(--zt-success-text); }
 .el-message--warning { --el-message-text-color: var(--zt-warning-text); }
 .el-message--error { --el-message-text-color: var(--zt-danger-text); }
