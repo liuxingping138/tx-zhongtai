@@ -623,6 +623,254 @@
         }
       }
     },
+    "/api/v1/tender/purchaser/export": {
+      "get": {
+        "tags": [
+          "招中标"
+        ],
+        "summary": "Export Items",
+        "operationId": "export_items_api_v1_tender_purchaser_export_get",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 10000,
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "project_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "0",
+                "1"
+              ],
+              "type": "string",
+              "default": "0",
+              "title": "Project Status"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 256,
+              "default": "",
+              "title": "Project Name"
+            }
+          },
+          {
+            "name": "project_content_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 255,
+              "default": "",
+              "title": "Project Content Id"
+            }
+          },
+          {
+            "name": "purchaser_provname",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 40,
+              "title": "Purchaser Provname"
+            }
+          },
+          {
+            "name": "purchaser_cityname",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 100,
+              "title": "Purchaser Cityname"
+            }
+          },
+          {
+            "name": "purchaser_countyname",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 100,
+              "title": "Purchaser Countyname"
+            }
+          },
+          {
+            "name": "is_supp_scene",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "0",
+                  "1"
+                ],
+                "type": "string"
+              },
+              "title": "Is Supp Scene"
+            }
+          },
+          {
+            "name": "collect_date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Collect Date From"
+            }
+          },
+          {
+            "name": "collect_date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Collect Date To"
+            }
+          },
+          {
+            "name": "public_date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Public Date From"
+            }
+          },
+          {
+            "name": "public_date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Public Date To"
+            }
+          },
+          {
+            "name": "create_time_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Create Time From"
+            }
+          },
+          {
+            "name": "create_time_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Create Time To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/tender/purchaser/{record_id}": {
       "get": {
         "tags": [
@@ -1221,6 +1469,254 @@
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponse_dict_str__Any__"
                 }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tender/winbid/export": {
+      "get": {
+        "tags": [
+          "招中标"
+        ],
+        "summary": "Export Items",
+        "operationId": "export_items_api_v1_tender_winbid_export_get",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 10000,
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "project_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "0",
+                "1"
+              ],
+              "type": "string",
+              "default": "0",
+              "title": "Project Status"
+            }
+          },
+          {
+            "name": "project_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 256,
+              "default": "",
+              "title": "Project Name"
+            }
+          },
+          {
+            "name": "project_content_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 255,
+              "default": "",
+              "title": "Project Content Id"
+            }
+          },
+          {
+            "name": "purchaser_provname",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 40,
+              "title": "Purchaser Provname"
+            }
+          },
+          {
+            "name": "purchaser_cityname",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 100,
+              "title": "Purchaser Cityname"
+            }
+          },
+          {
+            "name": "purchaser_countyname",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 100,
+              "title": "Purchaser Countyname"
+            }
+          },
+          {
+            "name": "is_supp_scene",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "0",
+                  "1"
+                ],
+                "type": "string"
+              },
+              "title": "Is Supp Scene"
+            }
+          },
+          {
+            "name": "collect_date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Collect Date From"
+            }
+          },
+          {
+            "name": "collect_date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Collect Date To"
+            }
+          },
+          {
+            "name": "public_date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Public Date From"
+            }
+          },
+          {
+            "name": "public_date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Public Date To"
+            }
+          },
+          {
+            "name": "create_time_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Create Time From"
+            }
+          },
+          {
+            "name": "create_time_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Create Time To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },

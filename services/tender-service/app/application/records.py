@@ -2,10 +2,13 @@
 
 from datetime import date, datetime
 
-from platform_common.errors import NotFoundError
+from anyio import to_thread
+from platform_common.errors import ApiError, ErrorCode, NotFoundError
+from platform_common.excel import build_workbook_async
 
+from app.core.config import get_settings
 from app.core.source import Row, source_reader
-from app.domain.fields import Kind, Status
+from app.domain.fields import Kind, Status, export_columns
 from app.domain.queries import ListQuery
 from app.repositories import records
 
@@ -53,3 +56,33 @@ def get_content(kind: Kind, status: Status, record_id: int) -> Row:
     if not str(content.get("html") or "").strip():
         raise NotFoundError("已关联到源记录，但正文内容为空")
     return {"html": content["html"]}
+
+
+def _read_export_rows(kind: Kind, query: ListQuery, limit: int) -> list[Row]:
+    with source_reader() as reader:
+        return records.export_records(reader, kind, query, limit=limit)
+
+
+def _format_export_row(row: Row) -> Row:
+    formatted = serialize(row)
+    formatted["project_status"] = "人工已处理（信息化）" if str(row.get("project_status")) == "1" else "原始数据"
+    formatted["is_supp_scene"] = "已补充" if str(row.get("is_supp_scene")) == "1" else "未补充"
+    return formatted
+
+
+async def export_records(kind: Kind, query: ListQuery) -> bytes:
+    limit = get_settings().export_max_rows
+    rows = await to_thread.run_sync(_read_export_rows, kind, query, limit)
+    if len(rows) > limit:
+        raise ApiError(
+            f"当前筛选结果超过单次导出上限 {limit:,} 条，请先缩小筛选范围（如指定采集日期或省份）后再导出。",
+            code=ErrorCode.VALIDATION_ERROR,
+            http_status=422,
+        )
+    sheet_name = "中标基础数据" if kind == "winbid" else "招标基础数据"
+    return await build_workbook_async(
+        export_columns(kind),
+        [_format_export_row(row) for row in rows],
+        sheet_name=sheet_name,
+        include_audit=False,
+    )

@@ -1,11 +1,23 @@
 <script setup lang="ts">
+import { Refresh } from '@element-plus/icons-vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { errorMessage } from '@/api/errors'
 import { getTenderStatistics, getTenderTotals, type TenderStatistics, type TenderTotals } from '@/api/tender'
 import BaseChart from '@/components/charts/BaseChart.vue'
 import { useChartPalette } from '@/components/charts/echarts'
-import { statisticsChart, recentRange } from './statistics'
-const range = ref<[string, string]>(recentRange())
+import TenderKpiGrid from './TenderKpiGrid.vue'
+import TenderProvincePanel from './TenderProvincePanel.vue'
+import { compactCount, recentRange, statisticsChart, structureDonutOption } from './statistics'
+
+const PRESETS = [
+  { days: 7, label: '近 7 天' },
+  { days: 14, label: '近 14 天' },
+  { days: 30, label: '近 30 天' },
+] as const
+
+const preset = ref<number | null>(7)
+const range = ref<[string, string]>(recentRange(new Date(), 7))
+const intakeMode = ref<'bar' | 'line'>('bar')
 const report = ref<TenderStatistics | null>(null)
 const totals = ref<TenderTotals | null>(null)
 const error = ref('')
@@ -15,23 +27,53 @@ const totalsLoading = ref(false)
 let totalTimer: ReturnType<typeof setTimeout> | undefined
 let disposed = false
 onBeforeUnmount(() => { disposed = true; clearTimeout(totalTimer) })
+
 const palette = useChartPalette()
 let sequence = 0
-const intakeChart = computed(() => statisticsChart(report.value?.daily ?? [], palette.value, 'intake'))
-const workChart = computed(() => statisticsChart(report.value?.daily ?? [], palette.value, 'work'))
+
+const intakeChart = computed(() => statisticsChart(report.value?.daily ?? [], palette.value, 'intake', intakeMode.value))
+const workChart = computed(() => statisticsChart(report.value?.daily ?? [], palette.value, 'work', 'bar'))
+const donutOption = computed(() =>
+  structureDonutOption(totals.value?.purchaser ?? 0, totals.value?.winbid ?? 0, palette.value),
+)
+
 const workload = computed(() => report.value?.daily.reduce((sum, row) => sum + row.tagged, 0) ?? 0)
+const rangeTotals = computed(() => {
+  const daily = report.value?.daily ?? []
+  const purchaser = daily.reduce((sum, row) => sum + row.purchaser, 0)
+  const winbid = daily.reduce((sum, row) => sum + row.winbid, 0)
+  const total = purchaser + winbid
+  const days = daily.length || 1
+  return { purchaser, winbid, total, days: daily.length, dailyAvg: Math.round(total / days) }
+})
+
+const sharePct = (part?: number, whole?: number) => {
+  if (!part || !whole) return '0.0%'
+  return `${((part * 100) / whole).toFixed(1)}%`
+}
+const count = (value?: number) => (value === undefined ? '—' : value.toLocaleString('zh-CN'))
+const formatTime = (iso?: string) => (iso ? iso.replace('T', ' ').slice(0, 19) : '—')
+
+const topProvince = computed(() => report.value?.provinces?.[0] ?? null)
+
 async function load() {
   const current = ++sequence
   error.value = ''
-  if (!range.value?.[0] || !range.value[1]) { error.value = '请选择统计日期范围'; return }
+  if (!range.value?.[0] || !range.value[1]) {
+    error.value = '请选择统计日期范围'
+    return
+  }
   loading.value = true
   try {
     const result = await getTenderStatistics(...range.value)
     if (current === sequence) report.value = result
   } catch (cause) {
     if (current === sequence) error.value = errorMessage(cause, '统计加载失败')
-  } finally { if (current === sequence) loading.value = false }
+  } finally {
+    if (current === sequence) loading.value = false
+  }
 }
+
 async function loadTotals() {
   clearTimeout(totalTimer)
   totalsLoading.value = true
@@ -53,204 +95,301 @@ async function loadTotals() {
   }
 }
 
-const count = (value?: number) => value === undefined ? '—' : value.toLocaleString('zh-CN')
+function pickPreset(days: number) {
+  preset.value = days
+  range.value = recentRange(new Date(), days)
+  void load()
+}
+
+function onRangeChange() {
+  preset.value = null
+}
+
 onMounted(() => { void load(); void loadTotals() })
 </script>
+
 <template>
-  <div class="tender-statistics">
-    <section
-      v-loading="totalsLoading && !totals"
-      class="panel"
-    >
-      <header>
-        <h2>招中标数据总量</h2><el-button
+  <div class="tender-stats">
+    <header class="stats-bar">
+      <div class="stats-bar__title">
+        <h1>招中标统计分析</h1>
+        <span
+          class="status-pill"
+          :class="{ 'is-updating': totalsLoading }"
+        >
+          <span class="status-dot" />
+          <template v-if="totalsLoading && !totals">后台统计中…</template>
+          <template v-else-if="totalsLoading">正在后台更新 · 上次 {{ formatTime(totals?.as_of).slice(11) }}</template>
+          <template v-else-if="totals">后台每 30 秒自动保鲜 · 更新于 {{ formatTime(totals.as_of).slice(11) }}</template>
+          <template v-else>等待数据源就绪</template>
+        </span>
+      </div>
+      <form
+        class="stats-bar__controls"
+        @submit.prevent="load"
+      >
+        <el-radio-group
+          :model-value="preset"
+          size="small"
+          aria-label="快捷时间范围"
+          @change="(value: string | number | boolean | undefined) => pickPreset(Number(value))"
+        >
+          <el-radio-button
+            v-for="item in PRESETS"
+            :key="item.days"
+            :value="item.days"
+          >
+            {{ item.label }}
+          </el-radio-button>
+        </el-radio-group>
+        <el-date-picker
+          v-model="range"
+          type="daterange"
+          size="small"
+          value-format="YYYY-MM-DD"
+          range-separator="至"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+          :clearable="false"
+          unlink-panels
+          style="width: 240px"
+          @change="onRangeChange"
+        />
+        <el-button
+          type="primary"
+          size="small"
+          native-type="submit"
+          :loading="loading"
+        >
+          查询
+        </el-button>
+        <el-button
+          size="small"
+          :icon="Refresh"
           :loading="totalsLoading"
           @click="loadTotals"
         >
           刷新总量
         </el-button>
-      </header>
-      <el-alert
-        v-if="totalError"
-        :title="totalError"
-        type="error"
-        :closable="false"
-      />
-      <div
-        v-if="totals || !totalError"
-        class="metrics"
+      </form>
+    </header>
+
+    <el-alert
+      v-if="totalError"
+      :title="totalError"
+      type="error"
+      :closable="false"
+      show-icon
+    />
+    <el-alert
+      v-if="error"
+      :title="error"
+      type="error"
+      :closable="false"
+      show-icon
+    >
+      <el-button
+        size="small"
+        @click="load"
       >
-        <div><span>数据总量</span><strong>{{ count(totals?.total) }}</strong></div>
-        <div><span>招标总量</span><strong>{{ count(totals?.purchaser) }}</strong></div>
-        <div><span>中标总量</span><strong>{{ count(totals?.winbid) }}</strong></div>
-      </div>
-      <p
-        v-if="totals"
-        class="note"
-      >
-        统计时间：{{ totals.as_of.replace('T', ' ').slice(0, 19) }} · 总量包含全部原始数据<span v-if="totalsLoading"> · 正在后台更新</span>
-      </p>
-    </section>
-    <section class="panel">
-      <el-form
-        inline
-        @submit.prevent="load"
-      >
-        <el-form-item label="统计日期（采集时间）">
-          <el-date-picker
-            v-model="range"
-            type="daterange"
-            value-format="YYYY-MM-DD"
-            range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期"
-            :clearable="false"
-            unlink-panels
-          />
-        </el-form-item>
-        <el-form-item>
-          <el-button
-            type="primary"
-            native-type="submit"
-            :loading="loading"
-          >
-            查询
-          </el-button>
-        </el-form-item>
-      </el-form>
-      <p class="note">
-        按采集日期统计，单次最多 31 天。信息化标签与基础字段补充均按人工已处理记录计数，场景处理暂为 0；两项工序不相加计算数据条数。
-      </p>
-      <el-alert
-        v-if="error"
-        :title="error"
-        type="error"
-        :closable="false"
-      >
-        <el-button @click="load">
-          重试
-        </el-button>
-      </el-alert>
-    </section>
+        重试
+      </el-button>
+    </el-alert>
+
+    <p
+      v-if="totals || report"
+      class="headline"
+      aria-live="polite"
+    >
+      <template v-if="totals">
+        全库累计接入原始数据 <strong class="hl-strong">{{ compactCount(totals.total) }}</strong> 条（招标占 <strong>{{ sharePct(totals.purchaser, totals.total) }}</strong>，中标占 <strong>{{ sharePct(totals.winbid, totals.total) }}</strong>）；
+      </template>
+      <template v-if="report && !error">
+        {{ report.date_from }} 至 {{ report.date_to }} 共采集入库 <strong class="hl-strong">{{ count(rangeTotals.total) }}</strong> 条（日均 <strong>{{ count(rangeTotals.dailyAvg) }}</strong> 条），
+        <template v-if="topProvince">
+          <strong>{{ topProvince.province || '未填写省份' }}</strong> 体量居首（{{ count(topProvince.purchaser + topProvince.winbid) }} 条），
+        </template>
+        已完成人工信息化及基础字段补充 <strong class="hl-good">{{ count(workload) }}</strong> 条。
+      </template>
+    </p>
+
+    <TenderKpiGrid
+      :totals="totals"
+      :totals-loading="totalsLoading"
+      :has-report="Boolean(report)"
+      :range-totals="rangeTotals"
+      :workload="workload"
+    />
+
     <template v-if="report && !error">
-      <p class="note">
-        当前结果：{{ report.date_from }} 至 {{ report.date_to }} · 统计时间：{{ report.as_of.replace('T', ' ').slice(0, 19) }}
-      </p>
-      <section
-        v-loading="loading"
-        class="panel"
-      >
-        <h3>每天数据接入情况</h3>
-        <BaseChart
-          :option="intakeChart"
-          label="招标与中标每日接入数量"
-          height="300px"
-        />
-      </section>
-      <section
-        v-loading="loading"
-        class="panel"
-      >
-        <h3>人工交付处理情况</h3>
-        <div class="metrics">
-          <div><span>打信息化标签</span><strong>{{ count(workload) }}</strong></div>
-          <div><span>基础字段补充</span><strong>{{ count(workload) }}</strong></div>
-          <div><span>场景补充（暂未开展）</span><strong>0</strong></div>
-        </div>
-        <BaseChart
-          :option="workChart"
-          label="每日信息化标签、基础字段补充与场景处理量"
-          height="300px"
-        />
-      </section>
-      <section class="panel">
-        <h3>分省份数据量</h3>
-        <el-table
-          :data="report.provinces"
-          stripe
-          empty-text="所选日期暂无数据"
+      <div class="grid-row grid-row--top">
+        <section
+          v-loading="loading"
+          class="panel panel--main"
         >
-          <el-table-column
-            prop="province"
-            label="省份"
-            min-width="160"
+          <header class="panel-head">
+            <div>
+              <h2>每日数据接入趋势</h2>
+              <p class="panel-note">
+                按采集日期统计（单次最多 31 天）；区间招标 {{ count(rangeTotals.purchaser) }} 条、中标 {{ count(rangeTotals.winbid) }} 条
+              </p>
+            </div>
+            <el-radio-group
+              v-model="intakeMode"
+              size="small"
+              aria-label="接入趋势图类型"
+            >
+              <el-radio-button value="bar">
+                分组柱状
+              </el-radio-button>
+              <el-radio-button value="line">
+                平滑趋势
+              </el-radio-button>
+            </el-radio-group>
+          </header>
+          <BaseChart
+            :option="intakeChart"
+            label="招标与中标每日接入数量"
+            height="260px"
           />
-          <el-table-column
-            prop="purchaser"
-            label="招标数据量"
-            align="right"
+        </section>
+
+        <section class="panel panel--side">
+          <header class="panel-head">
+            <div>
+              <h2>全库结构占比</h2>
+              <p class="panel-note">
+                原始库口径，不含交付表重复统计
+              </p>
+            </div>
+          </header>
+          <div class="donut-wrap">
+            <BaseChart
+              :option="donutOption"
+              label="招标与中标全库占比结构"
+              height="185px"
+            />
+            <div
+              class="donut-center"
+              aria-hidden="true"
+            >
+              <strong>{{ totals ? compactCount(totals.total) : '—' }}</strong>
+              <span>累计总规模</span>
+            </div>
+          </div>
+          <div class="donut-legend">
+            <div>
+              <span class="dot-label"><span class="dot dot--primary" />招标公告原始库</span>
+              <span class="tabular"><strong>{{ count(totals?.purchaser) }}</strong> ({{ sharePct(totals?.purchaser, totals?.total) }})</span>
+            </div>
+            <div>
+              <span class="dot-label"><span class="dot dot--success" />中标公告原始库</span>
+              <span class="tabular"><strong>{{ count(totals?.winbid) }}</strong> ({{ sharePct(totals?.winbid, totals?.total) }})</span>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="grid-row grid-row--mid">
+        <section
+          v-loading="loading"
+          class="panel"
+        >
+          <header class="panel-head">
+            <div>
+              <h2>人工交付处理趋势</h2>
+              <p class="panel-note">
+                信息化标签与基础字段补充按已处理状态计数，两项工序不相加计算数据条数
+              </p>
+            </div>
+          </header>
+          <div class="work-chips">
+            <div><span>信息化标签</span><strong class="tabular">{{ count(workload) }}</strong></div>
+            <div><span>基础字段补充</span><strong class="tabular">{{ count(workload) }}</strong></div>
+            <div><span>场景补充（暂未开展）</span><strong class="tabular">0</strong></div>
+          </div>
+          <BaseChart
+            :option="workChart"
+            label="每日信息化标签、基础字段补充与场景处理量"
+            height="210px"
           />
-          <el-table-column
-            prop="winbid"
-            label="中标数据量"
-            align="right"
-          />
-          <el-table-column
-            label="合计"
-            align="right"
+        </section>
+
+        <section class="panel">
+          <header class="panel-head">
+            <div>
+              <h2>每日统计明细</h2>
+              <p class="panel-note">
+                统计口径时间：{{ formatTime(report.as_of) }}
+              </p>
+            </div>
+            <span class="kpi-badge">共 {{ report.daily.length }} 天</span>
+          </header>
+          <el-table
+            :data="report.daily"
+            stripe
+            max-height="295"
           >
-            <template #default="{ row }">
-              {{ count(row.purchaser + row.winbid) }}
-            </template>
-          </el-table-column>
-        </el-table>
-      </section>
-      <section class="panel">
-        <h3>每日统计明细</h3>
-        <el-table
-          :data="report.daily"
-          stripe
-        >
-          <el-table-column
-            prop="date"
-            label="采集日期"
-            width="140"
-          />
-          <el-table-column
-            prop="purchaser"
-            label="招标接入量"
-            align="right"
-          />
-          <el-table-column
-            prop="winbid"
-            label="中标接入量"
-            align="right"
-          />
-          <el-table-column
-            prop="tagged"
-            label="信息化标签"
-            align="right"
-          />
-          <el-table-column
-            prop="enriched"
-            label="基础字段补充"
-            align="right"
-          />
-          <el-table-column
-            prop="scenario"
-            label="场景补充"
-            align="right"
-          />
-        </el-table>
-      </section>
+            <el-table-column
+              prop="date"
+              label="采集日期"
+              width="115"
+            />
+            <el-table-column
+              label="招标接入"
+              align="right"
+            >
+              <template #default="{ row }">
+                <span class="tabular">{{ count(row.purchaser) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              label="中标接入"
+              align="right"
+            >
+              <template #default="{ row }">
+                <span class="tabular">{{ count(row.winbid) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              label="信息化"
+              align="right"
+              width="82"
+            >
+              <template #default="{ row }">
+                <span class="tabular">{{ count(row.tagged) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              label="基础补充"
+              align="right"
+              width="86"
+            >
+              <template #default="{ row }">
+                <span class="tabular">{{ count(row.enriched) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="scenario"
+              label="场景"
+              align="right"
+              width="66"
+            />
+          </el-table>
+        </section>
+      </div>
+
+      <TenderProvincePanel :provinces="report.provinces" />
     </template>
+
     <p
       v-else-if="loading"
+      class="loading-note"
       role="status"
     >
       正在读取统计数据…
     </p>
   </div>
 </template>
-<style scoped>
-.tender-statistics { display: grid; gap: 16px; }
-.panel { padding: 20px 24px; border: 1px solid var(--zt-border); border-radius: 12px; background: var(--zt-panel); min-width: 0; }
-header { display: flex; align-items: center; justify-content: space-between; }
-h2, h3 { margin: 0 0 16px; font-size: 16px; color: var(--zt-ink-900); }
-.metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; padding: 12px 0; }
-.metrics > div { display: grid; gap: 10px; padding-left: 16px; border-left: 3px solid var(--zt-blue-600); }
-.metrics span, .note { font-size: 13px; color: var(--zt-ink-500); line-height: 1.7; }
-.metrics strong { font-size: 30px; font-variant-numeric: tabular-nums; color: var(--zt-ink-900); }
-.note { margin: 8px 0 0; }
-.el-form-item { margin-bottom: 8px; }
-</style>
+
+<style scoped src="./tender-statistics.css"></style>

@@ -256,10 +256,12 @@ def test_source_unavailable_is_503(monkeypatch):
 def test_only_get_routes_and_resource_authorization():
     assert audit_routes(app) == []
     mapping = permission_map(app)
-    assert len(mapping) == 10
+    assert len(mapping) == 12
     for route in iter_api_routes(app):
         if route.path.startswith("/api/"):
             assert route.methods == {"GET"}
+    assert mapping["GET /api/v1/tender/purchaser/export"][:2] == ("tender.purchaser", "export")
+    assert mapping["GET /api/v1/tender/winbid/export"][:2] == ("tender.winbid", "export")
     assert mapping["GET /api/v1/tender/winbid/{record_id}/content"][:2] == ("tender.winbid", "read")
 
 
@@ -398,3 +400,55 @@ async def test_totals_warmup_submits_before_first_page_visit(monkeypatch):
     with pytest.raises(asyncio.CancelledError):
         await main.warm_totals()
     assert called == [True]
+
+
+async def test_export_records_writes_xlsx_without_content_and_enforces_limit(monkeypatch):
+    from io import BytesIO
+
+    from openpyxl import load_workbook
+    from platform_common.errors import ApiError
+
+    sample = {
+        "id": 1001,
+        "project_content_id": "abc123",
+        "project_name": "测试招标项目",
+        "project_code": "ZB-001",
+        "purchaser_provname": "广东省",
+        "purchaser_cityname": "深圳市",
+        "purchaser_countyname": "南山区",
+        "purchaser": "测试单位",
+        "purchaser_address": "测试地址",
+        "agency": "测试代理",
+        "public_date": "2026-11-12",
+        "from_url": "https://example.com",
+        "first_indty_name": "数字政府",
+        "second_indty_name": "",
+        "third_indty_name": "",
+        "first_scene_name": "",
+        "second_scene_name": "",
+        "third_scene_name": "",
+        "project_status": "1",
+        "is_supp_scene": 1,
+        "collect_date": "2026-11-12",
+        "create_time": "2026-11-12 10:00:00",
+        "open_date": "2026-11-20",
+        "end_date": "2026-11-25",
+    }
+    reader = Reader([[sample]])
+    bind_reader(monkeypatch, service, reader)
+    payload = await service.export_records("purchaser", ListQuery(project_status="1"))
+    book = load_workbook(BytesIO(payload))
+    sheet = book.active
+    assert sheet is not None
+    rows = list(sheet.iter_rows(values_only=True))
+    assert rows[0][0] == "项目名称"
+    assert "正文" not in rows[0]
+    assert rows[1][0] == "测试招标项目"
+    assert "人工已处理（信息化）" in rows[1]
+    assert "已补充" in rows[1]
+
+    monkeypatch.setattr(service.get_settings(), "export_max_rows", 1)
+    too_many = Reader([[sample, {**sample, "id": 1002}]])
+    bind_reader(monkeypatch, service, too_many)
+    with pytest.raises(ApiError, match="超过单次导出上限"):
+        await service.export_records("purchaser", ListQuery())

@@ -66,6 +66,15 @@ def list_records(reader: Reader, kind: Kind, query: ListQuery) -> list[Row]:
     )
 
 
+def export_records(reader: Reader, kind: Kind, query: ListQuery, *, limit: int) -> list[Row]:
+    table = TABLES[kind, query.project_status]
+    where, params = where_clause(query)
+    return reader.select(
+        f"SELECT {', '.join(columns(kind))} FROM {table} WHERE {where} ORDER BY id DESC LIMIT %s",  # noqa: S608  标识符来自白名单，值绑定参数
+        (*params, limit + 1),
+    )
+
+
 def get_record(reader: Reader, kind: Kind, status: Status, record_id: int) -> Row | None:
     rows = reader.select(
         f"SELECT {', '.join(columns(kind))} FROM {TABLES[kind, status]} WHERE id = %s AND project_status = %s LIMIT 1",  # noqa: S608  表名和列名来自固定白名单，筛选值全部绑定参数

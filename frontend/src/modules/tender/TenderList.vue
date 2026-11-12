@@ -1,21 +1,35 @@
 <script setup lang="ts">
+import { Refresh } from '@element-plus/icons-vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import type { TenderKind, TenderRecord } from '@/api/tender'
 import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
+import ExportButton from '@/components/ExportButton.vue'
 import ListPage from '@/components/ListPage.vue'
-import { useTenderList } from './useTenderList'
-import { useListQuery } from '@/composables/useListQuery'
-import TenderFilters from './TenderFilters.vue'
+import { useExcelExport } from '@/composables/useExcelExport'
+import { filtersForExport, useListQuery } from '@/composables/useListQuery'
+import { useAuthStore } from '@/stores/auth'
 import { initialQuery, tenderColumns } from './fields'
+import TenderFilters from './TenderFilters.vue'
+import { useTenderList } from './useTenderList'
+
 const props = defineProps<{ kind: TenderKind }>()
-const title = computed(() => props.kind === 'winbid' ? '中标基础数据' : '招标基础数据')
+const auth = useAuthStore()
+const title = computed(() => (props.kind === 'winbid' ? '中标基础数据' : '招标基础数据'))
+const resource = computed(() => `tender.${props.kind}`)
 const columns = tenderColumns(props.kind)
 const defaults = columns.map(column => column.prop)
 const selected = ref([...defaults])
 const query = reactive(initialQuery())
 const listQuery = useListQuery(query, (): Promise<void> => load())
 const { items, total, loading, loadError, resultFiltered, hasMore, countMessage, load } = useTenderList(props.kind, listQuery)
+
+const { exporting, onExport } = useExcelExport({
+  path: `/tender/${props.kind}/export`,
+  filename: `${title.value}.xlsx`,
+  filters: () => filtersForExport(listQuery.applied),
+})
+
 async function changePage(page: number) {
   query.page = page
   await load()
@@ -30,6 +44,7 @@ function detailRoute(row: TenderRecord) {
 }
 onMounted(() => { void load() })
 </script>
+
 <template>
   <ListPage
     :title="title"
@@ -44,7 +59,7 @@ onMounted(() => { void load() })
     @change="load"
   >
     <template #total>
-      <span v-if="total !== null">共 {{ total.toLocaleString('zh-CN') }} 条记录</span>
+      <span v-if="total !== null">共 <strong>{{ total.toLocaleString('zh-CN') }}</strong> 条记录</span>
       <span v-else>{{ countMessage }}</span>
     </template>
     <template #pagination>
@@ -86,7 +101,15 @@ onMounted(() => { void load() })
       />
     </template>
     <template #actions>
+      <ExportButton
+        :allowed="auth.canExport(resource)"
+        :loading="exporting"
+        :disabled="loading || !!loadError"
+        hint="按当前已生效的筛选条件导出 Excel（单次最多 5 万条，不含正文）。"
+        @click="onExport"
+      />
       <el-button
+        :icon="Refresh"
         :loading="loading"
         @click="load"
       >
@@ -112,10 +135,22 @@ onMounted(() => { void load() })
       @reset="listQuery.resetFilters"
     >
       <template #cell-project_status="{ row }">
-        {{ row.project_status === '1' ? '人工已处理（信息化）' : '原始数据' }}
+        <el-tag
+          size="small"
+          :type="row.project_status === '1' ? 'success' : 'info'"
+          effect="light"
+        >
+          {{ row.project_status === '1' ? '人工已处理（信息化）' : '原始数据' }}
+        </el-tag>
       </template>
       <template #cell-is_supp_scene="{ row }">
-        {{ Number(row.is_supp_scene) === 1 ? '已补充' : '未补充' }}
+        <el-tag
+          size="small"
+          :type="Number(row.is_supp_scene) === 1 ? 'primary' : 'info'"
+          effect="plain"
+        >
+          {{ Number(row.is_supp_scene) === 1 ? '已补充' : '未补充' }}
+        </el-tag>
       </template>
     </BusinessTable>
   </ListPage>

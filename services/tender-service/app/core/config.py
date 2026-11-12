@@ -23,6 +23,7 @@ class Settings(BaseServiceSettings):
     mysql_read_timeout: int = Field(default=20, ge=1, le=120)
     mysql_count_timeout: int = Field(default=120, ge=1, le=300)
     stats_cache_seconds: int = Field(default=300, ge=1)
+    export_max_rows: int = Field(default=50000, ge=1, le=100000)
 
     @model_validator(mode="after")
     def production_secret(self) -> "Settings":

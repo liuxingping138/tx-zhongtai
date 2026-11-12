@@ -2,6 +2,8 @@
 
 from typing import Literal
 
+from platform_common.columns import ColumnSpec
+
 Kind = Literal["purchaser", "winbid"]
 Status = Literal["0", "1"]
 TABLES: dict[tuple[Kind, Status], str] = {
@@ -41,3 +43,45 @@ def columns(kind: Kind) -> tuple[str, ...]:
     return COMMON_FIELDS + (
         ("winbid", "accepted_amount", "bid_type") if kind == "winbid" else ("open_date", "end_date")
     )
+
+
+_COMMON_HEAD_SPECS: tuple[ColumnSpec, ...] = (
+    ColumnSpec("project_name", "项目名称"),
+    ColumnSpec("purchaser_provname", "招标单位省份"),
+    ColumnSpec("purchaser_cityname", "招标单位市"),
+    ColumnSpec("purchaser_countyname", "招标单位区县"),
+    ColumnSpec("purchaser", "招标单位名称"),
+    ColumnSpec("purchaser_address", "招标公司地址"),
+    ColumnSpec("agency", "代理机构"),
+)
+_COMMON_TAIL_SPECS: tuple[ColumnSpec, ...] = (
+    ColumnSpec("public_date", "发布时间"),
+    ColumnSpec("from_url", "发布链接"),
+    ColumnSpec("first_indty_name", "一级行业名称"),
+    ColumnSpec("second_indty_name", "二级行业名称"),
+    ColumnSpec("third_indty_name", "三级行业名称"),
+    ColumnSpec("first_scene_name", "一级场景"),
+    ColumnSpec("second_scene_name", "二级场景"),
+    ColumnSpec("third_scene_name", "三级场景"),
+    ColumnSpec("project_status", "项目状态"),
+    ColumnSpec("is_supp_scene", "是否补充场景"),
+    ColumnSpec("project_code", "项目编号"),
+    ColumnSpec("project_content_id", "项目ID"),
+    ColumnSpec("collect_date", "采集时间"),
+    ColumnSpec("create_time", "入库时间"),
+)
+_SPECIFIC_SPECS: dict[Kind, tuple[ColumnSpec, ...]] = {
+    "purchaser": (
+        ColumnSpec("open_date", "开标时间"),
+        ColumnSpec("end_date", "结束时间"),
+    ),
+    "winbid": (
+        ColumnSpec("winbid", "中标单位名称"),
+        ColumnSpec("accepted_amount", "中标金额"),
+        ColumnSpec("bid_type", "招标方式"),
+    ),
+}
+
+
+def export_columns(kind: Kind) -> tuple[ColumnSpec, ...]:
+    return _COMMON_HEAD_SPECS + _SPECIFIC_SPECS[kind] + _COMMON_TAIL_SPECS

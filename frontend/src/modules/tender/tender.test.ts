@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { chartPalette } from '@/components/charts/echarts'
 import { isolatedHtml } from './content'
 import { initialQuery, tenderColumns } from './fields'
-import { recentRange, statisticsChart } from './statistics'
+import { recentRange, statisticsChart, compactCount, shortProvinceName, structureDonutOption } from './statistics'
 
 describe('招中标页面规则', () => {
   it('两种列表包含各自 Excel 字段且不带大正文', () => {
@@ -27,5 +27,31 @@ describe('招中标页面规则', () => {
     expect(option.series).toEqual([
       expect.objectContaining({ data: [3] }), expect.objectContaining({ data: [3] }), expect.objectContaining({ data: [0] }),
     ])
+  })
+  it('大数压缩、省份简称与结构环形图生成正确', () => {
+    expect(compactCount(999)).toBe('999')
+    expect(compactCount(47_352_244)).toBe('4735.2万')
+    expect(compactCount(123_456_789)).toBe('1.23亿')
+    expect(shortProvinceName('新疆维吾尔自治区')).toBe('新疆')
+    expect(shortProvinceName('广东省')).toBe('广东')
+    expect(recentRange(new Date('2026-11-11T18:00:00Z'), 14)).toEqual(['2026-10-30', '2026-11-12'])
+    const donut = structureDonutOption(200, 100, chartPalette())
+    expect(donut.series).toHaveLength(1)
+  })
+  it('接入趋势支持折线面积模式、空数据及 Y 轴万级缩写', () => {
+    const palette = chartPalette()
+    const lineOpt = statisticsChart(
+      [{ date: '2026-11-12', purchaser: 12000, winbid: 8000, tagged: 0, enriched: 0, scenario: 0 }],
+      palette,
+      'intake',
+      'line',
+    )
+    expect(lineOpt.series).toHaveLength(2)
+    const emptyOpt = statisticsChart([], palette, 'intake', 'bar')
+    expect(emptyOpt.series).toHaveLength(2)
+    const formatter = (lineOpt.yAxis as { axisLabel: { formatter: (v: number) => string } }).axisLabel.formatter
+    expect(formatter(20_000)).toBe('2万')
+    expect(formatter(15_000)).toBe('1.5万')
+    expect(formatter(500)).toBe('500')
   })
 })
