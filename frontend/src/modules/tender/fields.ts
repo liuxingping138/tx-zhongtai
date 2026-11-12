@@ -6,10 +6,12 @@ export function tenderColumns(kind: TenderKind): DataColumn[] {
   const coreSpecific: DataColumn[] = kind === 'winbid'
     ? [
         { prop: 'winbid', label: '中标单位名称', minWidth: 220 },
-        { prop: 'accepted_amount', label: '中标金额', width: 150 },
+        { prop: 'accepted_amount', label: '中标金额（万元）', width: 150 },
         { prop: 'bid_type', label: '招标方式', width: 140 },
       ]
-    : []
+    : [
+        { prop: 'budget_fund', label: '预算金额（万元）', width: 150 },
+      ]
   const timeSpecific: DataColumn[] = kind === 'purchaser'
     ? [
         { prop: 'open_date', label: '开标时间', width: 180 },
@@ -47,9 +49,10 @@ export function tenderDetailGroups(kind: TenderKind): EditorGroup[] {
   const coreSpecific = kind === 'winbid'
     ? [
         { key: 'bid_type', label: '招标方式' },
-        { key: 'accepted_amount', label: '中标金额' },
+        { key: 'accepted_amount', label: '中标金额（万元）' },
       ]
     : [
+        { key: 'budget_fund', label: '预算金额（万元）' },
         { key: 'open_date', label: '开标时间' },
         { key: 'end_date', label: '结束时间' },
       ]

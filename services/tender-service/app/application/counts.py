@@ -18,12 +18,31 @@ from app.repositories import records, statistics
 
 logger = get_logger(__name__)
 _last_totals: Row | None = None
+_baseline_counts: dict[tuple[Kind, str], int] = {}
 _totals_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="tender-totals")
+_baseline_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="tender-baseline")
 _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="tender-count")
 _lock = Lock()
 _jobs: OrderedDict[str, tuple[float, Future[Row]]] = OrderedDict()
 _MAX_PENDING = 8
 _MAX_ENTRIES = 128
+
+
+def is_unfiltered(query: ListQuery) -> bool:
+    return not (
+        query.project_name.strip()
+        or query.project_content_id.strip()
+        or query.purchaser_provname
+        or query.purchaser_cityname
+        or query.purchaser_countyname
+        or query.is_supp_scene
+        or query.collect_date_from
+        or query.collect_date_to
+        or query.public_date_from
+        or query.public_date_to
+        or query.create_time_from
+        or query.create_time_to
+    )
 
 
 def _run(operation: Callable[[], Row]) -> Row:
@@ -50,9 +69,11 @@ def poll(key: str, operation: Callable[[], Row]) -> Row:
             if now - created < ttl:
                 return res
             del _jobs[key]
-        if key != "totals" and sum(not job.done() for _, job in _jobs.values()) >= _MAX_PENDING:
+        is_baseline = key == "totals" or key.startswith("baseline:")
+        if not is_baseline and sum(not job.done() for _, job in _jobs.values()) >= _MAX_PENDING:
             return {"state": "error", "data": None, "message": "统计任务较多，请稍后重试"}
-        _jobs[key] = (now, (_totals_executor if key == "totals" else _executor).submit(_run, operation))
+        executor = _totals_executor if key == "totals" else (_baseline_executor if is_baseline else _executor)
+        _jobs[key] = (now, executor.submit(_run, operation))
         # 只移除已完成任务，防止仍在执行的相同查询被重复提交。
         for old_key in list(_jobs):
             if len(_jobs) <= _MAX_ENTRIES:
@@ -87,9 +108,21 @@ def get_totals() -> Row:
 def _count(kind: Kind, query: ListQuery) -> Row:
     with source_reader(counting=True) as reader:
         total = records.count_records(reader, kind, query)
+    if is_unfiltered(query):
+        _baseline_counts[(kind, query.project_status)] = total
     return {"total": total}
 
 
 def get_count(kind: Kind, query: ListQuery) -> Row:
-    key = f"{kind}:{query.model_dump_json(exclude={'page', 'page_size'})}"
-    return poll(key, lambda: _count(kind, query))
+    unfiltered = is_unfiltered(query)
+    key = (
+        f"baseline:{kind}:{query.project_status}"
+        if unfiltered
+        else f"{kind}:{query.model_dump_json(exclude={'page', 'page_size'})}"
+    )
+    res = poll(key, lambda: _count(kind, query))
+    if unfiltered:
+        baseline = _baseline_counts.get((kind, query.project_status))
+        if baseline is not None and (res.get("state") == "pending" or res.get("data") is None):
+            return {"state": "ready", "data": {"total": baseline}, "message": ""}
+    return res

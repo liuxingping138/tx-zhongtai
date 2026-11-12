@@ -12,19 +12,23 @@ from platform_common.request_context import RequestIdMiddleware
 
 from app.api.routes import router
 from app.api.security import get_authz_client
-from app.application.counts import get_totals
+from app.application.counts import get_count, get_totals
 from app.core.config import get_settings
 from app.core.source import check_source_ready
+from app.domain.queries import ListQuery
 
 settings = get_settings()
 setup_logging(settings.service_name, level=settings.log_level, json_output=settings.environment != "development")
 
 
 async def warm_totals() -> None:
-    # 后台预热与刷新总量；专用计数线程不会挤占列表筛选计数。
+    # 后台预热与刷新总量与列表基准无条件计数；专用计数线程不会挤占列表筛选计数。
     while True:
         get_totals()
-        await asyncio.sleep(30)
+        for kind in ("purchaser", "winbid"):
+            for status in ("1", "0"):
+                get_count(kind, ListQuery(project_status=status))
+        await asyncio.sleep(60)
 
 
 @asynccontextmanager

@@ -39,7 +39,7 @@ def test_status_routes_to_one_table_and_never_reads_content(kind, status):
     for sql, params in reader.calls:
         assert TABLES[kind, status] in sql
         assert "project_status = %s" in sql and params[0] == status
-        assert "ORDER BY public_date DESC, id DESC" in sql
+        assert "ORDER BY purchaser_provname DESC, public_date DESC, id DESC" in sql
         assert " content" not in sql and " JOIN " not in sql
     assert reader.calls[0][1][-2:] == (21, 20)
 
@@ -416,16 +416,45 @@ async def test_totals_warmup_submits_before_first_page_visit(monkeypatch):
     from app import main
 
     called = []
+    warmed_counts = []
     monkeypatch.setattr(main, "get_totals", lambda: called.append(True))
+    monkeypatch.setattr(main, "get_count", lambda kind, q: warmed_counts.append((kind, q.project_status)))
 
     async def stop_after_first(interval):
-        assert interval == 30
+        assert interval == 60
         raise asyncio.CancelledError()
 
     monkeypatch.setattr(main.asyncio, "sleep", stop_after_first)
     with pytest.raises(asyncio.CancelledError):
         await main.warm_totals()
     assert called == [True]
+    assert ("purchaser", "0") in warmed_counts
+    assert ("winbid", "0") in warmed_counts
+
+
+def test_baseline_count_keeps_snapshot_while_refreshing(monkeypatch):
+    monkeypatch.setattr(counts, "_baseline_counts", {("purchaser", "0"): 123456})
+    monkeypatch.setattr(counts, "poll", lambda *args: {"state": "pending", "data": None, "message": "正在统计"})
+    res = counts.get_count("purchaser", ListQuery(project_status="0"))
+    assert res["state"] == "ready"
+    assert res["data"] == {"total": 123456}
+
+    # 没有快照且有筛选时正常返回 poll 结果
+    res_filtered = counts.get_count("purchaser", ListQuery(purchaser_provname=["广东"]))
+    assert res_filtered["state"] == "pending"
+
+
+def test_counts_count_executes_and_saves_baseline(monkeypatch):
+    reader = Reader([[{"total": 888}]])
+    monkeypatch.setattr(counts, "source_reader", lambda **kwargs: contextmanager(lambda: (yield reader))())
+    res = counts._count("purchaser", ListQuery(project_status="0"))
+    assert res == {"total": 888}
+    assert counts._baseline_counts[("purchaser", "0")] == 888
+
+    reader2 = Reader([[{"total": 66}]])
+    monkeypatch.setattr(counts, "source_reader", lambda **kwargs: contextmanager(lambda: (yield reader2))())
+    res2 = counts._count("purchaser", ListQuery(project_status="1", purchaser_provname=["广东"]))
+    assert res2 == {"total": 66}
 
 
 async def test_export_records_writes_xlsx_without_content_and_enforces_limit(monkeypatch):
@@ -457,6 +486,7 @@ async def test_export_records_writes_xlsx_without_content_and_enforces_limit(mon
         "is_supp_scene": 1,
         "collect_date": "2026-11-12",
         "create_time": "2026-11-12 10:00:00",
+        "budget_fund": "123.45",
         "open_date": "2026-11-20",
         "end_date": "2026-11-25",
     }
@@ -468,6 +498,7 @@ async def test_export_records_writes_xlsx_without_content_and_enforces_limit(mon
     assert sheet is not None
     rows = list(sheet.iter_rows(values_only=True))
     assert rows[0][0] == "项目名称"
+    assert "预算金额（万元）" in rows[0]
     assert "正文" not in rows[0]
     assert rows[1][0] == "测试招标项目"
     assert "人工已处理（信息化）" in rows[1]

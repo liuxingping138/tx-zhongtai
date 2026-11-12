@@ -61,7 +61,7 @@ def list_records(reader: Reader, kind: Kind, query: ListQuery) -> list[Row]:
     where, params = where_clause(query)
     sql = (
         f"SELECT {', '.join(columns(kind))} FROM {table} "  # noqa: S608  标识符来自白名单，值绑定参数
-        f"WHERE {where} ORDER BY public_date DESC, id DESC LIMIT %s OFFSET %s"
+        f"WHERE {where} ORDER BY purchaser_provname DESC, public_date DESC, id DESC LIMIT %s OFFSET %s"
     )
     return reader.select(sql, (*params, query.page_size + 1, (query.page - 1) * query.page_size))
 
@@ -71,7 +71,7 @@ def export_records(reader: Reader, kind: Kind, query: ListQuery, *, limit: int) 
     where, params = where_clause(query)
     sql = (
         f"SELECT {', '.join(columns(kind))} FROM {table} "  # noqa: S608  标识符来自白名单，值绑定参数
-        f"WHERE {where} ORDER BY public_date DESC, id DESC LIMIT %s"
+        f"WHERE {where} ORDER BY purchaser_provname DESC, public_date DESC, id DESC LIMIT %s"
     )
     return reader.select(sql, (*params, limit + 1))
 

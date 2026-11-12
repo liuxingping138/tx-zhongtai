@@ -41,7 +41,7 @@ REGION_FIELDS = ("purchaser_provname", "purchaser_cityname", "purchaser_countyna
 
 def columns(kind: Kind) -> tuple[str, ...]:
     return COMMON_FIELDS + (
-        ("winbid", "accepted_amount", "bid_type") if kind == "winbid" else ("open_date", "end_date")
+        ("winbid", "accepted_amount", "bid_type") if kind == "winbid" else ("open_date", "end_date", "budget_fund")
     )
 
 
@@ -72,12 +72,13 @@ _COMMON_TAIL_SPECS: tuple[ColumnSpec, ...] = (
 )
 _SPECIFIC_SPECS: dict[Kind, tuple[ColumnSpec, ...]] = {
     "purchaser": (
+        ColumnSpec("budget_fund", "预算金额（万元）"),
         ColumnSpec("open_date", "开标时间"),
         ColumnSpec("end_date", "结束时间"),
     ),
     "winbid": (
         ColumnSpec("winbid", "中标单位名称"),
-        ColumnSpec("accepted_amount", "中标金额"),
+        ColumnSpec("accepted_amount", "中标金额（万元）"),
         ColumnSpec("bid_type", "招标方式"),
     ),
 }
