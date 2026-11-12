@@ -52,23 +52,8 @@ def date_conditions(field: str, start: date | None, end: date | None) -> tuple[l
     return clauses, values
 
 
-def order_clause(query: ListQuery) -> str:
-    # 交付数据（status=1）或带有省份/日期/名称筛选时，严格按省份降序 + 时间降序 + ID 降序；
-    # 原始表（status=0，2400万行）在全量无省份无日期裸查时，分片代理跨历史 filesort 会超时，走物理索引按时间降序。
-    has_scope = bool(
-        query.purchaser_provname
-        or query.collect_date_from
-        or query.collect_date_to
-        or query.public_date_from
-        or query.public_date_to
-        or query.create_time_from
-        or query.create_time_to
-        or query.project_name.strip()
-        or query.project_content_id.strip()
-    )
-    if query.project_status == "1" or has_scope:
-        return "ORDER BY purchaser_provname DESC, public_date DESC, id DESC"
-    return "ORDER BY public_date DESC, id DESC"
+def order_clause(_query: ListQuery) -> str:
+    return "ORDER BY purchaser_provname DESC, public_date DESC, id DESC"
 
 
 def count_records(reader: Reader, kind: Kind, query: ListQuery) -> int:

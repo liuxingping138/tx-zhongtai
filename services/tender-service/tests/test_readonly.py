@@ -42,10 +42,7 @@ def test_status_routes_to_one_table_and_never_reads_content(kind, status):
             assert "project_status = %s" in sql and params[0] == status
         else:
             assert "WHERE 1=1" in sql
-        if status == "1":
-            assert "ORDER BY purchaser_provname DESC, public_date DESC, id DESC" in sql
-        else:
-            assert "ORDER BY public_date DESC, id DESC" in sql
+        assert "ORDER BY purchaser_provname DESC, public_date DESC, id DESC" in sql
         assert " content" not in sql and " JOIN " not in sql
     expected_limit = (21, 20)
     assert reader.calls[0][1][-2:] == expected_limit

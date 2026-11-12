@@ -71,11 +71,11 @@ function setRange(key: typeof DATES[number]['key'], value: [string, string] | nu
           />
           <el-option
             value="1"
-            label="人工已处理（通过）"
+            label="通过"
           />
           <el-option
             value="0"
-            label="原始数据（未通过）"
+            label="未通过"
           />
         </el-select>
       </el-form-item>
