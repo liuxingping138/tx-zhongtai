@@ -876,6 +876,13 @@ button:disabled { cursor: not-allowed; }
 
 .form-submit-error { margin-bottom: 18px; }
 
+/* Google Material 3 骨架屏平滑刷新状态，取代生硬的大遮罩 loading 圈圈 */
+.el-table.is-refreshing {
+  opacity: 0.65;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
 /* 顶栏高度收敛至 60px，侧栏 208px，释放更多垂直空间给业务数据 */
 .workspace-shell { --workspace-rail-width: 208px; --workspace-header-height: 60px; }
 

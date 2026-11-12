@@ -161,11 +161,12 @@
             "required": false,
             "schema": {
               "enum": [
+                "",
                 "0",
                 "1"
               ],
               "type": "string",
-              "default": "1",
+              "default": "",
               "title": "Project Status"
             }
           },
@@ -411,11 +412,12 @@
             "required": false,
             "schema": {
               "enum": [
+                "",
                 "0",
                 "1"
               ],
               "type": "string",
-              "default": "1",
+              "default": "",
               "title": "Project Status"
             }
           },
@@ -661,11 +663,12 @@
             "required": false,
             "schema": {
               "enum": [
+                "",
                 "0",
                 "1"
               ],
               "type": "string",
-              "default": "1",
+              "default": "",
               "title": "Project Status"
             }
           },
@@ -895,6 +898,7 @@
             "required": false,
             "schema": {
               "enum": [
+                "",
                 "0",
                 "1"
               ],
@@ -952,6 +956,7 @@
             "required": false,
             "schema": {
               "enum": [
+                "",
                 "0",
                 "1"
               ],
@@ -1023,11 +1028,12 @@
             "required": false,
             "schema": {
               "enum": [
+                "",
                 "0",
                 "1"
               ],
               "type": "string",
-              "default": "1",
+              "default": "",
               "title": "Project Status"
             }
           },
@@ -1273,11 +1279,12 @@
             "required": false,
             "schema": {
               "enum": [
+                "",
                 "0",
                 "1"
               ],
               "type": "string",
-              "default": "1",
+              "default": "",
               "title": "Project Status"
             }
           },
@@ -1523,11 +1530,12 @@
             "required": false,
             "schema": {
               "enum": [
+                "",
                 "0",
                 "1"
               ],
               "type": "string",
-              "default": "1",
+              "default": "",
               "title": "Project Status"
             }
           },
@@ -1757,6 +1765,7 @@
             "required": false,
             "schema": {
               "enum": [
+                "",
                 "0",
                 "1"
               ],
@@ -1814,6 +1823,7 @@
             "required": false,
             "schema": {
               "enum": [
+                "",
                 "0",
                 "1"
               ],

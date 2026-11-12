@@ -9,6 +9,7 @@ import FilterBar from '@/components/FilterBar.vue'
 import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useListQuery } from '@/composables/useListQuery'
 import ListEmpty from '@/components/ListEmpty.vue'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import type { AuditEventItem } from '@/api/types'
 import {
   ACTION_LABELS, DIRECTORIES, LINES, LINE_LABELS, MODULE_LABELS,
@@ -216,9 +217,15 @@ onMounted(() => {
           </template>
         </FilterBar>
       </template>
+      <TableSkeleton
+        v-if="loading && events.length === 0"
+        :columns="7"
+        :has-actions="true"
+      />
       <el-table
-        v-loading="loading"
+        v-else
         class="data-table"
+        :class="{ 'is-refreshing': loading }"
         :data="events"
         stripe
       >
@@ -370,5 +377,11 @@ onMounted(() => {
   white-space: pre-wrap;
   word-break: break-all;
   font-size: 12px;
+}
+
+.is-refreshing {
+  opacity: 0.65;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
 }
 </style>

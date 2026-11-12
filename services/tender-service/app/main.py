@@ -26,7 +26,7 @@ async def warm_totals() -> None:
     while True:
         get_totals()
         for kind in ("purchaser", "winbid"):
-            for status in ("1", "0"):
+            for status in ("", "1", "0"):
                 get_count(kind, ListQuery(project_status=status))
         await asyncio.sleep(60)
 

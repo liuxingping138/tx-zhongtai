@@ -5,6 +5,7 @@ import { Plus, Search } from '@element-plus/icons-vue'
 
 import { listPrompts, type PromptTemplate, type TemplateCategory } from '@/api/ai'
 import { errorMessage } from '@/api/errors'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { useAuthStore } from '@/stores/auth'
 import { ALL_CATEGORIES, defaultCategory, inCategory } from '../shared/categories'
 import { shortTime } from './sampleView'
@@ -168,11 +169,17 @@ function create(): void {
         :closable="false"
         show-icon
       />
+      <TableSkeleton
+        v-if="loading && templates.length === 0"
+        :columns="showTasks ? 8 : 7"
+        :has-actions="true"
+      />
       <el-table
-        v-loading="loading"
+        v-else
         :data="visible"
         row-key="id"
         class="data-table prompt-list__table"
+        :class="{ 'is-refreshing': loading }"
         :empty-text="emptyText"
         height="100%"
         @row-click="open"

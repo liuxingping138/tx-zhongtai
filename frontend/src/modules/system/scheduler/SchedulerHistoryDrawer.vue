@@ -4,6 +4,7 @@ import { Money, Refresh } from '@element-plus/icons-vue'
 
 import type { ScheduledRun } from '@/api/scheduler'
 import ScrollPort from '@/components/ScrollPort.vue'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { formatTime } from '@/utils/time'
 import { useAuthStore } from '@/stores/auth'
 import { TASK_PURPOSE, formatYuan, runResultText, taskOfJob } from './aiTagging'
@@ -78,11 +79,16 @@ function resultText(row: ScheduledRun): string {
       show-icon
     />
     <ScrollPort class="history-table">
+      <TableSkeleton
+        v-if="loading && records.length === 0"
+        :columns="6"
+      />
       <el-table
-        v-loading="loading"
+        v-else
         :data="records"
+        :class="{ 'is-refreshing': loading }"
         row-key="id"
-        :empty-text="loading ? '正在加载执行记录…' : '暂无执行记录，计划触发或手动执行后会在这里显示。'"
+        empty-text="暂无执行记录，计划触发或手动执行后会在这里显示。"
       >
         <el-table-column type="expand">
           <template #default="{ row }">

@@ -38,13 +38,17 @@ def test_status_routes_to_one_table_and_never_reads_content(kind, status):
     assert rows == [{"id": 123}]
     for sql, params in reader.calls:
         assert TABLES[kind, status] in sql
-        assert "project_status = %s" in sql and params[0] == status
+        if status:
+            assert "project_status = %s" in sql and params[0] == status
+        else:
+            assert "WHERE 1=1" in sql
         if status == "1":
             assert "ORDER BY purchaser_provname DESC, public_date DESC, id DESC" in sql
         else:
             assert "ORDER BY public_date DESC, id DESC" in sql
         assert " content" not in sql and " JOIN " not in sql
-    assert reader.calls[0][1][-2:] == (21, 20)
+    expected_limit = (21, 20)
+    assert reader.calls[0][1][-2:] == expected_limit
 
 
 def test_order_clause_with_scope_orders_by_province():
@@ -391,10 +395,14 @@ def test_http_routes_validate_filters_and_return_envelopes(monkeypatch):
 
 
 def test_collect_date_range_routes_as_daily_values_not_cross_shard_range():
-    sql, params = records.where_clause(ListQuery(collect_date_from="2026-11-10", collect_date_to="2026-11-12"))
+    sql, params = records.where_clause(
+        ListQuery(project_status="1", collect_date_from="2026-11-10", collect_date_to="2026-11-12")
+    )
     assert "collect_date IN (%s, %s, %s)" in sql
     assert params == ("1", "2026-11-10", "2026-11-11", "2026-11-12")
-    sql, params = records.where_clause(ListQuery(collect_date_from="2026-11-12", collect_date_to="2026-11-12"))
+    sql, params = records.where_clause(
+        ListQuery(project_status="1", collect_date_from="2026-11-12", collect_date_to="2026-11-12")
+    )
     assert "collect_date = %s" in sql
     assert params == ("1", "2026-11-12")
 

@@ -10,8 +10,11 @@ QLM_ID_MAX_LENGTH = 13
 
 
 def where_clause(query: ListQuery) -> tuple[str, tuple[object, ...]]:
-    clauses = ["project_status = %s"]
-    values: list[object] = [query.project_status]
+    clauses: list[str] = []
+    values: list[object] = []
+    if query.project_status:
+        clauses.append("project_status = %s")
+        values.append(query.project_status)
     if query.project_name.strip():
         # 使用 = 作为转义字符，避免关键词中的 %、_ 变成通配符。
         keyword = query.project_name.strip().replace("=", "==").replace("%", "=%").replace("_", "=_")
@@ -29,7 +32,7 @@ def where_clause(query: ListQuery) -> tuple[str, tuple[object, ...]]:
         parts, dates = date_conditions(field, getattr(query, f"{field}_from"), getattr(query, f"{field}_to"))
         clauses.extend(parts)
         values.extend(dates)
-    return " AND ".join(clauses), tuple(values)
+    return " AND ".join(clauses) if clauses else "1=1", tuple(values)
 
 
 def date_conditions(field: str, start: date | None, end: date | None) -> tuple[list[str], list[str]]:
@@ -98,10 +101,12 @@ def export_records(reader: Reader, kind: Kind, query: ListQuery, *, limit: int) 
 
 
 def get_record(reader: Reader, kind: Kind, status: Status, record_id: int) -> Row | None:
-    rows = reader.select(
-        f"SELECT {', '.join(columns(kind))} FROM {TABLES[kind, status]} WHERE id = %s AND project_status = %s LIMIT 1",  # noqa: S608  表名和列名来自固定白名单，筛选值全部绑定参数
-        (record_id, status),
-    )
+    cols = ", ".join(columns(kind))
+    table = TABLES[kind, status] if status else TABLES[kind, "0"]
+    cond = "id = %s AND project_status = %s" if status else "id = %s"
+    params = (record_id, status) if status else (record_id,)
+    sql = f"SELECT {cols} FROM {table} WHERE {cond} LIMIT 1"  # noqa: S608  白名单表名列名，值参数化
+    rows = reader.select(sql, params)
     return rows[0] if rows else None
 
 

@@ -2,6 +2,7 @@
 import { ArrowDown } from '@element-plus/icons-vue'
 
 import type { BatchRun, RunFileKind } from '@/api/ai'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { RUN_SOURCE_TEXT, RUN_STATUS_TEXT, formatYuan, isActive, roundText, runModeText, runStatusType } from '../shared/aiText'
 import { shortTime, versionLabel } from '../prompts/sampleView'
 import { RUN_FILES, deleteRun, downloadRunFile, retryRun, runAllRun, stopRun } from './runActions'
@@ -34,11 +35,17 @@ function progressText(run: BatchRun): string {
 
 <template>
   <div class="history">
+    <TableSkeleton
+      v-if="loading && items.length === 0"
+      :columns="7"
+      :has-actions="true"
+    />
     <el-table
-      v-loading="loading"
+      v-else
       :data="items"
       row-key="id"
       class="data-table history__table"
+      :class="{ 'is-refreshing': loading }"
       :empty-text="filtered ? '没有符合条件的任务' : '还没有批量任务'"
       height="100%"
       @row-click="(row: BatchRun) => emit('open', row)"

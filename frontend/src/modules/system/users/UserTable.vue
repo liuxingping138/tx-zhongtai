@@ -3,6 +3,7 @@ import { computed } from 'vue'
 
 import type { ManagedUser } from '@/api/system'
 import ListEmpty from '@/components/ListEmpty.vue'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { useAuthStore } from '@/stores/auth'
 import { formatTime } from '@/utils/time'
 import { lockText, sinceText } from '../sessions/loginText'
@@ -37,9 +38,15 @@ function roleNames(user: ManagedUser): string {
 </script>
 
 <template>
+  <TableSkeleton
+    v-if="loading && users.length === 0"
+    :columns="6"
+    :has-actions="true"
+  />
   <el-table
-    v-loading="loading"
+    v-else
     class="data-table"
+    :class="{ 'is-refreshing': loading }"
     :data="users"
     stripe
   >
@@ -349,5 +356,11 @@ function roleNames(user: ManagedUser): string {
   white-space: nowrap;
   font-size: 12px;
   color: var(--zt-ink-500);
+}
+
+.is-refreshing {
+  opacity: 0.65;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
 }
 </style>

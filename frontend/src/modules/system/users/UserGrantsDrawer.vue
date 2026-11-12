@@ -8,6 +8,7 @@ import type { ResourceNode } from '@/api/types'
 import { collectGrants } from '@/composables/useRoleGrants'
 import { LEVEL_TEXT, moduleGroups, moduleNames } from '@/permissions/catalog'
 import { grantDiff, grantsFromTree, type GrantLevel } from '@/permissions/levels'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import PermissionTable from '../roles/PermissionTable.vue'
 
 /**
@@ -120,9 +121,14 @@ async function save(): Promise<void> {
       :closable="false"
       show-icon
     />
+    <TableSkeleton
+      v-if="loading && !tree.length"
+      :columns="4"
+    />
     <div
-      v-loading="loading"
+      v-else
       class="grants__table"
+      :class="{ 'is-refreshing': loading }"
     >
       <PermissionTable
         v-if="tree.length"

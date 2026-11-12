@@ -6,6 +6,7 @@ import type { ScenarioPath } from '@/api/codebook'
 import { errorMessage } from '@/api/errors'
 import { changeRowScenario, listCandidateRows, type CandidateDetail, type CandidateItem, type CandidateRow } from '@/api/scenarioCandidates'
 import ScenarioPicker from '@/components/ScenarioPicker.vue'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { pathText } from './candidates'
 
 /**
@@ -136,10 +137,16 @@ async function save(row: CandidateRow) {
       :closable="false"
       show-icon
     />
+    <TableSkeleton
+      v-if="loading && rows.length === 0"
+      :columns="4"
+      :has-actions="true"
+    />
     <el-table
-      v-loading="loading"
+      v-else
       :data="rows"
       class="data-table"
+      :class="{ 'is-refreshing': loading }"
     >
       <el-table-column
         label="政策"

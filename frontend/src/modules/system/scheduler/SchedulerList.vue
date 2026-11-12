@@ -9,6 +9,7 @@ import { errorMessage } from '@/api/errors'
 import { useAuthStore } from '@/stores/auth'
 import { formatTime } from '@/utils/time'
 import ListPage from '@/components/ListPage.vue'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
 import type { DataColumn } from '@/components/dataColumns'
 import JobSettingsDrawer from './JobSettingsDrawer.vue'
@@ -250,11 +251,18 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
           :defaults="defaults"
         />
       </template>
+      <TableSkeleton
+        v-if="loading && !overview?.items?.length"
+        :columns="visibleColumns.length || 7"
+        :has-actions="true"
+      />
       <el-table
+        v-else
         :data="overview?.items ?? []"
         class="data-table"
+        :class="{ 'is-refreshing': loading }"
         row-key="code"
-        :empty-text="loading ? '正在加载任务…' : '暂无任务，请联系管理员初始化任务配置'"
+        empty-text="暂无任务，请联系管理员初始化任务配置"
       >
         <el-table-column
           v-for="col in visibleColumns"

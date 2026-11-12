@@ -10,6 +10,7 @@ import DetailSections from './DetailSections.vue'
 import type { EditorGroup } from './editorGroups'
 import ListEmpty from './ListEmpty.vue'
 import RowActions from './RowActions.vue'
+import TableSkeleton from './TableSkeleton.vue'
 const props = defineProps<{
   items: T[]; columns: readonly DataColumn[]; selected: string[]; titleKey: string; summaryKeys?: string[];
   canWrite: boolean; loading: boolean; filtered: boolean; detailTitle?: string;
@@ -71,205 +72,213 @@ function editRoute(row: T, index: number): RouteLocationRaw {
     ref="root"
     class="business-table"
   >
-    <el-table
-      v-if="!narrow"
-      ref="table"
-      v-loading="loading"
-      :data="items"
-      :fit="false"
-      style="width: 100%"
-      row-key="id"
-      class="data-table business-table__desktop"
-      @selection-change="(rows: T[]) => emit('selection-change', rows)"
-    >
-      <template #empty>
+    <TableSkeleton
+      v-if="loading && items.length === 0"
+      :columns="displayed.length || 6"
+      :has-selection="selectable"
+      :has-actions="true"
+    />
+    <template v-else>
+      <el-table
+        v-if="!narrow"
+        ref="table"
+        :data="items"
+        :fit="false"
+        style="width: 100%"
+        row-key="id"
+        class="data-table business-table__desktop"
+        :class="{ 'is-refreshing': loading }"
+        @selection-change="(rows: T[]) => emit('selection-change', rows)"
+      >
+        <template #empty>
+          <ListEmpty
+            :loading="loading"
+            :filtered="filtered"
+            @reset="emit('reset')"
+          />
+        </template>
+        <el-table-column
+          v-if="selectable"
+          type="selection"
+          :width="SELECTION_WIDTH"
+          class-name="table-selection"
+        />
+        <el-table-column
+          v-for="col in laidOut"
+          :key="col.prop"
+          :prop="col.prop"
+          :label="col.label"
+          :width="col.width"
+          :show-overflow-tooltip="col.prop !== titleKey && !col.stack && !col.tags && !$slots[`cell-${col.prop}`]"
+          :label-class-name="col.ai ? 'column-ai' : undefined"
+        >
+          <template #header>
+            <span
+              class="column-heading"
+              :title="col.ai ? `${col.fullLabel || col.label}：AI 打标写入，人工验证后 AI 不再覆盖` : col.fullLabel || col.label"
+            ><span
+              v-if="col.ai"
+              class="ai-mark"
+              aria-label="AI 打标"
+            >AI</span>{{ col.label }}</span>
+          </template>
+          <template #default="{ row, $index }">
+            <template v-if="col.prop === titleKey">
+              <!-- Element Plus 注册列时会拿空行（没有 id）试渲染一次插槽，不判断就会按空 id 生成地址、控制台报错 -->
+              <RouterLink
+                v-if="detailRoute && row.id"
+                class="record-title"
+                :to="detailRoute(row, $index)"
+                :title="text(row, col)"
+              >
+                {{ text(row, col) }}
+              </RouterLink>
+              <button
+                v-else
+                type="button"
+                class="record-title"
+                :title="text(row, col)"
+                @click="open(row)"
+              >
+                {{ text(row, col) }}
+              </button>
+            </template>
+            <!-- 模块自己画这一格（如行内启停开关）：插槽名 cell-列名 -->
+            <slot
+              v-else-if="$slots[`cell-${col.prop}`]"
+              :name="`cell-${col.prop}`"
+              :row="row"
+            />
+            <el-tag
+              v-else-if="col.tags && value(row, col.prop)"
+              size="small"
+              :type="col.tags[value(row, col.prop)] ?? 'info'"
+              disable-transitions
+            >
+              {{ text(row, col) }}
+            </el-tag>
+            <span
+              v-else-if="col.stack"
+              class="cell-stack"
+              :title="[text(row, col), stackText(row, col)].filter(Boolean).join(' › ')"
+            >
+              <span class="cell-stack__main">{{ text(row, col) }}</span>
+              <span
+                v-if="stackText(row, col)"
+                class="cell-stack__sub"
+              >{{ stackText(row, col) }}</span>
+            </span>
+            <a
+              v-else-if="col.link && link(row, col)"
+              :href="link(row, col)"
+              target="_blank"
+              rel="noopener noreferrer"
+            >{{ text(row, col) }}</a>
+            <span
+              v-else
+              class="cell-text"
+              :title="text(row, col)"
+              :class="{ 'cell-text--wrap': col.wrap, 'record-boolean': ['need_interpret', 'is_penetrate', 'has_subsidy'].includes(col.prop) }"
+            >{{ text(row, col) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          v-if="availableWidth > totalWidth"
+          :width="availableWidth - totalWidth"
+          class-name="table-remainder"
+        />
+        <el-table-column
+          label="操作"
+          :width="actionWidth"
+          class-name="table-action"
+        >
+          <template #default="{ row, $index }">
+            <RowActions
+              v-if="row.id"
+              :view="detailRoute ? detailRoute(row, $index) : undefined"
+              :edit="detailRoute ? editRoute(row, $index) : undefined"
+              :can-edit="canWrite"
+              @view="open(row)"
+              @edit="emit('edit', row)"
+            />
+          </template>
+        </el-table-column>
+      </el-table>
+      <div
+        v-if="narrow"
+        class="business-table__mobile"
+        :class="{ 'is-refreshing': loading }"
+      >
         <ListEmpty
+          v-if="!items.length"
           :loading="loading"
           :filtered="filtered"
           @reset="emit('reset')"
         />
-      </template>
-      <el-table-column
-        v-if="selectable"
-        type="selection"
-        :width="SELECTION_WIDTH"
-        class-name="table-selection"
-      />
-      <el-table-column
-        v-for="col in laidOut"
-        :key="col.prop"
-        :prop="col.prop"
-        :label="col.label"
-        :width="col.width"
-        :show-overflow-tooltip="col.prop !== titleKey && !col.stack && !col.tags && !$slots[`cell-${col.prop}`]"
-        :label-class-name="col.ai ? 'column-ai' : undefined"
-      >
-        <template #header>
-          <span
-            class="column-heading"
-            :title="col.ai ? `${col.fullLabel || col.label}：AI 打标写入，人工验证后 AI 不再覆盖` : col.fullLabel || col.label"
-          ><span
-            v-if="col.ai"
-            class="ai-mark"
-            aria-label="AI 打标"
-          >AI</span>{{ col.label }}</span>
-        </template>
-        <template #default="{ row, $index }">
-          <template v-if="col.prop === titleKey">
-            <!-- Element Plus 注册列时会拿空行（没有 id）试渲染一次插槽，不判断就会按空 id 生成地址、控制台报错 -->
-            <RouterLink
-              v-if="detailRoute && row.id"
-              class="record-title"
-              :to="detailRoute(row, $index)"
-              :title="text(row, col)"
-            >
-              {{ text(row, col) }}
-            </RouterLink>
-            <button
-              v-else
-              type="button"
-              class="record-title"
-              :title="text(row, col)"
-              @click="open(row)"
-            >
-              {{ text(row, col) }}
-            </button>
-          </template>
-          <!-- 模块自己画这一格（如行内启停开关）：插槽名 cell-列名 -->
-          <slot
-            v-else-if="$slots[`cell-${col.prop}`]"
-            :name="`cell-${col.prop}`"
-            :row="row"
-          />
-          <el-tag
-            v-else-if="col.tags && value(row, col.prop)"
-            size="small"
-            :type="col.tags[value(row, col.prop)] ?? 'info'"
-            disable-transitions
-          >
-            {{ text(row, col) }}
-          </el-tag>
-          <span
-            v-else-if="col.stack"
-            class="cell-stack"
-            :title="[text(row, col), stackText(row, col)].filter(Boolean).join(' › ')"
-          >
-            <span class="cell-stack__main">{{ text(row, col) }}</span>
-            <span
-              v-if="stackText(row, col)"
-              class="cell-stack__sub"
-            >{{ stackText(row, col) }}</span>
-          </span>
-          <a
-            v-else-if="col.link && link(row, col)"
-            :href="link(row, col)"
-            target="_blank"
-            rel="noopener noreferrer"
-          >{{ text(row, col) }}</a>
-          <span
-            v-else
-            class="cell-text"
-            :title="text(row, col)"
-            :class="{ 'cell-text--wrap': col.wrap, 'record-boolean': ['need_interpret', 'is_penetrate', 'has_subsidy'].includes(col.prop) }"
-          >{{ text(row, col) }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column
-        v-if="availableWidth > totalWidth"
-        :width="availableWidth - totalWidth"
-        class-name="table-remainder"
-      />
-      <el-table-column
-        label="操作"
-        :width="actionWidth"
-        class-name="table-action"
-      >
-        <template #default="{ row, $index }">
-          <RowActions
-            v-if="row.id"
-            :view="detailRoute ? detailRoute(row, $index) : undefined"
-            :edit="detailRoute ? editRoute(row, $index) : undefined"
-            :can-edit="canWrite"
-            @view="open(row)"
-            @edit="emit('edit', row)"
-          />
-        </template>
-      </el-table-column>
-    </el-table>
-    <div
-      v-if="narrow"
-      v-loading="loading"
-      class="business-table__mobile"
-    >
-      <ListEmpty
-        v-if="!items.length"
-        :loading="loading"
-        :filtered="filtered"
-        @reset="emit('reset')"
-      />
-      <article
-        v-for="(row, index) in items"
-        :key="row.id"
-        class="mobile-record"
-      >
-        <RouterLink
-          v-if="detailRoute"
-          class="record-title"
-          :to="detailRoute(row, index)"
+        <article
+          v-for="(row, index) in items"
+          :key="row.id"
+          class="mobile-record"
         >
-          {{ value(row, titleKey) || '未命名记录' }}
-        </RouterLink>
-        <button
-          v-else
-          type="button"
-          class="record-title"
-          @click="open(row)"
-        >
-          {{ value(row, titleKey) || '未命名记录' }}
-        </button>
-        <dl>
-          <template
-            v-for="col in summaryColumns"
-            :key="col.prop"
-          >
-            <dt :title="col.fullLabel || col.label">
-              {{ col.label }}
-            </dt><dd>{{ text(row, col) }}</dd>
-          </template>
-        </dl>
-        <div class="mobile-record__actions">
           <RouterLink
             v-if="detailRoute"
-            class="table-link"
+            class="record-title"
             :to="detailRoute(row, index)"
           >
-            查看详情
+            {{ value(row, titleKey) || '未命名记录' }}
           </RouterLink>
-          <RouterLink
-            v-if="detailRoute && canWrite && row.id"
-            class="table-link"
-            :to="editRoute(row, index)"
-          >
-            编辑
-          </RouterLink>
-          <el-button
-            v-if="!detailRoute"
-            text
-            type="primary"
+          <button
+            v-else
+            type="button"
+            class="record-title"
             @click="open(row)"
           >
-            查看详情
-          </el-button><el-button
-            v-if="canWrite && !detailRoute"
-            text
-            type="primary"
-            @click="emit('edit', row)"
-          >
-            编辑
-          </el-button>
-        </div>
-      </article>
-    </div>
+            {{ value(row, titleKey) || '未命名记录' }}
+          </button>
+          <dl>
+            <template
+              v-for="col in summaryColumns"
+              :key="col.prop"
+            >
+              <dt :title="col.fullLabel || col.label">
+                {{ col.label }}
+              </dt><dd>{{ text(row, col) }}</dd>
+            </template>
+          </dl>
+          <div class="mobile-record__actions">
+            <RouterLink
+              v-if="detailRoute"
+              class="table-link"
+              :to="detailRoute(row, index)"
+            >
+              查看详情
+            </RouterLink>
+            <RouterLink
+              v-if="detailRoute && canWrite && row.id"
+              class="table-link"
+              :to="editRoute(row, index)"
+            >
+              编辑
+            </RouterLink>
+            <el-button
+              v-if="!detailRoute"
+              text
+              type="primary"
+              @click="open(row)"
+            >
+              查看详情
+            </el-button><el-button
+              v-if="canWrite && !detailRoute"
+              text
+              type="primary"
+              @click="emit('edit', row)"
+            >
+              编辑
+            </el-button>
+          </div>
+        </article>
+      </div>
+    </template>
     <el-drawer
       v-model="detailOpen"
       :title="detailTitle || '记录详情'"
@@ -340,6 +349,11 @@ a.record-title { text-decoration: none; }
 a { color: var(--zt-blue-600); }
 
 .record-detail h2 { margin: 0 0 20px; line-height: 1.4; font-size: 18px; font-weight: 650; color: var(--zt-ink-900); letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.is-refreshing {
+  opacity: 0.65;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
 @media (max-width: 767px) {
  .business-table__desktop { display: none; }
  .business-table__mobile { display: block; }

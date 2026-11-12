@@ -10,6 +10,7 @@ import FilterBar from '@/components/FilterBar.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListEmpty from '@/components/ListEmpty.vue'
 import ListPage from '@/components/ListPage.vue'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useListQuery } from '@/composables/useListQuery'
 import { useAuthStore } from '@/stores/auth'
@@ -206,9 +207,16 @@ onMounted(() => {
         </el-form-item>
       </FilterBar>
     </template>
+    <TableSkeleton
+      v-if="loading && events.length === 0"
+      :rows="query.page_size || 10"
+      :columns="canUnlockIp ? 6 : 5"
+      :has-actions="canUnlockIp"
+    />
     <el-table
-      v-loading="loading"
+      v-else
       class="data-table"
+      :class="{ 'is-refreshing': loading }"
       :data="events"
       stripe
     >

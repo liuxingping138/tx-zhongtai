@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { addRoleMembers, listRoleMembers, listUsers, removeRoleMember } from '@/api/system'
 import { errorMessage } from '@/api/errors'
 import type { RoleItem, RoleMember, UserItem } from '@/api/types'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { memberSearchParams } from './memberSearch'
 
 const props = defineProps<{ role: RoleItem; canGrant: boolean }>()
@@ -148,11 +149,16 @@ defineExpose({ reload: load })
         重新加载
       </el-button>
     </div>
+    <TableSkeleton
+      v-else-if="loading && members.length === 0"
+      :columns="props.canGrant ? 4 : 3"
+      :has-actions="props.canGrant"
+    />
     <el-table
       v-else
-      v-loading="loading"
       :data="members"
       class="members__table"
+      :class="{ 'is-refreshing': loading }"
     >
       <template #empty>
         <el-empty

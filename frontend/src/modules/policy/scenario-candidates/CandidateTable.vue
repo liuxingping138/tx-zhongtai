@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 
 import type { CandidateItem } from '@/api/scenarioCandidates'
 import ListEmpty from '@/components/ListEmpty.vue'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import CandidateExpand from './CandidateExpand.vue'
 import DecisionButtons from './DecisionButtons.vue'
 import MatchCell from './MatchCell.vue'
@@ -63,10 +64,16 @@ defineExpose({ clearSelection: () => table.value?.clearSelection() })
 </script>
 
 <template>
+  <TableSkeleton
+    v-if="loading && items.length === 0"
+    :columns="pending && canDecide ? 7 : 6"
+    :has-actions="canDecide"
+  />
   <el-table
+    v-else
     ref="table"
-    v-loading="loading"
     class="data-table candidates-table"
+    :class="{ 'is-refreshing': loading }"
     :data="items"
     row-key="id"
     :expand-row-keys="open"

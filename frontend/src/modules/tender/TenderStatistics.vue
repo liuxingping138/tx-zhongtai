@@ -5,6 +5,7 @@ import { errorMessage } from '@/api/errors'
 import { getTenderStatistics, getTenderTotals, type TenderStatistics, type TenderTotals } from '@/api/tender'
 import BaseChart from '@/components/charts/BaseChart.vue'
 import { useChartPalette } from '@/components/charts/echarts'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import TenderKpiGrid from './TenderKpiGrid.vue'
 import TenderProvincePanel from './TenderProvincePanel.vue'
 import { compactCount, recentRange, statisticsChart, structureDonutOption } from './statistics'
@@ -224,8 +225,8 @@ onMounted(() => { void load(); void loadTotals() })
     <template v-if="report && !error">
       <div class="grid-row grid-row--top">
         <section
-          v-loading="loading"
           class="panel panel--main"
+          :class="{ 'is-refreshing': loading }"
         >
           <header class="panel-head">
             <div>
@@ -292,8 +293,8 @@ onMounted(() => { void load(); void loadTotals() })
 
       <div class="grid-row grid-row--mid">
         <section
-          v-loading="loading"
           class="panel"
+          :class="{ 'is-refreshing': loading }"
         >
           <header class="panel-head">
             <div>
@@ -327,6 +328,7 @@ onMounted(() => { void load(); void loadTotals() })
           </header>
           <el-table
             :data="report.daily"
+            :class="{ 'is-refreshing': loading }"
             stripe
             max-height="295"
           >
@@ -382,13 +384,16 @@ onMounted(() => { void load(); void loadTotals() })
       <TenderProvincePanel :provinces="report.provinces" />
     </template>
 
-    <p
+    <section
       v-else-if="loading"
-      class="loading-note"
-      role="status"
+      class="panel"
+      style="margin-top: 14px;"
     >
-      正在读取统计数据…
-    </p>
+      <TableSkeleton
+        :columns="6"
+        :rows="8"
+      />
+    </section>
   </div>
 </template>
 

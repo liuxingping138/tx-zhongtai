@@ -123,6 +123,9 @@ def get_count(kind: Kind, query: ListQuery) -> Row:
     res = poll(key, lambda: _count(kind, query))
     if unfiltered:
         baseline = _baseline_counts.get((kind, query.project_status))
+        if baseline is None and query.project_status == "" and _last_totals and kind in _last_totals:
+            baseline = int(_last_totals[kind])
+            _baseline_counts[(kind, "")] = baseline
         if baseline is not None and (res.get("state") == "pending" or res.get("data") is None):
             return {"state": "ready", "data": {"total": baseline}, "message": ""}
     return res

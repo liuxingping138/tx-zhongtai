@@ -7,6 +7,7 @@ import { errorMessage } from '@/api/errors'
 import { listOnlineSessions, revokeOnlineSession, type OnlineDevice } from '@/api/system'
 import ListEmpty from '@/components/ListEmpty.vue'
 import ListPage from '@/components/ListPage.vue'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { useAuthStore } from '@/stores/auth'
 import { formatTime } from '@/utils/time'
 import UserAvatar from '../users/UserAvatar.vue'
@@ -105,9 +106,15 @@ onMounted(load)
         刷新
       </el-button>
     </template>
+    <TableSkeleton
+      v-if="loading && rows.length === 0"
+      :columns="5"
+      :has-actions="true"
+    />
     <el-table
-      v-loading="loading"
+      v-else
       class="data-table"
+      :class="{ 'is-refreshing': loading }"
       :data="rows"
       stripe
     >
@@ -219,4 +226,9 @@ onMounted(load)
 .online-state.is-online { color: var(--zt-success-text); font-weight: 500; }
 .online-state.is-online::before { background: var(--zt-success); }
 .online-muted { color: var(--zt-ink-400); font-size: 12px; }
+.is-refreshing {
+  opacity: 0.65;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
 </style>

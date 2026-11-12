@@ -6,21 +6,11 @@ import { getAiBilling, type BillingRow } from '@/api/aiBilling'
 import { errorMessage } from '@/api/errors'
 import BaseChart from '@/components/charts/BaseChart.vue'
 import { useChartPalette } from '@/components/charts/echarts'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import {
-  colorMap,
-  dailySeries,
-  filterOptions,
-  filterRows,
-  groupBy,
-  money,
-  presetRange,
-  pruneInPlace,
-  SCENES,
-  summarize,
-  tokens,
-  type BillingFilters,
-  type GroupKey,
-  type RangePreset,
+  colorMap, dailySeries, filterOptions, filterRows, groupBy,
+  money, presetRange, pruneInPlace, SCENES, summarize, tokens,
+  type BillingFilters, type GroupKey, type RangePreset,
 } from './billing'
 import { costOption } from './billingChart'
 import '../shared/ai.css'
@@ -107,10 +97,7 @@ onMounted(load)
 </script>
 
 <template>
-  <div
-    v-loading="loading"
-    class="billing"
-  >
+  <div class="billing">
     <h1 class="ai-sr-only">
       费用账单
     </h1>
@@ -286,9 +273,15 @@ onMounted(load)
           :name="item.value"
         />
       </el-tabs>
+      <TableSkeleton
+        v-if="loading && rows.length === 0"
+        :columns="6"
+      />
       <el-table
+        v-else
         :data="groups"
         class="data-table"
+        :class="{ 'is-refreshing': loading }"
         row-key="name"
         empty-text="这段时间没有花费"
       >

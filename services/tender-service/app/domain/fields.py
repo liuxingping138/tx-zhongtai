@@ -5,10 +5,12 @@ from typing import Literal
 from platform_common.columns import ColumnSpec
 
 Kind = Literal["purchaser", "winbid"]
-Status = Literal["0", "1"]
+Status = Literal["", "0", "1"]
 TABLES: dict[tuple[Kind, Status], str] = {
+    ("purchaser", ""): "bid_purchaser_info_dis_pro",
     ("purchaser", "0"): "bid_purchaser_info_dis_pro",
     ("purchaser", "1"): "bid_purchaser_info_dis_approval_pro",
+    ("winbid", ""): "bid_winbid_info_dis_pro",
     ("winbid", "0"): "bid_winbid_info_dis_pro",
     ("winbid", "1"): "bid_winbid_info_dis_approval_pro",
 }
