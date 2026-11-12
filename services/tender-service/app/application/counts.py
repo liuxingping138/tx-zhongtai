@@ -17,6 +17,8 @@ from app.domain.queries import ListQuery
 from app.repositories import records, statistics
 
 logger = get_logger(__name__)
+_last_totals: Row | None = None
+_totals_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="tender-totals")
 _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="tender-count")
 _lock = Lock()
 _jobs: OrderedDict[str, tuple[float, Future[Row]]] = OrderedDict()
@@ -45,9 +47,9 @@ def poll(key: str, operation: Callable[[], Row]) -> Row:
             if now - created < get_settings().stats_cache_seconds:
                 return future.result()
             del _jobs[key]
-        if sum(not job.done() for _, job in _jobs.values()) >= _MAX_PENDING:
+        if key != "totals" and sum(not job.done() for _, job in _jobs.values()) >= _MAX_PENDING:
             return {"state": "error", "data": None, "message": "统计任务较多，请稍后重试"}
-        _jobs[key] = (now, _executor.submit(_run, operation))
+        _jobs[key] = (now, (_totals_executor if key == "totals" else _executor).submit(_run, operation))
         # 只移除已完成任务，防止仍在执行的相同查询被重复提交。
         for old_key in list(_jobs):
             if len(_jobs) <= _MAX_ENTRIES:
@@ -70,7 +72,13 @@ def _totals() -> Row:
 
 
 def get_totals() -> Row:
-    return poll("totals", _totals)
+    global _last_totals  # noqa: PLW0603  进程内保留最后一次成功快照，刷新失败不丢弃可用数据
+    result = poll("totals", _totals)
+    if result["state"] == "ready":
+        _last_totals = result["data"]
+    elif _last_totals is not None:
+        return {**result, "data": _last_totals}
+    return result
 
 
 def _count(kind: Kind, query: ListQuery) -> Row:

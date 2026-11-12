@@ -360,3 +360,41 @@ def test_collect_date_range_routes_as_daily_values_not_cross_shard_range():
     sql, params = records.where_clause(ListQuery(collect_date_from="2026-11-12", collect_date_to="2026-11-12"))
     assert "collect_date = %s" in sql
     assert params == ("0", "2026-11-12")
+
+
+def test_totals_keep_last_success_while_refreshing_or_failed(monkeypatch):
+    snapshot = {"total": 42, "purchaser": 20, "winbid": 22, "as_of": "2026-11-12T13:00:00+08:00"}
+    monkeypatch.setattr(counts, "_last_totals", None)
+    result = {"state": "ready", "data": snapshot}
+    monkeypatch.setattr(counts, "poll", lambda *args: result)
+    assert counts.get_totals()["data"] == snapshot
+    result = {"state": "pending", "data": None}
+    assert counts.get_totals() == {"state": "pending", "data": snapshot}
+    result = {"state": "error", "data": None, "message": "源库超时"}
+    assert counts.get_totals()["data"] == snapshot
+    assert counts.get_totals()["message"] == "源库超时"
+
+
+def test_empty_source_body_reports_matched_but_empty(monkeypatch):
+    reader = Reader([[{"id": 1, "project_content_id": "a" * 32, "collect_date": "2023-08-03"}], [{"html": ""}]])
+    bind_reader(monkeypatch, service, reader)
+    with pytest.raises(NotFoundError, match="已关联到源记录，但正文内容为空"):
+        service.get_content("purchaser", "0", 1)
+
+
+async def test_totals_warmup_submits_before_first_page_visit(monkeypatch):
+    import asyncio
+
+    from app import main
+
+    called = []
+    monkeypatch.setattr(main, "get_totals", lambda: called.append(True))
+
+    async def stop_after_first(interval):
+        assert interval == 30
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(main.asyncio, "sleep", stop_after_first)
+    with pytest.raises(asyncio.CancelledError):
+        await main.warm_totals()
+    assert called == [True]

@@ -39,6 +39,7 @@ async function loadTotals() {
   try {
     const result = await getTenderTotals()
     if (disposed) return
+    if (result.data) totals.value = result.data
     if (result.state === 'pending') {
       totalTimer = setTimeout(() => { void loadTotals() }, 3000)
       return
@@ -58,7 +59,7 @@ onMounted(() => { void load(); void loadTotals() })
 <template>
   <div class="tender-statistics">
     <section
-      v-loading="totalsLoading"
+      v-loading="totalsLoading && !totals"
       class="panel"
     >
       <header>
@@ -76,7 +77,7 @@ onMounted(() => { void load(); void loadTotals() })
         :closable="false"
       />
       <div
-        v-else
+        v-if="totals || !totalError"
         class="metrics"
       >
         <div><span>数据总量</span><strong>{{ count(totals?.total) }}</strong></div>
@@ -87,7 +88,7 @@ onMounted(() => { void load(); void loadTotals() })
         v-if="totals"
         class="note"
       >
-        统计时间：{{ totals.as_of.replace('T', ' ').slice(0, 19) }} · 总量包含全部原始数据
+        统计时间：{{ totals.as_of.replace('T', ' ').slice(0, 19) }} · 总量包含全部原始数据<span v-if="totalsLoading"> · 正在后台更新</span>
       </p>
     </section>
     <section class="panel">

@@ -48,6 +48,8 @@ def get_content(kind: Kind, status: Status, record_id: int) -> Row:
             raise NotFoundError("未找到该招中标记录")
         reference = records.original_reference(reader, kind, row) if status == "1" else row
         content = records.read_content(reader, reference) if reference else None
-    if not content or not content.get("html"):
-        raise NotFoundError("该记录暂无可用正文")
+    if not content:
+        raise NotFoundError("未在指定正文表中找到该项目的正文记录")
+    if not str(content.get("html") or "").strip():
+        raise NotFoundError("已关联到源记录，但正文内容为空")
     return {"html": content["html"]}
