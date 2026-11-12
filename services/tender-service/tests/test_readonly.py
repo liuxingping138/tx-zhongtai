@@ -161,13 +161,22 @@ def test_bigint_ids_are_strings_and_dates_are_preserved(monkeypatch):
 
 def test_missing_record_and_body_return_404(monkeypatch):
     for fn, results in [
-        (service.get_record, [[]]),
-        (service.get_content, [[]]),
+        (service.get_record, [[], []]),
+        (service.get_content, [[], []]),
         (service.get_content, [[{"id": 1, "project_content_id": ""}]]),
     ]:
         bind_reader(monkeypatch, service, Reader(results))
         with pytest.raises(NotFoundError):
             fn("winbid", "0", 1)
+
+
+def test_fallback_finds_record_in_alternate_status(monkeypatch):
+    # 当按 0 查不到时，自动在 1 查到并返回
+    reader = Reader([[], [{"id": 1001, "project_name": "项目交付", "project_status": "1"}]])
+    bind_reader(monkeypatch, service, reader)
+    row = service.get_record("winbid", "0", 1001)
+    assert row["id"] == "1001"
+    assert row["project_status"] == "1"
 
 
 def test_workflow_counts_equal_without_double_counting_source(monkeypatch):

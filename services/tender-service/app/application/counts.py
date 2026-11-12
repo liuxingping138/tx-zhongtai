@@ -44,8 +44,11 @@ def poll(key: str, operation: Callable[[], Row]) -> Row:
             created, future = entry
             if not future.done():
                 return {"state": "pending", "data": None, "message": "正在统计精确总量"}
-            if now - created < get_settings().stats_cache_seconds:
-                return future.result()
+            res = future.result()
+            # 异常结果不毒化 300 秒，仅保留 3 秒避免瞬态错误导致 5 分钟无法自愈
+            ttl = 3.0 if res.get("state") == "error" else get_settings().stats_cache_seconds
+            if now - created < ttl:
+                return res
             del _jobs[key]
         if key != "totals" and sum(not job.done() for _, job in _jobs.values()) >= _MAX_PENDING:
             return {"state": "error", "data": None, "message": "统计任务较多，请稍后重试"}

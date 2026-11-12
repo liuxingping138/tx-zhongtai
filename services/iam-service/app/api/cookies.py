@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal, cast
 
 from fastapi import Response
 
@@ -29,5 +29,18 @@ def set_csrf_cookie(response: Response, raw_token: str, settings: Settings) -> N
 
 
 def clear_auth_cookies(response: Response, settings: Settings) -> None:
-    response.delete_cookie(settings.refresh_cookie_name, path=settings.cookie_path)
-    response.delete_cookie(settings.csrf_cookie_name, path=settings.cookie_path)
+    samesite = cast(Literal["lax", "strict", "none"], settings.cookie_samesite)
+    response.delete_cookie(
+        settings.refresh_cookie_name,
+        path=settings.cookie_path,
+        secure=settings.cookie_secure,
+        samesite=samesite,
+        httponly=True,
+    )
+    response.delete_cookie(
+        settings.csrf_cookie_name,
+        path=settings.cookie_path,
+        secure=settings.cookie_secure,
+        samesite=samesite,
+        httponly=False,
+    )

@@ -54,14 +54,14 @@ def record_router(kind: Kind) -> APIRouter:
     @child.get("/{record_id}", dependencies=[Depends(require_tender_permission(resource, "read"))])
     @classified(SecurityClass.RESOURCE_AUTHORIZED)
     def detail(
-        record_id: Annotated[int, Path(gt=0)], project_status: Annotated[Status, Query()] = "0"
+        record_id: Annotated[int, Path(gt=0)], project_status: Annotated[Status, Query()] = "1"
     ) -> ApiResponse[Row]:
         return ok(records.get_record(kind, project_status, record_id), request_id=get_request_id())
 
     @child.get("/{record_id}/content", dependencies=[Depends(require_tender_permission(resource, "read"))])
     @classified(SecurityClass.RESOURCE_AUTHORIZED)
     def content(
-        record_id: Annotated[int, Path(gt=0)], project_status: Annotated[Status, Query()] = "0"
+        record_id: Annotated[int, Path(gt=0)], project_status: Annotated[Status, Query()] = "1"
     ) -> ApiResponse[Row]:
         return ok(records.get_content(kind, project_status, record_id), request_id=get_request_id())
 

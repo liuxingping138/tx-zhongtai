@@ -39,6 +39,10 @@ def list_records(kind: Kind, query: ListQuery) -> Row:
 def get_record(kind: Kind, status: Status, record_id: int) -> Row:
     with source_reader() as reader:
         row = records.get_record(reader, kind, status, record_id)
+        if row is None:
+            # 自适应回退：如果指定状态未找到，尝试在另一个状态表中定位
+            alt_status: Status = "0" if status == "1" else "1"
+            row = records.get_record(reader, kind, alt_status, record_id)
     if row is None:
         raise NotFoundError("未找到该招中标记录，数据状态可能已变化")
     return serialize(row)
@@ -48,8 +52,22 @@ def get_content(kind: Kind, status: Status, record_id: int) -> Row:
     with source_reader() as reader:
         row = records.get_record(reader, kind, status, record_id)
         if row is None:
+            alt_status: Status = "0" if status == "1" else "1"
+            row = records.get_record(reader, kind, alt_status, record_id)
+            if row is not None:
+                status = alt_status
+        if row is None:
             raise NotFoundError("未找到该招中标记录")
-        reference = records.original_reference(reader, kind, row) if status == "1" else row
+        reference = None
+        if status == "1":
+            # 交付数据若本身有符合 QLM 规范的 content_id，可直接取用；否则反查原始表
+            content_id = str(row.get("project_content_id") or "")
+            if content_id and len(content_id) <= records.QLM_ID_MAX_LENGTH and content_id.isdecimal():
+                reference = row
+            else:
+                reference = records.original_reference(reader, kind, row) or row
+        else:
+            reference = row
         content = records.read_content(reader, reference) if reference else None
     if not content:
         raise NotFoundError("未在指定正文表中找到该项目的正文记录")

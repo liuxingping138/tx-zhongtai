@@ -10,9 +10,10 @@ import csv
 import io
 import json
 import sys
-from collections.abc import Callable, Generator, Iterable, Iterator
+from collections.abc import Callable, Generator, Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from platform_common.xlsx_writer import write_text_xlsx
 
@@ -27,6 +28,20 @@ META_COLUMNS = ["model_name", "input_tokens", "output_tokens", "error", "search_
 FAILED_COLUMNS = ["myid", "提问", "失败类型", "error", "耗时(秒)"]
 # 模型正常回答了但解析不出输出字段。写在 error 列里，原始返回 CSV 不用加列，续跑时也能从文件认出来。
 FORMAT_ERROR_PREFIX = "返回格式不对"
+
+
+def sanitize_csv_cell(value: Any) -> str:
+    """防止 CSV 公式注入 (DDE)，开头的公式触发字符追加单引号转义。"""
+    text = str(value) if value is not None else ""
+    if text and text[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + text
+    return text
+
+
+def sanitize_csv_row(row: Sequence[Any]) -> list[str]:
+    return [sanitize_csv_cell(val) for val in row]
+
+
 # 每写一行原始返回，同时在这里记一行「这一行成没成、错在哪」，不带提问原文。详情「只看失败」读它：
 # 原始返回每行带着整段提问，几十万行的任务有几个 G，跑着时每 10 秒整份扫一遍会超时。
 OUTCOMES_SUFFIX = ".outcomes.jsonl"
@@ -198,10 +213,11 @@ def _int(value: str | None) -> int:
 def append_raw(path: Path, row: list[str]) -> None:
     """同一任务同时只能有一个写入方（batch_execute 用 Job.write_lock 排队），记下的字节位置才准。"""
 
+    safe_row = sanitize_csv_row(row)
     offset = path.stat().st_size if path.is_file() else 0
     with path.open("a", newline="", encoding="utf-8-sig") as handle:
-        csv.writer(handle).writerow(row)
-    _append_outcome(path, row, offset)
+        csv.writer(handle).writerow(safe_row)
+    _append_outcome(path, safe_row, offset)
 
 
 def append_log(path: Path, line: str) -> None:
@@ -216,7 +232,10 @@ def write_failed(path: Path, rows: Iterable[RowResult], prompt_of: Callable[[str
         writer = csv.writer(handle)
         writer.writerow(FAILED_COLUMNS)
         for row in rows:
-            writer.writerow([row.myid, prompt_of(row.myid), row.failure_kind, row.error, f"{row.elapsed:.2f}"])
+            safe_failed_row = sanitize_csv_row(
+                [row.myid, prompt_of(row.myid), row.failure_kind, row.error, f"{row.elapsed:.2f}"]
+            )
+            writer.writerow(safe_failed_row)
 
 
 def copy_answers(source: Path, target: Path, mapping: dict[str, list[str]], fields: list[str]) -> int:

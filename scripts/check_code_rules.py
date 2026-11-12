@@ -35,6 +35,7 @@ COLOR_FILES: dict[str, str] = {
     "frontend/src/views/LoginView.vue": "登录页沿用原独立视觉",
     "frontend/src/modules/ai/billing/billing.ts": "费用账单的分类色板，按名字固定颜色，校验过色盲和对比度",
     "frontend/src/components/charts/echarts.ts": "图表取色在拿不到主题变量时的兜底值",
+    "frontend/src/modules/tender/content.ts": "招投标正文沙箱 iframe 强隔离容器注入公文纸张基准色板，无法继承外部 CSS 变量",
 }
 
 

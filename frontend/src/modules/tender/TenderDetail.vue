@@ -18,7 +18,7 @@ const loading = ref(false)
 const html = ref<string | null>(null)
 const contentError = ref('')
 const contentLoading = ref(false)
-const status = route.query.project_status === '1' ? '1' : '0'
+const status = route.query.project_status === '0' ? '0' : '1'
 const sections = computed(() => buildDetailSections(tenderColumns(props.kind), tenderDetailGroups(props.kind)))
 const back = computed(() => ({ name: `tender-${props.kind}`, query: route.query }))
 

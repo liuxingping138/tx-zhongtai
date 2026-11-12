@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, watch } from 'vue'
 import FilterBar from '@/components/FilterBar.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
 import { useFilterOptions } from '@/composables/useFilterOptions'
@@ -16,6 +16,17 @@ onMounted(() => {
   if (auth.canRead('codebook.area_codes')) void areaFilters.load()
 })
 
+// 省份清空时联动重置已选地市和区县
+watch(
+  () => query.value.purchaser_provname,
+  (provinces) => {
+    if (!provinces || provinces.length === 0) {
+      query.value.purchaser_cityname = []
+      query.value.purchaser_countyname = []
+    }
+  },
+)
+
 const ADVANCED_DATES = DATES.filter(field => field.key !== 'collect_date')
 const SECONDARY_REGIONS = [
   { key: 'purchaser_cityname', optionField: 'city_name', label: '地市', placeholder: '选择或搜索地市' },
@@ -25,7 +36,7 @@ const SECONDARY_REGIONS = [
 function range(key: typeof DATES[number]['key']): [string, string] | null {
   const from = query.value[`${key}_from`]
   const to = query.value[`${key}_to`]
-  return from || to ? [from, to] : null
+  return from && to ? [from, to] : null
 }
 
 function setRange(key: typeof DATES[number]['key'], value: [string, string] | null) {
@@ -47,7 +58,6 @@ function setRange(key: typeof DATES[number]['key'], value: [string, string] | nu
           v-model="query.project_name"
           clearable
           placeholder="输入关键词（需选日期范围）"
-          @keyup.enter="emit('search')"
         />
       </el-form-item>
       <el-form-item label="项目状态">
@@ -104,7 +114,6 @@ function setRange(key: typeof DATES[number]['key'], value: [string, string] | nu
             v-model="query.project_content_id"
             placeholder="输入完整项目ID"
             clearable
-            @keyup.enter="emit('search')"
           />
         </el-form-item>
         <el-form-item label="是否补充场景">
@@ -136,11 +145,15 @@ function setRange(key: typeof DATES[number]['key'], value: [string, string] | nu
 </template>
 
 <style scoped>
-.tender-filters :deep(.filter-bar__fields) { gap: 8px 10px; }
-.tender-filters :deep(.filter-bar__fields > .el-form-item) { flex: 1 1 140px; max-width: 210px; }
-.tender-filters :deep(.filter-bar__fields > .el-form-item:first-child) { flex: 1.3 1 180px; max-width: 260px; }
-.tender-filters :deep(.el-form-item__label) { margin-bottom: 3px; font-size: 12px; line-height: 16px; }
-.tender-filters :deep(.el-input__wrapper),
-.tender-filters :deep(.el-select__wrapper),
-.tender-filters :deep(.el-date-editor) { min-height: 32px; height: 32px; }
+.tender-filters :deep(.filter-bar__fields) {
+  gap: var(--zt-space-3) var(--zt-space-4);
+}
+.tender-filters :deep(.filter-bar__fields > .el-form-item) {
+  flex: 1 1 160px;
+  max-width: 240px;
+}
+.tender-filters :deep(.filter-bar__fields > .el-form-item:first-child) {
+  flex: 1.5 1 200px;
+  max-width: 280px;
+}
 </style>

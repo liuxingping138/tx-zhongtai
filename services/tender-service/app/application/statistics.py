@@ -41,6 +41,9 @@ def _point(label: str, value: str) -> Row:
 
 def get_statistics(query: StatsQuery) -> Row:
     key = f"{query.date_from}:{query.date_to}"
+    cached = _cached(key)
+    if cached is not None:
+        return cached
     if not _lock.acquire(blocking=False):
         raise DependencyUnavailableError("已有统计查询正在执行，请稍后重试")
     try:
