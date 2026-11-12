@@ -121,6 +121,65 @@ export function statisticsChart(
   }
 }
 
+export interface ProvinceRow {
+  rank: number
+  name: string
+  shortName: string
+  purchaser: number
+  winbid: number
+  total: number
+  passed: number
+  unpassed: number
+  purchaserPct: number
+  winbidPct: number
+  passedPct: number
+  unpassedPct: number
+  share: string
+  passRate: string
+}
+
+export function buildProvinceRows(
+  provinces: TenderPoint[],
+  selected: string[],
+  sortBy: 'total' | 'delivery' = 'total',
+): ProvinceRow[] {
+  const totalSum = provinces.reduce((sum, row) => sum + row.purchaser + row.winbid, 0)
+  const maxTotal = Math.max(1, ...provinces.map(row => row.purchaser + row.winbid))
+  const needles = selected.map(item => shortProvinceName(item))
+  const matched = needles.length
+    ? provinces.filter((row) => {
+        const raw = row.province || '未填写省份'
+        const short = shortProvinceName(raw)
+        return selected.includes(raw) || needles.includes(short)
+      })
+    : provinces
+  const ordered = sortBy === 'delivery'
+    ? [...matched].sort((a, b) => b.tagged - a.tagged || (b.purchaser + b.winbid) - (a.purchaser + a.winbid))
+    : matched
+  return ordered.map((row, index) => {
+    const total = row.purchaser + row.winbid
+    const passed = row.tagged
+    const unpassed = Math.max(0, total - passed)
+    const name = row.province || '未填写省份'
+    return {
+      rank: index + 1,
+      name,
+      shortName: shortProvinceName(name),
+      purchaser: row.purchaser,
+      winbid: row.winbid,
+      total,
+      passed,
+      unpassed,
+      purchaserPct: (row.purchaser / maxTotal) * 100,
+      winbidPct: (row.winbid / maxTotal) * 100,
+      passedPct: (passed / maxTotal) * 100,
+      unpassedPct: (unpassed / maxTotal) * 100,
+      share: totalSum ? `${((total * 100) / totalSum).toFixed(1)}%` : '0.0%',
+      passRate: total ? `${((passed * 100) / total).toFixed(1)}%` : '0.0%',
+    }
+  })
+}
+
 export function structureDonutOption(purchaser: number, winbid: number, palette: ChartPalette): ChartOption {
   return {
     tooltip: {

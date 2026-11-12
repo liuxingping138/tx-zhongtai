@@ -39,6 +39,7 @@ def test_status_routes_to_one_table_and_never_reads_content(kind, status):
     for sql, params in reader.calls:
         assert TABLES[kind, status] in sql
         assert "project_status = %s" in sql and params[0] == status
+        assert "ORDER BY public_date DESC, id DESC" in sql
         assert " content" not in sql and " JOIN " not in sql
     assert reader.calls[0][1][-2:] == (21, 20)
 

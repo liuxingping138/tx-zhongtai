@@ -150,7 +150,7 @@ onMounted(() => { void load() })
           :type="row.project_status === '1' ? 'success' : 'info'"
           effect="light"
         >
-          {{ row.project_status === '1' ? '人工已处理（信息化）' : '原始数据' }}
+          {{ row.project_status === '1' ? '通过（1）' : '未通过（0）' }}
         </el-tag>
       </template>
       <template #cell-is_supp_scene="{ row }">

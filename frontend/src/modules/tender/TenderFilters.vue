@@ -57,11 +57,11 @@ function setRange(key: typeof DATES[number]['key'], value: [string, string] | nu
         >
           <el-option
             value="0"
-            label="原始数据（0）"
+            label="未通过（0）"
           />
           <el-option
             value="1"
-            label="人工已处理（1）"
+            label="通过（1）"
           />
         </el-select>
       </el-form-item>

@@ -33,7 +33,7 @@ async function loadContent() {
   finally { contentLoading.value = false }
 }
 function value(key: string) {
-  if (key === 'project_status') return status === '1' ? '人工已处理（信息化）' : '原始数据'
+  if (key === 'project_status') return status === '1' ? '通过（1）' : '未通过（0）'
   if (key === 'is_supp_scene') return Number(record.value?.[key]) === 1 ? '已补充' : '未补充'
   return record.value?.[key] ?? '—'
 }

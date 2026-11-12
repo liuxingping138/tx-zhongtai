@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { chartPalette } from '@/components/charts/echarts'
 import { isolatedHtml } from './content'
 import { initialQuery, tenderColumns, validateTenderSearch } from './fields'
-import { recentRange, statisticsChart, compactCount, shortProvinceName, structureDonutOption } from './statistics'
+import { buildProvinceRows, recentRange, statisticsChart, compactCount, shortProvinceName, structureDonutOption } from './statistics'
 
 describe('招中标页面规则', () => {
   it('两种列表包含各自 Excel 字段且不带大正文', () => {
@@ -76,5 +76,26 @@ describe('招中标页面规则', () => {
       public_date_from: '2026-11-01',
       public_date_to: '2026-11-12',
     })).toBeNull()
+  })
+  it('分省统计支持码表省份筛选及按交付量排序与通过率计算', () => {
+    const sample = [
+      { province: '广东省', purchaser: 60, winbid: 40, tagged: 20, enriched: 20, scenario: 0 },
+      { province: '浙江省', purchaser: 30, winbid: 20, tagged: 40, enriched: 40, scenario: 0 },
+      { province: '', purchaser: 10, winbid: 0, tagged: 0, enriched: 0, scenario: 0 },
+    ]
+    const totalRows = buildProvinceRows(sample, [], 'total')
+    expect(totalRows[0]?.name).toBe('广东省')
+    expect(totalRows[0]?.passRate).toBe('20.0%')
+    expect(totalRows[0]?.unpassed).toBe(80)
+    expect(totalRows[2]?.name).toBe('未填写省份')
+
+    const deliveryRows = buildProvinceRows(sample, [], 'delivery')
+    expect(deliveryRows[0]?.name).toBe('浙江省')
+    expect(deliveryRows[0]?.passed).toBe(40)
+    expect(deliveryRows[0]?.passRate).toBe('80.0%')
+
+    const filtered = buildProvinceRows(sample, ['浙江'], 'delivery')
+    expect(filtered).toHaveLength(1)
+    expect(filtered[0]?.name).toBe('浙江省')
   })
 })
