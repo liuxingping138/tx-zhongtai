@@ -16,7 +16,7 @@ class ListQuery(BaseModel):
 
     page: int = Field(default=1, ge=1, le=10000)
     page_size: int = Field(default=20, ge=1, le=100)
-    project_status: Status = "0"
+    project_status: Status = "1"
     project_name: str = Field(default="", max_length=256)
     project_content_id: str = Field(default="", max_length=255)
     purchaser_provname: list[str] = Field(default_factory=list, max_length=40)

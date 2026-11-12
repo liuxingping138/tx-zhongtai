@@ -165,7 +165,7 @@
                 "1"
               ],
               "type": "string",
-              "default": "0",
+              "default": "1",
               "title": "Project Status"
             }
           },
@@ -415,7 +415,7 @@
                 "1"
               ],
               "type": "string",
-              "default": "0",
+              "default": "1",
               "title": "Project Status"
             }
           },
@@ -665,7 +665,7 @@
                 "1"
               ],
               "type": "string",
-              "default": "0",
+              "default": "1",
               "title": "Project Status"
             }
           },
@@ -1027,7 +1027,7 @@
                 "1"
               ],
               "type": "string",
-              "default": "0",
+              "default": "1",
               "title": "Project Status"
             }
           },
@@ -1277,7 +1277,7 @@
                 "1"
               ],
               "type": "string",
-              "default": "0",
+              "default": "1",
               "title": "Project Status"
             }
           },
@@ -1527,7 +1527,7 @@
                 "1"
               ],
               "type": "string",
-              "default": "0",
+              "default": "1",
               "title": "Project Status"
             }
           },

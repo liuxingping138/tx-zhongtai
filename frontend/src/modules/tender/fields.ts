@@ -107,7 +107,7 @@ export const DATES = [
 ] as const
 export function initialQuery() {
   return {
-    project_name: '', project_content_id: '', project_status: '0',
+    project_name: '', project_content_id: '', project_status: '1',
     purchaser_provname: [] as string[], purchaser_cityname: [] as string[], purchaser_countyname: [] as string[],
     is_supp_scene: [] as string[], collect_date_from: '', collect_date_to: '',
     public_date_from: '', public_date_to: '', create_time_from: '', create_time_to: '', page: 1, page_size: 20,

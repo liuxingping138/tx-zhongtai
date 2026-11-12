@@ -375,10 +375,10 @@ def test_http_routes_validate_filters_and_return_envelopes(monkeypatch):
 def test_collect_date_range_routes_as_daily_values_not_cross_shard_range():
     sql, params = records.where_clause(ListQuery(collect_date_from="2026-11-10", collect_date_to="2026-11-12"))
     assert "collect_date IN (%s, %s, %s)" in sql
-    assert params == ("0", "2026-11-10", "2026-11-11", "2026-11-12")
+    assert params == ("1", "2026-11-10", "2026-11-11", "2026-11-12")
     sql, params = records.where_clause(ListQuery(collect_date_from="2026-11-12", collect_date_to="2026-11-12"))
     assert "collect_date = %s" in sql
-    assert params == ("0", "2026-11-12")
+    assert params == ("1", "2026-11-12")
 
 
 def test_totals_keep_last_success_while_refreshing_or_failed(monkeypatch):

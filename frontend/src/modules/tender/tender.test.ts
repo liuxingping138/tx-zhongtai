@@ -10,7 +10,7 @@ describe('招中标页面规则', () => {
     expect(tenderColumns('winbid').map(column => column.prop)).toContain('accepted_amount')
     expect(tenderColumns('purchaser').map(column => column.prop)).toContain('open_date')
     expect(tenderColumns('purchaser').map(column => column.prop)).not.toContain('content')
-    expect(initialQuery().project_status).toBe('0')
+    expect(initialQuery().project_status).toBe('1')
   })
   it('默认日期按北京时间跨日计算', () => {
     expect(recentRange(new Date('2026-11-11T18:00:00Z'))).toEqual(['2026-11-06', '2026-11-12'])
