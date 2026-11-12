@@ -33,11 +33,14 @@ async function loadContent() {
   finally { contentLoading.value = false }
 }
 function value(key: string) {
-  if (key === 'project_status') return status === '1' ? '通过（1）' : '未通过（0）'
+  if (key === 'project_status') return status === '1' ? '通过' : '未通过'
   if (key === 'is_supp_scene') return Number(record.value?.[key]) === 1 ? '已补充' : '未补充'
   return record.value?.[key] ?? '—'
 }
-onMounted(() => { void load() })
+onMounted(() => {
+  void load()
+  void loadContent()
+})
 </script>
 <template>
   <section
@@ -72,13 +75,19 @@ onMounted(() => { void load() })
           {{ value(column.prop) }}
         </el-descriptions-item>
       </el-descriptions>
-      <section class="tender-body">
+      <section
+        v-loading="contentLoading"
+        class="tender-body"
+      >
         <header>
-          <h3>项目正文</h3><el-button
+          <h3>项目正文</h3>
+          <el-button
+            v-if="contentError || html !== null"
+            size="small"
             :loading="contentLoading"
             @click="loadContent"
           >
-            {{ html === null ? '加载正文' : '重新加载' }}
+            {{ contentError ? '重试' : '重新加载' }}
           </el-button>
         </header>
         <el-alert
@@ -88,7 +97,7 @@ onMounted(() => { void load() })
           :closable="false"
         />
         <p v-else-if="html === null">
-          点击加载正文，查看原文排版。
+          正在加载正文…
         </p>
         <iframe
           v-else
