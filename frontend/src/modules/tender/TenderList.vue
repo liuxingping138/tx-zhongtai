@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Refresh } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
 import type { TenderKind, TenderRecord } from '@/api/tender'
 import BusinessTable from '@/components/BusinessTable.vue'
@@ -9,7 +10,7 @@ import ListPage from '@/components/ListPage.vue'
 import { useExcelExport } from '@/composables/useExcelExport'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import { useAuthStore } from '@/stores/auth'
-import { initialQuery, tenderColumns } from './fields'
+import { initialQuery, tenderColumns, validateTenderSearch } from './fields'
 import TenderFilters from './TenderFilters.vue'
 import { useTenderList } from './useTenderList'
 
@@ -37,6 +38,15 @@ async function changePage(page: number) {
 async function changeSize(size: number) {
   query.page_size = size
   await changePage(1)
+}
+
+function onSearch() {
+  const reason = validateTenderSearch(query)
+  if (reason) {
+    ElMessage.warning(reason)
+    return
+  }
+  void listQuery.search()
 }
 
 function detailRoute(row: TenderRecord) {
@@ -96,7 +106,7 @@ onMounted(() => { void load() })
       <TenderFilters
         :model-value="query"
         :applied="listQuery.applied"
-        @search="listQuery.search"
+        @search="onSearch"
         @reset="listQuery.resetFilters"
       />
     </template>

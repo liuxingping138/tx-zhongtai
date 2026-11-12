@@ -74,11 +74,27 @@ def test_filters_escape_keywords_bind_values_and_include_end_day():
         {"collect_date_from": "2026-11-12", "collect_date_to": "2026-11-01"},
         {"public_date_to": "9999-12-31"},
         {"is_supp_scene": ["2"]},
+        {"project_name": "智慧城市"},
+        {"project_name": "智慧城市", "collect_date_from": "2026-11-01"},
+        {"project_name": "智慧城市", "collect_date_from": "2025-01-01", "collect_date_to": "2026-11-12"},
     ],
 )
 def test_invalid_filters_rejected(values):
     with pytest.raises(ValidationError):
         ListQuery(**values)
+
+
+@pytest.mark.parametrize(
+    "date_kwargs",
+    [
+        {"collect_date_from": "2026-11-01", "collect_date_to": "2026-11-12"},
+        {"public_date_from": "2026-11-01", "public_date_to": "2026-11-12"},
+        {"create_time_from": "2026-11-01", "create_time_to": "2026-11-12"},
+    ],
+)
+def test_project_name_allows_bounded_date_ranges(date_kwargs):
+    query = ListQuery(project_name="智慧城市", **date_kwargs)
+    assert query.project_name == "智慧城市"
 
 
 def test_content_uses_confirmed_uid_and_exact_original_collect_date():

@@ -1,16 +1,25 @@
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import FilterBar from '@/components/FilterBar.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
+import { useFilterOptions } from '@/composables/useFilterOptions'
+import { useAuthStore } from '@/stores/auth'
 import { DATES, type TenderQuery } from './fields'
 
 const query = defineModel<TenderQuery>({ required: true })
 defineProps<{ applied: Record<string, unknown> }>()
 const emit = defineEmits<{ search: []; reset: [] }>()
 
+const auth = useAuthStore()
+const areaFilters = useFilterOptions('/codebook/area-codes')
+onMounted(() => {
+  if (auth.canRead('codebook.area_codes')) void areaFilters.load()
+})
+
 const ADVANCED_DATES = DATES.filter(field => field.key !== 'collect_date')
 const SECONDARY_REGIONS = [
-  { key: 'purchaser_cityname', label: '地市' },
-  { key: 'purchaser_countyname', label: '区县' },
+  { key: 'purchaser_cityname', optionField: 'city_name', label: '地市', placeholder: '选择或搜索地市' },
+  { key: 'purchaser_countyname', optionField: 'county_name', label: '区县', placeholder: '选择或搜索区县' },
 ] as const
 
 function range(key: typeof DATES[number]['key']): [string, string] | null {
@@ -37,7 +46,7 @@ function setRange(key: typeof DATES[number]['key'], value: [string, string] | nu
         <el-input
           v-model="query.project_name"
           clearable
-          placeholder="输入项目名称关键词"
+          placeholder="输入关键词（需选日期范围）"
           @keyup.enter="emit('search')"
         />
       </el-form-item>
@@ -57,23 +66,12 @@ function setRange(key: typeof DATES[number]['key'], value: [string, string] | nu
         </el-select>
       </el-form-item>
       <el-form-item label="省份">
-        <el-select
+        <FilterSelect
           v-model="query.purchaser_provname"
-          multiple
-          filterable
-          allow-create
-          default-first-option
-          collapse-tags
-          clearable
-          placeholder="输入省份回车"
-        >
-          <el-option
-            v-for="value in query.purchaser_provname"
-            :key="value"
-            :value="value"
-            :label="value"
-          />
-        </el-select>
+          v-bind="areaFilters.bind('prov_name')"
+          placeholder="选择或搜索省份"
+          size="short"
+        />
       </el-form-item>
       <el-form-item label="采集时间">
         <el-date-picker
@@ -94,29 +92,19 @@ function setRange(key: typeof DATES[number]['key'], value: [string, string] | nu
           :key="region.key"
           :label="region.label"
         >
-          <el-select
+          <FilterSelect
             v-model="query[region.key]"
-            multiple
-            filterable
-            allow-create
-            default-first-option
-            collapse-tags
-            clearable
-            placeholder="输入名称回车"
-          >
-            <el-option
-              v-for="value in query[region.key]"
-              :key="value"
-              :value="value"
-              :label="value"
-            />
-          </el-select>
+            v-bind="areaFilters.bind(region.optionField)"
+            :placeholder="region.placeholder"
+            size="short"
+          />
         </el-form-item>
         <el-form-item label="项目ID">
           <el-input
             v-model="query.project_content_id"
             placeholder="输入完整项目ID"
             clearable
+            @keyup.enter="emit('search')"
           />
         </el-form-item>
         <el-form-item label="是否补充场景">

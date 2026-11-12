@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { chartPalette } from '@/components/charts/echarts'
 import { isolatedHtml } from './content'
-import { initialQuery, tenderColumns } from './fields'
+import { initialQuery, tenderColumns, validateTenderSearch } from './fields'
 import { recentRange, statisticsChart, compactCount, shortProvinceName, structureDonutOption } from './statistics'
 
 describe('招中标页面规则', () => {
@@ -53,5 +53,28 @@ describe('招中标页面规则', () => {
     expect(formatter(20_000)).toBe('2万')
     expect(formatter(15_000)).toBe('1.5万')
     expect(formatter(500)).toBe('500')
+  })
+  it('按项目名称查询必须先选完整且不超过 366 天的日期范围', () => {
+    expect(validateTenderSearch(initialQuery())).toBeNull()
+    expect(validateTenderSearch({ ...initialQuery(), project_name: '智慧城市' })).toContain('日期范围')
+    expect(validateTenderSearch({ ...initialQuery(), project_name: '智慧城市', collect_date_from: '2026-11-01' })).toContain('日期范围')
+    expect(validateTenderSearch({
+      ...initialQuery(),
+      project_name: '智慧城市',
+      collect_date_from: '2025-01-01',
+      collect_date_to: '2026-11-12',
+    })).toContain('366')
+    expect(validateTenderSearch({
+      ...initialQuery(),
+      project_name: '智慧城市',
+      collect_date_from: '2026-11-01',
+      collect_date_to: '2026-11-12',
+    })).toBeNull()
+    expect(validateTenderSearch({
+      ...initialQuery(),
+      project_name: '智慧城市',
+      public_date_from: '2026-11-01',
+      public_date_to: '2026-11-12',
+    })).toBeNull()
   })
 })

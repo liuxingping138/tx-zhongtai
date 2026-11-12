@@ -4,10 +4,9 @@ from datetime import date, timedelta
 
 from app.core.source import Reader, Row
 from app.domain.fields import REGION_FIELDS, TABLES, Kind, Status, columns
-from app.domain.queries import ListQuery
+from app.domain.queries import MAX_ROUTED_DAYS, ListQuery
 
 QLM_ID_MAX_LENGTH = 13
-MAX_ROUTED_DAYS = 366
 
 
 def where_clause(query: ListQuery) -> tuple[str, tuple[object, ...]]:

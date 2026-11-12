@@ -54,4 +54,24 @@ export function initialQuery() {
     public_date_from: '', public_date_to: '', create_time_from: '', create_time_to: '', page: 1, page_size: 20,
   }
 }
+export const MAX_NAME_FILTER_DAYS = 366
+
+export function hasBoundedDateRange(query: TenderQuery): boolean {
+  for (const field of DATES) {
+    const from = query[`${field.key}_from`]
+    const to = query[`${field.key}_to`]
+    if (!from || !to) continue
+    const days = Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000)
+    if (days >= 0 && days < MAX_NAME_FILTER_DAYS) return true
+  }
+  return false
+}
+
+export function validateTenderSearch(query: TenderQuery): string | null {
+  if (query.project_name.trim() && !hasBoundedDateRange(query)) {
+    return '按项目名称查询时，请先选择完整的日期范围（建议选择采集时间，且跨度不超过 366 天）'
+  }
+  return null
+}
+
 export type TenderQuery = ReturnType<typeof initialQuery>

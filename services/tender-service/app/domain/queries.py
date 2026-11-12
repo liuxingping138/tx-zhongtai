@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.domain.fields import Status
 
 MAX_STATS_DAYS = 31
+MAX_ROUTED_DAYS = 366
 
 
 class ListQuery(BaseModel):
@@ -29,6 +30,13 @@ class ListQuery(BaseModel):
     create_time_from: date | None = None
     create_time_to: date | None = None
 
+    def _has_bounded_date(self) -> bool:
+        for field in ("collect_date", "public_date", "create_time"):
+            start, end = getattr(self, f"{field}_from"), getattr(self, f"{field}_to")
+            if start and end and (end - start).days < MAX_ROUTED_DAYS:
+                return True
+        return False
+
     @model_validator(mode="after")
     def date_order(self) -> "ListQuery":
         for field in ("collect_date", "public_date", "create_time"):
@@ -37,6 +45,8 @@ class ListQuery(BaseModel):
                 raise ValueError("开始日期不能晚于结束日期")
             if end == date.max:
                 raise ValueError("结束日期超出支持范围")
+        if self.project_name.strip() and not self._has_bounded_date():
+            raise ValueError("按项目名称查询时请先选择完整的日期范围（建议选择采集时间，且跨度不超过 366 天）")
         return self
 
 
