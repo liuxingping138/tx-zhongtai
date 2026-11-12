@@ -28,6 +28,7 @@ import * as policy from './policy'
 import * as scenarioCandidates from './scenarioCandidates'
 import * as scheduler from './scheduler'
 import * as system from './system'
+import * as tender from './tender'
 
 type Spec = { paths: Record<string, Record<string, unknown>> }
 
@@ -43,7 +44,7 @@ const operations = Object.values(specs).flatMap((spec) =>
   ),
 )
 
-const modules = { ai, aiSamples, audit, auth, codebook, crawler, policy, scenarioCandidates, scheduler, system }
+const modules = { ai, aiSamples, audit, auth, codebook, crawler, policy, scenarioCandidates, scheduler, system, tender }
 
 const wrappers = Object.entries(modules).flatMap(([module, exports]) =>
   Object.entries(exports)
@@ -52,13 +53,15 @@ const wrappers = Object.entries(modules).flatMap(([module, exports]) =>
 )
 
 describe('前端接口封装与后端 OpenAPI 一致', () => {
-  it('读到了全部五份 OpenAPI', () => {
-    expect(Object.keys(specs)).toHaveLength(5)
+  it('读到了全部六份 OpenAPI', () => {
+    expect(Object.keys(specs)).toHaveLength(6)
   })
 
-  it.each(wrappers)('$label 调用的方法和路径在后端存在', async ({ fn }) => {
+  it.each(wrappers)('$label 调用的方法和路径在后端存在', async ({ label, fn }) => {
     calls.length = 0
-    await fn('id-1', () => Promise.resolve({}))
+    if (label.startsWith('tender.list') || label === 'tender.getTenderCount') await fn('purchaser', {})
+    else if (label === 'tender.getTenderRecord' || label === 'tender.getTenderContent') await fn('winbid', '123', '0')
+    else await fn('id-1', () => Promise.resolve({}))
     expect(calls.length).toBeGreaterThan(0)
     for (const { method, url } of calls) {
       const path = `/api/v1${url}`

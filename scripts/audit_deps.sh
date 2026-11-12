@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-PY_PACKAGES="packages/platform-common services/iam-service services/audit-service services/codebook-service services/policy-service services/ai-service"
+PY_PACKAGES="packages/platform-common services/iam-service services/audit-service services/codebook-service services/policy-service services/ai-service services/tender-service"
 requirements="$(mktemp)"
 trap 'rm -f "$requirements"' EXIT
 failed=0

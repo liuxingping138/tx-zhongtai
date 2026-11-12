@@ -10,9 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BUSINESS_DIRS = [
     ROOT / "frontend/src/modules/customer",
-    ROOT / "frontend/src/modules/tender",
     ROOT / "services/customer-service",
-    ROOT / "services/tender-service",
 ]
 CODE_SUFFIX = {".py", ".ts", ".tsx", ".vue", ".js", ".sql"}
 # `(?<![:@-])` 排除 Vue 模板里的属性绑定和事件（`:password="oncePassword"`、`@reset-password="actions.reset"`），

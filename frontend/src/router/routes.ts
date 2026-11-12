@@ -178,6 +178,36 @@ export const routes: RouteRecordRaw[] = [
         redirect: to => ({ name: 'policy-scenario-candidates', query: { focus: String(to.params.id) } }),
       },
       {
+        path: 'tender/statistics',
+        name: 'tender-statistics',
+        component: () => import('@/modules/tender/TenderStatistics.vue'),
+        meta: { title: '招标统计分析', resource: 'tender.statistics' },
+      },
+      {
+        path: 'tender/purchaser',
+        name: 'tender-purchaser',
+        component: () => import('@/modules/tender/PurchaserList.vue'),
+        meta: { title: '招标基础数据', resource: 'tender.purchaser' },
+      },
+      {
+        path: 'tender/purchaser/:id',
+        name: 'tender-purchaser-detail',
+        component: () => import('@/modules/tender/PurchaserDetail.vue'),
+        meta: { title: '招标基础数据详情', resource: 'tender.purchaser', menuPath: '/tender/purchaser' },
+      },
+      {
+        path: 'tender/winbid',
+        name: 'tender-winbid',
+        component: () => import('@/modules/tender/WinbidList.vue'),
+        meta: { title: '中标基础数据', resource: 'tender.winbid' },
+      },
+      {
+        path: 'tender/winbid/:id',
+        name: 'tender-winbid-detail',
+        component: () => import('@/modules/tender/WinbidDetail.vue'),
+        meta: { title: '中标基础数据详情', resource: 'tender.winbid', menuPath: '/tender/winbid' },
+      },
+      {
         path: 'ai/prompts',
         name: 'ai-prompts',
         component: () => import('@/modules/ai/prompts/PromptListPage.vue'),

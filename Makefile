@@ -17,7 +17,7 @@ P6_DOCKER := docker
 P6_DOCKER_COMPOSE := docker compose
 endif
 P6_COMPOSE := $(P6_DOCKER_COMPOSE) -p tx-zhongtai-p6 -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.p6.yml --env-file $(P6_ENV)
-PY_PACKAGES := packages/platform-common services/iam-service services/audit-service services/codebook-service services/policy-service services/ai-service
+PY_PACKAGES := packages/platform-common services/iam-service services/audit-service services/codebook-service services/policy-service services/ai-service services/tender-service
 JWT_KEYS_DIR := deploy/secrets/jwt
 JWT_P6_DIR := deploy/secrets/jwt-p6
 
@@ -198,6 +198,7 @@ check:
 	@(cd services/codebook-service && uv run ruff format --check . && uv run ruff check . && uv run mypy app && uv run lint-imports) || exit 1
 	@(cd services/policy-service && uv run ruff format --check . && uv run ruff check . && uv run mypy app && uv run lint-imports) || exit 1
 	@(cd services/ai-service && uv run ruff format --check . && uv run ruff check . && uv run mypy app && uv run lint-imports) || exit 1
+	@(cd services/tender-service && uv run ruff format --check . && uv run ruff check . && uv run mypy app && uv run lint-imports) || exit 1
 	@echo "== 前端类型检查 =="
 	@(cd frontend && pnpm run type-check)
 	@echo "== 前端构建 =="
@@ -288,6 +289,7 @@ export-openapi:
 	@(cd services/codebook-service && uv run python ../../scripts/export_openapi.py codebook)
 	@(cd services/policy-service && uv run python ../../scripts/export_openapi.py policy)
 	@(cd services/ai-service && uv run python ../../scripts/export_openapi.py ai)
+	@(cd services/tender-service && uv run python ../../scripts/export_openapi.py tender)
 
 scan-scope:
 	python3 scripts/scan_scope.py

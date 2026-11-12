@@ -37,6 +37,12 @@ http:
       service: policy-service
       middlewares: ["compress", "request-limit"]
       priority: 100
+    tender:
+      rule: "PathPrefix(`/api/v1/tender`)"
+      entryPoints: ["web"]
+      service: tender-service
+      middlewares: ["compress", "request-limit"]
+      priority: 100
     ai:
       rule: "PathPrefix(`/api/v1/ai`)"
       entryPoints: ["web"]
@@ -96,6 +102,10 @@ http:
       loadBalancer:
         servers:
           - url: "http://policy-service:8004"
+    tender-service:
+      loadBalancer:
+        servers:
+          - url: "http://tender-service:8006"
     ai-service:
       loadBalancer:
         servers:

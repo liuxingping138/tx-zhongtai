@@ -64,7 +64,7 @@ async function onSize(value: number) {
         >
           <template v-if="error">数据加载失败</template>
           <template v-else-if="loading">正在加载…</template>
-          <template v-else>共 <strong>{{ total.toLocaleString('zh-CN') }}</strong> 条记录</template>
+          <template v-else><slot name="total">共 <strong>{{ total.toLocaleString('zh-CN') }}</strong> 条记录</slot></template>
         </span>
         <div class="list-page__actions">
           <slot name="actions" /><slot name="tools" />
@@ -110,18 +110,20 @@ async function onSize(value: number) {
         v-if="!hidePager && !error"
         class="pagination-row"
       >
-        <span class="pagination-range">第 {{ total ? (page - 1) * pageSize + 1 : 0 }}–{{ Math.min(page * pageSize, total) }} 条</span>
-        <el-pagination
-          :current-page="page"
-          :page-size="pageSize"
-          :total="total"
-          :page-sizes="[10, 20, 50, 100]"
-          :pager-count="5"
-          :disabled="loading"
-          layout="sizes, prev, pager, next"
-          @update:current-page="onPage"
-          @update:page-size="onSize"
-        />
+        <slot name="pagination">
+          <span class="pagination-range">第 {{ total ? (page - 1) * pageSize + 1 : 0 }}–{{ Math.min(page * pageSize, total) }} 条</span>
+          <el-pagination
+            :current-page="page"
+            :page-size="pageSize"
+            :total="total"
+            :page-sizes="[10, 20, 50, 100]"
+            :pager-count="5"
+            :disabled="loading"
+            layout="sizes, prev, pager, next"
+            @update:current-page="onPage"
+            @update:page-size="onSize"
+          />
+        </slot>
       </div>
     </section>
   </div>

@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 爬虫监测已接入（只读统计页，数据来自外部爬虫库采集总表的按天聚合，按网站统计），
 爬虫配置统计已接入（按规则表把信源标成已爬，按周按省统计上线栏目数），
 AI提问已接入（独立的 ai-service：提示词模板、样本试跑与上线、按 Excel 逐行跑的批量任务，从旧 Django 项目 difyapi/chat_web 迁来）。
-**客户、招投标仅有占位目录**，未开发——不要为它们提前暴露无功能入口或做过度抽象。
+**客户仅有占位目录**，未开发——不要提前暴露无功能入口。招中标已实现独立只读 tender-service（接口、页面、菜单与部署配置），部署说明见 docs/guides/招中标模块.md。
 其余文档按 设计决策 / 操作手册 分类，索引见 `docs/README.md`。文档只写与现有代码一致的现状，过时内容直接删除，历史留在 git 里。
 
 ## 常用命令
@@ -76,7 +76,7 @@ services/
   codebook-service/    码表：政策类型、行业场景、省市区编码
   ai-service/          AI提问：提示词模板、批量任务；Compose 里 ai-worker 共用此镜像执行批量任务
   customer-service/    占位，仅 .gitkeep
-  tender-service/      占位，仅 .gitkeep
+  tender-service/      招中标只读查询、按采集日统计、按需正文
 packages/platform-common/   跨服务公共包（见下）
 deploy/gateway/        Traefik 静态+动态配置
 deploy/compose/        docker-compose.yml、Postgres 初始化脚本
@@ -126,6 +126,14 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
 权限依赖，挂了依赖的也不能错标成别的分级。新写的 `require_*_permission` 工厂要调 `mark_permission_dependency`，
 否则体检认不出来。测试里要遍历路由用 `route_audit.iter_api_routes(app)`：`app.routes` 里是未展开的
 `include_router` 对象，直接遍历什么都找不到，检查会空跑通过。
+
+### 招中标源表严格只读（用户明确要求）
+
+- `tender-service` 的源表只能 SELECT，禁止对 `bid_analyse` 的四张招中标表以及正文表执行 INSERT / UPDATE / DELETE / DDL，也不建索引、不回传状态。
+- `project_status=0` 列表读 `bid_purchaser_info_dis_pro` / `bid_winbid_info_dis_pro`；`1` 列表读对应 `_dis_approval_pro` 交付表。不能用原始表冒充交付表的优化字段。
+- 统计只读原始表，按 `collect_date` 分日；状态 1 同时计入信息化标签、基础字段补充，场景工作量暂为 0。两项工序不能相加当作处理数据量。
+- 正文按需：项目 ID 长度 <=13 时读 `bid_analyse.qlm_pdf_content.infoid` 对应的 `infocontent`；其他读 `crawler2021.zhaobiao2021_prod.uid` 对应 `content`，必须同时限制 `create_time = 原始表.collect_date`（用户已确认 uid）。
+- 源库雪花 ID 序列化成字符串。全表精确计数在有界后台线程中执行，前端轮询；列表 LIMIT 多取一条判断下一页，不等待 COUNT。统计缓存只在服务内存，不建源表和平台业务表。
 
 ### 爬虫监测是只读统计，数据靠同步进来
 

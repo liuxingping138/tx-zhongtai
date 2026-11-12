@@ -44,6 +44,7 @@ SERVICES = {
     "codebook": "services/codebook-service",
     "policy": "services/policy-service",
     "ai": "services/ai-service",
+    "tender": "services/tender-service",
 }
 
 

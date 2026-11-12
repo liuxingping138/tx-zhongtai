@@ -75,7 +75,10 @@ RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     # 政策 AI 打标会花钱：改任务设置和每日费用上限、启用或改时间、立即执行，在任务调度之外单独授权。没有菜单。
     ResourceSpec("policy.ai_tagging", "政策AI打标", "policy-service", NodeType.RESOURCE, True, 27, "policy"),
     ResourceSpec("customer", "客户", "customer-service", NodeType.RESOURCE, False, 30),
-    ResourceSpec("tender", "招投标", "tender-service", NodeType.RESOURCE, False, 40),
+    ResourceSpec("tender", "招中标", "tender-service", NodeType.DIRECTORY, True, 40),
+    ResourceSpec("tender.statistics", "招标统计分析", "tender-service", NodeType.RESOURCE, True, 41, "tender"),
+    ResourceSpec("tender.purchaser", "招标基础数据", "tender-service", NodeType.RESOURCE, True, 42, "tender"),
+    ResourceSpec("tender.winbid", "中标基础数据", "tender-service", NodeType.RESOURCE, True, 43, "tender"),
     ResourceSpec("codebook", "码表管理", "codebook-service", NodeType.DIRECTORY, True, 50),
     ResourceSpec("codebook.policy_types", "政策类型码表", "codebook-service", NodeType.RESOURCE, True, 51, "codebook"),
     ResourceSpec("codebook.scenarios", "行业场景码表", "codebook-service", NodeType.RESOURCE, True, 52, "codebook"),
@@ -95,6 +98,11 @@ RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
 )
 
 ACTION_SPECS: tuple[ActionSpec, ...] = (
+    ActionSpec("tender.statistics", "list", GrantLevel.READ),
+    ActionSpec("tender.purchaser", "list", GrantLevel.READ),
+    ActionSpec("tender.purchaser", "read", GrantLevel.READ),
+    ActionSpec("tender.winbid", "list", GrantLevel.READ),
+    ActionSpec("tender.winbid", "read", GrantLevel.READ),
     ActionSpec("system.scheduler", "list", GrantLevel.READ),
     ActionSpec("system.scheduler", "update", GrantLevel.FULL),
     ActionSpec("system.scheduler", "execute", GrantLevel.FULL),
@@ -254,7 +262,10 @@ MENU_SPECS: tuple[MenuSpec, ...] = (
         enabled=True,
     ),
     MenuSpec("menu.customer", "客户", 30, "customer", "customer", enabled=False),
-    MenuSpec("menu.tender", "招投标", 40, "tender", "tender", enabled=False),
+    MenuSpec("menu.tender", "招中标", 40),
+    MenuSpec("menu.tender.statistics", "招标统计分析", 41, "tender-statistics", "tender.statistics", "menu.tender"),
+    MenuSpec("menu.tender.purchaser", "招标基础数据", 42, "tender-purchaser", "tender.purchaser", "menu.tender"),
+    MenuSpec("menu.tender.winbid", "中标基础数据", 43, "tender-winbid", "tender.winbid", "menu.tender"),
     MenuSpec("menu.codebook", "码表管理", 50, enabled=True),
     MenuSpec(
         "menu.codebook.policy_types",

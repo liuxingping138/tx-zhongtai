@@ -13,6 +13,7 @@ export interface WorkspaceGroup { key: string; title: string; icon: Component; e
 /** 顶部一级分类专属领域图标，践行 Google M3 导航规范 */
 const DOMAIN_ICONS: Record<string, Component> = {
   policy: Reading,
+  tender: Tickets,
   codebook: Collection,
   ai: Cpu,
   system: Setting,
@@ -35,6 +36,9 @@ export const ENTRY_DESCRIPTIONS: Record<string, string> = {
   '/system/login-logs': '谁在什么时候从哪里登录，失败原因和 IP 限制',
   '/system/scheduler': '配置每日同步与查看执行记录',
   '/system/audit': '追溯操作与权限变更',
+  '/tender/statistics': '按天、按省查看招中标接入与人工处理量',
+  '/tender/purchaser': '查看原始或交付招标数据',
+  '/tender/winbid': '查看原始或交付中标数据',
   '/ai/prompts': '写提示词、用样本试跑，管理员上线',
   '/ai/batch-runs': '用上线的模板跑这次上传的 Excel',
   '/ai/models': '维护可选模型、接入点和单价',
@@ -58,6 +62,9 @@ const entryIcons: Record<string, Component> = {
   '/system/login-logs': Unlock,
   '/system/audit': Tickets,
   '/system/scheduler': Timer,
+  '/tender/statistics': DataAnalysis,
+  '/tender/purchaser': Tickets,
+  '/tender/winbid': Finished,
   '/ai/prompts': EditPen,
   '/ai/batch-runs': Files,
   '/ai/models': Cpu,

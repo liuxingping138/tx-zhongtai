@@ -263,6 +263,32 @@ services:
       timeout: 5s
       retries: 5
 
+  tender-service:
+    build:
+      context: ../..
+      dockerfile: services/tender-service/Dockerfile
+    restart: unless-stopped
+    mem_limit: ${TENDER_MEM_LIMIT:-1g}
+    environment:
+      TENDER_ENVIRONMENT: ${TENDER_ENVIRONMENT:-${ENVIRONMENT:-development}}
+      TENDER_LOG_LEVEL: ${TENDER_LOG_LEVEL:-INFO}
+      TENDER_IAM_BASE_URL: http://iam-service:8001
+      TENDER_IAM_SERVICE_SECRET: ${TENDER_IAM_SERVICE_SECRET:-}
+      TENDER_MYSQL_HOST: ${TENDER_MYSQL_HOST:-}
+      TENDER_MYSQL_PORT: ${TENDER_MYSQL_PORT:-3306}
+      TENDER_MYSQL_USER: ${TENDER_MYSQL_USER:-}
+      TENDER_MYSQL_PASSWORD: ${TENDER_MYSQL_PASSWORD:-}
+      TENDER_MYSQL_READ_TIMEOUT: ${TENDER_MYSQL_READ_TIMEOUT:-20}
+      TENDER_MYSQL_COUNT_TIMEOUT: ${TENDER_MYSQL_COUNT_TIMEOUT:-120}
+      TENDER_STATS_CACHE_SECONDS: ${TENDER_STATS_CACHE_SECONDS:-300}
+    networks:
+      - gateway
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8006/health/live')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   ai-service:
     build:
       context: ../..
