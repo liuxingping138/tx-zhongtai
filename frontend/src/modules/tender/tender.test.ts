@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { chartPalette } from '@/components/charts/echarts'
 import { isolatedHtml } from './content'
-import { initialQuery, tenderColumns, validateTenderSearch } from './fields'
+import { buildDetailSections, SYSTEM_SECTION } from '@/components/detailSections'
+import { initialQuery, tenderColumns, tenderDetailGroups, validateTenderSearch } from './fields'
 import { buildProvinceRows, recentRange, statisticsChart, compactCount, shortProvinceName, structureDonutOption } from './statistics'
 
 describe('招中标页面规则', () => {
@@ -97,5 +98,11 @@ describe('招中标页面规则', () => {
     const filtered = buildProvinceRows(sample, ['浙江'], 'delivery')
     expect(filtered).toHaveLength(1)
     expect(filtered[0]?.name).toBe('浙江省')
+  })
+  it('详情页按业务主题分组且列表字段核心信息前置', () => {
+    const purchaserCols = tenderColumns('purchaser').map(col => col.prop)
+    expect(purchaserCols.slice(0, 3)).toEqual(['project_name', 'project_status', 'public_date'])
+    const sections = buildDetailSections(tenderColumns('winbid'), tenderDetailGroups('winbid'))
+    expect(sections.map(s => s.title)).toEqual(['项目核心信息', '招中标主体与地区', '行业与场景标签', SYSTEM_SECTION])
   })
 })

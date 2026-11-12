@@ -1,39 +1,98 @@
 import type { TenderKind } from '@/api/tender'
 import type { DataColumn } from '@/components/dataColumns'
+import type { EditorGroup } from '@/components/editorGroups'
 
-const common: DataColumn[] = [
-  { prop: 'project_name', label: '项目名称', minWidth: 300, grow: 2 },
-  { prop: 'purchaser_provname', label: '招标单位省份', width: 130 },
-  { prop: 'purchaser_cityname', label: '招标单位市', width: 130 },
-  { prop: 'purchaser_countyname', label: '招标单位区县', width: 140 },
-  { prop: 'purchaser', label: '招标单位名称', minWidth: 220 },
-  { prop: 'purchaser_address', label: '招标公司地址', minWidth: 240 },
-  { prop: 'agency', label: '代理机构', minWidth: 220 },
-  { prop: 'public_date', label: '发布时间', width: 180 },
-  { prop: 'from_url', label: '发布链接', minWidth: 220, link: true },
-  { prop: 'first_indty_name', label: '一级行业名称', width: 180 },
-  { prop: 'second_indty_name', label: '二级行业名称', width: 180 },
-  { prop: 'third_indty_name', label: '三级行业名称', width: 180 },
-  { prop: 'first_scene_name', label: '一级场景', width: 180 },
-  { prop: 'second_scene_name', label: '二级场景', width: 180 },
-  { prop: 'third_scene_name', label: '三级场景', width: 180 },
-]
 export function tenderColumns(kind: TenderKind): DataColumn[] {
-  const specific: DataColumn[] = kind === 'winbid' ? [
-    { prop: 'winbid', label: '中标单位名称', minWidth: 220 },
-    { prop: 'accepted_amount', label: '中标金额', width: 150 },
-    { prop: 'bid_type', label: '招标方式', width: 140 },
-  ] : [
-    { prop: 'open_date', label: '开标时间', width: 180 },
-    { prop: 'end_date', label: '结束时间', width: 180 },
-  ]
-  return [...common.slice(0, 7), ...specific, ...common.slice(7),
-    { prop: 'project_status', label: '项目状态', width: 160 },
+  const coreSpecific: DataColumn[] = kind === 'winbid'
+    ? [
+        { prop: 'winbid', label: '中标单位名称', minWidth: 220 },
+        { prop: 'accepted_amount', label: '中标金额', width: 150 },
+        { prop: 'bid_type', label: '招标方式', width: 140 },
+      ]
+    : []
+  const timeSpecific: DataColumn[] = kind === 'purchaser'
+    ? [
+        { prop: 'open_date', label: '开标时间', width: 180 },
+        { prop: 'end_date', label: '结束时间', width: 180 },
+      ]
+    : []
+  return [
+    { prop: 'project_name', label: '项目名称', minWidth: 300, grow: 2 },
+    { prop: 'project_status', label: '项目状态', width: 110 },
+    { prop: 'public_date', label: '发布时间', width: 180 },
+    { prop: 'purchaser_provname', label: '招标单位省份', width: 130 },
+    { prop: 'purchaser_cityname', label: '招标单位市', width: 130 },
+    { prop: 'purchaser_countyname', label: '招标单位区县', width: 140 },
+    ...coreSpecific,
+    { prop: 'purchaser', label: '招标单位名称', minWidth: 220 },
+    { prop: 'agency', label: '代理机构', minWidth: 220 },
+    ...timeSpecific,
+    { prop: 'first_indty_name', label: '一级行业名称', width: 180 },
+    { prop: 'second_indty_name', label: '二级行业名称', width: 180 },
+    { prop: 'third_indty_name', label: '三级行业名称', width: 180 },
+    { prop: 'first_scene_name', label: '一级场景', width: 180 },
+    { prop: 'second_scene_name', label: '二级场景', width: 180 },
+    { prop: 'third_scene_name', label: '三级场景', width: 180 },
     { prop: 'is_supp_scene', label: '是否补充场景', width: 130 },
+    { prop: 'purchaser_address', label: '招标公司地址', minWidth: 240 },
+    { prop: 'from_url', label: '发布链接', minWidth: 220, link: true },
     { prop: 'project_code', label: '项目编号', width: 180 },
     { prop: 'project_content_id', label: '项目ID', width: 280 },
     { prop: 'collect_date', label: '采集时间', width: 140 },
     { prop: 'create_time', label: '入库时间', width: 190 },
+  ]
+}
+
+export function tenderDetailGroups(kind: TenderKind): EditorGroup[] {
+  const coreSpecific = kind === 'winbid'
+    ? [
+        { key: 'bid_type', label: '招标方式' },
+        { key: 'accepted_amount', label: '中标金额' },
+      ]
+    : [
+        { key: 'open_date', label: '开标时间' },
+        { key: 'end_date', label: '结束时间' },
+      ]
+  const partySpecific = kind === 'winbid' ? [{ key: 'winbid', label: '中标单位名称', long: true }] : []
+  return [
+    {
+      title: '项目核心信息',
+      hint: '',
+      fields: [
+        { key: 'project_name', label: '项目名称', long: true },
+        { key: 'project_status', label: '项目状态' },
+        { key: 'project_code', label: '项目编号' },
+        { key: 'public_date', label: '发布时间' },
+        ...coreSpecific,
+        { key: 'from_url', label: '发布链接', long: true },
+      ],
+    },
+    {
+      title: '招中标主体与地区',
+      hint: '',
+      fields: [
+        { key: 'purchaser', label: '招标单位名称', long: true },
+        ...partySpecific,
+        { key: 'purchaser_provname', label: '招标单位省份' },
+        { key: 'purchaser_cityname', label: '招标单位市' },
+        { key: 'purchaser_countyname', label: '招标单位区县' },
+        { key: 'agency', label: '代理机构' },
+        { key: 'purchaser_address', label: '招标公司地址', long: true },
+      ],
+    },
+    {
+      title: '行业与场景标签',
+      hint: '',
+      fields: [
+        { key: 'first_indty_name', label: '一级行业名称' },
+        { key: 'second_indty_name', label: '二级行业名称' },
+        { key: 'third_indty_name', label: '三级行业名称' },
+        { key: 'is_supp_scene', label: '是否补充场景' },
+        { key: 'first_scene_name', label: '一级场景' },
+        { key: 'second_scene_name', label: '二级场景' },
+        { key: 'third_scene_name', label: '三级场景' },
+      ],
+    },
   ]
 }
 export const REGIONS = [

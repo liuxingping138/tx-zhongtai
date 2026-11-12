@@ -3,8 +3,11 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { errorMessage } from '@/api/errors'
 import { getTenderRecord, getTenderContent, type TenderKind, type TenderRecord } from '@/api/tender'
-import { tenderColumns } from './fields'
+import DetailSections from '@/components/DetailSections.vue'
+import { buildDetailSections } from '@/components/detailSections'
 import { isolatedHtml } from './content'
+import { tenderColumns, tenderDetailGroups } from './fields'
+
 const props = defineProps<{ kind: TenderKind }>()
 const route = useRoute()
 const record = ref<TenderRecord | null>(null)
@@ -14,8 +17,18 @@ const html = ref<string | null>(null)
 const contentError = ref('')
 const contentLoading = ref(false)
 const status = route.query.project_status === '1' ? '1' : '0'
-const columns = tenderColumns(props.kind)
+const sections = computed(() => buildDetailSections(tenderColumns(props.kind), tenderDetailGroups(props.kind)))
 const back = computed(() => ({ name: `tender-${props.kind}`, query: route.query }))
+
+const displayRecord = computed(() => {
+  if (!record.value) return null
+  return {
+    ...record.value,
+    project_status: status === '1' ? '通过' : '未通过',
+    is_supp_scene: Number(record.value.is_supp_scene) === 1 ? '已补充' : '未补充',
+  }
+})
+
 async function load() {
   loading.value = true
   error.value = ''
@@ -23,6 +36,7 @@ async function load() {
   catch (cause) { error.value = errorMessage(cause, '详情加载失败') }
   finally { loading.value = false }
 }
+
 async function loadContent() {
   contentLoading.value = true
   contentError.value = ''
@@ -32,25 +46,23 @@ async function loadContent() {
   } catch (cause) { contentError.value = errorMessage(cause, '正文加载失败') }
   finally { contentLoading.value = false }
 }
-function value(key: string) {
-  if (key === 'project_status') return status === '1' ? '通过' : '未通过'
-  if (key === 'is_supp_scene') return Number(record.value?.[key]) === 1 ? '已补充' : '未补充'
-  return record.value?.[key] ?? '—'
-}
+
 onMounted(() => {
   void load()
   void loadContent()
 })
 </script>
+
 <template>
   <section
     v-loading="loading"
     class="tender-detail"
   >
-    <header>
+    <header class="detail-head">
       <RouterLink :to="back">
         返回列表
-      </RouterLink><h2>{{ record?.project_name || '项目详情' }}</h2>
+      </RouterLink>
+      <h2>{{ record?.project_name || '项目详情' }}</h2>
     </header>
     <el-alert
       v-if="error"
@@ -62,24 +74,16 @@ onMounted(() => {
         重试
       </el-button>
     </el-alert>
-    <template v-else-if="record">
-      <el-descriptions
-        :column="2"
-        border
-      >
-        <el-descriptions-item
-          v-for="column in columns"
-          :key="column.prop"
-          :label="column.label"
-        >
-          {{ value(column.prop) }}
-        </el-descriptions-item>
-      </el-descriptions>
+    <template v-else-if="displayRecord">
+      <DetailSections
+        :row="displayRecord"
+        :sections="sections"
+      />
       <section
         v-loading="contentLoading"
         class="tender-body"
       >
-        <header>
+        <header class="detail-head">
           <h3>项目正文</h3>
           <el-button
             v-if="contentError || html !== null"
@@ -110,13 +114,13 @@ onMounted(() => {
     </template>
   </section>
 </template>
+
 <style scoped>
 .tender-detail { padding: 24px; background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: 12px; }
-header { display: flex; align-items: center; gap: 20px; margin-bottom: 16px; }
-h2 { font-size: 20px; overflow-wrap: anywhere; }
-h3 { margin: 0; }
+.detail-head { display: flex; align-items: center; gap: 20px; margin-bottom: 16px; }
+h2 { margin: 0; font-size: 20px; overflow-wrap: anywhere; }
+h3 { margin: 0; font-size: 16px; }
 .tender-body { margin-top: 24px; }
 .tender-body p { color: var(--zt-ink-500); }
-iframe { width: 100%; height: 70vh; border: 1px solid var(--zt-border); background: var(--zt-panel); }
-:deep(.el-descriptions__content) { overflow-wrap: anywhere; white-space: pre-wrap; }
+iframe { width: 100%; height: 70vh; border: 1px solid var(--zt-border); border-radius: 8px; background: var(--zt-panel); }
 </style>
