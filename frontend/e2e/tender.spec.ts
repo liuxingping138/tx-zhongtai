@@ -7,7 +7,7 @@ const menus = [
     id: kind, title: ['招标统计分析', '招标基础数据', '中标基础数据'][index], parent_id: 'tender', route_name: `tender-${kind}`, sort_order: 41 + index,
   })),
 ]
-const record = { id: '2005511121291911170', project_content_id: 'abc123456789012345678901234567890', project_name: '智慧园区信息化平台建设项目', purchaser: '某市公共服务中心', purchaser_provname: '北京市', purchaser_cityname: '北京市', purchaser_countyname: '朝阳区', project_status: '0', is_supp_scene: 0, public_date: '2026-11-11', collect_date: '2026-11-12', create_time: '2026-11-12 09:30:00', agency: '项目咨询有限公司', accepted_amount: '120万元' }
+const record = { id: '2005511121291911170', project_content_id: 'abc123456789012345678901234567890', project_name: '智慧园区信息化平台建设项目', purchaser: '某市公共服务中心', purchaser_provname: '北京市', purchaser_cityname: '北京市', purchaser_countyname: '朝阳区', project_status: '1', is_supp_scene: 0, public_date: '2026-11-11', collect_date: '2026-11-12', create_time: '2026-11-12 09:30:00', agency: '项目咨询有限公司', accepted_amount: '120万元' }
 async function mockSource(page: Page) {
   const calls: string[] = []
   await page.route('**/api/v1/**', route => {
@@ -26,8 +26,8 @@ async function mockSource(page: Page) {
     })
     if (path.endsWith('/content')) return respond(route, { html: '<h1>项目原始正文</h1><table><tr><td>预算</td><td>120万元</td></tr></table><script>parent.document.body.dataset.unsafe="yes"</script>' })
     if (path.endsWith('/count')) return respond(route, { state: 'ready', data: { total: 12345 } })
-    const status = url.searchParams.get('project_status') || '0'
-    const item = { ...record, project_status: status, project_name: status === '1' ? '人工优化后的智慧园区项目' : record.project_name }
+    const status = url.searchParams.get('project_status') || '1'
+    const item = { ...record, project_status: status, project_name: status === '0' ? '未通过的原始智慧园区项目' : record.project_name }
     if (/\/tender\/(purchaser|winbid)\/\d+$/.test(path)) return respond(route, item)
     if (/\/tender\/(purchaser|winbid)$/.test(path)) return respond(route, { items: [item], has_more: true, page: 1, page_size: 20 })
     return respond(route, { items: [], total: 0 })
@@ -35,24 +35,22 @@ async function mockSource(page: Page) {
   return calls
 }
 
-test('招中标：查询才切换数据视图，正文按需加载并隔离脚本', async ({ page }) => {
+test('招中标：查询才切换数据视图，正文直接加载并隔离脚本', async ({ page }) => {
   const calls = await mockSource(page)
   await page.goto('/tender/purchaser')
   await expect(page.getByRole('link', { name: record.project_name, exact: true })).toBeVisible()
   await page.getByRole('button', { name: /展开筛选条件/ }).click()
-  await page.getByRole('region', { name: '筛选条件' }).getByText('原始数据（0）', { exact: true }).click()
-  await page.getByRole('option', { name: '人工已处理（1）' }).click()
-  expect(calls.filter(url => url.includes('/tender/purchaser?')).every(url => !url.includes('project_status=1'))).toBe(true)
+  await page.getByRole('region', { name: '筛选条件' }).getByText('通过', { exact: true }).click()
+  await page.getByRole('option', { name: '未通过' }).click()
+  expect(calls.filter(url => url.includes('/tender/purchaser?')).every(url => !url.includes('project_status=0'))).toBe(true)
   await page.getByRole('button', { name: '查询', exact: true }).click()
-  await expect(page.getByRole('link', { name: '人工优化后的智慧园区项目', exact: true })).toBeVisible()
-  await page.getByRole('link', { name: '人工优化后的智慧园区项目', exact: true }).click()
-  expect(calls.some(url => url.includes('/content'))).toBe(false)
-  await page.getByRole('button', { name: '加载正文', exact: true }).click()
+  await expect(page.getByRole('link', { name: '未通过的原始智慧园区项目', exact: true })).toBeVisible()
+  await page.getByRole('link', { name: '未通过的原始智慧园区项目', exact: true }).click()
   await expect(page.frameLocator('iframe').getByRole('heading', { name: '项目原始正文' })).toBeVisible()
   await expect(page.locator('iframe')).toHaveAttribute('sandbox', '')
   expect(await page.locator('body').getAttribute('data-unsafe')).toBeNull()
   await page.getByRole('link', { name: '返回列表', exact: true }).click()
-  await expect(page.getByRole('link', { name: '人工优化后的智慧园区项目', exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: '未通过的原始智慧园区项目', exact: true })).toBeVisible()
 })
 
 test('招中标：从招标切到中标时重新加载对应列表', async ({ page }) => {

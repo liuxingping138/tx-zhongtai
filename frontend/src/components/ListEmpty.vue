@@ -5,10 +5,21 @@ defineEmits<{ reset: [] }>()
 <template>
   <div
     v-if="loading"
-    class="list-empty"
+    class="table-skeleton-wrap"
     role="status"
+    aria-label="数据加载中"
   >
-    正在加载数据…
+    <div
+      v-for="i in 5"
+      :key="i"
+      class="table-skeleton-row"
+    >
+      <div class="skeleton-shimmer skeleton-col--short" />
+      <div class="skeleton-shimmer skeleton-col--main" />
+      <div class="skeleton-shimmer skeleton-col--mid" />
+      <div class="skeleton-shimmer skeleton-col--short" />
+      <div class="skeleton-shimmer skeleton-col--actions" />
+    </div>
   </div>
   <el-empty
     v-else
@@ -27,6 +38,43 @@ defineEmits<{ reset: [] }>()
   </el-empty>
 </template>
 <style scoped>
-.list-empty { padding: 48px 16px; color: var(--zt-ink-500); }
-.list-empty__hint { margin: 0 0 14px; color: var(--zt-ink-500); font-size: 12px; line-height: 1.7; }
+.table-skeleton-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--zt-space-3);
+  padding: var(--zt-space-4) var(--zt-space-3);
+  width: 100%;
+}
+.table-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: var(--zt-space-4);
+  height: 38px;
+  border-bottom: 1px solid var(--zt-divider);
+}
+.skeleton-shimmer {
+  height: 16px;
+  border-radius: 4px;
+  background: var(--zt-surface-subtle);
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--zt-panel), transparent);
+  animation: shimmer 1.5s infinite;
+}
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+.skeleton-col--short { flex: 0 0 80px; }
+.skeleton-col--main { flex: 1 1 200px; }
+.skeleton-col--mid { flex: 0 0 140px; }
+.skeleton-col--actions { flex: 0 0 100px; margin-left: auto; }
+.list-empty__hint { margin: 0 0 var(--zt-space-3); color: var(--zt-ink-500); font-size: 12px; line-height: 1.7; }
 </style>

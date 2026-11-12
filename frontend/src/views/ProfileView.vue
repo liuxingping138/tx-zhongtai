@@ -10,6 +10,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useWorkspace } from '@/layouts/workspace'
 import { errorMessage } from '@/api/errors'
 import { passwordError } from '@/utils/passwordPolicy'
+import ProfilePreferences from './profile/ProfilePreferences.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -201,6 +202,8 @@ async function onLogoutAll() {
             提示：登录账号与角色归属由系统管理员统一指派，所有写操作均自动关联审计轨迹。
           </p>
         </section>
+
+        <ProfilePreferences />
 
         <section class="profile-card is-grow">
           <div class="card-head">

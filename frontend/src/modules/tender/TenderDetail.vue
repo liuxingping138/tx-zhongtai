@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, Document, Link, Refresh } from '@element-plus/icons-vue'
+import { ArrowLeft, Document, Link, Refresh, Warning } from '@element-plus/icons-vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { errorMessage } from '@/api/errors'
@@ -105,19 +105,31 @@ onMounted(() => {
       </div>
     </header>
 
-    <el-alert
+    <div
       v-if="error"
-      :title="error"
-      type="error"
-      :closable="false"
+      class="detail-error-card"
+      role="alert"
     >
+      <span
+        class="detail-error-card__icon"
+        aria-hidden="true"
+      >
+        <el-icon :size="20"><Warning /></el-icon>
+      </span>
+      <div class="detail-error-card__body">
+        <strong>获取项目详情失败</strong>
+        <p>{{ error }}</p>
+      </div>
       <el-button
         size="small"
+        type="primary"
+        plain
+        :icon="Refresh"
         @click="load"
       >
         重试
       </el-button>
-    </el-alert>
+    </div>
 
     <template v-else-if="displayRecord">
       <DetailSections
@@ -209,8 +221,8 @@ onMounted(() => {
 <style scoped>
 .tender-detail {
   display: grid;
-  gap: 20px;
-  padding: 22px 24px;
+  gap: var(--zt-space-5);
+  padding: var(--zt-space-6);
   background: var(--zt-panel);
   border: 1px solid var(--zt-border);
   border-radius: 12px;
@@ -221,14 +233,14 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
-  padding-bottom: 16px;
+  gap: var(--zt-space-3);
+  padding-bottom: var(--zt-space-4);
   border-bottom: 1px solid var(--zt-divider);
 }
 .detail-topbar__left {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: var(--zt-space-4);
   min-width: 0;
   flex: 1 1 360px;
 }
@@ -243,13 +255,48 @@ onMounted(() => {
 .detail-topbar__meta {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--zt-space-3);
   flex-wrap: wrap;
 }
 .meta-date {
   font-size: 12.5px;
   color: var(--zt-ink-500);
   font-variant-numeric: tabular-nums;
+}
+.detail-error-card {
+  display: flex;
+  align-items: center;
+  gap: var(--zt-space-4);
+  padding: var(--zt-space-4) var(--zt-space-5);
+  background: var(--zt-danger-soft);
+  border: 1px solid var(--zt-danger-border);
+  border-radius: 10px;
+}
+.detail-error-card__icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--zt-panel);
+  color: var(--zt-danger);
+  border: 1px solid var(--zt-danger-border);
+}
+.detail-error-card__body {
+  flex: 1;
+  min-width: 0;
+}
+.detail-error-card__body strong {
+  display: block;
+  font-size: 14px;
+  color: var(--zt-danger-text);
+  margin-bottom: 2px;
+}
+.detail-error-card__body p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--zt-ink-700);
 }
 .tender-body {
   padding-top: 8px;
