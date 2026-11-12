@@ -52,8 +52,21 @@ def date_conditions(field: str, start: date | None, end: date | None) -> tuple[l
     return clauses, values
 
 
-def order_clause(_query: ListQuery) -> str:
-    return "ORDER BY purchaser_provname DESC, public_date DESC, id DESC"
+def order_clause(query: ListQuery) -> str:
+    has_scope = bool(
+        query.purchaser_provname
+        or query.collect_date_from
+        or query.collect_date_to
+        or query.public_date_from
+        or query.public_date_to
+        or query.create_time_from
+        or query.create_time_to
+        or query.project_name.strip()
+        or query.project_content_id.strip()
+    )
+    if query.project_status == "1" or has_scope:
+        return "ORDER BY purchaser_provname DESC, public_date DESC, id DESC"
+    return "ORDER BY public_date DESC, id DESC"
 
 
 def count_records(reader: Reader, kind: Kind, query: ListQuery) -> int:
