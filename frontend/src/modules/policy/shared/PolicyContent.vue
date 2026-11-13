@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 
 import { errorMessage, isApiError } from '@/api/errors'
 import type { PolicyContent } from '@/api/policy'
+import ParagraphSkeleton from '@/components/ParagraphSkeleton.vue'
 
 import { PREVIEW_PARAGRAPHS, paragraphs, shownParagraphs } from './policyContent'
 
@@ -69,12 +70,10 @@ onMounted(fetchContent)
       >打开原网页</a>
       <slot name="actions" />
     </header>
-    <p
+    <ParagraphSkeleton
       v-if="loading"
-      class="policy-content__muted"
-    >
-      正文加载中…
-    </p>
+      :lines="6"
+    />
     <p
       v-else-if="missing"
       class="policy-content__muted"

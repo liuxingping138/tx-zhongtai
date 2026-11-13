@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 
 import type { RunRows, RunRowStatus } from '@/api/ai'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { itemSummary, rowLayout } from './runRowLayout'
 
 /**
@@ -24,12 +25,16 @@ const layouts = computed(() => new Map((props.rows?.items ?? []).map(row => [row
 
 <template>
   <section
-    v-loading="loading && !rows"
     class="run-rows"
     aria-label="逐行结果"
   >
+    <TableSkeleton
+      v-if="loading && !rows"
+      :rows="5"
+      :columns="4"
+    />
     <div
-      v-if="rows"
+      v-else-if="rows"
       class="run-rows__bar"
     >
       <span>{{ summary }}</span>

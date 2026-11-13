@@ -4,6 +4,7 @@ import { ElMessage } from 'element-plus'
 
 import { confirmEnrich, listEnrichPending, type EnrichItem } from '@/api/codebook'
 import { errorMessage } from '@/api/errors'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { useAuthStore } from '@/stores/auth'
 import { levelName, pathText } from './candidates'
 
@@ -65,107 +66,111 @@ async function confirm() {
 </script>
 
 <template>
-  <div
-    v-loading="loading"
-    class="enrich"
-  >
-    <el-alert
-      v-if="loadError"
-      type="error"
-      :title="loadError"
-      :closable="false"
-      show-icon
+  <div class="enrich">
+    <TableSkeleton
+      v-if="loading && !items.length"
+      :rows="5"
+      :columns="3"
     />
-    <!-- 和别的列表一样居中的空状态，不在大白框左上角放一行小字 -->
-    <el-empty
-      v-else-if="!loading && !items.length"
-      class="enrich__empty"
-      :image-size="64"
-      description="没有等确认的描述"
-    >
-      <p class="enrich__empty-hint">
-        采纳进码表的新场景，在任务调度里跑过「新增场景补描述」、AI 写好描述后会出现在这里。
-      </p>
-    </el-empty>
     <template v-else>
-      <nav
-        class="enrich__list"
-        aria-label="待确认的场景"
+      <el-alert
+        v-if="loadError"
+        type="error"
+        :title="loadError"
+        :closable="false"
+        show-icon
+      />
+      <!-- 和别的列表一样居中的空状态，不在大白框左上角放一行小字 -->
+      <el-empty
+        v-else-if="!loading && !items.length"
+        class="enrich__empty"
+        :image-size="64"
+        description="没有等确认的描述"
       >
-        <button
-          v-for="item in items"
-          :key="item.key"
-          type="button"
-          :class="['enrich__item', { 'is-active': item.key === selected }]"
-          :aria-current="item.key === selected ? 'true' : undefined"
-          @click="pick(item)"
-        >
-          <strong>{{ item.path[item.path.length - 1] }}</strong>
-          <span>{{ pathText(item.path) }} · {{ levelName(item.level) }}</span>
-          <span>{{ item.industries.length }} 个行业 · 码表 {{ item.rows }} 行</span>
-        </button>
-      </nav>
-      <section
-        v-if="current"
-        class="enrich__detail"
-        :aria-label="`核对「${current.path[current.path.length - 1]}」的描述`"
-      >
-        <h2>{{ pathText(current.path) }}</h2>
-        <p class="enrich__muted">
-          新增{{ levelName(current.level) }} · {{ current.industries.join('；') }}{{ current.source_policy ? ` · 来源政策：${current.source_policy}` : '' }}
+        <p class="enrich__empty-hint">
+          采纳进码表的新场景，在任务调度里跑过「新增场景补描述」、AI 写好描述后会出现在这里。
         </p>
-        <p
-          v-if="!current.desc_90"
-          class="enrich__warn"
+      </el-empty>
+      <template v-else>
+        <nav
+          class="enrich__list"
+          aria-label="待确认的场景"
         >
-          AI 没写出来，请自己补上。
-        </p>
-        <el-form label-position="top">
-          <el-form-item label="场景描述（90字）">
-            <el-input
-              v-model="form.desc_90"
-              type="textarea"
-              :rows="3"
-              :disabled="!canConfirm"
-            />
-          </el-form-item>
-          <el-form-item label="场景描述（130字）">
-            <el-input
-              v-model="form.desc_130"
-              type="textarea"
-              :rows="4"
-              :disabled="!canConfirm"
-            />
-          </el-form-item>
-          <el-form-item label="场景描述（PEST总结）">
-            <el-input
-              v-model="form.desc_pest"
-              type="textarea"
-              :rows="4"
-              :disabled="!canConfirm"
-            />
-          </el-form-item>
-          <el-form-item :label="`${levelName(current.level)}场景描述`">
-            <el-input
-              v-model="form.level_desc"
-              type="textarea"
-              :rows="3"
-              :disabled="!canConfirm"
-            />
-          </el-form-item>
-        </el-form>
-        <div class="enrich__actions">
-          <span class="enrich__muted">{{ canConfirm ? '确认后这个场景在码表各行业、各客群的行一起写上' : '确认要行业场景码表的管理权限' }}</span>
-          <el-button
-            type="primary"
-            :disabled="!canConfirm || !form.desc_90.trim()"
-            :loading="saving"
-            @click="confirm"
+          <button
+            v-for="item in items"
+            :key="item.key"
+            type="button"
+            :class="['enrich__item', { 'is-active': item.key === selected }]"
+            :aria-current="item.key === selected ? 'true' : undefined"
+            @click="pick(item)"
           >
-            确认无误，下一个
-          </el-button>
-        </div>
-      </section>
+            <strong>{{ item.path[item.path.length - 1] }}</strong>
+            <span>{{ pathText(item.path) }} · {{ levelName(item.level) }}</span>
+            <span>{{ item.industries.length }} 个行业 · 码表 {{ item.rows }} 行</span>
+          </button>
+        </nav>
+        <section
+          v-if="current"
+          class="enrich__detail"
+          :aria-label="`核对「${current.path[current.path.length - 1]}」的描述`"
+        >
+          <h2>{{ pathText(current.path) }}</h2>
+          <p class="enrich__muted">
+            新增{{ levelName(current.level) }} · {{ current.industries.join('；') }}{{ current.source_policy ? ` · 来源政策：${current.source_policy}` : '' }}
+          </p>
+          <p
+            v-if="!current.desc_90"
+            class="enrich__warn"
+          >
+            AI 没写出来，请自己补上。
+          </p>
+          <el-form label-position="top">
+            <el-form-item label="场景描述（90字）">
+              <el-input
+                v-model="form.desc_90"
+                type="textarea"
+                :rows="3"
+                :disabled="!canConfirm"
+              />
+            </el-form-item>
+            <el-form-item label="场景描述（130字）">
+              <el-input
+                v-model="form.desc_130"
+                type="textarea"
+                :rows="4"
+                :disabled="!canConfirm"
+              />
+            </el-form-item>
+            <el-form-item label="场景描述（PEST总结）">
+              <el-input
+                v-model="form.desc_pest"
+                type="textarea"
+                :rows="4"
+                :disabled="!canConfirm"
+              />
+            </el-form-item>
+            <el-form-item :label="`${levelName(current.level)}场景描述`">
+              <el-input
+                v-model="form.level_desc"
+                type="textarea"
+                :rows="3"
+                :disabled="!canConfirm"
+              />
+            </el-form-item>
+          </el-form>
+          <div class="enrich__actions">
+            <span class="enrich__muted">{{ canConfirm ? '确认后这个场景在码表各行业、各客群的行一起写上' : '确认要行业场景码表的管理权限' }}</span>
+            <el-button
+              type="primary"
+              :disabled="!canConfirm || !form.desc_90.trim()"
+              :loading="saving"
+              @click="confirm"
+            >
+              确认无误，下一个
+            </el-button>
+          </div>
+        </section>
+      </template>
     </template>
   </div>
 </template>

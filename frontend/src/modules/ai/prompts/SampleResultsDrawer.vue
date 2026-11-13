@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { Download } from '@element-plus/icons-vue'
 
 import type { PromptTemplate } from '@/api/ai'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { formatYuan } from '../shared/aiText'
 import SampleRowDetail from './SampleRowDetail.vue'
 import { ROW_STATUS_TEXT, fieldCell, isProblem, previousText, rowCounts, rowMatches, shortTime } from './sampleView'
@@ -160,11 +161,13 @@ const trial = (row: number) => { open.value = false; emit('trial', row) }
         />
         <span class="results__hint">点一行展开，看输入、这次和上次的回答</span>
       </div>
-      <div
-        v-loading="sample.loading.value"
-        class="results__wrap"
-      >
-        <table v-if="rows">
+      <div class="results__wrap">
+        <TableSkeleton
+          v-if="sample.loading.value && !rows"
+          :rows="8"
+          :columns="5"
+        />
+        <table v-else-if="rows">
           <thead>
             <tr class="results__group">
               <th

@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 import { getCrawlerTrend, type CrawlerTrendDays, type CrawlerTrendPoint } from '@/api/crawlerMonitoring'
 import { errorMessage } from '@/api/errors'
 import BaseChart from '@/components/charts/BaseChart.vue'
+import ChartSkeleton from '@/components/ChartSkeleton.vue'
 import { useChartPalette } from '@/components/charts/echarts'
 import { TREND_RANGES, trendOption, trendSummary } from './charts'
 
@@ -47,8 +48,8 @@ defineExpose({ load })
 
 <template>
   <section
-    v-loading="loading"
     class="chart-panel"
+    :class="{ 'is-refreshing': loading && option !== null }"
   >
     <header class="chart-head">
       <div>
@@ -74,8 +75,12 @@ defineExpose({ load })
         </el-radio-button>
       </el-radio-group>
     </header>
+    <ChartSkeleton
+      v-if="loading && points.length === 0"
+      height="300px"
+    />
     <div
-      v-if="error"
+      v-else-if="error"
       class="chart-error"
       role="alert"
     >

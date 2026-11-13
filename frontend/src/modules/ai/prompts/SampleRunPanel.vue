@@ -164,8 +164,8 @@ async function start(): Promise<void> {
       </p>
       <section
         v-if="run"
-        v-loading="sample.loading.value && !rows"
         class="sample__result"
+        :class="{ 'is-refreshing': sample.loading.value }"
         aria-labelledby="sample-run-title"
       >
         <div class="sample__head">

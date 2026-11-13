@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import { getCrawlerSiteTrend, type CrawlerSiteRef, type CrawlerTrendPoint } from '@/api/crawlerMonitoring'
 import { errorMessage } from '@/api/errors'
 import BaseChart from '@/components/charts/BaseChart.vue'
+import ChartSkeleton from '@/components/ChartSkeleton.vue'
 import { useChartPalette } from '@/components/charts/echarts'
 import { siteTrendOption, siteTrendSummary } from './charts'
 
@@ -38,13 +39,15 @@ watch(() => [props.site.site_name, props.site.province_name, props.site.city_nam
 </script>
 
 <template>
-  <section
-    v-loading="loading"
-    class="site-trend"
-  >
+  <section class="site-trend">
     <h3>近 {{ SITE_TREND_DAYS }} 天采集量</h3>
+    <ChartSkeleton
+      v-if="loading && points.length === 0"
+      height="180px"
+      :bars="5"
+    />
     <p
-      v-if="error"
+      v-else-if="error"
       class="site-trend-note"
       role="alert"
     >

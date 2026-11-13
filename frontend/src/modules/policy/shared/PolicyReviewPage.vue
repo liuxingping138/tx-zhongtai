@@ -7,6 +7,7 @@ import { fieldText, fieldValue } from '@/components/cellValue'
 import type { DataColumn } from '@/components/dataColumns'
 import DetailFieldTable from '@/components/DetailFieldTable.vue'
 import DetailSections from '@/components/DetailSections.vue'
+import DetailSkeleton from '@/components/DetailSkeleton.vue'
 import { buildDetailSections } from '@/components/detailSections'
 import type { EditorGroup } from '@/components/editorGroups'
 import GroupedFields from '@/components/GroupedFields.vue'
@@ -149,10 +150,11 @@ function setContentOpen(open: boolean) {
       </template>
     </div>
 
-    <div
+    <DetailSkeleton
       v-if="loading && !record"
-      v-loading="true"
-      class="review__placeholder"
+      :sections="2"
+      :fields-per-section="4"
+      :show-article="true"
     />
     <el-alert
       v-else-if="loadError"

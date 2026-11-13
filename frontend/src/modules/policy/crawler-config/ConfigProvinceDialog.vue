@@ -4,6 +4,7 @@ import { ElMessage } from 'element-plus'
 import { computed } from 'vue'
 
 import type { CrawlerConfigReport } from '@/api/crawlerConfig'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { deltaText, periodRange, provinceRanking, provinceTableText } from './report'
 
 /**
@@ -41,51 +42,58 @@ async function copyTable(): Promise<void> {
         <span class="range">{{ range }}</span>
       </div>
     </template>
-    <div v-loading="loading">
-      <div class="summary">
-        <div class="total">
-          <strong>{{ report.new.toLocaleString() }}</strong>
-          <span>个网站</span>
+    <div>
+      <TableSkeleton
+        v-if="loading"
+        :rows="6"
+        :columns="3"
+      />
+      <template v-else>
+        <div class="summary">
+          <div class="total">
+            <strong>{{ report.new.toLocaleString() }}</strong>
+            <span>个网站</span>
+          </div>
+          <div class="facts">
+            <span>{{ rows.length }} 个省份有配置</span>
+            <span :class="`delta-${delta.tone}`">{{ delta.text }}</span>
+          </div>
         </div>
-        <div class="facts">
-          <span>{{ rows.length }} 个省份有配置</span>
-          <span :class="`delta-${delta.tone}`">{{ delta.text }}</span>
-        </div>
-      </div>
-      <p
-        v-if="!rows.length"
-        class="empty"
-      >
-        {{ periodName }}还没有配置网站。爬虫同事更新规则表后，每天 18:00 自动同步进来。
-      </p>
-      <ol
-        v-else
-        class="ranking"
-      >
-        <li
-          v-for="row in rows"
-          :key="row.province_name"
+        <p
+          v-if="!rows.length"
+          class="empty"
         >
-          <button
-            type="button"
-            class="row"
-            :title="`查看${row.province_name}${periodName}配置的网站`"
-            @click="emit('province', row.province_name)"
+          {{ periodName }}还没有配置网站。爬虫同事更新规则表后，每天 18:00 自动同步进来。
+        </p>
+        <ol
+          v-else
+          class="ranking"
+        >
+          <li
+            v-for="row in rows"
+            :key="row.province_name"
           >
-            <span
-              class="rank"
-              :class="{ top: row.rank <= 3 }"
-            >{{ row.rank }}</span>
-            <span class="name">{{ row.province_name }}</span>
-            <span class="track"><span
-              class="fill"
-              :style="{ width: row.width }"
-            /></span>
-            <span class="count">{{ row.new.toLocaleString() }}</span>
-            <span class="share">{{ row.share }}</span>
-          </button>
-        </li>
-      </ol>
+            <button
+              type="button"
+              class="row"
+              :title="`查看${row.province_name}${periodName}配置的网站`"
+              @click="emit('province', row.province_name)"
+            >
+              <span
+                class="rank"
+                :class="{ top: row.rank <= 3 }"
+              >{{ row.rank }}</span>
+              <span class="name">{{ row.province_name }}</span>
+              <span class="track"><span
+                class="fill"
+                :style="{ width: row.width }"
+              /></span>
+              <span class="count">{{ row.new.toLocaleString() }}</span>
+              <span class="share">{{ row.share }}</span>
+            </button>
+          </li>
+        </ol>
+      </template>
     </div>
     <template #footer>
       <span class="hint">点一行查看这个省配置的网站</span>

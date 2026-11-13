@@ -5,6 +5,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { errorMessage } from '@/api/errors'
 import { getTenderRecord, getTenderContent, type TenderKind, type TenderRecord } from '@/api/tender'
 import DetailSections from '@/components/DetailSections.vue'
+import DetailSkeleton from '@/components/DetailSkeleton.vue'
+import ParagraphSkeleton from '@/components/ParagraphSkeleton.vue'
 import { buildDetailSections } from '@/components/detailSections'
 import { isolatedHtml } from './content'
 import { tenderColumns, tenderDetailGroups } from './fields'
@@ -61,10 +63,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <section
-    v-loading="loading"
-    class="tender-detail"
-  >
+  <section class="tender-detail">
     <header class="detail-topbar">
       <div class="detail-topbar__left">
         <el-button
@@ -105,8 +104,15 @@ onMounted(() => {
       </div>
     </header>
 
+    <DetailSkeleton
+      v-if="loading && !record"
+      :sections="2"
+      :fields-per-section="6"
+      :show-article="true"
+    />
+
     <div
-      v-if="error"
+      v-else-if="error"
       class="detail-error-card"
       role="alert"
     >
@@ -137,10 +143,7 @@ onMounted(() => {
         :sections="sections"
       />
 
-      <section
-        v-loading="contentLoading"
-        class="tender-body"
-      >
+      <section class="tender-body">
         <header class="body-head">
           <div>
             <h3>项目正文</h3>
@@ -199,12 +202,10 @@ onMounted(() => {
           </div>
         </div>
 
-        <div
+        <ParagraphSkeleton
           v-else-if="html === null"
-          class="content-loading"
-        >
-          正在加载项目正文…
-        </div>
+          :lines="8"
+        />
 
         <iframe
           v-else

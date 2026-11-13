@@ -27,8 +27,8 @@ const next = computed(() => adjacent.value.next)
 
 <template>
   <section
-    v-loading="loading"
     class="panel"
+    :class="{ 'is-refreshing': loading }"
   >
     <header class="panel-head">
       <div>

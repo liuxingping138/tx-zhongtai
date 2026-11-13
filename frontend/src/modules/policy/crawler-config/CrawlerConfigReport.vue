@@ -9,7 +9,9 @@ import {
   type CrawlerConfigReport,
 } from '@/api/crawlerConfig'
 import { errorMessage } from '@/api/errors'
+import CardSkeleton from '@/components/CardSkeleton.vue'
 import ExportButton from '@/components/ExportButton.vue'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { useExcelExport } from '@/composables/useExcelExport'
 import { configResultText } from '@/modules/system/scheduler/crawlerConfig'
 import { useAuthStore } from '@/stores/auth'
@@ -103,10 +105,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div
-    v-loading="loading && !report"
-    class="config"
-  >
+  <div class="config">
     <div class="heading">
       <div class="caption">
         <h1>爬虫配置统计</h1>
@@ -143,7 +142,18 @@ onMounted(() => {
       show-icon
     />
 
-    <template v-if="report">
+    <template v-if="loading && !report">
+      <CardSkeleton
+        :count="4"
+        :columns="4"
+      />
+      <TableSkeleton
+        :rows="6"
+        :columns="5"
+      />
+    </template>
+
+    <template v-else-if="report">
       <ConfigOverview
         :report="report"
         :period-name="periodName"

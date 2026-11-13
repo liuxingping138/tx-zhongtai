@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 
 import { previewSystemCode, previewUploadedCode, type CodePreview } from '@/api/ai'
 import { errorMessage } from '@/api/errors'
+import ParagraphSkeleton from '@/components/ParagraphSkeleton.vue'
 import { CODE_TABLE_FIELD } from '../shared/aiText'
 
 /**
@@ -42,12 +43,13 @@ watch(open, async visible => {
     :title="preview ? `码表预览：${preview.name}` : '码表预览'"
     width="min(760px, 92vw)"
   >
-    <div
-      v-loading="loading"
-      class="code-preview"
-    >
+    <div class="code-preview">
+      <ParagraphSkeleton
+        v-if="loading"
+        :lines="6"
+      />
       <el-alert
-        v-if="failure"
+        v-else-if="failure"
         :title="failure"
         type="error"
         :closable="false"

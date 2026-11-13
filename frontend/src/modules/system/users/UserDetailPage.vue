@@ -7,6 +7,7 @@ import { ElMessage } from 'element-plus'
 import { getUser, getUserPermissions, listAllRoles, replaceUserRoles, updateUser, type ManagedUser } from '@/api/system'
 import { errorMessage } from '@/api/errors'
 import type { EffectivePermission, RoleItem } from '@/api/types'
+import DetailSkeleton from '@/components/DetailSkeleton.vue'
 import PasswordOnceDialog from '@/components/PasswordOnceDialog.vue'
 import { useUserActions } from '@/composables/useUserActions'
 import { useAuthStore } from '@/stores/auth'
@@ -178,10 +179,11 @@ watch(userId, () => {
       >@{{ user.username }}</span>
     </div>
 
-    <div
+    <DetailSkeleton
       v-if="loading && !user"
-      v-loading="true"
-      class="user-detail__placeholder"
+      :show-hero="true"
+      :sections="2"
+      :fields-per-section="4"
     />
     <el-alert
       v-else-if="loadError"

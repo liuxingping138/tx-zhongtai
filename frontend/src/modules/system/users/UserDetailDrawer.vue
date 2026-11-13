@@ -8,6 +8,7 @@ import { getUser, getUserPermissions, replaceUserRoles, updateUser, type Managed
 import { errorMessage } from '@/api/errors'
 import type { EffectivePermission, RoleItem, UserItem } from '@/api/types'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
+import DetailSkeleton from '@/components/DetailSkeleton.vue'
 import { formatTime } from '@/utils/time'
 import EffectivePermissions from './EffectivePermissions.vue'
 import RolePicker from './RolePicker.vue'
@@ -188,10 +189,7 @@ async function openAudit() {
     size="600px"
     :title="user ? `${user.display_name}（${user.username}）` : '用户详情'"
   >
-    <div
-      v-loading="loading && !user"
-      class="user-drawer__body"
-    >
+    <div class="user-drawer__body">
       <div
         v-if="loadError"
         class="user-drawer__error"
@@ -205,6 +203,11 @@ async function openAudit() {
           重新加载
         </el-button>
       </div>
+      <DetailSkeleton
+        v-else-if="loading && !user"
+        :sections="2"
+        :fields-per-section="3"
+      />
       <template v-else-if="user">
         <el-alert
           v-if="saveError"
@@ -375,25 +378,4 @@ async function openAudit() {
   </el-drawer>
 </template>
 
-<style scoped>
-.user-drawer__body { display: flex; flex-direction: column; gap: 16px; min-height: 200px; }
-.user-drawer__error { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 32px; }
-.user-drawer__error p { margin: 0; color: var(--zt-ink-700); }
-.block { padding: 16px; border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: var(--zt-panel); }
-.block h3 { margin: 0 0 12px; font-size: 14px; font-weight: 650; color: var(--zt-ink-900); }
-.block__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.block__head h3 { margin-bottom: 12px; }
-.block__hint { font-size: 12px; color: var(--zt-ink-500); }
-.block__notice { margin-bottom: 12px; }
-.role-tags { display: flex; flex-wrap: wrap; gap: 8px; }
-.direct-grants { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--zt-divider); color: var(--zt-ink-500); font-size: 13px; }
-.block__notice--after { margin: 12px 0 0; }
-.info-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; }
-.info-grid :deep(.el-form-item) { margin-bottom: 12px; }
-.block__hint .el-tag { margin-right: 6px; }
-.user-drawer__audit { margin-right: auto; }
-</style>
-
-<style>
-.user-drawer .el-drawer__footer { display: flex; align-items: center; }
-</style>
+<style scoped src="./user-detail-drawer.css"></style>

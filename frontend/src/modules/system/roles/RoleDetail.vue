@@ -9,6 +9,7 @@ import { errorMessage } from '@/api/errors'
 import type { RoleItem } from '@/api/types'
 import { useRoleGrants } from '@/composables/useRoleGrants'
 import { SUPERADMIN_ROLE_CODE } from '@/permissions/catalog'
+import DetailSkeleton from '@/components/DetailSkeleton.vue'
 import { useAuthStore } from '@/stores/auth'
 import PermissionTable from './PermissionTable.vue'
 import RoleFormDialog, { type RoleFormMode } from './RoleFormDialog.vue'
@@ -127,12 +128,15 @@ onMounted(() => {
 </script>
 
 <template>
-  <div
-    v-loading="loading && !role"
-    class="role-detail"
-  >
+  <div class="role-detail">
+    <DetailSkeleton
+      v-if="loading && !role"
+      :sections="2"
+      :fields-per-section="4"
+    />
+
     <div
-      v-if="loadError && !role"
+      v-else-if="loadError && !role"
       class="role-detail__error"
       role="alert"
     >

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { TenderTotals } from '@/api/tender'
+import CardSkeleton from '@/components/CardSkeleton.vue'
 import { compactCount } from './statistics'
 
 defineProps<{
@@ -17,7 +18,20 @@ const count = (value?: number) => (value === undefined ? '—' : value.toLocaleS
 
 <template>
   <div
-    v-loading="totalsLoading && !totals"
+    v-if="totalsLoading && !totals"
+    class="kpi-grid"
+    role="status"
+    aria-label="统计指标正在加载"
+  >
+    <CardSkeleton
+      v-for="i in 5"
+      :key="i"
+      variant="kpi"
+    />
+  </div>
+
+  <div
+    v-else
     class="kpi-grid"
   >
     <div class="kpi-card kpi-card--main">

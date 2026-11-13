@@ -6,6 +6,7 @@ import { ArrowLeft } from '@element-plus/icons-vue'
 
 import { createPrompt, promptEditorData, updatePrompt, type AiModel, type BatchRun, type PromptFileKind, type PromptTemplate, type SystemCodeTable, type TemplateCategory } from '@/api/ai'
 import { errorMessage } from '@/api/errors'
+import DetailSkeleton from '@/components/DetailSkeleton.vue'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import { useAuthStore } from '@/stores/auth'
 import { splitFields } from '../shared/aiText'
@@ -202,9 +203,8 @@ function onStep(key: StepKey): void {
 
 <template>
   <section
-    v-loading="opening"
     class="prompt-page"
-    :class="{ 'is-opening': opening }"
+    :class="{ 'is-opening': opening && !selected }"
   >
     <h1 class="ai-sr-only">
       {{ selected ? selected.title : '新建提示词模板' }}
@@ -287,9 +287,15 @@ function onStep(key: StepKey): void {
       :closable="false"
       show-icon
     />
+    <DetailSkeleton
+      v-if="opening && !selected"
+      :sections="2"
+      :fields-per-section="4"
+    />
     <div
-      v-loading="loading"
+      v-else
       class="prompt-page__body"
+      :class="{ 'is-refreshing': loading }"
     >
       <form
         class="ai-panel prompt-page__main"
@@ -372,28 +378,4 @@ function onStep(key: StepKey): void {
   </section>
 </template>
 
-<style scoped>
-/* 打开已有模板时，数据回来之前不露出新建模板的空样子。 */ .prompt-page.is-opening > :not(.el-loading-mask) { visibility: hidden; }
-.prompt-page { display: flex; flex-direction: column; gap: 12px; height: calc(100dvh - var(--workspace-header-height) - 48px); min-height: 640px; }
-.prompt-page__head { flex: none; overflow: hidden; }
-.prompt-page__title-row { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px 18px; }
-.prompt-page__title-row .el-button { margin: 0; }
-.prompt-page__back { display: inline-flex; flex: none; align-items: center; gap: 4px; padding-right: 12px; border-right: 1px solid var(--zt-border); color: var(--zt-ink-500); font-size: 13px; text-decoration: none; }
-.prompt-page__back:hover { color: var(--zt-blue-600); }
-.prompt-page__title { flex: 1; min-width: 0; padding: 2px 0; border: 0; border-bottom: 1px dashed transparent; background: transparent; color: var(--zt-ink-900); font: 600 19px/1.4 var(--zt-font); outline: none; }
-.prompt-page__title:hover:not([readonly]), .prompt-page__title:focus { border-bottom-color: var(--el-color-primary-light-5); }
-.prompt-page__title::placeholder { color: var(--zt-ink-400); font-weight: 500; }
-.prompt-page__spacer { flex: 1; }
-.prompt-page__body { display: grid; flex: 1; grid-template-columns: minmax(0, 1fr) minmax(360px, 420px); gap: 12px; min-height: 0; }
-.prompt-page__main { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-/* 左栏只有这一条滚动条：提示词在上、跟着内容长高，至少占六成高度；设置区接在下面，不收起也不自己滚。 */
-.prompt-page__scroll { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow-y: auto; }
-.prompt-page__scroll > .prompt-editor { flex: 1 0 auto; min-height: 60%; }
-.prompt-page__scroll > .config { flex: none; }
-@media (max-width: 1180px) {
-  .prompt-page { height: auto; }
-  .prompt-page__body { grid-template-columns: minmax(0, 1fr); }
-  .prompt-page__main { min-height: 640px; }
-  .prompt-page__test { height: 560px; }
-}
-</style>
+<style scoped src="./prompt-editor-page.css"></style>
