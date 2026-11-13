@@ -27,6 +27,14 @@ watch(
   },
 )
 
+function onStatusChange(status: string) {
+  if (status === '') {
+    query.value.project_status = 'all'
+  }
+  applyDefaultDateRange(query.value)
+  emit('search')
+}
+
 // 项目状态空值归一化；切换到未通过或全部且无日期时，自动预填近 7 天发布时间
 watch(
   () => query.value.project_status,
@@ -110,6 +118,7 @@ function setRange(key: typeof DATES[number]['key'], value: [string, string] | nu
           v-model="query.project_status"
           placeholder="全部"
           aria-label="项目状态"
+          @change="onStatusChange"
         >
           <el-option
             value="all"

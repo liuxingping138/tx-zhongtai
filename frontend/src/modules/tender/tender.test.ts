@@ -57,22 +57,23 @@ describe('招中标页面规则', () => {
   })
   it('按项目名称查询必须先选完整且不超过 366 天的日期范围', () => {
     expect(validateTenderSearch(initialQuery())).toBeNull()
-    expect(validateTenderSearch({ ...initialQuery(), project_name: '智慧城市' })).toContain('日期范围')
-    expect(validateTenderSearch({ ...initialQuery(), project_name: '智慧城市', collect_date_from: '2026-11-01' })).toContain('日期范围')
+    const emptyDates = { ...initialQuery(), public_date_from: '', public_date_to: '' }
+    expect(validateTenderSearch({ ...emptyDates, project_name: '智慧城市' })).toContain('日期范围')
+    expect(validateTenderSearch({ ...emptyDates, project_name: '智慧城市', collect_date_from: '2026-11-01' })).toContain('日期范围')
     expect(validateTenderSearch({
-      ...initialQuery(),
+      ...emptyDates,
       project_name: '智慧城市',
       collect_date_from: '2025-01-01',
       collect_date_to: '2026-11-12',
     })).toContain('366')
     expect(validateTenderSearch({
-      ...initialQuery(),
+      ...emptyDates,
       project_name: '智慧城市',
       collect_date_from: '2026-11-01',
       collect_date_to: '2026-11-12',
     })).toBeNull()
     expect(validateTenderSearch({
-      ...initialQuery(),
+      ...emptyDates,
       project_name: '智慧城市',
       public_date_from: '2026-11-01',
       public_date_to: '2026-11-12',
@@ -105,29 +106,24 @@ describe('招中标页面规则', () => {
     const sections = buildDetailSections(tenderColumns('winbid'), tenderDetailGroups('winbid'))
     expect(sections.map(s => s.title)).toEqual(['项目核心信息', '招中标主体与地区', '行业与场景标签', SYSTEM_SECTION])
   })
-  it('方案A在未通过与全部状态下自动注入近7天发布时间，不覆盖已有日期', () => {
+  it('方案A默认注入近7天发布时间，支持清空兜底且不覆盖已有日期', () => {
     const testDate = new Date(2026, 10, 13) // 2026-11-13
     expect(recentDaysRange(7, testDate)).toEqual(['2026-11-07', '2026-11-13'])
 
-    // 通过状态 (1) 不自动注入
-    const queryPassed = initialQuery()
-    expect(applyDefaultDateRange(queryPassed)).toBe(false)
-    expect(queryPassed.public_date_from).toBe('')
+    // initialQuery 默认带入近 7 天发布时间
+    const defaultQuery = initialQuery()
+    expect(defaultQuery.public_date_from).toBeTruthy()
+    expect(defaultQuery.public_date_to).toBeTruthy()
 
-    // 未通过状态 (0) 且无日期：自动注入
-    const queryUnpassed = { ...initialQuery(), project_status: '0' }
-    expect(applyDefaultDateRange(queryUnpassed)).toBe(true)
-    expect(queryUnpassed.public_date_from).toBeTruthy()
-    expect(queryUnpassed.public_date_to).toBeTruthy()
+    // 若日期被清空：applyDefaultDateRange 自动补齐近 7 天
+    const emptyDateQuery = { ...initialQuery(), public_date_from: '', public_date_to: '' }
+    expect(applyDefaultDateRange(emptyDateQuery)).toBe(true)
+    expect(emptyDateQuery.public_date_from).toBeTruthy()
+    expect(emptyDateQuery.public_date_to).toBeTruthy()
 
-    // 全部状态 (all) 且无日期：自动注入
-    const queryAll = { ...initialQuery(), project_status: 'all' }
-    expect(applyDefaultDateRange(queryAll)).toBe(true)
-    expect(queryAll.public_date_from).toBeTruthy()
-
-    // 已有日期时：不覆盖
-    const queryWithDate = { ...initialQuery(), project_status: '0', collect_date_from: '2026-11-01' }
-    expect(applyDefaultDateRange(queryWithDate)).toBe(false)
-    expect(queryWithDate.public_date_from).toBe('')
+    // 已有其他日期时：不覆盖
+    const queryWithOtherDate = { ...initialQuery(), public_date_from: '', public_date_to: '', collect_date_from: '2026-11-01' }
+    expect(applyDefaultDateRange(queryWithOtherDate)).toBe(false)
+    expect(queryWithOtherDate.public_date_from).toBe('')
   })
 })

@@ -109,7 +109,7 @@ onMounted(() => {
     </template>
     <template #filters>
       <TenderFilters
-        :model-value="query"
+        v-model="query"
         :applied="listQuery.applied"
         @search="onSearch"
         @reset="listQuery.resetFilters"

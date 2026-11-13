@@ -108,12 +108,26 @@ export const DATES = [
   { key: 'public_date', label: '发布时间' },
   { key: 'create_time', label: '入库时间' },
 ] as const
+export function recentDaysRange(days = 7, refDate: Date = new Date()): [string, string] {
+  const to = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate())
+  const from = new Date(to)
+  from.setDate(from.getDate() - (days - 1))
+  const format = (d: Date) => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+  return [format(from), format(to)]
+}
+
 export function initialQuery() {
+  const [from, to] = recentDaysRange(7)
   return {
     project_name: '', project_content_id: '', project_status: '1',
     purchaser_provname: [] as string[], purchaser_cityname: [] as string[], purchaser_countyname: [] as string[],
     is_supp_scene: [] as string[], collect_date_from: '', collect_date_to: '',
-    public_date_from: '', public_date_to: '', create_time_from: '', create_time_to: '', page: 1, page_size: 20,
+    public_date_from: from, public_date_to: to, create_time_from: '', create_time_to: '', page: 1, page_size: 20,
   }
 }
 export const MAX_NAME_FILTER_DAYS = 366
@@ -136,21 +150,7 @@ export function validateTenderSearch(query: TenderQuery): string | null {
   return null
 }
 
-export function recentDaysRange(days = 7, refDate: Date = new Date()): [string, string] {
-  const to = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate())
-  const from = new Date(to)
-  from.setDate(from.getDate() - (days - 1))
-  const format = (d: Date) => {
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    return `${y}-${m}-${day}`
-  }
-  return [format(from), format(to)]
-}
-
 export function applyDefaultDateRange(query: TenderQuery): boolean {
-  if (query.project_status !== '0' && query.project_status !== 'all') return false
   const hasDate = query.public_date_from || query.public_date_to ||
     query.collect_date_from || query.collect_date_to ||
     query.create_time_from || query.create_time_to
