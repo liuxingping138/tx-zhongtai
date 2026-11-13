@@ -27,6 +27,17 @@ watch(
   },
 )
 
+// 项目状态空值归一化为 'all'，杜绝 Element Plus 空值判定清空选项 label
+watch(
+  () => query.value.project_status,
+  (val) => {
+    if (val === '') {
+      query.value.project_status = 'all'
+    }
+  },
+  { immediate: true },
+)
+
 const ADVANCED_DATES = DATES.filter(field => field.key !== 'collect_date')
 const SECONDARY_REGIONS = [
   { key: 'purchaser_cityname', optionField: 'city_name', label: '地市', placeholder: '选择或搜索地市' },
@@ -63,10 +74,11 @@ function setRange(key: typeof DATES[number]['key'], value: [string, string] | nu
       <el-form-item label="项目状态">
         <el-select
           v-model="query.project_status"
+          placeholder="全部"
           aria-label="项目状态"
         >
           <el-option
-            value=""
+            value="all"
             label="全部"
           />
           <el-option

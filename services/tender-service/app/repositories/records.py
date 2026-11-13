@@ -12,7 +12,7 @@ QLM_ID_MAX_LENGTH = 13
 def where_clause(query: ListQuery) -> tuple[str, tuple[object, ...]]:
     clauses: list[str] = []
     values: list[object] = []
-    if query.project_status:
+    if query.project_status and query.project_status != "all":
         clauses.append("project_status = %s")
         values.append(query.project_status)
     if query.project_name.strip():
@@ -100,9 +100,10 @@ def export_records(reader: Reader, kind: Kind, query: ListQuery, *, limit: int) 
 
 def get_record(reader: Reader, kind: Kind, status: Status, record_id: int) -> Row | None:
     cols = ", ".join(columns(kind))
-    table = TABLES[kind, status] if status else TABLES[kind, "0"]
-    cond = "id = %s AND project_status = %s" if status else "id = %s"
-    params = (record_id, status) if status else (record_id,)
+    use_status = status and status != "all"
+    table = TABLES[kind, status] if use_status else TABLES[kind, "0"]
+    cond = "id = %s AND project_status = %s" if use_status else "id = %s"
+    params = (record_id, status) if use_status else (record_id,)
     sql = f"SELECT {cols} FROM {table} WHERE {cond} LIMIT 1"  # noqa: S608  白名单表名列名，值参数化
     rows = reader.select(sql, params)
     return rows[0] if rows else None

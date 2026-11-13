@@ -38,7 +38,7 @@ def test_status_routes_to_one_table_and_never_reads_content(kind, status):
     assert rows == [{"id": 123}]
     for sql, params in reader.calls:
         assert TABLES[kind, status] in sql
-        if status:
+        if status in ("0", "1"):
             assert "project_status = %s" in sql and params[0] == status
         else:
             assert "WHERE 1=1" in sql
