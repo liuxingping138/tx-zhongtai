@@ -5,15 +5,13 @@ import { errorMessage } from '@/api/errors'
 import { getTenderStatistics, getTenderTotals, type TenderStatistics, type TenderTotals } from '@/api/tender'
 import BaseChart from '@/components/charts/BaseChart.vue'
 import { useChartPalette } from '@/components/charts/echarts'
-import TableSkeleton from '@/components/TableSkeleton.vue'
 import TenderKpiGrid from './TenderKpiGrid.vue'
 import TenderProvincePanel from './TenderProvincePanel.vue'
+import TenderStatsSkeleton from './TenderStatsSkeleton.vue'
 import { compactCount, recentRange, statisticsChart, structureDonutOption } from './statistics'
 
 const PRESETS = [
-  { days: 7, label: '近 7 天' },
-  { days: 14, label: '近 14 天' },
-  { days: 30, label: '近 30 天' },
+  { days: 7, label: '近 7 天' }, { days: 14, label: '近 14 天' }, { days: 30, label: '近 30 天' },
 ] as const
 
 const preset = ref<number | null>(7)
@@ -34,9 +32,7 @@ let sequence = 0
 
 const intakeChart = computed(() => statisticsChart(report.value?.daily ?? [], palette.value, 'intake', intakeMode.value))
 const workChart = computed(() => statisticsChart(report.value?.daily ?? [], palette.value, 'work', 'bar'))
-const donutOption = computed(() =>
-  structureDonutOption(totals.value?.purchaser ?? 0, totals.value?.winbid ?? 0, palette.value),
-)
+const donutOption = computed(() => structureDonutOption(totals.value?.purchaser ?? 0, totals.value?.winbid ?? 0, palette.value))
 
 const workload = computed(() => report.value?.daily.reduce((sum, row) => sum + row.tagged, 0) ?? 0)
 const rangeTotals = computed(() => {
@@ -48,10 +44,7 @@ const rangeTotals = computed(() => {
   return { purchaser, winbid, total, days: daily.length, dailyAvg: Math.round(total / days) }
 })
 
-const sharePct = (part?: number, whole?: number) => {
-  if (!part || !whole) return '0.0%'
-  return `${((part * 100) / whole).toFixed(1)}%`
-}
+const sharePct = (part?: number, whole?: number) => (!part || !whole ? '0.0%' : `${((part * 100) / whole).toFixed(1)}%`)
 const count = (value?: number) => (value === undefined ? '—' : value.toLocaleString('zh-CN'))
 const formatTime = (iso?: string) => (iso ? iso.replace('T', ' ').slice(0, 19) : '—')
 
@@ -96,15 +89,8 @@ async function loadTotals() {
   }
 }
 
-function pickPreset(days: number) {
-  preset.value = days
-  range.value = recentRange(new Date(), days)
-  void load()
-}
-
-function onRangeChange() {
-  preset.value = null
-}
+function pickPreset(days: number) { preset.value = days; range.value = recentRange(new Date(), days); void load() }
+function onRangeChange() { preset.value = null }
 
 onMounted(() => { void load(); void loadTotals() })
 </script>
@@ -212,6 +198,17 @@ onMounted(() => { void load(); void loadTotals() })
         </template>
         已完成人工信息化及基础字段补充 <strong class="hl-good">{{ count(workload) }}</strong> 条。
       </template>
+    </p>
+    <p
+      v-else-if="totalsLoading"
+      class="headline"
+      role="status"
+      aria-label="摘要数据统计中"
+    >
+      <span
+        class="skeleton-shimmer"
+        style="width: 55%; height: 14px; border-radius: 4px; display: inline-block;"
+      />
     </p>
 
     <TenderKpiGrid
@@ -384,16 +381,9 @@ onMounted(() => { void load(); void loadTotals() })
       <TenderProvincePanel :provinces="report.provinces" />
     </template>
 
-    <section
-      v-else-if="loading"
-      class="panel"
-      style="margin-top: 14px;"
-    >
-      <TableSkeleton
-        :columns="6"
-        :rows="8"
-      />
-    </section>
+    <template v-else-if="loading">
+      <TenderStatsSkeleton />
+    </template>
   </div>
 </template>
 

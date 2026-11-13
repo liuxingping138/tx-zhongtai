@@ -4,7 +4,7 @@ import { ElMessage } from 'element-plus'
 
 import { confirmEnrich, listEnrichPending, type EnrichItem } from '@/api/codebook'
 import { errorMessage } from '@/api/errors'
-import TableSkeleton from '@/components/TableSkeleton.vue'
+import DetailSkeleton from '@/components/DetailSkeleton.vue'
 import { useAuthStore } from '@/stores/auth'
 import { levelName, pathText } from './candidates'
 
@@ -67,11 +67,37 @@ async function confirm() {
 
 <template>
   <div class="enrich">
-    <TableSkeleton
+    <div
       v-if="loading && !items.length"
-      :rows="5"
-      :columns="3"
-    />
+      class="enrich-skeleton"
+    >
+      <div class="enrich-skeleton__nav">
+        <div
+          v-for="i in 5"
+          :key="i"
+          class="enrich-skeleton__nav-item"
+        >
+          <span
+            class="skeleton-shimmer"
+            style="width: 60%; height: 16px; border-radius: 4px; display: inline-block;"
+          />
+          <span
+            class="skeleton-shimmer"
+            style="width: 85%; height: 12px; border-radius: 4px; margin-top: 6px; display: inline-block;"
+          />
+          <span
+            class="skeleton-shimmer"
+            style="width: 45%; height: 12px; border-radius: 4px; margin-top: 6px; display: inline-block;"
+          />
+        </div>
+      </div>
+      <div class="enrich-skeleton__form">
+        <DetailSkeleton
+          :sections="1"
+          :fields-per-section="4"
+        />
+      </div>
+    </div>
     <template v-else>
       <el-alert
         v-if="loadError"
@@ -79,7 +105,18 @@ async function confirm() {
         :title="loadError"
         :closable="false"
         show-icon
-      />
+      >
+        <template #default>
+          <el-button
+            link
+            type="primary"
+            style="margin-left: 8px; font-weight: 500;"
+            @click="load"
+          >
+            重试
+          </el-button>
+        </template>
+      </el-alert>
       <!-- 和别的列表一样居中的空状态，不在大白框左上角放一行小字 -->
       <el-empty
         v-else-if="!loading && !items.length"
@@ -264,5 +301,30 @@ async function confirm() {
   gap: var(--zt-space-3);
   align-items: center;
   justify-content: flex-end;
+}
+.enrich-skeleton {
+  display: flex;
+  gap: var(--zt-space-4);
+  width: 100%;
+}
+.enrich-skeleton__nav {
+  flex: 0 1 300px;
+  border: 1px solid var(--zt-border);
+  border-radius: var(--zt-radius);
+  overflow: hidden;
+  background: var(--zt-panel);
+}
+.enrich-skeleton__nav-item {
+  padding: var(--zt-space-3) var(--zt-space-4);
+  border-top: 1px solid var(--zt-divider);
+  display: flex;
+  flex-direction: column;
+}
+.enrich-skeleton__nav-item:first-child {
+  border-top: 0;
+}
+.enrich-skeleton__form {
+  flex: 999 1 480px;
+  min-width: 0;
 }
 </style>

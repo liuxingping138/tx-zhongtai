@@ -5,6 +5,8 @@ import { computed, ref } from 'vue'
 import { getCrawlerOverview, type CrawlerOverviewData, type SiteStatus } from '@/api/crawlerMonitoring'
 import { errorMessage } from '@/api/errors'
 import CardSkeleton from '@/components/CardSkeleton.vue'
+import ChartSkeleton from '@/components/ChartSkeleton.vue'
+import TableSkeleton from '@/components/TableSkeleton.vue'
 import { changeText, headline, weekDelta } from './charts'
 import CrawlerHealthChart from './CrawlerHealthChart.vue'
 import CrawlerProvinceChart from './CrawlerProvinceChart.vue'
@@ -121,11 +123,27 @@ defineExpose({ reload })
     id="crawler-overview"
     class="overview"
   >
-    <CardSkeleton
-      v-if="loading && !overview"
-      :count="4"
-      :columns="4"
-    />
+    <template v-if="loading && !overview">
+      <CardSkeleton
+        :count="6"
+        :columns="6"
+      />
+      <div class="chart-row">
+        <ChartSkeleton
+          height="300px"
+          :bars="10"
+        />
+        <ChartSkeleton
+          height="300px"
+          :bars="4"
+        />
+      </div>
+      <TableSkeleton
+        :columns="5"
+        :rows="6"
+        :has-actions="false"
+      />
+    </template>
     <div
       v-else-if="error"
       class="overview-error"

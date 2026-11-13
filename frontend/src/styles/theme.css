@@ -867,7 +867,20 @@ button:disabled { cursor: not-allowed; }
  .el-date-range-picker .el-picker-panel__body { min-width: 0; }
  .el-date-range-picker__content { width: 100%; }
 }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+  .el-table.is-refreshing::before,
+  .panel.is-refreshing::before,
+  .chart-panel.is-refreshing::before,
+  .overview.is-refreshing::before {
+    animation: none !important;
+  }
+}
 .field-error { margin: 5px 0 0; color: var(--zt-danger-text); font-size: 12px; line-height: 1.5; }
 @media (max-width: 767px) {
  .list-page__results { overflow-x: auto; }
@@ -876,15 +889,21 @@ button:disabled { cursor: not-allowed; }
 
 .form-submit-error { margin-bottom: 18px; }
 
-/* Google Material 3 表格平滑刷新状态：微暗淡 + 顶部 Indeterminate 线性进度流光 */
-.el-table.is-refreshing {
+/* Google Material 3 平滑刷新状态：微暗淡 + 顶部 Indeterminate 线性进度流光 */
+.el-table.is-refreshing,
+.panel.is-refreshing,
+.chart-panel.is-refreshing,
+.overview.is-refreshing {
   position: relative;
-  opacity: 0.68;
+  opacity: 0.72;
   pointer-events: none;
   transition: opacity 0.2s ease;
 }
 
-.el-table.is-refreshing::before {
+.el-table.is-refreshing::before,
+.panel.is-refreshing::before,
+.chart-panel.is-refreshing::before,
+.overview.is-refreshing::before {
   content: "";
   position: absolute;
   top: 0;
@@ -895,6 +914,7 @@ button:disabled { cursor: not-allowed; }
   background-size: 200% 100%;
   animation: m3-linear-flow 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   z-index: 10;
+  border-radius: var(--zt-radius) var(--zt-radius) 0 0;
 }
 
 @keyframes m3-linear-flow {

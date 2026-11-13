@@ -136,14 +136,25 @@ async function save(row: CandidateRow) {
       :title="loadError"
       :closable="false"
       show-icon
-    />
+    >
+      <template #default>
+        <el-button
+          link
+          type="primary"
+          style="margin-left: 8px; font-weight: 500;"
+          @click="load"
+        >
+          重试
+        </el-button>
+      </template>
+    </el-alert>
     <TableSkeleton
       v-if="loading && rows.length === 0"
       :columns="4"
       :has-actions="true"
     />
     <el-table
-      v-else
+      v-else-if="!loadError || rows.length > 0"
       :data="rows"
       class="data-table"
       :class="{ 'is-refreshing': loading }"

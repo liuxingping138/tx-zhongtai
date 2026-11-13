@@ -70,6 +70,12 @@ watch(() => [props.site.site_name, props.site.province_name, props.site.city_nam
         height="180px"
       />
     </template>
+    <div
+      v-else
+      class="site-trend-empty"
+    >
+      近 {{ SITE_TREND_DAYS }} 天暂无抓取记录
+    </div>
   </section>
 </template>
 
@@ -77,4 +83,5 @@ watch(() => [props.site.site_name, props.site.province_name, props.site.city_nam
 .site-trend { margin-top: var(--zt-space-6); min-height: 80px; }
 .site-trend h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--zt-ink-900); }
 .site-trend-note { margin: 4px 0 var(--zt-space-2); font-size: 12px; color: var(--zt-ink-500); }
+.site-trend-empty { min-height: 180px; display: flex; align-items: center; justify-content: center; color: var(--zt-ink-500); font-size: 13px; }
 </style>

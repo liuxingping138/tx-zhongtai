@@ -6,6 +6,8 @@ import { getAiBilling, type BillingRow } from '@/api/aiBilling'
 import { errorMessage } from '@/api/errors'
 import BaseChart from '@/components/charts/BaseChart.vue'
 import { useChartPalette } from '@/components/charts/echarts'
+import CardSkeleton from '@/components/CardSkeleton.vue'
+import ChartSkeleton from '@/components/ChartSkeleton.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import {
   colorMap, dailySeries, filterOptions, filterRows, groupBy,
@@ -206,7 +208,14 @@ onMounted(load)
       :closable="false"
       show-icon
     />
+    <CardSkeleton
+      v-if="loading && rows.length === 0"
+      :count="4"
+      :columns="4"
+      variant="kpi"
+    />
     <section
+      v-else
       class="billing__totals"
       aria-label="合计"
     >
@@ -231,7 +240,10 @@ onMounted(load)
         <small>模型结构化生成结果消耗</small>
       </div>
     </section>
-    <section class="billing__panel">
+    <section
+      class="billing__panel"
+      :class="{ 'is-refreshing': loading && rows.length > 0 }"
+    >
       <header class="billing__head">
         <div>
           <h2>每日费用</h2>
@@ -251,8 +263,13 @@ onMounted(load)
           </el-radio-button>
         </el-radio-group>
       </header>
+      <ChartSkeleton
+        v-if="loading && rows.length === 0"
+        height="320px"
+        :bars="9"
+      />
       <BaseChart
-        v-if="shown.length"
+        v-else-if="shown.length"
         :option="option"
         :label="chartLabel"
         height="320px"
@@ -261,7 +278,7 @@ onMounted(load)
         v-else
         class="billing__empty"
       >
-        {{ loading ? '正在加载…' : '这段时间没有花费' }}
+        这段时间没有花费
       </p>
     </section>
     <section class="billing__panel">
@@ -362,30 +379,4 @@ onMounted(load)
   </div>
 </template>
 
-<style scoped>
-.billing { display: flex; flex-direction: column; gap: 14px; }
-.billing__bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; padding: 12px 16px; border: 1px solid var(--zt-border); border-radius: 12px; background: var(--zt-panel); box-shadow: var(--zt-shadow); }
-.billing__filter { width: 220px; }
-.billing__totals { display: grid; grid-template-columns: minmax(0, 1.35fr) repeat(3, minmax(0, 1fr)); gap: 12px; }
-.billing__totals > div { display: flex; flex-direction: column; gap: 4px; padding: 16px 20px; min-width: 0; border: 1px solid var(--zt-border); border-radius: 12px; background: var(--zt-panel); box-shadow: var(--zt-shadow); }
-.billing__totals > div.billing__total { background: var(--zt-hero-gradient); border-color: var(--el-color-primary-light-7); }
-.billing__totals span { color: var(--zt-ink-500); font-size: 12.5px; font-weight: 500; }
-.billing__totals strong { color: var(--zt-ink-900); font-size: 24px; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.billing__total strong { font-size: 28px; color: var(--zt-blue-600); }
-.billing__totals small { color: var(--zt-ink-500); font-size: 11.5px; }
-.billing__panel { padding: 16px 20px; border: 1px solid var(--zt-border); border-radius: 12px; background: var(--zt-panel); box-shadow: var(--zt-shadow); min-width: 0; }
-.billing__head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; }
-.billing__head h2 { margin: 0; color: var(--zt-ink-900); font-size: 15px; font-weight: 650; }
-.billing__head p, .billing__foot { margin: 4px 0 0; color: var(--zt-ink-500); font-size: 12px; line-height: 1.6; }
-.billing__foot { margin-top: 10px; }
-.billing__empty { margin: 0; padding: 48px 0; color: var(--zt-ink-500); font-size: 13px; text-align: center; }
-.billing__name { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; }
-.billing__swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
-.billing__share { display: flex; align-items: center; gap: 10px; font-variant-numeric: tabular-nums; }
-.billing__share-track { width: 108px; height: 8px; border-radius: 999px; background: var(--zt-surface-subtle); overflow: hidden; flex: none; }
-.billing__share-bar { display: block; height: 100%; border-radius: 999px; background: var(--zt-blue-600); }
-.billing :deep(.el-table .cell) { font-variant-numeric: tabular-nums; }
-@media (max-width: 900px) {
-  .billing__totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-</style>
+<style scoped src="./billing-page.css"></style>

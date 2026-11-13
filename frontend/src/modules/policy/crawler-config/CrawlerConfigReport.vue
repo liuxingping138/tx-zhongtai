@@ -140,7 +140,21 @@ onMounted(() => {
       type="error"
       :closable="false"
       show-icon
-    />
+    >
+      <template
+        v-if="error"
+        #default
+      >
+        <el-button
+          link
+          type="primary"
+          style="margin-left: 8px; font-weight: 500;"
+          @click="load(unit, period)"
+        >
+          重试
+        </el-button>
+      </template>
+    </el-alert>
 
     <template v-if="loading && !report">
       <CardSkeleton
