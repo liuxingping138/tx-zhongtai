@@ -876,11 +876,30 @@ button:disabled { cursor: not-allowed; }
 
 .form-submit-error { margin-bottom: 18px; }
 
-/* Google Material 3 骨架屏平滑刷新状态，取代生硬的大遮罩 loading 圈圈 */
+/* Google Material 3 表格平滑刷新状态：微暗淡 + 顶部 Indeterminate 线性进度流光 */
 .el-table.is-refreshing {
-  opacity: 0.65;
+  position: relative;
+  opacity: 0.68;
   pointer-events: none;
   transition: opacity 0.2s ease;
+}
+
+.el-table.is-refreshing::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, var(--zt-blue-600) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: m3-linear-flow 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  z-index: 10;
+}
+
+@keyframes m3-linear-flow {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 /* 顶栏高度收敛至 60px，侧栏 208px，释放更多垂直空间给业务数据 */

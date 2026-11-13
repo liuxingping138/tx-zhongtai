@@ -97,9 +97,9 @@ const colList = computed(() => Array.from({ length: props.columns }, (_, i) => i
 <style scoped>
 .table-skeleton {
   width: 100%;
-  border: 1px solid var(--zt-border-subtle);
-  border-radius: var(--zt-radius-md);
-  background: var(--zt-surface-subtle);
+  border: 1px solid var(--zt-border);
+  border-radius: var(--zt-radius);
+  background: var(--zt-panel);
   overflow: hidden;
   user-select: none;
 }
@@ -108,7 +108,7 @@ const colList = computed(() => Array.from({ length: props.columns }, (_, i) => i
   display: flex;
   align-items: center;
   height: 40px;
-  background: var(--zt-surface);
+  background: var(--zt-table-head);
   border-bottom: 1px solid var(--zt-border);
   padding: 0 16px;
 }
@@ -117,10 +117,14 @@ const colList = computed(() => Array.from({ length: props.columns }, (_, i) => i
   display: flex;
   align-items: center;
   height: 48px;
-  background: var(--zt-surface);
-  border-bottom: 1px solid var(--zt-border-subtle);
+  background: var(--zt-panel);
+  border-bottom: 1px solid var(--zt-divider);
   padding: 0 16px;
   transition: height 0.16s ease;
+}
+
+.table-skeleton__row:nth-child(even) {
+  background: var(--zt-soft);
 }
 
 :global(html.zt-compact) .table-skeleton__row {
@@ -138,6 +142,12 @@ const colList = computed(() => Array.from({ length: props.columns }, (_, i) => i
   align-items: center;
   padding: 0 8px;
   min-width: 0;
+}
+
+/* 首列主要信息占位稍宽，建立符合 Google M3 的视觉层级 */
+.table-skeleton__th:nth-child(2),
+.table-skeleton__td:nth-child(2) {
+  flex: 1.8 1 0;
 }
 
 .table-skeleton__th:first-child,
@@ -159,18 +169,18 @@ const colList = computed(() => Array.from({ length: props.columns }, (_, i) => i
   padding-right: 0;
 }
 
-/* Material 3 柔和 Shimmer 流光动效 */
+/* Google Material 3 柔和 Shimmer 流光动效 */
 .skeleton-shimmer {
   display: inline-block;
   background: linear-gradient(
     90deg,
-    var(--zt-border-subtle) 25%,
-    var(--zt-surface-subtle) 37%,
-    var(--zt-border-subtle) 63%
+    var(--zt-soft) 25%,
+    var(--zt-divider) 37%,
+    var(--zt-soft) 63%
   );
   background-size: 400% 100%;
-  animation: shimmer-flow 1.6s ease-in-out infinite;
-  border-radius: var(--zt-radius-sm);
+  animation: shimmer-flow 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  border-radius: 4px;
 }
 
 .skeleton-box--checkbox {
@@ -181,17 +191,18 @@ const colList = computed(() => Array.from({ length: props.columns }, (_, i) => i
 
 .skeleton-bar {
   height: 14px;
+  border-radius: 4px;
 }
 
 .skeleton-bar--th {
   height: 12px;
-  border-radius: var(--zt-radius-xs);
+  border-radius: 3px;
 }
 
 .skeleton-bar--action {
-  width: 64px;
+  width: 52px;
   height: 24px;
-  border-radius: var(--zt-radius-sm);
+  border-radius: 12px;
 }
 
 @keyframes shimmer-flow {
@@ -200,6 +211,14 @@ const colList = computed(() => Array.from({ length: props.columns }, (_, i) => i
   }
   100% {
     background-position: 0 50%;
+  }
+}
+
+/* Google M3 无障碍支持：系统开启减弱动效时禁用流光 */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer {
+    animation: none !important;
+    background: var(--zt-divider) !important;
   }
 }
 </style>
