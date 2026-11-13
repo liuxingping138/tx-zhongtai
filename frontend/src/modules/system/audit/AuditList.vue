@@ -9,6 +9,7 @@ import FilterBar from '@/components/FilterBar.vue'
 import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useListQuery } from '@/composables/useListQuery'
 import ListEmpty from '@/components/ListEmpty.vue'
+import DetailSkeleton from '@/components/DetailSkeleton.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import type { AuditEventItem } from '@/api/types'
 import {
@@ -330,10 +331,10 @@ onMounted(() => {
           重试
         </el-button>
       </el-alert>
-      <el-skeleton
+      <DetailSkeleton
         v-if="detailLoading"
-        :rows="8"
-        animated
+        :sections="1"
+        :fields-per-section="6"
       />
       <el-descriptions
         v-else-if="detail"
