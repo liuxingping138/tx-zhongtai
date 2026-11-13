@@ -4,7 +4,7 @@ import FilterBar from '@/components/FilterBar.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
 import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useAuthStore } from '@/stores/auth'
-import { DATES, type TenderQuery } from './fields'
+import { applyDefaultDateRange, DATES, type TenderQuery } from './fields'
 
 const query = defineModel<TenderQuery>({ required: true })
 defineProps<{ applied: Record<string, unknown> }>()
@@ -27,22 +27,56 @@ watch(
   },
 )
 
-// 项目状态空值归一化为 'all'，杜绝 Element Plus 空值判定清空选项 label
+// 项目状态空值归一化；切换到未通过或全部且无日期时，自动预填近 7 天发布时间
 watch(
   () => query.value.project_status,
-  (val) => {
+  (val, oldVal) => {
     if (val === '') {
       query.value.project_status = 'all'
+      return
+    }
+    if ((val === '0' || val === 'all') && val !== oldVal) {
+      applyDefaultDateRange(query.value)
     }
   },
   { immediate: true },
 )
 
-const ADVANCED_DATES = DATES.filter(field => field.key !== 'collect_date')
+const ADVANCED_DATES = DATES.filter(field => field.key !== 'public_date')
 const SECONDARY_REGIONS = [
   { key: 'purchaser_cityname', optionField: 'city_name', label: '地市', placeholder: '选择或搜索地市' },
   { key: 'purchaser_countyname', optionField: 'county_name', label: '区县', placeholder: '选择或搜索区县' },
 ] as const
+
+const dateShortcuts = [
+  {
+    text: '近 7 天',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setDate(start.getDate() - 6)
+      return [start, end]
+    },
+  },
+  {
+    text: '近 30 天',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setDate(start.getDate() - 29)
+      return [start, end]
+    },
+  },
+  {
+    text: '近 90 天',
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setDate(start.getDate() - 89)
+      return [start, end]
+    },
+  },
+]
 
 function range(key: typeof DATES[number]['key']): [string, string] | null {
   const from = query.value[`${key}_from`]
@@ -99,16 +133,17 @@ function setRange(key: typeof DATES[number]['key'], value: [string, string] | nu
           size="short"
         />
       </el-form-item>
-      <el-form-item label="采集时间">
+      <el-form-item label="发布时间">
         <el-date-picker
-          :model-value="range('collect_date')"
+          :model-value="range('public_date')"
           type="daterange"
           value-format="YYYY-MM-DD"
           range-separator="至"
           start-placeholder="开始"
           end-placeholder="结束"
           unlink-panels
-          @update:model-value="setRange('collect_date', $event)"
+          :shortcuts="dateShortcuts"
+          @update:model-value="setRange('public_date', $event)"
         />
       </el-form-item>
 

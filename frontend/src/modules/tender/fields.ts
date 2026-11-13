@@ -136,4 +136,31 @@ export function validateTenderSearch(query: TenderQuery): string | null {
   return null
 }
 
+export function recentDaysRange(days = 7, refDate: Date = new Date()): [string, string] {
+  const to = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate())
+  const from = new Date(to)
+  from.setDate(from.getDate() - (days - 1))
+  const format = (d: Date) => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+  return [format(from), format(to)]
+}
+
+export function applyDefaultDateRange(query: TenderQuery): boolean {
+  if (query.project_status !== '0' && query.project_status !== 'all') return false
+  const hasDate = query.public_date_from || query.public_date_to ||
+    query.collect_date_from || query.collect_date_to ||
+    query.create_time_from || query.create_time_to
+  if (!hasDate) {
+    const [from, to] = recentDaysRange(7)
+    query.public_date_from = from
+    query.public_date_to = to
+    return true
+  }
+  return false
+}
+
 export type TenderQuery = ReturnType<typeof initialQuery>

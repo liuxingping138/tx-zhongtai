@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { chartPalette } from '@/components/charts/echarts'
 import { isolatedHtml } from './content'
 import { buildDetailSections, SYSTEM_SECTION } from '@/components/detailSections'
-import { initialQuery, tenderColumns, tenderDetailGroups, validateTenderSearch } from './fields'
+import { applyDefaultDateRange, initialQuery, recentDaysRange, tenderColumns, tenderDetailGroups, validateTenderSearch } from './fields'
 import { buildProvinceRows, recentRange, statisticsChart, compactCount, shortProvinceName, structureDonutOption } from './statistics'
 
 describe('招中标页面规则', () => {
@@ -104,5 +104,30 @@ describe('招中标页面规则', () => {
     expect(purchaserCols.slice(0, 3)).toEqual(['project_name', 'project_status', 'public_date'])
     const sections = buildDetailSections(tenderColumns('winbid'), tenderDetailGroups('winbid'))
     expect(sections.map(s => s.title)).toEqual(['项目核心信息', '招中标主体与地区', '行业与场景标签', SYSTEM_SECTION])
+  })
+  it('方案A在未通过与全部状态下自动注入近7天发布时间，不覆盖已有日期', () => {
+    const testDate = new Date(2026, 10, 13) // 2026-11-13
+    expect(recentDaysRange(7, testDate)).toEqual(['2026-11-07', '2026-11-13'])
+
+    // 通过状态 (1) 不自动注入
+    const queryPassed = initialQuery()
+    expect(applyDefaultDateRange(queryPassed)).toBe(false)
+    expect(queryPassed.public_date_from).toBe('')
+
+    // 未通过状态 (0) 且无日期：自动注入
+    const queryUnpassed = { ...initialQuery(), project_status: '0' }
+    expect(applyDefaultDateRange(queryUnpassed)).toBe(true)
+    expect(queryUnpassed.public_date_from).toBeTruthy()
+    expect(queryUnpassed.public_date_to).toBeTruthy()
+
+    // 全部状态 (all) 且无日期：自动注入
+    const queryAll = { ...initialQuery(), project_status: 'all' }
+    expect(applyDefaultDateRange(queryAll)).toBe(true)
+    expect(queryAll.public_date_from).toBeTruthy()
+
+    // 已有日期时：不覆盖
+    const queryWithDate = { ...initialQuery(), project_status: '0', collect_date_from: '2026-11-01' }
+    expect(applyDefaultDateRange(queryWithDate)).toBe(false)
+    expect(queryWithDate.public_date_from).toBe('')
   })
 })

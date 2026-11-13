@@ -43,7 +43,7 @@ def test_status_routes_to_one_table_and_never_reads_content(kind, status):
         else:
             assert "WHERE 1=1" in sql
         if status == "1":
-            assert "ORDER BY purchaser_provname DESC, public_date DESC, id DESC" in sql
+            assert "ORDER BY public_date DESC, purchaser_provname DESC, id DESC" in sql
         else:
             assert "ORDER BY public_date DESC, id DESC" in sql
         assert " content" not in sql and " JOIN " not in sql
@@ -54,7 +54,7 @@ def test_status_routes_to_one_table_and_never_reads_content(kind, status):
 def test_order_clause_with_scope_orders_by_province():
     reader = Reader([[{"id": 123}]])
     records.list_records(reader, "purchaser", ListQuery(project_status="0", purchaser_provname=["广东"]))
-    assert "ORDER BY purchaser_provname DESC, public_date DESC, id DESC" in reader.calls[0][0]
+    assert "ORDER BY public_date DESC, purchaser_provname DESC, id DESC" in reader.calls[0][0]
 
 
 def test_filters_escape_keywords_bind_values_and_include_end_day():

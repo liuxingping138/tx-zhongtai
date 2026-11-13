@@ -65,7 +65,7 @@ def order_clause(query: ListQuery) -> str:
         or query.project_content_id.strip()
     )
     if query.project_status == "1" or has_scope:
-        return "ORDER BY purchaser_provname DESC, public_date DESC, id DESC"
+        return "ORDER BY public_date DESC, purchaser_provname DESC, id DESC"
     return "ORDER BY public_date DESC, id DESC"
 
 

@@ -10,7 +10,7 @@ import ListPage from '@/components/ListPage.vue'
 import { useExcelExport } from '@/composables/useExcelExport'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import { useAuthStore } from '@/stores/auth'
-import { initialQuery, tenderColumns, validateTenderSearch } from './fields'
+import { applyDefaultDateRange, initialQuery, tenderColumns, validateTenderSearch } from './fields'
 import TenderFilters from './TenderFilters.vue'
 import { useTenderList } from './useTenderList'
 
@@ -52,7 +52,12 @@ function onSearch() {
 function detailRoute(row: TenderRecord) {
   return { name: `tender-${props.kind}-detail`, params: { id: row.id }, query: { ...listQuery.requested(), project_status: row.project_status } }
 }
-onMounted(() => { void load() })
+onMounted(() => {
+  if (applyDefaultDateRange(query)) {
+    listQuery.captureApplied()
+  }
+  void load()
+})
 </script>
 
 <template>
