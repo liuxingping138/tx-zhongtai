@@ -5,6 +5,7 @@ import { errorMessage } from '@/api/errors'
 import { getTenderStatistics, getTenderTotals, type TenderStatistics, type TenderTotals } from '@/api/tender'
 import BaseChart from '@/components/charts/BaseChart.vue'
 import { useChartPalette } from '@/components/charts/echarts'
+import TenderDailyTable from './TenderDailyTable.vue'
 import TenderKpiGrid from './TenderKpiGrid.vue'
 import TenderProvincePanel from './TenderProvincePanel.vue'
 import TenderStatsSkeleton from './TenderStatsSkeleton.vue'
@@ -313,69 +314,11 @@ onMounted(() => { void load(); void loadTotals() })
           />
         </section>
 
-        <section class="panel">
-          <header class="panel-head">
-            <div>
-              <h2>每日统计明细</h2>
-              <p class="panel-note">
-                统计口径时间：{{ formatTime(report.as_of) }}
-              </p>
-            </div>
-            <span class="kpi-badge">共 {{ report.daily.length }} 天</span>
-          </header>
-          <el-table
-            :data="report.daily"
-            :class="{ 'is-refreshing': loading }"
-            stripe
-            max-height="295"
-          >
-            <el-table-column
-              prop="date"
-              label="采集日期"
-              width="115"
-            />
-            <el-table-column
-              label="招标接入"
-              align="right"
-            >
-              <template #default="{ row }">
-                <span class="tabular">{{ count(row.purchaser) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column
-              label="中标接入"
-              align="right"
-            >
-              <template #default="{ row }">
-                <span class="tabular">{{ count(row.winbid) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column
-              label="信息化"
-              align="right"
-              width="82"
-            >
-              <template #default="{ row }">
-                <span class="tabular">{{ count(row.tagged) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column
-              label="基础补充"
-              align="right"
-              width="86"
-            >
-              <template #default="{ row }">
-                <span class="tabular">{{ count(row.enriched) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column
-              prop="scenario"
-              label="场景"
-              align="right"
-              width="66"
-            />
-          </el-table>
-        </section>
+        <TenderDailyTable
+          :daily="report.daily"
+          :loading="loading"
+          :as-of="report.as_of"
+        />
       </div>
 
       <TenderProvincePanel :provinces="report.provinces" />
