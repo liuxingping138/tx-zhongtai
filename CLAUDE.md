@@ -132,7 +132,7 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
 - `tender-service` 的源表只能 SELECT，禁止对 `bid_analyse` 的四张招中标表以及正文表执行 INSERT / UPDATE / DELETE / DDL，也不建索引、不回传状态。
 - `project_status=0` 列表读 `bid_purchaser_info_dis_pro` / `bid_winbid_info_dis_pro`；`1` 列表读对应 `_dis_approval_pro` 交付表。不能用原始表冒充交付表的优化字段。
 - 统计只读原始表，按 `collect_date` 分日；状态 1 同时计入信息化标签、基础字段补充，场景工作量暂为 0。两项工序不能相加当作处理数据量。
-- 正文按需：项目 ID 长度 <=13 时读 `bid_analyse.qlm_pdf_content.infoid` 对应的 `infocontent`；其他读 `crawler2021.zhaobiao2021_prod.uid` 对应 `content`，必须同时限制 `create_time = 原始表.collect_date`（用户已确认 uid）。
+- 正文按需：项目 ID 长度 <=13 时读 `bid_analyse.qlm_saas_content.infoid` 对应的 `infocontent`；其他读 `crawler2021.zhaobiao2021_prod.uid` 对应 `content`，必须同时限制 `create_time = 原始表.collect_date`（用户已确认 uid）。
 - 源库雪花 ID 序列化成字符串。全表精确计数在有界后台线程中执行，前端轮询；列表 LIMIT 多取一条判断下一页，不等待 COUNT。统计缓存只在服务内存，不建源表和平台业务表。
 
 ### 爬虫监测是只读统计，数据靠同步进来

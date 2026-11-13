@@ -127,7 +127,7 @@ def read_content(reader: Reader, reference: Row) -> Row | None:
         if not content_id.isascii() or not content_id.isdecimal():
             return None
         rows = reader.select(
-            "SELECT infocontent AS html FROM bid_analyse.qlm_pdf_content WHERE infoid = %s LIMIT 1",
+            "SELECT infocontent AS html FROM bid_analyse.qlm_saas_content WHERE infoid = %s LIMIT 1",
             (int(content_id),),
         )
     elif reference.get("collect_date"):

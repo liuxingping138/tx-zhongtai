@@ -125,7 +125,7 @@ def test_short_numeric_id_only_reads_qlm():
     reader = Reader([[{"html": "<table>正文</table>"}]])
     records.read_content(reader, {"project_content_id": "1234567890123"})
     assert "infocontent AS html" in reader.calls[0][0]
-    assert "qlm_pdf_content" in reader.calls[0][0]
+    assert "qlm_saas_content" in reader.calls[0][0]
     assert reader.calls[0][1] == (1234567890123,)
 
 
