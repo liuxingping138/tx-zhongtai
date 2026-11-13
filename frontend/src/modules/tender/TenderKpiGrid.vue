@@ -94,7 +94,7 @@ const count = (value?: number) => (value === undefined ? '—' : value.toLocaleS
 
     <div class="kpi-card">
       <div class="kpi-head">
-        <span>人工交付处理</span>
+        <span>人工审核通过</span>
         <span class="kpi-pill kpi-pill--warn">场景暂 0</span>
       </div>
       <strong class="kpi-value">{{ hasReport ? count(workload) : '—' }}</strong>

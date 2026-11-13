@@ -128,6 +128,8 @@ export interface ProvinceRow {
   purchaser: number
   winbid: number
   total: number
+  passPurchaser: number
+  passWinbid: number
   passed: number
   unpassed: number
   purchaserPct: number
@@ -141,7 +143,7 @@ export interface ProvinceRow {
 export function buildProvinceRows(
   provinces: TenderPoint[],
   selected: string[],
-  sortBy: 'total' | 'delivery' = 'total',
+  sortBy: 'total' | 'delivery' | 'passed' = 'total',
 ): ProvinceRow[] {
   const totalSum = provinces.reduce((sum, row) => sum + row.purchaser + row.winbid, 0)
   const maxTotal = Math.max(1, ...provinces.map(row => row.purchaser + row.winbid))
@@ -153,12 +155,20 @@ export function buildProvinceRows(
         return selected.includes(raw) || needles.includes(short)
       })
     : provinces
-  const ordered = sortBy === 'delivery'
-    ? [...matched].sort((a, b) => b.tagged - a.tagged || (b.purchaser + b.winbid) - (a.purchaser + a.winbid))
+  const getPassed = (row: TenderPoint) =>
+    row.purchaser_passed !== undefined && row.winbid_passed !== undefined
+      ? (row.purchaser_passed || 0) + (row.winbid_passed || 0)
+      : row.tagged
+  const ordered = (sortBy === 'delivery' || sortBy === 'passed')
+    ? [...matched].sort((a, b) => getPassed(b) - getPassed(a) || (b.purchaser + b.winbid) - (a.purchaser + a.winbid))
     : matched
   return ordered.map((row, index) => {
     const total = row.purchaser + row.winbid
-    const passed = row.tagged
+    const passPurchaser = row.purchaser_passed ?? 0
+    const passWinbid = row.winbid_passed ?? 0
+    const passed = row.purchaser_passed !== undefined && row.winbid_passed !== undefined
+      ? passPurchaser + passWinbid
+      : row.tagged
     const unpassed = Math.max(0, total - passed)
     const name = row.province || '未填写省份'
     return {
@@ -168,6 +178,8 @@ export function buildProvinceRows(
       purchaser: row.purchaser,
       winbid: row.winbid,
       total,
+      passPurchaser,
+      passWinbid,
       passed,
       unpassed,
       purchaserPct: (row.purchaser / maxTotal) * 100,

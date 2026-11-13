@@ -215,6 +215,8 @@ def test_workflow_counts_equal_without_double_counting_source(monkeypatch):
     }
     assert result["daily"][1]["purchaser"] == result["daily"][1]["tagged"] == 0
     assert result["provinces"][0]["tagged"] == 5
+    assert result["provinces"][0]["purchaser_passed"] == 3
+    assert result["provinces"][0]["winbid_passed"] == 2
     assert stats.get_statistics(query) is result
     assert len(reader.calls) == 4
     assert all("approval" not in sql for sql, _ in reader.calls)

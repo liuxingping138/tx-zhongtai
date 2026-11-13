@@ -257,7 +257,7 @@ onMounted(() => { void load(); void loadTotals() })
             <div>
               <h2>全库结构占比</h2>
               <p class="panel-note">
-                原始库口径，不含交付表重复统计
+                原始库口径，不含重复统计
               </p>
             </div>
           </header>
@@ -295,7 +295,7 @@ onMounted(() => { void load(); void loadTotals() })
         >
           <header class="panel-head">
             <div>
-              <h2>人工交付处理趋势</h2>
+              <h2>每日人工审核处理趋势</h2>
               <p class="panel-note">
                 信息化标签与基础字段补充按已处理状态计数，两项工序不相加计算数据条数
               </p>

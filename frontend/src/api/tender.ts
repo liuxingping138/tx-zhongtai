@@ -17,6 +17,8 @@ export interface TenderPoint {
   tagged: number
   enriched: number
   scenario: number
+  purchaser_passed?: number
+  winbid_passed?: number
 }
 export interface TenderStatistics {
   date_from: string

@@ -36,7 +36,11 @@ def _store(key: str, result: Row) -> Row:
 
 
 def _point(label: str, value: str) -> Row:
-    return {label: value, "purchaser": 0, "winbid": 0, "tagged": 0, "enriched": 0, "scenario": 0}
+    row: Row = {label: value, "purchaser": 0, "winbid": 0, "tagged": 0, "enriched": 0, "scenario": 0}
+    if label == "province":
+        row["purchaser_passed"] = 0
+        row["winbid_passed"] = 0
+    return row
 
 
 def get_statistics(query: StatsQuery) -> Row:
@@ -70,10 +74,15 @@ def _aggregate(query: StatsQuery) -> Row:
                 for row in statistics.daily(reader, kind, day):
                     name = str(row["province"] or "未填写省份")
                     province = provinces.setdefault(name, _point("province", name))
+                    processed = int(row["processed"] or 0)
                     for target in (point, province):
                         target[kind] += int(row["total"])
-                        target["tagged"] += int(row["processed"] or 0)
-                        target["enriched"] += int(row["processed"] or 0)
+                        target["tagged"] += processed
+                        target["enriched"] += processed
+                    if kind == "purchaser":
+                        province["purchaser_passed"] += processed
+                    elif kind == "winbid":
+                        province["winbid_passed"] += processed
             daily.append(point)
     return {
         "daily": daily,

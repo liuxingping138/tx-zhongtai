@@ -79,23 +79,35 @@ describe('招中标页面规则', () => {
       public_date_to: '2026-11-12',
     })).toBeNull()
   })
-  it('分省统计支持码表省份筛选及按交付量排序与通过率计算', () => {
+  it('分省统计按全量及通过量排序并计算通过率与拆解量', () => {
+    const sample = [
+      { province: '广东省', purchaser: 60, winbid: 40, tagged: 20, enriched: 20, scenario: 0, purchaser_passed: 12, winbid_passed: 8 },
+      { province: '浙江省', purchaser: 30, winbid: 20, tagged: 40, enriched: 40, scenario: 0, purchaser_passed: 25, winbid_passed: 15 },
+      { province: '', purchaser: 10, winbid: 0, tagged: 0, enriched: 0, scenario: 0, purchaser_passed: 0, winbid_passed: 0 },
+    ]
+    const totalRows = buildProvinceRows(sample, [], 'total')
+    const topTotal = totalRows[0]!
+    const lastTotal = totalRows[2]!
+    expect(topTotal.name).toBe('广东省')
+    expect(topTotal.passRate).toBe('20.0%')
+    expect(topTotal.unpassed).toBe(80)
+    expect(topTotal.passPurchaser).toBe(12)
+    expect(topTotal.passWinbid).toBe(8)
+    expect(lastTotal.name).toBe('未填写省份')
+
+    const deliveryRows = buildProvinceRows(sample, [], 'delivery')
+    const topDelivery = deliveryRows[0]!
+    expect(topDelivery.name).toBe('浙江省')
+    expect(topDelivery.passed).toBe(40)
+    expect(topDelivery.passPurchaser).toBe(25)
+    expect(topDelivery.passWinbid).toBe(15)
+    expect(topDelivery.passRate).toBe('80.0%')
+  })
+  it('分省统计支持码表省份名称过滤', () => {
     const sample = [
       { province: '广东省', purchaser: 60, winbid: 40, tagged: 20, enriched: 20, scenario: 0 },
       { province: '浙江省', purchaser: 30, winbid: 20, tagged: 40, enriched: 40, scenario: 0 },
-      { province: '', purchaser: 10, winbid: 0, tagged: 0, enriched: 0, scenario: 0 },
     ]
-    const totalRows = buildProvinceRows(sample, [], 'total')
-    expect(totalRows[0]?.name).toBe('广东省')
-    expect(totalRows[0]?.passRate).toBe('20.0%')
-    expect(totalRows[0]?.unpassed).toBe(80)
-    expect(totalRows[2]?.name).toBe('未填写省份')
-
-    const deliveryRows = buildProvinceRows(sample, [], 'delivery')
-    expect(deliveryRows[0]?.name).toBe('浙江省')
-    expect(deliveryRows[0]?.passed).toBe(40)
-    expect(deliveryRows[0]?.passRate).toBe('80.0%')
-
     const filtered = buildProvinceRows(sample, ['浙江'], 'delivery')
     expect(filtered).toHaveLength(1)
     expect(filtered[0]?.name).toBe('浙江省')

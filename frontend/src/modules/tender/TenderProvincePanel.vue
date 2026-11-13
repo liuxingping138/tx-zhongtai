@@ -33,10 +33,13 @@ const columns = computed(() => {
         <h3>分省份数据分布（全部 {{ provinces.length }} 项）</h3>
         <p class="panel-note">
           <template v-if="mode === 'delivery'">
-            按已通过（状态 1 交付量）降序排列；绿色为已通过交付量，浅灰为未通过量，右侧展示交付数与通过率
+            按人工审核通过量降序排列；绿色为人工审核通过量，浅灰为未通过储备，右侧展示审核通过数（支持查看招标与中标细分）及通过率
+          </template>
+          <template v-else-if="mode === 'table'">
+            分省数据完整明细；包含各省招标/中标接入量、全量合计、招标审核通过量、中标审核通过量、审核通过合计及通过率
           </template>
           <template v-else>
-            蓝色为招标、绿色为中标，按各省合计降序排列，完整展示全部省级区域、交付量及通过率
+            蓝色为招标、绿色为中标，按各省合计降序排列，完整展示全部省级区域接入体量、人工审核通过量及通过率
           </template>
         </p>
       </div>
@@ -58,7 +61,7 @@ const columns = computed(() => {
             全量分布
           </el-radio-button>
           <el-radio-button value="delivery">
-            交付排行
+            审核通过排行
           </el-radio-button>
           <el-radio-button value="table">
             完整明细表
@@ -87,7 +90,7 @@ const columns = computed(() => {
           v-for="row in col"
           :key="row.name"
           class="rank-row"
-          :title="`${row.name}：总量 ${row.total.toLocaleString('zh-CN')}（招标 ${row.purchaser.toLocaleString('zh-CN')} / 中标 ${row.winbid.toLocaleString('zh-CN')}）· 已通过 ${row.passed.toLocaleString('zh-CN')} · 未通过 ${row.unpassed.toLocaleString('zh-CN')}（通过率 ${row.passRate}）`"
+          :title="`${row.name}：总量 ${row.total.toLocaleString('zh-CN')}（招标 ${row.purchaser.toLocaleString('zh-CN')} / 中标 ${row.winbid.toLocaleString('zh-CN')}）· 人工审核通过 ${row.passed.toLocaleString('zh-CN')}（招标通过 ${row.passPurchaser.toLocaleString('zh-CN')} · 中标通过 ${row.passWinbid.toLocaleString('zh-CN')}）· 未通过 ${row.unpassed.toLocaleString('zh-CN')}（通过率 ${row.passRate}）`"
         >
           <span
             class="rank-num"
@@ -121,11 +124,23 @@ const columns = computed(() => {
           </span>
           <span class="rank-meta">
             <template v-if="mode === 'delivery'">
-              <strong class="meta-pass">{{ row.passed.toLocaleString('zh-CN') }}</strong>
+              <div class="meta-col">
+                <strong class="meta-pass">{{ row.passed.toLocaleString('zh-CN') }}</strong>
+                <span
+                  v-if="row.passed > 0"
+                  class="sub-pass"
+                >招 {{ row.passPurchaser.toLocaleString('zh-CN') }} · 中 {{ row.passWinbid.toLocaleString('zh-CN') }}</span>
+              </div>
               <span class="rank-share">{{ row.passRate }}</span>
             </template>
             <template v-else>
-              <strong>{{ row.total.toLocaleString('zh-CN') }}</strong>
+              <div class="meta-col">
+                <strong>{{ row.total.toLocaleString('zh-CN') }}</strong>
+                <span
+                  v-if="row.passed > 0"
+                  class="sub-pass meta-pass"
+                >过 {{ row.passed.toLocaleString('zh-CN') }}（招 {{ row.passPurchaser }} · 中 {{ row.passWinbid }}）</span>
+              </div>
               <span class="rank-share">过 {{ row.passRate }}</span>
             </template>
           </span>
@@ -143,16 +158,16 @@ const columns = computed(() => {
       <el-table-column
         prop="rank"
         label="排名"
-        width="64"
+        width="58"
         align="center"
       />
       <el-table-column
         prop="name"
         label="省份"
-        min-width="140"
+        min-width="110"
       />
       <el-table-column
-        label="招标数据量"
+        label="招标接入量"
         align="right"
       >
         <template #default="{ row }">
@@ -160,7 +175,7 @@ const columns = computed(() => {
         </template>
       </el-table-column>
       <el-table-column
-        label="中标数据量"
+        label="中标接入量"
         align="right"
       >
         <template #default="{ row }">
@@ -176,11 +191,30 @@ const columns = computed(() => {
         </template>
       </el-table-column>
       <el-table-column
-        label="已通过（交付）"
+        label="招标审核通过"
         align="right"
+        min-width="110"
       >
         <template #default="{ row }">
-          <span class="tabular meta-pass">{{ row.passed.toLocaleString('zh-CN') }}</span>
+          <span class="tabular meta-purchaser-pass">{{ row.passPurchaser.toLocaleString('zh-CN') }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column
+        label="中标审核通过"
+        align="right"
+        min-width="110"
+      >
+        <template #default="{ row }">
+          <span class="tabular meta-winbid-pass">{{ row.passWinbid.toLocaleString('zh-CN') }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column
+        label="人工审核通过"
+        align="right"
+        min-width="110"
+      >
+        <template #default="{ row }">
+          <strong class="tabular meta-pass">{{ row.passed.toLocaleString('zh-CN') }}</strong>
         </template>
       </el-table-column>
       <el-table-column
@@ -194,13 +228,13 @@ const columns = computed(() => {
       <el-table-column
         prop="passRate"
         label="通过率"
-        width="86"
+        width="82"
         align="right"
       />
       <el-table-column
         prop="share"
         label="全库占比"
-        width="88"
+        width="84"
         align="right"
       />
     </el-table>
@@ -249,9 +283,13 @@ const columns = computed(() => {
 .seg-p { background: var(--zt-blue-600); border-radius: 999px 0 0 999px; }
 .seg-w { background: var(--chart-normal); border-radius: 0 999px 999px 0; }
 .seg-u { background: var(--zt-ink-300); border-radius: 0 999px 999px 0; }
-.rank-meta { display: inline-flex; align-items: baseline; gap: 8px; font-variant-numeric: tabular-nums; }
+.rank-meta { display: inline-flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+.meta-col { display: flex; flex-direction: column; align-items: flex-end; }
 .rank-meta strong { font-size: 13px; font-weight: 600; color: var(--zt-ink-900); min-width: 58px; text-align: right; }
 .meta-pass { color: var(--zt-success-text); }
+.meta-purchaser-pass { color: var(--zt-blue-600); font-weight: 550; }
+.meta-winbid-pass { color: var(--zt-success-text); font-weight: 550; }
+.sub-pass { font-size: 11px; color: var(--zt-ink-400); line-height: 1.2; text-align: right; }
 .rank-share { font-size: 12px; color: var(--zt-ink-500); min-width: 48px; text-align: right; }
 .tabular { font-variant-numeric: tabular-nums; }
 @media (max-width: 960px) {
