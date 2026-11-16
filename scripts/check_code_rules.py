@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import ast
+from html.parser import HTMLParser
 import io
 import re
 import sys
@@ -211,6 +212,53 @@ def line_count_errors(rel: str, source: str) -> list[str]:
     return []
 
 
+class TemplateRootCounter(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.depth = 0
+        self.root_tags: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if self.depth == 0:
+            self.root_tags.append(tag)
+        self.depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        self.depth = max(0, self.depth - 1)
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if self.depth == 0:
+            self.root_tags.append(tag)
+
+
+ROUTE_IMPORT = re.compile(r"import\(['\"]@/(.+?)\.vue['\"]\)")
+
+
+def route_component_root_errors(root: Path) -> list[str]:
+    routes_file = root / "frontend/src/router/routes.ts"
+    if not routes_file.is_file():
+        return []
+    content = routes_file.read_text(encoding="utf-8")
+    errors: list[str] = []
+    for rel_path in ROUTE_IMPORT.findall(content):
+        comp_file = root / f"frontend/src/{rel_path}.vue"
+        if not comp_file.is_file():
+            continue
+        text = comp_file.read_text(encoding="utf-8")
+        tpl_match = re.search(r"<template>(.*)</template>", text, re.DOTALL)
+        if not tpl_match:
+            continue
+        tpl = re.sub(r"<!--.*?-->", "", tpl_match.group(1), flags=re.DOTALL).strip()
+        parser = TemplateRootCounter()
+        parser.feed(tpl)
+        if len(parser.root_tags) != 1:
+            errors.append(
+                f"frontend/src/{rel_path}.vue: 路由页面组件必须为单个根节点（当前根元素数 {len(parser.root_tags)}），"
+                f'避免 AdminLayout 的 <transition mode="out-in"> 离开过渡挂起导致白屏'
+            )
+    return errors
+
+
 def check(files: list[str], root: Path) -> list[str]:
     errors: list[str] = []
     for rel in files:
@@ -240,6 +288,8 @@ def check(files: list[str], root: Path) -> list[str]:
     if any(UI_SOURCE.match(rel) for rel in files):
         stale = sorted(rel for rel in COLOR_FILES if rel not in files)
         errors += [f"COLOR_FILES 里的 {rel} 已不存在，删掉这条登记" for rel in stale]
+    if any(rel.startswith("frontend/src/") for rel in files):
+        errors += route_component_root_errors(root)
     return errors
 
 

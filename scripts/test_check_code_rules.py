@@ -94,6 +94,28 @@ def test_big_table_indexes_must_be_built_concurrently() -> None:
     assert not rules.index_lock_errors(baseline, plain), "已上线的历史迁移不改"
 
 
+def test_route_component_must_have_single_root() -> None:
+    with tempfile.TemporaryDirectory() as raw:
+        root = Path(raw)
+        routes_dir = root / "frontend/src/router"
+        routes_dir.mkdir(parents=True)
+        (routes_dir / "routes.ts").write_text(
+            "export const routes = [{ component: () => import('@/views/Demo.vue') }]\n",
+            encoding="utf-8",
+        )
+        views_dir = root / "frontend/src/views"
+        views_dir.mkdir(parents=True)
+        # 单根节点正常
+        (views_dir / "Demo.vue").write_text("<template><div><h1>ok</h1></div></template>\n", encoding="utf-8")
+        assert not rules.route_component_root_errors(root)
+
+        # 多根节点报错
+        (views_dir / "Demo.vue").write_text("<template><div>a</div><div>b</div></template>\n", encoding="utf-8")
+        errors = rules.route_component_root_errors(root)
+        assert len(errors) == 1
+        assert "单个根节点" in errors[0]
+
+
 if __name__ == "__main__":
     test_python_suppressions_need_reason()
     test_strings_and_test_type_ignores_are_not_reported()
@@ -102,5 +124,6 @@ if __name__ == "__main__":
     test_long_python_source_is_reported_unless_registered()
     test_ui_color_literals_are_reported_outside_registered_files()
     test_big_table_indexes_must_be_built_concurrently()
+    test_route_component_must_have_single_root()
     print("code_rules_selftest_ok")
 
