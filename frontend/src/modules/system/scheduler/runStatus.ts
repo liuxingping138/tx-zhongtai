@@ -25,3 +25,8 @@ export function duration(row: Pick<ScheduledRun, 'started_at' | 'finished_at'>):
   const seconds = Math.max(0, Math.round((Date.parse(row.finished_at) - Date.parse(row.started_at)) / 1000))
   return seconds < 60 ? `${seconds} 秒` : `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒`
 }
+
+/** 最近一次失败时的原因摘要。 */
+export function lastFailureReason(run?: ScheduledRun | null): string {
+  return run?.status === 'failed' ? run.error_message || '' : ''
+}

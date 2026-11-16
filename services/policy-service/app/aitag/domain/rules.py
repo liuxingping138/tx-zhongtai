@@ -17,6 +17,11 @@ from app.policy.domain.fields import (
 
 INFORMATIZATION = "信息化建设类"
 TYPE_FIELD = "政策类型名称"
+TYPE_FIELDS = ("政策类型", "政策类型名称")
+IS_POLICY_FIELD = "是否政策"
+IS_INFO_FIELD = "是否信息化政策"
+DEFAULT_AI_OUTPUT_FIELDS = ("是否政策", "是否信息化政策", "信息化标签", "判定简因")
+_BLANK_OUTPUTS = {"-", "—", "无", "none", "null"}
 # 解读、市场机会失败时追加到基础标签备注里的前缀；重新打标时据此清掉旧的失败说明，列表也按它筛。
 INTERPRET_FAILED = AI_NOTE_INTERPRET_FAILED
 OPPORTUNITY_FAILED = AI_NOTE_OPPORTUNITY_FAILED
@@ -226,7 +231,41 @@ def parse_policy_types(answer: str, known: list[str]) -> tuple[list[str], list[s
     return matched[:TYPES_MAX], unknown
 
 
-def base_tag_values(row: dict[str, Any], types: list[str], remark: str) -> dict[str, str]:
+def _need_interpret(types: list[str], ai_outputs: dict[str, str] | None) -> str:
+    """是否进入政策解读：「是否政策 = 否」不解读；有「是否信息化政策」按它定；否则看类型含不含信息化建设类。"""
+
+    if ai_outputs:
+        if ai_outputs.get(IS_POLICY_FIELD) == "否":
+            return "否"
+        info_flag = ai_outputs.get(IS_INFO_FIELD, "")
+        if info_flag:
+            return "是" if info_flag.startswith("是") else "否"
+    return "是" if INFORMATIZATION in types else "否"
+
+
+def extract_ai_outputs(result: dict[str, Any]) -> dict[str, str]:
+    """取出模型按模板输出的所有扩展字段（源ID、政策类型本身已落独立列，不重复存）。"""
+
+    if result.get("error"):
+        return {}
+    out: dict[str, str] = {}
+    for item in result.get("items") or []:
+        if not isinstance(item, dict):
+            continue
+        for key, raw in item.items():
+            if not isinstance(key, str) or key in (SOURCE_ID, *TYPE_FIELDS):
+                continue
+            val = _text(raw)
+            if val.lower() in _BLANK_OUTPUTS:
+                val = ""
+            if key not in out or (val and not out[key]):
+                out[key] = val
+    return out
+
+
+def base_tag_values(
+    row: dict[str, Any], types: list[str], remark: str, ai_outputs: dict[str, str] | None = None
+) -> dict[str, str]:
     """基础标签的业务字段。穿透词三列来自别的流程，打标不填。"""
 
     title, from_script = policy_title(row.get("name"))
@@ -247,8 +286,7 @@ def base_tag_values(row: dict[str, Any], types: list[str], remark: str) -> dict[
         "is_penetrate": "",
         "penetrate_words": "",
         "penetrate_score": "",
-        # 只有信息化建设类往下做政策解读。
-        "need_interpret": "是" if INFORMATIZATION in types else "否",
+        "need_interpret": _need_interpret(types, ai_outputs),
         "remark": remark,
     }
 
@@ -258,11 +296,14 @@ def tagging_outcome(result: dict[str, Any], known: list[str]) -> tuple[list[str]
 
     if result.get("error"):
         return [], f"{AI_NOTE_TYPE_FAILED}：{str(result['error'])[:200]}"
-    answers = [str(item.get(TYPE_FIELD) or "") for item in result.get("items") or []]
+    items = [item for item in (result.get("items") or []) if isinstance(item, dict)]
+    answers = [str(item.get("政策类型") or item.get(TYPE_FIELD) or "") for item in items]
     types, unknown = parse_policy_types("、".join(answers), known)
     if unknown:
         return types, f"{AI_NOTE_TYPE_UNKNOWN}：{'、'.join(unknown)}"
     if not types:
+        if any(_text(item.get(IS_POLICY_FIELD)) == "否" for item in items):
+            return [], ""
         return [], AI_NOTE_TYPE_EMPTY
     return types, ""
 

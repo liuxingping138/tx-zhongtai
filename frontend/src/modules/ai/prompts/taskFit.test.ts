@@ -21,6 +21,8 @@ describe('模板放进打标任务前的检查', () => {
     const check = checkTemplate(TYPE, ['政策标题', '政策正文', '上传码表'], ['政策类型名称'], true)
     expect(check).toEqual({ errors: [], warnings: [] })
     expect(fitLevel({ check, skip: false })).toBe('ok')
+    const aliasCheck = checkTemplate(TYPE, ['政策标题', '政策正文', '上传码表'], ['是否政策', '政策类型', '是否信息化政策', '信息化标签', '判定简因'], true)
+    expect(aliasCheck).toEqual({ errors: [], warnings: [] })
   })
 
   it('用了任务不提供的列、缺输出字段是必须改的', () => {

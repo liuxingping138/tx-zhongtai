@@ -16,6 +16,7 @@ export interface FilterOptionSet {
 export interface FilterOptionsPayload {
   options: Record<string, FilterOptionSet>
   city_by_province?: Record<string, string[]>
+  ai_fields?: string[]
 }
 
 export function fetchFilterOptions(path: string): Promise<FilterOptionsPayload> {

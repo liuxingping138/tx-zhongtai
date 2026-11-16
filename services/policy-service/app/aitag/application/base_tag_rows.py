@@ -13,7 +13,13 @@ from app.policy.domain.models import BASE_TAG_FIELDS, BaseTag, content_hash
 
 
 def write(
-    session: Any, existing: BaseTag | None, source_row: dict[str, Any], values: dict[str, str], *, force: bool = False
+    session: Any,
+    existing: BaseTag | None,
+    source_row: dict[str, Any],
+    values: dict[str, str],
+    *,
+    force: bool = False,
+    ai_outputs: dict[str, str] | None = None,
 ) -> bool:
     """有这条政策的 AI 行就更新，返回是否写入。
 
@@ -30,6 +36,8 @@ def write(
         changed = rules.redoes_downstream(existing, values)
         for key, value in values.items():
             setattr(existing, key, value)
+        if ai_outputs is not None:
+            existing.ai_outputs = dict(ai_outputs)
         existing.refresh_hash()
         existing.version += 1
         existing.tagged_at = existing.updated_at = now
@@ -41,6 +49,7 @@ def write(
         BaseTag(
             content_hash=content_hash(values, BASE_TAG_FIELDS),
             source_content_id=str(source_row["content_id"]),
+            ai_outputs=dict(ai_outputs or {}),
             tagged_at=now,
             version=1,
             created_at=now,

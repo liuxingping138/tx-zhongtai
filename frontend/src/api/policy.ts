@@ -48,11 +48,13 @@ export interface BaseTagItem {
   penetrate_score: string
   need_interpret: string
   remark: string
+  ai_outputs?: Record<string, string>
   version: number
   created_at: string
   created_by_name: string
   updated_at: string
   updated_by_name: string
+  [key: string]: unknown
 }
 
 export interface InterpretationItem {
@@ -157,6 +159,8 @@ export function listBaseTags(params: {
   policy_name?: FilterParam
   province_name?: FilterParam
   policy_types?: FilterParam
+  is_policy?: FilterParam
+  is_info_policy?: FilterParam
   is_penetrate?: FilterParam
   need_interpret?: FilterParam
   ai_status?: FilterParam

@@ -219,3 +219,43 @@ def test_opportunities_match_whether_the_template_says_industry_or_first_level_i
         {"一级行业": "党政行业", "一级场景": "数字政府", "市场机会": "机会A"},
     ]
     assert match_opportunities(items, rows) == {0: "机会A", 1: "机会B"}
+
+
+def test_dynamic_template_outputs_and_informatization_flag() -> None:
+    """支持「政策类型」别名及「是否政策 / 是否信息化政策 / 信息化标签 / 判定简因」等动态模板输出字段。"""
+
+    res = {
+        "error": "",
+        "items": [
+            {
+                "是否政策": "是",
+                "政策类型": "科技创新类",
+                "是否信息化政策": "是",
+                "信息化标签": "数字政府、政务云",
+                "判定简因": "涉及政务云平台建设",
+            }
+        ],
+    }
+    types, remark = rules.tagging_outcome(res, KNOWN)
+    assert types == ["科技创新类"] and remark == ""
+    outputs = rules.extract_ai_outputs(res)
+    assert outputs == {
+        "是否政策": "是",
+        "是否信息化政策": "是",
+        "信息化标签": "数字政府、政务云",
+        "判定简因": "涉及政务云平台建设",
+    }
+    values = rules.base_tag_values({"name": "测试政策"}, types, remark, outputs)
+    assert values["need_interpret"] == "是"
+
+    # 非政策文件（是否政策=否，政策类型=-）不算类型判断失败，且不进解读
+    not_policy = {
+        "error": "",
+        "items": [{"是否政策": "否", "政策类型": "-", "是否信息化政策": "否", "信息化标签": "-", "判定简因": "新闻稿"}],
+    }
+    types2, remark2 = rules.tagging_outcome(not_policy, KNOWN)
+    assert types2 == [] and remark2 == ""
+    outputs2 = rules.extract_ai_outputs(not_policy)
+    assert outputs2["是否政策"] == "否" and outputs2["信息化标签"] == ""
+    values2 = rules.base_tag_values({"name": "某新闻稿"}, types2, remark2, outputs2)
+    assert values2["need_interpret"] == "否"

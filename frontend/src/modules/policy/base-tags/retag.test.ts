@@ -23,3 +23,18 @@ describe('retag', () => {
     expect((await submitRetag(['a'], 'interpret')).message).toBe('没有可以重新打标的政策')
   })
 })
+
+import { TABLE_COLUMNS, mergeAiColumns, packBaseTagPatch } from './fields'
+
+describe('packBaseTagPatch', () => {
+  it('splits core fields and dynamic AI output fields', () => {
+    const patch = packBaseTagPatch({ policy_name: '政策A', 是否政策: '是', 是否信息化政策: '是' }, 3)
+    expect(patch).toEqual({
+      policy_name: '政策A',
+      ai_outputs: { 是否政策: '是', 是否信息化政策: '是' },
+      version: 3,
+    })
+    const merged = mergeAiColumns(TABLE_COLUMNS, ['是否政策', '新扩展字段'])
+    expect(merged.some(c => c.prop === '新扩展字段')).toBe(true)
+  })
+})

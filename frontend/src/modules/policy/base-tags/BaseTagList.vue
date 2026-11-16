@@ -23,7 +23,7 @@ import { useListLoader } from '@/composables/useListLoader'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import { useTableSelection } from '@/composables/useTableSelection'
 import { useAuthStore } from '@/stores/auth'
-import { AI_STATUS_CHOICES, EDITOR_GROUPS, SUMMARY_KEYS, TABLE_COLUMNS } from './fields'
+import { AI_STATUS_CHOICES, EDITOR_GROUPS, SUMMARY_KEYS, TABLE_COLUMNS, mergeAiColumns } from './fields'
 import RetagDialog from './RetagDialog.vue'
 
 const RESOURCE = 'policy.base_tags'
@@ -38,6 +38,8 @@ const query = reactive({
   policy_name: [] as string[],
   province_name: [] as string[],
   policy_types: [] as string[],
+  is_policy: [] as string[],
+  is_info_policy: [] as string[],
   is_penetrate: [] as string[],
   need_interpret: [] as string[],
   ai_status: [] as string[],
@@ -52,7 +54,8 @@ const { items, total, loading, loadError, resultFiltered, load } = useListLoader
   fetch: listBaseTags,
   errorText: '加载政策基础标签失败',
 })
-const { columns, defaults, selected } = useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)
+const { columns: baseColumns, defaults, selected } = useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)
+const columns = computed(() => mergeAiColumns(baseColumns, filters.aiFields.value))
 
 async function refresh() {
   await Promise.all([load(), filters.load()])
@@ -161,7 +164,21 @@ onMounted(() => {
               v-bind="filters.bind('policy_types')"
             />
           </el-form-item>
+          <el-form-item label="是否信息化政策">
+            <FilterSelect
+              v-model="query.is_info_policy"
+              :options="['是', '否']"
+              size="short"
+            />
+          </el-form-item>
           <template #advanced>
+            <el-form-item label="是否政策">
+              <FilterSelect
+                v-model="query.is_policy"
+                :options="['是', '否', '疑似']"
+                size="short"
+              />
+            </el-form-item>
             <el-form-item label="是否穿透">
               <FilterSelect
                 v-model="query.is_penetrate"

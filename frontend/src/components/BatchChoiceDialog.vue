@@ -10,6 +10,8 @@ export interface BatchChoice {
   label: string
   /** 选中后在下面说明这一项会做什么 */
   hint: string
+  disabled?: boolean
+  disabledReason?: string
 }
 
 export interface BatchResult {
@@ -31,9 +33,18 @@ const emit = defineEmits<{ done: [] }>()
 const open = defineModel<boolean>({ required: true })
 const value = ref('')
 const saving = ref(false)
-const hint = computed(() => props.choices.find(item => item.value === value.value)?.hint ?? '')
+const hint = computed(() => {
+  const found = props.choices.find(item => item.value === value.value)
+  if (!found) return ''
+  return found.disabledReason ? `${found.hint}（${found.disabledReason}）` : found.hint
+})
 
-watch(open, visible => { if (visible) value.value = props.choices[0]?.value ?? '' })
+watch(open, visible => {
+  if (visible) {
+    const firstEnabled = props.choices.find(item => !item.disabled) ?? props.choices[0]
+    value.value = firstEnabled?.value ?? ''
+  }
+})
 
 async function confirm(): Promise<void> {
   saving.value = true
@@ -73,8 +84,13 @@ async function confirm(): Promise<void> {
         v-for="item in choices"
         :key="item.value"
         :value="item.value"
+        :disabled="item.disabled"
+        :title="item.disabledReason"
       >
-        {{ item.label }}
+        {{ item.label }}<span
+          v-if="item.disabledReason"
+          class="batch-choice__disabled-note"
+        >（{{ item.disabledReason }}）</span>
       </el-radio>
     </el-radio-group>
     <p class="batch-choice__hint">
@@ -99,5 +115,6 @@ async function confirm(): Promise<void> {
 <style scoped>
 .batch-choice__count { margin: 0 0 12px; color: var(--zt-ink-900); }
 .batch-choice__options { display: flex; flex-wrap: wrap; gap: 4px 0; }
+.batch-choice__disabled-note { font-size: 12px; color: var(--zt-ink-500); }
 .batch-choice__hint { min-height: 40px; margin: 12px 0 0; padding: 8px 12px; border-radius: 4px; background: var(--zt-soft); color: var(--zt-ink-700); font-size: 13px; line-height: 1.6; }
 </style>

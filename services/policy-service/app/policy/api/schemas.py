@@ -137,6 +137,7 @@ class BaseTagWrite(BaseModel):
     penetrate_score: str = ""
     need_interpret: str = ""
     remark: str = ""
+    ai_outputs: dict[str, str] | None = None
 
 
 class InterpretationWrite(BaseModel):

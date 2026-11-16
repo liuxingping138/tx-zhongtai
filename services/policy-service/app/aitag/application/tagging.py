@@ -95,8 +95,9 @@ async def _save_types(
         existing = await repo.base_tags_by_source(session, [str(row["content_id"]) for row in done_rows])
         for row, result in zip(done_rows, done_results, strict=True):
             types, remark = rules.tagging_outcome(result, known)
+            ai_outputs = rules.extract_ai_outputs(result)
             failed += 1 if remark else 0
-            values = rules.base_tag_values(row, types, remark)
+            values = rules.base_tag_values(row, types, remark, ai_outputs)
             current = existing.get(str(row["content_id"]))
             if current is not None and retag and result.get("error"):
                 # 网络、限流这类失败不是答案：上次判好的类型和解读留着，只记这次失败、出队。
@@ -119,7 +120,7 @@ async def _save_types(
                 continue
             seen.add(digest)
             was_interpreted = current is not None and current.need_interpret == "是"
-            if base_tag_rows.write(session, current, row, values, force=retag):
+            if base_tag_rows.write(session, current, row, values, force=retag, ai_outputs=ai_outputs):
                 tagged += 1
                 if was_interpreted and values["need_interpret"] != "是":
                     no_longer_interpreted.append(str(row["content_id"]))

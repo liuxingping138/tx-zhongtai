@@ -9,7 +9,7 @@ from datetime import datetime
 
 from platform_common.orm_base import Base
 from sqlalchemy import ColumnElement, DateTime, Index, Integer, String, Text, UniqueConstraint, and_, literal, text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.policy.domain.fields import BASE_TAG_COLUMNS
@@ -143,6 +143,9 @@ class BaseTag(Base):
     penetrate_score: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="穿透词评分")
     need_interpret: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="是否解读")
     remark: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="备注")
+    ai_outputs: Mapped[dict[str, str]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb"), comment="AI模板动态输出字段"
+    )
     # AI 打标写入的行带源政策 ID，重打同一条政策时按它更新，不按内容哈希新增一行。手工导入的行为空。
     source_content_id: Mapped[str | None] = mapped_column(String(200), nullable=True, comment="源政策ID")
     tagged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, comment="AI打标时间")

@@ -26,6 +26,7 @@ export interface FilterSelectBinding {
 export function useFilterOptions(path: string) {
   const sets = reactive<Record<string, FilterOptionSet>>({})
   const cityByProvince = ref<Record<string, string[]>>({})
+  const aiFields = ref<string[]>([])
   const loaded = ref(false)
 
   async function load(): Promise<void> {
@@ -33,6 +34,7 @@ export function useFilterOptions(path: string) {
       const payload: FilterOptionsPayload = await fetchFilterOptions(path)
       Object.assign(sets, payload.options ?? {})
       cityByProvince.value = payload.city_by_province ?? {}
+      aiFields.value = payload.ai_fields ?? []
       loaded.value = true
     } catch {
       /* 选项取不到不影响列表本身，筛选框退化为可自由输入。 */
@@ -66,5 +68,5 @@ export function useFilterOptions(path: string) {
     return { options: [...new Set(scoped.flatMap(list => list ?? []))] }
   }
 
-  return { load, bind, bindCity, get, cityByProvince, loaded }
+  return { load, bind, bindCity, get, cityByProvince, aiFields, loaded }
 }

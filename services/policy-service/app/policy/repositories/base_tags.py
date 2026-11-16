@@ -76,16 +76,33 @@ AI_STATUS: dict[str, Callable[[], ColumnElement[bool]]] = {
     "待解读": awaiting_interpretation,
     "待补市场机会": awaiting_opportunity,
 }
-EXACT_FILTERS = ("ai_status",)
+EXACT_FILTERS = ("ai_status", "is_policy", "is_info_policy")
+
+
+def _str_list(value: object) -> list[str]:
+    if isinstance(value, (int, str)) or not isinstance(value, Collection):
+        return []
+    return [str(item).strip() for item in value if isinstance(item, str) and str(item).strip()]
 
 
 def _conditions(filters: Filters) -> list[ColumnElement[bool]]:
     conds: list[ColumnElement[bool]] = []
     for key, value in filters.items():
         if key == "ai_status":
-            statuses = [] if isinstance(value, int) else list(value or [])
+            statuses = _str_list(value)
             if statuses:
                 conds.append(or_(*(AI_STATUS[item]() for item in statuses)))  # 不认识的状态 KeyError，API 转 422
+            continue
+        if key == "is_policy":
+            if values := _str_list(value):
+                conds.append(BaseTag.ai_outputs["是否政策"].astext.in_(values))
+            continue
+        if key == "is_info_policy":
+            if values := _str_list(value):
+                expr = func.coalesce(
+                    func.nullif(BaseTag.ai_outputs["是否信息化政策"].astext, ""), BaseTag.need_interpret
+                )
+                conds.append(expr.in_(values))
             continue
         column = FILTER_COLUMNS[key]  # 未知字段直接报错，避免筛选被静默忽略
         cond = ilike_any(column, value)

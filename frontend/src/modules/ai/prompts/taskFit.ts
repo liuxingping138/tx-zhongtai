@@ -5,6 +5,14 @@ import { CODE_TABLE_FIELD } from '../shared/aiText'
 const BODY = '政策正文'
 const SCENES = '行业场景'
 const SCENARIO_PATHS = '同行业已有场景'
+const FIELD_ALIASES: Record<string, string[]> = {
+  政策类型名称: ['政策类型名称', '政策类型'],
+}
+
+function hasField(fields: string[], required: string): boolean {
+  const aliases = FIELD_ALIASES[required] ?? [required]
+  return aliases.some(alias => fields.includes(alias))
+}
 
 const quoted = (names: string[]) => names.map(name => `@【${name}】`).join('、')
 
@@ -12,7 +20,7 @@ export function checkTemplate(task: ContractTask, variables: string[], fields: s
   const errors: string[] = []
   const unknown = [...new Set(variables)].filter(name => !task.columns.includes(name) && name !== CODE_TABLE_FIELD)
   if (unknown.length) errors.push(`用了这个任务不提供的列：${quoted(unknown)}。能用的列：${quoted(task.columns)}`)
-  const missing = task.required_fields.filter(name => !fields.includes(name))
+  const missing = task.required_fields.filter(name => !hasField(fields, name))
   if (missing.length) errors.push(`输出字段缺少：${missing.join('、')}，结果写不回表`)
   // 顺序、说法和政策服务 aitag.domain.contract 一致。
   const warnings = [
@@ -83,7 +91,7 @@ export function fitResults(tasks: ContractTask[], variables: string[], fields: s
     code: task.code,
     name: task.name,
     check: checkTemplate(task, variables, fields, systemCode),
-    skip: !task.required_fields.some(name => fields.includes(name)),
+    skip: !task.required_fields.some(name => hasField(fields, name)),
     required: task.required_fields,
   }))
 }
@@ -104,6 +112,6 @@ export function fitSummary(results: Pick<TaskFitResult, 'name' | 'check' | 'skip
 
 /** 按输出字段猜模板是给哪个任务用的，取测试数据时默认选它；猜不出就是类型判断。 */
 export function guessTask(tasks: ContractTask[], fields: string[]): ContractTask['code'] {
-  const fit = [...tasks].reverse().find(task => task.required_fields.every(name => fields.includes(name)))
+  const fit = [...tasks].reverse().find(task => task.required_fields.every(name => hasField(fields, name)))
   return fit?.code ?? 'type'
 }

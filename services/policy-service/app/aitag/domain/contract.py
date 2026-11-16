@@ -10,7 +10,7 @@ from collections.abc import Iterable
 
 from app.aitag.domain import describing
 from app.aitag.domain.interpret_rules import ANSWER_FIELDS, SCENES_COLUMN
-from app.aitag.domain.rules import PROMPT_COLUMNS, SOURCE_ID, TYPE_FIELD
+from app.aitag.domain.rules import PROMPT_COLUMNS, SOURCE_ID, TYPE_FIELD, TYPE_FIELDS
 from app.policy.domain.candidates import AI_COLUMNS, AI_PATHS, AI_REASON_FIELD, AI_SIMILAR_FIELD, AI_VERDICT_FIELD
 
 # 模板里引用码表全文的变量，三个任务都能用。
@@ -31,6 +31,10 @@ REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "opportunity": ("市场机会",),
     "scenario": (AI_VERDICT_FIELD, AI_SIMILAR_FIELD),
     "enrich": describing.REQUIRED,
+}
+# 同一业务字段的不同命名写法都认（如「政策类型」与「政策类型名称」）。
+FIELD_ALIASES: dict[str, tuple[str, ...]] = {
+    TYPE_FIELD: TYPE_FIELDS,
 }
 
 
@@ -70,7 +74,11 @@ def check_template(
     unknown = [name for name in dict.fromkeys(variables) if name not in columns and name != CODE_VARIABLE]
     if unknown:
         errors.append(f"用了这个任务不提供的列：{_quoted(unknown)}。能用的列：{_quoted(columns)}")
-    missing = [name for name in REQUIRED_FIELDS[task] if name not in output_fields]
+    missing = [
+        name
+        for name in REQUIRED_FIELDS[task]
+        if not any(alias in output_fields for alias in FIELD_ALIASES.get(name, (name,)))
+    ]
     if missing:
         errors.append(f"输出字段缺少：{'、'.join(missing)}，结果写不回表")
     warnings: list[str] = []

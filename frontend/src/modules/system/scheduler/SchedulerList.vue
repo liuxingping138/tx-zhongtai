@@ -18,7 +18,7 @@ import { TASK_INTRO, formatYuan, taskOfJob } from './aiTagging'
 import { CRAWLER_CONFIG_JOB, configProgress } from './crawlerConfig'
 import { SESSION_CLEANUP_JOB, cleanupProgress } from './sessionCleanup'
 import { AUDIT_CLEANUP_JOB, auditCleanupProgress } from './auditCleanup'
-import { STATUS_TEXT, statusType, type RunStatus } from './runStatus'
+import { STATUS_TEXT, lastFailureReason, statusType, type RunStatus } from './runStatus'
 import { useSchedulerHistory } from './useSchedulerHistory'
 
 const auth = useAuthStore()
@@ -110,11 +110,11 @@ function planNote(job: ScheduledJob): string {
   if (!job.enabled) return `已停用，原定每天 ${job.daily_time}`
   return job.next_run_at ? `下次 ${short(job.next_run_at)}` : `每天 ${job.daily_time}`
 }
-/** 最近执行旁边一行：执行中的打标任务写模型答到第几条，结束了写结束时间。 */
+/** 最近执行旁边一行：执行中的打标任务写模型答到第几条，失败写原因，结束了写结束时间。 */
 function runNote(job: ScheduledJob): string {
   const current = job.active_run ? aiTask(job)?.current : null
   if (current) return current.total ? `${current.done ?? 0} / ${current.total} 条` : current.stage_name
-  return job.last_run?.finished_at ? short(job.last_run.finished_at) : ''
+  return lastFailureReason(job.last_run) || (job.last_run?.finished_at ? short(job.last_run.finished_at) : '')
 }
 function cell(job: ScheduledJob, prop: string) {
   if (prop === 'name') return job.name

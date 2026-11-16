@@ -159,7 +159,7 @@ async def update_task(session: AsyncSession, actor: Actor, code: str, values: di
     # 采集省份也只有类型判断用：其余任务按待办做，待办来自类型判断写进基础标签的政策。
     provinces = _provinces(values.get("provinces")) if code == "type" else []
     prompt_id = str(values.get("prompt_id") or "").strip()
-    if prompt_id and prompt_id != task.prompt_id:
+    if prompt_id:
         await _check_prompt(code, prompt_id)
     before = _task_out(task)
     task.prompt_id = prompt_id

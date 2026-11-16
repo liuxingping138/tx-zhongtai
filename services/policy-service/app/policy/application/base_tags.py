@@ -7,7 +7,7 @@ from typing import Any
 
 from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
-from platform_common.columns import overlong_reasons, string_lengths
+from platform_common.columns import ColumnSpec, overlong_reasons, string_lengths
 from platform_common.errors import ApiError, DependencyUnavailableError, ErrorCode, NotFoundError, VersionConflictError
 from platform_common.excel import build_workbook_async, parse_sheet_async
 from platform_common.filters import Filters
@@ -24,18 +24,29 @@ from app.policy.application.importing import (
     rejected_result,
 )
 from app.policy.application.policy_content import attach_policy_contents, policy_content
-from app.policy.domain.fields import BASE_TAG_COLUMNS, BASE_TAG_EXPORT_COLUMNS, ai_status
+from app.policy.domain.fields import BASE_TAG_COLUMNS, POLICY_CONTENT_COLUMN, ai_status
 from app.policy.domain.models import BASE_TAG_FIELDS, BaseTag, content_hash
 from app.policy.repositories import base_tags as repo
 from app.policy.repositories import options as options_repo
 
 BASE_TAG_LENGTHS = string_lengths(BaseTag)
+DEFAULT_AI_OUTPUT_FIELDS: tuple[str, ...] = ("是否政策", "是否信息化政策", "信息化标签", "判定简因")
+_BUILTIN_TYPE_NAMES = {"源ID", "政策类型", "政策类型名称"}
 
 logger = logging.getLogger("policy.base_tags")
 
 
 def _to_out(row: BaseTag) -> dict[str, Any]:
     data: dict[str, Any] = row.business_values()
+    extra = dict(getattr(row, "ai_outputs", None) or {})
+    for field in DEFAULT_AI_OUTPUT_FIELDS:
+        data.setdefault(field, "")
+    for key, val in extra.items():
+        if key not in BASE_TAG_FIELDS:
+            data[key] = str(val or "")
+    if not data.get("是否信息化政策") and data.get("need_interpret"):
+        data["是否信息化政策"] = str(data["need_interpret"])
+    data["ai_outputs"] = extra
     data["id"] = str(row.id)
     data["version"] = row.version
     data["created_at"] = format_beijing(row.created_at)
@@ -74,6 +85,19 @@ async def list_base_tags(
     return {"items": [_to_out(item) for item in items], "total": total, "page": page, "page_size": page_size}
 
 
+async def _active_ai_fields() -> list[str]:
+    fields = list(DEFAULT_AI_OUTPUT_FIELDS)
+    try:
+        items = await internal_clients.ai("GET", "/internal/v1/online-templates", params={"category": "policy"})
+        for item in items or []:
+            item_fields = [str(f).strip() for f in (item.get("output_fields") or []) if str(f).strip()]
+            if set(item_fields) & {"政策类型", "政策类型名称"}:
+                fields.extend(name for name in item_fields if name not in _BUILTIN_TYPE_NAMES and name not in fields)
+    except (ApiError, DependencyUnavailableError):
+        logger.warning("AI 模板服务暂时取不到，使用默认模板输出字段")
+    return fields
+
+
 async def list_base_tag_options(session: AsyncSession) -> dict[str, Any]:
     data = await options_repo.base_tag_options(session)
     # 政策类型的候选值是政策类型码表，不在几百万条政策上去重。码表服务暂时取不到时下拉为空，仍可输入后回车。
@@ -83,6 +107,9 @@ async def list_base_tag_options(session: AsyncSession) -> dict[str, Any]:
         logger.warning("政策类型码表暂时取不到，筛选项先不给政策类型")
         names = []
     data["options"]["policy_types"] = {"items": names, "truncated": False}
+    data["options"]["is_policy"] = {"items": ["是", "否", "疑似"], "truncated": False}
+    data["options"]["is_info_policy"] = {"items": ["是", "否"], "truncated": False}
+    data["ai_fields"] = await _active_ai_fields()
     return data
 
 
@@ -111,6 +138,25 @@ def _require_lengths(values: dict[str, str]) -> None:
         raise ApiError("、".join(reasons), code=ErrorCode.VALIDATION_ERROR, http_status=422)
 
 
+def _apply_ai_outputs(row: BaseTag, raw_outputs: Any) -> dict[str, Any]:
+    if not isinstance(raw_outputs, dict):
+        return {}
+    current_extra = dict(getattr(row, "ai_outputs", None) or {})
+    extra_changes: dict[str, Any] = {}
+    for raw_k, raw_v in raw_outputs.items():
+        key = str(raw_k).strip()
+        if not key or key in BASE_TAG_FIELDS:
+            continue
+        new_val = str(raw_v or "").strip()
+        old_val = str(current_extra.get(key) or "")
+        if old_val != new_val:
+            extra_changes[key] = {"from": old_val[:80], "to": new_val[:80]}
+            current_extra[key] = new_val
+    if extra_changes:
+        row.ai_outputs = current_extra
+    return extra_changes
+
+
 async def update_base_tag(
     session: AsyncSession, actor: Actor, item_id: uuid.UUID, data: dict[str, Any]
 ) -> dict[str, Any]:
@@ -135,9 +181,11 @@ async def update_base_tag(
         if old != new:
             changes[field] = {"from": old[:80], "to": new[:80]}
             setattr(row, field, new)
-    if not changes:
+    all_changes = {**changes, **_apply_ai_outputs(row, data.get("ai_outputs"))}
+    if not all_changes:
         return _to_out(row)
-    row.refresh_hash()
+    if changes:
+        row.refresh_hash()
     row.version += 1
     row.updated_at = utcnow()
     row.updated_by_id = actor.id
@@ -147,7 +195,7 @@ async def update_base_tag(
         event_type="policy.base_tag.updated",
         actor=actor,
         target_id=str(row.id),
-        changes=changes,
+        changes=all_changes,
     )
     return _to_out(row)
 
@@ -233,10 +281,16 @@ async def export_base_tags(session: AsyncSession, actor: Actor, filters: Filters
     items = await repo.list_filtered(session, filters)
     rows = [_to_out(item) for item in items]
     await attach_policy_contents(session, items, rows)
+    ai_fields = list(DEFAULT_AI_OUTPUT_FIELDS)
+    for row in rows:
+        for key in row.get("ai_outputs") or ():
+            if key not in BASE_TAG_FIELDS and key not in ai_fields:
+                ai_fields.append(str(key))
+    export_cols = (*BASE_TAG_COLUMNS, *(ColumnSpec(f, f) for f in ai_fields), POLICY_CONTENT_COLUMN)
     await enqueue_event(
         session,
         event_type="policy.base_tag.exported",
         actor=actor,
         extra={"count": len(rows)},
     )
-    return await build_workbook_async(BASE_TAG_EXPORT_COLUMNS, rows, sheet_name="政策基础标签表")
+    return await build_workbook_async(export_cols, rows, sheet_name="政策基础标签表")
