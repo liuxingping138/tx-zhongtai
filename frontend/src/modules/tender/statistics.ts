@@ -192,12 +192,21 @@ export function buildProvinceRows(
   })
 }
 
-export function structureDonutOption(purchaser: number, winbid: number, palette: ChartPalette): ChartOption {
+export function structureDonutOption(
+  purchaser: number,
+  winbid: number,
+  purchaserPassed: number,
+  winbidPassed: number,
+  palette: ChartPalette,
+): ChartOption {
+  const pUnpass = Math.max(0, purchaser - purchaserPassed)
+  const wUnpass = Math.max(0, winbid - winbidPassed)
+
   return {
     tooltip: {
       trigger: 'item',
       ...tooltipStyle(palette),
-      formatter: '{b}：{c}（{d}%）',
+      formatter: '{b}：{c} 条（{d}%）',
     },
     series: [
       {
@@ -209,8 +218,10 @@ export function structureDonutOption(purchaser: number, winbid: number, palette:
         itemStyle: { borderRadius: 6, borderColor: palette.surface, borderWidth: 2 },
         label: { show: false },
         data: [
-          { name: '招标原始库', value: purchaser, itemStyle: { color: palette.primary } },
-          { name: '中标原始库', value: winbid, itemStyle: { color: palette.success } },
+          { name: '招标 - 审核通过', value: purchaserPassed, itemStyle: { color: palette.purchaserPass } },
+          { name: '招标 - 待审未通过', value: pUnpass, itemStyle: { color: palette.purchaserUnpass } },
+          { name: '中标 - 审核通过', value: winbidPassed, itemStyle: { color: palette.winbidPass } },
+          { name: '中标 - 待审未通过', value: wUnpass, itemStyle: { color: palette.winbidUnpass } },
         ],
       },
     ],

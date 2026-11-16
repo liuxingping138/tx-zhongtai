@@ -29,7 +29,14 @@ export interface TenderStatistics {
 }
 export interface CountJob<T> { state: 'pending' | 'ready' | 'error'; data: T | null; message: string }
 export interface TenderPage { items: TenderRecord[]; has_more: boolean; page: number; page_size: number }
-export interface TenderTotals { total: number; purchaser: number; winbid: number; as_of: string }
+export interface TenderTotals {
+  total: number
+  purchaser: number
+  purchaser_passed?: number
+  winbid: number
+  winbid_passed?: number
+  as_of: string
+}
 
 export function listTenderRecords(kind: TenderKind, params: Record<string, unknown>): Promise<TenderPage> {
   const clean = Object.fromEntries(Object.entries(params).filter(([, value]) => value !== '' && value !== null))

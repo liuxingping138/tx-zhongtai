@@ -10,6 +10,10 @@ def totals(reader: Reader, kind: Kind) -> int:
     return int(reader.select(f"SELECT COUNT(*) AS total FROM {TABLES[kind, '0']}")[0]["total"])  # noqa: S608  表名和列名来自固定白名单，筛选值全部绑定参数
 
 
+def totals_passed(reader: Reader, kind: Kind) -> int:
+    return int(reader.select(f"SELECT COUNT(*) AS total FROM {TABLES[kind, '1']}")[0]["total"])  # noqa: S608  表名和列名来自固定白名单，筛选值全部绑定参数
+
+
 def daily(reader: Reader, kind: Kind, day: date) -> list[Row]:
     return reader.select(
         "SELECT purchaser_provname AS province, COUNT(*) AS total, "  # noqa: S608  表名和列名来自固定白名单，筛选值全部绑定参数

@@ -36,8 +36,9 @@ describe('招中标页面规则', () => {
     expect(shortProvinceName('新疆维吾尔自治区')).toBe('新疆')
     expect(shortProvinceName('广东省')).toBe('广东')
     expect(recentRange(new Date('2026-11-11T18:00:00Z'), 14)).toEqual(['2026-10-30', '2026-11-12'])
-    const donut = structureDonutOption(200, 100, chartPalette())
+    const donut = structureDonutOption(200, 100, 20, 10, chartPalette())
     expect(donut.series).toHaveLength(1)
+    expect((donut.series as Array<{ data: unknown[] }>)[0]?.data).toHaveLength(4)
   })
   it('接入趋势支持折线面积模式、空数据及 Y 轴万级缩写', () => {
     const palette = chartPalette()

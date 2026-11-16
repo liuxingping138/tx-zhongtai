@@ -33,7 +33,15 @@ let sequence = 0
 
 const intakeChart = computed(() => statisticsChart(report.value?.daily ?? [], palette.value, 'intake', intakeMode.value))
 const workChart = computed(() => statisticsChart(report.value?.daily ?? [], palette.value, 'work', 'bar'))
-const donutOption = computed(() => structureDonutOption(totals.value?.purchaser ?? 0, totals.value?.winbid ?? 0, palette.value))
+const donutOption = computed(() =>
+  structureDonutOption(
+    totals.value?.purchaser ?? 0,
+    totals.value?.winbid ?? 0,
+    totals.value?.purchaser_passed ?? 0,
+    totals.value?.winbid_passed ?? 0,
+    palette.value,
+  ),
+)
 
 const workload = computed(() => report.value?.daily.reduce((sum, row) => sum + row.tagged, 0) ?? 0)
 const rangeTotals = computed(() => {
@@ -277,13 +285,37 @@ onMounted(() => { void load(); void loadTotals() })
             </div>
           </div>
           <div class="donut-legend">
-            <div>
-              <span class="dot-label"><span class="dot dot--primary" />招标公告原始库</span>
-              <span class="tabular"><strong>{{ count(totals?.purchaser) }}</strong> ({{ sharePct(totals?.purchaser, totals?.total) }})</span>
+            <div class="legend-card">
+              <div class="lc-head">
+                <span class="dot-label"><span class="dot dot--primary" />招标公告原始库</span>
+                <span class="tabular"><strong>{{ count(totals?.purchaser) }}</strong> ({{ sharePct(totals?.purchaser, totals?.total) }})</span>
+              </div>
+              <div class="lc-split">
+                <span class="pill-item pill-p-pass">
+                  <span class="pill-label"><span class="pill-dot pill-dot--p" />审核通过</span>
+                  <span class="tabular"><strong>{{ count(totals?.purchaser_passed) }}</strong> ({{ sharePct(totals?.purchaser_passed, totals?.purchaser) }})</span>
+                </span>
+                <span class="pill-item pill-p-unpass">
+                  <span class="pill-label"><span class="pill-dot pill-dot--p-unpass" />待审未通过</span>
+                  <span class="tabular"><strong>{{ count(totals ? totals.purchaser - (totals.purchaser_passed ?? 0) : undefined) }}</strong> ({{ sharePct(totals ? totals.purchaser - (totals.purchaser_passed ?? 0) : 0, totals?.purchaser) }})</span>
+                </span>
+              </div>
             </div>
-            <div>
-              <span class="dot-label"><span class="dot dot--success" />中标公告原始库</span>
-              <span class="tabular"><strong>{{ count(totals?.winbid) }}</strong> ({{ sharePct(totals?.winbid, totals?.total) }})</span>
+            <div class="legend-card">
+              <div class="lc-head">
+                <span class="dot-label"><span class="dot dot--success" />中标公告原始库</span>
+                <span class="tabular"><strong>{{ count(totals?.winbid) }}</strong> ({{ sharePct(totals?.winbid, totals?.total) }})</span>
+              </div>
+              <div class="lc-split">
+                <span class="pill-item pill-w-pass">
+                  <span class="pill-label"><span class="pill-dot pill-dot--w" />审核通过</span>
+                  <span class="tabular"><strong>{{ count(totals?.winbid_passed) }}</strong> ({{ sharePct(totals?.winbid_passed, totals?.winbid) }})</span>
+                </span>
+                <span class="pill-item pill-w-unpass">
+                  <span class="pill-label"><span class="pill-dot pill-dot--w-unpass" />待审未通过</span>
+                  <span class="tabular"><strong>{{ count(totals ? totals.winbid - (totals.winbid_passed ?? 0) : undefined) }}</strong> ({{ sharePct(totals ? totals.winbid - (totals.winbid_passed ?? 0) : 0, totals?.winbid) }})</span>
+                </span>
+              </div>
             </div>
           </div>
         </section>

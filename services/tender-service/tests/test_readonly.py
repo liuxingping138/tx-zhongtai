@@ -223,11 +223,16 @@ def test_workflow_counts_equal_without_double_counting_source(monkeypatch):
 
 
 def test_totals_only_count_raw_tables_and_cache(monkeypatch):
-    reader = Reader([[{"total": 10}], [{"total": 20}]])
+    reader = Reader([[{"total": 10}], [{"total": 2}], [{"total": 20}], [{"total": 3}]])
     bind_reader(monkeypatch, counts, reader)
     result = counts._totals()
     assert result["total"] == 30
-    assert all("approval" not in sql and "project_status" not in sql for sql, _ in reader.calls)
+    assert result["purchaser"] == 10
+    assert result["purchaser_passed"] == 2
+    assert result["winbid"] == 20
+    assert result["winbid_passed"] == 3
+    assert len(reader.calls) == 4
+    assert all(sql.startswith("SELECT COUNT(*) AS total FROM bid_") for sql, _ in reader.calls)
 
 
 def test_filter_count_uses_same_where_as_list():

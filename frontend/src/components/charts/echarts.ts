@@ -42,6 +42,10 @@ export interface ChartPalette {
   weekendBand: string
   weekendBar: string
   tooltipShadow: string
+  purchaserPass: string
+  purchaserUnpass: string
+  winbidPass: string
+  winbidUnpass: string
 }
 
 const PALETTE_VARS: Record<keyof ChartPalette, [string, string]> = {
@@ -61,6 +65,10 @@ const PALETTE_VARS: Record<keyof ChartPalette, [string, string]> = {
   weekendBand: ['--chart-weekend-band', 'rgba(15, 23, 42, 0.035)'],
   weekendBar: ['--chart-weekend-bar', 'rgba(51, 85, 221, 0.28)'],
   tooltipShadow: ['--chart-tooltip-shadow', '0 12px 32px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.06)'],
+  purchaserPass: ['--zt-blue-800', '#1e429f'],
+  purchaserUnpass: ['--el-color-primary-light-5', '#9aacee'],
+  winbidPass: ['--chart-normal', '#2e8b67'],
+  winbidUnpass: ['--zt-success-border', '#bce6d2'],
 }
 
 export function chartPalette(style?: Pick<CSSStyleDeclaration, 'getPropertyValue'>): ChartPalette {

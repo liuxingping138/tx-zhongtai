@@ -86,10 +86,14 @@ def poll(key: str, operation: Callable[[], Row]) -> Row:
 def _totals() -> Row:
     with source_reader(counting=True) as reader:
         purchaser = statistics.totals(reader, "purchaser")
+        purchaser_passed = statistics.totals_passed(reader, "purchaser")
         winbid = statistics.totals(reader, "winbid")
+        winbid_passed = statistics.totals_passed(reader, "winbid")
     return {
         "purchaser": purchaser,
+        "purchaser_passed": purchaser_passed,
         "winbid": winbid,
+        "winbid_passed": winbid_passed,
         "total": purchaser + winbid,
         "as_of": utcnow().astimezone(BEIJING).isoformat(),
     }
