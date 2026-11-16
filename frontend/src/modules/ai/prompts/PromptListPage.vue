@@ -75,11 +75,13 @@ async function load(): Promise<void> {
 onMounted(() => { void load(); void taskFit.load() })
 
 /** 「字节-DeepSeek-V3.2」→「DeepSeek-V3.2」：厂商前缀每行都一样，省下宽度给名称；悬停看全名。 */
-/** 类型用颜色区分，一眼分出政策、客户、招投标；颜色只区分取值，不表示好坏。 */
-const CATEGORY_TAGS: Record<string, 'primary' | 'success' | 'warning'> = { policy: 'primary', customer: 'success', tender: 'warning' }
-
 function shortModel(name: string): string {
   return name ? name.replace(/^(字节|百度)\s*[-－]\s*/, '') : '未选'
+}
+
+function outputPreview(fields: string[]): string {
+  if (!fields.length) return ''
+  return fields.length <= 2 ? fields.join('、') : `${fields.slice(0, 2).join('、')}…`
 }
 
 function open(template: PromptTemplate): void {
@@ -94,31 +96,10 @@ function create(): void {
 
 <template>
   <section class="prompt-list">
-    <header class="ai-panel prompt-list__hero">
-      <div class="prompt-list__hero-main">
+    <header class="prompt-list__head">
+      <div>
         <h1>提示词模板</h1>
-        <p>统一编写、测试与版本发布各业务场景的 AI 提示词模板；选中一行即可进入工作台调优。</p>
-      </div>
-      <div class="prompt-list__kpis">
-        <div class="prompt-list__kpi">
-          <span>全部模板</span>
-          <strong>{{ inScope.length }}</strong>
-        </div>
-        <div class="prompt-list__kpi is-online">
-          <span>已上线</span>
-          <strong>{{ counts.online }}</strong>
-        </div>
-        <div class="prompt-list__kpi is-changed">
-          <span>有改动待发</span>
-          <strong>{{ counts.changed }}</strong>
-        </div>
-        <div
-          v-if="showTasks"
-          class="prompt-list__kpi is-task"
-        >
-          <span>定时任务在用</span>
-          <strong>{{ scheduled }}</strong>
-        </div>
+        <p>管理所有业务 AI 提示词模板；点击任意模板进入编排、单条调试与样本试跑。</p>
       </div>
       <el-button
         v-if="canCreate"
@@ -131,49 +112,51 @@ function create(): void {
     </header>
     <div class="ai-panel prompt-list__panel">
       <div class="prompt-list__toolbar">
-        <el-input
-          v-model="keyword"
-          class="prompt-list__search"
-          :prefix-icon="Search"
-          clearable
-          placeholder="按模板名称搜索…"
-          aria-label="按名称查找模板"
-        />
-        <el-radio-group
-          v-if="categories.length > 1"
-          v-model="category"
-          class="ai-seg"
-          aria-label="按模板类型查看"
-        >
-          <el-radio-button :value="ALL_CATEGORIES">
-            全部
-          </el-radio-button>
-          <el-radio-button
-            v-for="item in categories"
-            :key="item.code"
-            :value="item.code"
+        <div class="prompt-list__filters">
+          <el-input
+            v-model="keyword"
+            class="prompt-list__search"
+            :prefix-icon="Search"
+            clearable
+            placeholder="搜索模板名称…"
+            aria-label="按名称查找模板"
+          />
+          <el-radio-group
+            v-if="categories.length > 1"
+            v-model="category"
+            class="ai-seg"
+            aria-label="按模板类型查看"
           >
-            {{ item.name }}
-          </el-radio-button>
-        </el-radio-group>
-        <span
-          v-if="categories.length > 1"
-          class="prompt-list__sep"
-          aria-hidden="true"
-        />
-        <el-radio-group
-          v-model="status"
-          class="ai-seg"
-          aria-label="按上线状态查看"
-        >
-          <el-radio-button
-            v-for="item in STATUS_OPTIONS"
-            :key="item.value"
-            :value="item.value"
+            <el-radio-button :value="ALL_CATEGORIES">
+              全部
+            </el-radio-button>
+            <el-radio-button
+              v-for="item in categories"
+              :key="item.code"
+              :value="item.code"
+            >
+              {{ item.name }}
+            </el-radio-button>
+          </el-radio-group>
+          <span
+            v-if="categories.length > 1"
+            class="prompt-list__sep"
+            aria-hidden="true"
+          />
+          <el-radio-group
+            v-model="status"
+            class="ai-seg"
+            aria-label="按上线状态查看"
           >
-            {{ item.label }}<span class="prompt-list__count">{{ counts[item.value] }}</span>
-          </el-radio-button>
-        </el-radio-group>
+            <el-radio-button
+              v-for="item in STATUS_OPTIONS"
+              :key="item.value"
+              :value="item.value"
+            >
+              {{ item.label }}<span class="prompt-list__count">{{ counts[item.value] }}</span>
+            </el-radio-button>
+          </el-radio-group>
+        </div>
         <el-checkbox-group
           v-if="showTasks"
           v-model="scheduledFilter"
@@ -195,7 +178,7 @@ function create(): void {
       <TableSkeleton
         v-if="loading && templates.length === 0"
         :columns="showTasks ? 9 : 8"
-        :has-actions="true"
+        :has-actions="false"
       />
       <el-table
         v-else
@@ -209,7 +192,7 @@ function create(): void {
       >
         <el-table-column
           label="模板名称"
-          min-width="150"
+          min-width="160"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -227,20 +210,13 @@ function create(): void {
           width="74"
         >
           <template #default="{ row }">
-            <el-tag
-              size="small"
-              round
-              :type="CATEGORY_TAGS[row.category] ?? 'info'"
-              disable-transitions
-            >
-              {{ row.category_name }}
-            </el-tag>
+            <span class="prompt-list__cat">{{ row.category_name }}</span>
           </template>
         </el-table-column>
         <el-table-column
           v-if="showTasks"
           label="定时任务"
-          min-width="120"
+          min-width="124"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -285,7 +261,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="样本试跑"
-          min-width="168"
+          min-width="156"
         >
           <template #default="{ row }">
             <span
@@ -296,24 +272,25 @@ function create(): void {
           </template>
         </el-table-column>
         <el-table-column
-          label="字段"
-          width="58"
-          align="center"
+          label="输出字段"
+          min-width="160"
+          show-overflow-tooltip
         >
           <template #default="{ row }">
             <span
               v-if="row.fields.length"
-              class="prompt-list__field-badge"
-            >{{ row.fields.length }}</span>
+              class="prompt-list__fields"
+              :title="row.fields.join('、')"
+            ><strong>{{ row.fields.length }} 个</strong><span>{{ outputPreview(row.fields) }}</span></span>
             <span
               v-else
               class="prompt-list__none"
-            >—</span>
+            >自由文本输出</span>
           </template>
         </el-table-column>
         <el-table-column
           label="模型"
-          min-width="126"
+          min-width="132"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -325,7 +302,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="最近更新"
-          width="116"
+          width="104"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -336,22 +313,11 @@ function create(): void {
           </template>
         </el-table-column>
         <el-table-column
-          label="操作"
-          width="78"
+          width="66"
           align="right"
         >
-          <template #default="{ row }">
-            <div
-              class="row-actions"
-              @click.stop
-            >
-              <router-link
-                class="row-action row-action--primary"
-                :to="{ name: 'ai-prompt-edit', params: { id: row.id } }"
-              >
-                调试
-              </router-link>
-            </div>
+          <template #default>
+            <span class="prompt-list__open">打开 →</span>
           </template>
         </el-table-column>
       </el-table>

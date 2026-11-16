@@ -208,7 +208,7 @@ defineExpose({ focus: () => area.value?.focus() })
       class="prompt-editor__vars"
       aria-label="提示词里的变量"
     >
-      <span class="prompt-editor__vars-label">变量</span>
+      <span class="prompt-editor__vars-label">输入变量</span>
       <span
         v-for="item in used"
         :key="item.name"

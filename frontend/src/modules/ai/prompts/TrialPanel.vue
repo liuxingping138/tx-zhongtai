@@ -7,6 +7,7 @@ import { getTestRows, type TestRows } from '@/api/aiSamples'
 import { formatYuan, priceText } from '../shared/aiText'
 import type { useAnswerStream } from '../shared/useAnswerStream'
 import { usedVariables } from './promptVariables'
+import SampleStrip from './SampleStrip.vue'
 import { ROW_STATUS_TEXT, isProblem, trialVerdict } from './sampleView'
 import type { SampleRun } from './useSampleRun'
 
@@ -45,8 +46,14 @@ const sampleRow = computed(() => (props.sample.state.value.same_sample === false
   ? undefined
   : props.sample.state.value.rows?.items.find(item => item.row === row.value + 1)))
 const sampleNo = computed(() => props.sample.run.value?.no ?? 0)
+const stripRows = computed(() => (props.sample.state.value.same_sample === false ? [] : props.sample.state.value.rows?.items ?? []))
+const stripCompared = computed(() => props.sample.state.value.compare?.fixed !== undefined)
 const verdict = computed(() => (showResult.value && !running.value
   ? trialVerdict(sampleRow.value, reply.value?.parsed, sampleNo.value, props.fields) : null))
+
+function pickStripRow(number: number): void {
+  if (!running.value && number >= 1 && number <= data.value.rows.length) row.value = number - 1
+}
 /** 下拉里用提示词引用的列来认行（项目名称、政策标题），第一列常是编号，看不出是哪一行 */
 const label = (index: number) => {
   const item = data.value.rows[index]
@@ -118,6 +125,17 @@ function move(step: number): void {
         @click="move(1)"
       />
       <span class="trial__total">{{ data.total > data.rows.length ? `共 ${data.total} 行，这里列前 ${data.rows.length} 行` : `共 ${data.total} 行` }}</span>
+    </div>
+    <div
+      v-if="stripRows.length"
+      class="trial__strip"
+    >
+      <SampleStrip
+        :rows="stripRows"
+        :compared="stripCompared"
+        :active-row="row + 1"
+        @pick="pickStripRow"
+      />
     </div>
     <p
       v-if="!showResult && sampleRow && isProblem(sampleRow)"
@@ -294,7 +312,8 @@ function move(step: number): void {
 
 <style scoped>
 .trial { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.trial__pick { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--zt-divider); }
+.trial__pick { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--zt-divider); }
+.trial__strip { padding: 8px 16px 10px; border-bottom: 1px solid var(--zt-divider); background: var(--zt-surface-subtle); }
 .trial__pick .el-button { margin: 0; }
 .trial__rows { flex: 1; min-width: 0; }
 .trial__total { flex: none; color: var(--zt-ink-500); font-size: 12px; }

@@ -13,6 +13,7 @@ import { splitFields } from '../shared/aiText'
 import { defaultCategory } from '../shared/categories'
 import { useAnswerStream } from '../shared/useAnswerStream'
 import FlowBar from './FlowBar.vue'
+import OutputFieldsDock from './OutputFieldsDock.vue'
 import PromptEditor from './PromptEditor.vue'
 import PromptSettings from './PromptSettings.vue'
 import ReleaseDrawer from './ReleaseDrawer.vue'
@@ -307,25 +308,23 @@ function onStep(key: StepKey): void {
         aria-label="编写模板"
         @submit.prevent="persist()"
       >
+        <PromptSettings
+          v-model:category="form.category"
+          v-model:model-id="form.model_id"
+          v-model:code-table="form.code_table"
+          :template="selected"
+          :categories="categoryOptions"
+          :models="models"
+          :code-tables="codeTables"
+          :files="files"
+          :can-edit="canEdit"
+          :can-export="canExport"
+          :sample-tasks="taskFit.sampleTasks.value"
+          :show-fit="taskFit.visible.value"
+          :fit="taskFit.results.value"
+          @files-changed="replace"
+        />
         <div class="prompt-page__scroll">
-          <PromptSettings
-            v-model:category="form.category"
-            v-model:model-id="form.model_id"
-            v-model:output-fields="form.output_fields"
-            v-model:code-table="form.code_table"
-            v-model:content="form.content"
-            :template="selected"
-            :categories="categoryOptions"
-            :models="models"
-            :code-tables="codeTables"
-            :files="files"
-            :can-edit="canEdit"
-            :can-export="canExport"
-            :sample-tasks="taskFit.sampleTasks.value"
-            :show-fit="taskFit.visible.value"
-            :fit="taskFit.results.value"
-            @files-changed="replace"
-          />
           <PromptEditor
             ref="editor"
             v-model="form.content"
@@ -337,6 +336,11 @@ function onStep(key: StepKey): void {
             @upload="files.pick('excel')"
           />
         </div>
+        <OutputFieldsDock
+          v-model:output-fields="form.output_fields"
+          v-model:content="form.content"
+          :can-edit="canEdit"
+        />
       </form>
 
       <TestPanel

@@ -8,7 +8,7 @@ import { ROW_STATUS_TEXT, rowCounts } from './sampleView'
  * 样本试跑一格一行：成功是浅绿，调用失败是深红实心，格式不对是琥珀斜纹，和上次不同的格子下面有一道蓝线。
  * 每格写着行号，下面的图例写着每种几行，不只靠颜色认。点一格看这一行。
  */
-const props = defineProps<{ rows: RunRow[]; compared: boolean }>()
+const props = defineProps<{ rows: RunRow[]; compared: boolean; activeRow?: number }>()
 const emit = defineEmits<{ pick: [row: number] }>()
 const counts = computed(() => rowCounts(props.rows))
 
@@ -30,7 +30,7 @@ function label(row: RunRow): string {
         <button
           type="button"
           class="strip__cell"
-          :class="[`is-${row.status}`, { 'is-changed': row.change }]"
+          :class="[`is-${row.status}`, { 'is-changed': row.change, 'is-active': activeRow === row.row }]"
           :aria-label="label(row)"
           :title="label(row)"
           @click="emit('pick', row.row)"
@@ -53,6 +53,7 @@ function label(row: RunRow): string {
 .strip__cell { position: relative; display: grid; place-items: center; width: 100%; height: 34px; padding: 0; border: 1px solid var(--zt-success-border); border-radius: 4px; background: var(--zt-success-soft); color: var(--zt-success-text); font: 600 12px/1 var(--zt-font); font-variant-numeric: tabular-nums; cursor: pointer; }
 .strip__cell:hover { filter: brightness(0.97); }
 .strip__cell:focus-visible { outline: 2px solid var(--zt-blue-600); outline-offset: 2px; }
+.strip__cell.is-active { outline: 2px solid var(--zt-blue-600); outline-offset: 1px; box-shadow: 0 2px 6px var(--zt-focus-ring); }
 .strip__cell.is-failed { border-color: var(--zt-danger-text); background: var(--zt-danger-text); color: var(--el-color-white); }
 .strip__cell.is-format, .strip__key.is-format { border-color: var(--zt-warning); background: repeating-linear-gradient(135deg, var(--zt-warning-soft) 0 5px, var(--zt-warning-border) 5px 10px); color: var(--zt-warning-text); }
 .strip__cell.is-pending { border-style: dashed; border-color: var(--zt-border-strong); background: var(--zt-panel); color: var(--zt-ink-400); }

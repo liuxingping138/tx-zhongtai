@@ -110,6 +110,7 @@ function trialRow(number: number): void {
       :can-run="canRun"
       :can-export="canExport"
       :dirty="dirty"
+      :active-row="row + 1"
       @upload="emit('upload')"
       @trial="trialRow"
       @edit="emit('edit')"

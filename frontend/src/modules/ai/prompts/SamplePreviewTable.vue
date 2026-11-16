@@ -9,6 +9,7 @@ const props = defineProps<{
   fields: string[]
   items: RunRow[]
   canRun: boolean
+  activeRow?: number
 }>()
 const emit = defineEmits<{ pick: [row: number]; trial: [row: number] }>()
 const titleCol = computed(() => props.columns[0] ?? '')
@@ -50,7 +51,7 @@ const titleCol = computed(() => props.columns[0] ?? '')
         <tr
           v-for="row in items"
           :key="row.row"
-          :class="[`is-${row.status}`, { 'is-changed': row.change }]"
+          :class="[`is-${row.status}`, { 'is-changed': row.change, 'is-active-row': activeRow === row.row }]"
           @click="emit('pick', row.row)"
         >
           <td class="is-no">
@@ -113,6 +114,7 @@ const titleCol = computed(() => props.columns[0] ?? '')
 .matrix td { padding: 8px 10px; border-bottom: 1px solid var(--zt-divider); color: var(--zt-ink-900); vertical-align: top; max-width: 240px; }
 .matrix tr { cursor: pointer; }
 .matrix tr:hover td { background: var(--zt-row-hover); }
+.matrix tr.is-active-row td { background: var(--el-color-primary-light-9); }
 .matrix tr.is-failed td { background: var(--zt-danger-soft); }
 .matrix tr.is-format td { background: var(--zt-warning-soft); }
 .matrix .is-no { position: sticky; left: 0; z-index: 1; width: 40px; background: inherit; }

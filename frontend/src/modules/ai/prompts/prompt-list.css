@@ -1,23 +1,17 @@
-.prompt-list { display: flex; flex-direction: column; gap: 12px; height: calc(100dvh - var(--workspace-header-height) - 48px); min-height: 480px; }
-.prompt-list__hero { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 18px; background: var(--zt-hero-gradient); }
-.prompt-list__hero-main { min-width: 0; flex: 1 1 auto; }
-.prompt-list__hero-main h1 { margin: 0; color: var(--zt-ink-900); font-size: 17px; font-weight: 650; line-height: 1.3; }
-.prompt-list__hero-main p { margin: 2px 0 0; color: var(--zt-ink-500); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.prompt-list__kpis { display: flex; align-items: center; gap: 8px; flex: none; }
-.prompt-list__kpi { display: flex; align-items: baseline; gap: 6px; padding: 5px 11px; border: 1px solid var(--zt-border); border-radius: 999px; background: var(--zt-panel); font-size: 12px; color: var(--zt-ink-500); white-space: nowrap; }
-.prompt-list__kpi strong { color: var(--zt-ink-900); font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; }
-.prompt-list__kpi.is-online strong { color: var(--zt-success-text); }
-.prompt-list__kpi.is-changed strong { color: var(--zt-warning-text); }
-.prompt-list__kpi.is-task strong { color: var(--zt-blue-600); }
+.prompt-list { display: flex; flex-direction: column; gap: 14px; height: calc(100dvh - var(--workspace-header-height) - 48px); min-height: 480px; }
+.prompt-list__head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex: none; padding: 2px 2px 0; }
+.prompt-list__head h1 { margin: 0; color: var(--zt-ink-900); font-size: 20px; font-weight: 650; line-height: 1.3; }
+.prompt-list__head p { margin: 4px 0 0; color: var(--zt-ink-500); font-size: 13px; }
 .prompt-list__panel { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
-.prompt-list__toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; padding: 12px 18px; border-bottom: 1px solid var(--zt-border); background: var(--zt-surface-subtle); }
+.prompt-list__toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; padding: 12px 16px; border-bottom: 1px solid var(--zt-border); }
+.prompt-list__filters { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; }
 .prompt-list__search { width: 200px; }
-.prompt-list__search :deep(.el-input__wrapper) { border-radius: 999px; }
+.prompt-list__search :deep(.el-input__wrapper) { border-radius: 8px; }
 .prompt-list__sep { width: 1px; height: 16px; margin: 0 2px; background: var(--zt-border); }
 .prompt-list__toggle :deep(.el-checkbox-button__inner) {
-  display: inline-flex; align-items: center; height: 32px; padding: 0 13px; border: 1px solid var(--zt-border) !important; outline: 0;
-  border-radius: 999px !important; background: var(--zt-panel); color: var(--zt-ink-700);
-  font-size: 13px; font-weight: 500; box-shadow: none !important; transition: background-color .15s, border-color .15s, color .15s;
+  display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border: 1px solid var(--zt-border) !important; outline: 0;
+  border-radius: 8px !important; background: transparent; color: var(--zt-ink-700);
+  font-size: 12.5px; font-weight: 500; box-shadow: none !important; transition: background-color .15s, border-color .15s, color .15s;
 }
 .prompt-list__toggle :deep(.el-checkbox-button:not(.is-checked) .el-checkbox-button__inner:hover) {
   border-color: var(--zt-border-strong) !important; background: var(--zt-surface-subtle); color: var(--zt-ink-900);
@@ -30,23 +24,28 @@
 .prompt-list :deep(.is-active) .prompt-list__count, .prompt-list :deep(.is-checked) .prompt-list__count { color: var(--zt-blue-600); font-weight: 600; }
 .prompt-list__table { flex: 1; min-height: 0; }
 .prompt-list__table :deep(.el-table__row) { cursor: pointer; }
-.prompt-list__table :deep(.cell) { padding: 0 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prompt-list__table :deep(.cell) { padding: 0 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prompt-list__name { color: var(--zt-ink-900); font-weight: 600; text-decoration: none; }
-.prompt-list__name:hover { color: var(--zt-blue-600); }
+.prompt-list__table :deep(.el-table__row:hover) .prompt-list__name { color: var(--zt-blue-600); }
+.prompt-list__cat { color: var(--zt-ink-500); font-size: 12.5px; }
 .prompt-list__task-pills { display: inline-flex; align-items: center; gap: 4px; flex-wrap: nowrap; }
-.prompt-list__task-pill { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; background: var(--el-color-primary-light-9); border: 1px solid var(--el-color-primary-light-7); color: var(--zt-blue-700); font-size: 11.5px; font-weight: 500; white-space: nowrap; }
-.prompt-list__state { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
+.prompt-list__task-pill { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 6px; background: var(--el-color-primary-light-9); color: var(--zt-blue-700); font-size: 12px; font-weight: 500; white-space: nowrap; }
+.prompt-list__state { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--zt-ink-700); white-space: nowrap; }
 .prompt-list__state::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--zt-muted-mark); }
 .prompt-list__state.is-online::before { background: var(--zt-success); }
 .prompt-list__state.is-changed { color: var(--zt-warning-text); }
 .prompt-list__state.is-changed::before { background: var(--zt-warning); }
-.prompt-list__diff { margin-left: 4px; padding: 1px 7px; border-radius: 999px; background: var(--el-color-primary-light-9); color: var(--zt-blue-600); font-size: 12px; font-weight: 600; text-decoration: none; }
-.prompt-list__diff:hover { background: var(--el-color-primary-light-8); }
-.prompt-list__sample { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; background: var(--zt-soft); color: var(--zt-ink-500); font-size: 12px; font-weight: 500; }
-.prompt-list__sample.is-passed { background: var(--zt-success-soft); color: var(--zt-success-text); }
-.prompt-list__sample.is-failed, .prompt-list__sample.is-stale { background: var(--zt-warning-soft); color: var(--zt-warning-text); }
-.prompt-list__sample.is-running { background: var(--el-color-primary-light-9); color: var(--zt-blue-600); }
-.prompt-list__field-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 22px; padding: 0 7px; border-radius: 6px; background: var(--zt-ai-soft); border: 1px solid var(--zt-ai-line); color: var(--zt-ai-text); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.prompt-list__diff { margin-left: 6px; color: var(--zt-blue-600); font-size: 12.5px; font-weight: 500; text-decoration: none; }
+.prompt-list__diff:hover { text-decoration: underline; }
+.prompt-list__sample { font-size: 13px; color: var(--zt-ink-400); }
+.prompt-list__sample.is-passed { color: var(--zt-success-text); }
+.prompt-list__sample.is-failed, .prompt-list__sample.is-stale { color: var(--zt-warning-text); }
+.prompt-list__sample.is-running { color: var(--zt-blue-600); }
+.prompt-list__fields { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; max-width: 100%; font-size: 13px; }
+.prompt-list__fields strong { color: var(--zt-ink-900); font-weight: 600; font-variant-numeric: tabular-nums; flex: none; }
+.prompt-list__fields span { overflow: hidden; text-overflow: ellipsis; color: var(--zt-ink-400); font-size: 12px; }
 .prompt-list__model { color: var(--zt-ink-700); font-size: 12.5px; }
 .prompt-list__time { color: var(--zt-ink-500); font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .prompt-list__none { color: var(--zt-ink-400); font-size: 13px; }
+.prompt-list__open { opacity: 0; color: var(--zt-blue-600); font-size: 12.5px; font-weight: 600; transition: opacity 0.12s; }
+.prompt-list__table :deep(.el-table__row:hover) .prompt-list__open { opacity: 1; }

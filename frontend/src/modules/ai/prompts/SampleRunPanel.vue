@@ -23,6 +23,7 @@ const props = defineProps<{
   canRun: boolean
   canExport: boolean
   dirty: boolean
+  activeRow?: number
 }>()
 const emit = defineEmits<{ upload: []; trial: [row: number]; edit: [] }>()
 
@@ -192,6 +193,7 @@ async function start(): Promise<void> {
           v-if="rows?.items.length"
           :rows="rows.items"
           :compared="compared"
+          :active-row="activeRow"
           @pick="open"
         />
         <p
@@ -219,6 +221,7 @@ async function start(): Promise<void> {
         :fields="rows.fields"
         :items="rows.items"
         :can-run="canRun"
+        :active-row="activeRow"
         @pick="open"
         @trial="row => emit('trial', row)"
       />
