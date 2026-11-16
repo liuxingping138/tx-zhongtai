@@ -96,20 +96,6 @@ function create(): void {
 
 <template>
   <section class="prompt-list">
-    <header class="prompt-list__head">
-      <div>
-        <h1>提示词模板</h1>
-        <p>管理所有业务 AI 提示词模板；点击任意模板进入编排、单条调试与样本试跑。</p>
-      </div>
-      <el-button
-        v-if="canCreate"
-        type="primary"
-        :icon="Plus"
-        @click="create"
-      >
-        新建模板
-      </el-button>
-    </header>
     <div class="ai-panel prompt-list__panel">
       <div class="prompt-list__toolbar">
         <div class="prompt-list__filters">
@@ -157,16 +143,26 @@ function create(): void {
             </el-radio-button>
           </el-radio-group>
         </div>
-        <el-checkbox-group
-          v-if="showTasks"
-          v-model="scheduledFilter"
-          class="prompt-list__toggle"
-          aria-label="只看定时任务在用的模板"
-        >
-          <el-checkbox-button value="scheduled">
-            定时任务在用<span class="prompt-list__count">{{ scheduled }}</span>
-          </el-checkbox-button>
-        </el-checkbox-group>
+        <div class="prompt-list__actions">
+          <el-checkbox-group
+            v-if="showTasks"
+            v-model="scheduledFilter"
+            class="prompt-list__toggle"
+            aria-label="只看定时任务在用的模板"
+          >
+            <el-checkbox-button value="scheduled">
+              定时任务在用<span class="prompt-list__count">{{ scheduled }}</span>
+            </el-checkbox-button>
+          </el-checkbox-group>
+          <el-button
+            v-if="canCreate"
+            type="primary"
+            :icon="Plus"
+            @click="create"
+          >
+            新建模板
+          </el-button>
+        </div>
       </div>
       <el-alert
         v-if="loadError"
