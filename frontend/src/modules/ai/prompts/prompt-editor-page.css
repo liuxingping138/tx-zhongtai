@@ -20,14 +20,15 @@
 .prompt-page__spacer { flex: 1; }
 /* 自适应分栏：试发一条时左宽右窄（专注写提示词）；样本试跑时右侧自动加宽（方便浏览批量对比结果）；全宽模式隐藏左栏。 */
 .prompt-page__body {
-  display: grid; flex: 1; min-height: 0; gap: 12px;
-  grid-template-columns: minmax(0, 1.38fr) minmax(380px, 1fr);
+  display: grid; flex: 1; min-height: 0; min-width: 0; gap: 12px;
+  grid-template-columns: minmax(0, 1.38fr) minmax(0, 1fr);
   transition: grid-template-columns 0.18s ease;
 }
-.prompt-page__body.is-sample { grid-template-columns: minmax(320px, 0.76fr) minmax(560px, 1.24fr); }
+.prompt-page__body.is-sample { grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr); }
 .prompt-page__body.is-sample-wide { grid-template-columns: minmax(0, 1fr); }
 .prompt-page__body.is-sample-wide .prompt-page__main { display: none; }
-.prompt-page__main { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.prompt-page__main { display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
+.prompt-page__test { min-width: 0; }
 .prompt-page__main > .config, .prompt-page__main > .out-dock { flex: none; }
 .prompt-page__scroll { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow-y: auto; }
 .prompt-page__scroll > .prompt-editor { flex: 1 0 auto; min-height: 240px; }

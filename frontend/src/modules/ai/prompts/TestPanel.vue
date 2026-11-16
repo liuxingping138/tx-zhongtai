@@ -119,7 +119,7 @@ function trialRow(number: number): void {
 </template>
 
 <style scoped>
-.test-panel { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.test-panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
 .test-panel__tabs { display: flex; gap: 4px; padding: 3px; border: 1px solid var(--zt-border); border-radius: 999px; background: var(--zt-soft); }
 .test-panel__tabs button { position: relative; padding: 5px 14px; border: 0; border-radius: 999px; background: none; color: var(--zt-ink-500); font: 600 13px/18px var(--zt-font); cursor: pointer; transition: all .15s; }
 .test-panel__tabs button[aria-selected="true"] { background: var(--zt-panel); color: var(--zt-blue-600); box-shadow: 0 1px 2px var(--zt-shadow-soft); }

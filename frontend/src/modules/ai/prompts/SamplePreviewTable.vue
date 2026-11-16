@@ -107,7 +107,7 @@ const titleCol = computed(() => props.columns[0] ?? '')
 </template>
 
 <style scoped>
-.matrix-wrap { flex: none; overflow: auto; max-height: 360px; border: 1px solid var(--zt-border); border-radius: 10px; background: var(--zt-panel); }
+.matrix-wrap { flex: none; width: 100%; max-width: 100%; min-width: 0; overflow: auto; max-height: 360px; border: 1px solid var(--zt-border); border-radius: 10px; background: var(--zt-panel); }
 .matrix { width: max-content; min-width: 100%; border-collapse: collapse; font-size: 12.5px; text-align: left; font-variant-numeric: tabular-nums; }
 .matrix th { position: sticky; top: 0; z-index: 2; padding: 8px 10px; background: var(--zt-table-head); border-bottom: 1px solid var(--zt-border); color: var(--zt-ink-700); font-weight: 600; white-space: nowrap; }
 .matrix th.is-ai { background: var(--zt-ai-soft); color: var(--zt-ai-text); }

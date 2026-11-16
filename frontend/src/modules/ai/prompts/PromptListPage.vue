@@ -192,7 +192,7 @@ function create(): void {
       >
         <el-table-column
           label="模板名称"
-          min-width="160"
+          min-width="148"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -207,7 +207,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="类型"
-          width="74"
+          width="62"
         >
           <template #default="{ row }">
             <span class="prompt-list__cat">{{ row.category_name }}</span>
@@ -216,7 +216,7 @@ function create(): void {
         <el-table-column
           v-if="showTasks"
           label="定时任务"
-          min-width="124"
+          min-width="110"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -238,7 +238,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="上线状态"
-          min-width="172"
+          min-width="154"
         >
           <template #default="{ row }">
             <!-- 有改动没上线：一行写完，改了什么放悬停提示，「看改动」直接打开逐行对比。 -->
@@ -261,7 +261,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="样本试跑"
-          min-width="156"
+          min-width="134"
         >
           <template #default="{ row }">
             <span
@@ -273,7 +273,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="输出字段"
-          min-width="160"
+          min-width="144"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -290,7 +290,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="模型"
-          min-width="132"
+          min-width="112"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -302,7 +302,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="最近更新"
-          width="104"
+          width="88"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -313,7 +313,7 @@ function create(): void {
           </template>
         </el-table-column>
         <el-table-column
-          width="66"
+          width="54"
           align="right"
         >
           <template #default>

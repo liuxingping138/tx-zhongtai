@@ -322,19 +322,19 @@ async function start(): Promise<void> {
 </template>
 
 <style scoped>
-.sample { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.sample__scroll { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; overflow-y: auto; padding: 12px 16px 16px; }
-.sample__scroll > * { flex: none; }
+.sample { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
+.sample__scroll { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; min-width: 0; overflow-y: auto; padding: 12px 16px 16px; }
+.sample__scroll > * { flex: none; min-width: 0; }
 .sample__launch { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
 .sample__source { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin: 0; color: var(--zt-ink-700); font-size: 13px; }
 .sample__source strong { overflow: hidden; color: var(--zt-ink-900); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .sample__source span { flex: none; color: var(--zt-ink-500); font-size: 12px; }
-.sample__controls { display: flex; align-items: center; gap: 6px; color: var(--zt-ink-700); font-size: 13px; }
+.sample__controls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--zt-ink-700); font-size: 13px; }
 .sample__controls .el-input-number { width: 84px; }
 .sample__controls .el-button { margin-left: 4px; }
 .sample__hint, .sample__empty { margin: 0; color: var(--zt-ink-500); font-size: 12px; line-height: 1.6; }
 .sample__hint.is-blocked { color: var(--zt-warning-text); }
-.sample__result { display: grid; gap: 12px; padding: 14px 14px 12px; border: 1px solid var(--zt-border); border-radius: 8px; }
+.sample__result { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; padding: 14px 14px 12px; border: 1px solid var(--zt-border); border-radius: 8px; }
 .sample__head { display: flex; align-items: center; gap: 8px; min-width: 0; font-variant-numeric: tabular-nums; }
 .sample__head h3 { margin: 0; color: var(--zt-ink-900); font-size: 15px; font-weight: 600; }
 .sample__meta { overflow: hidden; color: var(--zt-ink-500); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }

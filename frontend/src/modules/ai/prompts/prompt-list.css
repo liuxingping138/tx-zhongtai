@@ -24,7 +24,7 @@
 .prompt-list :deep(.is-active) .prompt-list__count, .prompt-list :deep(.is-checked) .prompt-list__count { color: var(--zt-blue-600); font-weight: 600; }
 .prompt-list__table { flex: 1; min-height: 0; }
 .prompt-list__table :deep(.el-table__row) { cursor: pointer; }
-.prompt-list__table :deep(.cell) { padding: 0 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prompt-list__table :deep(.cell) { padding: 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prompt-list__name { color: var(--zt-ink-900); font-weight: 600; text-decoration: none; }
 .prompt-list__table :deep(.el-table__row:hover) .prompt-list__name { color: var(--zt-blue-600); }
 .prompt-list__cat { color: var(--zt-ink-500); font-size: 12.5px; }
@@ -43,7 +43,7 @@
 .prompt-list__sample.is-running { color: var(--zt-blue-600); }
 .prompt-list__fields { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; max-width: 100%; font-size: 13px; }
 .prompt-list__fields strong { color: var(--zt-ink-900); font-weight: 600; font-variant-numeric: tabular-nums; flex: none; }
-.prompt-list__fields span { overflow: hidden; text-overflow: ellipsis; color: var(--zt-ink-400); font-size: 12px; }
+.prompt-list__fields span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; color: var(--zt-ink-400); font-size: 12px; }
 .prompt-list__model { color: var(--zt-ink-700); font-size: 12.5px; }
 .prompt-list__time { color: var(--zt-ink-500); font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .prompt-list__none { color: var(--zt-ink-400); font-size: 13px; }
