@@ -321,6 +321,7 @@ async function start(): Promise<void> {
 <style scoped>
 .sample { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .sample__scroll { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; overflow-y: auto; padding: 12px 16px 16px; }
+.sample__scroll > * { flex: none; }
 .sample__launch { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
 .sample__source { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin: 0; color: var(--zt-ink-700); font-size: 13px; }
 .sample__source strong { overflow: hidden; color: var(--zt-ink-900); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }

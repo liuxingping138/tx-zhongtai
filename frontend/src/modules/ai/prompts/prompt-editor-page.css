@@ -31,7 +31,7 @@
 .prompt-page__scroll { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow-y: auto; }
 .prompt-page__scroll > .config { flex: none; }
 .prompt-page__scroll > .prompt-editor { flex: 1 0 auto; min-height: 300px; }
-@media (max-width: 1180px) {
+@media (max-width: 960px) {
   .prompt-page { height: auto; }
   .prompt-page__body, .prompt-page__body.is-sample { grid-template-columns: minmax(0, 1fr); }
   .prompt-page__main { min-height: 600px; }
