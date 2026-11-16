@@ -28,7 +28,8 @@ import { useListLoader } from '@/composables/useListLoader'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import { useTableSelection } from '@/composables/useTableSelection'
 import { useAuthStore } from '@/stores/auth'
-import { EDITOR_GROUPS, SUMMARY_KEYS, TABLE_COLUMNS } from './fields'
+import RetagDialog from '../base-tags/RetagDialog.vue'
+import { EDITOR_GROUPS, mergeInterpretAiColumns, SUMMARY_KEYS, TABLE_COLUMNS } from './fields'
 
 const RESOURCE = 'policy.interpretations'
 const auth = useAuthStore()
@@ -55,7 +56,8 @@ const { items, total, loading, loadError, resultFiltered, load } = useListLoader
   fetch: listInterpretations,
   errorText: '加载政策解读失败',
 })
-const { columns, defaults, selected } = useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)
+const { columns: baseColumns, defaults, selected } = useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)
+const columns = computed(() => mergeInterpretAiColumns(baseColumns, filters.aiFields.value))
 
 async function refresh() {
   await Promise.all([load(), filters.load()])
@@ -65,6 +67,7 @@ async function refresh() {
 const selection = useTableSelection<InterpretationItem>()
 const checked = selection.checked
 const statusOpen = ref(false)
+const retagOpen = ref(false)
 const STATUS_CHOICES = [
   { value: '人工验证', label: '人工验证', hint: '核对过、内容可用。之后 AI 重新解读、回填市场机会都不会再覆盖这些行。新增场景进不进码表在「新增场景审核」里按场景决定，和这里无关。' },
   { value: '待验证', label: '待验证', hint: '退回待核对。AI 重新解读时可以替换这些行。' },
@@ -133,6 +136,12 @@ onMounted(() => {
           @click="onExport"
         />
         <!-- 勾选了才出现，平时不摆灰按钮 -->
+        <el-button
+          v-if="canWrite && checked.length"
+          @click="retagOpen = true"
+        >
+          重新打标（{{ checked.length }}）
+        </el-button>
         <el-button
           v-if="canWrite && checked.length"
           @click="statusOpen = true"
@@ -248,6 +257,12 @@ onMounted(() => {
       prompt="数据状态改为："
       :choices="STATUS_CHOICES"
       :submit="submitStatus"
+      @done="afterStatus"
+    />
+    <RetagDialog
+      v-model="retagOpen"
+      :ids="selection.ids.value"
+      default-step="interpret"
       @done="afterStatus"
     />
   </div>

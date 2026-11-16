@@ -29,6 +29,24 @@ ANSWER_FIELDS: dict[str, str] = {
     "信息化等级": "info_level",
     "备注": "remark",
 }
+EXTRA_INTERPRET_ALIASES: dict[str, str] = {
+    "行业": "industry_l1",
+    "场景": "scenario_l1_name",
+    "一级场景名称": "scenario_l1_name",
+    "二级场景名称": "scenario_l2_name",
+    "三级场景名称": "scenario_l3_name",
+    "采买理由": "purchase_reason",
+    "客户群": "target_customers",
+    "政策市场机会": "market_opportunity",
+    "市场机会": "market_opportunity",
+}
+KNOWN_INTERPRET_KEYS = {
+    SOURCE_ID,
+    *ANSWER_FIELDS,
+    *EXTRA_INTERPRET_ALIASES,
+    "省/直辖市",
+    "省份",
+}
 # 和库里列宽一致，超出的截断，免得一条超长回答让整批写入失败。
 _WIDTHS = {
     "industry_l1": 128,
@@ -81,7 +99,9 @@ def _split_levels(values: dict[str, str]) -> None:
 
 def interpretation_values(item: dict[str, Any]) -> dict[str, str]:
     values = dict.fromkeys(set(ANSWER_FIELDS.values()), "")
-    for answer_name, column in ANSWER_FIELDS.items():
+    for answer_name, column in (*ANSWER_FIELDS.items(), *EXTRA_INTERPRET_ALIASES.items()):
+        if column not in values:
+            continue
         text = _clean(item.get(answer_name))
         if text and not values[column]:
             values[column] = text
@@ -93,6 +113,21 @@ def interpretation_values(item: dict[str, Any]) -> dict[str, str]:
     # 模型偶尔答「是的」「新增」，统一成表里的是 / 否。
     values["is_new_scenario"] = "是" if values["is_new_scenario"].startswith(("是", "新增")) else "否"
     return values
+
+
+def extract_ai_outputs(item: dict[str, Any]) -> dict[str, str]:
+    """取出解读或市场机会模板输出中、不在固定列映射里的新增动态字段。"""
+
+    out: dict[str, str] = {}
+    if not isinstance(item, dict):
+        return out
+    for key, raw in item.items():
+        if not isinstance(key, str) or key in KNOWN_INTERPRET_KEYS:
+            continue
+        val = _clean(raw)
+        if key not in out or (val and not out[key]):
+            out[key] = val
+    return out
 
 
 def scenario_names(values: dict[str, str]) -> tuple[str, ...]:
@@ -122,7 +157,7 @@ def match_opportunities(items: list[dict[str, Any]], rows: list[dict[str, str]])
     模型只给了一段又哪都对不上时，整条政策的行都用它。返回 {行下标: 机会文本}。"""
 
     matched: dict[int, list[str]] = {}
-    texts = [(item, _clean(item.get("市场机会"))) for item in items]
+    texts = [(item, _clean(item.get("市场机会") or item.get("政策市场机会"))) for item in items]
     texts = [(item, text) for item, text in texts if text]
     for item, text in texts:
         # 「一级行业 / 一级场景」是解读那一步的写法，业务人员照着写市场机会模板也很常见，两种都认。

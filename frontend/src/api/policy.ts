@@ -95,11 +95,13 @@ export interface InterpretationItem {
   tagged_at: string
   /** 新增场景按决定写进码表、回填编码的时间 */
   scenario_synced_at: string
+  ai_outputs?: Record<string, string>
   version: number
   created_at: string
   created_by_name: string
   updated_at: string
   updated_by_name: string
+  [key: string]: unknown
 }
 
 export type { ImportResult } from './excelImport'

@@ -26,6 +26,7 @@ const props = defineProps<{
   prompt: string
   /** 不是勾选来的（如核对页的当前这条）时开头写它，代替「已勾选 N 条」 */
   target?: string
+  defaultValue?: string
   choices: BatchChoice[]
   submit: (value: string) => Promise<BatchResult>
 }>()
@@ -41,7 +42,8 @@ const hint = computed(() => {
 
 watch(open, visible => {
   if (visible) {
-    const firstEnabled = props.choices.find(item => !item.disabled) ?? props.choices[0]
+    const preferred = props.defaultValue ? props.choices.find(item => item.value === props.defaultValue && !item.disabled) : undefined
+    const firstEnabled = preferred ?? props.choices.find(item => !item.disabled) ?? props.choices[0]
     value.value = firstEnabled?.value ?? ''
   }
 })

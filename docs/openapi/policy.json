@@ -4667,6 +4667,20 @@
             "type": "string",
             "title": "Data Status",
             "default": ""
+          },
+          "ai_outputs": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Outputs"
           }
         },
         "additionalProperties": false,

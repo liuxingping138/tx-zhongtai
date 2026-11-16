@@ -169,6 +169,7 @@ class InterpretationWrite(BaseModel):
     new_scenario_level: str = ""
     remark: str = ""
     data_status: str = ""
+    ai_outputs: dict[str, str] | None = None
 
 
 class SourcePatch(SourceWrite):

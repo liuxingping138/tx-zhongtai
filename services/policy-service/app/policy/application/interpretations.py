@@ -6,12 +6,13 @@ from typing import Any
 
 from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
-from platform_common.columns import overlong_reasons, string_lengths
+from platform_common.columns import ColumnSpec, overlong_reasons, string_lengths
 from platform_common.errors import ApiError, DependencyUnavailableError, ErrorCode, NotFoundError, VersionConflictError
 from platform_common.excel import build_workbook_async, encode_skipped_file_async, parse_sheet_async
 from platform_common.filters import Filters
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.aitag.domain.interpret_rules import KNOWN_INTERPRET_KEYS
 from app.common import internal_clients
 from app.common.audit_emit import enqueue_event
 from app.core.config import get_settings
@@ -24,6 +25,7 @@ from app.policy.domain.fields import (
     DATA_STATUS_PENDING,
     INTERPRETATION_COLUMNS,
     INTERPRETATION_EXPORT_COLUMNS,
+    POLICY_CONTENT_COLUMN,
     POLICY_TITLE_MAX,
     SCENARIO_CODE_FIELDS,
     SCENARIO_NAME_FIELDS,
@@ -38,7 +40,8 @@ logger = logging.getLogger("policy.interpretations")
 
 
 def to_out(row: Interpretation) -> dict[str, Any]:
-    return {
+    extra = dict(getattr(row, "ai_outputs", None) or {})
+    data: dict[str, Any] = {
         "id": str(row.id),
         "record_id": row.record_id,
         "tenant_id": row.tenant_id,
@@ -72,12 +75,17 @@ def to_out(row: Interpretation) -> dict[str, Any]:
         "source_content_id": row.source_content_id or "",
         "tagged_at": format_beijing(row.tagged_at),
         "scenario_synced_at": format_beijing(row.scenario_synced_at),
+        "ai_outputs": extra,
         "version": row.version,
         "created_at": format_beijing(row.created_at),
         "created_by_name": row.created_by_name,
         "updated_at": format_beijing(row.updated_at),
         "updated_by_name": row.updated_by_name,
     }
+    for key, val in extra.items():
+        if key not in data:
+            data[key] = str(val or "")
+    return data
 
 
 def _values(data: dict[str, str]) -> dict[str, str]:
@@ -141,20 +149,22 @@ def _data_status_error(values: dict[str, str]) -> str | None:
     return f"数据状态只能是{'、'.join(DATA_STATUS_CHOICES)}"
 
 
-async def list_interpretations(
-    session: AsyncSession,
-    filters: Filters,
-    *,
-    page: int,
-    page_size: int,
-) -> dict[str, Any]:
-    items, total = await repo.list_items(
-        session,
-        filters=filters,
-        page=page,
-        page_size=page_size,
-    )
+async def list_interpretations(session: AsyncSession, filters: Filters, *, page: int, page_size: int) -> dict[str, Any]:
+    items, total = await repo.list_items(session, filters=filters, page=page, page_size=page_size)
     return {"items": [to_out(item) for item in items], "total": total, "page": page, "page_size": page_size}
+
+
+async def _active_interpret_ai_fields() -> list[str]:
+    fields: list[str] = []
+    try:
+        items = await internal_clients.ai("GET", "/internal/v1/online-templates", params={"category": "policy"})
+        for item in items or []:
+            item_fields = [str(f).strip() for f in (item.get("output_fields") or []) if str(f).strip()]
+            if set(item_fields) & {"一级行业", "行业", "一级场景", "场景"}:
+                fields.extend(name for name in item_fields if name not in KNOWN_INTERPRET_KEYS and name not in fields)
+    except (ApiError, DependencyUnavailableError):
+        logger.warning("AI 模板服务暂时取不到，解读表暂不附加动态模板字段")
+    return fields
 
 
 async def list_interpretation_options(session: AsyncSession) -> dict[str, Any]:
@@ -167,6 +177,7 @@ async def list_interpretation_options(session: AsyncSession) -> dict[str, Any]:
         industries, scenarios = [], []
     data["options"]["industry_l1"] = {"items": industries, "truncated": False}
     data["options"]["scenario_l1_name"] = {"items": scenarios, "truncated": False}
+    data["ai_fields"] = await _active_interpret_ai_fields()
     return data
 
 
@@ -204,6 +215,25 @@ def _apply_changes(row: Interpretation, values: dict[str, str], *, renamed: bool
     return changes
 
 
+def _apply_ai_outputs(row: Interpretation, raw_outputs: Any) -> dict[str, Any]:
+    if not isinstance(raw_outputs, dict):
+        return {}
+    current_extra = dict(getattr(row, "ai_outputs", None) or {})
+    extra_changes: dict[str, Any] = {}
+    for raw_k, raw_v in raw_outputs.items():
+        key = str(raw_k).strip()
+        if not key or key in INTERPRETATION_WRITE_FIELDS:
+            continue
+        new_val = str(raw_v or "").strip()
+        old_val = str(current_extra.get(key) or "")
+        if old_val != new_val:
+            extra_changes[key] = {"from": old_val[:80], "to": new_val[:80]}
+            current_extra[key] = new_val
+    if extra_changes:
+        row.ai_outputs = current_extra
+    return extra_changes
+
+
 async def update_interpretation(
     session: AsyncSession, actor: Actor, item_id: uuid.UUID, data: dict[str, Any]
 ) -> dict[str, Any]:
@@ -232,7 +262,7 @@ async def update_interpretation(
             code=ErrorCode.DUPLICATE,
             http_status=409,
         )
-    changes = _apply_changes(row, values, renamed=renamed)
+    changes = {**_apply_changes(row, values, renamed=renamed), **_apply_ai_outputs(row, data.get("ai_outputs"))}
     if not changes:
         return to_out(row)
     row.version += 1
@@ -245,11 +275,7 @@ async def update_interpretation(
         row.scenario_state, row.candidate_id = "", None
         await scenario_engine.classify_quietly(session, [row], also=[old_candidate])
     await enqueue_event(
-        session,
-        event_type="policy.interpretation.updated",
-        actor=actor,
-        target_id=str(row.id),
-        changes=changes,
+        session, event_type="policy.interpretation.updated", actor=actor, target_id=str(row.id), changes=changes
     )
     return to_out(row)
 
@@ -340,10 +366,15 @@ async def export_interpretations(session: AsyncSession, actor: Actor, filters: F
     items = await repo.list_filtered(session, filters)
     rows = [to_out(item) for item in items]
     await attach_policy_contents(session, items, rows)
-    await enqueue_event(
-        session,
-        event_type="policy.interpretation.exported",
-        actor=actor,
-        extra={"count": len(rows)},
+    ai_fields: list[str] = []
+    for row in rows:
+        for key in row.get("ai_outputs") or ():
+            if key not in INTERPRETATION_WRITE_FIELDS and key not in ai_fields:
+                ai_fields.append(str(key))
+    export_cols = (
+        (*INTERPRETATION_COLUMNS, *(ColumnSpec(f, f) for f in ai_fields), POLICY_CONTENT_COLUMN)
+        if ai_fields
+        else INTERPRETATION_EXPORT_COLUMNS
     )
-    return await build_workbook_async(INTERPRETATION_EXPORT_COLUMNS, rows, sheet_name="政策解读列表")
+    await enqueue_event(session, event_type="policy.interpretation.exported", actor=actor, extra={"count": len(rows)})
+    return await build_workbook_async(export_cols, rows, sheet_name="政策解读列表")

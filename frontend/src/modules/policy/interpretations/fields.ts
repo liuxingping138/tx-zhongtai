@@ -104,3 +104,31 @@ export const EDITOR_GROUPS: EditorGroup[] = [
     ],
   },
 ]
+
+const CORE_INTERPRET_KEYS = new Set([
+  'tenant_id', 'policy_uid', 'policy_title',
+  'industry_scenario_code', 'industry_code', 'industry_l1', 'industry_l2', 'industry_l3',
+  'scenario_code', 'scenario_l1_name', 'scenario_l2_name', 'scenario_l3_name',
+  'target_customers', 'adapted_products', 'purchase_reason',
+  'opportunity_type', 'policy_summary', 'has_subsidy', 'subsidy_content',
+  'market_opportunity', 'info_level', 'is_new_scenario', 'new_scenario_level',
+  'remark', 'data_status',
+])
+
+/** 拆分基础列与模板动态扩展列，供核对页保存提交。 */
+export function packInterpretationPatch(form: Record<string, string>, row: { policy_uid: string; version: number }) {
+  const core: Record<string, string> = {}
+  const ai_outputs: Record<string, string> = {}
+  for (const [key, val] of Object.entries(form)) {
+    if (CORE_INTERPRET_KEYS.has(key)) core[key] = val
+    else ai_outputs[key] = val
+  }
+  return { ...core, policy_uid: row.policy_uid, ai_outputs, version: row.version }
+}
+
+/** 将解读/市场机会模板新增的动态输出字段并入列清单。 */
+export function mergeInterpretAiColumns(baseCols: readonly DataColumn[], aiFields: string[]): DataColumn[] {
+  const known = new Set(baseCols.map(col => col.prop))
+  const extra = aiFields.filter(name => !known.has(name)).map(name => ({ prop: name, label: name, minWidth: 160, wrap: true, ai: true }))
+  return extra.length ? [...baseCols.slice(0, 15), ...extra, ...baseCols.slice(15)] : [...baseCols]
+}

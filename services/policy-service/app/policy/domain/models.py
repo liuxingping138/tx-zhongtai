@@ -224,6 +224,9 @@ class Interpretation(Base):
     is_new_scenario: Mapped[str] = mapped_column(String(32), nullable=False, default="", comment="是否新增场景")
     new_scenario_level: Mapped[str] = mapped_column(String(64), nullable=False, default="", comment="新增场景级别")
     remark: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="备注")
+    ai_outputs: Mapped[dict[str, str]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb"), comment="AI模板动态输出字段"
+    )
     # AI 解读写入的行带源政策 ID；手工录入、导入的为空。重新解读同一条政策时按它清掉没人动过的旧行。
     source_content_id: Mapped[str | None] = mapped_column(String(200), nullable=True, index=True, comment="源政策ID")
     tagged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, comment="AI解读时间")

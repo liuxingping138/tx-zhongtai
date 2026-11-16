@@ -133,6 +133,13 @@ async def base_tags_by_ids(session: AsyncSession, ids: list[uuid.UUID]) -> dict[
     return {row.id: row for row in rows}
 
 
+async def interpretations_by_ids(session: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, Interpretation]:
+    if not ids:
+        return {}
+    rows = await session.scalars(select(Interpretation).where(Interpretation.id.in_(ids)))
+    return {row.id: row for row in rows}
+
+
 async def ai_interpretations(session: AsyncSession, source_ids: list[str]) -> dict[str, list[Interpretation]]:
     if not source_ids:
         return {}

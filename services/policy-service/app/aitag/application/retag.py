@@ -64,13 +64,33 @@ def _queue(tag: BaseTag, step: str) -> bool:
     return (tag.type_retag_at, tag.interpreted_at, tag.opportunity_at, tag.remark) != before
 
 
+async def _resolve_tags(
+    session: AsyncSession, item_ids: list[uuid.UUID], skipped: Counter[str]
+) -> tuple[dict[uuid.UUID, BaseTag], int]:
+    tags = await repo.base_tags_by_ids(session, list(item_ids))
+    unresolved = [uid for uid in dict.fromkeys(item_ids) if uid not in tags]
+    if not unresolved or session is None:
+        return tags, len(unresolved)
+    interps = await repo.interpretations_by_ids(session, unresolved)
+    missing = len(unresolved) - len(interps)
+    source_ids: list[str] = []
+    for interp in interps.values():
+        if not interp.source_content_id:
+            skipped["手工录入或导入的政策没有源政策，不能重新打标"] += 1
+        else:
+            source_ids.append(str(interp.source_content_id))
+    for tag in await repo.base_tags_by_source_ids(session, list(dict.fromkeys(source_ids))):
+        tags[tag.id] = tag
+    return tags, missing
+
+
 async def request(session: AsyncSession, actor: Actor, item_ids: list[uuid.UUID], step: str) -> dict[str, Any]:
-    """把勾选的政策放回某个任务的待办。返回放回几条、跳过的各是什么原因。"""
+    """把勾选的政策（或政策解读行所属的政策）放回某个任务的待办。返回放回几条、跳过的各是什么原因。"""
 
     if step not in TASKS:
         raise ApiError("不认识的打标步骤", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    tags = await repo.base_tags_by_ids(session, list(item_ids))
     skipped: Counter[str] = Counter()
+    tags, missing = await _resolve_tags(session, list(item_ids), skipped)
     queued = []
     for tag in tags.values():
         reason = _skip_reason(tag, step)
@@ -82,7 +102,6 @@ async def request(session: AsyncSession, actor: Actor, item_ids: list[uuid.UUID]
         if _queue(tag, step):
             tag.version += 1
         queued.append(tag)
-    missing = len(set(item_ids)) - len(tags)
     if missing:
         skipped["政策已被删除"] += missing
     if queued:

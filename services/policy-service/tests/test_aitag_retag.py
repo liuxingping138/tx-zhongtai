@@ -198,3 +198,26 @@ def test_ai_status_column_uses_the_filter_rules_failures_first() -> None:
     assert status(remark=f"{AI_NOTE_TYPE_UNKNOWN}：数字经济；{AI_NOTE_INTERPRET_FAILED}：超时") == "类型判断失败"
     # 申请重新判断之前留下的失败说明：排着队就显示排队，不再显示失败。
     assert status(remark=f"{AI_NOTE_TYPE_UNKNOWN}：数字经济", type_retag_at=now) == "等待重新判断类型"
+
+
+async def test_retag_accepts_interpretation_ids_and_resolves_parent_base_tags(
+    tags: dict[uuid.UUID, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tag = _tag(source_content_id="src_100")
+    interp_ok = SimpleNamespace(id=uuid.uuid4(), source_content_id="src_100")
+    interp_manual = SimpleNamespace(id=uuid.uuid4(), source_content_id="")
+    interps = {interp_ok.id: interp_ok, interp_manual.id: interp_manual}
+
+    async def interps_by_ids(_session: Any, ids: list[uuid.UUID]) -> dict[uuid.UUID, Any]:
+        return {uid: interps[uid] for uid in ids if uid in interps}
+
+    async def by_source_ids(_session: Any, source_ids: list[str]) -> list[Any]:
+        return [tag] if "src_100" in source_ids else []
+
+    monkeypatch.setattr(retag.repo, "interpretations_by_ids", interps_by_ids)
+    monkeypatch.setattr(retag.repo, "base_tags_by_source_ids", by_source_ids)
+    fake_session = SimpleNamespace()
+    out = await retag.request(fake_session, ACTOR, [interp_ok.id, interp_manual.id], "interpret")  # type: ignore[arg-type]  # 测试用替身替代 AsyncSession
+    assert out["queued"] == 1
+    assert out["skipped"] == [{"reason": "手工录入或导入的政策没有源政策，不能重新打标", "count": 1}]
+    assert tag.interpreted_at is None and tag.opportunity_at is None

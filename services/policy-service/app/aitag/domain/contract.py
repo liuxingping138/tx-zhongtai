@@ -35,6 +35,9 @@ REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
 # 同一业务字段的不同命名写法都认（如「政策类型」与「政策类型名称」）。
 FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     TYPE_FIELD: TYPE_FIELDS,
+    "一级行业": ("一级行业", "行业"),
+    "一级场景": ("一级场景", "一级场景名称", "场景"),
+    "市场机会": ("市场机会", "政策市场机会"),
 }
 
 

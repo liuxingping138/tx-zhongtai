@@ -7,6 +7,9 @@ const SCENES = '行业场景'
 const SCENARIO_PATHS = '同行业已有场景'
 const FIELD_ALIASES: Record<string, string[]> = {
   政策类型名称: ['政策类型名称', '政策类型'],
+  一级行业: ['一级行业', '行业'],
+  一级场景: ['一级场景', '一级场景名称', '场景'],
+  市场机会: ['市场机会', '政策市场机会'],
 }
 
 function hasField(fields: string[], required: string): boolean {

@@ -74,7 +74,9 @@ async def _codes(results: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
     return {str(item["key"]): item for item in found if item.get("industry_scenario_code")}
 
 
-def _new_row(tag: BaseTag, values: dict[str, str], key: str) -> Interpretation:
+def _new_row(
+    tag: BaseTag, values: dict[str, str], key: str, ai_outputs: dict[str, str] | None = None
+) -> Interpretation:
     now = utcnow()
     return Interpretation(
         record_id=str(uuid.uuid4()),
@@ -86,6 +88,7 @@ def _new_row(tag: BaseTag, values: dict[str, str], key: str) -> Interpretation:
         tagged_at=now,
         data_status=DATA_STATUS_PENDING,
         market_opportunity="",
+        ai_outputs=dict(ai_outputs or {}),
         version=1,
         created_at=now,
         created_by_id=ROBOT.id,
@@ -117,7 +120,7 @@ async def _save_interpretations(
     async with SessionLocal() as session:
         locked = await repo.base_tags_by_ids(session, [tag.id for tag in tags])
         old = await repo.ai_interpretations(session, [str(tag.source_content_id) for tag in tags])
-        plans: list[tuple[BaseTag, list[tuple[str, dict[str, str]]]]] = []
+        plans: list[tuple[BaseTag, list[tuple[str, dict[str, str], dict[str, str]]]]] = []
         for index, (snapshot, result) in enumerate(zip(tags, results, strict=True)):
             tag = locked.get(snapshot.id)
             if tag is None or not_run(result):
@@ -133,18 +136,20 @@ async def _save_interpretations(
             planned = []
             for position, item in enumerate(result["items"]):
                 values = _row_values(item, codes.get(f"{index}:{position}"))
-                planned.append((rules.relation_key(str(tag.source_content_id), values), values))
+                planned.append(
+                    (rules.relation_key(str(tag.source_content_id), values), values, rules.extract_ai_outputs(item))
+                )
             plans.append((tag, planned))
         # 先删旧行再写新行：同一个关联主键先删后插，不先落库删除会撞唯一约束。
         await session.flush()
         await scenario_engine.recount(session, stale)  # 旧行删掉了，它们归属的候选少了几行
-        taken = await repo.taken_relation_keys(session, [key for _, planned in plans for key, _ in planned])
+        taken = await repo.taken_relation_keys(session, [key for _, planned in plans for key, _, _ in planned])
         for tag, planned in plans:
-            for key, values in planned:
+            for key, values, extra in planned:
                 if key in taken:
                     continue  # 人工核对过的、手工录入的同一行，或模型重复给了同一行
                 taken.add(key)
-                session.add(_new_row(tag, values, key))
+                session.add(_new_row(tag, values, key, extra))
                 written += 1
         await enqueue_event(
             session,

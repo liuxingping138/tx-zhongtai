@@ -122,3 +122,22 @@ def test_new_marks_are_dropped_from_scenario_names() -> None:
 
 def _scenarios(values: dict[str, str]) -> tuple[str, str, str]:
     return values["scenario_l1_name"], values["scenario_l2_name"], values["scenario_l3_name"]
+
+
+def test_aliases_and_dynamic_ai_outputs_are_extracted_without_collision() -> None:
+    item = {
+        "行业": "党政行业",
+        "场景": "数字政府",
+        "客户群": "各级政数局",
+        "采买理由": "省厅文件要求",
+        "政策亮点": "专项资金5000万",
+        "申报截止期": "2026-12-31",
+        "空字段": "-",
+    }
+    values = rules.interpretation_values(item)
+    assert values["industry_l1"] == "党政行业"
+    assert values["scenario_l1_name"] == "数字政府"
+    assert values["target_customers"] == "各级政数局"
+    assert values["purchase_reason"] == "省厅文件要求"
+    extra = rules.extract_ai_outputs(item)
+    assert extra == {"政策亮点": "专项资金5000万", "申报截止期": "2026-12-31", "空字段": ""}
