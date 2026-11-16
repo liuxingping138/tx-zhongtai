@@ -44,6 +44,7 @@ const loadError = ref('')
 const saving = ref(false)
 const thinking = ref(false)
 const testTab = ref<'trial' | 'sample'>('trial')
+const sampleWide = ref(false)
 const trialRow = ref(0)
 const editor = ref<{ focus: () => void } | null>(null)
 const releasing = ref(false)
@@ -295,7 +296,11 @@ function onStep(key: StepKey): void {
     <div
       v-else
       class="prompt-page__body"
-      :class="{ 'is-refreshing': loading }"
+      :class="{
+        'is-refreshing': loading,
+        'is-sample': testTab === 'sample',
+        'is-sample-wide': testTab === 'sample' && sampleWide,
+      }"
     >
       <form
         class="ai-panel prompt-page__main"
@@ -303,16 +308,6 @@ function onStep(key: StepKey): void {
         @submit.prevent="persist()"
       >
         <div class="prompt-page__scroll">
-          <PromptEditor
-            ref="editor"
-            v-model="form.content"
-            :headers="selected?.excel_headers ?? []"
-            :code-name="codeName"
-            :disabled="!canEdit"
-            @run="trial"
-            @save="persist()"
-            @upload="files.pick('excel')"
-          />
           <PromptSettings
             v-model:category="form.category"
             v-model:model-id="form.model_id"
@@ -331,11 +326,22 @@ function onStep(key: StepKey): void {
             :fit="taskFit.results.value"
             @files-changed="replace"
           />
+          <PromptEditor
+            ref="editor"
+            v-model="form.content"
+            :headers="selected?.excel_headers ?? []"
+            :code-name="codeName"
+            :disabled="!canEdit"
+            @run="trial"
+            @save="persist()"
+            @upload="files.pick('excel')"
+          />
         </div>
       </form>
 
       <TestPanel
         v-model:tab="testTab"
+        v-model:wide="sampleWide"
         v-model:thinking="thinking"
         v-model:row="trialRow"
         class="prompt-page__test"
@@ -350,7 +356,7 @@ function onStep(key: StepKey): void {
         :dirty="unsaved.dirty.value"
         @run="trial"
         @upload="files.pick('excel')"
-        @edit="editor?.focus()"
+        @edit="sampleWide = false; editor?.focus()"
         @sample-changed="sampleChanged"
       />
     </div>

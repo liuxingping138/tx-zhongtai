@@ -94,9 +94,41 @@ function create(): void {
 
 <template>
   <section class="prompt-list">
-    <h1 class="ai-sr-only">
-      提示词模板
-    </h1>
+    <header class="ai-panel prompt-list__hero">
+      <div class="prompt-list__hero-main">
+        <h1>提示词模板</h1>
+        <p>统一编写、测试与版本发布各业务场景的 AI 提示词模板；选中一行即可进入工作台调优。</p>
+      </div>
+      <div class="prompt-list__kpis">
+        <div class="prompt-list__kpi">
+          <span>全部模板</span>
+          <strong>{{ inScope.length }}</strong>
+        </div>
+        <div class="prompt-list__kpi is-online">
+          <span>已上线</span>
+          <strong>{{ counts.online }}</strong>
+        </div>
+        <div class="prompt-list__kpi is-changed">
+          <span>有改动待发</span>
+          <strong>{{ counts.changed }}</strong>
+        </div>
+        <div
+          v-if="showTasks"
+          class="prompt-list__kpi is-task"
+        >
+          <span>定时任务在用</span>
+          <strong>{{ scheduled }}</strong>
+        </div>
+      </div>
+      <el-button
+        v-if="canCreate"
+        type="primary"
+        :icon="Plus"
+        @click="create"
+      >
+        新建模板
+      </el-button>
+    </header>
     <div class="ai-panel prompt-list__panel">
       <div class="prompt-list__toolbar">
         <el-input
@@ -104,7 +136,7 @@ function create(): void {
           class="prompt-list__search"
           :prefix-icon="Search"
           clearable
-          placeholder="按名称查找"
+          placeholder="按模板名称搜索…"
           aria-label="按名称查找模板"
         />
         <el-radio-group
@@ -152,15 +184,6 @@ function create(): void {
             定时任务在用<span class="prompt-list__count">{{ scheduled }}</span>
           </el-checkbox-button>
         </el-checkbox-group>
-        <span class="prompt-list__spacer" />
-        <el-button
-          v-if="canCreate"
-          type="primary"
-          :icon="Plus"
-          @click="create"
-        >
-          新建模板
-        </el-button>
       </div>
       <el-alert
         v-if="loadError"
@@ -171,7 +194,7 @@ function create(): void {
       />
       <TableSkeleton
         v-if="loading && templates.length === 0"
-        :columns="showTasks ? 8 : 7"
+        :columns="showTasks ? 9 : 8"
         :has-actions="true"
       />
       <el-table
@@ -186,7 +209,7 @@ function create(): void {
       >
         <el-table-column
           label="模板名称"
-          min-width="148"
+          min-width="170"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -201,11 +224,12 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="类型"
-          width="84"
+          width="88"
         >
           <template #default="{ row }">
             <el-tag
               size="small"
+              round
               :type="CATEGORY_TAGS[row.category] ?? 'info'"
               disable-transitions
             >
@@ -216,23 +240,29 @@ function create(): void {
         <el-table-column
           v-if="showTasks"
           label="定时任务"
-          min-width="112"
+          min-width="136"
           show-overflow-tooltip
         >
           <template #default="{ row }">
-            <span
+            <div
               v-if="tasksOf(row).length"
-              class="prompt-list__task"
-            >{{ tasksOf(row).join('、') }}</span>
+              class="prompt-list__task-pills"
+            >
+              <span
+                v-for="taskName in tasksOf(row)"
+                :key="taskName"
+                class="prompt-list__task-pill"
+              >{{ taskName }}</span>
+            </div>
             <span
               v-else
               class="prompt-list__none"
-            >不在用</span>
+            >—</span>
           </template>
         </el-table-column>
         <el-table-column
           label="上线状态"
-          min-width="128"
+          min-width="148"
         >
           <template #default="{ row }">
             <!-- 有改动没上线：一行写完，改了什么放悬停提示，「看改动」直接打开逐行对比。 -->
@@ -240,7 +270,7 @@ function create(): void {
               v-if="row.release?.unreleased_changes.length"
               class="prompt-list__state is-changed"
               :title="`草稿改了${row.release.unreleased_changes.join('、')}，还没上线`"
-            >第 {{ row.release.release_no }} 版，有改动<router-link
+            >第 {{ row.release.release_no }} 版 · 有改动<router-link
               class="prompt-list__diff"
               :to="{ name: 'ai-prompt-edit', params: { id: row.id }, query: { review: '1' } }"
               @click.stop
@@ -255,7 +285,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="样本试跑"
-          min-width="136"
+          min-width="148"
         >
           <template #default="{ row }">
             <span
@@ -267,11 +297,18 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="字段数"
-          width="64"
-          align="right"
+          width="76"
+          align="center"
         >
           <template #default="{ row }">
-            {{ row.fields.length || '—' }}
+            <span
+              v-if="row.fields.length"
+              class="prompt-list__field-badge"
+            >{{ row.fields.length }}</span>
+            <span
+              v-else
+              class="prompt-list__none"
+            >—</span>
           </template>
         </el-table-column>
         <el-table-column
@@ -280,18 +317,21 @@ function create(): void {
           show-overflow-tooltip
         >
           <template #default="{ row }">
-            <span :title="row.model_name">{{ shortModel(row.model_name) }}</span>
+            <span
+              class="prompt-list__model"
+              :title="row.model_name"
+            >{{ shortModel(row.model_name) }}</span>
           </template>
         </el-table-column>
         <el-table-column
           prop="updated_by_name"
           label="更新人"
-          width="84"
+          width="88"
           show-overflow-tooltip
         />
         <el-table-column
           label="更新时间"
-          width="94"
+          width="96"
         >
           <template #default="{ row }">
             <span
@@ -300,54 +340,29 @@ function create(): void {
             >{{ shortTime(row.updated_at) }}</span>
           </template>
         </el-table-column>
+        <el-table-column
+          label="操作"
+          width="110"
+          fixed="right"
+          align="right"
+        >
+          <template #default="{ row }">
+            <div
+              class="row-actions"
+              @click.stop
+            >
+              <router-link
+                class="row-action row-action--primary"
+                :to="{ name: 'ai-prompt-edit', params: { id: row.id } }"
+              >
+                编辑调优
+              </router-link>
+            </div>
+          </template>
+        </el-table-column>
       </el-table>
     </div>
   </section>
 </template>
 
-<style scoped>
-.prompt-list { height: calc(100dvh - var(--workspace-header-height) - 48px); min-height: 480px; }
-.prompt-list__panel { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
-.prompt-list__toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--zt-border); }
-.prompt-list__toolbar .el-button { height: 32px; margin: 0; padding: 0 14px; }
-.prompt-list__search { width: 160px; }
-.prompt-list__sep { width: 1px; height: 16px; margin: 0 2px; background: var(--zt-border); }
-/* 独立过滤开关：白底描边按钮，选中变为浅蓝描边态，与左侧分段槽区分职责。 */
-.prompt-list__toggle :deep(.el-checkbox-button__inner) {
-  display: inline-flex; align-items: center; height: 32px; padding: 0 11px; border: 1px solid var(--zt-border) !important; outline: 0;
-  border-radius: var(--zt-radius) !important; background: var(--zt-panel); color: var(--zt-ink-700);
-  font-size: 13px; font-weight: 400; box-shadow: none !important; transition: background-color .15s, border-color .15s, color .15s;
-}
-.prompt-list__toggle :deep(.el-checkbox-button:not(.is-checked) .el-checkbox-button__inner:hover) {
-  border-color: var(--zt-border-strong) !important; background: var(--zt-surface-subtle); color: var(--zt-ink-900);
-}
-.prompt-list__toggle :deep(.el-checkbox-button.is-checked .el-checkbox-button__inner) {
-  border-color: var(--el-color-primary-light-5) !important; background: var(--el-color-primary-light-9) !important;
-  color: var(--zt-blue-600) !important; font-weight: 600;
-}
-.prompt-list__spacer { flex: 1; }
-.prompt-list__count { margin-left: 4px; color: var(--zt-ink-400); font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
-.prompt-list :deep(.is-active) .prompt-list__count, .prompt-list :deep(.is-checked) .prompt-list__count { color: var(--zt-blue-600); font-weight: 600; }
-.prompt-list__table { flex: 1; min-height: 0; }
-.prompt-list__table :deep(.el-table__row) { cursor: pointer; }
-/* 和业务列表一样左右各 12px：九列在常见宽度下放得下，不用横向滚动 */
-.prompt-list__table :deep(.cell) { padding: 0 12px; }
-/* 每格只占一行，所有行一样高：放不下的截断，悬停看全文。 */
-.prompt-list__table :deep(.cell) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.prompt-list__name { color: var(--zt-ink-900); font-weight: 600; text-decoration: none; }
-.prompt-list__name:hover { color: var(--zt-blue-600); }
-.prompt-list__state { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
-.prompt-list__state::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--zt-muted-mark); }
-.prompt-list__state.is-online::before { background: var(--zt-success); }
-.prompt-list__state.is-changed { color: var(--zt-warning-text); }
-.prompt-list__state.is-changed::before { background: var(--zt-warning); }
-.prompt-list__diff { margin-left: 2px; color: var(--zt-blue-600); text-decoration: none; }
-.prompt-list__diff:hover { text-decoration: underline; }
-.prompt-list__sample { color: var(--zt-ink-500); font-size: 13px; }
-.prompt-list__sample.is-passed { color: var(--zt-success-text); }
-.prompt-list__sample.is-failed, .prompt-list__sample.is-stale { color: var(--zt-warning-text); }
-.prompt-list__sample.is-running { color: var(--zt-blue-600); }
-.prompt-list__task { color: var(--zt-ink-700); font-size: 13px; }
-.prompt-list__time { font-variant-numeric: tabular-nums; }
-.prompt-list__none { color: var(--zt-ink-400); font-size: 13px; }
-</style>
+<style scoped src="./prompt-list.css"></style>

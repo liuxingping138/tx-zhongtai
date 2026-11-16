@@ -29,6 +29,7 @@ const emit = defineEmits<{ run: []; upload: []; sample: [] }>()
 const row = defineModel<number>('row', { required: true })
 
 const data = ref<TestRows>({ headers: [], total: 0, rows: [] })
+const expandInput = ref(false)
 /** 最近一次试发问的是哪一行：换了行就先看新一行的数据，不拿上一行的回答冒充 */
 const askedRow = ref<number | null>(null)
 
@@ -127,12 +128,23 @@ function move(step: number): void {
     <div class="trial__content">
       <template v-if="!showResult">
         <template v-if="template?.excel_name">
-          <p class="trial__cap">
-            发出去时，提示词里的变量换成这一行的数据
-          </p>
+          <div class="trial__cap-row">
+            <p class="trial__cap">
+              发出去时，提示词里的变量换成这一行的数据
+            </p>
+            <button
+              v-if="variables.length"
+              type="button"
+              class="trial__cap-toggle"
+              @click="expandInput = !expandInput"
+            >
+              {{ expandInput ? '收起长文本' : '展开全文' }}
+            </button>
+          </div>
           <dl
             v-if="variables.length"
             class="trial__data"
+            :class="{ 'is-compact': !expandInput }"
           >
             <template
               v-for="item in variables"
@@ -289,8 +301,12 @@ function move(step: number): void {
 .trial__from { margin: 12px 16px 0; padding: 8px 12px; border-radius: 6px; background: var(--zt-warning-soft); color: var(--zt-warning-text); font-size: 12px; line-height: 1.6; }
 .trial__content { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px; }
 .trial__cap { margin: 0; color: var(--zt-ink-500); font-size: 12px; }
-.trial__data, .trial__fields { display: grid; grid-template-columns: 88px minmax(0, 1fr); margin: 0; font-size: 13px; line-height: 1.7; }
-.trial__data { overflow: hidden; border: 1px solid var(--zt-border); border-radius: 6px; }
+.trial__cap-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.trial__cap-toggle { padding: 2px 6px; border: 0; border-radius: 6px; background: transparent; color: var(--zt-blue-600); font-size: 12px; cursor: pointer; }
+.trial__cap-toggle:hover { background: var(--el-color-primary-light-9); }
+.trial__data, .trial__fields { display: grid; grid-template-columns: 96px minmax(0, 1fr); margin: 0; font-size: 13px; line-height: 1.65; }
+.trial__data { overflow: hidden; border: 1px solid var(--zt-border); border-radius: 10px; }
+.trial__data.is-compact dd { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .trial__data dt, .trial__fields dt { padding: 8px 10px; border-bottom: 1px solid var(--zt-divider); color: var(--zt-ink-500); word-break: break-all; }
 .trial__data dt { background: var(--zt-surface-subtle); }
 .trial__data dd, .trial__fields dd { margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--zt-divider); color: var(--zt-ink-900); word-break: break-all; }
@@ -298,7 +314,7 @@ function move(step: number): void {
 .trial__data small { display: block; color: var(--zt-ink-500); font-size: 12px; }
 .trial__data .is-missing { color: var(--zt-warning-text); }
 .trial__fields dd { font-weight: 600; }
-.trial__result { overflow: hidden; border: 1px solid var(--zt-border); border-radius: 6px; }
+.trial__result { overflow: hidden; border: 1px solid var(--zt-border); border-radius: 10px; }
 .trial__result.is-ok { border-color: var(--zt-success-border); }
 .trial__result.is-bad { border-color: var(--zt-warning-border); }
 .trial__head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 9px 12px; background: var(--zt-surface-subtle); color: var(--zt-ink-700); font-size: 13px; font-weight: 600; }

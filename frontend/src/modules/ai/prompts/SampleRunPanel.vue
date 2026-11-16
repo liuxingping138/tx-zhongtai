@@ -5,6 +5,7 @@ import { missingFieldsWarning } from '../shared/outputFields'
 import type { AiModel, PromptTemplate, RunRow } from '@/api/ai'
 import { RUN_STATUS_TEXT, formatYuan, runStatusType } from '../shared/aiText'
 import SampleResultsDrawer from './SampleResultsDrawer.vue'
+import SamplePreviewTable from './SamplePreviewTable.vue'
 import SampleStrip from './SampleStrip.vue'
 import { compareText, isProblem, rowNote, rowsToWatch, shortTime } from './sampleView'
 import { sampleCurrent } from './templateStatus'
@@ -261,6 +262,15 @@ async function start(): Promise<void> {
       >
         {{ allGood }}
       </p>
+      <SamplePreviewTable
+        v-if="rows?.items.length && !running"
+        :columns="rows.columns"
+        :fields="rows.fields"
+        :items="rows.items"
+        :can-run="canRun"
+        @pick="open"
+        @trial="row => emit('trial', row)"
+      />
       <p
         v-if="!run && !sample.loading.value"
         class="sample__empty"

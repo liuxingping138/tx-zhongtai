@@ -24,6 +24,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ run: []; upload: []; edit: []; 'sample-changed': [run: BatchRun] }>()
 const tab = defineModel<'trial' | 'sample'>('tab', { required: true })
+const wide = defineModel<boolean>('wide', { default: false })
 const thinking = defineModel<boolean>('thinking', { default: false })
 /** 试发测试样本的第几条，从 0 数 */
 const row = defineModel<number>('row', { required: true })
@@ -33,6 +34,7 @@ const sample = useSampleRun(toRef(props, 'template'), run => emit('sample-change
 /** 样本试跑里点「试发这一行」：换到试发，选好那一行（试跑的行号从 1 数）。 */
 function trialRow(number: number): void {
   row.value = number - 1
+  wide.value = false
   tab.value = 'trial'
 }
 </script>
@@ -61,12 +63,22 @@ function trialRow(number: number): void {
           {{ item.label }}
         </button>
       </div>
-      <el-switch
-        v-if="model?.supports_thinking"
-        v-model="thinking"
-        size="small"
-        active-text="深度思考"
-      />
+      <div class="test-panel__right">
+        <el-switch
+          v-if="model?.supports_thinking"
+          v-model="thinking"
+          size="small"
+          active-text="深度思考"
+        />
+        <button
+          v-if="tab === 'sample'"
+          type="button"
+          class="test-panel__wide"
+          @click="wide = !wide"
+        >
+          {{ wide ? '恢复分栏' : '全屏看结果' }}
+        </button>
+      </div>
     </div>
     <TrialPanel
       v-show="tab === 'trial'"
@@ -107,10 +119,12 @@ function trialRow(number: number): void {
 
 <style scoped>
 .test-panel { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-.test-panel__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--zt-border); }
-.test-panel__tabs { display: flex; gap: 20px; }
-.test-panel__tabs button { position: relative; padding: 13px 0 11px; border: 0; background: none; color: var(--zt-ink-500); font: 600 14px/22px var(--zt-font); cursor: pointer; }
-.test-panel__tabs button[aria-selected="true"] { color: var(--zt-ink-900); }
-.test-panel__tabs button[aria-selected="true"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; border-radius: 1px; background: var(--zt-blue-600); }
+.test-panel__tabs { display: flex; gap: 4px; padding: 3px; border: 1px solid var(--zt-border); border-radius: 999px; background: var(--zt-soft); }
+.test-panel__tabs button { position: relative; padding: 5px 14px; border: 0; border-radius: 999px; background: none; color: var(--zt-ink-500); font: 600 13px/18px var(--zt-font); cursor: pointer; transition: all .15s; }
+.test-panel__tabs button[aria-selected="true"] { background: var(--zt-panel); color: var(--zt-blue-600); box-shadow: 0 1px 2px var(--zt-shadow-soft); }
 .test-panel__tabs button:focus-visible { outline: 2px solid var(--zt-blue-600); outline-offset: 2px; }
+.test-panel__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--zt-border); background: var(--zt-surface-subtle); }
+.test-panel__right { display: flex; align-items: center; gap: 10px; }
+.test-panel__wide { padding: 4px 10px; border: 1px solid var(--zt-border); border-radius: 999px; background: var(--zt-panel); color: var(--zt-ink-700); font: 500 12px/1.3 var(--zt-font); cursor: pointer; }
+.test-panel__wide:hover { border-color: var(--zt-blue-600); color: var(--zt-blue-600); }
 </style>
