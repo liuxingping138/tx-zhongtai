@@ -50,7 +50,14 @@ def _secret_scan(root: Path | None = None) -> list[str]:
     base = root or ROOT
     listed = tracked_files(base)
     errors: list[str] = []
-    skip = {"docs/openapi/iam.json", "docs/openapi/audit.json", "docs/openapi/codebook.json", "docs/openapi/policy.json", "docs/openapi/ai.json"}
+    skip = {
+        "docs/openapi/iam.json",
+        "docs/openapi/audit.json",
+        "docs/openapi/codebook.json",
+        "docs/openapi/policy.json",
+        "docs/openapi/ai.json",
+        "docs/openapi/tender.json",
+    }
     for rel in listed:
         if rel in skip or rel.endswith(".lock") or "pnpm-lock" in rel:
             continue

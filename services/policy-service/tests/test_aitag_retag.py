@@ -133,7 +133,9 @@ def test_read_by_ids_keeps_the_requested_order(monkeypatch: pytest.MonkeyPatch) 
         def __exit__(self, *_: object) -> None:
             return None
 
-    monkeypatch.setattr(source, "mysql_connect", lambda _db: Connection())
+    from app.common import policy_source
+
+    monkeypatch.setattr(policy_source, "mysql_connect", lambda _db: Connection())
     rows = source.read_by_ids(["a", "gone", "b"])
     assert [row["content_id"] for row in rows] == ["a", "b"]
     assert "WHERE content_id IN (%s, %s, %s)" in executed[0][0] and "collect_date" in executed[0][0]

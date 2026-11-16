@@ -10,7 +10,7 @@ import pymysql
 import pytest
 from platform_common.errors import DependencyUnavailableError, NotFoundError
 
-from app.aitag.repositories import source
+from app.common import policy_source as source
 from app.policy.application import base_tags, interpretations, policy_content
 
 HTML = "<html><body><div class='nav'>首页</div><p>第一段。</p><p>第二段。</p></body></html>"

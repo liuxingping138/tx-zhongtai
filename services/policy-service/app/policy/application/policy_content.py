@@ -16,8 +16,8 @@ from platform_common.errors import DependencyUnavailableError, NotFoundError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.aitag.domain import rules
-from app.aitag.repositories import source
+from app.common import policy_source as source
+from app.common import policy_text as rules
 from app.policy.domain.models import BaseTag
 
 NO_SOURCE = "这条不是从源库打标的，没有正文"

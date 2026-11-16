@@ -63,6 +63,12 @@ type = "independence"
 modules = ["app.policy", "app.crawler"]
 
 [[tool.importlinter.contracts]]
+name = "政策领域不反向依赖 AI 打标与爬虫配置"
+type = "forbidden"
+source_modules = ["app.policy"]
+forbidden_modules = ["app.aitag", "app.crawlconfig"]
+
+[[tool.importlinter.contracts]]
 name = "调度只经爬虫、爬虫配置、AI 打标的 application 触发执行，不依赖政策"
 type = "forbidden"
 source_modules = ["app.scheduler"]

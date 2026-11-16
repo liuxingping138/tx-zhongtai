@@ -12,9 +12,9 @@ from platform_common.excel import build_workbook_async, encode_skipped_file_asyn
 from platform_common.filters import Filters
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.aitag.domain.interpret_rules import KNOWN_INTERPRET_KEYS
 from app.common import internal_clients
 from app.common.audit_emit import enqueue_event
+from app.common.interpret_fields import KNOWN_INTERPRET_KEYS
 from app.core.config import get_settings
 from app.policy.application import scenario_engine
 from app.policy.application.importing import add_in_batches

@@ -449,7 +449,7 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
 
 - 本期不执行生产部署；`deploy/gateway/traefik.prod.yml.example` 只是 HTTPS 模板
 - `client_ip` 无条件信任 `X-Forwarded-For` 首段，成立前提是服务只能经网关访问
-  （Traefik 会清洗客户端自带的该头）。服务端口 8001–8005 不得直接对外暴露，
+  （Traefik 会清洗客户端自带的该头）。服务端口 8001–8006 不得直接对外暴露，
   也不要在 Traefik 前再加一层不做同样清洗的代理
 - 导出不分页，整个结果集读进内存再生成 Excel，靠 `export_max_rows` 兜底
 - 筛选项服务端搜索最坏情况线性扫索引（20002 行约 5ms），到 20 万行量级再考虑 pg_trgm

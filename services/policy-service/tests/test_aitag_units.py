@@ -76,8 +76,10 @@ def _connect(cursor: FakeCursor) -> Any:
 
 
 def test_read_batch_walks_days_and_pages_within_a_day(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.common import policy_source
+
     cursor = FakeCursor({DAY: ["a", "b", "c"], DAY + timedelta(2): ["d", "e"]})
-    monkeypatch.setattr(source, "mysql_connect", _connect(cursor))
+    monkeypatch.setattr(policy_source, "mysql_connect", _connect(cursor))
     rows = source.read_batch(DAY, "a", 3, DAY + timedelta(5))
     # 当天从 a 之后读 b、c 不够 3 条，跳过空的第二天，第三天补 d。
     assert [row["content_id"] for row in rows] == ["b", "c", "d"]
@@ -86,8 +88,10 @@ def test_read_batch_walks_days_and_pages_within_a_day(monkeypatch: pytest.Monkey
 
 
 def test_read_batch_reads_only_the_picked_provinces(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.common import policy_source
+
     cursor = FakeCursor({DAY: ["a", "b", "c", "d"]}, {"a": "北京市", "b": "河北省", "c": "北京市", "d": "天津市"})
-    monkeypatch.setattr(source, "mysql_connect", _connect(cursor))
+    monkeypatch.setattr(policy_source, "mysql_connect", _connect(cursor))
     rows = source.read_batch(DAY, "", 5, DAY, ["北京市", "天津市"])
     assert [row["content_id"] for row in rows] == ["a", "c", "d"]
     # 省份作为参数绑进 IN，条数仍在最后；不选省份时 SQL 不带省份条件。
@@ -98,8 +102,10 @@ def test_read_batch_reads_only_the_picked_provinces(monkeypatch: pytest.MonkeyPa
 
 
 def test_read_contents_goes_in_chunks(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.common import policy_source
+
     cursor = FakeCursor({})
-    monkeypatch.setattr(source, "mysql_connect", _connect(cursor))
+    monkeypatch.setattr(policy_source, "mysql_connect", _connect(cursor))
     ids = [f"id{index:03d}" for index in range(450)]
     contents = source.read_contents(ids)
     assert len(contents) == 450 and contents["id449"] == "id449正文"
