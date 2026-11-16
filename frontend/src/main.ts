@@ -47,7 +47,7 @@ onRemoteLogout(() => {
 })
 setForbiddenHandler(() => {
   if (auth.isAuthenticated && !auth.mustChangePassword) {
-    void auth.loadProfile()
+    void auth.loadProfile().catch(() => undefined)
   }
 })
 

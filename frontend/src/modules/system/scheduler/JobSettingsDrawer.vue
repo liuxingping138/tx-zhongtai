@@ -8,10 +8,12 @@ import { errorMessage } from '@/api/errors'
 import FilterSelect from '@/components/FilterSelect.vue'
 import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
+import { useAuthStore } from '@/stores/auth'
 import { TASK_INTRO, cursorToSend, formatYuan } from './aiTagging'
 
 /** 一个任务的设置：每日计划；打标任务再加模板、每批条数、正文长度、每日上限，类型判断还有起始采集日期和采集省份。 */
 const emit = defineEmits<{ saved: [] }>()
+const auth = useAuthStore()
 const visible = ref(false)
 const saving = ref(false)
 const error = ref('')
@@ -57,7 +59,9 @@ function open(target: ScheduledJob, aiTask: AiTask | null): void {
     Object.assign(ai, { prompt_id, batch_size, content_max_chars, daily_cost_limit, cursor_date, provinces: [...(aiTask.provinces ?? [])] })
     openedCursor.value = cursor_date
     void loadTemplates()
-    if (aiTask.code === 'type' && !provinceOptions.loaded.value) void provinceOptions.load()
+    if (aiTask.code === 'type' && !provinceOptions.loaded.value && auth.canRead('codebook.area_codes')) {
+      void provinceOptions.load()
+    }
   }
   error.value = ''
   visible.value = true

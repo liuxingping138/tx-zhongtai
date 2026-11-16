@@ -45,9 +45,9 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    app.add_middleware(RequestIdMiddleware)
-    # 登录接口不用登录就能调：不限请求体的话，不带 Content-Length 的大正文会整段读进 IAM 内存。
+    # 后添加的中间件更靠外层：RequestIdMiddleware 放后面以确保最外层注入 request_id（含 401/413 拒绝响应）。
     app.add_middleware(RequestBodyLimitMiddleware, max_bytes=settings.import_max_bytes + MULTIPART_OVERHEAD_BYTES)
+    app.add_middleware(RequestIdMiddleware)
     if settings.cors_allow_origins:
         app.add_middleware(
             CORSMiddleware,

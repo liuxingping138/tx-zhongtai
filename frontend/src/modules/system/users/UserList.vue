@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 
@@ -22,6 +22,7 @@ import UserCreateDrawer from './UserCreateDrawer.vue'
 import UserTable from './UserTable.vue'
 
 const auth = useAuthStore()
+const route = useRoute()
 const router = useRouter()
 /** 分配角色即授权，与后端同一门槛：需要「权限分配」可管理（只有超级管理员）。 */
 const canGrant = computed(() => auth.canFull('system.permissions'))
@@ -133,7 +134,7 @@ function onCreated(result: { username: string; temporaryPassword: string | null 
 }
 
 function openDetail(user: UserItem) {
-  void router.push(`/system/users/${user.id}`)
+  void router.push({ path: `/system/users/${user.id}`, query: route.query })
 }
 
 function openAudit(user: UserItem) {

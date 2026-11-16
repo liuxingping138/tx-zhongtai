@@ -36,7 +36,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     app.dependency_overrides[get_category_access] = lambda: FULL_ACCESS
     monkeypatch.setattr(prompts, "audit_template", noop)
     monkeypatch.setattr(get_settings(), "baidu_api_key", "k")
-    yield TestClient(app)
+    yield TestClient(app, headers={"Authorization": "Bearer test"})
     app.dependency_overrides.clear()
 
 
@@ -62,6 +62,7 @@ def test_upload_parses_multipart_after_auth(client: TestClient, monkeypatch: pyt
     assert response.json()["data"]["excel_rows"] == 1
     assert client.post(f"/api/v1/ai/prompts/{PROMPT_ID}/files/pdf", files=files).status_code == 422
     assert client.post(f"/api/v1/ai/prompts/{PROMPT_ID}/files/excel", data={"x": "1"}).status_code == 422
+    assert TestClient(app).post(f"/api/v1/ai/prompts/{PROMPT_ID}/files/excel", files=files).status_code == 401
 
 
 def test_download_sets_utf8_filename(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:

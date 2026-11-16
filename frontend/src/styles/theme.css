@@ -922,6 +922,8 @@ button:disabled { cursor: not-allowed; }
   100% { background-position: -200% 0; }
 }
 
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
 /* 顶栏高度收敛至 60px，侧栏 208px，释放更多垂直空间给业务数据 */
 .workspace-shell { --workspace-rail-width: 208px; --workspace-header-height: 60px; }
 

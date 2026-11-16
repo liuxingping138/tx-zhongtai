@@ -42,12 +42,14 @@ function openRetag(row: BaseTagItem) {
 
 let pollTimer: ReturnType<typeof setInterval> | undefined
 let pollRemaining = 0
+let pollInFlight = false
 function stopPoll() {
   if (pollTimer) {
     clearInterval(pollTimer)
     pollTimer = undefined
   }
   pollRemaining = 0
+  pollInFlight = false
   retagging.value = false
 }
 
@@ -81,9 +83,18 @@ async function onRetagDone() {
 }
 
 async function checkFresh(baseId: string, baseVersion: number, baseStatus: string) {
-  if (review.editing.value || review.record.value?.id !== baseId) return
+  if (review.editing.value || pollInFlight) return
+  if (review.record.value?.id !== baseId) {
+    stopPoll()
+    return
+  }
+  pollInFlight = true
   try {
     const fresh = await getBaseTag(baseId)
+    if (review.record.value?.id !== baseId) {
+      stopPoll()
+      return
+    }
     if (fresh.version !== baseVersion || fresh.ai_status !== baseStatus) {
       stopPoll()
       await review.load()
@@ -91,6 +102,8 @@ async function checkFresh(baseId: string, baseVersion: number, baseStatus: strin
     }
   } catch {
     /* 轮询网络波动忽略 */
+  } finally {
+    pollInFlight = false
   }
 }
 

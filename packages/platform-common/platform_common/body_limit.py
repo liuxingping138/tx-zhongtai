@@ -15,8 +15,9 @@ from fastapi import HTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from platform_common.errors import ErrorCode
+from platform_common.request_context import REQUEST_ID_HEADER, REQUEST_ID_PATTERN, get_request_id
 
-_UPLOAD_SUFFIXES = ("/import", "/resolve")
+_UPLOAD_SUFFIXES = ("/import", "/resolve", "/files/excel", "/files/code")
 
 
 def _headers(scope: Scope) -> dict[str, str]:
@@ -31,21 +32,26 @@ def _is_upload(scope: Scope) -> bool:
     return scope.get("method") == "POST" and path.endswith(_UPLOAD_SUFFIXES)
 
 
-async def _json_response(send: Send, status: int, code: str, message: str) -> None:
+def _resolve_request_id(headers: dict[str, str]) -> str | None:
+    current = get_request_id()
+    if current:
+        return current
+    incoming = (headers.get("x-request-id") or "").strip()
+    return incoming if REQUEST_ID_PATTERN.match(incoming) else None
+
+
+async def _json_response(send: Send, status: int, code: str, message: str, *, request_id: str | None = None) -> None:
     body = json.dumps(
-        {"code": code, "message": message, "data": None, "request_id": None},
+        {"code": code, "message": message, "data": None, "request_id": request_id},
         ensure_ascii=False,
     ).encode("utf-8")
-    await send(
-        {
-            "type": "http.response.start",
-            "status": status,
-            "headers": [
-                (b"content-type", b"application/json; charset=utf-8"),
-                (b"content-length", str(len(body)).encode("ascii")),
-            ],
-        }
-    )
+    resp_headers = [
+        (b"content-type", b"application/json; charset=utf-8"),
+        (b"content-length", str(len(body)).encode("ascii")),
+    ]
+    if request_id:
+        resp_headers.append((REQUEST_ID_HEADER.lower().encode("ascii"), request_id.encode("ascii")))
+    await send({"type": "http.response.start", "status": status, "headers": resp_headers})
     await send({"type": "http.response.body", "body": body})
 
 
@@ -82,16 +88,17 @@ class RequestBodyLimitMiddleware:
             await self.app(scope, receive, send)
             return
         headers = _headers(scope)
+        rid = _resolve_request_id(headers)
         if _is_upload(scope) and not headers.get("authorization", "").lower().startswith("bearer "):
-            await _json_response(send, 401, ErrorCode.AUTH_UNAUTHENTICATED, "未认证或凭据已失效")
+            await _json_response(send, 401, ErrorCode.AUTH_UNAUTHENTICATED, "未认证或凭据已失效", request_id=rid)
             return
         limit = self._limit(scope)
         if _declared_length(headers) > limit:
-            await _json_response(send, 413, ErrorCode.VALIDATION_ERROR, _TOO_LARGE)
+            await _json_response(send, 413, ErrorCode.VALIDATION_ERROR, _TOO_LARGE, request_id=rid)
             return
-        await self._counted(scope, receive, send, limit)
+        await self._counted(scope, receive, send, limit, rid)
 
-    async def _counted(self, scope: Scope, receive: Receive, send: Send, limit: int) -> None:
+    async def _counted(self, scope: Scope, receive: Receive, send: Send, limit: int, request_id: str | None) -> None:
         """按实际收到的字节累计，一超就停：不带 Content-Length 的分块正文靠这一层挡。"""
 
         received = 0
@@ -116,7 +123,7 @@ class RequestBodyLimitMiddleware:
         except RequestBodyTooLargeError:
             # 应用的异常处理没接住（比如在中间件层读的正文）：还没开始回响应就由这里回 413。
             if not started:
-                await _json_response(send, 413, ErrorCode.VALIDATION_ERROR, _TOO_LARGE)
+                await _json_response(send, 413, ErrorCode.VALIDATION_ERROR, _TOO_LARGE, request_id=request_id)
 
 
 def _declared_length(headers: dict[str, str]) -> int:

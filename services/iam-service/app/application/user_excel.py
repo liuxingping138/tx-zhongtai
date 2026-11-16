@@ -33,7 +33,7 @@ from app.domain.enums import RoleStatus
 from app.domain.fields import STATUS_TEXT, USER_EXPORT_COLUMNS, USER_IMPORT_COLUMNS
 from app.domain.filters import UserFilters
 from app.domain.models import Role, User
-from app.domain.password import hash_password
+from app.domain.password import hash_password_async
 from app.repositories import roles as role_repo
 from app.repositories import users as user_repo
 
@@ -187,8 +187,8 @@ async def _prepare_row(
 
 async def _create_imported(session: AsyncSession, actor: User, item: _ImportRow) -> dict[str, str]:
     temporary = generate_temporary_password()
-    # Argon2 一次几十毫秒，几百行在协程里算会把整个服务卡住，放线程池。
-    hashed = await to_thread.run_sync(hash_password, temporary)
+    # Argon2 一次几十毫秒，走域名受限线程池（CapacityLimiter）防百行导入瞬时打满内存与 CPU。
+    hashed = await hash_password_async(temporary)
     payload, _ = await user_admin.create_user(session, actor, replace(item.user, password_hash=hashed))
     roles = payload.get("roles") or []
     return {

@@ -108,7 +108,9 @@ onMounted(() => { void load(); void loadTotals() })
   <div class="tender-stats">
     <header class="stats-bar">
       <div class="stats-bar__title">
-        <h1>招中标统计分析</h1>
+        <h1 class="sr-only">
+          招中标统计分析
+        </h1>
         <span
           class="status-pill"
           :class="{ 'is-updating': totalsLoading }"

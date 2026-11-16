@@ -50,8 +50,8 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json" if settings.environment != "production" else None,
         lifespan=lifespan,
     )
-    app.add_middleware(RequestIdMiddleware)
     app.add_middleware(RequestBodyLimitMiddleware, max_bytes=settings.import_max_bytes + MULTIPART_OVERHEAD_BYTES)
+    app.add_middleware(RequestIdMiddleware)
     if settings.cors_allow_origins:
         app.add_middleware(
             CORSMiddleware,

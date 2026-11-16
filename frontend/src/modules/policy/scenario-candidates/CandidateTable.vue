@@ -25,6 +25,7 @@ const props = defineProps<{
   extras: ReturnType<typeof useCandidateExtras>
   /** 正在准备确认框的那一行和那个决定 */
   busy: { id: string; mode: DecisionMode } | null
+  reopeningId?: string
   /** 从别处带过来要直接展开的那一行 */
   focus: string
 }>()
@@ -211,6 +212,8 @@ defineExpose({ clearSelection: () => table.value?.clearSelection() })
         <el-button
           link
           type="primary"
+          :loading="reopeningId === row.id"
+          :disabled="Boolean(reopeningId)"
           @click="emit('reopen', row)"
         >
           改判回待审

@@ -340,3 +340,30 @@ def test_production_requires_origin_header() -> None:
     with pytest.raises(Exception, match="缺少 Origin"):
         security.check_origin(request, production)  # type: ignore[arg-type]  # 只用到 headers 的替身
     security.check_origin(request, SETTINGS)  # type: ignore[arg-type]  # 只用到 headers 的替身
+
+
+def test_production_origin_hardening() -> None:
+    production = SETTINGS.model_copy(
+        update={
+            "environment": Environment.PRODUCTION,
+            "cors_allow_origins": ["https://app.example.com"],
+            "csrf_allowed_origins": [],
+        }
+    )
+    spoofed_host = SimpleNamespace(headers={"origin": "https://evil.example.com", "host": "evil.example.com"})
+    with pytest.raises(Exception, match="请求来源不被允许"):
+        security.check_origin(spoofed_host, production)  # type: ignore[arg-type]
+
+    plaintext = SimpleNamespace(headers={"origin": "http://app.example.com", "host": "app.example.com"})
+    with pytest.raises(Exception, match="请求来源不被允许"):
+        security.check_origin(plaintext, SETTINGS.model_copy(update={"environment": Environment.PRODUCTION}))  # type: ignore[arg-type]
+
+    https_only = SETTINGS.model_copy(
+        update={"cookie_secure": True, "cors_allow_origins": [], "csrf_allowed_origins": []}
+    )
+    with pytest.raises(Exception, match="请求来源不被允许"):
+        security.check_origin(plaintext, https_only)  # type: ignore[arg-type]
+    security.check_origin(
+        SimpleNamespace(headers={"origin": "https://app.example.com", "host": "app.example.com"}),  # type: ignore[arg-type]
+        https_only,
+    )

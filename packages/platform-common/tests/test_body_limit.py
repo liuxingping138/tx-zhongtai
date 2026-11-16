@@ -169,3 +169,53 @@ def test_a_path_prefix_can_have_a_smaller_limit() -> None:
     big = {"content": "x" * 500}
     assert client.post("/api/v1/ai/stream/ask", json=big).status_code == 413
     assert client.post("/api/v1/other", json=big).status_code == 200
+
+
+def test_body_limit_preserves_request_id_and_allows_excel_upload() -> None:
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from platform_common.request_context import RequestIdMiddleware
+
+    app = FastAPI()
+
+    @app.post("/api/v1/users/files/excel")
+    async def upload() -> dict[str, bool]:
+        return {"ok": True}
+
+    @app.post("/api/v1/other")
+    async def other() -> dict[str, bool]:
+        return {"ok": True}
+
+    app.add_middleware(
+        RequestBodyLimitMiddleware,
+        max_bytes=100,
+        path_limits={"/api/v1/users/files/excel": 5000},
+    )
+    app.add_middleware(RequestIdMiddleware)
+    client = TestClient(app)
+
+    res_401 = client.post(
+        "/api/v1/users/files/excel",
+        files={"file": ("users.xlsx", b"x" * 400, "application/octet-stream")},
+        headers={"x-request-id": "req-upload-401"},
+    )
+    assert res_401.status_code == 401
+    assert res_401.headers.get("x-request-id") == "req-upload-401"
+    assert res_401.json()["request_id"] == "req-upload-401"
+
+    res_413 = client.post(
+        "/api/v1/other",
+        content=b"x" * 200,
+        headers={"content-type": "application/json", "x-request-id": "req-limit-1"},
+    )
+    assert res_413.status_code == 413
+    assert res_413.headers.get("x-request-id") == "req-limit-1"
+    assert res_413.json()["request_id"] == "req-limit-1"
+
+    res_upload = client.post(
+        "/api/v1/users/files/excel",
+        files={"file": ("users.xlsx", b"x" * 400, "application/octet-stream")},
+        headers={"authorization": "Bearer test-token"},
+    )
+    assert res_upload.status_code == 200

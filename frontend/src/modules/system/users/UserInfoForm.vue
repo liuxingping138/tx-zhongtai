@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import { Edit } from '@element-plus/icons-vue'
 import type { ManagedUser } from '@/api/system'
 
@@ -42,8 +43,13 @@ function onCancel() {
 }
 
 function onSubmit() {
+  const display_name = form.display_name.trim()
+  if (!display_name) {
+    ElMessage.warning('请填写用户姓名')
+    return
+  }
   emit('save', {
-    display_name: form.display_name.trim(),
+    display_name,
     phone: form.phone.trim(),
     email: form.email.trim(),
   })

@@ -49,11 +49,20 @@ def check_origin(request: Request, settings: Settings) -> None:
         if settings.environment == "production":
             raise PermissionDeniedError("缺少 Origin")
         return
-    allowed = set(settings.csrf_allowed_origins) | set(settings.cors_allow_origins)
-    host = request.headers.get("host")
-    if host:
-        allowed.add(f"http://{host}")
-        allowed.add(f"https://{host}")
+    explicit = set(settings.csrf_allowed_origins) | set(settings.cors_allow_origins)
+    # 生产环境若显式配了跨域/CSRF 白名单，严格只认白名单，不盲信请求头 Host。
+    if explicit and settings.environment == "production":
+        allowed = explicit
+    else:
+        allowed = set(explicit)
+        host = (request.headers.get("host") or "").strip()
+        if host:
+            proto = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip().lower()
+            if settings.environment == "production" or settings.cookie_secure or proto == "https":
+                allowed.add(f"https://{host}")
+            else:
+                allowed.add(f"http://{host}")
+                allowed.add(f"https://{host}")
     if origin not in allowed:
         raise PermissionDeniedError("请求来源不被允许")
 

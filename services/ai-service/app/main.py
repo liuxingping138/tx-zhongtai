@@ -58,13 +58,13 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json" if settings.environment != "production" else None,
         lifespan=lifespan,
     )
-    app.add_middleware(RequestIdMiddleware)
-    # 流式提问只收一段 JSON（提示词最多 20 万字），用不着上传文件那么大的额度；这个前缀在网关上也不经缓冲限流。
+    # RequestIdMiddleware 最后注册（最外层先执行），保证 401/413 截断同样携带 request_id。
     app.add_middleware(
         RequestBodyLimitMiddleware,
         max_bytes=settings.upload_max_bytes + MULTIPART_OVERHEAD_BYTES,
         path_limits={"/api/v1/ai/stream": STREAM_MAX_BYTES, "/internal/v1/pipeline-runs": PIPELINE_MAX_BYTES},
     )
+    app.add_middleware(RequestIdMiddleware)
     if settings.cors_allow_origins:
         app.add_middleware(
             CORSMiddleware,

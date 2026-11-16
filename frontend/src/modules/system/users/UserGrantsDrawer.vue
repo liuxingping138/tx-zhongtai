@@ -36,15 +36,21 @@ const changes = computed(() =>
 )
 const opened = computed(() => Object.values(selected.value).filter(level => level !== 'NONE').length)
 
+let loadSeq = 0
+let closing = false
+
 async function load(): Promise<void> {
-  if (!props.user) return
+  const target = props.user
+  if (!target) return
+  const seq = ++loadSeq
   loading.value = true
   loadError.value = ''
   try {
     const [resources, current] = await Promise.all([
       tree.value.length ? { tree: tree.value } : listResourceTree(),
-      getUserGrants(props.user.id),
+      getUserGrants(target.id),
     ])
+    if (seq !== loadSeq) return
     tree.value = resources.tree
     const saved: Grants = {}
     for (const grant of current.grants) saved[grant.resource_code] = grant.level
@@ -52,22 +58,28 @@ async function load(): Promise<void> {
     original.value = { ...selected.value }
     version.value = current.version
   } catch (error) {
-    loadError.value = errorMessage(error, '单独授权加载失败')
+    if (seq === loadSeq) loadError.value = errorMessage(error, '单独授权加载失败')
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
   }
 }
 
 watch(visible, open => { if (open) void load() })
 
 async function close(): Promise<void> {
+  if (closing) return
   if (changes.value.length) {
-    const discard = await ElMessageBox.confirm('改了还没保存，关掉就不保存了。', '放弃修改？', {
-      type: 'warning',
-      confirmButtonText: '放弃修改',
-      cancelButtonText: '继续编辑',
-    }).then(() => true, () => false)
-    if (!discard) return
+    closing = true
+    try {
+      const discard = await ElMessageBox.confirm('改了还没保存，关掉就不保存了。', '放弃修改？', {
+        type: 'warning',
+        confirmButtonText: '放弃修改',
+        cancelButtonText: '继续编辑',
+      }).then(() => true, () => false)
+      if (!discard) return
+    } finally {
+      closing = false
+    }
   }
   visible.value = false
 }

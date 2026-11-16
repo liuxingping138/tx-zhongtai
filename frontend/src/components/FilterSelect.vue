@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 const props = withDefaults(
   defineProps<{
@@ -32,8 +32,13 @@ const SEARCH_DEBOUNCE_MS = 250
 const keyword = ref('')
 const remoteItems = ref<string[]>([])
 const searching = ref(false)
+const remoteFailed = ref(false)
 let timer: ReturnType<typeof setTimeout> | null = null
 let sequence = 0
+
+onBeforeUnmount(() => {
+  if (timer) clearTimeout(timer)
+})
 
 const isRemote = computed(() => typeof props.remoteSearch === 'function')
 
@@ -62,6 +67,7 @@ const withSelected = computed(() => {
 
 const emptyText = computed(() => {
   if (searching.value) return '搜索中…'
+  if (remoteFailed.value) return '搜索失败，请稍后重试'
   if (isRemote.value && !keyword.value.trim()) return '候选较多，输入关键词搜索'
   return '无匹配项'
 })
@@ -71,6 +77,7 @@ function runRemote(query: string) {
   if (!search) return
   const current = ++sequence
   searching.value = true
+  remoteFailed.value = false
   void search(query)
     .then((items) => {
       if (current !== sequence) return
@@ -78,6 +85,7 @@ function runRemote(query: string) {
     })
     .catch(() => {
       if (current !== sequence) return
+      remoteFailed.value = true
       remoteItems.value = []
     })
     .finally(() => {
@@ -92,6 +100,7 @@ watch(keyword, (value) => {
   if (!query) {
     sequence += 1
     searching.value = false
+    remoteFailed.value = false
     remoteItems.value = []
     return
   }

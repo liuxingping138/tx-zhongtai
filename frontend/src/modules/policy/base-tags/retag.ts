@@ -27,6 +27,8 @@ export function useListRetagPoll<T extends { id: string; version: number; update
   const retagging = ref(false)
   let timer: ReturnType<typeof setInterval> | null = null
   let remaining = 0
+  let inFlight = false
+  let disposed = false
 
   function stop() {
     if (timer) {
@@ -34,6 +36,7 @@ export function useListRetagPoll<T extends { id: string; version: number; update
       timer = null
     }
     remaining = 0
+    inFlight = false
     retagging.value = false
   }
 
@@ -41,9 +44,25 @@ export function useListRetagPoll<T extends { id: string; version: number; update
     return rows.map(r => `${r.id}:${r.version}:${r.updated_at ?? ''}:${r.tagged_at ?? ''}:${r.ai_status ?? ''}`).join('|')
   }
 
+  async function tick(baseline: string) {
+    if (inFlight || disposed) return
+    inFlight = true
+    try {
+      await refresh()
+      if (disposed || !retagging.value) return
+      if (snapshot(items.value) !== baseline) {
+        stop()
+        ElMessage.success('重新打标已完成，列表数据已自动更新')
+      }
+    } finally {
+      inFlight = false
+    }
+  }
+
   async function startAfterRetag() {
     stop()
     await refresh()
+    if (disposed) return
     const baseline = snapshot(items.value)
     retagging.value = true
     remaining = 30
@@ -53,16 +72,13 @@ export function useListRetagPoll<T extends { id: string; version: number; update
         stop()
         return
       }
-      void (async () => {
-        await refresh()
-        if (snapshot(items.value) !== baseline) {
-          stop()
-          ElMessage.success('重新打标已完成，列表数据已自动更新')
-        }
-      })()
+      void tick(baseline)
     }, 3000)
   }
 
-  onBeforeUnmount(stop)
+  onBeforeUnmount(() => {
+    disposed = true
+    stop()
+  })
   return { retagging, startAfterRetag, stop }
 }

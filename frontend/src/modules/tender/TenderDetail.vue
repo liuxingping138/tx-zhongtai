@@ -8,21 +8,28 @@ import DetailSections from '@/components/DetailSections.vue'
 import DetailSkeleton from '@/components/DetailSkeleton.vue'
 import ParagraphSkeleton from '@/components/ParagraphSkeleton.vue'
 import { buildDetailSections } from '@/components/detailSections'
+import { useTheme } from '@/composables/useTheme'
 import { isolatedHtml } from './content'
 import { tenderColumns, tenderDetailGroups } from './fields'
 
 const props = defineProps<{ kind: TenderKind }>()
 const route = useRoute()
 const router = useRouter()
+const { isDark } = useTheme()
 const record = ref<TenderRecord | null>(null)
 const error = ref('')
 const loading = ref(false)
-const html = ref<string | null>(null)
+const rawHtml = ref<string | null>(null)
+const html = computed(() => (rawHtml.value === null ? null : isolatedHtml(rawHtml.value, isDark.value)))
 const contentError = ref('')
 const contentLoading = ref(false)
-const status = computed<'0' | '1'>(() => (route.query.project_status === '0' ? '0' : '1'))
+const status = computed<'0' | '1'>(() => ((route.query.row_status ?? route.query.project_status) === '0' ? '0' : '1'))
 const sections = computed(() => buildDetailSections(tenderColumns(props.kind), tenderDetailGroups(props.kind)))
-const back = computed(() => ({ name: `tender-${props.kind}`, query: route.query }))
+const back = computed(() => {
+  const rest = { ...route.query }
+  delete rest.row_status
+  return { name: `tender-${props.kind}`, query: rest }
+})
 
 const displayRecord = computed(() => {
   if (!record.value) return null
@@ -61,7 +68,7 @@ async function loadContent() {
   contentError.value = ''
   try {
     const result = await getTenderContent(props.kind, String(route.params.id), status.value)
-    if (seq === contentSeq) html.value = isolatedHtml(result.html)
+    if (seq === contentSeq) rawHtml.value = result.html
   } catch (cause) {
     if (seq === contentSeq) contentError.value = errorMessage(cause, '正文加载失败')
   } finally {

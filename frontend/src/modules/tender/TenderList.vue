@@ -50,7 +50,7 @@ function onSearch() {
 }
 
 function detailRoute(row: TenderRecord) {
-  return { name: `tender-${props.kind}-detail`, params: { id: row.id }, query: { ...listQuery.requested(), project_status: row.project_status } }
+  return { name: `tender-${props.kind}-detail`, params: { id: row.id }, query: { ...listQuery.requested(), row_status: String(row.project_status) } }
 }
 onMounted(() => {
   if (applyDefaultDateRange(query)) {

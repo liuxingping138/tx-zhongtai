@@ -108,7 +108,9 @@ onMounted(() => {
   <div class="config">
     <div class="heading">
       <div class="caption">
-        <h1>爬虫配置统计</h1>
+        <h1 class="sr-only">
+          爬虫配置统计
+        </h1>
         <span
           class="sync-time"
           :title="syncDetail"
@@ -206,7 +208,6 @@ onMounted(() => {
 .config { display: flex; flex-direction: column; gap: var(--zt-space-3); }
 .heading, .caption, .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
 .heading { justify-content: space-between; }
-.caption h1 { margin: 0; font-size: 14px; font-weight: 600; color: var(--zt-ink-900); }
 .sync-time { color: var(--zt-ink-500); font-size: 12px; font-variant-numeric: tabular-nums; }
 .actions { gap: 8px; }
 .actions .el-button + .el-button { margin-left: 0; }

@@ -76,7 +76,7 @@ const COLUMNS = [
       :data="report.status"
       show-summary
       :summary-method="() => ['总计', ...COLUMNS.map(column => report.totals[column.key].toLocaleString())]"
-      class="status-table"
+      class="data-table status-table"
     >
       <el-table-column
         prop="province_name"

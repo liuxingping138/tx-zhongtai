@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import type { ScenarioPath } from '@/api/codebook'
@@ -7,6 +7,7 @@ import { errorMessage } from '@/api/errors'
 import { changeRowScenario, listCandidateRows, type CandidateDetail, type CandidateItem, type CandidateRow } from '@/api/scenarioCandidates'
 import ScenarioPicker from '@/components/ScenarioPicker.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
+import { useAuthStore } from '@/stores/auth'
 import { pathText } from './candidates'
 
 /**
@@ -15,6 +16,8 @@ import { pathText } from './candidates'
  */
 const props = defineProps<{ candidate: CandidateItem | null; industries?: CandidateDetail['industries'] }>()
 const emit = defineEmits<{ close: []; changed: [] }>()
+const auth = useAuthStore()
+const canEditRows = computed(() => auth.canFull('policy.interpretations'))
 
 const PAGE_SIZE = 20
 const rows = ref<CandidateRow[]>([])
@@ -159,6 +162,9 @@ async function save(row: CandidateRow) {
       class="data-table"
       :class="{ 'is-refreshing': loading }"
     >
+      <template #empty>
+        <span>{{ keyword.trim() || industry ? '没有符合筛选条件的来源政策' : '暂无来源政策记录' }}</span>
+      </template>
       <el-table-column
         label="政策"
         min-width="300"
@@ -178,7 +184,10 @@ async function save(row: CandidateRow) {
                 :industry-l1="row.industry_l1"
                 :placeholder="`在「${row.industry_l1}」下搜码表里的场景`"
               />
-              <el-button @click="editing = null">
+              <el-button
+                :disabled="saving"
+                @click="editing = null"
+              >
                 取消
               </el-button>
               <el-button
@@ -208,6 +217,7 @@ async function save(row: CandidateRow) {
         </template>
       </el-table-column>
       <el-table-column
+        v-if="canEditRows"
         label="操作"
         width="100"
       >
@@ -215,6 +225,7 @@ async function save(row: CandidateRow) {
           <el-button
             link
             type="primary"
+            :aria-label="`修改《${row.policy_title}》的场景`"
             @click="startEdit(row)"
           >
             改场景

@@ -172,7 +172,7 @@ watch(userId, () => {
         link
         type="primary"
         :icon="ArrowLeft"
-        @click="router.push('/system/users')"
+        @click="router.push({ name: 'system-users', query: route.query })"
       >
         返回用户管理
       </el-button>

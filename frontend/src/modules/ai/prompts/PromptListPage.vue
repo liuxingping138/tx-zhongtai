@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { Plus, Search } from '@element-plus/icons-vue'
 
 import { listPrompts, type PromptTemplate, type TemplateCategory } from '@/api/ai'
@@ -16,17 +16,28 @@ import '../shared/ai.css'
 /**
  * 模板列表：一眼看出每个模板走到哪一步。管理员按「有改动未上线」找要审核上线的，业务人员找自己在调的。
  */
+const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const templates = ref<PromptTemplate[]>([])
 const categories = ref<TemplateCategory[]>([])
 const loading = ref(false)
 const loadError = ref('')
-const category = ref(ALL_CATEGORIES)
-const status = ref<ReleaseKind | ''>('')
-const keyword = ref('')
+const category = ref(typeof route.query.category === 'string' ? route.query.category : ALL_CATEGORIES)
+const status = ref<ReleaseKind | ''>((typeof route.query.status === 'string' && ['changed', 'online', 'offline'].includes(route.query.status) ? route.query.status : '') as ReleaseKind | '')
+const keyword = ref(typeof route.query.q === 'string' ? route.query.q : '')
 // 「定时任务在用」做成和旁边按钮组一样的按钮，只有一个选项，选中即只看在用的。
-const scheduledFilter = ref<string[]>([])
+const scheduledFilter = ref<string[]>(route.query.sched === '1' ? ['scheduled'] : [])
+watch([category, status, keyword, scheduledFilter], ([cat, st, q, sched]) => {
+  const nextQuery = {
+    ...route.query,
+    category: cat !== ALL_CATEGORIES ? cat : undefined,
+    status: st || undefined,
+    q: q.trim() ? q : undefined,
+    sched: sched.length ? '1' : undefined,
+  }
+  void router.replace({ query: nextQuery })
+})
 const onlyScheduled = computed(() => scheduledFilter.value.length > 0)
 // 哪些模板正被定时任务用：只有政策类会被选用；看不到政策打标约定（没权限）时这一列和筛选都不显示。
 const taskFit = useTaskFit(reactive({ category: 'policy', content: '', output_fields: '', code_table: '' }))

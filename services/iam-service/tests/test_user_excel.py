@@ -48,10 +48,13 @@ def created(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
         roles = [{"name": role.name} for role in (EDITOR, VIEWER) if role.id in data.role_ids]
         return {"roles": roles}, None
 
+    async def fake_hash(password: str) -> str:
+        return f"hashed:{password}"
+
     monkeypatch.setattr(user_excel.user_repo, "get_user_by_username", get_by_username)
     monkeypatch.setattr(user_excel.role_repo, "list_all_roles", list_all_roles)
     monkeypatch.setattr(user_excel.user_admin, "create_user", create_user)
-    monkeypatch.setattr(user_excel, "hash_password", lambda password: f"hashed:{password}")
+    monkeypatch.setattr(user_excel, "hash_password_async", fake_hash)
     return calls
 
 

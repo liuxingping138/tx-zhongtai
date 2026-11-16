@@ -30,6 +30,7 @@ const sites = computed(() => props.report.new_sites.filter(site => (site.provinc
     <el-table
       v-else
       :data="sites"
+      class="data-table"
     >
       <el-table-column
         prop="province_name"

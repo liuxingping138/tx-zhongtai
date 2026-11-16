@@ -125,13 +125,18 @@ function openRows(row: CandidateItem) {
   void extras.ensure(row.id)
 }
 
+const reopeningId = ref('')
 async function reopen(row: CandidateItem) {
+  if (reopeningId.value === row.id) return
+  reopeningId.value = row.id
   try {
     await reopenCandidate(row.id, { version: row.version })
     ElMessage.success(`「${row.name}」已改判回待审`)
     await refreshAfter([row.id])
   } catch (error) {
     ElMessage.error(errorMessage(error, '没能改判，请重试'))
+  } finally {
+    if (reopeningId.value === row.id) reopeningId.value = ''
   }
 }
 
@@ -262,6 +267,7 @@ onMounted(() => {
         :can-write-codebook="canWriteCodebook"
         :extras="extras"
         :busy="decision.busy.value"
+        :reopening-id="reopeningId"
         :focus="focus"
         @open="decision.open"
         @rows="openRows"
