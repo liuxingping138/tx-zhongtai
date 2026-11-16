@@ -1,8 +1,8 @@
 /* 打开已有模板时，数据回来之前不露出新建模板的空样子。 */
 .prompt-page.is-opening > :not(.el-loading-mask) { visibility: hidden; }
-.prompt-page { display: flex; flex-direction: column; gap: 12px; height: calc(100dvh - var(--workspace-header-height) - 48px); min-height: 640px; }
+.prompt-page { display: flex; flex-direction: column; gap: 10px; height: calc(100dvh - var(--workspace-header-height) - 48px); min-height: 600px; }
 .prompt-page__head { flex: none; overflow: hidden; }
-.prompt-page__title-row { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 10px 16px; }
+.prompt-page__title-row { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 7px 14px; }
 .prompt-page__title-row .el-button { margin: 0; border-radius: 999px; }
 .prompt-page__back {
   display: inline-flex; flex: none; align-items: center; gap: 5px;
@@ -25,13 +25,16 @@
   transition: grid-template-columns 0.18s ease;
 }
 .prompt-page__body.is-sample { grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr); }
-.prompt-page__body.is-sample-wide { grid-template-columns: minmax(0, 1fr); }
+.prompt-page__body.is-sample-wide,
+.prompt-page__body.is-editor-wide { grid-template-columns: minmax(0, 1fr); }
 .prompt-page__body.is-sample-wide .prompt-page__main { display: none; }
+.prompt-page__body.is-editor-wide .prompt-page__test { display: none; }
 .prompt-page__main { display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
 .prompt-page__test { min-width: 0; }
-.prompt-page__main > .config, .prompt-page__main > .out-dock { flex: none; }
+.prompt-page__main > .out-dock { flex: none; }
 .prompt-page__scroll { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow-y: auto; }
-.prompt-page__scroll > .prompt-editor { flex: 1 0 auto; min-height: 240px; }
+.prompt-page__scroll > .config { flex: none; }
+.prompt-page__scroll > .prompt-editor { flex: 1 0 auto; min-height: 360px; }
 @media (max-width: 960px) {
   .prompt-page { height: auto; }
   .prompt-page__body, .prompt-page__body.is-sample { grid-template-columns: minmax(0, 1fr); }

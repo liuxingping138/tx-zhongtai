@@ -47,13 +47,13 @@ const emit = defineEmits<{ step: [key: StepKey] }>()
 
 <style scoped>
 .flow {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;
-  margin: 0; padding: 8px 14px; list-style: none;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px;
+  margin: 0; padding: 5px 12px; list-style: none;
   border-top: 1px solid var(--zt-divider); background: var(--zt-surface-subtle);
 }
 .flow__step {
-  position: relative; display: flex; align-items: center; gap: 10px;
-  min-width: 0; padding: 7px 12px; border: 1px solid transparent; border-radius: 10px;
+  position: relative; display: flex; align-items: center; gap: 7px;
+  min-width: 0; padding: 4px 10px; border: 1px solid transparent; border-radius: 8px;
   background: var(--zt-panel); transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 .flow__step.is-done { border-color: var(--zt-border); }
@@ -62,20 +62,20 @@ const emit = defineEmits<{ step: [key: StepKey] }>()
 .flow__step.is-todo { background: transparent; border-color: var(--zt-divider); }
 .flow__mark {
   display: inline-grid; flex: none; place-items: center;
-  width: 22px; height: 22px; border: 1px solid var(--zt-border-strong);
+  width: 18px; height: 18px; border: 1px solid var(--zt-border-strong);
   border-radius: 50%; background: var(--zt-panel); color: var(--zt-ink-500);
-  font: 600 11px/1 var(--zt-font); font-variant-numeric: tabular-nums;
+  font: 600 10.5px/1 var(--zt-font); font-variant-numeric: tabular-nums;
 }
 .is-done .flow__mark { border-color: var(--zt-success-border); background: var(--zt-success-soft); color: var(--zt-success-text); }
 .is-warn .flow__mark { border-color: var(--zt-warning-border); background: var(--zt-panel); color: var(--zt-warning-text); }
 .is-current .flow__mark {
   border-color: var(--zt-blue-600); background: var(--zt-blue-600);
-  color: var(--el-color-white); box-shadow: 0 0 0 3px var(--zt-focus-ring);
+  color: var(--el-color-white); box-shadow: 0 0 0 2px var(--zt-focus-ring);
 }
-.flow__text { display: flex; flex: 1; flex-direction: column; min-width: 0; line-height: 1.35; }
-.flow__text strong { color: var(--zt-ink-900); font-size: 13px; font-weight: 600; }
+.flow__text { display: flex; flex: 1; align-items: baseline; gap: 6px; min-width: 0; line-height: 1.3; }
+.flow__text strong { flex: none; color: var(--zt-ink-900); font-size: 12px; font-weight: 600; }
 .is-todo .flow__text strong { color: var(--zt-ink-500); }
-.flow__text span { overflow: hidden; color: var(--zt-ink-500); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.flow__text span { min-width: 0; overflow: hidden; color: var(--zt-ink-500); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
 .is-warn .flow__text span { color: var(--zt-warning-text); }
 .flow__step .el-button { flex: none; margin: 0; border-radius: 999px; }
 </style>

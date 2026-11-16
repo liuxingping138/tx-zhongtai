@@ -83,10 +83,10 @@ async function openSampling(): Promise<void> {
 </template>
 
 <style scoped>
-.prompt-files { display: grid; gap: 8px; }
+.prompt-files { display: grid; gap: 4px; min-width: 0; }
 /* 栏窄时按钮整组换到下一行，不撑出横向滚动条。 */
-.prompt-files__row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; min-height: 32px; }
-.prompt-files__row .el-button { margin: 0; }
-.prompt-files__name { flex: 1 1 120px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.prompt-files__row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; min-height: 26px; }
+.prompt-files__row .el-button { margin: 0; font-size: 12.5px; }
+.prompt-files__name { flex: 1 1 110px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
 .prompt-files__name.is-empty { color: var(--zt-ink-500); }
 </style>

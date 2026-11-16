@@ -108,7 +108,10 @@ async function setCodeMode(next: CodeMode): Promise<void> {
         class="config__label"
         :title="CODE_TIPS[codeMode]"
       >码表</span>
-      <div class="config__code">
+      <div
+        class="config__code"
+        :title="CODE_TIPS[codeMode]"
+      >
         <div class="config__code-line">
           <el-radio-group
             :model-value="codeMode"
@@ -161,10 +164,6 @@ async function setCodeMode(next: CodeMode): Promise<void> {
           >
             预览码表
           </el-button>
-          <span
-            v-if="codeMode === 'system'"
-            class="config__hint-inline"
-          >{{ CODE_TIPS.system }}</span>
         </div>
         <CodePreviewDialog
           v-model="previewing"
@@ -201,18 +200,17 @@ async function setCodeMode(next: CodeMode): Promise<void> {
 </template>
 
 <style scoped>
-.config { display: grid; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--zt-border); background: var(--zt-surface-subtle); }
-.config__row { display: grid; grid-template-columns: 60px minmax(0, 1fr); align-items: center; gap: 10px; min-height: 30px; }
-.config__row--inline { display: flex; flex-wrap: wrap; gap: 8px 16px; }
-.config__item { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.config__item > span, .config__label { flex: none; width: 60px; color: var(--zt-ink-500); font-size: 12px; font-weight: 600; }
+.config { display: grid; gap: 5px; padding: 8px 16px; border-bottom: 1px solid var(--zt-border); background: var(--zt-surface-subtle); }
+.config__row { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: center; gap: 8px; min-height: 26px; }
+.config__row--inline { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.config__item { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.config__item > span, .config__label { flex: none; width: 56px; color: var(--zt-ink-500); font-size: 12px; font-weight: 600; }
 .config__item--grow { flex: 1 1 220px; }
 .config__item--grow > :last-child { flex: 1; min-width: 0; }
-.config__category { width: 104px; }
+.config__category { width: 96px; }
 .config__item--grow :deep(.model-picker__select) { width: 100%; }
 .config__code { min-width: 0; }
-.config__code-line { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
-.config__code-select { width: 200px; }
-.config__code-file { flex: 1; min-width: 180px; }
-.config__hint-inline { color: var(--zt-ink-400); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.config__code-line { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
+.config__code-select { width: 184px; }
+.config__code-file { flex: 1; min-width: 160px; }
 </style>

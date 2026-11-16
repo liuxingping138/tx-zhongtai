@@ -68,9 +68,9 @@ function writeFormat(): void {
 </template>
 
 <style scoped>
-.out-dock { display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: start; gap: 10px; padding: 10px 18px 12px; border-top: 1px solid var(--zt-divider); background: var(--zt-surface-subtle); }
-.out-dock__label { color: var(--zt-ink-500); font-size: 12px; font-weight: 600; line-height: 28px; }
-.out-dock__main { display: grid; gap: 5px; min-width: 0; }
-.out-dock__foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; color: var(--zt-ink-500); font-size: 12px; }
+.out-dock { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: start; gap: 8px; padding: 8px 16px 9px; border-top: 1px solid var(--zt-divider); background: var(--zt-surface-subtle); }
+.out-dock__label { color: var(--zt-ink-500); font-size: 12px; font-weight: 600; line-height: 26px; }
+.out-dock__main { display: grid; gap: 4px; min-width: 0; }
+.out-dock__foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; color: var(--zt-ink-500); font-size: 11.5px; }
 .out-dock__foot .is-warn { color: var(--zt-warning-text); }
 </style>

@@ -59,20 +59,20 @@ function skipHint(item: TaskFitResult): string | undefined {
 </template>
 
 <style scoped>
-.task-fit { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0; padding: 0; list-style: none; }
-.task-fit li { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; line-height: 1.5; }
-.task-fit li.is-skip { opacity: 0.72; }
-.task-fit__icon { flex: none; font-size: 14px; }
-.is-skip .task-fit__icon { font-size: 12px; color: var(--zt-muted-mark); }
+.task-fit { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 10px; margin: 0; padding: 0; list-style: none; }
+.task-fit li { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; line-height: 1.4; }
+.task-fit li.is-skip { opacity: 0.65; }
+.task-fit__icon { flex: none; font-size: 13px; }
+.is-skip .task-fit__icon { font-size: 11.5px; color: var(--zt-muted-mark); }
 .is-ok .task-fit__icon { color: var(--zt-success); }
 .is-warn .task-fit__icon { color: var(--zt-warning); }
 .is-error .task-fit__icon { color: var(--zt-danger-text); }
-.task-fit__body { display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap; min-width: 0; }
+.task-fit__body { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; min-width: 0; }
 .task-fit__name { color: var(--zt-ink-900); font-weight: 600; }
 .is-skip .task-fit__name { color: var(--zt-ink-500); font-weight: 400; }
 .task-fit__level { color: var(--zt-ink-500); }
 .is-skip .task-fit__level { color: var(--zt-ink-400); }
 .is-error .task-fit__level { color: var(--zt-danger-text); }
-.task-fit p { flex-basis: 100%; margin: 1px 0 0; color: var(--zt-ink-700); font-size: 12px; overflow-wrap: anywhere; }
-.task-fit__empty { margin: 0; color: var(--zt-ink-500); font-size: 12px; line-height: 1.5; }
+.task-fit p { flex-basis: 100%; margin: 0; color: var(--zt-ink-700); font-size: 11.5px; overflow-wrap: anywhere; }
+.task-fit__empty { margin: 0; color: var(--zt-ink-500); font-size: 11.5px; line-height: 1.4; }
 </style>

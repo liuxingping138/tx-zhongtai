@@ -260,9 +260,9 @@ defineExpose({ focus: () => area.value?.focus() })
 <style scoped>
 .prompt-editor { display: flex; flex-direction: column; }
 /* 输入框跟着内容长高、自己不滚动：高度由底下同字体的高亮层撑开，整个左栏只有一条滚动条。 */
-.prompt-editor__surface { position: relative; flex: 1 0 auto; min-height: 260px; }
+.prompt-editor__surface { position: relative; flex: 1 0 auto; min-height: 320px; }
 .prompt-editor__backdrop, .prompt-editor__input {
-  margin: 0; padding: 18px 22px; border: 0;
+  margin: 0; padding: 14px 18px; border: 0;
   font: 14px/1.85 var(--zt-font); letter-spacing: 0.01em; white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal;
 }
 .prompt-editor__backdrop { position: relative; pointer-events: none; color: transparent; }
@@ -284,7 +284,7 @@ defineExpose({ focus: () => area.value?.focus() })
 .prompt-editor__menu .prompt-editor__menu-hint:hover { background: none; color: var(--zt-ink-500); }
 .prompt-editor__menu .prompt-editor__menu-action { color: var(--zt-blue-600); }
 /* 提示词很长、往下滚时变量这一行贴在可见区域底部，随时能插；限制最大高度，展开几十列时内部滚动不遮编辑区。 */
-.prompt-editor__vars { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; max-height: 116px; overflow-y: auto; padding: 10px 22px; border-top: 1px solid var(--zt-border); background: var(--zt-surface-subtle); font-size: 12px; }
+.prompt-editor__vars { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; max-height: 116px; overflow-y: auto; padding: 7px 16px; border-top: 1px solid var(--zt-border); background: var(--zt-surface-subtle); font-size: 12px; }
 .prompt-editor__vars-label { margin-right: 4px; color: var(--zt-ink-500); }
 .prompt-editor__vars-hint { color: var(--zt-ink-400); }
 .prompt-editor__var { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; line-height: 18px; }

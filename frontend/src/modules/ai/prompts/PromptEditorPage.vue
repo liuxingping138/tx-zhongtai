@@ -46,6 +46,7 @@ const saving = ref(false)
 const thinking = ref(false)
 const testTab = ref<'trial' | 'sample'>('trial')
 const sampleWide = ref(false)
+const editorWide = ref(false)
 const trialRow = ref(0)
 const editor = ref<{ focus: () => void } | null>(null)
 const releasing = ref(false)
@@ -126,13 +127,8 @@ function fill(template: PromptTemplate | null): void {
 }
 
 /** 上传、删除附件，上线、下线，试跑开始和结束：只换模板信息，不动没保存的草稿。 */
-function replace(template: PromptTemplate): void {
-  selected.value = template
-}
-
-function sampleChanged(run: BatchRun): void {
-  if (selected.value) selected.value = withSample(selected.value, run)
-}
+function replace(template: PromptTemplate): void { selected.value = template }
+function sampleChanged(run: BatchRun): void { if (selected.value) selected.value = withSample(selected.value, run) }
 
 /** 能不能存成模板：要有名字和类型；提示词可以先空着（先传样本再照着列名写）。不行就说明原因，名字空着就把光标放过去。 */
 function canCreateDraft(): boolean {
@@ -246,6 +242,13 @@ function onStep(key: StepKey): void {
           只读
         </el-tag>
         <span class="prompt-page__spacer" />
+        <el-button
+          v-if="!(testTab === 'sample' && sampleWide)"
+          size="small"
+          @click="editorWide = !editorWide"
+        >
+          {{ editorWide ? '恢复分栏' : '专注编辑' }}
+        </el-button>
         <el-tooltip
           v-if="canEdit && selected"
           :disabled="!selected.release"
@@ -301,6 +304,7 @@ function onStep(key: StepKey): void {
         'is-refreshing': loading,
         'is-sample': testTab === 'sample',
         'is-sample-wide': testTab === 'sample' && sampleWide,
+        'is-editor-wide': editorWide && !(testTab === 'sample' && sampleWide),
       }"
     >
       <form
@@ -308,23 +312,23 @@ function onStep(key: StepKey): void {
         aria-label="编写模板"
         @submit.prevent="persist()"
       >
-        <PromptSettings
-          v-model:category="form.category"
-          v-model:model-id="form.model_id"
-          v-model:code-table="form.code_table"
-          :template="selected"
-          :categories="categoryOptions"
-          :models="models"
-          :code-tables="codeTables"
-          :files="files"
-          :can-edit="canEdit"
-          :can-export="canExport"
-          :sample-tasks="taskFit.sampleTasks.value"
-          :show-fit="taskFit.visible.value"
-          :fit="taskFit.results.value"
-          @files-changed="replace"
-        />
         <div class="prompt-page__scroll">
+          <PromptSettings
+            v-model:category="form.category"
+            v-model:model-id="form.model_id"
+            v-model:code-table="form.code_table"
+            :template="selected"
+            :categories="categoryOptions"
+            :models="models"
+            :code-tables="codeTables"
+            :files="files"
+            :can-edit="canEdit"
+            :can-export="canExport"
+            :sample-tasks="taskFit.sampleTasks.value"
+            :show-fit="taskFit.visible.value"
+            :fit="taskFit.results.value"
+            @files-changed="replace"
+          />
           <PromptEditor
             ref="editor"
             v-model="form.content"
@@ -360,7 +364,7 @@ function onStep(key: StepKey): void {
         :dirty="unsaved.dirty.value"
         @run="trial"
         @upload="files.pick('excel')"
-        @edit="sampleWide = false; editor?.focus()"
+        @edit="sampleWide = false; editorWide = false; editor?.focus()"
         @sample-changed="sampleChanged"
       />
     </div>
