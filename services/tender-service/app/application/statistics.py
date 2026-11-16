@@ -2,7 +2,7 @@
 
 from collections import OrderedDict
 from datetime import timedelta
-from threading import Lock
+from threading import BoundedSemaphore, Event, Lock
 from time import monotonic
 
 from platform_common.clock import BEIJING, utcnow
@@ -14,13 +14,25 @@ from app.domain.fields import Kind
 from app.domain.queries import StatsQuery
 from app.repositories import statistics
 
+
+class _InFlight:
+    """同一个日期区间的并发统计请求合并成一次源库扫描，避免重复查或彼此阻塞。"""
+
+    def __init__(self) -> None:
+        self.done = Event()
+        self.result: Row | None = None
+        self.error: BaseException | None = None
+
+
 _cache: OrderedDict[str, tuple[float, Row]] = OrderedDict()
+_inflight: dict[str, _InFlight] = {}
 _lock = Lock()
+_COMPUTE_SEM = BoundedSemaphore(4)
 _MAX_CACHE_ENTRIES = 128
 KINDS: tuple[Kind, ...] = ("purchaser", "winbid")
 
 
-def _cached(key: str) -> Row | None:
+def _cached_locked(key: str) -> Row | None:
     entry = _cache.get(key)
     if entry and monotonic() - entry[0] < get_settings().stats_cache_seconds:
         return entry[1]
@@ -28,11 +40,12 @@ def _cached(key: str) -> Row | None:
 
 
 def _store(key: str, result: Row) -> Row:
-    _cache[key] = (monotonic(), result)
-    _cache.move_to_end(key)
-    while len(_cache) > _MAX_CACHE_ENTRIES:
-        _cache.popitem(last=False)
-    return result
+    with _lock:
+        _cache[key] = (monotonic(), result)
+        _cache.move_to_end(key)
+        while len(_cache) > _MAX_CACHE_ENTRIES:
+            _cache.popitem(last=False)
+        return result
 
 
 def _point(label: str, value: str) -> Row:
@@ -43,21 +56,54 @@ def _point(label: str, value: str) -> Row:
     return row
 
 
+def _wait_flight(flight: _InFlight) -> Row:
+    if not flight.done.wait(timeout=95):
+        raise DependencyUnavailableError("统计查询等待超时，请稍后重试")
+    if flight.error is not None:
+        raise flight.error
+    if flight.result is None:
+        raise DependencyUnavailableError("统计结果未就绪，请稍后重试")
+    return flight.result
+
+
 def get_statistics(query: StatsQuery) -> Row:
     key = f"{query.date_from}:{query.date_to}"
-    cached = _cached(key)
-    if cached is not None:
-        return cached
-    if not _lock.acquire(blocking=False):
-        raise DependencyUnavailableError("已有统计查询正在执行，请稍后重试")
-    try:
-        cached = _cached(key)
+    flight: _InFlight | None = None
+    leader = False
+    with _lock:
+        cached = _cached_locked(key)
         if cached is not None:
             return cached
+        flight = _inflight.get(key)
+        if flight is None:
+            flight = _InFlight()
+            _inflight[key] = flight
+            leader = True
+
+    if not leader:
+        return _wait_flight(flight)
+
+    if not _COMPUTE_SEM.acquire(blocking=False):
+        err = DependencyUnavailableError("当前统计查询较多，请稍后重试")
+        with _lock:
+            _inflight.pop(key, None)
+        flight.error = err
+        flight.done.set()
+        raise err
+
+    try:
         result = _aggregate(query)
-        return _store(key, result)
+        _store(key, result)
+        flight.result = result
+        return result
+    except BaseException as exc:
+        flight.error = exc
+        raise
     finally:
-        _lock.release()
+        with _lock:
+            _inflight.pop(key, None)
+        _COMPUTE_SEM.release()
+        flight.done.set()
 
 
 def _aggregate(query: StatsQuery) -> Row:

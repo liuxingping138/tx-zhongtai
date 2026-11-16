@@ -45,6 +45,8 @@ class ScenarioItems(BaseModel):
     caller_name: str = Field(default="政策解读同步", max_length=100)
     # 页面上点「同步新增场景」的那个人：码表里新建的场景记他是入库人，审计也记他，不记成服务名。
     caller_id: str = Field(default="", max_length=64)
+    # atomic=True 时整批全成或全回滚，不在部分失败时在码表库留下半截新建场景。
+    atomic: bool = False
 
 
 @router.post("/scenarios/lookup")
@@ -179,4 +181,5 @@ async def sync_scenarios(
     if service not in SCENARIO_WRITERS:
         raise InternalCallerRejectedError(f"{service} 不能往场景码表里写")
     caller = Actor(id=body.caller_id or service, name=body.caller_name)
-    return success_json(await scenario_sync.sync(session, caller, body.items))
+    kwargs = {"atomic": True} if body.atomic else {}
+    return success_json(await scenario_sync.sync(session, caller, body.items, **kwargs))

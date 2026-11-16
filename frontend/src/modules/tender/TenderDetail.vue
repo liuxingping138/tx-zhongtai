@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ArrowLeft, Document, Link, Refresh, Warning } from '@element-plus/icons-vue'
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { errorMessage } from '@/api/errors'
 import { getTenderRecord, getTenderContent, type TenderKind, type TenderRecord } from '@/api/tender'
@@ -20,7 +20,7 @@ const loading = ref(false)
 const html = ref<string | null>(null)
 const contentError = ref('')
 const contentLoading = ref(false)
-const status = route.query.project_status === '0' ? '0' : '1'
+const status = computed<'0' | '1'>(() => (route.query.project_status === '0' ? '0' : '1'))
 const sections = computed(() => buildDetailSections(tenderColumns(props.kind), tenderDetailGroups(props.kind)))
 const back = computed(() => ({ name: `tender-${props.kind}`, query: route.query }))
 
@@ -28,7 +28,7 @@ const displayRecord = computed(() => {
   if (!record.value) return null
   return {
     ...record.value,
-    project_status: status === '1' ? '通过' : '未通过',
+    project_status: status.value === '1' ? '通过' : '未通过',
     is_supp_scene: Number(record.value.is_supp_scene) === 1 ? '已补充' : '未补充',
   }
 })
@@ -38,28 +38,45 @@ const sourceUrl = computed(() => {
   return /^https?:\/\//i.test(raw) ? raw : ''
 })
 
+let loadSeq = 0
+let contentSeq = 0
+
 async function load() {
+  const seq = ++loadSeq
   loading.value = true
   error.value = ''
-  try { record.value = await getTenderRecord(props.kind, String(route.params.id), status) }
-  catch (cause) { error.value = errorMessage(cause, '详情加载失败') }
-  finally { loading.value = false }
+  try {
+    const next = await getTenderRecord(props.kind, String(route.params.id), status.value)
+    if (seq === loadSeq) record.value = next
+  } catch (cause) {
+    if (seq === loadSeq) error.value = errorMessage(cause, '详情加载失败')
+  } finally {
+    if (seq === loadSeq) loading.value = false
+  }
 }
 
 async function loadContent() {
+  const seq = ++contentSeq
   contentLoading.value = true
   contentError.value = ''
   try {
-    const result = await getTenderContent(props.kind, String(route.params.id), status)
-    html.value = isolatedHtml(result.html)
-  } catch (cause) { contentError.value = errorMessage(cause, '正文加载失败') }
-  finally { contentLoading.value = false }
+    const result = await getTenderContent(props.kind, String(route.params.id), status.value)
+    if (seq === contentSeq) html.value = isolatedHtml(result.html)
+  } catch (cause) {
+    if (seq === contentSeq) contentError.value = errorMessage(cause, '正文加载失败')
+  } finally {
+    if (seq === contentSeq) contentLoading.value = false
+  }
 }
 
-onMounted(() => {
-  void load()
-  void loadContent()
-})
+watch(
+  () => [props.kind, String(route.params.id), status.value] as const,
+  () => {
+    void load()
+    void loadContent()
+  },
+  { immediate: true },
+)
 </script>
 
 <template>

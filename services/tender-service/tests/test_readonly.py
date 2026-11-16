@@ -533,3 +533,49 @@ async def test_export_records_writes_xlsx_without_content_and_enforces_limit(mon
     bind_reader(monkeypatch, service, too_many)
     with pytest.raises(ApiError, match="超过单次导出上限"):
         await service.export_records("purchaser", ListQuery())
+
+
+def test_statistics_concurrent_distinct_ranges_do_not_503_and_same_key_coalesces(monkeypatch) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    stats._cache.clear()
+    started_a, gate_a = Event(), Event()
+    calls: list[str] = []
+
+    def fake_aggregate(query: StatsQuery) -> dict[str, object]:
+        calls.append(f"{query.date_from}:{query.date_to}")
+        if query.date_from.isoformat() == "2026-11-01":
+            started_a.set()
+            assert gate_a.wait(timeout=3)
+        return {
+            "daily": [],
+            "provinces": [],
+            "date_from": query.date_from.isoformat(),
+            "date_to": query.date_to.isoformat(),
+            "as_of": "now",
+        }
+
+    monkeypatch.setattr(stats, "_aggregate", fake_aggregate)
+    q_a = StatsQuery(date_from="2026-11-01", date_to="2026-11-01")
+    q_b = StatsQuery(date_from="2026-11-02", date_to="2026-11-02")
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        f_a1 = pool.submit(stats.get_statistics, q_a)
+        assert started_a.wait(timeout=2)
+        # 另一个不同日期区间不会被第一个查询锁死报错 503；同区间并发请求会合并等待同一结果。
+        res_b = pool.submit(stats.get_statistics, q_b).result(timeout=2)
+        f_a2 = pool.submit(stats.get_statistics, q_a)
+        gate_a.set()
+        res_a1 = f_a1.result(timeout=3)
+        res_a2 = f_a2.result(timeout=3)
+    assert res_b["date_from"] == "2026-11-02"
+    assert res_a1 is res_a2
+    assert calls.count("2026-11-01:2026-11-01") == 1
+
+    # 领导请求报错时等待方同样收到该错误，且不会锁死后续重试；并发配额满时回 503。
+    monkeypatch.setattr(stats, "_aggregate", lambda _q: (_ for _ in ()).throw(DependencyUnavailableError("源库忙")))
+    with pytest.raises(DependencyUnavailableError, match="源库忙"):
+        stats.get_statistics(StatsQuery(date_from="2026-11-03", date_to="2026-11-03"))
+    monkeypatch.setattr(stats._COMPUTE_SEM, "acquire", lambda **_kw: False)
+    with pytest.raises(DependencyUnavailableError, match="查询较多"):
+        stats.get_statistics(StatsQuery(date_from="2026-11-04", date_to="2026-11-04"))

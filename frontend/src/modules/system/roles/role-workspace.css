@@ -55,7 +55,7 @@
   box-shadow: 0 0 0 1px var(--zt-border) inset;
 }
 .role-nav__search :deep(.el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 1.5px var(--zt-primary) inset;
+  box-shadow: 0 0 0 1.5px var(--zt-blue-600) inset;
   background: var(--zt-panel);
 }
 
@@ -73,7 +73,7 @@
   gap: 2px 8px;
   padding: 10px 12px 10px 14px;
   border: 1px solid transparent;
-  border-radius: var(--zt-radius-sm);
+  border-radius: var(--zt-radius);
   background: none;
   text-align: left;
   font: inherit;

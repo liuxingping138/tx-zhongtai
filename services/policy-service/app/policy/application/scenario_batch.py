@@ -18,7 +18,8 @@ async def _each(session: AsyncSession, items: list[tuple[uuid.UUID, int]], actio
     """逐个做决定，各自一个保存点：一个失败（被人改过、已经决定过）不影响其他的，跳过的写明原因。"""
 
     done, skipped = 0, []
-    for candidate_id, version in items:
+    # 按候选 ID 升序逐条锁定，避免批量审核与并发相似任务/合并交叉加锁死锁。
+    for candidate_id, version in sorted(items, key=lambda pair: pair[0]):
         try:
             async with session.begin_nested():
                 await action(candidate_id, version)

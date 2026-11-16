@@ -57,7 +57,9 @@ async def ensure(session: AsyncSession, specs: list[dict[str, Any]], now: dateti
         for spec in specs
     ]
     await session.execute(pg_insert(C).values(values).on_conflict_do_nothing(index_elements=["key"]))
-    rows = await session.scalars(select(C).where(C.key.in_([spec["key"] for spec in specs])).with_for_update())
+    rows = await session.scalars(
+        select(C).where(C.key.in_([spec["key"] for spec in specs])).order_by(C.id).with_for_update()
+    )
     return {row.key: row for row in rows}
 
 

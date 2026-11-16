@@ -1,6 +1,6 @@
 .tender-detail {
   display: grid;
-  gap: var(--zt-space-5);
+  gap: var(--zt-space-4);
   padding: var(--zt-space-6);
   background: var(--zt-panel);
   border: 1px solid var(--zt-border);
@@ -46,7 +46,7 @@
   display: flex;
   align-items: center;
   gap: var(--zt-space-4);
-  padding: var(--zt-space-4) var(--zt-space-5);
+  padding: var(--zt-space-4) var(--zt-space-6);
   background: var(--zt-danger-soft);
   border: 1px solid var(--zt-danger-border);
   border-radius: 10px;

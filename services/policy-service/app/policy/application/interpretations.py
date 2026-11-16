@@ -366,6 +366,8 @@ async def export_interpretations(session: AsyncSession, actor: Actor, filters: F
     items = await repo.list_filtered(session, filters)
     rows = [to_out(item) for item in items]
     await attach_policy_contents(session, items, rows)
+    items.clear()
+    del items
     ai_fields: list[str] = []
     for row in rows:
         for key in row.get("ai_outputs") or ():

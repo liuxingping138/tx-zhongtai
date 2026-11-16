@@ -94,4 +94,7 @@ export const requestRetag = (ids: string[], step: AiTaskCode) => request<RetagRe
 export const getTaggingContract = () => request<{ tasks: ContractTask[] }>(http.get(`${base}/contract`))
 export const getTaggingSamples = (task: AiTaskCode, day: string, limit: number) =>
   request<TaggingSamples>(http.get(`${base}/samples`, { params: { task, limit, ...(task === 'type' ? { day } : {}) }, timeout: 120_000 }))
-export const updateAiTask = (code: AiTaskCode, body: AiTaskBody) => request<AiTask>(http.put(`${base}/tasks/${code}`, body))
+export type AiTaskUpdate = Omit<AiTask, 'spent_today' | 'spent_month' | 'current' | 'pending'>
+
+export const updateAiTask = (code: AiTaskCode, body: AiTaskBody) =>
+  request<AiTaskUpdate>(http.put(`${base}/tasks/${code}`, body))

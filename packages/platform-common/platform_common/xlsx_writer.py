@@ -9,9 +9,9 @@ openpyxl 每个单元格建一个对象再序列化，2 万行信源导出要 3.
 from __future__ import annotations
 
 import re
+import tempfile
 import zipfile
 from collections.abc import Iterable, Sequence
-from io import BytesIO
 from xml.sax.saxutils import escape, quoteattr
 
 from openpyxl.utils.cell import get_column_letter
@@ -93,27 +93,28 @@ def write_text_xlsx(sheet_name: str, rows: Iterable[Sequence[str]], *, column_co
     """一张工作表，每行是一组字符串，空串不写单元格。"""
 
     letters = [get_column_letter(index) for index in range(1, column_count + 1)]
-    buffer = BytesIO()
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as book:
-        for path, text in (
-            ("[Content_Types].xml", _CONTENT_TYPES),
-            ("_rels/.rels", _ROOT_RELS),
-            ("xl/workbook.xml", _workbook(sheet_title(sheet_name))),
-            ("xl/_rels/workbook.xml.rels", _WORKBOOK_RELS),
-            ("xl/styles.xml", _STYLES),
-        ):
-            book.writestr(_entry(path), text)
-        with book.open(_entry("xl/worksheets/sheet1.xml"), "w") as sheet:
-            sheet.write(f'{_XML_HEAD}<worksheet xmlns="{_MAIN_NS}"><sheetData>'.encode())
-            chunk: list[str] = []
-            for number, values in enumerate(rows, start=1):
-                chunk.append(_row_xml(number, letters, values))
-                if len(chunk) >= _CHUNK_ROWS:
-                    sheet.write(_encode(chunk))
-                    chunk = []
-            sheet.write(_encode(chunk))
-            sheet.write(b"</sheetData></worksheet>")
-    return buffer.getvalue()
+    with tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024) as buffer:
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as book:
+            for path, text in (
+                ("[Content_Types].xml", _CONTENT_TYPES),
+                ("_rels/.rels", _ROOT_RELS),
+                ("xl/workbook.xml", _workbook(sheet_title(sheet_name))),
+                ("xl/_rels/workbook.xml.rels", _WORKBOOK_RELS),
+                ("xl/styles.xml", _STYLES),
+            ):
+                book.writestr(_entry(path), text)
+            with book.open(_entry("xl/worksheets/sheet1.xml"), "w") as sheet:
+                sheet.write(f'{_XML_HEAD}<worksheet xmlns="{_MAIN_NS}"><sheetData>'.encode())
+                chunk: list[str] = []
+                for number, values in enumerate(rows, start=1):
+                    chunk.append(_row_xml(number, letters, values))
+                    if len(chunk) >= _CHUNK_ROWS:
+                        sheet.write(_encode(chunk))
+                        chunk = []
+                sheet.write(_encode(chunk))
+                sheet.write(b"</sheetData></worksheet>")
+        buffer.seek(0)
+        return buffer.read()
 
 
 def _entry(path: str) -> zipfile.ZipInfo:

@@ -88,21 +88,22 @@ const actions = computed(() => stepActions(selected.value, steps.value, {
   canEdit: canEdit.value, canRelease: canRelease.value, sampleOpen: testTab.value === 'sample',
 }))
 
+let loadSeq = 0
+
 async function load(): Promise<void> {
+  const seq = ++loadSeq
   loading.value = true
   try {
     const data = await promptEditorData(routeId.value)
+    if (seq !== loadSeq) return
     models.value = data.models
     categories.value = data.categories
     codeTables.value = data.code_tables
     loadError.value = ''
     fill(data.item)
     openReviewFromLink()
-  } catch (error) {
-    loadError.value = errorMessage(error, '模板加载失败，请刷新重试')
-  } finally {
-    loading.value = false
-  }
+  } catch (error) { if (seq === loadSeq) loadError.value = errorMessage(error, '模板加载失败，请刷新重试') }
+  finally { if (seq === loadSeq) loading.value = false }
 }
 onMounted(load)
 
@@ -112,7 +113,10 @@ function openReviewFromLink(): void {
   void router.replace({ query: { ...route.query, review: undefined } })
   if (selected.value?.release) releasing.value = true
 }
-watch(routeId, id => { if (id !== (selected.value?.id ?? '')) void load() })
+watch(routeId, id => {
+  if (id === (selected.value?.id ?? '')) return
+  answer.stop(); void load()
+})
 onBeforeUnmount(answer.stop)
 
 function fill(template: PromptTemplate | null): void {
@@ -137,10 +141,7 @@ function canCreateDraft(): boolean {
     titleInput.value?.focus()
     return false
   }
-  if (!form.category) {
-    ElMessage.warning('请选择模板类型')
-    return false
-  }
+  if (!form.category) { ElMessage.warning('请选择模板类型'); return false }
   return true
 }
 
@@ -194,8 +195,7 @@ async function trial(): Promise<void> {
 }
 
 function onStep(key: StepKey): void {
-  if (key === 'test') testTab.value = 'sample'
-  else if (key === 'release') releasing.value = true
+  if (key === 'test') testTab.value = 'sample'; else if (key === 'release') releasing.value = true
 }
 </script>
 

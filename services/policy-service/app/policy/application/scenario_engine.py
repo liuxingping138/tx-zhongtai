@@ -185,7 +185,9 @@ def _final_pair(candidate: ScenarioCandidate, row: Interpretation) -> Pair:
     return industry, scenario
 
 
-async def _write_to_codebook(candidate: ScenarioCandidate, pairs: list[Pair]) -> dict[Pair, dict[str, Any]]:
+async def _write_to_codebook(
+    candidate: ScenarioCandidate, pairs: list[Pair], *, atomic: bool = False
+) -> dict[Pair, dict[str, Any]]:
     """采纳、合并都经码表的同步接口：已有的返回原编码，新的按规则分配；合并到没挂在这个行业下的场景只新建关联行。"""
 
     unique = list(dict.fromkeys(pairs))
@@ -200,6 +202,7 @@ async def _write_to_codebook(candidate: ScenarioCandidate, pairs: list[Pair]) ->
             "items": items,
             "caller_name": candidate.decided_by_name or DEFAULT_DECIDER,
             "caller_id": candidate.decided_by_id,
+            **({"atomic": True} if atomic else {}),
         },
     )
     by_key = {str(item.get("key")): item for item in found}
@@ -211,6 +214,8 @@ async def apply_decision(
     candidate: ScenarioCandidate,
     rows: list[Interpretation] | None,
     now: datetime,
+    *,
+    atomic: bool = False,
 ) -> list[tuple[Interpretation, str]]:
     """把候选现在的决定写到它下面的行上（不传 rows 就是全部还没处理的行）。可以反复执行，处理过的行不再动。
 
@@ -231,7 +236,7 @@ async def apply_decision(
             system_touch(row)
         return []
     finals = {row.id: _final_pair(candidate, row) for row in rows}
-    results = await _write_to_codebook(candidate, list(finals.values()))
+    results = await _write_to_codebook(candidate, list(finals.values()), atomic=atomic)
     failed: list[tuple[Interpretation, str]] = []
     done: list[Interpretation] = []
     for row in rows:

@@ -121,12 +121,15 @@ def _new_row(item: ScenarioItem, codes: Codes, caller: Actor, source_policy: str
     )
 
 
-async def sync(session: AsyncSession, caller: Actor, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """逐条分配编码并写入；已有同名同路径的直接返回原编码。单条出错（行业不在码表等）不影响其他条。"""
+async def sync(
+    session: AsyncSession, caller: Actor, items: list[dict[str, Any]], *, atomic: bool = False
+) -> list[dict[str, Any]]:
+    """逐条分配编码并写入；已有同名同路径的直接返回原编码。atomic=True 时任一条出错则整批回滚拒绝，不留脏写入。"""
 
     await repo.lock_scenario_codes(session)
     book = CodeBook.from_rows(await repo.scenario_codes(session))
     results: list[dict[str, Any]] = []
+    errors: list[str] = []
     created = 0
     for raw in items:
         key = str(raw.get("key") or "")
@@ -134,12 +137,19 @@ async def sync(session: AsyncSession, caller: Actor, items: list[dict[str, Any]]
         try:
             codes, is_new = book.assign(item)
         except ValueError as exc:
-            results.append(_codes_out(key, None, created=False, error=str(exc)))
+            msg = str(exc)
+            errors.append(msg)
+            results.append(_codes_out(key, None, created=False, error=msg))
             continue
         if is_new:
             session.add(_new_row(item, codes, caller, str(raw.get("source_policy") or "")))
             created += 1
         results.append(_codes_out(key, codes, created=is_new, error=""))
+    if atomic and errors:
+        reasons = "；".join(sorted(set(errors))[:3])
+        raise ApiError(
+            f"有 {len(errors)} 行没法写进行业场景码表：{reasons}", code=ErrorCode.VALIDATION_ERROR, http_status=422
+        )
     await session.flush()
     await enqueue_event(
         session,

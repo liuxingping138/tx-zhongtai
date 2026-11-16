@@ -57,6 +57,13 @@ async def test_rows_without_a_source_id_and_missing_sources_are_explained(monkey
     with pytest.raises(DependencyUnavailableError, match="源库暂时连不上"):
         await policy_content.policy_content("c1")
 
+    monkeypatch.setattr(
+        source,
+        "read_page",
+        lambda _id: ({"content_id": "c1", "name": "恶意链接", "original_link": "javascript:alert(1)"}, "<p>ok</p>"),
+    )
+    assert (await policy_content.policy_content("c1"))["source_url"] == ""
+
 
 class _Cursor:
     def __init__(self, replies: list[Any]) -> None:

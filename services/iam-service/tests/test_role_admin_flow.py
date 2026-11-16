@@ -101,8 +101,9 @@ class TestCreateRole:
 
     async def test_duplicate_code_is_a_conflict(self, env: SimpleNamespace) -> None:
         session = _Session(flush_error=IntegrityError("insert", {}, Exception("unique")))
-        with pytest.raises(VersionConflictError, match="编码已存在"):
+        with pytest.raises(ApiError, match="编码已存在") as err:
             await role_admin.create_role(session, ACTOR, code="ops", name="运营")  # type: ignore[arg-type]
+        assert err.value.code == "DUPLICATE" and err.value.http_status == 409
 
 
 class TestUpdateRole:

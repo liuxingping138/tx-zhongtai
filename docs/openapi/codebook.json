@@ -2215,6 +2215,11 @@
             "maxLength": 64,
             "title": "Caller Id",
             "default": ""
+          },
+          "atomic": {
+            "type": "boolean",
+            "title": "Atomic",
+            "default": false
           }
         },
         "additionalProperties": false,

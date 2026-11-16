@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 
 from platform_common.clock import utcnow
-from platform_common.errors import ApiError, NotFoundError, PermissionDeniedError, VersionConflictError
+from platform_common.errors import ApiError, ErrorCode, NotFoundError, PermissionDeniedError, VersionConflictError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -168,7 +168,7 @@ async def create_user(session: AsyncSession, actor: User, data: NewUser) -> tupl
     try:
         await session.flush()
     except IntegrityError as exc:
-        raise VersionConflictError("用户名已存在") from exc
+        raise ApiError("用户名已存在", code=ErrorCode.DUPLICATE, http_status=409) from exc
     await outbox_repo.enqueue(
         session,
         event_type="iam.user.created",

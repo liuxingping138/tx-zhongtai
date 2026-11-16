@@ -74,7 +74,7 @@ def _clean_path(names: list[str]) -> Names:
 
 async def _apply(session: AsyncSession, candidate: ScenarioCandidate, actor: Actor, event: str) -> dict[str, Any]:
     now = utcnow()
-    failed = await engine.apply_decision(session, candidate, None, now)
+    failed = await engine.apply_decision(session, candidate, None, now, atomic=True)
     if failed:
         reasons = "；".join(sorted({reason for _, reason in failed})[:3])
         raise _error(f"有 {len(failed)} 行没法写进行业场景码表：{reasons}")
@@ -208,14 +208,14 @@ async def change_row_scenario(
         setattr(row, field, value)
     key = make_relation_key(row.policy_uid, "", row.opportunity_type, [*industry, *scenario])
     if key != row.relation_key and await interpretations_repo.get_by_relation_key(session, key):
-        raise _error(DUPLICATE_ROW, 409)
+        raise ApiError(DUPLICATE_ROW, code=ErrorCode.DUPLICATE, http_status=409)
     row.relation_key = key
     row.industry_code = row.scenario_code = row.industry_scenario_code = ""
     row.scenario_state, row.candidate_id, row.scenario_synced_at = "", None, None
     now = utcnow()
     touched = await engine.classify_rows(session, [row], now)
     if row.scenario_state == SCENARIO_STATE_DUPLICATE:
-        raise _error(DUPLICATE_ROW, 409)
+        raise ApiError(DUPLICATE_ROW, code=ErrorCode.DUPLICATE, http_status=409)
     row.updated_at, row.updated_by_id, row.updated_by_name = now, actor.id, actor.name
     await engine.settle(session, {*touched, old_candidate})
     await enqueue_event(

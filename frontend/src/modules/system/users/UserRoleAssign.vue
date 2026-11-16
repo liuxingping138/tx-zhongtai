@@ -157,7 +157,7 @@ function onSubmit() {
 .user-role-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding-top: 12px; border-top: 1px solid var(--zt-divider); }
 .user-dirty-hint { margin-right: auto; color: var(--zt-warning-text); font-size: 12px; }
 
-.user-direct-grants { display: flex; align-items: center; justify-content: space-between; padding-top: 12px; border-top: 1px solid var(--zt-divider); font-size: 12.5px; color: var(--zt-ink-600); }
+.user-direct-grants { display: flex; align-items: center; justify-content: space-between; padding-top: 12px; border-top: 1px solid var(--zt-divider); font-size: 12.5px; color: var(--zt-ink-700); }
 .direct-text { display: flex; align-items: center; gap: 6px; }
 .direct-btn { font-size: 12.5px; }
 </style>

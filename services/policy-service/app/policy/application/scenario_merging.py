@@ -47,8 +47,7 @@ async def peers(session: AsyncSession, candidate_id: uuid.UUID) -> list[dict[str
     ]
 
 
-async def _locked(session: AsyncSession, candidate_id: uuid.UUID, version: int) -> ScenarioCandidate:
-    candidate = await repo.get_for_update(session, candidate_id)
+def _check_pending(candidate: ScenarioCandidate | None, version: int) -> ScenarioCandidate:
     if candidate is None:
         raise NotFoundError("新增场景不存在")
     if candidate.version != version:
@@ -60,6 +59,30 @@ async def _locked(session: AsyncSession, candidate_id: uuid.UUID, version: int) 
             http_status=409,
         )
     return candidate
+
+
+async def _locked(session: AsyncSession, candidate_id: uuid.UUID, version: int) -> ScenarioCandidate:
+    return _check_pending(await repo.get_for_update(session, candidate_id), version)
+
+
+async def _lock_pair(
+    session: AsyncSession,
+    candidate_id: uuid.UUID,
+    version: int,
+    peer_id: uuid.UUID,
+    peer_version: int,
+) -> tuple[ScenarioCandidate, ScenarioCandidate]:
+    """按 UUID 升序加行锁，杜绝双方互并时交叉锁序引发死锁；锁齐再做版本与状态校验。"""
+
+    if candidate_id <= peer_id:
+        first_c = await repo.get_for_update(session, candidate_id)
+        second_c = await repo.get_for_update(session, peer_id)
+        target_raw, peer_raw = first_c, second_c
+    else:
+        first_c = await repo.get_for_update(session, peer_id)
+        second_c = await repo.get_for_update(session, candidate_id)
+        peer_raw, target_raw = first_c, second_c
+    return _check_pending(target_raw, version), _check_pending(peer_raw, peer_version)
 
 
 async def absorb(
@@ -75,8 +98,7 @@ async def absorb(
 
     if peer_id == candidate_id:
         raise ApiError("不能并入自己", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    target = await _locked(session, candidate_id, version)
-    peer = await _locked(session, peer_id, peer_version)
+    target, peer = await _lock_pair(session, candidate_id, version, peer_id, peer_version)
     if (peer.kind, peer.new_level) != (target.kind, target.new_level):
         raise ApiError(
             f"两个场景的新增级别不同（{peer.level_label}、{target.level_label}），不能合成一个，请分别决定",

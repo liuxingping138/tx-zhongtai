@@ -80,7 +80,8 @@ function setContentMode(mode: string | number | boolean | undefined): void {
 }
 
 async function saveTask(current: AiTask): Promise<void> {
-  task.value = await updateAiTask(current.code, { ...ai, cursor_date: cursorToSend(ai.cursor_date, openedCursor.value), daily_cost_limit: String(ai.daily_cost_limit), version: current.version })
+  const updated = await updateAiTask(current.code, { ...ai, cursor_date: cursorToSend(ai.cursor_date, openedCursor.value), daily_cost_limit: String(ai.daily_cost_limit), version: current.version })
+  task.value = { ...current, ...updated }
 }
 
 async function saveSchedule(current: ScheduledJob): Promise<void> {

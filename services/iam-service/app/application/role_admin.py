@@ -7,7 +7,7 @@ import uuid
 from dataclasses import dataclass
 
 from platform_common.clock import utcnow
-from platform_common.errors import ApiError, NotFoundError, PermissionDeniedError, VersionConflictError
+from platform_common.errors import ApiError, ErrorCode, NotFoundError, PermissionDeniedError, VersionConflictError
 from platform_common.filters import FilterValue
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -129,7 +129,7 @@ async def create_role(
     try:
         await session.flush()
     except IntegrityError as exc:
-        raise VersionConflictError("角色编码已存在") from exc
+        raise ApiError("角色编码已存在", code=ErrorCode.DUPLICATE, http_status=409) from exc
     await outbox_repo.enqueue(
         session,
         event_type="iam.role.created",

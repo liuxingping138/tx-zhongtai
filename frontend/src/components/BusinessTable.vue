@@ -325,6 +325,8 @@ function editRoute(row: T, index: number): RouteLocationRaw {
 .column-heading { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 20px; }
 .business-table__desktop :deep(th.el-table__cell) { height: 40px; padding: 5px 0; }
 .business-table__desktop :deep(td.el-table__cell) { height: 44px; padding: 6px 0; }
+:global(html[data-density="compact"]) .business-table__desktop :deep(th.el-table__cell),
+:global(html[data-density="compact"]) .business-table__desktop :deep(td.el-table__cell) { height: 32px; }
 .business-table__desktop :deep(.el-button.is-link) { min-height: 24px; height: 24px; }
 .business-table__desktop :deep(.cell) { padding: 0 12px; line-height: 22px; }
 .cell-text--wrap { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

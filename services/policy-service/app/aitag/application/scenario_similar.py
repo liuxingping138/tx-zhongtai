@@ -105,7 +105,8 @@ async def _save(ids: list[uuid.UUID], results: list[dict[str, Any]], known: dict
     done = failed = 0
     now = utcnow()
     async with SessionLocal() as session:
-        for candidate_id, result in zip(ids, results, strict=True):
+        # 按候选 ID 升序获取行锁，与其他场景处理接口锁序一致，防止死锁。
+        for candidate_id, result in sorted(zip(ids, results, strict=True), key=lambda pair: pair[0]):
             if not_run(result):
                 continue  # 费用到上限没轮到：下批再问
             candidate = await scenario_candidates.locked(session, candidate_id)

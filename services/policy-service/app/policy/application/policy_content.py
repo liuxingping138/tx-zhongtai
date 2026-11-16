@@ -23,8 +23,15 @@ from app.policy.domain.models import BaseTag
 NO_SOURCE = "这条不是从源库打标的，没有正文"
 GONE = "源库里已经找不到这条政策的正文"
 SOURCE_DOWN = "源库暂时连不上，正文取不了，稍后再试"
+_TITLE_CHUNK = 500
+_CONTENT_CHUNK = 200
 
 logger = logging.getLogger("policy.content")
+
+
+def _safe_http_url(raw: Any) -> str:
+    url = str(raw or "").strip()
+    return url if url.lower().startswith(("http://", "https://")) else ""
 
 
 async def _read(func: Any, *args: Any) -> Any:
@@ -47,7 +54,7 @@ async def policy_content(source_content_id: str | None) -> dict[str, Any]:
     return {
         "title": rules.policy_title(row.get("name"))[0],
         "text": text,
-        "source_url": str(row.get("original_link") or ""),
+        "source_url": _safe_http_url(row.get("original_link")),
         "issued_at": str(row.get("introduced_date") or ""),
         "chars": len(text),
     }
@@ -56,19 +63,39 @@ async def policy_content(source_content_id: str | None) -> dict[str, Any]:
 async def policy_contents_by_source_ids(source_content_ids: Sequence[str]) -> dict[str, str]:
     """批量按源政策 ID 读取正文并清洗，返回 {source_content_id: text}。
 
-    用于政策基础表、政策解读表导出时填入「政策正文」。
-    去重后批量读源库并提取可视纯文本；读取失败或没有源 ID 的返回空串。
+    分批拉取并即时清洗释放原始 HTML，避免万级导出同时囤积全量富文本撑爆容器内存。
     """
 
     valid_ids = [cid for cid in dict.fromkeys(source_content_ids) if cid]
     if not valid_ids:
         return {}
-    try:
-        raw_map: dict[str, str] = await anyio.to_thread.run_sync(source.read_contents, valid_ids)
-    except (OSError, pymysql.MySQLError) as exc:
-        logger.warning("批量读取源政策正文失败，导出将回退为空正文: %s", exc)
-        return {}
-    return {cid: rules.clean_content(raw_html, 0) for cid, raw_html in raw_map.items() if raw_html}
+    cleaned: dict[str, str] = {}
+    for start in range(0, len(valid_ids), _CONTENT_CHUNK):
+        batch = valid_ids[start : start + _CONTENT_CHUNK]
+        try:
+            raw_map: dict[str, str] = await anyio.to_thread.run_sync(source.read_contents, batch)
+        except (OSError, pymysql.MySQLError) as exc:
+            logger.warning("批量读取源政策正文失败，导出将回退为空正文: %s", exc)
+            return cleaned
+        for cid, raw_html in raw_map.items():
+            if raw_html:
+                cleaned[cid] = rules.clean_content(raw_html, 0)
+        raw_map.clear()
+    return cleaned
+
+
+async def _lookup_missing_sids(session: AsyncSession, titles: list[str]) -> dict[str, str]:
+    title_to_sid: dict[str, str] = {}
+    for start in range(0, len(titles), _TITLE_CHUNK):
+        chunk = titles[start : start + _TITLE_CHUNK]
+        stmt = select(BaseTag.policy_name, BaseTag.source_content_id).where(
+            BaseTag.policy_name.in_(chunk), BaseTag.source_content_id.is_not(None)
+        )
+        res = await session.execute(stmt)
+        for name, sid in res.all():
+            if sid:
+                title_to_sid[name] = str(sid)
+    return title_to_sid
 
 
 async def attach_policy_contents(
@@ -96,11 +123,7 @@ async def attach_policy_contents(
 
     if missing_title_indices:
         titles = list({title for _, title in missing_title_indices})
-        stmt = select(BaseTag.policy_name, BaseTag.source_content_id).where(
-            BaseTag.policy_name.in_(titles), BaseTag.source_content_id.is_not(None)
-        )
-        res = await session.execute(stmt)
-        title_to_sid = {name: str(sid) for name, sid in res.all() if sid}
+        title_to_sid = await _lookup_missing_sids(session, titles)
         for idx, title in missing_title_indices:
             if title in title_to_sid:
                 id_map[idx] = title_to_sid[title]

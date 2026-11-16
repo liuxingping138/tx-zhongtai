@@ -18,7 +18,7 @@ MAX_LINES = 400
 LONG_FILES: dict[str, str] = {}
 
 PY_SOURCE = re.compile(r"^(services/[^/]+/app|packages/platform-common/platform_common|scripts)/.+\.py$")
-FRONTEND = re.compile(r"^frontend/(src|e2e)/.+\.(ts|vue)$|^frontend/[^/]+\.(ts|js)$")
+FRONTEND = re.compile(r"^frontend/(src|e2e)/.+\.(ts|vue|css)$|^frontend/[^/]+\.(ts|js)$")
 
 NOQA = re.compile(r"#\s*noqa(?P<codes>:\s*[A-Z]+[0-9]+(?:\s*,\s*[A-Z]+[0-9]+)*)?(?P<rest>.*)", re.I)
 TYPE_IGNORE = re.compile(r"#\s*type:\s*ignore(?P<codes>\[[^\]]*\])?(?P<rest>.*)")
@@ -279,7 +279,8 @@ def check(files: list[str], root: Path) -> list[str]:
             if PY_SOURCE.match(rel) and not _is_python_test(rel):
                 errors += line_count_errors(rel, source)
         else:
-            errors += frontend_comment_errors(rel, source)
+            if rel.endswith((".ts", ".vue", ".js")):
+                errors += frontend_comment_errors(rel, source)
             if UI_SOURCE.match(rel):
                 errors += color_literal_errors(rel, source)
     stale = sorted(rel for rel in LONG_FILES if rel not in files)

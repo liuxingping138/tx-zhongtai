@@ -83,8 +83,8 @@ export const FILTER_KEYS = [
   'site_code',
   'crawl_priority',
   'tag',
-  'online_date_after',
-  'online_date_before',
+  'online_date_from',
+  'online_date_to',
 ]
 
 /** 省市区编码只用来给新信源分配网站编码：新建时三级至少要有一级，编辑已有网站编码的信源不要求

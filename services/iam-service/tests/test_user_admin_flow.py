@@ -115,8 +115,9 @@ class TestCreateUser:
 
     async def test_duplicate_username_is_a_conflict(self, env: SimpleNamespace) -> None:
         session = _Session(flush_error=IntegrityError("insert", {}, Exception("unique")))
-        with pytest.raises(VersionConflictError, match="用户名已存在"):
+        with pytest.raises(ApiError, match="用户名已存在") as err:
             await user_admin.create_user(session, ACTOR, NewUser(username="lisi", display_name="李四"))  # type: ignore[arg-type]
+        assert err.value.code == "DUPLICATE" and err.value.http_status == 409
 
     async def test_blank_display_name_is_rejected_before_anything_is_written(self, env: SimpleNamespace) -> None:
         session = _Session()

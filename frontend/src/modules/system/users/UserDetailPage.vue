@@ -50,8 +50,12 @@ const directCount = computed(() =>
   permissions.value.filter(item => item.sources.some(source => source.role_id === null)).length,
 )
 
+let loadSeq = 0
+
 async function load() {
-  if (!userId.value) return
+  const id = userId.value
+  if (!id) return
+  const seq = ++loadSeq
   loading.value = true
   loadError.value = ''
   permissionError.value = ''
@@ -60,21 +64,22 @@ async function load() {
   pendingRoleChange.value = false
   try {
     const [detail, allRoles, permsResult] = await Promise.all([
-      getUser(userId.value),
+      getUser(id),
       listAllRoles().catch(() => []),
-      getUserPermissions(userId.value).catch(err => {
-        permissionError.value = errorMessage(err, '无法加载实际权限')
+      getUserPermissions(id).catch(err => {
+        if (seq === loadSeq) permissionError.value = errorMessage(err, '无法加载实际权限')
         return { account_active: true, items: [] }
       }),
     ])
+    if (seq !== loadSeq) return
     user.value = detail
     roles.value = allRoles
     permissions.value = permsResult.items
     accountActive.value = permsResult.account_active
   } catch (error) {
-    loadError.value = errorMessage(error, '暂时无法加载用户信息')
+    if (seq === loadSeq) loadError.value = errorMessage(error, '暂时无法加载用户信息')
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
   }
 }
 

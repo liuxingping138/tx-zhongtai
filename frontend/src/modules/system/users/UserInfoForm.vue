@@ -194,13 +194,13 @@ watch(() => props.saving, (cur, prev) => {
 .user-kv__label { color: var(--zt-ink-500); flex-shrink: 0; font-size: 12.5px; }
 .user-kv__val { color: var(--zt-ink-900); font-weight: 500; text-align: right; word-break: break-all; }
 .user-kv__val--mono { font-family: var(--zt-font-mono, monospace); }
-.user-kv__val--email { color: var(--zt-primary-text); }
+.user-kv__val--email { color: var(--zt-blue-700); }
 
 .user-info-form { display: flex; flex-direction: column; gap: 10px; }
 .user-form-grid { display: flex; flex-direction: column; gap: 10px; }
 .user-form-grid__row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .user-form-grid :deep(.el-form-item) { margin-bottom: 0; }
-.user-form-grid :deep(.el-form-item__label) { padding-bottom: 4px; font-size: 12.5px; color: var(--zt-ink-600); line-height: 1.3; }
+.user-form-grid :deep(.el-form-item__label) { padding-bottom: 4px; font-size: 12.5px; color: var(--zt-ink-700); line-height: 1.3; }
 .user-form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--zt-divider); }
 .user-dirty-hint { margin-right: auto; color: var(--zt-warning-text); font-size: 12px; }
 </style>

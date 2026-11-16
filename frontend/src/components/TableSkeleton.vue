@@ -127,8 +127,8 @@ const colList = computed(() => Array.from({ length: props.columns }, (_, i) => i
   background: var(--zt-soft);
 }
 
-:global(html.zt-compact) .table-skeleton__row {
-  height: 36px;
+:global(html[data-density="compact"]) .table-skeleton__row {
+  height: 32px;
 }
 
 .table-skeleton__row:last-child {

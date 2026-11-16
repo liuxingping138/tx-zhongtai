@@ -183,14 +183,14 @@ defineProps<{ user: ManagedUser }>()
   color: var(--zt-ink-500);
 }
 .user-hero__meta-val {
-  color: var(--zt-ink-800);
+  color: var(--zt-ink-900);
 }
 .user-hero__meta-ip {
   color: var(--zt-ink-500);
   margin-left: 2px;
 }
 .user-hero__meta-sep {
-  color: var(--zt-ink-300);
+  color: var(--zt-border-strong);
 }
 .user-hero__actions {
   display: flex;

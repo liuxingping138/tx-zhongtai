@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
+import { errorMessage, isApiError } from '@/api/errors'
 import {
   getInterpretation,
   getInterpretationContent,
@@ -34,6 +35,8 @@ const retagOpen = ref(false)
 const retagging = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let pollRemaining = 0
+let pollBaseId = ''
+let pollInFlight = false
 
 function stopPolling() {
   if (pollTimer) {
@@ -41,33 +44,50 @@ function stopPolling() {
     pollTimer = null
   }
   pollRemaining = 0
+  pollBaseId = ''
+  pollInFlight = false
   retagging.value = false
 }
 
-async function switchToReplacedRow(policyTitle: string, sourceId: string) {
-  const page = await listInterpretations({ policy_title: policyTitle, page: 1, page_size: 20 })
-  const replacement = page.items.find(item => item.source_content_id === sourceId) ?? page.items[0]
-  if (replacement) {
-    await router.replace({ name: 'policy-interpretation-review', params: { id: replacement.id }, query: route.query })
-    ElMessage.success('重新解读已完成，已切换到最新生成的解读记录')
-  } else {
-    await router.replace({ name: 'policy-interpretations' })
-    ElMessage.info('该政策重新打标后不再保留此解读行，已返回政策解读列表')
+async function switchToReplacedRow(baseId: string, policyTitle: string, sourceId: string) {
+  try {
+    const page = await listInterpretations({ policy_title: policyTitle, page: 1, page_size: 20 })
+    if (review.record.value?.id !== baseId) return
+    const replacement = page.items.find(item => item.source_content_id === sourceId) ?? page.items[0]
+    if (replacement) {
+      await router.replace({ name: 'policy-interpretation-review', params: { id: replacement.id }, query: route.query })
+      ElMessage.success('重新解读已完成，已切换到最新生成的解读记录')
+    } else {
+      await router.replace({ name: 'policy-interpretations' })
+      ElMessage.info('该政策重新打标后不再保留此解读行，已返回政策解读列表')
+    }
+  } catch (cause) {
+    ElMessage.warning(errorMessage(cause, '重新解读结果刷新失败，请手动刷新列表查看'))
   }
 }
 
+function syncCurrentRecord(baseId: string): boolean {
+  if (review.record.value?.id === baseId) return true
+  stopPolling()
+  return false
+}
+
 async function pollOnce(baseId: string, baseVersion: number, policyTitle: string, sourceId: string) {
-  if (review.editing.value) return
+  if (review.editing.value || pollInFlight || !syncCurrentRecord(baseId)) return
+  pollInFlight = true
   try {
     const fresh = await getInterpretation(baseId)
-    if (fresh.version !== baseVersion) {
-      stopPolling()
-      await review.load()
-      ElMessage.success('重新打标已完成，已刷新最新结果')
-    }
-  } catch {
+    if (!syncCurrentRecord(baseId) || fresh.version === baseVersion) return
     stopPolling()
-    await switchToReplacedRow(policyTitle, sourceId)
+    await review.load()
+    ElMessage.success('重新打标已完成，已刷新最新结果')
+  } catch (cause) {
+    // 只有旧行因重新打标被替换（404）才去查找新生成行；临时 5xx/超时继续按剩余次数重试。
+    if (!isApiError(cause) || cause.status !== 404) return
+    stopPolling()
+    await switchToReplacedRow(baseId, policyTitle, sourceId)
+  } finally {
+    pollInFlight = false
   }
 }
 
@@ -77,6 +97,7 @@ function onRetagDone() {
   if (!current) return
   const { id, version, policy_title, source_content_id } = current
   retagging.value = true
+  pollBaseId = id
   pollRemaining = 30
   pollTimer = setInterval(() => {
     pollRemaining -= 1
@@ -101,6 +122,9 @@ const review = useReviewRecord<InterpretationItem>({
   // 政策唯一标识不在表单里，按原值提交；同时合并模板新增动态列。
   update: (row, form) => updateInterpretation(row.id, packInterpretationPatch(form, row)),
   canEdit: () => canWrite.value,
+})
+watch(() => review.record.value?.id, id => {
+  if (pollBaseId && id !== pollBaseId) stopPolling()
 })
 
 const status = computed(() => {

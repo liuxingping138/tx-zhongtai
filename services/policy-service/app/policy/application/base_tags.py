@@ -281,6 +281,8 @@ async def export_base_tags(session: AsyncSession, actor: Actor, filters: Filters
     items = await repo.list_filtered(session, filters)
     rows = [_to_out(item) for item in items]
     await attach_policy_contents(session, items, rows)
+    items.clear()
+    del items
     ai_fields = list(DEFAULT_AI_OUTPUT_FIELDS)
     for row in rows:
         for key in row.get("ai_outputs") or ():
