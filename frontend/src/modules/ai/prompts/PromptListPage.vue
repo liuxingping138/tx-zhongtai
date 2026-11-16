@@ -209,7 +209,7 @@ function create(): void {
       >
         <el-table-column
           label="模板名称"
-          min-width="170"
+          min-width="150"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -224,7 +224,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="类型"
-          width="88"
+          width="74"
         >
           <template #default="{ row }">
             <el-tag
@@ -240,7 +240,7 @@ function create(): void {
         <el-table-column
           v-if="showTasks"
           label="定时任务"
-          min-width="136"
+          min-width="120"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -262,7 +262,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="上线状态"
-          min-width="148"
+          min-width="172"
         >
           <template #default="{ row }">
             <!-- 有改动没上线：一行写完，改了什么放悬停提示，「看改动」直接打开逐行对比。 -->
@@ -285,7 +285,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="样本试跑"
-          min-width="148"
+          min-width="168"
         >
           <template #default="{ row }">
             <span
@@ -296,8 +296,8 @@ function create(): void {
           </template>
         </el-table-column>
         <el-table-column
-          label="字段数"
-          width="76"
+          label="字段"
+          width="58"
           align="center"
         >
           <template #default="{ row }">
@@ -313,7 +313,7 @@ function create(): void {
         </el-table-column>
         <el-table-column
           label="模型"
-          min-width="156"
+          min-width="126"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -324,26 +324,20 @@ function create(): void {
           </template>
         </el-table-column>
         <el-table-column
-          prop="updated_by_name"
-          label="更新人"
-          width="88"
+          label="最近更新"
+          width="116"
           show-overflow-tooltip
-        />
-        <el-table-column
-          label="更新时间"
-          width="96"
         >
           <template #default="{ row }">
             <span
               class="prompt-list__time"
-              :title="row.updated_at"
+              :title="`${row.updated_by_name} · ${row.updated_at}`"
             >{{ shortTime(row.updated_at) }}</span>
           </template>
         </el-table-column>
         <el-table-column
           label="操作"
-          width="110"
-          fixed="right"
+          width="78"
           align="right"
         >
           <template #default="{ row }">
@@ -355,7 +349,7 @@ function create(): void {
                 class="row-action row-action--primary"
                 :to="{ name: 'ai-prompt-edit', params: { id: row.id } }"
               >
-                编辑调优
+                调试
               </router-link>
             </div>
           </template>

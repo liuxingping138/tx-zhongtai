@@ -74,6 +74,11 @@ function onCodeMode(value: string | number | boolean | undefined): void {
 // 选了系统码表、或者已经传了文件，就能看一眼码表内容和大小。
 const previewing = ref(false)
 const collapsed = ref(false)
+watch(
+  () => props.template?.id,
+  (id, prev) => { if (id !== prev) collapsed.value = Boolean(id && modelId.value && content.value.trim()) },
+  { immediate: true, flush: 'post' },
+)
 const previewable = computed(() => (codeMode.value === 'system' ? Boolean(codeTable.value) : codeMode.value === 'upload' && Boolean(props.template?.code_name)))
 const activeModelName = computed(() => props.models.find(item => item.id === modelId.value)?.name ?? '未选模型')
 const activeCodeSummary = computed(() => {

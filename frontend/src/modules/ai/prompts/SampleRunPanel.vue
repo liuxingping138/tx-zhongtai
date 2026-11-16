@@ -213,6 +213,15 @@ async function start(): Promise<void> {
           草稿在这次试跑之后改过，结果可能过时，点「再跑一次」看改过的效果
         </p>
       </section>
+      <SamplePreviewTable
+        v-if="rows?.items.length && !running"
+        :columns="rows.columns"
+        :fields="rows.fields"
+        :items="rows.items"
+        :can-run="canRun"
+        @pick="open"
+        @trial="row => emit('trial', row)"
+      />
       <template v-if="watched.length">
         <div class="sample__sect">
           <h4>要看的 {{ watched.length }} 行</h4>
@@ -262,15 +271,6 @@ async function start(): Promise<void> {
       >
         {{ allGood }}
       </p>
-      <SamplePreviewTable
-        v-if="rows?.items.length && !running"
-        :columns="rows.columns"
-        :fields="rows.fields"
-        :items="rows.items"
-        :can-run="canRun"
-        @pick="open"
-        @trial="row => emit('trial', row)"
-      />
       <p
         v-if="!run && !sample.loading.value"
         class="sample__empty"
