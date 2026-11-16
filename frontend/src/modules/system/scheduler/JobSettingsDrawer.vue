@@ -193,6 +193,10 @@ defineExpose({ open })
             controls-position="right"
           />
           <span class="job-settings__hint">{{ task.code === 'type' ? '一次执行读这么多条源政策' : '一次执行最多处理这么多条待办政策' }}；先用几十条试跑</span>
+          <span
+            v-if="task.code === 'type' && task.pending > 0"
+            class="job-settings__hint"
+          >提示：当前有 {{ task.pending }} 条排队等待「重新判断类型」，下一次执行会优先单独处理这 {{ task.pending }} 条重打记录，完成后再按每批条数读取新政策。</span>
         </el-form-item>
         <el-form-item label="发给模型的正文">
           <el-radio-group

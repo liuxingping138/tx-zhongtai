@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 
 import {
   getInterpretation,
@@ -22,11 +24,14 @@ import ScenarioInlineCard from '../scenario-candidates/ScenarioInlineCard.vue'
 const RESOURCE = 'policy.interpretations'
 const FACTS = ['industry_l1', 'opportunity_type', 'has_subsidy', 'info_level']
 const auth = useAuthStore()
+const route = useRoute()
+const router = useRouter()
 const canWrite = computed(() => auth.canFull(RESOURCE))
 const filters = useFilterOptions('/policy/interpretations')
 const { columns: baseColumns } = useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)
 const columns = computed(() => mergeInterpretAiColumns(baseColumns, filters.aiFields.value))
 const retagOpen = ref(false)
+const retagging = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let pollRemaining = 0
 
@@ -36,19 +41,50 @@ function stopPolling() {
     pollTimer = null
   }
   pollRemaining = 0
+  retagging.value = false
+}
+
+async function switchToReplacedRow(policyTitle: string, sourceId: string) {
+  const page = await listInterpretations({ policy_title: policyTitle, page: 1, page_size: 20 })
+  const replacement = page.items.find(item => item.source_content_id === sourceId) ?? page.items[0]
+  if (replacement) {
+    await router.replace({ name: 'policy-interpretation-review', params: { id: replacement.id }, query: route.query })
+    ElMessage.success('重新解读已完成，已切换到最新生成的解读记录')
+  } else {
+    await router.replace({ name: 'policy-interpretations' })
+    ElMessage.info('该政策重新打标后不再保留此解读行，已返回政策解读列表')
+  }
+}
+
+async function pollOnce(baseId: string, baseVersion: number, policyTitle: string, sourceId: string) {
+  if (review.editing.value) return
+  try {
+    const fresh = await getInterpretation(baseId)
+    if (fresh.version !== baseVersion) {
+      stopPolling()
+      await review.load()
+      ElMessage.success('重新打标已完成，已刷新最新结果')
+    }
+  } catch {
+    stopPolling()
+    await switchToReplacedRow(policyTitle, sourceId)
+  }
 }
 
 function onRetagDone() {
-  void review.load()
   stopPolling()
-  pollRemaining = 24
+  const current = review.record.value
+  if (!current) return
+  const { id, version, policy_title, source_content_id } = current
+  retagging.value = true
+  pollRemaining = 30
   pollTimer = setInterval(() => {
     pollRemaining -= 1
     if (pollRemaining <= 0) {
       stopPolling()
       return
     }
-    if (!review.editing.value) void review.load()
+    void pollOnce(id, version, policy_title, source_content_id)
   }, 3000)
 }
 
@@ -113,10 +149,11 @@ const { verifying, verify } = useVerify(review)
       <template #actions="{ row, editing, ready }">
         <el-button
           v-if="canWrite && row.source_content_id"
+          :loading="retagging"
           :disabled="editing || !ready"
           @click="retagOpen = true"
         >
-          重新打标
+          {{ retagging ? '正在重新打标…' : '重新打标' }}
         </el-button>
         <AuditLogButton :module="RESOURCE" />
         <el-button

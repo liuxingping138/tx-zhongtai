@@ -28,6 +28,7 @@ import { useListLoader } from '@/composables/useListLoader'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import { useTableSelection } from '@/composables/useTableSelection'
 import { useAuthStore } from '@/stores/auth'
+import { useListRetagPoll } from '../base-tags/retag'
 import RetagDialog from '../base-tags/RetagDialog.vue'
 import { EDITOR_GROUPS, mergeInterpretAiColumns, SUMMARY_KEYS, TABLE_COLUMNS } from './fields'
 
@@ -68,6 +69,7 @@ const selection = useTableSelection<InterpretationItem>()
 const checked = selection.checked
 const statusOpen = ref(false)
 const retagOpen = ref(false)
+const { retagging, startAfterRetag } = useListRetagPoll(items, refresh)
 const STATUS_CHOICES = [
   { value: '人工验证', label: '人工验证', hint: '核对过、内容可用。之后 AI 重新解读、回填市场机会都不会再覆盖这些行。新增场景进不进码表在「新增场景审核」里按场景决定，和这里无关。' },
   { value: '待验证', label: '待验证', hint: '退回待核对。AI 重新解读时可以替换这些行。' },
@@ -79,6 +81,10 @@ async function submitStatus(status: string) {
 async function afterStatus() {
   selection.clear()
   await refresh()
+}
+async function afterRetag() {
+  selection.clear()
+  await startAfterRetag()
 }
 // 标题和「查看」进核对页：带上已生效的筛选和这条的位置，那边能翻上一条、下一条，读完就标人工验证。
 function detailRoute(row: InterpretationItem, index: number) {
@@ -137,10 +143,11 @@ onMounted(() => {
         />
         <!-- 勾选了才出现，平时不摆灰按钮 -->
         <el-button
-          v-if="canWrite && checked.length"
+          v-if="canWrite && (checked.length || retagging)"
+          :loading="retagging"
           @click="retagOpen = true"
         >
-          重新打标（{{ checked.length }}）
+          {{ retagging ? '正在重新打标…' : `重新打标（${checked.length}）` }}
         </el-button>
         <el-button
           v-if="canWrite && checked.length"
@@ -263,7 +270,7 @@ onMounted(() => {
       v-model="retagOpen"
       :ids="selection.ids.value"
       default-step="interpret"
-      @done="afterStatus"
+      @done="afterRetag"
     />
   </div>
 </template>

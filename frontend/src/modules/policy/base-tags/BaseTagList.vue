@@ -24,6 +24,7 @@ import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import { useTableSelection } from '@/composables/useTableSelection'
 import { useAuthStore } from '@/stores/auth'
 import { AI_STATUS_CHOICES, EDITOR_GROUPS, SUMMARY_KEYS, TABLE_COLUMNS, mergeAiColumns } from './fields'
+import { useListRetagPoll } from './retag'
 import RetagDialog from './RetagDialog.vue'
 
 const RESOURCE = 'policy.base_tags'
@@ -70,9 +71,10 @@ function detailRoute(row: BaseTagItem, index: number) {
 const selection = useTableSelection<BaseTagItem>()
 const checked = selection.checked
 const retagOpen = ref(false)
+const { retagging, startAfterRetag } = useListRetagPoll(items, refresh)
 async function afterRetag() {
   selection.clear()
-  await refresh()
+  await startAfterRetag()
 }
 
 async function onImport(file: File) {
@@ -129,10 +131,11 @@ onMounted(() => {
         />
         <!-- 勾选了才出现，平时不摆灰按钮 -->
         <el-button
-          v-if="canWrite && checked.length"
+          v-if="canWrite && (checked.length || retagging)"
+          :loading="retagging"
           @click="retagOpen = true"
         >
-          重新打标（{{ checked.length }}）
+          {{ retagging ? '正在重新打标…' : `重新打标（${checked.length}）` }}
         </el-button>
         <AuditLogButton :module="RESOURCE" />
       </template>
