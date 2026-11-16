@@ -23,8 +23,8 @@ from app.policy.application.importing import (
     missing_area_reason,
     rejected_result,
 )
-from app.policy.application.policy_content import policy_content
-from app.policy.domain.fields import BASE_TAG_COLUMNS, ai_status
+from app.policy.application.policy_content import attach_policy_contents, policy_content
+from app.policy.domain.fields import BASE_TAG_COLUMNS, BASE_TAG_EXPORT_COLUMNS, ai_status
 from app.policy.domain.models import BASE_TAG_FIELDS, BaseTag, content_hash
 from app.policy.repositories import base_tags as repo
 from app.policy.repositories import options as options_repo
@@ -230,11 +230,13 @@ async def _assert_exportable(session: AsyncSession, filters: Filters) -> None:
 
 async def export_base_tags(session: AsyncSession, actor: Actor, filters: Filters) -> bytes:
     await _assert_exportable(session, filters)
-    rows = [_to_out(item) for item in await repo.list_filtered(session, filters)]
+    items = await repo.list_filtered(session, filters)
+    rows = [_to_out(item) for item in items]
+    await attach_policy_contents(session, items, rows)
     await enqueue_event(
         session,
         event_type="policy.base_tag.exported",
         actor=actor,
         extra={"count": len(rows)},
     )
-    return await build_workbook_async(BASE_TAG_COLUMNS, rows, sheet_name="政策基础标签表")
+    return await build_workbook_async(BASE_TAG_EXPORT_COLUMNS, rows, sheet_name="政策基础标签表")

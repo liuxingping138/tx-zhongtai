@@ -43,6 +43,9 @@ BASE_TAG_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec("remark", "备注"),
 )
 
+POLICY_CONTENT_COLUMN = ColumnSpec("policy_content", "政策正文")
+BASE_TAG_EXPORT_COLUMNS: tuple[ColumnSpec, ...] = (*BASE_TAG_COLUMNS, POLICY_CONTENT_COLUMN)
+
 
 INTERPRETATION_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec("record_id", "自增或雪花算法"),
@@ -73,6 +76,8 @@ INTERPRETATION_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec("remark", "备注"),
     ColumnSpec("data_status", "数据状态"),
 )
+
+INTERPRETATION_EXPORT_COLUMNS: tuple[ColumnSpec, ...] = (*INTERPRETATION_COLUMNS, POLICY_CONTENT_COLUMN)
 
 # 信源的爬虫状态。改成「已爬」记当天上线；「异常」由人工标，规则表同步（app.crawlconfig）只把未爬、没填的改成已爬。
 CRAWLER_STATUS_ONLINE = "已爬"

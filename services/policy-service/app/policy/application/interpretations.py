@@ -17,12 +17,13 @@ from app.common.audit_emit import enqueue_event
 from app.core.config import get_settings
 from app.policy.application import scenario_engine
 from app.policy.application.importing import add_in_batches
-from app.policy.application.policy_content import policy_content
+from app.policy.application.policy_content import attach_policy_contents, policy_content
 from app.policy.application.region import make_policy_uid, make_relation_key
 from app.policy.domain.fields import (
     DATA_STATUS_CHOICES,
     DATA_STATUS_PENDING,
     INTERPRETATION_COLUMNS,
+    INTERPRETATION_EXPORT_COLUMNS,
     POLICY_TITLE_MAX,
     SCENARIO_CODE_FIELDS,
     SCENARIO_NAME_FIELDS,
@@ -336,11 +337,13 @@ async def _assert_exportable(session: AsyncSession, filters: Filters) -> None:
 
 async def export_interpretations(session: AsyncSession, actor: Actor, filters: Filters) -> bytes:
     await _assert_exportable(session, filters)
-    rows = [to_out(item) for item in await repo.list_filtered(session, filters)]
+    items = await repo.list_filtered(session, filters)
+    rows = [to_out(item) for item in items]
+    await attach_policy_contents(session, items, rows)
     await enqueue_event(
         session,
         event_type="policy.interpretation.exported",
         actor=actor,
         extra={"count": len(rows)},
     )
-    return await build_workbook_async(INTERPRETATION_COLUMNS, rows, sheet_name="政策解读列表")
+    return await build_workbook_async(INTERPRETATION_EXPORT_COLUMNS, rows, sheet_name="政策解读列表")

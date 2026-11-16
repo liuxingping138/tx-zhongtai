@@ -146,3 +146,38 @@ async def test_both_tables_look_up_the_row_then_its_source_id(monkeypatch: pytes
     assert asked == ["1111", "1111"]
     with pytest.raises(NotFoundError):
         await base_tags.base_tag_content(object(), uuid.UUID("22222222-2222-2222-2222-222222222222"))  # type: ignore[arg-type]
+
+
+async def test_policy_contents_by_source_ids(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_contents(content_ids: list[str]) -> dict[str, str]:
+        return {cid: f"<p>{cid}正文内容</p>" for cid in content_ids}
+
+    monkeypatch.setattr(source, "read_contents", fake_contents)
+    contents = await policy_content.policy_contents_by_source_ids(["c1", "c2", ""])
+    assert contents == {"c1": "c1正文内容", "c2": "c2正文内容"}
+
+
+async def test_attach_policy_contents(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_contents(content_ids: list[str]) -> dict[str, str]:
+        return {cid: f"{cid}正文" for cid in content_ids}
+
+    monkeypatch.setattr(source, "read_contents", fake_contents)
+
+    item1 = SimpleNamespace(source_content_id="s1", policy_title="政策1")
+    item2 = SimpleNamespace(source_content_id=None, policy_title="政策2")
+    item3 = SimpleNamespace(source_content_id=None, policy_title="")
+
+    class _FakeResult:
+        def all(self) -> list[tuple[str, str]]:
+            return [("政策2", "s2")]
+
+    class _FakeSession:
+        async def execute(self, _stmt: Any) -> Any:
+            return _FakeResult()
+
+    rows: list[dict[str, Any]] = [{}, {}, {}]
+    await policy_content.attach_policy_contents(_FakeSession(), [item1, item2, item3], rows)  # type: ignore[arg-type]
+
+    assert rows[0]["policy_content"] == "s1正文"
+    assert rows[1]["policy_content"] == "s2正文"
+    assert rows[2]["policy_content"] == ""
