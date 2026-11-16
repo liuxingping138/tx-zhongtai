@@ -46,32 +46,40 @@ const status = computed(() => {
 </script>
 
 <template>
-  <PolicyReviewPage
-    :review="review"
-    :columns="columns"
-    :groups="EDITOR_GROUPS"
-    title-key="policy_name"
-    :facts="FACTS"
-    list-label="政策基础标签表"
-    :can-write="canWrite"
-    :status="status"
-    :load-content="getBaseTagContent"
-  >
-    <template #actions="{ row, editing, ready }">
-      <AuditLogButton :module="RESOURCE" />
-      <el-button
-        v-if="canWrite && row.ai_status"
-        :disabled="editing || !ready"
-        @click="openRetag(row)"
-      >
-        重新打标
-      </el-button>
-    </template>
-  </PolicyReviewPage>
-  <RetagDialog
-    v-model="retagOpen"
-    :ids="retagIds"
-    target="这条政策"
-    @done="review.load"
-  />
+  <div class="base-tag-review-view">
+    <PolicyReviewPage
+      :review="review"
+      :columns="columns"
+      :groups="EDITOR_GROUPS"
+      title-key="policy_name"
+      :facts="FACTS"
+      list-label="政策基础标签表"
+      :can-write="canWrite"
+      :status="status"
+      :load-content="getBaseTagContent"
+    >
+      <template #actions="{ row, editing, ready }">
+        <AuditLogButton :module="RESOURCE" />
+        <el-button
+          v-if="canWrite && row.ai_status"
+          :disabled="editing || !ready"
+          @click="openRetag(row)"
+        >
+          重新打标
+        </el-button>
+      </template>
+    </PolicyReviewPage>
+    <RetagDialog
+      v-model="retagOpen"
+      :ids="retagIds"
+      target="这条政策"
+      @done="review.load"
+    />
+  </div>
 </template>
+
+<style scoped>
+.base-tag-review-view {
+  min-height: 100%;
+}
+</style>
