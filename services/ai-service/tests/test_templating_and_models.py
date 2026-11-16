@@ -149,3 +149,7 @@ def test_parse_fields_tolerates_wrapping_nesting_and_single_objects() -> None:
     for unusable in ("", "没有 JSON", '[{"别的": 1}]', "[1, 2]", "[{坏的"):
         assert parse_fields(unusable, fields) is None
     assert parse_fields('[{"行业": 1}]', []) is None
+    thinking_hijack = (
+        '<think>比如正文写了 [{"行业": "假"}]</think>\n前缀 {"行业": " prose"}\n```json\n[{"行业": "真"}]\n```'
+    )
+    assert parse_fields(thinking_hijack, fields) == [{"行业": "真", "客群": ""}]

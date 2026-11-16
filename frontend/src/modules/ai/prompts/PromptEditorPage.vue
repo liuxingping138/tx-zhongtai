@@ -284,14 +284,17 @@ function onStep(key: StepKey): void {
         @step="onStep"
       />
     </header>
-
     <el-alert
       v-if="loadError"
       :title="loadError"
       type="error"
       :closable="false"
       show-icon
-    />
+    >
+      <el-button @click="load()">
+        重试
+      </el-button>
+    </el-alert>
     <DetailSkeleton
       v-if="opening && !selected"
       :sections="2"
@@ -378,7 +381,6 @@ function onStep(key: StepKey): void {
       hidden
       @change="files.received(kind, $event)"
     >
-
     <ReleaseDrawer
       v-if="selected"
       v-model="releasing"

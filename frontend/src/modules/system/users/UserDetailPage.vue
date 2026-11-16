@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, Delete, Document, Key, Lock, SwitchButton, Unlock } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { getUser, getUserPermissions, listAllRoles, replaceUserRoles, updateUser, type ManagedUser } from '@/api/system'
 import { errorMessage } from '@/api/errors'
@@ -40,6 +40,7 @@ const roleSaveError = ref('')
 
 const infoSaving = ref(false)
 const roleSaving = ref(false)
+const pendingInfoChange = ref(false)
 const pendingRoleChange = ref(false)
 const grantsVisible = ref(false)
 
@@ -51,6 +52,26 @@ const directCount = computed(() =>
 )
 
 let loadSeq = 0
+
+async function confirmDiscard(): Promise<boolean> {
+  if (!pendingInfoChange.value && !pendingRoleChange.value) return true
+  return ElMessageBox.confirm('这个用户还有未保存的修改，离开后将丢弃。', '放弃修改？', {
+    type: 'warning',
+    confirmButtonText: '离开',
+    cancelButtonText: '留下',
+  }).then(() => true, () => false)
+}
+
+onBeforeRouteLeave(async () => {
+  if (infoSaving.value || roleSaving.value) return false
+  return confirmDiscard()
+})
+
+onBeforeRouteUpdate(async (to, from) => {
+  if (to.params.id === from.params.id) return true
+  if (infoSaving.value || roleSaving.value) return false
+  return confirmDiscard()
+})
 
 async function load() {
   const id = userId.value
@@ -281,6 +302,7 @@ watch(userId, () => {
               :saving="infoSaving"
               :save-error="infoSaveError"
               @save="onSaveInfo"
+              @dirty="pendingInfoChange = $event"
             />
           </section>
 

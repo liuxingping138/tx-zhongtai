@@ -166,7 +166,16 @@ async function created(): Promise<void> {
         type="error"
         :closable="false"
         show-icon
-      />
+      >
+        <el-button
+          size="small"
+          type="danger"
+          plain
+          @click="loadRuns()"
+        >
+          重试
+        </el-button>
+      </el-alert>
       <el-alert
         v-if="!workerOnline"
         title="AI 执行进程不在线：排队中的任务暂时不会开始，运行中的任务也不会有进度。请联系管理员检查 ai-worker。"

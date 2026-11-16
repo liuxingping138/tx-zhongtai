@@ -10,7 +10,7 @@ import { lockText, sinceText } from '../sessions/loginText'
 import UserAvatar from './UserAvatar.vue'
 import { canManageRow, openLabel } from './userRows'
 
-defineProps<{ users: ManagedUser[]; loading: boolean; filtered: boolean }>()
+defineProps<{ users: ManagedUser[]; loading: boolean; filtered: boolean; busyUserId?: string }>()
 defineEmits<{
   open: [user: ManagedUser]
   toggle: [user: ManagedUser]
@@ -152,6 +152,8 @@ function roleNames(user: ManagedUser): string {
           <el-switch
             v-if="manageable(row) && row.id !== auth.user?.id"
             :model-value="row.status === 'active'"
+            :loading="busyUserId === row.id"
+            :disabled="Boolean(busyUserId)"
             :aria-label="`${row.username} 的账号启用`"
             @change="$emit('toggle', row)"
           />
@@ -172,6 +174,8 @@ function roleNames(user: ManagedUser): string {
               v-if="manageable(row)"
               link
               type="primary"
+              :loading="busyUserId === row.id"
+              :disabled="Boolean(busyUserId)"
               @click="$emit('unlock', row)"
             >
               解锁
@@ -273,6 +277,7 @@ function roleNames(user: ManagedUser): string {
             <button
               type="button"
               class="row-action"
+              :disabled="busyUserId === row.id"
             >
               更多
             </button>

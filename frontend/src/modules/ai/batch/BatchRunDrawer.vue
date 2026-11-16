@@ -14,6 +14,7 @@ const emit = defineEmits<{ changed: []; close: [] }>()
 const rows = ref<Rows | null>(null)
 const rowsError = ref('')
 const loadingRows = ref(false)
+const acting = ref(false)
 const failedOnly = ref(false)
 const PROGRESS_RELOAD_MS = 10_000
 let sequence = 0
@@ -64,9 +65,15 @@ watch(() => run.value?.done_count, () => {
 
 async function act(action: (current: BatchRun) => Promise<boolean>, close = false): Promise<void> {
   const current = run.value
-  if (!current || !await action(current)) return
-  emit('changed')
-  if (close) emit('close')
+  if (!current || acting.value) return
+  acting.value = true
+  try {
+    if (!await action(current)) return
+    emit('changed')
+    if (close) emit('close')
+  } finally {
+    acting.value = false
+  }
 }
 </script>
 
@@ -112,7 +119,7 @@ async function act(action: (current: BatchRun) => Promise<boolean>, close = fals
           <el-button
             v-if="run.can_stop"
             size="small"
-            :disabled="run.status === 'stopping'"
+            :disabled="acting || run.status === 'stopping'"
             @click="act(stopRun)"
           >
             停止
@@ -122,6 +129,7 @@ async function act(action: (current: BatchRun) => Promise<boolean>, close = fals
             size="small"
             type="primary"
             plain
+            :disabled="acting"
             @click="act(retryRun)"
           >
             重跑失败的 {{ run.pending_count }} 条
@@ -131,6 +139,7 @@ async function act(action: (current: BatchRun) => Promise<boolean>, close = fals
             size="small"
             type="primary"
             plain
+            :disabled="acting"
             @click="act(runAllRun)"
           >
             用同一份数据跑全部
@@ -140,6 +149,7 @@ async function act(action: (current: BatchRun) => Promise<boolean>, close = fals
             size="small"
             text
             type="danger"
+            :disabled="acting"
             @click="act(deleteRun, true)"
           >
             删除

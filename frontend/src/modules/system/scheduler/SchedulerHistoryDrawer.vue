@@ -77,7 +77,16 @@ function resultText(row: ScheduledRun): string {
       type="error"
       :closable="false"
       show-icon
-    />
+    >
+      <el-button
+        size="small"
+        type="danger"
+        plain
+        @click="load()"
+      >
+        重试
+      </el-button>
+    </el-alert>
     <ScrollPort class="history-table">
       <TableSkeleton
         v-if="loading && records.length === 0"

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { ArrowDown } from '@element-plus/icons-vue'
 
 import type { BatchRun, RunFileKind } from '@/api/ai'
@@ -21,9 +22,16 @@ const props = defineProps<{
 const canManage = (run: BatchRun) => props.canRun && props.editableCategories.includes(run.prompt_category)
 const page = defineModel<number>('page', { required: true })
 const emit = defineEmits<{ changed: []; open: [run: BatchRun] }>()
+const busyId = ref('')
 
 async function act(action: (run: BatchRun) => Promise<boolean>, run: BatchRun): Promise<void> {
-  if (await action(run)) emit('changed')
+  if (busyId.value) return
+  busyId.value = run.id
+  try {
+    if (await action(run)) emit('changed')
+  } finally {
+    busyId.value = ''
+  }
 }
 
 function progressText(run: BatchRun): string {
@@ -222,7 +230,7 @@ function progressText(run: BatchRun): string {
               v-if="canManage(row) && row.can_stop"
               type="button"
               class="row-action row-action--primary"
-              :disabled="row.status === 'stopping'"
+              :disabled="busyId === row.id || row.status === 'stopping'"
               @click="act(stopRun, row)"
             >
               停止
@@ -231,6 +239,7 @@ function progressText(run: BatchRun): string {
               v-if="canManage(row) && row.can_retry"
               type="button"
               class="row-action row-action--primary"
+              :disabled="busyId === row.id"
               :title="`重新提问失败和没跑到的 ${row.pending_count} 条`"
               @click="act(retryRun, row)"
             >
@@ -240,6 +249,7 @@ function progressText(run: BatchRun): string {
               v-if="canManage(row) && row.can_run_all"
               type="button"
               class="row-action row-action--primary"
+              :disabled="busyId === row.id"
               title="这次只跑了前几行：用同一份数据、同一版提示词跑全部"
               @click="act(runAllRun, row)"
             >
@@ -249,6 +259,7 @@ function progressText(run: BatchRun): string {
               v-if="canManage(row) && row.can_delete"
               type="button"
               class="row-action row-action--danger"
+              :disabled="busyId === row.id"
               @click="act(deleteRun, row)"
             >
               删除

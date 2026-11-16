@@ -271,6 +271,7 @@ onMounted(() => {
         :users="items"
         :loading="loading"
         :filtered="resultFiltered"
+        :busy-user-id="actions.busyId.value"
         @open="openDetail"
         @toggle="actions.toggleStatus"
         @remove="actions.remove"

@@ -12,6 +12,8 @@ import re
 CODE_TABLE_FIELD = "上传码表"
 _VAR_RE = re.compile(r"@【([^】]+)】")
 _JSON_START = re.compile(r"[\[{]")
+_THINK_RE = re.compile(r"<think>[\s\S]*?</think>", re.IGNORECASE)
+_FENCED_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.IGNORECASE)
 _MYID_BASE = 1_000_000
 
 
@@ -78,17 +80,27 @@ def _entries(value: object) -> list[dict[str, object]]:
 def parse_fields(text: str, fields: list[str]) -> list[dict[str, str]] | None:
     """解析不出任何一个输出字段时返回 None，由调用方判定为「返回格式不对」。
 
-    优先取第一段含输出字段的 [{...}]；模型只回了单个 {...} 也接受，当作一条。
+    优先忽略 <think> 思考段里的示例，优先读取 Markdown JSON 代码块（如有多段取最后一段含目标字段的块），
+    再退回到正文中第一段含输出字段的 [{...}] 或单个 {...}。
     """
 
     if not text or not fields:
         return None
-    for value in _json_candidates(text):
-        entries = [entry for entry in _entries(value) if any(name in entry for name in fields)]
-        if entries:
-            return [
-                {name: "" if entry.get(name) is None else str(entry.get(name)) for name in fields} for entry in entries
-            ]
+    visible = _THINK_RE.sub("", text).strip()
+    fenced = list(reversed(_FENCED_RE.findall(visible))) if visible else []
+    sources = [*fenced, visible, text] if visible else [text]
+    seen_sources: set[str] = set()
+    for chunk in sources:
+        if not chunk or chunk in seen_sources:
+            continue
+        seen_sources.add(chunk)
+        for value in _json_candidates(chunk):
+            entries = [entry for entry in _entries(value) if any(name in entry for name in fields)]
+            if entries:
+                return [
+                    {name: "" if entry.get(name) is None else str(entry.get(name)) for name in fields}
+                    for entry in entries
+                ]
     return None
 
 

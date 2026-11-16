@@ -181,7 +181,16 @@ function create(): void {
         type="error"
         :closable="false"
         show-icon
-      />
+      >
+        <el-button
+          size="small"
+          type="danger"
+          plain
+          @click="load()"
+        >
+          重试
+        </el-button>
+      </el-alert>
       <TableSkeleton
         v-if="loading && templates.length === 0"
         :columns="showTasks ? 9 : 8"

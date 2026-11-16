@@ -207,7 +207,16 @@ onMounted(load)
       type="error"
       :closable="false"
       show-icon
-    />
+    >
+      <el-button
+        size="small"
+        type="danger"
+        plain
+        @click="load()"
+      >
+        重试
+      </el-button>
+    </el-alert>
     <CardSkeleton
       v-if="loading && rows.length === 0"
       :count="4"

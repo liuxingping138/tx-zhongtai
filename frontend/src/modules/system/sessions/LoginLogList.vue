@@ -29,6 +29,7 @@ const auth = useAuthStore()
 const canUnlockIp = computed(() => auth.canFull('system.permissions'))
 
 const loading = ref(false)
+const unlockingIp = ref('')
 const loadError = ref('')
 const resultFiltered = ref(false)
 const events = ref<AuditEventItem[]>([])
@@ -97,12 +98,16 @@ function onReset() {
 }
 
 async function unlockIp(ip: string): Promise<void> {
+  if (unlockingIp.value) return
+  unlockingIp.value = ip
   try {
     const result = await unlockLoginIp(ip)
     if (result.unlocked) ElMessage.success(`已解除 ${ip} 的登录限制，这个出口的人现在可以重新登录`)
     else ElMessage.info(`${ip} 现在没有被限制，可能已经到期自动解除`)
   } catch (error) {
     ElMessage.error(errorMessage(error, '解除失败'))
+  } finally {
+    unlockingIp.value = ''
   }
 }
 
@@ -158,7 +163,10 @@ onMounted(() => {
       v-if="canUnlockIp"
       #actions
     >
-      <el-button @click="promptUnlock">
+      <el-button
+        :disabled="Boolean(unlockingIp)"
+        @click="promptUnlock"
+      >
         解除 IP 限制
       </el-button>
     </template>
@@ -279,6 +287,8 @@ onMounted(() => {
             v-if="ipLimited(row)"
             link
             type="primary"
+            :loading="Boolean(row.client_ip) && unlockingIp === row.client_ip"
+            :disabled="Boolean(unlockingIp)"
             @click="unlockRow(row)"
           >
             解除限制

@@ -25,6 +25,7 @@ const sessions = ref<OnlineDevice[]>([])
 const windowSeconds = ref(1800)
 const view = ref<SessionView>('online')
 const loading = ref(false)
+const revokingId = ref('')
 const loadError = ref('')
 const counts = computed(() => sessionCounts(sessions.value))
 const rows = computed(() => visibleSessions(sessions.value, view.value))
@@ -48,6 +49,7 @@ async function load(): Promise<void> {
 }
 
 async function revoke(item: OnlineDevice): Promise<void> {
+  if (revokingId.value) return
   const where = [browserOf(item.user_agent), item.ip].filter(Boolean).join('，')
   const sure = await ElMessageBox.confirm(
     `${item.user.display_name}（${item.user.username}）在这台设备（${where}）上会马上退出，其他设备不受影响。`,
@@ -55,11 +57,14 @@ async function revoke(item: OnlineDevice): Promise<void> {
     { type: 'warning', confirmButtonText: '下线', cancelButtonText: '取消' },
   ).then(() => true, () => false)
   if (!sure) return
+  revokingId.value = item.id
   try {
     await revokeOnlineSession(item.id)
     ElMessage.success('已下线')
   } catch (error) {
     ElMessage.error(errorMessage(error, '下线失败'))
+  } finally {
+    revokingId.value = ''
   }
   await load()
 }
@@ -202,9 +207,10 @@ onMounted(load)
             v-else-if="deviceAction(row, canRevoke) === 'revoke'"
             type="button"
             class="row-action row-action--danger"
+            :disabled="Boolean(revokingId)"
             @click="revoke(row)"
           >
-            下线
+            {{ revokingId === row.id ? '下线中…' : '下线' }}
           </button>
           <span
             v-else

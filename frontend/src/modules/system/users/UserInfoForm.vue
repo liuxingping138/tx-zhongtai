@@ -13,6 +13,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   save: [form: { display_name: string; phone: string; email: string }]
+  dirty: [value: boolean]
 }>()
 
 const editing = ref(false)
@@ -30,10 +31,13 @@ watch(() => props.user, (u, prev) => {
 }, { immediate: true })
 
 const dirty = computed(() =>
-  form.display_name.trim() !== props.user.display_name
-  || form.phone.trim() !== (props.user.phone ?? '')
-  || form.email.trim() !== (props.user.email ?? ''),
+  editing.value && (
+    form.display_name.trim() !== props.user.display_name
+    || form.phone.trim() !== (props.user.phone ?? '')
+    || form.email.trim() !== (props.user.email ?? '')
+  ),
 )
+watch(dirty, value => emit('dirty', value), { immediate: true })
 
 function onCancel() {
   form.display_name = props.user.display_name
