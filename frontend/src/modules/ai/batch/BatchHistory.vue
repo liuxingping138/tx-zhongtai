@@ -4,7 +4,7 @@ import { ArrowDown } from '@element-plus/icons-vue'
 
 import type { BatchRun, RunFileKind } from '@/api/ai'
 import TableSkeleton from '@/components/TableSkeleton.vue'
-import { RUN_SOURCE_TEXT, RUN_STATUS_TEXT, formatYuan, isActive, roundText, runModeText, runStatusType } from '../shared/aiText'
+import { RUN_SOURCE_TEXT, RUN_STATUS_TEXT, formatYuan, isActive, roundText, runModeText } from '../shared/aiText'
 import { shortTime, versionLabel } from '../prompts/sampleView'
 import { RUN_FILES, deleteRun, downloadRunFile, retryRun, runAllRun, stopRun } from './runActions'
 
@@ -44,10 +44,22 @@ async function act(action: (run: BatchRun) => Promise<boolean>, run: BatchRun): 
   }
 }
 
-function progressText(run: BatchRun): string {
-  const formats = run.format_failed_count ? `（格式不对 ${run.format_failed_count}）` : ''
-  const failed = run.failed_count ? `，失败 ${run.failed_count}${formats}` : ''
-  return `${run.done_count}/${run.total_count || '?'}${failed}`
+function statusTone(run: BatchRun): 'running' | 'done' | 'warn' | 'muted' {
+  if (isActive(run.status)) return 'running'
+  if (run.status === 'cancelled') return 'muted'
+  return run.failed_count > 0 ? 'warn' : 'done'
+}
+
+function statusTooltip(run: BatchRun): string {
+  const parts = [`${RUN_STATUS_TEXT[run.status]} ${run.done_count}/${run.total_count || '?'}`]
+  if (run.failed_count) {
+    const formats = run.format_failed_count ? `（格式不对 ${run.format_failed_count}）` : ''
+    parts.push(`失败 ${run.failed_count}${formats}`)
+  }
+  const round = roundText(run)
+  if (round) parts.push(round)
+  if (run.error_message) parts.push(run.error_message)
+  return parts.join(' · ')
 }
 </script>
 
@@ -87,37 +99,36 @@ function progressText(run: BatchRun): string {
       />
       <el-table-column
         label="状态"
-        width="176"
+        width="216"
       >
         <template #default="{ row }">
-          <div class="history__status">
-            <el-tag
-              :type="runStatusType(row.status)"
-              size="small"
+          <div
+            class="history__status-wrap"
+            :title="statusTooltip(row)"
+          >
+            <div class="history__status">
+              <span
+                class="history__badge"
+                :class="`is-${statusTone(row)}`"
+              >{{ RUN_STATUS_TEXT[row.status as BatchRun['status']] }}</span>
+              <span class="history__metrics">
+                <span>{{ row.done_count }}/{{ row.total_count || '?' }}</span><span
+                  v-if="row.failed_count"
+                  class="history__failed"
+                >，失败 {{ row.failed_count }}</span>
+              </span>
+              <span
+                v-if="row.retry_round > 1"
+                class="history__round-pill"
+              >{{ row.retry_round }}轮</span>
+            </div>
+            <div
+              v-if="isActive(row.status)"
+              class="history__bar"
             >
-              {{ RUN_STATUS_TEXT[row.status as BatchRun['status']] }}
-            </el-tag>
-            <span>{{ progressText(row) }}</span>
+              <span :style="{ width: `${row.percent}%` }" />
+            </div>
           </div>
-          <el-progress
-            v-if="isActive(row.status)"
-            :percentage="row.percent"
-            :show-text="false"
-            :stroke-width="4"
-          />
-          <p
-            v-if="roundText(row)"
-            class="history__round"
-          >
-            {{ roundText(row) }}
-          </p>
-          <p
-            v-if="row.error_message"
-            class="history__error"
-            :title="row.error_message"
-          >
-            {{ row.error_message }}
-          </p>
         </template>
       </el-table-column>
       <el-table-column
@@ -308,10 +319,22 @@ function progressText(run: BatchRun): string {
 .history__table :deep(.el-table__row) { cursor: pointer; }
 /* 和业务列表一样左右各 12px：标准表格的 16px 会把「总消耗(千token)」表头、「草稿 11-03 17:20」挤成两行 */
 .history__table :deep(.cell) { padding: 0 12px; }
-.history__status { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; font-size: 13px; }
-.history__status + .el-progress { margin-top: 6px; }
-.history__round { margin: 4px 0 0; color: var(--zt-ink-500); font-size: 12px; }
-.history__error { margin: 4px 0 0; color: var(--zt-danger-text); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history__status-wrap { position: relative; display: flex; align-items: center; }
+.history__status { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.history__badge { display: inline-flex; align-items: center; gap: 6px; flex: none; color: var(--zt-ink-900); font-weight: 500; }
+.history__badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--zt-muted-mark); }
+.history__badge.is-done::before { background: var(--zt-success); }
+.history__badge.is-warn::before { background: var(--zt-warning); }
+.history__badge.is-running { color: var(--zt-blue-600); }
+.history__badge.is-running::before { background: var(--zt-blue-600); }
+.history__badge.is-danger { color: var(--zt-danger-text); }
+.history__badge.is-danger::before { background: var(--zt-danger-text); }
+.history__badge.is-muted { color: var(--zt-ink-500); }
+.history__metrics { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--zt-ink-700); }
+.history__failed { color: var(--zt-danger-text); font-weight: 500; }
+.history__round-pill { flex: none; padding: 1px 6px; border-radius: 999px; background: var(--zt-surface-subtle); color: var(--zt-ink-500); font-size: 11px; line-height: 1.4; }
+.history__bar { position: absolute; left: 0; right: 0; bottom: -5px; height: 2px; border-radius: 999px; background: var(--zt-surface-subtle); overflow: hidden; }
+.history__bar span { display: block; height: 100%; background: var(--zt-blue-600); transition: width 0.25s ease; }
 .history__time { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .history__pager { justify-content: flex-end; padding: 10px 16px; }
 .history__version { color: var(--zt-blue-700); font-variant-numeric: tabular-nums; white-space: nowrap; }
