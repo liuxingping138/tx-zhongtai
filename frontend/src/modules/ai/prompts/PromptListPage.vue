@@ -193,7 +193,7 @@ function create(): void {
       </el-alert>
       <TableSkeleton
         v-if="loading && templates.length === 0"
-        :columns="showTasks ? 9 : 8"
+        :columns="showTasks ? 10 : 9"
         :has-actions="false"
       />
       <el-table
@@ -314,6 +314,15 @@ function create(): void {
               class="prompt-list__model"
               :title="row.model_name"
             >{{ shortModel(row.model_name) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="创建人"
+          width="88"
+          show-overflow-tooltip
+        >
+          <template #default="{ row }">
+            <span class="prompt-list__creator">{{ row.created_by_name || '—' }}</span>
           </template>
         </el-table-column>
         <el-table-column

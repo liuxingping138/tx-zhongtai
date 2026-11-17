@@ -20,9 +20,19 @@ const props = defineProps<{
   editableCategories: string[]
 }>()
 const canManage = (run: BatchRun) => props.canRun && props.editableCategories.includes(run.prompt_category)
+const hasFiles = (run: BatchRun) => props.canExport && Object.values(run.files).some(Boolean)
+const hasMoreActions = (run: BatchRun) => canManage(run) && (run.can_retry || run.can_run_all || run.can_delete)
 const page = defineModel<number>('page', { required: true })
 const emit = defineEmits<{ changed: []; open: [run: BatchRun] }>()
 const busyId = ref('')
+
+type MoreCommand = 'retry' | 'runAll' | 'delete'
+
+function runMoreCommand(run: BatchRun, command: MoreCommand): void {
+  if (command === 'retry') void act(retryRun, run)
+  else if (command === 'runAll') void act(runAllRun, run)
+  else if (command === 'delete') void act(deleteRun, run)
+}
 
 async function act(action: (run: BatchRun) => Promise<boolean>, run: BatchRun): Promise<void> {
   if (busyId.value) return
@@ -187,11 +197,11 @@ function progressText(run: BatchRun): string {
       />
       <el-table-column
         label="操作"
-        width="292"
+        width="212"
         fixed="right"
       >
         <template #default="{ row }">
-          <!-- 行末按钮和别的列表同一套（theme.css 的 .row-action）：详情、下载描边，停止、重跑、跑全部浅底，删除红字 -->
+          <!-- 行末最多 3 个等高胶囊：详情、下载、停止/更多，避免一排 5 个按钮过宽且参差不齐 -->
           <div
             class="row-actions"
             @click.stop
@@ -204,7 +214,7 @@ function progressText(run: BatchRun): string {
               详情
             </button>
             <el-dropdown
-              v-if="canExport && Object.values(row.files).some(Boolean)"
+              v-if="hasFiles(row)"
               trigger="click"
               @command="(kind: RunFileKind) => downloadRunFile(row, kind)"
             >
@@ -212,7 +222,9 @@ function progressText(run: BatchRun): string {
                 type="button"
                 class="row-action"
               >
-                下载<el-icon><ArrowDown /></el-icon>
+                下载<el-icon class="history__arrow">
+                  <ArrowDown />
+                </el-icon>
               </button>
               <template #dropdown>
                 <el-dropdown-menu>
@@ -235,35 +247,46 @@ function progressText(run: BatchRun): string {
             >
               停止
             </button>
-            <button
-              v-if="canManage(row) && row.can_retry"
-              type="button"
-              class="row-action row-action--primary"
-              :disabled="busyId === row.id"
-              :title="`重新提问失败和没跑到的 ${row.pending_count} 条`"
-              @click="act(retryRun, row)"
+            <el-dropdown
+              v-if="hasMoreActions(row)"
+              trigger="click"
+              @command="(command: MoreCommand) => runMoreCommand(row, command)"
             >
-              重跑失败
-            </button>
-            <button
-              v-if="canManage(row) && row.can_run_all"
-              type="button"
-              class="row-action row-action--primary"
-              :disabled="busyId === row.id"
-              title="这次只跑了前几行：用同一份数据、同一版提示词跑全部"
-              @click="act(runAllRun, row)"
-            >
-              跑全部
-            </button>
-            <button
-              v-if="canManage(row) && row.can_delete"
-              type="button"
-              class="row-action row-action--danger"
-              :disabled="busyId === row.id"
-              @click="act(deleteRun, row)"
-            >
-              删除
-            </button>
+              <button
+                type="button"
+                class="row-action"
+                :disabled="busyId === row.id"
+              >
+                更多<el-icon class="history__arrow">
+                  <ArrowDown />
+                </el-icon>
+              </button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item
+                    v-if="row.can_retry"
+                    command="retry"
+                    :title="`重新提问失败和没跑到的 ${row.pending_count} 条`"
+                  >
+                    重跑失败
+                  </el-dropdown-item>
+                  <el-dropdown-item
+                    v-if="row.can_run_all"
+                    command="runAll"
+                    title="这次只跑了前几行：用同一份数据、同一版提示词跑全部"
+                  >
+                    跑全部
+                  </el-dropdown-item>
+                  <el-dropdown-item
+                    v-if="row.can_delete"
+                    command="delete"
+                    :divided="row.can_retry || row.can_run_all"
+                  >
+                    删除
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </template>
       </el-table-column>
@@ -293,4 +316,5 @@ function progressText(run: BatchRun): string {
 .history__pager { justify-content: flex-end; padding: 10px 16px; }
 .history__version { color: var(--zt-blue-700); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .history__version.is-draft { color: var(--zt-ink-700); }
+.history__arrow { font-size: 11px; }
 </style>

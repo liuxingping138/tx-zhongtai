@@ -43,6 +43,7 @@
 .prompt-list__fields strong { color: var(--zt-ink-900); font-weight: 600; font-variant-numeric: tabular-nums; flex: none; }
 .prompt-list__fields span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; color: var(--zt-ink-400); font-size: 12px; }
 .prompt-list__model { color: var(--zt-ink-700); font-size: 12.5px; }
+.prompt-list__creator { color: var(--zt-ink-700); font-size: 12.5px; }
 .prompt-list__time { color: var(--zt-ink-500); font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .prompt-list__none { color: var(--zt-ink-400); font-size: 13px; }
 .prompt-list__open { opacity: 0; color: var(--zt-blue-600); font-size: 12.5px; font-weight: 600; transition: opacity 0.12s; }
