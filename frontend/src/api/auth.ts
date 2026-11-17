@@ -5,10 +5,6 @@ export function login(username: string, password: string): Promise<TokenPayload>
   return request(http.post('/auth/login', { username, password }))
 }
 
-export function fetchCsrf(): Promise<{ csrf_token: string }> {
-  return request(http.get('/auth/csrf'))
-}
-
 export function fetchMe(): Promise<MePayload> {
   return request(http.get('/auth/me'))
 }

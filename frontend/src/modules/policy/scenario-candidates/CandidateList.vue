@@ -215,7 +215,6 @@ onMounted(() => {
               v-model="query.keyword"
               label="场景名称"
               placeholder="输入场景名称关键词"
-              @search="listQuery.search"
             />
           </el-form-item>
           <el-form-item label="一级行业">
@@ -246,7 +245,6 @@ onMounted(() => {
                 class="candidates__min"
                 inputmode="numeric"
                 placeholder="如 3"
-                @keyup.enter="listQuery.search"
               />
             </el-form-item>
           </template>

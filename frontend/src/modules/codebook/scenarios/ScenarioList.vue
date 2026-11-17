@@ -139,7 +139,6 @@ onMounted(() => {
               v-model="query.scenario_name"
               label="场景名称"
               placeholder="输入场景名称关键词，一二三级都查"
-              @search="listQuery.search"
             />
           </el-form-item>
           <el-form-item label="一级行业">

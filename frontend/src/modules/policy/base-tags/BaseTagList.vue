@@ -151,7 +151,6 @@ onMounted(() => {
               v-model="query.policy_name"
               label="政策名称"
               placeholder="输入政策名称关键词"
-              @search="listQuery.search"
             />
           </el-form-item>
           <el-form-item label="省份">

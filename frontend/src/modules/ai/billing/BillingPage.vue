@@ -9,6 +9,7 @@ import { useChartPalette } from '@/components/charts/echarts'
 import CardSkeleton from '@/components/CardSkeleton.vue'
 import ChartSkeleton from '@/components/ChartSkeleton.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
+import { useTheme } from '@/composables/useTheme'
 import {
   colorMap, dailySeries, filterOptions, filterRows, groupBy,
   money, presetRange, pruneInPlace, SCENES, summarize, tokens,
@@ -47,12 +48,13 @@ const filters = reactive<BillingFilters>({
 const colorBy = ref<'model' | 'purpose'>('model')
 const tab = ref<GroupKey>('model')
 const palette = useChartPalette()
+const { isDark } = useTheme()
 
 const options = computed(() => filterOptions(rows.value, filters))
 const shown = computed(() => filterRows(rows.value, filters))
 const total = computed(() => summarize(shown.value))
-const colors = computed(() => colorMap(rows.value, colorBy.value))
-const chart = computed(() => dailySeries(shown.value, range.value[0], range.value[1], colorBy.value, colors.value))
+const colors = computed(() => colorMap(rows.value, colorBy.value, isDark.value))
+const chart = computed(() => dailySeries(shown.value, range.value[0], range.value[1], colorBy.value, colors.value, isDark.value))
 const option = computed(() => costOption(chart.value.days, chart.value.series, palette.value))
 const chartLabel = computed(() =>
   `每日费用：${range.value[0]} 至 ${range.value[1]} 合计 ${money(total.value.cost)}。${groupBy(shown.value, colorBy.value)

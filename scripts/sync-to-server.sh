@@ -36,6 +36,7 @@ rsync -az --delete -e "ssh -i $HOME/.ssh/tx-zhongtai-deploy -o IdentitiesOnly=ye
   --exclude 'frontend/.vite/' \
   --exclude '.DS_Store' \
   --exclude '.claude/' \
+  --exclude '.cursor/' \
   --exclude '.env' \
   --exclude '/.env.*' \
   --exclude '*.bak' \

@@ -19,11 +19,15 @@ vi.mock('./excelImport', () => ({
 }))
 
 import * as ai from './ai'
+import * as aiBilling from './aiBilling'
 import * as aiSamples from './aiSamples'
+import * as aiTagging from './aiTagging'
 import * as audit from './audit'
 import * as auth from './auth'
 import * as codebook from './codebook'
+import * as crawlerConfig from './crawlerConfig'
 import * as crawler from './crawlerMonitoring'
+import * as filterOptions from './filterOptions'
 import * as policy from './policy'
 import * as scenarioCandidates from './scenarioCandidates'
 import * as scheduler from './scheduler'
@@ -44,7 +48,23 @@ const operations = Object.values(specs).flatMap((spec) =>
   ),
 )
 
-const modules = { ai, aiSamples, audit, auth, codebook, crawler, policy, scenarioCandidates, scheduler, system, tender }
+const modules = {
+  ai,
+  aiBilling,
+  aiSamples,
+  aiTagging,
+  audit,
+  auth,
+  codebook,
+  crawlerConfig,
+  crawler,
+  filterOptions,
+  policy,
+  scenarioCandidates,
+  scheduler,
+  system,
+  tender,
+}
 
 const wrappers = Object.entries(modules).flatMap(([module, exports]) =>
   Object.entries(exports)
@@ -61,6 +81,7 @@ describe('前端接口封装与后端 OpenAPI 一致', () => {
     calls.length = 0
     if (label.startsWith('tender.list') || label === 'tender.getTenderCount') await fn('purchaser', {})
     else if (label === 'tender.getTenderRecord' || label === 'tender.getTenderContent') await fn('winbid', '123', '0')
+    else if (label.startsWith('filterOptions.')) await fn('/policy/sources', 'province_name', '京')
     else await fn('id-1', () => Promise.resolve({}))
     expect(calls.length).toBeGreaterThan(0)
     for (const { method, url } of calls) {

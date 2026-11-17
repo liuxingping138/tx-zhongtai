@@ -204,15 +204,15 @@ frontend 目录运行 `pnpm run type-check`、`pnpm run lint`、`pnpm run test`�
 - **严禁**：严禁在样式中手写 `5px`、`7px`、`11px`、`13px`、`15px`、`21px` 等非规范间隙。
 
 ### 2. Material 3 语义色彩与排版
-- **零硬编码色值**：页面 `.vue` 与组件内禁止出现任何形如 `#xxxxxx`、`rgb()` 的色值，必须调用 `theme.css` 中的语义变量（`--zt-primary`、`--zt-surface`、`--zt-border`、`--zt-ink-*`、`--zt-success` 等）。
+- **零硬编码色值**：页面 `.vue` 与组件内禁止出现任何形如 `#xxxxxx`、`rgb()` 的色值，必须调用 `theme.css` 中的语义变量（`--el-color-primary`、`--zt-surface`、`--zt-border`、`--zt-ink-*`、`--zt-success` 等）。
 - **M3 Inline Banner**：凡需提示用户的信息横幅，必须采用无侵扰 Inline Banner 模式（浅色软底 `--zt-*-soft` + 细描边 `--zt-*-border` + 高对比度深色文本 `--zt-*-text`），杜绝生硬的高饱和深色块。
 - **Clean Empty State**：无数据占位统一采用极简干净的 Clean Empty 模式，使用单色低饱和度矢量或清晰文字引导，严禁使用卡通与插画。
 
 ### 3. 数据表格零抖动（Zero-CLS）骨架屏
-- 业务列表与数据大表首次加载或切换主视图时，统一使用企业级数据表格骨架屏组件，占位行高精确对齐实际行高（标准密度 48px / 紧凑密度 36px）。
+- 业务列表与数据大表首次加载或切换主视图时，统一使用企业级数据表格骨架屏组件，占位行高精确对齐实际行高（标准密度 44px / 紧凑密度 `html[data-density="compact"]` 32px）。
 - 严禁使用全屏透明模糊遮罩 + 转圈（`v-loading` 蒙层），避免遮挡并杜绝视网膜跳变。
 
 ### 4. 招中标大数据量与排序落地
-- **默认排序**：招中标无论原始还是交付数据，默认排序必须严格对齐 `ORDER BY purchaser_provname DESC, public_date DESC, id DESC`。
+- **默认排序**：交付数据及带条件查询按 `ORDER BY public_date DESC, purchaser_provname DESC, id DESC`；原始表全量无过滤裸查走索引按 `ORDER BY public_date DESC, id DESC`。
 - **金额单位标注**：中标金额表头必须标注 `中标金额（万元）`；招标列表与详情必须补充展示 `预算金额（万元）`（对应 `budget_fund` 字段）。
 - **大数据量无条件统计**：针对 2400 万级大数据量无过滤基准统计，采用 SWR 长效快照与预热机制（`counts.py`），确保用户在无条件切换时 0 毫秒即刻呈现总数，杜绝 24 秒慢查询轮询卡顿。

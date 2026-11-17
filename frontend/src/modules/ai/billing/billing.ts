@@ -15,8 +15,10 @@ export interface BillingGroup {
 
 /** 分类色板（已用色盲和对比度校验）：颜色跟着模型或用途走，筛掉别的系列也不变色。超过 8 个的并进「其他」。 */
 export const SERIES_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948']
+export const DARK_SERIES_COLORS = ['#60a5fa', '#fb923c', '#34d399', '#fbbf24', '#f472b6', '#4ade80', '#a78bfa', '#f87171']
 export const OTHER = '其他'
 const OTHER_COLOR = '#9aa4b2'
+const DARK_OTHER_COLOR = '#94a3b8'
 
 /** 页面上的筛选。scene → category → purpose 三级联动，model 独立；空数组表示不限。 */
 export interface BillingFilters {
@@ -90,18 +92,28 @@ export function groupBy(rows: BillingRow[], key: GroupKey): BillingGroup[] {
 
 /** 名字 -> 颜色，顺序也是柱子里从下往上的堆叠顺序。
  * 按全部数据（未筛选）里各自的总花费从高到低排：花得最多的拿最醒目的颜色、垫在最底下。筛选只是隐藏系列，不重新上色。 */
-export function colorMap(rows: BillingRow[], key: 'model' | 'purpose'): Map<string, string> {
+export function colorMap(rows: BillingRow[], key: 'model' | 'purpose', dark = false): Map<string, string> {
+  const palette = dark ? DARK_SERIES_COLORS : SERIES_COLORS
+  const fallback = dark ? DARK_OTHER_COLOR : OTHER_COLOR
   const names = groupBy(rows, key).map(group => group.name)
-  return new Map(names.map((name, index) => [name, SERIES_COLORS[index] ?? OTHER_COLOR]))
+  return new Map(names.map((name, index) => [name, palette[index] ?? fallback]))
 }
 
 /** 范围内每一天（没花钱的日子补 0），每个系列一组按天的费用。 */
-export function dailySeries(rows: BillingRow[], from: string, to: string, key: 'model' | 'purpose', colors: Map<string, string>) {
+export function dailySeries(
+  rows: BillingRow[],
+  from: string,
+  to: string,
+  key: 'model' | 'purpose',
+  colors: Map<string, string>,
+  dark = false,
+) {
+  const fallback = dark ? DARK_OTHER_COLOR : OTHER_COLOR
   const days = daysBetween(from, to)
   const index = new Map(days.map((day, position) => [day, position]))
   const series = new Map<string, number[]>()
   for (const row of rows) {
-    const name = colors.get(row[key]) === OTHER_COLOR ? OTHER : row[key]
+    const name = colors.get(row[key]) === fallback ? OTHER : row[key]
     const values = series.get(name) ?? days.map(() => 0)
     const position = index.get(row.day)
     if (position !== undefined) values[position] = (values[position] ?? 0) + Number(row.cost)
@@ -109,7 +121,7 @@ export function dailySeries(rows: BillingRow[], from: string, to: string, key: '
   }
   const order = [...colors.keys(), OTHER]
   const names = [...series.keys()].sort((a, b) => order.indexOf(a) - order.indexOf(b))
-  return { days, series: names.map(name => ({ name, color: colors.get(name) ?? OTHER_COLOR, data: series.get(name) ?? [] })) }
+  return { days, series: names.map(name => ({ name, color: colors.get(name) ?? fallback, data: series.get(name) ?? [] })) }
 }
 
 export function daysBetween(from: string, to: string): string[] {

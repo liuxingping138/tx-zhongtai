@@ -102,10 +102,6 @@ export function listScenarios(params: {
   return request(http.get('/codebook/scenarios', { params }))
 }
 
-export function getScenario(id: string): Promise<ScenarioItem> {
-  return request(http.get(`/codebook/scenarios/${id}`))
-}
-
 export function createScenario(body: Partial<ScenarioItem>): Promise<ScenarioItem> {
   return request(http.post('/codebook/scenarios', body))
 }

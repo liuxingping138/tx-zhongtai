@@ -169,7 +169,6 @@ onMounted(() => {
               v-model="query.policy_title"
               label="政策原文名称"
               placeholder="输入政策名称关键词"
-              @search="listQuery.search"
             />
           </el-form-item>
           <el-form-item label="一级行业">

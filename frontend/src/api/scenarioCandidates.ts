@@ -1,4 +1,5 @@
 import { http, request } from './http'
+import type { InterpretationItem } from './policy'
 import type { FilterParam, Page } from './types'
 
 /** 新增场景候选：AI 解读出的、码表里还没有的场景，按第一个新出现的那一级归成一个，人在这里做决定。 */
@@ -110,13 +111,6 @@ export function listCandidates(params: CandidateQuery): Promise<Page<CandidateIt
   return request(http.get('/policy/scenario-candidates', { params }))
 }
 
-export function candidateOptions(): Promise<{
-  options: Record<string, { items: string[]; truncated: boolean }>
-  reject_reasons: string[]
-}> {
-  return request(http.get('/policy/scenario-candidates/options'))
-}
-
 export function getCandidate(id: string): Promise<CandidateDetail> {
   return request(http.get(`/policy/scenario-candidates/${id}`))
 }
@@ -166,7 +160,7 @@ export function changeRowScenario(
     scenario_l2_name: string
     scenario_l3_name: string
   },
-): Promise<{ id: string; scenario_state: string; version: number }> {
+): Promise<InterpretationItem> {
   return request(http.post(`/policy/interpretations/${id}/scenario`, body))
 }
 

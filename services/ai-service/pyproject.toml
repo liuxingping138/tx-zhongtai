@@ -1,7 +1,7 @@
 [project]
 name = "ai-service"
 version = "0.1.0"
-description = "AI提问：提示词模板、批量提问、多轮对话"
+description = "AI提问：提示词模板、样本试跑、批量任务与费用账单"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "fastapi>=0.143,<0.144",
