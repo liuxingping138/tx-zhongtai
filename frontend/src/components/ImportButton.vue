@@ -4,6 +4,8 @@ import { Upload } from '@element-plus/icons-vue'
 import { importUi } from '@/api/excelImport'
 
 defineProps<{
+  /** 按钮文案，默认「导入」。 */
+  label?: string
   /** 悬停说明：去重口径、失败时整批退回还是逐行跳过。 */
   hint: string
   /** 交给 el-upload 的 before-upload，自己发请求并返回 false 阻止默认上传。 */
@@ -28,7 +30,7 @@ defineProps<{
         :icon="Upload"
         :disabled="importUi.visible || Boolean(blocked)"
       >
-        导入
+        {{ label || '导入' }}
       </el-button>
     </el-tooltip>
   </el-upload>

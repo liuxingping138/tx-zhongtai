@@ -107,8 +107,15 @@ ALL_SCOPE_RESOURCES: list[str] = [
     *INDUSTRY_RESOURCE_BY_VALUE.values(),
 ]
 
+_LEVEL_RANK: dict[str, int] = {"NONE": 0, "READ": 1, "EXPORT": 2, "FULL": 3}
 _EXPORT_LEVELS = frozenset({"EXPORT", "FULL"})
 _EDIT_LEVELS = frozenset({"FULL"})
+
+
+def _cap_level(level: str, cap: str | None) -> str:
+    if not cap or cap not in _LEVEL_RANK:
+        return level
+    return cap if _LEVEL_RANK.get(level, 0) > _LEVEL_RANK[cap] else level
 
 
 def split_multi_tags(raw: str | None) -> list[str]:
@@ -144,9 +151,17 @@ class KnowledgeAccess:
     industry_levels: dict[str, str]
 
     @classmethod
-    def from_levels(cls, levels: dict[str, str]) -> KnowledgeAccess:
-        file_levels = {value: levels[res] for value, res in FILE_TYPE_RESOURCE_BY_VALUE.items() if res in levels}
-        ind_levels = {value: levels[res] for value, res in INDUSTRY_RESOURCE_BY_VALUE.items() if res in levels}
+    def from_levels(cls, levels: dict[str, str], *, module_level: str | None = None) -> KnowledgeAccess:
+        file_levels = {
+            value: _cap_level(levels[res], module_level)
+            for value, res in FILE_TYPE_RESOURCE_BY_VALUE.items()
+            if res in levels and _cap_level(levels[res], module_level) != "NONE"
+        }
+        ind_levels = {
+            value: _cap_level(levels[res], module_level)
+            for value, res in INDUSTRY_RESOURCE_BY_VALUE.items()
+            if res in levels and _cap_level(levels[res], module_level) != "NONE"
+        }
         return cls(file_type_levels=file_levels, industry_levels=ind_levels)
 
     @property

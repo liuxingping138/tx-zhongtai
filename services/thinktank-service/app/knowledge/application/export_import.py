@@ -99,6 +99,19 @@ async def export_undefined_excel(
     access: KnowledgeAccess,
 ) -> bytes:
     if "" not in access.exportable_file_types:
+        await enqueue_event(
+            session,
+            event_type="thinktank.knowledge.access_denied",
+            actor=actor,
+            target_id="undefined",
+            changes={
+                "file_type": "未定义",
+                "attempted_action": "export_undefined",
+                "reason": "没有「未定义文件」范围的导出权限",
+            },
+            extra={"outcome": "denied"},
+        )
+        await session.commit()
         raise PermissionDeniedError("没有「未定义文件」范围的导出权限")
     rows = await repo.list_undefined(session, access=access)
     payload = await build_workbook_async(

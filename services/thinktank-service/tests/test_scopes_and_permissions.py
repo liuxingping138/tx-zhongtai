@@ -58,6 +58,15 @@ def test_access_levels_orthogonal_file_type_and_industry() -> None:
     assert access.can_read_record("", "党政|教育") is True
     assert access.can_edit_record("", "党政|教育") is False
 
+    # 当子库菜单档位为 READ 时，数据范围档位被封顶在 READ
+    capped = KnowledgeAccess.from_levels(
+        {"thinktank.file_type.undefined": "FULL", "thinktank.industry_type.gov": "FULL"},
+        module_level="READ",
+    )
+    assert capped.can_read_record("", "党政") is True
+    assert capped.can_export_record("", "党政") is False
+    assert capped.can_edit_record("", "党政") is False
+
     # 未授权维度拒绝并给出可读信息
     assert access.can_read_record("通报", "党政") is False
     with pytest.raises(PermissionDeniedError, match="通报 / 党政"):

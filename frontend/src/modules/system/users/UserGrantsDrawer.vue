@@ -9,6 +9,7 @@ import { collectGrants } from '@/composables/useRoleGrants'
 import { LEVEL_TEXT, moduleGroups, moduleNames } from '@/permissions/catalog'
 import { grantDiff, grantsFromTree, type GrantLevel } from '@/permissions/levels'
 import {
+  collapseScopeDiffs,
   isThinktankScopeCode,
   syncThinktankScopesWithMenu,
   thinktankLibraries,
@@ -44,7 +45,10 @@ const names = computed(() => ({
   ...thinktankScopeNames(thinktankLibs.value),
 }))
 const changes = computed(() =>
-  grantDiff(grantsFromTree(tree.value, original.value), grantsFromTree(tree.value, selected.value)),
+  collapseScopeDiffs(
+    thinktankLibs.value,
+    grantDiff(grantsFromTree(tree.value, original.value), grantsFromTree(tree.value, selected.value)),
+  ),
 )
 const opened = computed(
   () =>
@@ -107,7 +111,7 @@ async function save(): Promise<void> {
   const user = props.user
   if (!user || saving.value || !changes.value.length) return
   const summary = changes.value
-    .map(item => `${names.value[item.code] ?? item.code}：${LEVEL_TEXT[item.from]} → ${LEVEL_TEXT[item.to]}`)
+    .map(item => `${item.label ?? names.value[item.code] ?? item.code}：${LEVEL_TEXT[item.from]} → ${LEVEL_TEXT[item.to]}`)
     .join('\n')
   const sure = await ElMessageBox.confirm(summary, `给「${user.display_name}」单独授权，共 ${changes.value.length} 项修改？`, {
     type: 'warning',
@@ -122,7 +126,7 @@ async function save(): Promise<void> {
     original.value = { ...selected.value }
     version.value = result.version
     ElMessage.success('单独授权已保存，对方下次操作时即生效')
-    emit('saved', { count: result.grants.length, version: result.version })
+    emit('saved', { count: opened.value, version: result.version })
     visible.value = false
   } catch (error) {
     ElMessage.error(errorMessage(error, '保存失败'))

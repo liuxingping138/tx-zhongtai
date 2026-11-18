@@ -4,6 +4,8 @@ import type { ResourceNode } from '@/api/types'
 import { moduleGroups } from './catalog'
 import {
   applyDimensionAllMode,
+  capDimensionToMenuLevel,
+  collapseScopeDiffs,
   isDimensionAllMode,
   isThinktankScopeCode,
   syncThinktankScopesWithMenu,
@@ -183,5 +185,20 @@ describe('thinktankScopes', () => {
     })
     expect(closed['thinktank.file_type.product']).toBe('NONE')
     expect(closed['thinktank.industry_type.sme']).toBe('NONE')
+
+    // 按菜单档位封顶维度内可选档位
+    const capped = capDimensionToMenuLevel(fileTypeDim, 'READ')
+    expect(capped.modules[0]?.levels).toEqual(['NONE', 'READ'])
+
+    // 整组同档位变化折叠为 1 条摘要
+    const collapsed = collapseScopeDiffs(libs, [
+      { code: 'thinktank.knowledge', from: 'NONE', to: 'FULL' },
+      { code: 'thinktank.file_type.product', from: 'NONE', to: 'FULL' },
+      { code: 'thinktank.file_type.undefined', from: 'NONE', to: 'FULL' },
+      { code: 'thinktank.industry_type.sme', from: 'NONE', to: 'FULL' },
+    ])
+    expect(collapsed).toHaveLength(3)
+    expect(collapsed[1]?.label).toBe('智库·知识库 / 文件类型范围（全部 2 项）')
+    expect(collapsed[2]?.label).toBe('智库·知识库 / 行业类型范围（全部 1 项）')
   })
 })

@@ -95,6 +95,73 @@ export function applyDimensionAllMode(dimension: ModuleGroup, grants: Grants, me
   return next
 }
 
+/** 按子库菜单档位上限收敛维度内各项可选档位（例如菜单为仅查看时，数据范围不可勾导出/管理）。 */
+export function capDimensionToMenuLevel(dimension: ModuleGroup, menuLevel: GrantLevel): ModuleGroup {
+  const maxRank = rank(menuLevel)
+  return {
+    ...dimension,
+    modules: dimension.modules.map(item => ({
+      ...item,
+      levels: item.levels.filter(lvl => rank(lvl) <= maxRank),
+    })),
+  }
+}
+
+export interface DiffEntry {
+  code: string
+  from: GrantLevel
+  to: GrantLevel
+  label?: string
+}
+
+function tryCollapseDimension(
+  libName: string,
+  dim: ModuleGroup,
+  byCode: Map<string, DiffEntry>,
+): DiffEntry | null {
+  if (!dim.modules.length) return null
+  const first = byCode.get(dim.modules[0]!.code)
+  if (!first) return null
+  const allSame = dim.modules.every(item => {
+    const d = byCode.get(item.code)
+    return d !== undefined && d.from === first.from && d.to === first.to
+  })
+  if (!allSame) return null
+  return {
+    code: dim.code,
+    from: first.from,
+    to: first.to,
+    label: `智库·${libName} / ${dim.name}（全部 ${dim.modules.length} 项）`,
+  }
+}
+
+/**
+ * 将整组同步变化的智库数据维度折叠为 1 条修改摘要，避免勾选 1 个「知识库」时弹窗和底部栏显示 29 项修改。
+ */
+export function collapseScopeDiffs(libraries: ThinktankLibraryScope[], diffs: DiffEntry[]): DiffEntry[] {
+  if (!diffs.length || !libraries.length) return diffs
+  const byCode = new Map(diffs.map(d => [d.code, d]))
+  const collapsedCodes = new Set<string>()
+  const summaryByFirstCode = new Map<string, DiffEntry>()
+
+  for (const lib of libraries) {
+    for (const dim of lib.dimensions) {
+      const summary = tryCollapseDimension(lib.name, dim, byCode)
+      if (!summary) continue
+      summaryByFirstCode.set(dim.modules[0]!.code, summary)
+      for (const item of dim.modules) collapsedCodes.add(item.code)
+    }
+  }
+
+  const out: DiffEntry[] = []
+  for (const d of diffs) {
+    const summary = summaryByFirstCode.get(d.code)
+    if (summary) out.push(summary)
+    if (!collapsedCodes.has(d.code)) out.push(d)
+  }
+  return out
+}
+
 function syncDimensionOnMenuChange(
   dim: ModuleGroup,
   prev: Grants,

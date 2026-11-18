@@ -40,6 +40,7 @@ import KnowledgeLogsDrawer from './KnowledgeLogsDrawer.vue'
 import KnowledgeUploadDialog from './KnowledgeUploadDialog.vue'
 import {
   displayFileType,
+  EDITABLE_FILE_TYPE_OPTIONS,
   EDITOR_GROUPS,
   parseContentDispositionFilename,
   SUMMARY_KEYS,
@@ -83,6 +84,21 @@ const { items, total, loading, loadError, resultFiltered, load } = useListLoader
   errorText: '加载知识库列表失败',
 })
 const { columns, defaults, selected } = useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)
+
+const editorGroups = computed(() => {
+  const allowedFt = accessScope.value?.editable_file_types
+    ? EDITABLE_FILE_TYPE_OPTIONS.filter(t => accessScope.value?.editable_file_types.includes(t))
+    : [...EDITABLE_FILE_TYPE_OPTIONS]
+  const provChoices = filters.get('prov_name').items
+  return EDITOR_GROUPS.map(group => ({
+    ...group,
+    fields: group.fields.map(field => {
+      if (field.key === 'file_type') return { ...field, choices: allowedFt }
+      if (field.key === 'prov_name' && provChoices.length) return { ...field, choices: provChoices }
+      return field
+    }),
+  }))
+})
 
 const uploadVisible = ref(false)
 const exportingUndefined = ref(false)
@@ -246,6 +262,7 @@ onMounted(async () => {
         <FilterBar
           :query="query"
           :applied="listQuery.applied"
+          :collapsible="false"
           @search="listQuery.search"
           @reset="listQuery.resetFilters"
         >
@@ -272,9 +289,9 @@ onMounted(async () => {
         :selected="selected"
         title-key="file_name"
         :summary-keys="SUMMARY_KEYS"
-        :groups="EDITOR_GROUPS"
+        :groups="editorGroups"
         :can-write="canCreate"
-        :action-width="260"
+        :action-width="340"
         :loading="loading"
         :filtered="resultFiltered"
         detail-title="知识资料详情"
@@ -346,7 +363,7 @@ onMounted(async () => {
 
     <RecordEditorDrawer
       :editor="editor"
-      :groups="EDITOR_GROUPS"
+      :groups="editorGroups"
     />
     <KnowledgeUploadDialog
       v-model="uploadVisible"
@@ -364,6 +381,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.row-action { display: inline-flex; align-items: center; gap: 3px; }
+.row-actions { gap: 4px; }
+.row-action { display: inline-flex; align-items: center; gap: 3px; padding: 0 8px; }
 .row-action--danger { color: var(--zt-danger-text); }
 </style>

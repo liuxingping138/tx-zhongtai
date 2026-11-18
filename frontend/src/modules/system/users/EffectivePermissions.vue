@@ -16,13 +16,29 @@ const props = defineProps<{
 
 const keyword = ref('')
 
+function collapseScopeGroup(group: string, items: EffectivePermission[]): EffectivePermission[] {
+  const first = items[0]
+  if (!first || items.length <= 1 || !items.every(i => isThinktankScopeCode(i.resource_code))) return items
+  if (!items.every(i => i.level === first.level)) return items
+  return [
+    {
+      ...first,
+      resource_code: `${group}:all`,
+      resource_name: `${group}（全部 ${items.length} 项）`,
+    },
+  ]
+}
+
 const grouped = computed(() => {
   const out = new Map<string, EffectivePermission[]>()
   for (const item of props.permissions) {
     const key = item.group_name || '其他'
     out.set(key, [...(out.get(key) ?? []), item])
   }
-  return [...out.entries()]
+  return [...out.entries()].map(([group, items]): [string, EffectivePermission[]] => [
+    group,
+    collapseScopeGroup(group, items),
+  ])
 })
 
 function sourceText(item: EffectivePermission): string {

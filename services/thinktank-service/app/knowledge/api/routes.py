@@ -39,10 +39,11 @@ async def get_knowledge_access(
     request: Request,
     client: Annotated[AuthzClient, Depends(get_authz_client)],
 ) -> KnowledgeAccess:
-    """加载当前用户在各文件类型、行业类型上的授权档位。"""
+    """加载当前用户在各文件类型、行业类型上的授权档位，并按子库菜单档位封顶。"""
 
     levels = await fetch_scope_levels(request, client, ALL_SCOPE_RESOURCES, "list")
-    return KnowledgeAccess.from_levels(levels)
+    module_level = getattr(request.state, "authz_level", None)
+    return KnowledgeAccess.from_levels(levels, module_level=module_level)
 
 
 def knowledge_filters(

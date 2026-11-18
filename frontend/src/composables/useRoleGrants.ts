@@ -7,6 +7,7 @@ import type { ResourceNode, RoleItem } from '@/api/types'
 import { LEVEL_TEXT, capabilityModules, moduleGroups, moduleNames } from '@/permissions/catalog'
 import { grantDiff, grantsFromTree, type GrantLevel } from '@/permissions/levels'
 import {
+  collapseScopeDiffs,
   isThinktankScopeCode,
   syncThinktankScopesWithMenu,
   thinktankLibraries,
@@ -58,7 +59,10 @@ export function useRoleGrants(options: RoleGrantsOptions) {
     ...Object.fromEntries(capabilities.value.map(module => [module.code, `分配角色 / ${module.name}`])),
   }))
   const changes = computed(() =>
-    grantDiff(grantsFromTree(tree.value, original.value), grantsFromTree(tree.value, selected.value)),
+    collapseScopeDiffs(
+      thinktankLibs.value,
+      grantDiff(grantsFromTree(tree.value, original.value), grantsFromTree(tree.value, selected.value)),
+    ),
   )
   const openedCount = computed(
     () =>
@@ -131,7 +135,7 @@ export function useRoleGrants(options: RoleGrantsOptions) {
     const current = role.value
     if (saving.value || !current || !changes.value.length || options.readonly()) return
     const summary = changes.value
-      .map(item => `${names.value[item.code] ?? item.code}：${LEVEL_TEXT[item.from]} → ${LEVEL_TEXT[item.to]}`)
+      .map(item => `${item.label ?? names.value[item.code] ?? item.code}：${LEVEL_TEXT[item.from]} → ${LEVEL_TEXT[item.to]}`)
       .join('\n')
     saving.value = true
     try {

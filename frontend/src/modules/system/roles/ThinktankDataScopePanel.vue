@@ -6,6 +6,7 @@ import type { GrantLevel } from '@/permissions/levels'
 import { levelOf, openedCount, type Grants } from '@/permissions/matrix'
 import {
   applyDimensionAllMode,
+  capDimensionToMenuLevel,
   isDimensionAllMode,
   syncThinktankScopesWithMenu,
   type ThinktankLibraryScope,
@@ -219,7 +220,7 @@ function onDimensionGrantsUpdate(next: Grants) {
           >
             <PermissionTable
               :model-value="modelValue"
-              :groups="[dim]"
+              :groups="[capDimensionToMenuLevel(dim, activeMenuLevel)]"
               :original="original"
               :disabled="disabled"
               @update:model-value="onDimensionGrantsUpdate"

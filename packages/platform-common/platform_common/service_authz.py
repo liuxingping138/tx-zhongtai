@@ -106,6 +106,8 @@ def build_permission_dependency(
                 action=action,
                 scope_prefixes=scope_prefixes,
             )
+            if result.level:
+                request.state.authz_level = result.level
             if scope_prefixes and isinstance(getattr(result, "scopes", None), dict):
                 request.state.authz_scopes = result.scopes
             actor_id = result.user_id or ""

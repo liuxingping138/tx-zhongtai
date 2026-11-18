@@ -52,6 +52,15 @@ async def count_by_users(session: AsyncSession, user_ids: list[uuid.UUID]) -> di
     if not user_ids:
         return {}
     result = await session.execute(
-        select(UserGrant.user_id, func.count()).where(UserGrant.user_id.in_(user_ids)).group_by(UserGrant.user_id)
+        select(UserGrant.user_id, func.count())
+        .join(Resource, Resource.id == UserGrant.resource_id)
+        .where(
+            UserGrant.user_id.in_(user_ids),
+            Resource.published.is_(True),
+            Resource.node_type == NodeType.RESOURCE,
+            ~Resource.code.startswith("thinktank.file_type."),
+            ~Resource.code.startswith("thinktank.industry_type."),
+        )
+        .group_by(UserGrant.user_id)
     )
     return {user_id: int(count) for user_id, count in result.all()}

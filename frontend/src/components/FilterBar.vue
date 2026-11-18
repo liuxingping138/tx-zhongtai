@@ -3,7 +3,10 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ArrowDown, ArrowUp, RefreshRight, Search } from '@element-plus/icons-vue'
 import { foldFilterFields } from './filterFold'
 
-const props = defineProps<{ query: Record<string, unknown>; applied?: Record<string, unknown> }>()
+const props = withDefaults(
+  defineProps<{ query: Record<string, unknown>; applied?: Record<string, unknown>; collapsible?: boolean }>(),
+  { applied: undefined, collapsible: true },
+)
 const emit = defineEmits<{ search: []; reset: [] }>()
 const composing = ref(false)
 
@@ -51,6 +54,12 @@ function measure() {
   const box = fields.value
   if (!box) return
   const items = [...box.children].filter((node): node is HTMLElement => node instanceof HTMLElement)
+  if (!props.collapsible) {
+    items.forEach(item => item.removeAttribute('data-folded'))
+    foldedCount.value = 0
+    foldedFilled.value = 0
+    return
+  }
   const fold = foldFilterFields(items.map(item => ({ top: item.offsetTop, height: item.offsetHeight, filled: hasValue(item) })))
   const hidden = new Set(fold.folded)
   items.forEach((item, index) => item.toggleAttribute('data-folded', !expanded.value && hidden.has(index)))
