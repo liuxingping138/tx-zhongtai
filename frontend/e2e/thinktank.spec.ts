@@ -15,7 +15,7 @@ test('码表两级目录与智库知识库主流程', async ({ page }) => {
   await expect(sidebar.getByRole('link', { name: '省市区码表', exact: true })).toBeVisible()
   await expect(sidebar.getByText('暂无码表')).toBeVisible()
 
-  // 2. 进入「智库 -> 知识库」验证 1,448 条全量历史数据加载、操作日志、预览与收藏
+  // 2. 进入「智库 -> 知识库」验证 1,448 条全量历史数据加载、操作日志、独立详情页查看与编辑
   await page.getByRole('navigation', { name: '一级模块' }).getByRole('link', { name: '智库', exact: true }).click()
   await expect(page).toHaveURL(/\/thinktank\/knowledge$/)
   await expect(page.getByRole('heading', { name: '智库知识库' })).toBeVisible()
@@ -31,10 +31,10 @@ test('码表两级目录与智库知识库主流程', async ({ page }) => {
   await logsDialog.locator('.el-drawer__close-btn').click()
   await expect(logsDialog).toBeHidden()
 
-  // 点击预览跳转到独立预览页
-  await firstRow.getByRole('button', { name: '预览', exact: true }).click()
+  // 点击查看跳转到独立详情预览工作台（含上一条/下一条翻页与内联编辑）
+  await firstRow.getByRole('link', { name: '查看', exact: true }).click()
   await expect(page).toHaveURL(/\/thinktank\/knowledge\/.+/)
-  await expect(page.getByText('资料标签信息')).toBeVisible()
+  await expect(page.getByRole('button', { name: '基本信息', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: /收藏/ })).toBeVisible()
 
   // 3. 验证「角色与权限」中「菜单权限」与「智库数据权限」已独立拆分

@@ -4,6 +4,7 @@ import { ref, watch } from 'vue'
 
 import { errorMessage } from '@/api/errors'
 import { listKnowledgeLogs, type KnowledgeOpLogItem } from '@/api/thinktank'
+import ParagraphSkeleton from '@/components/ParagraphSkeleton.vue'
 
 const props = defineProps<{
   modelValue: boolean
@@ -52,12 +53,13 @@ watch(
     destroy-on-close
     @update:model-value="$emit('update:modelValue', $event)"
   >
-    <div
-      v-loading="loading"
-      class="logs-body"
-    >
+    <div class="logs-body">
+      <ParagraphSkeleton
+        v-if="loading"
+        :lines="6"
+      />
       <el-empty
-        v-if="!loading && logs.length === 0"
+        v-else-if="logs.length === 0"
         description="暂无操作日志"
       />
       <el-timeline v-else>
@@ -67,14 +69,19 @@ watch(
           :timestamp="item.created_at"
           placement="top"
         >
-          <div class="log-head">
-            <el-tag size="small">
-              {{ item.op_type }}
-            </el-tag>
-            <span class="log-actor">{{ item.actor_name }}</span>
-          </div>
-          <div class="log-detail">
-            {{ item.detail }}
+          <div class="log-card">
+            <div class="log-head">
+              <el-tag size="small">
+                {{ item.op_type }}
+              </el-tag>
+              <span class="log-actor">{{ item.actor_name }}</span>
+            </div>
+            <div
+              v-if="item.detail"
+              class="log-detail"
+            >
+              {{ item.detail }}
+            </div>
           </div>
         </el-timeline-item>
       </el-timeline>
@@ -95,9 +102,10 @@ watch(
 </template>
 
 <style scoped>
-.logs-body { min-height: 200px; }
+.logs-body { min-height: 200px; padding: 4px 8px; }
+.log-card { padding: 12px 16px; background: var(--zt-soft); border: 1px solid var(--zt-border); border-radius: 8px; }
 .log-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-.log-actor { font-weight: 500; color: var(--zt-ink-900); }
-.log-detail { font-size: 13px; color: var(--zt-ink-500); }
+.log-actor { font-weight: 600; font-size: 13px; color: var(--zt-ink-900); }
+.log-detail { color: var(--zt-ink-700); font-size: 13px; line-height: 1.5; word-break: break-word; }
 .logs-pager { display: flex; justify-content: flex-end; margin-top: 12px; }
 </style>

@@ -2,7 +2,7 @@
 import { Download, Star, StarFilled, Upload } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { RouterLink, type RouteLocationRaw } from 'vue-router'
 
 import { downloadBlob } from '@/api/download'
 import { errorMessage } from '@/api/errors'
@@ -15,7 +15,6 @@ import {
   getKnowledgeAccess,
   listKnowledge,
   unfavoriteKnowledge,
-  updateKnowledge,
   uploadKnowledgeTags,
   type KnowledgeAccessSummary,
   type KnowledgeItem,
@@ -27,20 +26,18 @@ import ExportButton from '@/components/ExportButton.vue'
 import FilterBar from '@/components/FilterBar.vue'
 import ImportButton from '@/components/ImportButton.vue'
 import ListPage from '@/components/ListPage.vue'
-import RecordEditorDrawer from '@/components/RecordEditorDrawer.vue'
 import { useDetailColumns } from '@/composables/useDetailColumns'
 import { useExcelExport } from '@/composables/useExcelExport'
 import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useListLoader } from '@/composables/useListLoader'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
-import { useRecordEditor } from '@/composables/useRecordEditor'
+import { reviewQuery } from '@/modules/policy/shared/reviewQuery'
 import { useAuthStore } from '@/stores/auth'
 import KnowledgeFilters, { type KnowledgeFilterQuery } from './KnowledgeFilters.vue'
 import KnowledgeLogsDrawer from './KnowledgeLogsDrawer.vue'
 import KnowledgeUploadDialog from './KnowledgeUploadDialog.vue'
 import {
   displayFileType,
-  EDITABLE_FILE_TYPE_OPTIONS,
   EDITOR_GROUPS,
   parseContentDispositionFilename,
   SUMMARY_KEYS,
@@ -48,7 +45,6 @@ import {
 } from './fields'
 
 const RESOURCE = 'thinktank.knowledge'
-const router = useRouter()
 const auth = useAuthStore()
 const canCreate = computed(() => auth.canFull(RESOURCE))
 const canExportUndefined = computed(
@@ -85,21 +81,6 @@ const { items, total, loading, loadError, resultFiltered, load } = useListLoader
 })
 const { columns, defaults, selected } = useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)
 
-const editorGroups = computed(() => {
-  const allowedFt = accessScope.value?.editable_file_types
-    ? EDITABLE_FILE_TYPE_OPTIONS.filter(t => accessScope.value?.editable_file_types.includes(t))
-    : [...EDITABLE_FILE_TYPE_OPTIONS]
-  const provChoices = filters.get('prov_name').items
-  return EDITOR_GROUPS.map(group => ({
-    ...group,
-    fields: group.fields.map(field => {
-      if (field.key === 'file_type') return { ...field, choices: allowedFt }
-      if (field.key === 'prov_name' && provChoices.length) return { ...field, choices: provChoices }
-      return field
-    }),
-  }))
-})
-
 const uploadVisible = ref(false)
 const exportingUndefined = ref(false)
 const busyRowIds = reactive(new Set<string>())
@@ -109,13 +90,19 @@ async function refresh() {
   await Promise.all([load(), filters.load()])
 }
 
-const editor = useRecordEditor<KnowledgeItem>({
-  noun: '知识资料',
-  groups: EDITOR_GROUPS,
-  create: () => Promise.reject(new Error('新增请使用「上传文件」')),
-  update: (row, form) => updateKnowledge(row.id, { ...form, version: row.version }),
-  refresh,
-})
+function detailRoute(row: KnowledgeItem, index: number): RouteLocationRaw {
+  const position = (query.page - 1) * query.page_size + index
+  return {
+    name: 'thinktank-knowledge-preview',
+    params: { id: row.id },
+    query: reviewQuery(listQuery.applied, position, query.page_size),
+  }
+}
+
+function editRoute(row: KnowledgeItem, index: number): RouteLocationRaw {
+  const to = detailRoute(row, index)
+  return typeof to === 'string' ? { path: to, query: { edit: '1' } } : { ...to, query: { ...to.query, edit: '1' } }
+}
 
 const { exporting, onExport } = useExcelExport({
   path: '/thinktank/knowledge/export',
@@ -147,10 +134,6 @@ async function onUploadTags(file: File) {
     ElMessage.error(errorMessage(error, '上传知识标签失败'))
   }
   return false
-}
-
-function onPreview(row: KnowledgeItem) {
-  void router.push({ name: 'thinktank-knowledge-preview', params: { id: row.id } })
 }
 
 async function onToggleFavorite(row: KnowledgeItem) {
@@ -236,6 +219,12 @@ onMounted(async () => {
         >
           上传文件
         </el-button>
+        <ImportButton
+          v-if="canUploadTags"
+          label="上传知识标签"
+          hint="上传导出的未定义标签 Excel 模板，批量完善标签并记录操作审计。"
+          :upload="onUploadTags"
+        />
         <el-button
           v-if="canExportUndefined"
           :icon="Download"
@@ -244,12 +233,6 @@ onMounted(async () => {
         >
           导出未定义数据
         </el-button>
-        <ImportButton
-          v-if="canUploadTags"
-          label="上传知识标签"
-          hint="上传导出的未定义标签 Excel 模板，批量完善标签并记录操作审计。"
-          :upload="onUploadTags"
-        />
         <ExportButton
           :allowed="auth.canExport(RESOURCE)"
           :loading="exporting"
@@ -279,7 +262,6 @@ onMounted(async () => {
           v-model="selected"
           :columns="columns"
           :defaults="defaults"
-          :legacy-defaults="SUMMARY_KEYS"
         />
       </template>
 
@@ -289,7 +271,8 @@ onMounted(async () => {
         :selected="selected"
         title-key="file_name"
         :summary-keys="SUMMARY_KEYS"
-        :groups="editorGroups"
+        :groups="EDITOR_GROUPS"
+        :detail-route="detailRoute"
         :can-write="canCreate"
         :action-width="340"
         :loading="loading"
@@ -306,15 +289,21 @@ onMounted(async () => {
           </el-tag>
         </template>
 
-        <template #row-actions="{ row }">
+        <template #row-actions="{ row, index }">
           <div class="row-actions">
-            <button
-              type="button"
+            <RouterLink
               class="row-action"
-              @click="onPreview(row)"
+              :to="detailRoute(row, index)"
             >
-              预览
-            </button>
+              查看
+            </RouterLink>
+            <RouterLink
+              v-if="row.can_edit"
+              class="row-action row-action--primary"
+              :to="editRoute(row, index)"
+            >
+              编辑
+            </RouterLink>
             <button
               type="button"
               class="row-action"
@@ -343,14 +332,6 @@ onMounted(async () => {
             <button
               v-if="row.can_edit"
               type="button"
-              class="row-action"
-              @click="editor.openEdit(row)"
-            >
-              编辑
-            </button>
-            <button
-              v-if="row.can_edit"
-              type="button"
               class="row-action row-action--danger"
               @click="onDeleteRow(row)"
             >
@@ -361,10 +342,6 @@ onMounted(async () => {
       </BusinessTable>
     </ListPage>
 
-    <RecordEditorDrawer
-      :editor="editor"
-      :groups="editorGroups"
-    />
     <KnowledgeUploadDialog
       v-model="uploadVisible"
       :provinces="filters.get('prov_name').items"
@@ -381,7 +358,8 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.row-actions { gap: 4px; }
-.row-action { display: inline-flex; align-items: center; gap: 3px; padding: 0 8px; }
+.row-actions { display: inline-flex; align-items: center; gap: 4px; }
+.row-action { display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; text-decoration: none; }
+.row-action--primary { color: var(--zt-blue-600); }
 .row-action--danger { color: var(--zt-danger-text); }
 </style>
