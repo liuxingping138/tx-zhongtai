@@ -53,8 +53,10 @@ export const useAuthStore = defineStore('auth', {
         canWrite(state.resources.find((item) => item.code === code)?.level),
     isSuperadmin: (state): boolean => Boolean(state.user?.is_superadmin),
     visibleMenus(state): MenuItem[] {
+      const byId = new Map<string, MenuItem>()
       const byParent = new Map<string | null, MenuItem[]>()
       for (const menu of state.menus) {
+        byId.set(menu.id, menu)
         const list = byParent.get(menu.parent_id) ?? []
         list.push(menu)
         byParent.set(menu.parent_id, list)
@@ -64,9 +66,20 @@ export const useAuthStore = defineStore('auth', {
           return true
         }
         const children = byParent.get(menu.id) ?? []
-        return children.some((child) => hasLeaf(child))
+        return children.some(child => hasLeaf(child))
       }
-      return state.menus.filter((menu) => hasLeaf(menu))
+      const rootOf = (menu: MenuItem): MenuItem => {
+        let cur = menu
+        while (cur.parent_id && byId.has(cur.parent_id)) {
+          cur = byId.get(cur.parent_id)!
+        }
+        return cur
+      }
+      // 顶级模块目录无任何可见叶子时整体隐藏；同一顶级模块下的子级空目录（如「智库码表」）对拥有该模块权限的用户保留。
+      return state.menus.filter(menu => {
+        if (menu.parent_id === null) return hasLeaf(menu)
+        return menu.route_name ? true : hasLeaf(rootOf(menu))
+      })
     },
   },
   actions: {

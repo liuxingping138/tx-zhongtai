@@ -1,0 +1,82 @@
+[project]
+name = "thinktank-service"
+version = "0.1.0"
+description = "智库服务：知识库（及后续报告库、方案库等）资料管理、权限范围控制与全操作审计"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi>=0.143,<0.144",
+  "uvicorn[standard]>=0.30,<0.31",
+  "pydantic>=2.9,<3.0",
+  "pydantic-settings>=2.5,<3.0",
+  "sqlalchemy[asyncio]>=2.0,<2.1",
+  "asyncpg>=0.29,<0.30",
+  "alembic>=1.13,<1.14",
+  "httpx>=0.27,<0.28",
+  "openpyxl>=3.1,<3.2",
+  "python-multipart>=0.0.31,<0.1",
+  "platform-common",
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.6,<1.0",
+  "mypy>=1.11,<2.0",
+  "types-defusedxml>=0.7,<0.8",
+  "types-openpyxl>=3.1,<4.0",
+  "import-linter>=2.1,<3.0",
+  "pytest>=9.0.3,<10.0",
+  "pytest-asyncio>=1.0,<2.0",
+  "pytest-cov>=5.0,<8.0",
+]
+
+[tool.uv.sources]
+platform-common = { path = "../../packages/platform-common", editable = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.ruff]
+# 规则在仓库根目录 ruff.toml，这里只写本包特有的例外。
+extend = "../../ruff.toml"
+
+[tool.importlinter]
+root_package = "app"
+
+# 智库内部按库分包（知识库、后续报告库、方案库等），每个库内部严格分层。
+[[tool.importlinter.contracts]]
+name = "领域内分层：api → application → repositories → domain"
+type = "layers"
+containers = ["app.knowledge"]
+layers = ["api", "application", "repositories", "domain"]
+
+[[tool.importlinter.contracts]]
+name = "common、core 不依赖任何业务库"
+type = "forbidden"
+source_modules = ["app.common", "app.core"]
+forbidden_modules = ["app.knowledge"]
+
+[[tool.importlinter.contracts]]
+name = "入口层不跳过 application 直接用仓储"
+type = "forbidden"
+source_modules = ["app.knowledge.api", "app.cli"]
+forbidden_modules = ["app.knowledge.repositories"]
+allow_indirect_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+exclude = ["migrations/versions"]
+
+[tool.coverage.run]
+source = ["app"]
+
+[tool.coverage.report]
+precision = 2
+fail_under = 84

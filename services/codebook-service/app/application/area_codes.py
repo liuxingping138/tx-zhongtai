@@ -76,6 +76,10 @@ async def list_area_code_options(session: AsyncSession) -> dict[str, Any]:
     return await options_repo.area_code_options(session)
 
 
+async def list_provinces(session: AsyncSession) -> list[str]:
+    return await options_repo.list_province_names(session)
+
+
 async def search_area_code_options(session: AsyncSession, *, field: str, keyword: str | None) -> list[str]:
     """按关键词搜索筛选项候选值，供前端下拉的服务端搜索使用。"""
 

@@ -423,18 +423,32 @@ def run() -> None:
     expect(restarting == "", f"A16 restarting containers: {restarting}")
     results.append("A16 ok")
 
-    # A17 跨微服务网关端点鉴权与路由验收：Codebook, Policy, Tender
+    # A17 跨微服务网关端点鉴权与路由验收：Codebook, Policy, Tender, Thinktank
     anon_api = Api(base)
-    for svc_path in ("/api/v1/codebook/area-codes", "/api/v1/policy/sources", "/api/v1/tender/purchaser"):
+    for svc_path in (
+        "/api/v1/codebook/area-codes",
+        "/api/v1/policy/sources",
+        "/api/v1/tender/purchaser",
+        "/api/v1/thinktank/knowledge",
+    ):
         code, _ = anon_api.call("GET", svc_path)
         expect(code == 401, f"A17 expected 401 for anonymous {svc_path}, got {code}")
 
     admin_gw = Api(base)
-    admin_gw.login(os.environ["ADMIN_USERNAME"], os.environ["ADMIN_PASSWORD"])
+    admin_gw.login(admin_user, admin_password)
     code, cbody = admin_gw.call("GET", "/api/v1/codebook/area-codes")
     expect(code == 200, f"A17 codebook area-codes expected 200, got {code} {cbody}")
     code, pbody = admin_gw.call("GET", "/api/v1/policy/sources")
     expect(code == 200, f"A17 policy sources expected 200, got {code} {pbody}")
+    code, kbody = admin_gw.call("GET", "/api/v1/thinktank/knowledge?page=1&page_size=5")
+    expect(code == 200 and (kbody.get("data") or {}).get("total", 0) >= 1400, f"A17 thinktank list failed: {code} {kbody}")
+    first_id = kbody["data"]["items"][0]["id"]
+    code, prev_body = admin_gw.call("GET", f"/api/v1/thinktank/knowledge/{first_id}/preview")
+    expect(code == 200, f"A17 thinktank preview failed: {code} {prev_body}")
+    code, fav_body = admin_gw.call("POST", f"/api/v1/thinktank/knowledge/{first_id}/favorite")
+    expect(code == 200 and fav_body["data"]["is_favorited"] is True, f"A17 thinktank favorite failed: {code} {fav_body}")
+    code, opts_body = admin_gw.call("GET", "/api/v1/thinktank/knowledge/options")
+    expect(code == 200 and "集团" in opts_body["data"]["options"]["prov_name"]["items"], f"A17 thinktank options failed: {code}")
     results.append("A17 cross-service gateway ok")
 
     # isolation

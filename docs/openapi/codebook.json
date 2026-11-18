@@ -1618,6 +1618,26 @@
         }
       }
     },
+    "/internal/v1/provinces": {
+      "get": {
+        "tags": [
+          "internal"
+        ],
+        "summary": "List Provinces",
+        "description": "供智库等服务读取省市区码表里的权威省份列表。",
+        "operationId": "list_provinces_internal_v1_provinces_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/internal/v1/scenarios/lookup": {
       "post": {
         "tags": [

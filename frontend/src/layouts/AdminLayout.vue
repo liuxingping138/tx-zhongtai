@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { Moon, Sunny, User } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowRight, Moon, Sunny, User } from '@element-plus/icons-vue'
 import UserAccountMenu from '@/layouts/UserAccountMenu.vue'
 import { useWorkspace } from './workspace'
 import { useMenuBadges } from './menuBadges'
@@ -18,6 +18,10 @@ const activeGroup = computed(() => groups.value.find(group => group.entries.some
 // 403、个人设置不在任何菜单下。侧栏继续显示这个角色能进的菜单，避免只剩「个人设置」。
 const sidebarGroup = computed(() => activeGroup.value ?? groups.value[0])
 const firstModulePath = computed(() => groups.value[0]?.entries[0]?.path || '/no-modules')
+const collapsed = ref<Record<string, boolean>>({})
+function toggleSection(id: string) {
+  collapsed.value[id] = !collapsed.value[id]
+}
 </script>
 
 <template>
@@ -85,7 +89,57 @@ const firstModulePath = computed(() => groups.value[0]?.entries[0]?.path || '/no
           class="workspace-module-nav"
           aria-label="子模块导航"
         >
-          <template v-if="sidebarGroup">
+          <template v-if="sidebarGroup?.sections?.length">
+            <div
+              v-for="sec in sidebarGroup.sections"
+              :key="sec.id"
+              class="workspace-section"
+            >
+              <button
+                type="button"
+                class="workspace-section-title"
+                :aria-expanded="!collapsed[sec.id]"
+                @click="toggleSection(sec.id)"
+              >
+                <el-icon aria-hidden="true">
+                  <ArrowRight v-if="collapsed[sec.id]" />
+                  <ArrowDown v-else />
+                </el-icon>
+                <span>{{ sec.title }}</span>
+              </button>
+              <div
+                v-show="!collapsed[sec.id]"
+                class="workspace-section-items"
+              >
+                <router-link
+                  v-for="entry in sec.entries"
+                  :key="entry.path"
+                  :to="{ path: entry.path }"
+                  :class="{ 'is-active': activePath === entry.path }"
+                  :aria-current="activePath === entry.path ? 'page' : undefined"
+                >
+                  <el-icon aria-hidden="true">
+                    <component :is="entry.icon" />
+                  </el-icon>
+                  <span>{{ entry.title }}</span>
+                  <span
+                    v-if="badges[entry.path]"
+                    class="workspace-badge"
+                    :title="`待审 ${badges[entry.path]} 个`"
+                  >
+                    <span class="sr-only">待审</span>{{ badges[entry.path]?.toLocaleString() }}
+                  </span>
+                </router-link>
+                <div
+                  v-if="sec.entries.length === 0"
+                  class="workspace-section-empty"
+                >
+                  {{ sec.emptyHint || '暂无模块' }}
+                </div>
+              </div>
+            </div>
+          </template>
+          <template v-else-if="sidebarGroup">
             <router-link
               v-for="entry in sidebarGroup.entries"
               :key="entry.path"

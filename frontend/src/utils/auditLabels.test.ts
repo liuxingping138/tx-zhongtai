@@ -24,9 +24,10 @@ describe('auditLabels', () => {
   })
 
   it('业务模块取菜单目录，类型取入库时算好的业务线', () => {
-    expect(['auth', 'system.users', 'policy.sources', 'codebook.area_codes', 'ai.prompts'].map(directoryLabel))
-      .toEqual(['系统管理', '系统管理', '政策', '码表管理', 'AI提问'])
-    expect([businessLineLabel('tender'), businessLineLabel(null), businessLineLabel('x')]).toEqual(['招投标', '-', '-'])
+    expect(['auth', 'system.users', 'policy.sources', 'codebook.area_codes', 'thinktank.knowledge', 'ai.prompts'].map(directoryLabel))
+      .toEqual(['系统管理', '系统管理', '政策', '码表管理', '智库', 'AI提问'])
+    expect([businessLineLabel('tender'), businessLineLabel('thinktank'), businessLineLabel(null), businessLineLabel('x')])
+      .toEqual(['招投标', '智库', '-', '-'])
   })
 
   it('业务模块换算成模块编码第一段，模块选项随之收窄', () => {

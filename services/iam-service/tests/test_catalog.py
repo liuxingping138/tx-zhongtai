@@ -102,3 +102,27 @@ def test_scenario_review_has_its_own_resource_and_the_old_sync_action_is_retired
     assert levels[("policy.scenario_candidates", "list")] == GrantLevel.READ
     for retired in RETIRED_ACTIONS:
         assert retired not in levels  # 留在清单里会被建回来，又被退役步骤删掉
+
+
+def test_codebook_has_dictionary_and_thinktank_directories() -> None:
+    by_code = {spec.code: spec for spec in MENU_SPECS}
+    assert by_code["menu.codebook.dictionary"].parent_code == "menu.codebook"
+    assert by_code["menu.codebook.dictionary"].title == "数据字典"
+    assert by_code["menu.codebook.thinktank"].parent_code == "menu.codebook"
+    assert by_code["menu.codebook.thinktank"].title == "智库码表"
+    dict_children = [spec.title for spec in MENU_SPECS if spec.parent_code == "menu.codebook.dictionary"]
+    assert dict_children == ["政策类型码表", "行业场景码表", "省市区码表"]
+
+
+def test_thinktank_catalog_has_knowledge_and_type_industry_scopes() -> None:
+    by_code = {spec.code: spec for spec in RESOURCE_SPECS}
+    assert by_code["thinktank"].published is True
+    assert by_code["thinktank.knowledge"].published is True
+    assert by_code["thinktank.file_type.product"].parent_code == "thinktank"
+    assert by_code["thinktank.industry_type.energy"].parent_code == "thinktank"
+    levels = {(spec.resource_code, spec.action_code): spec.required_level for spec in ACTION_SPECS}
+    assert levels[("thinktank.knowledge", "preview")] == GrantLevel.READ
+    assert levels[("thinktank.knowledge", "favorite")] == GrantLevel.READ
+    assert levels[("thinktank.knowledge", "download")] == GrantLevel.EXPORT
+    assert levels[("thinktank.knowledge", "export_undefined")] == GrantLevel.EXPORT
+    assert levels[("thinktank.knowledge", "upload_tags")] == GrantLevel.FULL

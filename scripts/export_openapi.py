@@ -27,6 +27,10 @@ def _prepare_env() -> None:
     os.environ.setdefault("POLICY_IAM_SERVICE_SECRET", "export-only")
     os.environ.setdefault("POLICY_AUDIT_INGEST_SECRET", "export-only")
     os.environ.setdefault("AI_DATABASE_URL", "postgresql+asyncpg://ai_app:test@localhost:5432/ai_db")
+    os.environ.setdefault("THINKTANK_DATABASE_URL", "postgresql+asyncpg://thinktank_app:test@localhost:5432/thinktank_db")
+    os.environ.setdefault("THINKTANK_ENVIRONMENT", "test")
+    os.environ.setdefault("THINKTANK_IAM_SERVICE_SECRET", "export-only")
+    os.environ.setdefault("THINKTANK_AUDIT_INGEST_SECRET", "export-only")
     os.environ.setdefault("AI_ENVIRONMENT", "test")
     os.environ.setdefault("AI_IAM_SERVICE_SECRET", "export-only")
     os.environ.setdefault("AI_AUDIT_INGEST_SECRET", "export-only")
@@ -45,6 +49,7 @@ SERVICES = {
     "policy": "services/policy-service",
     "ai": "services/ai-service",
     "tender": "services/tender-service",
+    "thinktank": "services/thinktank-service",
 }
 
 

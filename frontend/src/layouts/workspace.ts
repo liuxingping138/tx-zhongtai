@@ -4,17 +4,26 @@ import {
   Key, Link, MapLocation, Menu, Money, Monitor, PriceTag, Reading,
   Setting, Tickets, Timer, User, UserFilled, Unlock,
 } from '@element-plus/icons-vue'
+import type { MenuItem } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { pathForRouteName } from '@/router/menu'
 
 export interface WorkspaceEntry { title: string; path: string; description: string; icon: Component }
-export interface WorkspaceGroup { key: string; title: string; icon: Component; entries: WorkspaceEntry[] }
+export interface WorkspaceSection { id: string; title: string; entries: WorkspaceEntry[]; emptyHint?: string }
+export interface WorkspaceGroup {
+  key: string
+  title: string
+  icon: Component
+  entries: WorkspaceEntry[]
+  sections?: WorkspaceSection[]
+}
 
 /** 顶部一级分类专属领域图标，践行 Google M3 导航规范 */
 const DOMAIN_ICONS: Record<string, Component> = {
   policy: Reading,
   tender: Tickets,
   codebook: Collection,
+  thinktank: Files,
   ai: Cpu,
   system: Setting,
 }
@@ -30,6 +39,7 @@ export const ENTRY_DESCRIPTIONS: Record<string, string> = {
   '/codebook/policy-types': '统一政策分类口径',
   '/codebook/scenarios': '管理行业与业务场景',
   '/codebook/area-codes': '维护省、市、区地域编码',
+  '/thinktank/knowledge': '知识库资料查询、按文件类型与行业类型授权及操作审计',
   '/system/users': '管理账号与角色分配',
   '/system/roles': '配置模块和操作权限',
   '/system/sessions': '看谁在线，按设备下线',
@@ -56,6 +66,7 @@ const entryIcons: Record<string, Component> = {
   '/codebook/policy-types': Collection,
   '/codebook/scenarios': Connection,
   '/codebook/area-codes': MapLocation,
+  '/thinktank/knowledge': Reading,
   '/system/users': User,
   '/system/roles': Key,
   '/system/sessions': UserFilled,
@@ -71,32 +82,93 @@ const entryIcons: Record<string, Component> = {
   '/ai/billing': Money,
 }
 
+function buildEntry(item: MenuItem, path: string): WorkspaceEntry {
+  return {
+    title: item.title,
+    path,
+    description: ENTRY_DESCRIPTIONS[path] || '进入业务模块',
+    icon: entryIcons[path] || Menu,
+  }
+}
+
+function buildRootMap(menus: readonly MenuItem[]) {
+  const byId = new Map<string, MenuItem>(menus.map(m => [m.id, m]))
+  const rootOf = (menu: MenuItem): MenuItem => {
+    let cur = menu
+    while (cur.parent_id && byId.has(cur.parent_id)) {
+      cur = byId.get(cur.parent_id)!
+    }
+    return cur
+  }
+  return { byId, rootOf }
+}
+
+function ensureSection(
+  sectionsByRoot: Map<string, Map<string, WorkspaceSection>>,
+  rootId: string,
+  dir: MenuItem,
+): WorkspaceSection {
+  let map = sectionsByRoot.get(rootId)
+  if (!map) {
+    map = new Map()
+    sectionsByRoot.set(rootId, map)
+  }
+  let sec = map.get(dir.id)
+  if (!sec) {
+    sec = { id: dir.id, title: dir.title, entries: [], emptyHint: '暂无码表' }
+    map.set(dir.id, sec)
+  }
+  return sec
+}
+
+function appendEntryToGroup(
+  result: Map<string, WorkspaceGroup>,
+  groupByRootId: Map<string, WorkspaceGroup>,
+  sectionsByRoot: Map<string, Map<string, WorkspaceSection>>,
+  item: MenuItem,
+  byId: Map<string, MenuItem>,
+  rootOf: (m: MenuItem) => MenuItem,
+) {
+  const path = pathForRouteName(item.route_name)
+  if (!path) return
+  const key = path.split('/')[1] || 'other'
+  const root = rootOf(item)
+  if (!result.has(key)) {
+    const group: WorkspaceGroup = { key, title: root.title || '业务模块', icon: DOMAIN_ICONS[key] || Menu, entries: [] }
+    result.set(key, group)
+    groupByRootId.set(root.id, group)
+  }
+  const entry = buildEntry(item, path)
+  result.get(key)!.entries.push(entry)
+  const parent = item.parent_id ? byId.get(item.parent_id) : undefined
+  if (parent && parent.id !== root.id) {
+    ensureSection(sectionsByRoot, root.id, parent).entries.push(entry)
+  }
+}
+
+function buildWorkspaceGroups(menus: readonly MenuItem[]): WorkspaceGroup[] {
+  const { byId, rootOf } = buildRootMap(menus)
+  const result = new Map<string, WorkspaceGroup>()
+  const groupByRootId = new Map<string, WorkspaceGroup>()
+  const sectionsByRoot = new Map<string, Map<string, WorkspaceSection>>()
+
+  for (const item of menus) {
+    appendEntryToGroup(result, groupByRootId, sectionsByRoot, item, byId, rootOf)
+  }
+  for (const dir of menus) {
+    if (!dir.route_name && dir.parent_id && groupByRootId.has(dir.parent_id)) {
+      ensureSection(sectionsByRoot, dir.parent_id, dir)
+    }
+  }
+  for (const [rootId, secMap] of sectionsByRoot) {
+    const group = groupByRootId.get(rootId)
+    if (group) group.sections = [...secMap.values()]
+  }
+  return [...result.values()]
+}
+
 export function useWorkspace() {
   const auth = useAuthStore()
-  const groups = computed<WorkspaceGroup[]>(() => {
-    const result = new Map<string, WorkspaceGroup>()
-    for (const item of auth.visibleMenus) {
-      const path = pathForRouteName(item.route_name)
-      if (!path) continue
-      const key = path.split('/')[1] || 'other'
-      const parent = auth.visibleMenus.find(menu => menu.id === item.parent_id)
-      if (!result.has(key)) {
-        result.set(key, {
-          key,
-          title: parent?.title || '业务模块',
-          icon: DOMAIN_ICONS[key] || Menu,
-          entries: [],
-        })
-      }
-      result.get(key)!.entries.push({
-        title: item.title,
-        path,
-        description: ENTRY_DESCRIPTIONS[path] || '进入业务模块',
-        icon: entryIcons[path] || Menu,
-      })
-    }
-    // 模块顺序以 iam 菜单 sort_order 为准（系统管理、政策、码表管理、AI提问），前端不另行排序。
-    return [...result.values()]
-  })
+  const groups = computed<WorkspaceGroup[]>(() => buildWorkspaceGroups(auth.visibleMenus))
   return { auth, groups }
 }

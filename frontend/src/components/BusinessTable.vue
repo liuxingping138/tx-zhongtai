@@ -20,6 +20,8 @@ const props = defineProps<{
   detailRoute?: (row: T, index: number) => RouteLocationRaw;
   /** 首列加勾选框，用于批量操作；只勾当前页。 */
   selectable?: boolean;
+  /** 自定义操作列宽度（当使用 #row-actions 插槽时可调宽）。 */
+  actionWidth?: number;
 }>()
 const emit = defineEmits<{ edit: [row: T]; reset: []; 'selection-change': [rows: T[]] }>()
 const SELECTION_WIDTH = 44
@@ -35,8 +37,8 @@ const summaryColumns = computed(() => (props.summaryKeys ?? props.selected)
   .slice(0, 3))
 const root = ref<HTMLElement>()
 const availableWidth = ref(0)
-const actionWidth = computed(() => props.canWrite ? 140 : 84)
-const fixedWidth = computed(() => actionWidth.value + (props.selectable ? SELECTION_WIDTH : 0))
+const resolvedActionWidth = computed(() => props.actionWidth ?? (props.canWrite ? 140 : 84))
+const fixedWidth = computed(() => resolvedActionWidth.value + (props.selectable ? SELECTION_WIDTH : 0))
 const laidOut = computed(() => layoutDataColumns(displayed.value, availableWidth.value - 2, fixedWidth.value))
 const totalWidth = computed(() => laidOut.value.reduce((sum, col) => sum + col.width, fixedWidth.value) + 2)
 let resizeObserver: ResizeObserver | undefined
@@ -189,18 +191,24 @@ function editRoute(row: T, index: number): RouteLocationRaw {
         />
         <el-table-column
           label="操作"
-          :width="actionWidth"
+          :width="resolvedActionWidth"
           class-name="table-action"
         >
           <template #default="{ row, $index }">
-            <RowActions
-              v-if="row.id"
-              :view="detailRoute ? detailRoute(row, $index) : undefined"
-              :edit="detailRoute ? editRoute(row, $index) : undefined"
-              :can-edit="canWrite"
-              @view="open(row)"
-              @edit="emit('edit', row)"
-            />
+            <slot
+              name="row-actions"
+              :row="row"
+              :index="$index"
+            >
+              <RowActions
+                v-if="row.id"
+                :view="detailRoute ? detailRoute(row, $index) : undefined"
+                :edit="detailRoute ? editRoute(row, $index) : undefined"
+                :can-edit="canWrite"
+                @view="open(row)"
+                @edit="emit('edit', row)"
+              />
+            </slot>
           </template>
         </el-table-column>
       </el-table>

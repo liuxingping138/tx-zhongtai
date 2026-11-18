@@ -1,0 +1,58 @@
+"""thinktank-service 配置。环境变量前缀 `THINKTANK_`。"""
+
+from __future__ import annotations
+
+from functools import lru_cache
+
+from platform_common.config import BaseServiceSettings, Environment
+from pydantic import model_validator
+from pydantic_settings import SettingsConfigDict
+
+
+class Settings(BaseServiceSettings):
+    model_config = SettingsConfigDict(env_prefix="THINKTANK_", env_file=".env", extra="ignore")
+
+    service_name: str = "thinktank-service"
+    http_port: int = 8007
+    database_url: str
+    cors_allow_origins: list[str] = []
+
+    iam_base_url: str = "http://iam-service:8001"
+    iam_service_secret: str = ""
+    iam_authorize_timeout_seconds: float = 2.0
+
+    audit_ingest_url: str = "http://audit-service:8002"
+    audit_ingest_secret: str = ""
+    codebook_base_url: str = ""
+    codebook_service_secret: str = ""
+    codebook_timeout_seconds: float = 2.0
+    worker_poll_interval_seconds: float = 2.0
+    worker_max_attempts: int = 100
+
+    # 知识文件、标签表上传上限及导出行数上限
+    upload_max_bytes: int = 50 * 1024 * 1024
+    import_max_bytes: int = 20 * 1024 * 1024
+    export_max_rows: int = 100_000
+    storage_dir: str = "./data/thinktank"
+
+    # 原服务器 MinIO 对象存储（配置 endpoint 后优先读写 MinIO，未配置则回退本地 storage_dir）
+    minio_endpoint: str = ""
+    minio_access_key: str = ""
+    minio_secret_key: str = ""
+    minio_bucket: str = "tx-bifang-knowledge-emp-service-prod"
+    minio_region: str = "us-east-1"
+    minio_timeout_seconds: float = 30.0
+
+    @model_validator(mode="after")
+    def _reject_demo_secrets_in_production(self) -> Settings:
+        if self.environment == Environment.PRODUCTION:
+            markers = ("dev-", "example", "changeme", "test-secret", "p6-only")
+            for token in (self.iam_service_secret, self.audit_ingest_secret):
+                if token and any(marker in token.lower() for marker in markers):
+                    raise ValueError("生产环境内部调用密钥看起来是示例值，拒绝启动")
+        return self
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()  # type: ignore[call-arg]  # 必填项从环境变量读取，mypy 只看到构造参数缺失

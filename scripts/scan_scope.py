@@ -57,6 +57,7 @@ def _secret_scan(root: Path | None = None) -> list[str]:
         "docs/openapi/policy.json",
         "docs/openapi/ai.json",
         "docs/openapi/tender.json",
+        "docs/openapi/thinktank.json",
     }
     for rel in listed:
         if rel in skip or rel.endswith(".lock") or "pnpm-lock" in rel:

@@ -26,6 +26,8 @@ export const MODULE_LABELS: Record<string, string> = {
   'ai.models': '模型配置',
   'ai.billing': '费用账单',
   'ai.releases': '模板上线',
+  thinktank: '智库',
+  'thinktank.knowledge': '知识库',
 }
 
 export const ACTION_LABELS: Record<string, string> = {
@@ -62,6 +64,13 @@ export const ACTION_LABELS: Record<string, string> = {
   decide: '决定新增场景',
   resolve: '补码',
   sync: '同步',
+  preview: '预览',
+  favorite: '收藏',
+  unfavorite: '取消收藏',
+  download: '下载',
+  export_undefined: '导出未定义数据',
+  upload_tags: '上传知识标签',
+  access_denied: '越权访问被拒',
 }
 
 export function moduleLabel(code: string | null | undefined): string {
@@ -84,12 +93,13 @@ export const DIRECTORY_ROOTS: Record<string, string[]> = {
   系统管理: ['auth', 'iam', 'system'],
   政策: ['policy'],
   码表管理: ['codebook'],
+  智库: ['thinktank'],
   AI提问: ['ai'],
 }
 export const DIRECTORIES = Object.keys(DIRECTORY_ROOTS)
 
-/** 类型 = 业务线编码 -> 中文。审计服务入库时算好存在 business_line（policy / customer / tender）。 */
-export const LINE_LABELS: Record<string, string> = { policy: '政策', customer: '客户', tender: '招投标' }
+/** 类型 = 业务线编码 -> 中文。审计服务入库时算好存在 business_line（policy / customer / tender / thinktank）。 */
+export const LINE_LABELS: Record<string, string> = { policy: '政策', customer: '客户', tender: '招投标', thinktank: '智库' }
 export const LINES = Object.keys(LINE_LABELS)
 
 function rootOf(code: string | null | undefined): string {

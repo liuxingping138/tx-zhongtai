@@ -196,4 +196,18 @@ describe('退出', () => {
     expect(await store.signOutAll()).toBe(3)
     expect(session.setCsrfToken).toHaveBeenCalledWith('')
   })
+
+  it('顶级无叶模块隐藏，但同一模块下的空子级目录（如智库码表）保留可见', () => {
+    const store = useAuthStore()
+    store.menus = [
+      { id: 'empty-root', title: '空模块', parent_id: null, route_name: null, resource_code: null, icon: null, sort_order: 1 },
+      { id: 'cb', title: '码表管理', parent_id: null, route_name: null, resource_code: null, icon: null, sort_order: 2 },
+      { id: 'cb-dict', title: '数据字典', parent_id: 'cb', route_name: null, resource_code: null, icon: null, sort_order: 1 },
+      { id: 'cb-pt', title: '政策类型码表', parent_id: 'cb-dict', route_name: 'codebook-policy-types', resource_code: 'codebook.policy_types', icon: null, sort_order: 1 },
+      { id: 'cb-tt', title: '智库码表', parent_id: 'cb', route_name: null, resource_code: null, icon: null, sort_order: 2 },
+    ]
+    const ids = store.visibleMenus.map(m => m.id)
+    expect(ids).not.toContain('empty-root')
+    expect(ids).toEqual(['cb', 'cb-dict', 'cb-pt', 'cb-tt'])
+  })
 })

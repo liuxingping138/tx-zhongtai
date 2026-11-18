@@ -6,40 +6,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
+from app.domain.catalog_types import ActionSpec, MenuSpec, ResourceSpec
 from app.domain.enums import GrantLevel, NodeType
-
-
-@dataclass(frozen=True)
-class ResourceSpec:
-    code: str
-    name: str
-    service_code: str
-    node_type: NodeType
-    published: bool
-    sort_order: int
-    parent_code: str | None = None
-
-
-@dataclass(frozen=True)
-class ActionSpec:
-    resource_code: str
-    action_code: str
-    required_level: GrantLevel
-
-
-@dataclass(frozen=True)
-class MenuSpec:
-    code: str
-    title: str
-    sort_order: int
-    route_name: str | None = None
-    resource_code: str | None = None
-    parent_code: str | None = None
-    icon: str | None = None
-    enabled: bool = True
-
+from app.domain.thinktank_catalog import (
+    THINKTANK_ACTION_SPECS,
+    THINKTANK_MENU_SPECS,
+    THINKTANK_RESOURCE_SPECS,
+)
 
 # 已下线的资源：同步清单时连同它的菜单、授权和动作一起清掉，否则角色权限页还会列出已不存在的模块。
 # 只放真正下线的编码；改名用迁移原地改，不能写在这里，否则授权会被删掉。
@@ -83,6 +56,7 @@ RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("codebook.policy_types", "政策类型码表", "codebook-service", NodeType.RESOURCE, True, 51, "codebook"),
     ResourceSpec("codebook.scenarios", "行业场景码表", "codebook-service", NodeType.RESOURCE, True, 52, "codebook"),
     ResourceSpec("codebook.area_codes", "省市区编码表", "codebook-service", NodeType.RESOURCE, True, 53, "codebook"),
+    *THINKTANK_RESOURCE_SPECS,
     ResourceSpec("ai", "AI提问", "ai-service", NodeType.DIRECTORY, True, 60),
     ResourceSpec("ai.prompts", "提示词模板", "ai-service", NodeType.RESOURCE, True, 61, "ai"),
     ResourceSpec("ai.batch_runs", "批量任务", "ai-service", NodeType.RESOURCE, True, 62, "ai"),
@@ -195,6 +169,7 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ActionSpec("ai.category.tender", "update", GrantLevel.FULL),
     ActionSpec("ai.releases", "publish", GrantLevel.FULL),
     ActionSpec("ai.billing", "list", GrantLevel.READ),
+    *THINKTANK_ACTION_SPECS,
 )
 
 MENU_SPECS: tuple[MenuSpec, ...] = (
@@ -268,34 +243,37 @@ MENU_SPECS: tuple[MenuSpec, ...] = (
     MenuSpec("menu.tender.statistics", "招标统计分析", 41, "tender-statistics", "tender.statistics", "menu.tender"),
     MenuSpec("menu.tender.purchaser", "招标基础数据", 42, "tender-purchaser", "tender.purchaser", "menu.tender"),
     MenuSpec("menu.tender.winbid", "中标基础数据", 43, "tender-winbid", "tender.winbid", "menu.tender"),
+    *THINKTANK_MENU_SPECS,
     MenuSpec("menu.codebook", "码表管理", 50, enabled=True),
+    MenuSpec("menu.codebook.dictionary", "数据字典", 51, parent_code="menu.codebook", enabled=True),
     MenuSpec(
         "menu.codebook.policy_types",
         "政策类型码表",
-        51,
+        511,
         "codebook-policy-types",
         "codebook.policy_types",
-        "menu.codebook",
+        "menu.codebook.dictionary",
         enabled=True,
     ),
     MenuSpec(
         "menu.codebook.scenarios",
         "行业场景码表",
-        52,
+        512,
         "codebook-scenarios",
         "codebook.scenarios",
-        "menu.codebook",
+        "menu.codebook.dictionary",
         enabled=True,
     ),
     MenuSpec(
         "menu.codebook.area_codes",
-        "省市区编码表",
-        53,
+        "省市区码表",
+        513,
         "codebook-area-codes",
         "codebook.area_codes",
-        "menu.codebook",
+        "menu.codebook.dictionary",
         enabled=True,
     ),
+    MenuSpec("menu.codebook.thinktank", "智库码表", 52, parent_code="menu.codebook", enabled=True),
     MenuSpec("menu.ai", "AI提问", 60, enabled=True),
     MenuSpec("menu.ai.prompts", "提示词模板", 61, "ai-prompts", "ai.prompts", "menu.ai", enabled=True),
     MenuSpec("menu.ai.batch_runs", "批量任务", 62, "ai-batch-runs", "ai.batch_runs", "menu.ai", enabled=True),

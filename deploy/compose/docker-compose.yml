@@ -19,6 +19,8 @@ volumes:
   redis-data:
   # AI提问的模板 Excel、码表和批量结果
   ai-data:
+  # 智库本地兜底存储目录（接入 MinIO 时可作缓存/临时目录）
+  thinktank-data:
 
 # 应用容器都设内存上限（mem_limit，可用同名环境变量调）：和同机其他业务共用 15G，
 # 不设的话 ai-worker 跑大任务涨上去，宿主机的 OOM killer 可能先杀 Postgres 或别人的服务，而不是出问题的这个容器。
@@ -48,6 +50,9 @@ services:
       AI_DB_NAME: ${AI_DB_NAME:?AI_DB_NAME 未设置}
       AI_DB_USER: ${AI_DB_USER:?AI_DB_USER 未设置}
       AI_DB_PASSWORD: ${AI_DB_PASSWORD:?AI_DB_PASSWORD 未设置}
+      THINKTANK_DB_NAME: ${THINKTANK_DB_NAME:-thinktank_db}
+      THINKTANK_DB_USER: ${THINKTANK_DB_USER:-thinktank_app}
+      THINKTANK_DB_PASSWORD: ${THINKTANK_DB_PASSWORD:-dev-only-change-me-thinktank}
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
@@ -168,8 +173,8 @@ services:
       CODEBOOK_IAM_SERVICE_SECRET: ${CODEBOOK_IAM_SERVICE_SECRET:-dev-only-change-me-internal}
       CODEBOOK_AUDIT_INGEST_URL: http://audit-service:8002
       CODEBOOK_AUDIT_INGEST_SECRET: ${CODEBOOK_AUDIT_INGEST_SECRET:-dev-only-change-me-ingest}
-      # 内部接口的调用方：AI 模板取系统码表、政策 AI 打标取码表。每个密钥都是同一个变量传给调用方，两边不会配岔。
-      CODEBOOK_INTERNAL_CALLER_SECRETS: '{"ai-service":"${CODEBOOK_AI_CALLER_SECRET:-dev-only-change-me-internal}","policy-service":"${CODEBOOK_POLICY_CALLER_SECRET:-dev-only-change-me-internal}"}'
+      # 内部接口的调用方：AI 模板取系统码表、政策 AI 打标取码表、智库取省市区码表。每个密钥都是同一个变量传给调用方，两边不会配岔。
+      CODEBOOK_INTERNAL_CALLER_SECRETS: '{"ai-service":"${CODEBOOK_AI_CALLER_SECRET:-dev-only-change-me-internal}","policy-service":"${CODEBOOK_POLICY_CALLER_SECRET:-dev-only-change-me-internal}","thinktank-service":"${CODEBOOK_THINKTANK_CALLER_SECRET:-dev-only-change-me-internal}"}'
     depends_on:
       postgres:
         condition: service_healthy
@@ -433,6 +438,46 @@ services:
     networks:
       - data
 
+  thinktank-service:
+    build:
+      context: ../..
+      dockerfile: services/thinktank-service/Dockerfile
+    restart: unless-stopped
+    mem_limit: ${THINKTANK_MEM_LIMIT:-1g}
+    environment:
+      THINKTANK_ENVIRONMENT: ${THINKTANK_ENVIRONMENT:-${ENVIRONMENT:-development}}
+      THINKTANK_SERVICE_NAME: thinktank-service
+      THINKTANK_LOG_LEVEL: ${THINKTANK_LOG_LEVEL:-INFO}
+      THINKTANK_DATABASE_URL: postgresql+asyncpg://${THINKTANK_DB_USER:-thinktank_app}:${THINKTANK_DB_PASSWORD:-dev-only-change-me-thinktank}@postgres:5432/${THINKTANK_DB_NAME:-thinktank_db}
+      THINKTANK_CORS_ALLOW_ORIGINS: ${THINKTANK_CORS_ALLOW_ORIGINS:-[]}
+      THINKTANK_IAM_BASE_URL: http://iam-service:8001
+      THINKTANK_IAM_SERVICE_SECRET: ${THINKTANK_IAM_SERVICE_SECRET:-dev-only-change-me-internal}
+      THINKTANK_AUDIT_INGEST_URL: http://audit-service:8002
+      THINKTANK_AUDIT_INGEST_SECRET: ${THINKTANK_AUDIT_INGEST_SECRET:-dev-only-change-me-ingest}
+      THINKTANK_CODEBOOK_BASE_URL: http://codebook-service:8003
+      THINKTANK_CODEBOOK_SERVICE_SECRET: ${CODEBOOK_THINKTANK_CALLER_SECRET:-dev-only-change-me-internal}
+      THINKTANK_UPLOAD_MAX_BYTES: ${THINKTANK_UPLOAD_MAX_BYTES:-52428800}
+      THINKTANK_IMPORT_MAX_BYTES: ${THINKTANK_IMPORT_MAX_BYTES:-20971520}
+      THINKTANK_EXPORT_MAX_ROWS: ${THINKTANK_EXPORT_MAX_ROWS:-100000}
+      THINKTANK_STORAGE_DIR: /data/thinktank
+      THINKTANK_MINIO_ENDPOINT: ${THINKTANK_MINIO_ENDPOINT:-}
+      THINKTANK_MINIO_ACCESS_KEY: ${THINKTANK_MINIO_ACCESS_KEY:-}
+      THINKTANK_MINIO_SECRET_KEY: ${THINKTANK_MINIO_SECRET_KEY:-}
+      THINKTANK_MINIO_BUCKET: ${THINKTANK_MINIO_BUCKET:-tx-bifang-knowledge-emp-service-prod}
+    volumes:
+      - thinktank-data:/data/thinktank
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - data
+      - gateway
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8007/health/live')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   api-fallback:
     image: nginx:1.27-alpine3.20
     restart: unless-stopped
@@ -467,5 +512,6 @@ services:
       - codebook-service
       - policy-service
       - ai-service
+      - thinktank-service
       - frontend
       - api-fallback

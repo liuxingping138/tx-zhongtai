@@ -23,7 +23,7 @@ function flatten(records: RouteRecordRaw[], parent = ''): { name: string; path: 
   return out
 }
 
-const MODULE_PREFIXES = ['/system/', '/codebook/', '/policy/', '/ai/']
+const MODULE_PREFIXES = ['/system/', '/codebook/', '/policy/', '/thinktank/', '/ai/']
 
 const all = flatten(routes)
 // 带路径参数的是详情/子页（如角色授权），不进菜单，不参与映射校验。

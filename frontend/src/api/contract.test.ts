@@ -33,6 +33,7 @@ import * as scenarioCandidates from './scenarioCandidates'
 import * as scheduler from './scheduler'
 import * as system from './system'
 import * as tender from './tender'
+import * as thinktank from './thinktank'
 
 type Spec = { paths: Record<string, Record<string, unknown>> }
 
@@ -64,6 +65,7 @@ const modules = {
   scheduler,
   system,
   tender,
+  thinktank,
 }
 
 const wrappers = Object.entries(modules).flatMap(([module, exports]) =>
@@ -73,8 +75,8 @@ const wrappers = Object.entries(modules).flatMap(([module, exports]) =>
 )
 
 describe('前端接口封装与后端 OpenAPI 一致', () => {
-  it('读到了全部六份 OpenAPI', () => {
-    expect(Object.keys(specs)).toHaveLength(6)
+  it('读到了全部七份 OpenAPI', () => {
+    expect(Object.keys(specs)).toHaveLength(7)
   })
 
   it.each(wrappers)('$label 调用的方法和路径在后端存在', async ({ label, fn }) => {

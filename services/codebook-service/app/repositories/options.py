@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from platform_common.options import OptionColumns, preview_options, search_options
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.fields import ENRICH_CHOICES
@@ -47,3 +48,16 @@ async def area_code_options(session: AsyncSession) -> dict[str, Any]:
 
 async def search(session: AsyncSession, columns: OptionColumns, *, field: str, keyword: str | None) -> list[str]:
     return await search_options(session, columns, field=field, keyword=keyword)
+
+
+async def list_province_names(session: AsyncSession) -> list[str]:
+    """省市区码表中去重后的全部省份名称（供智库等服务作为省枚举权威源）。"""
+
+    stmt = (
+        select(AreaCode.prov_name)
+        .where(AreaCode.prov_name.is_not(None))
+        .where(AreaCode.prov_name != "")
+        .distinct()
+        .order_by(AreaCode.prov_name)
+    )
+    return [name for name in (await session.execute(stmt)).scalars() if name]

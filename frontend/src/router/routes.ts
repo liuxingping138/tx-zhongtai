@@ -208,6 +208,18 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '中标基础数据详情', resource: 'tender.winbid', menuPath: '/tender/winbid' },
       },
       {
+        path: 'thinktank/knowledge',
+        name: 'thinktank-knowledge',
+        component: () => import('@/modules/thinktank/knowledge/KnowledgeList.vue'),
+        meta: { title: '知识库', resource: 'thinktank.knowledge' },
+      },
+      {
+        path: 'thinktank/knowledge/:id',
+        name: 'thinktank-knowledge-preview',
+        component: () => import('@/modules/thinktank/knowledge/KnowledgePreview.vue'),
+        meta: { title: '知识库文件预览', resource: 'thinktank.knowledge', menuPath: '/thinktank/knowledge' },
+      },
+      {
         path: 'ai/prompts',
         name: 'ai-prompts',
         component: () => import('@/modules/ai/prompts/PromptListPage.vue'),

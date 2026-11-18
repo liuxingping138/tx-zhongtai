@@ -18,6 +18,7 @@ export const ROUTE_BY_NAME: Record<string, string> = {
   'tender-statistics': '/tender/statistics',
   'tender-purchaser': '/tender/purchaser',
   'tender-winbid': '/tender/winbid',
+  'thinktank-knowledge': '/thinktank/knowledge',
   'ai-prompts': '/ai/prompts',
   'ai-batch-runs': '/ai/batch-runs',
   'ai-models': '/ai/models',

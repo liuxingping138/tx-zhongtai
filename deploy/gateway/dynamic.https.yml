@@ -66,6 +66,13 @@ http:
       middlewares: ["secure-headers", "compress", "request-limit"]
       priority: 100
       tls: {}
+    thinktank:
+      rule: "PathPrefix(`/api/v1/thinktank`)"
+      entryPoints: ["websecure"]
+      service: thinktank-service
+      middlewares: ["secure-headers", "compress", "thinktank-limit"]
+      priority: 100
+      tls: {}
     # 流式回答：不挂压缩和请求缓冲（buffering 会把整个响应攒满才下发），请求体上限由服务自己限制。
     ai-stream:
       rule: "PathPrefix(`/api/v1/ai/stream`)"
@@ -110,6 +117,9 @@ http:
     request-limit:
       buffering:
         maxRequestBodyBytes: 21233664
+    thinktank-limit:
+      buffering:
+        maxRequestBodyBytes: 52690944
 
   services:
     iam-service:
@@ -136,6 +146,10 @@ http:
       loadBalancer:
         servers:
           - url: "http://ai-service:8005"
+    thinktank-service:
+      loadBalancer:
+        servers:
+          - url: "http://thinktank-service:8007"
     api-fallback:
       loadBalancer:
         servers:

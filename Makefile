@@ -17,7 +17,7 @@ P6_DOCKER := docker
 P6_DOCKER_COMPOSE := docker compose
 endif
 P6_COMPOSE := $(P6_DOCKER_COMPOSE) -p tx-zhongtai-p6 -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.p6.yml --env-file $(P6_ENV)
-PY_PACKAGES := packages/platform-common services/iam-service services/audit-service services/codebook-service services/policy-service services/ai-service services/tender-service
+PY_PACKAGES := packages/platform-common services/iam-service services/audit-service services/codebook-service services/policy-service services/ai-service services/tender-service services/thinktank-service
 JWT_KEYS_DIR := deploy/secrets/jwt
 JWT_P6_DIR := deploy/secrets/jwt-p6
 
@@ -127,6 +127,9 @@ migrate:
 	@$(MAKE) provision-ai-db
 	@echo "== ai-service 迁移 =="
 	$(COMPOSE) exec -T ai-service .venv/bin/alembic upgrade head
+	@$(MAKE) provision-thinktank-db
+	@echo "== thinktank-service 迁移 =="
+	$(COMPOSE) exec -T thinktank-service .venv/bin/alembic upgrade head
 
 migrate-check:
 	@# alembic check 需要连真实库，进不了 make check，单独跑。
@@ -154,8 +157,12 @@ provision-ai-db:
 	@echo "== 补建 AI提问库和账号（已有数据卷不会重跑 init） =="
 	$(COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-ai-db.sh
 
-# iam、policy、codebook、ai 各有一张 Outbox 表，逐个重放。只重放某一个：make outbox-replay OUTBOX_SERVICES=policy-service
-OUTBOX_SERVICES ?= iam-service policy-service codebook-service ai-service
+provision-thinktank-db:
+	@echo "== 补建智库数据库和账号（已有数据卷不会重跑 init） =="
+	$(COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-thinktank-db.sh
+
+# iam、policy、codebook、ai、thinktank 各有一张 Outbox 表，逐个重放。只重放某一个：make outbox-replay OUTBOX_SERVICES=policy-service
+OUTBOX_SERVICES ?= iam-service policy-service codebook-service ai-service thinktank-service
 outbox-replay:
 	@set -e; for s in $(OUTBOX_SERVICES); do \
 		echo "== $$s =="; \
@@ -178,6 +185,9 @@ seed:
 seed-area-codes:
 	$(COMPOSE) exec -T codebook-service .venv/bin/python -m app.cli.seed_area_codes
 
+seed-knowledge:
+	$(COMPOSE) exec -T thinktank-service .venv/bin/python -m app.cli.seed_knowledge
+
 # 爬虫监测：只读采集总表，按「网站名称 + 省份 + 地市」统计。首次必须先回填建立水位。
 crawler-sync:
 	$(COMPOSE) exec -T policy-service .venv/bin/python -m app.cli.sync_crawler
@@ -199,6 +209,7 @@ check:
 	@(cd services/policy-service && uv run ruff format --check . && uv run ruff check . && uv run mypy app && uv run lint-imports) || exit 1
 	@(cd services/ai-service && uv run ruff format --check . && uv run ruff check . && uv run mypy app && uv run lint-imports) || exit 1
 	@(cd services/tender-service && uv run ruff format --check . && uv run ruff check . && uv run mypy app && uv run lint-imports) || exit 1
+	@(cd services/thinktank-service && uv run ruff format --check . && uv run ruff check . && uv run mypy app && uv run lint-imports) || exit 1
 	@echo "== 前端类型检查 =="
 	@(cd frontend && pnpm run type-check)
 	@echo "== 前端构建 =="
@@ -231,6 +242,7 @@ p6-env:
 	@grep -q '^GATEWAY_BIND_ADDR=' $(P6_ENV) || echo 'GATEWAY_BIND_ADDR=127.0.0.1' >> $(P6_ENV)
 	@# 新增服务的库配置：已有的 .p6.env 不会重新从样例生成，缺什么补什么。
 	@grep -q '^AI_DB_NAME=' $(P6_ENV) || printf 'AI_DB_NAME=ai_p6_db\nAI_DB_USER=ai_p6\nAI_DB_PASSWORD=p6-only-change-me-ai\n' >> $(P6_ENV)
+	@grep -q '^THINKTANK_DB_NAME=' $(P6_ENV) || printf 'THINKTANK_DB_NAME=thinktank_p6_db\nTHINKTANK_DB_USER=thinktank_p6\nTHINKTANK_DB_PASSWORD=p6-only-change-me-thinktank\n' >> $(P6_ENV)
 
 jwt-keys-p6:
 	@bash scripts/gen-jwt-keys.sh $(JWT_P6_DIR)
@@ -266,9 +278,12 @@ p6-migrate:
 	$(P6_COMPOSE) exec -T policy-service .venv/bin/alembic upgrade head
 	$(P6_COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-ai-db.sh
 	$(P6_COMPOSE) exec -T ai-service .venv/bin/alembic upgrade head
+	$(P6_COMPOSE) exec -T postgres sh < deploy/compose/scripts/provision-thinktank-db.sh
+	$(P6_COMPOSE) exec -T thinktank-service .venv/bin/alembic upgrade head
 
 p6-seed:
 	$(P6_COMPOSE) exec -T iam-service .venv/bin/python -m app.cli.seed
+	$(P6_COMPOSE) exec -T thinktank-service .venv/bin/python -m app.cli.seed_knowledge
 
 p6-admin:
 	@set -a && . ./$(P6_ENV) && set +a && \
@@ -290,6 +305,7 @@ export-openapi:
 	@(cd services/policy-service && uv run python ../../scripts/export_openapi.py policy)
 	@(cd services/ai-service && uv run python ../../scripts/export_openapi.py ai)
 	@(cd services/tender-service && uv run python ../../scripts/export_openapi.py tender)
+	@(cd services/thinktank-service && uv run python ../../scripts/export_openapi.py thinktank)
 
 scan-scope:
 	python3 scripts/scan_scope.py
@@ -302,9 +318,11 @@ test-integration: p6-up
 	P6_GATEWAY=http://localhost:$$GATEWAY_HTTP_PORT \
 	P6_COMPOSE="$(P6_COMPOSE)" \
 	P6_RUNTIME_FILE=deploy/compose/.p6.runtime \
-	python3 tests/p6/accept.py && \
-	python3 tests/p6/upload_limits.py && \
-	python3 tests/p6/business_patch.py
+	sh -c 'python3 tests/p6/accept.py \
+	  && set -a && . ./deploy/compose/.p6.runtime && set +a \
+	  && (python3 -c "import httpx, openpyxl" >/dev/null 2>&1 && python3 tests/p6/upload_limits.py \
+	      || $(P6_DOCKER) run --rm --network host -e P6_GATEWAY -e IAM_DB_NAME -e AUDIT_DB_NAME -e POLICY_DB_NAME -e CODEBOOK_DB_NAME -e ADMIN_USERNAME -e ADMIN_PASSWORD -v "$$(pwd)/tests/p6:/p6:ro" -w /p6 tx-zhongtai-p6-codebook-service /srv/services/codebook-service/.venv/bin/python /p6/upload_limits.py) \
+	  && python3 tests/p6/business_patch.py'
 	@P6_COMPOSE="$(P6_COMPOSE)" DOCKER="$(P6_DOCKER)" P6_SERVER="$(P6_SERVER)" bash scripts/scheduler-integration.sh
 	@P6_COMPOSE="$(P6_COMPOSE)" DOCKER="$(P6_DOCKER)" P6_SERVER="$(P6_SERVER)" bash scripts/ai-integration.sh
 

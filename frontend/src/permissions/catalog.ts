@@ -23,6 +23,7 @@ const WRITE_ACTIONS: [code: string, text: string][] = [
   ['stop', '停止任务'],
   ['publish', '上线、下线模板'],
   ['import', '导入 Excel'],
+  ['upload_tags', '上传知识标签'],
   ['sync', '立即同步'],
   ['decide', '采纳、合并、驳回新增场景'],
   ['reset_password', '重置密码'],
@@ -38,6 +39,7 @@ const WRITE_LABEL_BY_RESOURCE: Record<string, Record<string, string>> = {
   'system.users': { delete: '删除账号', update: '编辑、解锁被锁账号' },
   'policy.ai_tagging': { update: '改打标任务设置和每日费用上限、启用或改执行时间', execute: '立即执行打标' },
   'policy.scenario_candidates': { decide: '采纳、合并、驳回新增场景（采纳、合并还要行业场景码表可管理）' },
+  'thinktank.knowledge': { create: '上传文件' },
 }
 
 /** 只能授予超级管理员角色的资源：用它能给别人（包括自己）加权限，后端也拒绝授给其他角色。 */

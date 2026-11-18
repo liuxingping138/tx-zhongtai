@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.security import SecurityClass, classified
-from app.application import code_tables, scenario_enrich, scenario_sync
+from app.application import area_codes, code_tables, scenario_enrich, scenario_sync
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
 
@@ -35,6 +35,19 @@ async def code_table(
 
     verify_internal_caller(request, settings.internal_caller_secrets)
     return success_json(await code_tables.render(session, name))
+
+
+@router.get("/provinces")
+@classified(SecurityClass.INTERNAL)
+async def list_provinces(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    settings: Settings = Depends(get_settings),
+) -> JSONResponse:
+    """供智库等服务读取省市区码表里的权威省份列表。"""
+
+    verify_internal_caller(request, settings.internal_caller_secrets)
+    return success_json({"items": await area_codes.list_provinces(session)})
 
 
 class ScenarioItems(BaseModel):

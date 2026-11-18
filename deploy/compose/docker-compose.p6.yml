@@ -16,6 +16,8 @@ volumes:
     name: tx-zhongtai-p6-redis-data
   ai-data:
     name: tx-zhongtai-p6-ai-data
+  thinktank-data:
+    name: tx-zhongtai-p6-thinktank-data
 
 services:
   iam-service:
@@ -25,26 +27,26 @@ services:
       IAM_ENVIRONMENT: test
       IAM_REFRESH_REUSE_GRACE_SECONDS: "0"
       IAM_CSRF_ALLOWED_ORIGINS: '["http://localhost:8090","http://127.0.0.1:8090"]'
-      IAM_INTERNAL_CALLER_SECRETS: '{"audit-service":"p6-only-change-me-internal","codebook-service":"p6-only-change-me-internal","policy-service":"p6-only-change-me-internal","ai-service":"p6-only-change-me-internal"}'
+      IAM_INTERNAL_CALLER_SECRETS: '{"audit-service":"p6-only-change-me-internal","codebook-service":"p6-only-change-me-internal","policy-service":"p6-only-change-me-internal","ai-service":"p6-only-change-me-internal","thinktank-service":"p6-only-change-me-internal"}'
       IAM_AUDIT_INGEST_SECRET: p6-only-change-me-ingest
   iam-worker:
     volumes:
       - ../secrets/jwt-p6:/secrets/jwt
     environment:
       IAM_ENVIRONMENT: test
-      IAM_INTERNAL_CALLER_SECRETS: '{"audit-service":"p6-only-change-me-internal","codebook-service":"p6-only-change-me-internal","policy-service":"p6-only-change-me-internal","ai-service":"p6-only-change-me-internal"}'
+      IAM_INTERNAL_CALLER_SECRETS: '{"audit-service":"p6-only-change-me-internal","codebook-service":"p6-only-change-me-internal","policy-service":"p6-only-change-me-internal","ai-service":"p6-only-change-me-internal","thinktank-service":"p6-only-change-me-internal"}'
       IAM_AUDIT_INGEST_SECRET: p6-only-change-me-ingest
   audit-service:
     environment:
       AUDIT_ENVIRONMENT: test
-      AUDIT_INTERNAL_CALLER_SECRETS: '{"iam-service":"p6-only-change-me-ingest","codebook-service":"p6-only-change-me-ingest","policy-service":"p6-only-change-me-ingest","ai-service":"p6-only-change-me-ingest"}'
+      AUDIT_INTERNAL_CALLER_SECRETS: '{"iam-service":"p6-only-change-me-ingest","codebook-service":"p6-only-change-me-ingest","policy-service":"p6-only-change-me-ingest","ai-service":"p6-only-change-me-ingest","thinktank-service":"p6-only-change-me-ingest"}'
       AUDIT_IAM_SERVICE_SECRET: p6-only-change-me-internal
   # 和 audit-service 同一套密钥：原来只覆盖了环境名，这一项为空串时配置解析失败，audit-worker 在 P6 里一直起不来，
   # 180 天清理在验收里从没真跑过。
   audit-worker:
     environment:
       AUDIT_ENVIRONMENT: test
-      AUDIT_INTERNAL_CALLER_SECRETS: '{"iam-service":"p6-only-change-me-ingest","codebook-service":"p6-only-change-me-ingest","policy-service":"p6-only-change-me-ingest","ai-service":"p6-only-change-me-ingest"}'
+      AUDIT_INTERNAL_CALLER_SECRETS: '{"iam-service":"p6-only-change-me-ingest","codebook-service":"p6-only-change-me-ingest","policy-service":"p6-only-change-me-ingest","ai-service":"p6-only-change-me-ingest","thinktank-service":"p6-only-change-me-ingest"}'
       AUDIT_IAM_SERVICE_SECRET: p6-only-change-me-internal
   codebook-service:
     environment:
@@ -89,6 +91,13 @@ services:
     depends_on:
       llm-mock:
         condition: service_started
+  thinktank-service:
+    environment:
+      THINKTANK_ENVIRONMENT: test
+      THINKTANK_IAM_SERVICE_SECRET: p6-only-change-me-internal
+      THINKTANK_AUDIT_INGEST_SECRET: p6-only-change-me-ingest
+      THINKTANK_CODEBOOK_SERVICE_SECRET: p6-only-change-me-internal
+      THINKTANK_MINIO_ENDPOINT: ""
   llm-mock:
     build:
       context: ../..

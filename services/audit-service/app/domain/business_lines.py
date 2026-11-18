@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-BUSINESS_LINES = ("policy", "customer", "tender")
+BUSINESS_LINES = ("policy", "customer", "tender", "thinktank")
 
 
 def business_line(module_code: str | None, changes: dict[str, Any] | None) -> str | None:
