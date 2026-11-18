@@ -112,3 +112,4 @@ class AuthorizeRequest(StrictModel):
     access_token: str = Field(min_length=1)
     resource: str = Field(min_length=1, max_length=128)
     action: str = Field(min_length=1, max_length=64)
+    scope_prefixes: list[str] = Field(default_factory=list, max_length=16)

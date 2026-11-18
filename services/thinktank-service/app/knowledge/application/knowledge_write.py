@@ -172,11 +172,29 @@ async def upload_knowledge_file(
     _raise_if_invalid({**cleaned, "file_name": clean_name})
     file_type = cleaned["file_type"]
     industry_type = cleaned.get("industry_type", "")
-    access.require_edit(file_type, industry_type)
+    try:
+        access.require_edit(file_type, industry_type)
+    except PermissionDeniedError as exc:
+        await enqueue_event(
+            session,
+            event_type="thinktank.knowledge.access_denied",
+            actor=actor,
+            target_id=clean_name,
+            changes={
+                "file_name": clean_name,
+                "file_type": file_type or "未定义",
+                "industry_type": industry_type or "无",
+                "attempted_action": "upload",
+                "reason": str(exc),
+            },
+            extra={"outcome": "denied"},
+        )
+        await session.commit()
+        raise
 
     now = utcnow()
     file_id = uuid.uuid4()
-    rel_path = storage.legacy_object_key(clean_name, len(content), ext.lower())
+    rel_path = storage.new_object_key(file_id, ext.lower())
     await storage.save_object(
         get_settings(),
         rel_path,
@@ -256,5 +274,6 @@ async def delete_knowledge_file(
     )
     await session.delete(row)
     await session.flush()
-    await storage.delete_object(get_settings(), rel_path)
+    if storage.is_managed_object_key(rel_path, row.id):
+        await storage.delete_object(get_settings(), rel_path)
     return {"deleted": True}

@@ -14,6 +14,7 @@ import { useAuthStore } from '@/stores/auth'
 import PermissionTable from './PermissionTable.vue'
 import RoleFormDialog, { type RoleFormMode } from './RoleFormDialog.vue'
 import RoleMembersPanel from './RoleMembersPanel.vue'
+import ThinktankDataScopePanel from './ThinktankDataScopePanel.vue'
 
 /**
  * 角色详情：嵌在「角色与权限」右侧。上面是角色信息，下面分「权限设置」「成员」两个页签。
@@ -29,14 +30,26 @@ const canSeeGrants = computed(() => auth.canRead('system.permissions'))
 const canGrant = computed(() => auth.canFull('system.permissions'))
 
 const roleId = computed(() => String(route.params.roleId ?? ''))
-const tab = ref<'grants' | 'members'>(route.query.tab === 'members' ? 'members' : 'grants')
+const tab = ref<'grants' | 'data-scopes' | 'members'>(
+  route.query.tab === 'members' ? 'members' : route.query.tab === 'data-scopes' ? 'data-scopes' : 'grants',
+)
 const justCreated = ref(typeof route.query.created === 'string' ? route.query.created : '')
 
 const isSuperRole = computed(() => role.value?.code === SUPERADMIN_ROLE_CODE && role.value.is_builtin)
 const readonly = computed(() => !canGrant.value || isSuperRole.value || loading.value || saving.value)
+const grantNotice = computed<{ type: 'info' | 'warning'; title: string } | null>(() => {
+  if (isSuperRole.value) {
+    return { type: 'info', title: '超级管理员拥有全部模块的全部权限，也是唯一能分配角色和权限的角色。这里只能查看，防止把所有人锁在门外。' }
+  }
+  if (!canGrant.value) return { type: 'info', title: '只读查看：只有超级管理员可以修改角色权限。' }
+  if (role.value && role.value.status !== 'active') {
+    return { type: 'warning', title: '角色已停用：下面的权限暂时对成员不生效，启用后恢复。' }
+  }
+  return null
+})
 const {
-  role, groups, capabilities, selected, original, loading, saving, loadError, changes, openedCount,
-  load, refreshRole, confirmDiscard, reset: onReset, save: onSave,
+  role, groups, capabilities, thinktankLibs, selected, original, loading, saving, loadError, changes, openedCount,
+  updateSelected, load, refreshRole, confirmDiscard, reset: onReset, save: onSave,
 } = useRoleGrants({
   roleId: () => roleId.value,
   canSeeGrants: () => canSeeGrants.value,
@@ -98,13 +111,15 @@ function onMembersChanged(count: number) {
 }
 
 watch(tab, (value) => {
-  void router.replace({ query: { ...route.query, tab: value === 'members' ? 'members' : undefined } })
+  void router.replace({
+    query: { ...route.query, tab: value === 'grants' ? undefined : value },
+  })
 })
 
 watch(roleId, (value, previous) => {
   if (value && value !== previous) {
     justCreated.value = typeof route.query.created === 'string' ? route.query.created : ''
-    tab.value = route.query.tab === 'members' ? 'members' : 'grants'
+    tab.value = route.query.tab === 'members' ? 'members' : route.query.tab === 'data-scopes' ? 'data-scopes' : 'grants'
     void load()
   }
 })
@@ -178,18 +193,9 @@ onMounted(() => {
             {{ role.description || (role.is_builtin ? '内置角色：拥有全部模块的全部权限，也是唯一能给人分配角色的角色。' : '还没有职责说明。补一句说明，给同事分配角色时更容易选对。') }}
           </p>
           <dl class="role-head__stats">
-            <div>
-              <dt>成员</dt>
-              <dd>{{ role.member_count ?? 0 }} 人</dd>
-            </div>
-            <div>
-              <dt>已开通模块</dt>
-              <dd>{{ openedCount }} 个</dd>
-            </div>
-            <div>
-              <dt>角色编码</dt>
-              <dd>{{ role.code }}</dd>
-            </div>
+            <div><dt>成员</dt><dd>{{ role.member_count ?? 0 }} 人</dd></div>
+            <div><dt>已开通模块</dt><dd>{{ openedCount }} 个</dd></div>
+            <div><dt>角色编码</dt><dd>{{ role.code }}</dd></div>
           </dl>
         </div>
         <!-- 内置角色不能改名，也不能复制：复制超级管理员等于造出一个几乎全权限的普通角色。 -->
@@ -249,7 +255,7 @@ onMounted(() => {
         <el-tabs v-model="tab">
           <el-tab-pane
             name="grants"
-            label="权限设置"
+            label="菜单权限"
           >
             <el-alert
               v-if="!canSeeGrants"
@@ -260,65 +266,48 @@ onMounted(() => {
             />
             <template v-else>
               <el-alert
-                v-if="isSuperRole"
-                type="info"
+                v-if="grantNotice"
+                :type="grantNotice.type"
                 :closable="false"
                 show-icon
                 class="role-detail__notice"
-                title="超级管理员拥有全部模块的全部权限，也是唯一能分配角色和权限的角色。这里只能查看，防止把所有人锁在门外。"
-              />
-              <el-alert
-                v-else-if="!canGrant"
-                type="info"
-                :closable="false"
-                show-icon
-                class="role-detail__notice"
-                title="只读查看：只有超级管理员可以修改角色权限。"
-              />
-              <el-alert
-                v-else-if="role.status !== 'active'"
-                type="warning"
-                :closable="false"
-                show-icon
-                class="role-detail__notice"
-                title="角色已停用：下面的权限暂时对成员不生效，启用后恢复。"
+                :title="grantNotice.title"
               />
               <p
                 v-if="!readonly || saving"
                 class="role-body__guide"
               >
-                按菜单勾选。分组行的勾选框一次开通整列；最下面的「特殊能力」不是菜单。
+                按菜单勾选。分组行的勾选框一次开通整列；开通「智库」下子库菜单后，可在右侧「智库数据权限」页签按文件类型与行业精细限制范围。
               </p>
               <PermissionTable
-                v-model="selected"
+                :model-value="selected"
                 :groups="groups"
                 :original="original"
                 :disabled="readonly"
                 :role-code="role.code"
                 :capabilities="capabilities"
+                @update:model-value="updateSelected"
               />
-              <!-- 钉在权限卡片底部：滚动时一直看得到，但不盖住表格内容。 -->
-              <div
-                v-if="changes.length"
-                class="savebar"
-                role="status"
-              >
-                <span class="savebar__text">有 <strong>{{ changes.length }}</strong> 项修改还没保存，保存后成员下次操作即生效</span>
-                <el-button
-                  :disabled="saving"
-                  @click="onReset"
-                >
-                  放弃修改
-                </el-button>
-                <el-button
-                  type="primary"
-                  :loading="saving"
-                  @click="onSave"
-                >
-                  保存权限
-                </el-button>
-              </div>
             </template>
+          </el-tab-pane>
+          <el-tab-pane
+            v-if="canSeeGrants"
+            name="data-scopes"
+            label="智库数据权限"
+          >
+            <p
+              v-if="!readonly || saving"
+              class="role-body__guide"
+            >
+              针对「智库」下各子库设置数据行级范围（默认跟随子库菜单档位放行全部范围，可切换为「指定范围」按文件类型、行业精细勾选）。
+            </p>
+            <ThinktankDataScopePanel
+              :libraries="thinktankLibs"
+              :model-value="selected"
+              :original="original"
+              :disabled="readonly"
+              @update:model-value="updateSelected"
+            />
           </el-tab-pane>
           <el-tab-pane name="members">
             <template #label>
@@ -332,6 +321,27 @@ onMounted(() => {
             />
           </el-tab-pane>
         </el-tabs>
+        <!-- 钉在权限卡片底部：在「菜单权限」或「智库数据权限」页签下滚动时一直看得到。 -->
+        <div
+          v-if="canSeeGrants && tab !== 'members' && changes.length"
+          class="savebar"
+          role="status"
+        >
+          <span class="savebar__text">有 <strong>{{ changes.length }}</strong> 项修改还没保存，保存后成员下次操作即生效</span>
+          <el-button
+            :disabled="saving"
+            @click="onReset"
+          >
+            放弃修改
+          </el-button>
+          <el-button
+            type="primary"
+            :loading="saving"
+            @click="onSave"
+          >
+            保存权限
+          </el-button>
+        </div>
       </section>
     </template>
 

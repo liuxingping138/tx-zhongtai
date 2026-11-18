@@ -42,15 +42,14 @@ const form = reactive({
   remark: '',
 })
 
-const fileTypeChoices = computed(() => {
-  if (!props.editableFileTypes.length) return [...EDITABLE_FILE_TYPE_OPTIONS]
-  return EDITABLE_FILE_TYPE_OPTIONS.filter(t => props.editableFileTypes.includes(t))
-})
+const fileTypeChoices = computed(() =>
+  EDITABLE_FILE_TYPE_OPTIONS.filter(t => props.editableFileTypes.includes(t)),
+)
+const canLeaveUndefined = computed(() => props.editableFileTypes.includes('未定义'))
 
-const industryChoices = computed(() => {
-  if (!props.editableIndustries.length) return [...INDUSTRY_OPTIONS]
-  return INDUSTRY_OPTIONS.filter(i => props.editableIndustries.includes(i))
-})
+const industryChoices = computed(() =>
+  INDUSTRY_OPTIONS.filter(i => props.editableIndustries.includes(i)),
+)
 
 watch(() => props.modelValue, open => {
   if (!open) return
@@ -78,6 +77,10 @@ function onPickFile(uploadFile: UploadFile) {
 async function onSubmit() {
   if (!selectedFile.value) {
     ElMessage.warning('请先选择需要上传的文件')
+    return
+  }
+  if (!form.file_type && !canLeaveUndefined.value) {
+    ElMessage.warning('当前账号无「未定义」文件类型管理权限，请选择具体文件类型')
     return
   }
   uploading.value = true
@@ -139,8 +142,8 @@ async function onSubmit() {
           <el-form-item label="文件类型">
             <el-select
               v-model="form.file_type"
-              clearable
-              placeholder="留空则归入未定义"
+              :clearable="canLeaveUndefined"
+              :placeholder="canLeaveUndefined ? '留空则归入未定义' : '请选择文件类型'"
               class="w-full"
             >
               <el-option

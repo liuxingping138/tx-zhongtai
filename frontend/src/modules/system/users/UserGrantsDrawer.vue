@@ -8,8 +8,15 @@ import type { ResourceNode } from '@/api/types'
 import { collectGrants } from '@/composables/useRoleGrants'
 import { LEVEL_TEXT, moduleGroups, moduleNames } from '@/permissions/catalog'
 import { grantDiff, grantsFromTree, type GrantLevel } from '@/permissions/levels'
+import {
+  isThinktankScopeCode,
+  syncThinktankScopesWithMenu,
+  thinktankLibraries,
+  thinktankScopeNames,
+} from '@/permissions/thinktankScopes'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import PermissionTable from '../roles/PermissionTable.vue'
+import ThinktankDataScopePanel from '../roles/ThinktankDataScopePanel.vue'
 
 /**
  * 角色之外单独给一个人授权：和角色同一张「查看 / 导出 / 管理」勾选表。
@@ -28,13 +35,25 @@ const version = ref(0)
 const loading = ref(false)
 const saving = ref(false)
 const loadError = ref('')
+const activeTab = ref<'menu' | 'data-scopes'>('menu')
 
 const groups = computed(() => moduleGroups(tree.value))
-const names = computed(() => moduleNames(groups.value))
+const thinktankLibs = computed(() => thinktankLibraries(tree.value))
+const names = computed(() => ({
+  ...moduleNames(groups.value),
+  ...thinktankScopeNames(thinktankLibs.value),
+}))
 const changes = computed(() =>
   grantDiff(grantsFromTree(tree.value, original.value), grantsFromTree(tree.value, selected.value)),
 )
-const opened = computed(() => Object.values(selected.value).filter(level => level !== 'NONE').length)
+const opened = computed(
+  () =>
+    Object.entries(selected.value).filter(([code, level]) => level !== 'NONE' && !isThinktankScopeCode(code)).length,
+)
+
+function updateSelected(next: Grants): void {
+  selected.value = syncThinktankScopesWithMenu(thinktankLibs.value, selected.value, next)
+}
 
 let loadSeq = 0
 let closing = false
@@ -142,13 +161,35 @@ async function save(): Promise<void> {
       class="grants__table"
       :class="{ 'is-refreshing': loading }"
     >
-      <PermissionTable
+      <el-tabs
         v-if="tree.length"
-        v-model="selected"
-        :groups="groups"
-        :original="original"
-        :disabled="saving"
-      />
+        v-model="activeTab"
+      >
+        <el-tab-pane
+          name="menu"
+          label="菜单权限"
+        >
+          <PermissionTable
+            :model-value="selected"
+            :groups="groups"
+            :original="original"
+            :disabled="saving"
+            @update:model-value="updateSelected"
+          />
+        </el-tab-pane>
+        <el-tab-pane
+          name="data-scopes"
+          label="智库数据权限"
+        >
+          <ThinktankDataScopePanel
+            :libraries="thinktankLibs"
+            :model-value="selected"
+            :original="original"
+            :disabled="saving"
+            @update:model-value="updateSelected"
+          />
+        </el-tab-pane>
+      </el-tabs>
     </div>
     <template #footer>
       <span class="grants__count">单独开通 {{ opened }} 个模块</span>

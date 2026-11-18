@@ -117,6 +117,8 @@ async def authorize_access_context(
     user: User,
     resource_code: str,
     action_code: str,
+    *,
+    scope_prefixes: list[str] | None = None,
 ) -> dict[str, object]:
     if user.status != UserStatus.ACTIVE:
         raise UnauthenticatedError("账号不可用")
@@ -132,7 +134,7 @@ async def authorize_access_context(
     ):
         allowed = False
         reason = "仅超级管理员可清空数据"
-    return {
+    payload: dict[str, object] = {
         "allowed": allowed,
         "reason": reason,
         "level": level,
@@ -145,6 +147,9 @@ async def authorize_access_context(
             "status": user.status,
         },
     }
+    if allowed and scope_prefixes:
+        payload["scopes"] = await resource_repo.list_effective_levels_by_prefixes(session, user.id, scope_prefixes)
+    return payload
 
 
 async def visible_permissions(session: AsyncSession, user_id: uuid.UUID) -> dict[str, object]:

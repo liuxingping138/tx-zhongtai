@@ -126,9 +126,10 @@ async def search_filter_options(
     q: str | None = Query(default=None, max_length=200),
     session: AsyncSession = Depends(get_db_session, scope="function"),
     _: Actor = Depends(require_thinktank_permission(RESOURCE, "list")),
+    access: KnowledgeAccess = Depends(get_knowledge_access),
 ) -> JSONResponse:
     try:
-        values = await service.search_options(session, field=field, keyword=q)
+        values = await service.search_options(session, field=field, keyword=q, access=access)
     except KeyError as exc:
         raise ApiError("未知的筛选字段", code=ErrorCode.VALIDATION_ERROR, http_status=422) from exc
     return success_json({"items": values})

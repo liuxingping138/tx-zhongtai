@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Edit } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 
 import { errorMessage } from '@/api/errors'
 import { updateKnowledge, type KnowledgeItem } from '@/api/thinktank'
@@ -19,7 +19,21 @@ import {
 const props = defineProps<{
   item: KnowledgeItem
   provinces: string[]
+  editableFileTypes?: string[]
+  editableIndustries?: string[]
 }>()
+
+const fileTypeChoices = computed(() =>
+  props.editableFileTypes
+    ? EDITABLE_FILE_TYPE_OPTIONS.filter(t => props.editableFileTypes?.includes(t))
+    : [...EDITABLE_FILE_TYPE_OPTIONS],
+)
+const canClearFileType = computed(() => !props.editableFileTypes || props.editableFileTypes.includes('未定义'))
+const industryChoices = computed(() =>
+  props.editableIndustries
+    ? INDUSTRY_OPTIONS.filter(i => props.editableIndustries?.includes(i))
+    : [...INDUSTRY_OPTIONS],
+)
 
 const emit = defineEmits<{ updated: [item: KnowledgeItem] }>()
 
@@ -145,11 +159,11 @@ async function onSave() {
         <el-select
           v-if="editing"
           v-model="form.file_type"
-          clearable
+          :clearable="canClearFileType"
           class="w-full"
         >
           <el-option
-            v-for="t in EDITABLE_FILE_TYPE_OPTIONS"
+            v-for="t in fileTypeChoices"
             :key="t"
             :label="t"
             :value="t"
@@ -189,7 +203,7 @@ async function onSave() {
           class="w-full"
         >
           <el-option
-            v-for="t in INDUSTRY_OPTIONS"
+            v-for="t in industryChoices"
             :key="t"
             :label="t"
             :value="t"

@@ -125,14 +125,20 @@ async def member_counts(session: AsyncSession, role_ids: list[uuid.UUID]) -> dic
 
 
 async def grant_level_counts(session: AsyncSession, role_ids: list[uuid.UUID]) -> dict[uuid.UUID, dict[str, int]]:
-    """每个角色在已发布模块上的只读 / 可管理数量。未发布资源不计入，免得摘要与页面对不上。"""
+    """每个角色在已发布模块上的只读 / 可管理数量。未发布资源与智库数据范围子项不计入，免得摘要与菜单表对不上。"""
 
     if not role_ids:
         return {}
     result = await session.execute(
         select(RoleGrant.role_id, RoleGrant.level, func.count())
         .join(Resource, Resource.id == RoleGrant.resource_id)
-        .where(RoleGrant.role_id.in_(role_ids), Resource.published.is_(True), Resource.node_type == NodeType.RESOURCE)
+        .where(
+            RoleGrant.role_id.in_(role_ids),
+            Resource.published.is_(True),
+            Resource.node_type == NodeType.RESOURCE,
+            ~Resource.code.startswith("thinktank.file_type."),
+            ~Resource.code.startswith("thinktank.industry_type."),
+        )
         .group_by(RoleGrant.role_id, RoleGrant.level)
     )
     out: dict[uuid.UUID, dict[str, int]] = {}

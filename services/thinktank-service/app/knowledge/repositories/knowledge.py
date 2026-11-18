@@ -296,7 +296,7 @@ async def list_options(
     access: KnowledgeAccess,
     provinces: list[str] | None = None,
 ) -> dict[str, Any]:
-    raw = await preview_options(session, OPTION_COLUMNS)
+    raw = await preview_options(session, OPTION_COLUMNS, conditions=_scope_conditions(access))
     allowed_ft = [
         label for label in (*FILE_TYPES, "未定义") if ("" if label == "未定义" else label) in access.readable_file_types
     ]
@@ -318,9 +318,18 @@ async def search_option_values(
     field: str,
     keyword: str | None,
     provinces: list[str] | None = None,
+    access: KnowledgeAccess | None = None,
 ) -> list[str]:
     if field == "prov_name":
         q = (keyword or "").strip()
         source = provinces if provinces is not None else list(PROVINCES)
         return [p for p in source if not q or q in p][:SEARCH_LIMIT]
-    return await search_options(session, OPTION_COLUMNS, field=field, keyword=keyword, limit=SEARCH_LIMIT)
+    scope_conds = _scope_conditions(access) if access is not None else ()
+    return await search_options(
+        session,
+        OPTION_COLUMNS,
+        field=field,
+        keyword=keyword,
+        limit=SEARCH_LIMIT,
+        conditions=scope_conds,
+    )

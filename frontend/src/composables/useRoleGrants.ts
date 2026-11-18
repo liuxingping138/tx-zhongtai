@@ -6,6 +6,12 @@ import { getRole, listResourceTree, listRoleGrants, replaceRoleGrants } from '@/
 import type { ResourceNode, RoleItem } from '@/api/types'
 import { LEVEL_TEXT, capabilityModules, moduleGroups, moduleNames } from '@/permissions/catalog'
 import { grantDiff, grantsFromTree, type GrantLevel } from '@/permissions/levels'
+import {
+  isThinktankScopeCode,
+  syncThinktankScopesWithMenu,
+  thinktankLibraries,
+  thinktankScopeNames,
+} from '@/permissions/thinktankScopes'
 
 type Grants = Record<string, GrantLevel>
 
@@ -45,14 +51,23 @@ export function useRoleGrants(options: RoleGrantsOptions) {
 
   const groups = computed(() => moduleGroups(tree.value))
   const capabilities = computed(() => capabilityModules(tree.value))
+  const thinktankLibs = computed(() => thinktankLibraries(tree.value))
   const names = computed(() => ({
     ...moduleNames(groups.value),
+    ...thinktankScopeNames(thinktankLibs.value),
     ...Object.fromEntries(capabilities.value.map(module => [module.code, `分配角色 / ${module.name}`])),
   }))
   const changes = computed(() =>
     grantDiff(grantsFromTree(tree.value, original.value), grantsFromTree(tree.value, selected.value)),
   )
-  const openedCount = computed(() => Object.values(selected.value).filter(level => level !== 'NONE').length)
+  const openedCount = computed(
+    () =>
+      Object.entries(selected.value).filter(([code, level]) => level !== 'NONE' && !isThinktankScopeCode(code)).length,
+  )
+
+  function updateSelected(next: Grants): void {
+    selected.value = syncThinktankScopesWithMenu(thinktankLibs.value, selected.value, next)
+  }
 
   // 快速切换角色时先发的请求可能后回来：只认最后一次，不然左边高亮的是 B，右边显示、保存的却是 A。
   let sequence = 0
@@ -156,7 +171,7 @@ export function useRoleGrants(options: RoleGrantsOptions) {
 
   return {
     role, tree, selected, original, loading, saving, loadError,
-    groups, capabilities, names, changes, openedCount,
-    load, refreshRole, confirmDiscard, reset, save,
+    groups, capabilities, thinktankLibs, names, changes, openedCount,
+    updateSelected, load, refreshRole, confirmDiscard, reset, save,
   }
 }

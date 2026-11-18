@@ -6,12 +6,16 @@ import asyncio
 import base64
 import hashlib
 import hmac
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 from urllib.parse import quote, urlparse
 
 import httpx
+from platform_common.logging_setup import get_logger
+
+logger = get_logger(__name__)
 
 ALLOWED_SUFFIXES: frozenset[str] = frozenset({"PDF", "XLS", "XLSX", "DOC", "DOCX", "PPT", "PPTX", "TXT", "CSV", "MD"})
 
@@ -73,6 +77,20 @@ def legacy_object_key(filename: str, size_bytes: int, ext_lower: str) -> str:
     digest = hashlib.md5(f"{filename}/{size_bytes}/{ext_lower}".encode(), usedforsecurity=False).digest()
     file_id = base64.b64encode(digest).decode("ascii")
     return f"knowledgeBase/{file_id}.{ext_lower}"
+
+
+def new_object_key(file_id: uuid.UUID, ext_lower: str) -> str:
+    """新上传文件使用记录 UUID 作为对象键前缀，避免同名同大小文件键冲突与覆盖原系统文件。"""
+
+    return f"knowledgeBase/{file_id.hex}.{ext_lower}"
+
+
+def is_managed_object_key(rel_path: str, file_id: uuid.UUID) -> bool:
+    """仅当对象键由本系统按记录 UUID 生成时才允许物理删除，保护迁移来的原服务器 MinIO 文件。"""
+
+    if not rel_path:
+        return False
+    return rel_path.startswith(f"knowledgeBase/{file_id.hex}.") or rel_path.startswith(f"knowledgeBase/{file_id}.")
 
 
 def _resolve_safe_path(base_dir: str, rel_path: str) -> Path:
@@ -206,12 +224,15 @@ async def read_object(settings: StorageSettings, rel_path: str) -> bytes | None:
     _resolve_safe_path(settings.storage_dir, rel_path)
     if _use_minio(settings):
         url, headers = _sign_s3_headers(settings, "GET", rel_path)
-        async with httpx.AsyncClient(timeout=settings.minio_timeout_seconds) as client:
-            resp = await client.get(url, headers=headers)
-            if resp.status_code == _HTTP_NOT_FOUND:
-                return None
-            resp.raise_for_status()
-            return resp.content
+        try:
+            async with httpx.AsyncClient(timeout=settings.minio_timeout_seconds) as client:
+                resp = await client.get(url, headers=headers)
+                if resp.status_code == _HTTP_NOT_FOUND:
+                    return None
+                resp.raise_for_status()
+                return resp.content
+        except httpx.HTTPError as exc:
+            logger.warning("minio_read_fallback", path=rel_path, error=str(exc))
     return await read_bytes(settings.storage_dir, rel_path)
 
 

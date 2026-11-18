@@ -14,10 +14,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
@@ -33,14 +33,25 @@ OptionColumn = InstrumentedAttribute[str] | InstrumentedAttribute[str | None]
 OptionColumns = Mapping[str, OptionColumn]
 
 
-async def _distinct(session: AsyncSession, column: OptionColumn, limit: int) -> list[str]:
-    result = await session.execute(
-        select(column).where(column.is_not(None)).where(column != "").distinct().order_by(column).limit(limit)
-    )
+async def _distinct(
+    session: AsyncSession,
+    column: OptionColumn,
+    limit: int,
+    conditions: Sequence[ColumnElement[bool]] = (),
+) -> list[str]:
+    stmt = select(column).where(column.is_not(None)).where(column != "")
+    if conditions:
+        stmt = stmt.where(*conditions)
+    result = await session.execute(stmt.distinct().order_by(column).limit(limit))
     return [value for value in result.scalars() if value]
 
 
-async def preview_options(session: AsyncSession, columns: OptionColumns) -> dict[str, dict[str, Any]]:
+async def preview_options(
+    session: AsyncSession,
+    columns: OptionColumns,
+    *,
+    conditions: Sequence[ColumnElement[bool]] = (),
+) -> dict[str, dict[str, Any]]:
     """每个字段返回前 PREVIEW_LIMIT 个候选，并标明是否被截断。
 
     多取一条用于判断截断，不需要再跑一次 count。
@@ -48,7 +59,11 @@ async def preview_options(session: AsyncSession, columns: OptionColumns) -> dict
 
     out: dict[str, dict[str, Any]] = {}
     for field, column in columns.items():
-        rows = await _distinct(session, column, PREVIEW_LIMIT + 1)
+        rows = (
+            await _distinct(session, column, PREVIEW_LIMIT + 1, conditions=conditions)
+            if conditions
+            else await _distinct(session, column, PREVIEW_LIMIT + 1)
+        )
         out[field] = {
             "items": rows[:PREVIEW_LIMIT],
             "truncated": len(rows) > PREVIEW_LIMIT,
@@ -63,6 +78,7 @@ async def search_options(
     field: str,
     keyword: str | None,
     limit: int = SEARCH_LIMIT,
+    conditions: Sequence[ColumnElement[bool]] = (),
 ) -> list[str]:
     """按关键词搜索某个字段的候选值。
 
@@ -73,6 +89,8 @@ async def search_options(
     column = columns[field]
     text = (keyword or "").strip()
     stmt = select(column).where(column.is_not(None)).where(column != "")
+    if conditions:
+        stmt = stmt.where(*conditions)
     if text:
         stmt = stmt.where(contains_ilike(column, text))
     result = await session.execute(stmt.distinct().order_by(column).limit(limit))

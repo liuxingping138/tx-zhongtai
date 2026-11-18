@@ -12,7 +12,7 @@ from platform_common.actors import Actor
 from platform_common.route_audit import iter_api_routes
 
 from app.core.database import get_db_session
-from app.knowledge.api.routes import knowledge_filters
+from app.knowledge.api.routes import get_knowledge_access, knowledge_filters
 from app.knowledge.domain.scopes import FULL_ACCESS
 from app.knowledge.repositories import knowledge as repo
 from app.main import app
@@ -38,8 +38,9 @@ def test_unknown_search_option_field_returns_422() -> None:
 
     route = next(item for item in iter_api_routes(app) if item.path == "/api/v1/thinktank/knowledge/options/search")
     app.dependency_overrides[get_db_session] = _db
+    app.dependency_overrides[get_knowledge_access] = lambda: FULL_ACCESS
     for dep in route.dependant.dependencies:
-        if dep.name == "_":
+        if dep.name == "_" and dep.call is not None:
             app.dependency_overrides[dep.call] = lambda: Actor(id="u1", name="测试")
     try:
         client = TestClient(app)

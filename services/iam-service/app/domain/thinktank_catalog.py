@@ -50,9 +50,29 @@ def _scope_actions(resource_code: str) -> tuple[ActionSpec, ...]:
     )
 
 
+THINKTANK_SCOPE_PREFIXES: tuple[str, ...] = ("thinktank.file_type.", "thinktank.industry_type.")
+
 THINKTANK_RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("thinktank", "智库", "thinktank-service", NodeType.DIRECTORY, True, 45),
     ResourceSpec("thinktank.knowledge", "知识库", "thinktank-service", NodeType.RESOURCE, True, 451, "thinktank"),
+    ResourceSpec(
+        "thinktank.knowledge.file_type",
+        "文件类型范围",
+        "thinktank-service",
+        NodeType.DIRECTORY,
+        True,
+        458,
+        "thinktank.knowledge",
+    ),
+    ResourceSpec(
+        "thinktank.knowledge.industry_type",
+        "行业类型范围",
+        "thinktank-service",
+        NodeType.DIRECTORY,
+        True,
+        459,
+        "thinktank.knowledge",
+    ),
     *(
         ResourceSpec(
             f"thinktank.file_type.{slug}",
@@ -61,7 +81,7 @@ THINKTANK_RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
             NodeType.RESOURCE,
             True,
             460 + idx,
-            "thinktank",
+            "thinktank.knowledge.file_type",
         )
         for idx, (slug, name) in enumerate(FILE_TYPE_SCOPES)
     ),
@@ -73,7 +93,7 @@ THINKTANK_RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
             NodeType.RESOURCE,
             True,
             480 + idx,
-            "thinktank",
+            "thinktank.knowledge.industry_type",
         )
         for idx, (slug, name) in enumerate(INDUSTRY_TYPE_SCOPES)
     ),

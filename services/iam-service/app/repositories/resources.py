@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.authorization import max_level
@@ -93,3 +93,44 @@ async def list_effective_levels(session: AsyncSession, user_id: uuid.UUID) -> di
         if chosen:
             merged[code] = chosen
     return merged
+
+
+async def list_effective_levels_by_prefixes(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    prefixes: list[str],
+) -> dict[str, str]:
+    """按编码前缀一次查询用户在多个数据范围维度上的生效授权档位。"""
+
+    cleaned = [p.strip() for p in prefixes if p.strip()]
+    if not cleaned:
+        return {}
+    prefix_filter = or_(*(Resource.code.startswith(p) for p in cleaned))
+    stmt = (
+        select(Resource.code, RoleGrant.level)
+        .join(RoleGrant, RoleGrant.resource_id == Resource.id)
+        .join(Role, Role.id == RoleGrant.role_id)
+        .join(UserRole, UserRole.role_id == Role.id)
+        .where(
+            UserRole.user_id == user_id,
+            Role.status == RoleStatus.ACTIVE,
+            Resource.published.is_(True),
+            Resource.node_type == NodeType.RESOURCE,
+            prefix_filter,
+        )
+    )
+    direct = (
+        select(Resource.code, UserGrant.level)
+        .join(UserGrant, UserGrant.resource_id == Resource.id)
+        .where(
+            UserGrant.user_id == user_id,
+            Resource.published.is_(True),
+            Resource.node_type == NodeType.RESOURCE,
+            prefix_filter,
+        )
+    )
+    result = await session.execute(stmt.union_all(direct))
+    grouped: dict[str, list[str]] = {}
+    for code, level in result.all():
+        grouped.setdefault(code, []).append(level)
+    return {code: chosen for code, levels in grouped.items() if (chosen := max_level(levels))}

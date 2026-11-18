@@ -159,9 +159,15 @@ async def get_options(session: AsyncSession, *, access: KnowledgeAccess) -> dict
     return await repo.list_options(session, access=access, provinces=provinces)
 
 
-async def search_options(session: AsyncSession, *, field: str, keyword: str | None) -> list[str]:
+async def search_options(
+    session: AsyncSession,
+    *,
+    field: str,
+    keyword: str | None,
+    access: KnowledgeAccess | None = None,
+) -> list[str]:
     provinces = await get_provinces(get_settings(), PROVINCES) if field == "prov_name" else None
-    return await repo.search_option_values(session, field=field, keyword=keyword, provinces=provinces)
+    return await repo.search_option_values(session, field=field, keyword=keyword, provinces=provinces, access=access)
 
 
 async def get_detail(

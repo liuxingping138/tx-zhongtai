@@ -40,7 +40,13 @@ async def authorize(
 ) -> JSONResponse:
     caller = require_internal_caller(request, settings)
     principal = await principal_from_access_token(body.access_token, session, settings)
-    data = await authorize_access_context(session, principal.user, body.resource, body.action)
+    data = await authorize_access_context(
+        session,
+        principal.user,
+        body.resource,
+        body.action,
+        scope_prefixes=body.scope_prefixes,
+    )
     if not data["allowed"]:
         await audit_service_denial(redis_client, principal.user, data, caller)
     return success_json(data)

@@ -11,8 +11,10 @@ import {
   downloadKnowledgeBlob,
   favoriteKnowledge,
   fetchKnowledgeContentBlob,
+  getKnowledgeAccess,
   previewKnowledge,
   unfavoriteKnowledge,
+  type KnowledgeAccessSummary,
   type KnowledgeItem,
 } from '@/api/thinktank'
 import { useAuthStore } from '@/stores/auth'
@@ -31,23 +33,34 @@ const previewMode = ref<'pdf' | 'text' | 'summary'>('summary')
 const previewText = ref('')
 const pdfUrl = ref('')
 const provinces = ref<string[]>([])
+const accessScope = ref<KnowledgeAccessSummary | null>(null)
 const logsOpen = ref(false)
 
 const watermarkText = computed(() => auth.user?.display_name || auth.user?.username || '智库预览')
+
+function isPdfResponse(contentType: string | undefined, blobType: string): boolean {
+  return String(contentType || blobType || '').toLowerCase().includes('pdf')
+}
+
+async function applyBlobPreview(mode: 'pdf' | 'text', resp: { data: Blob; headers?: Record<string, unknown> }) {
+  const isPdf = isPdfResponse(resp.headers?.['content-type'] as string | undefined, resp.data.type)
+  if (mode === 'pdf' && isPdf) {
+    pdfUrl.value = URL.createObjectURL(resp.data)
+    return
+  }
+  previewMode.value = mode === 'pdf' ? 'summary' : mode
+  previewText.value = await resp.data.text()
+}
 
 async function loadContent(mode: 'pdf' | 'text' | 'summary', hasBinary: boolean) {
   if (pdfUrl.value) {
     URL.revokeObjectURL(pdfUrl.value)
     pdfUrl.value = ''
   }
-  if (!hasBinary || (mode !== 'pdf' && mode !== 'text')) return
+  if (!hasBinary || mode === 'summary') return
   try {
     const resp = await fetchKnowledgeContentBlob(fileId.value)
-    if (mode === 'pdf') {
-      pdfUrl.value = URL.createObjectURL(resp.data)
-    } else {
-      previewText.value = await resp.data.text()
-    }
+    await applyBlobPreview(mode, resp)
   } catch {
     previewMode.value = 'summary'
   }
@@ -56,14 +69,16 @@ async function loadContent(mode: 'pdf' | 'text' | 'summary', hasBinary: boolean)
 async function loadPage() {
   loading.value = true
   try {
-    const [res, opts] = await Promise.all([
+    const [res, opts, scope] = await Promise.all([
       previewKnowledge(fileId.value),
       fetchFilterOptions('/thinktank/knowledge').catch(() => null),
+      getKnowledgeAccess().catch(() => null),
     ])
     item.value = res.item
     previewMode.value = res.preview.mode
     previewText.value = res.preview.content_text
     if (opts?.options?.prov_name?.items) provinces.value = opts.options.prov_name.items
+    if (scope) accessScope.value = scope
     await loadContent(res.preview.mode, res.preview.has_binary)
   } catch (error) {
     ElMessage.error(errorMessage(error, '加载文件预览失败'))
@@ -168,6 +183,8 @@ onMounted(() => {
       <KnowledgeMetaCard
         :item="item"
         :provinces="provinces"
+        :editable-file-types="accessScope?.editable_file_types"
+        :editable-industries="accessScope?.editable_industries"
         @updated="item = $event"
       />
       <div class="viewer-card">

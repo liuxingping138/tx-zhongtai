@@ -41,7 +41,7 @@ class Settings(BaseServiceSettings):
     minio_secret_key: str = ""
     minio_bucket: str = "tx-bifang-knowledge-emp-service-prod"
     minio_region: str = "us-east-1"
-    minio_timeout_seconds: float = 30.0
+    minio_timeout_seconds: float = 5.0
 
     @model_validator(mode="after")
     def _reject_demo_secrets_in_production(self) -> Settings:

@@ -35,7 +35,12 @@ def get_authz_client(settings: Annotated[Settings, Depends(get_settings)]) -> Au
     )
 
 
-require_thinktank_permission: Callable[[str, str], Callable[..., Any]] = build_permission_dependency(get_authz_client)
+SCOPE_PREFIXES: tuple[str, ...] = ("thinktank.file_type.", "thinktank.industry_type.")
+
+require_thinktank_permission: Callable[[str, str], Callable[..., Any]] = build_permission_dependency(
+    get_authz_client,
+    scope_prefixes=SCOPE_PREFIXES,
+)
 
 
 async def fetch_scope_levels(

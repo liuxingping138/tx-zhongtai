@@ -174,12 +174,20 @@ class KnowledgeAccess:
         return frozenset(k for k, lvl in self.industry_levels.items() if lvl in _EDIT_LEVELS)
 
     def _matches(
-        self, file_type: str, industry_type: str, allowed_ft: frozenset[str], allowed_ind: frozenset[str]
+        self,
+        file_type: str,
+        industry_type: str,
+        allowed_ft: frozenset[str],
+        allowed_ind: frozenset[str],
+        *,
+        require_all_industries: bool = False,
     ) -> bool:
         ft = normalize_file_type_input(file_type)
         if ft not in allowed_ft:
             return False
         industries = effective_industry_tags(industry_type)
+        if require_all_industries:
+            return all(item in allowed_ind for item in industries)
         return any(item in allowed_ind for item in industries)
 
     def can_read_record(self, file_type: str, industry_type: str) -> bool:
@@ -189,7 +197,13 @@ class KnowledgeAccess:
         return self._matches(file_type, industry_type, self.exportable_file_types, self.exportable_industries)
 
     def can_edit_record(self, file_type: str, industry_type: str) -> bool:
-        return self._matches(file_type, industry_type, self.editable_file_types, self.editable_industries)
+        return self._matches(
+            file_type,
+            industry_type,
+            self.editable_file_types,
+            self.editable_industries,
+            require_all_industries=True,
+        )
 
     def require_read(self, file_type: str, industry_type: str) -> None:
         if not self.can_read_record(file_type, industry_type):

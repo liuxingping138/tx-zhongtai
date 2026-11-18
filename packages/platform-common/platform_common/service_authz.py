@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from fastapi import Depends, Request
@@ -65,8 +65,13 @@ def cached_authz_client(
 async def resource_levels(request: Request, client: AuthzClient, resources: list[str], action: str) -> dict[str, str]:
     """当前用户在几个资源上的授权档位，没授权的不在结果里。用于按数据分类收窄可见范围，不是路由的准入检查。
 
+    若路由鉴权已通过 scope_prefixes 随同返回 scopes，直接复用，不再逐个发 HTTP 请求。
     被拒绝只说明没有这个分类；鉴权服务不可用等其他错误照常抛出（503），绝不当作放行。
     """
+
+    preloaded = getattr(request.state, "authz_scopes", None)
+    if action == "list" and isinstance(preloaded, dict):
+        return {resource: preloaded[resource] for resource in resources if preloaded.get(resource)}
 
     token = _bearer_token(request)
 
@@ -81,7 +86,11 @@ async def resource_levels(request: Request, client: AuthzClient, resources: list
     return {resource: value for resource, value in zip(resources, levels, strict=True) if value}
 
 
-def build_permission_dependency(get_client: Callable[..., AuthzClient]) -> Callable[[str, str], Callable[..., Any]]:
+def build_permission_dependency(
+    get_client: Callable[..., AuthzClient],
+    *,
+    scope_prefixes: Sequence[str] | None = None,
+) -> Callable[[str, str], Callable[..., Any]]:
     """构造本服务的 require_*_permission 工厂；服务名在 get_client 构造 AuthzClient 时已写入。"""
 
     def require_permission(resource: str, action: str) -> Callable[..., Any]:
@@ -91,7 +100,14 @@ def build_permission_dependency(get_client: Callable[..., AuthzClient]) -> Calla
             # 参数会被误当成查询参数。这里只能用默认值写法。
             client: AuthzClient = Depends(get_client),  # noqa: B008  闭包依赖不能写成 Annotated，原因见上
         ) -> Actor:
-            result = await client.authorize(access_token=_bearer_token(request), resource=resource, action=action)
+            result = await client.authorize(
+                access_token=_bearer_token(request),
+                resource=resource,
+                action=action,
+                scope_prefixes=scope_prefixes,
+            )
+            if scope_prefixes and isinstance(getattr(result, "scopes", None), dict):
+                request.state.authz_scopes = result.scopes
             actor_id = result.user_id or ""
             actor_name = result.display_name or result.username or actor_id
             if not actor_id:

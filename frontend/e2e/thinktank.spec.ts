@@ -36,4 +36,13 @@ test('码表两级目录与智库知识库主流程', async ({ page }) => {
   await expect(page).toHaveURL(/\/thinktank\/knowledge\/.+/)
   await expect(page.getByText('资料标签信息')).toBeVisible()
   await expect(page.getByRole('button', { name: /收藏/ })).toBeVisible()
+
+  // 3. 验证「角色与权限」中「菜单权限」与「智库数据权限」已独立拆分
+  await page.goto('/system/roles')
+  await expect(page.getByRole('tab', { name: '菜单权限' })).toBeVisible()
+  const dataScopeTab = page.getByRole('tab', { name: '智库数据权限' })
+  await expect(dataScopeTab).toBeVisible()
+  await dataScopeTab.click()
+  await expect(page.getByRole('heading', { name: '知识库 · 文件类型范围' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '知识库 · 行业类型范围' })).toBeVisible()
 })

@@ -4,6 +4,7 @@ import { Search } from '@element-plus/icons-vue'
 
 import type { EffectivePermission } from '@/api/types'
 import { LEVEL_TEXT } from '@/permissions/catalog'
+import { isThinktankScopeCode } from '@/permissions/thinktankScopes'
 
 /** 用户的实际权限：多个角色叠加后每个模块取最高一档，并写明每档来自哪个角色。 */
 const props = defineProps<{
@@ -48,7 +49,9 @@ const filteredGrouped = computed(() => {
   return out
 })
 
-const effectiveCount = computed(() => props.permissions.filter(item => item.level !== 'NONE').length)
+const effectiveCount = computed(
+  () => props.permissions.filter(item => item.level !== 'NONE' && !isThinktankScopeCode(item.resource_code)).length,
+)
 </script>
 
 <template>

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from http import HTTPStatus
 from typing import Any
@@ -36,6 +37,7 @@ class AuthzResult:
     display_name: str | None
     level: str | None
     reason: str | None
+    scopes: dict[str, str] | None = None
 
 
 class AuthzClient:
@@ -60,11 +62,21 @@ class AuthzClient:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def authorize(self, *, access_token: str, resource: str, action: str) -> AuthzResult:
+    async def authorize(
+        self,
+        *,
+        access_token: str,
+        resource: str,
+        action: str,
+        scope_prefixes: Sequence[str] | None = None,
+    ) -> AuthzResult:
+        body: dict[str, Any] = {"access_token": access_token, "resource": resource, "action": action}
+        if scope_prefixes:
+            body["scope_prefixes"] = list(scope_prefixes)
         try:
             response = await self._client.post(
                 "/internal/v1/authorize",
-                json={"access_token": access_token, "resource": resource, "action": action},
+                json=body,
                 headers={
                     "X-Internal-Service": self._service_name,
                     "X-Internal-Token": self._service_secret,
@@ -107,6 +119,12 @@ class AuthzClient:
         username = user.get("username")
         display_name = user.get("display_name")
         level = data.get("level")
+        raw_scopes = data.get("scopes")
+        scopes = (
+            {str(k): str(v) for k, v in raw_scopes.items() if isinstance(k, str) and isinstance(v, str)}
+            if isinstance(raw_scopes, dict)
+            else None
+        )
         return AuthzResult(
             allowed=True,
             user_id=user_id if isinstance(user_id, str) else None,
@@ -114,4 +132,5 @@ class AuthzClient:
             display_name=display_name if isinstance(display_name, str) else None,
             level=level if isinstance(level, str) else None,
             reason=None,
+            scopes=scopes,
         )

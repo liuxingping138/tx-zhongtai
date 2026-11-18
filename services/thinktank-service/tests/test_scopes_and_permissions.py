@@ -54,6 +54,9 @@ def test_access_levels_orthogonal_file_type_and_industry() -> None:
     assert access.can_export_record("经分", "") is True  # 空行业视为「无」（EXPORT）
     assert access.can_edit_record("经分", "党政") is False  # 文件类型仅 EXPORT
     assert access.can_edit_record("", "党政") is True  # 未定义 FULL + 党政 FULL
+    # 多选行业：读取只需命中其一（any），编辑/上传/删除必须全部行业均有 FULL（all）
+    assert access.can_read_record("", "党政|教育") is True
+    assert access.can_edit_record("", "党政|教育") is False
 
     # 未授权维度拒绝并给出可读信息
     assert access.can_read_record("通报", "党政") is False
@@ -78,7 +81,13 @@ async def test_storage_save_read_delete_and_path_traversal(tmp_path: Path) -> No
     assert storage.normalize_suffix("测试.pptx") == "PPT"
     assert storage.normalize_suffix("报表.xlsx") == "EXCEL"
     assert storage.media_type_for_file("测试.pdf", "PDF") == "application/pdf"
-    assert storage.legacy_object_key("demo.pdf", 1024, "pdf").startswith("knowledgeBase/")
+    legacy_key = storage.legacy_object_key("demo.pdf", 1024, "pdf")
+    assert legacy_key.startswith("knowledgeBase/")
+    fid = uuid.uuid4()
+    managed_key = storage.new_object_key(fid, "pdf")
+    assert storage.is_managed_object_key(managed_key, fid) is True
+    assert storage.is_managed_object_key(legacy_key, fid) is False
+    assert storage.is_managed_object_key("", fid) is False
 
     await storage.save_bytes(str(tmp_path), "knowledge/sample.pdf", b"%PDF-1.4")
     assert await storage.read_bytes(str(tmp_path), "knowledge/sample.pdf") == b"%PDF-1.4"

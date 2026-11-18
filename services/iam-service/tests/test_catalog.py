@@ -118,8 +118,11 @@ def test_thinktank_catalog_has_knowledge_and_type_industry_scopes() -> None:
     by_code = {spec.code: spec for spec in RESOURCE_SPECS}
     assert by_code["thinktank"].published is True
     assert by_code["thinktank.knowledge"].published is True
-    assert by_code["thinktank.file_type.product"].parent_code == "thinktank"
-    assert by_code["thinktank.industry_type.energy"].parent_code == "thinktank"
+    assert by_code["thinktank.knowledge"].parent_code == "thinktank"
+    assert by_code["thinktank.knowledge.file_type"].parent_code == "thinktank.knowledge"
+    assert by_code["thinktank.knowledge.industry_type"].parent_code == "thinktank.knowledge"
+    assert by_code["thinktank.file_type.product"].parent_code == "thinktank.knowledge.file_type"
+    assert by_code["thinktank.industry_type.energy"].parent_code == "thinktank.knowledge.industry_type"
     levels = {(spec.resource_code, spec.action_code): spec.required_level for spec in ACTION_SPECS}
     assert levels[("thinktank.knowledge", "preview")] == GrantLevel.READ
     assert levels[("thinktank.knowledge", "favorite")] == GrantLevel.READ

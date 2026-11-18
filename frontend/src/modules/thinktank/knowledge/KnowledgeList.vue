@@ -86,6 +86,7 @@ const { columns, defaults, selected } = useDetailColumns(TABLE_COLUMNS, EDITOR_G
 
 const uploadVisible = ref(false)
 const exportingUndefined = ref(false)
+const busyRowIds = reactive(new Set<string>())
 const logTarget = ref<{ visible: boolean; id: string; name: string }>({ visible: false, id: '', name: '' })
 
 async function refresh() {
@@ -137,16 +138,22 @@ function onPreview(row: KnowledgeItem) {
 }
 
 async function onToggleFavorite(row: KnowledgeItem) {
+  if (busyRowIds.has(row.id)) return
+  busyRowIds.add(row.id)
   try {
     const res = row.is_favorited ? await unfavoriteKnowledge(row.id) : await favoriteKnowledge(row.id)
     row.is_favorited = res.is_favorited
     ElMessage.success(res.is_favorited ? '收藏成功' : '已取消收藏')
   } catch (error) {
     ElMessage.error(errorMessage(error, '收藏操作失败'))
+  } finally {
+    busyRowIds.delete(row.id)
   }
 }
 
 async function onDownload(row: KnowledgeItem) {
+  if (busyRowIds.has(row.id)) return
+  busyRowIds.add(row.id)
   try {
     const resp = await downloadKnowledgeBlob(row.id)
     const filename = parseContentDispositionFilename(resp.headers?.['content-disposition'], row.file_name)
@@ -154,6 +161,8 @@ async function onDownload(row: KnowledgeItem) {
     ElMessage.success('开始下载文件')
   } catch (error) {
     ElMessage.error(errorMessage(error, '下载失败'))
+  } finally {
+    busyRowIds.delete(row.id)
   }
 }
 
@@ -292,6 +301,7 @@ onMounted(async () => {
             <button
               type="button"
               class="row-action"
+              :disabled="busyRowIds.has(row.id)"
               @click="onToggleFavorite(row)"
             >
               <el-icon><StarFilled v-if="row.is_favorited" /><Star v-else /></el-icon>
@@ -301,6 +311,7 @@ onMounted(async () => {
               v-if="row.can_export"
               type="button"
               class="row-action"
+              :disabled="busyRowIds.has(row.id)"
               @click="onDownload(row)"
             >
               下载
