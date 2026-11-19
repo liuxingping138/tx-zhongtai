@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -70,7 +71,7 @@ def check_origin(request: Request, settings: Settings) -> None:
 def check_csrf(request: Request, settings: Settings) -> None:
     header = request.headers.get(settings.csrf_header_name)
     cookie = request.cookies.get(settings.csrf_cookie_name)
-    if not header or not cookie or header != cookie:
+    if not header or not cookie or not hmac.compare_digest(header, cookie):
         raise PermissionDeniedError("CSRF 校验失败")
 
 

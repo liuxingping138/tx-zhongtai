@@ -130,7 +130,7 @@ class TestIssue:
             username=" ZhangSan ", request_id=None, client_ip="1.1.1.1", user_agent="ua", reason="bad"
         )
         assert env.events == ["auth.login.failed"]
-        assert env.payloads[0]["username"] == "zhangsan"
+        assert env.payloads[0]["username"] == "zh***"
         assert "actor_id" not in env.payloads[0] and "actor_name" not in env.payloads[0]
 
     async def test_failure_of_a_real_account_is_tied_to_the_person(self, env: SimpleNamespace) -> None:
@@ -141,6 +141,7 @@ class TestIssue:
             username="ZhangSan", request_id=None, client_ip="1.1.1.1", user_agent="ua", reason="locked_account"
         )
         payload = env.payloads[0]
+        assert payload["username"] == "zhangsan"
         assert payload["actor_id"] == str(env.user.id)
         assert payload["actor_name"] == "张三"
         assert payload["username"] == "zhangsan"

@@ -71,12 +71,12 @@ XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 @router.get("/users/export")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def export_users(
-    _principal: CurrentPrincipal = Depends(require_permission("system.users", "export")),
+    principal: CurrentPrincipal = Depends(require_permission("system.users", "export")),
     session: AsyncSession = Depends(get_db_session, scope="function"),
     filters: UserFilters = Depends(user_filters),
 ) -> Response:
     # 与列表同一套筛选，所见即所导。
-    payload = await user_excel.export_users(session, filters)
+    payload = await user_excel.export_users(session, filters, actor=principal.user)
     return Response(
         content=payload,
         media_type=XLSX,

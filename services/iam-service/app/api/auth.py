@@ -73,6 +73,7 @@ async def login(
     session: AsyncSession = Depends(get_db_session, scope="function"),
     settings: Settings = Depends(get_settings),
 ) -> JSONResponse:
+    check_origin(request, settings)
     limiter = LoginRateLimiter(redis_client, settings)
     ip = client_ip(request)
     user_agent = client_user_agent(request)

@@ -17,6 +17,7 @@ from platform_common.clock import format_beijing
 from platform_common.columns import overlong_reasons, string_lengths
 from platform_common.errors import ApiError, ErrorCode
 from platform_common.excel import SKIP_REASON_COLUMN, active_worksheet, append_text_row, parse_sheet_async
+from platform_common.request_context import get_request_id
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application import user_admin
@@ -34,6 +35,7 @@ from app.domain.fields import STATUS_TEXT, USER_EXPORT_COLUMNS, USER_IMPORT_COLU
 from app.domain.filters import UserFilters
 from app.domain.models import Role, User
 from app.domain.password import hash_password_async
+from app.repositories import outbox as outbox_repo
 from app.repositories import roles as role_repo
 from app.repositories import users as user_repo
 
@@ -41,7 +43,7 @@ ROLE_SEPARATORS = re.compile(r"[、,，;；\n]")
 ROLES_IGNORED_NOTE = "角色列已忽略：分配角色需要超级管理员，已放进「待分配角色」"
 
 
-async def export_users(session: AsyncSession, filters: UserFilters) -> bytes:
+async def export_users(session: AsyncSession, filters: UserFilters, *, actor: User | None = None) -> bytes:
     """按列表同一套筛选导出，所见即所导。不含任何密码相关字段。"""
 
     total = await user_repo.count_users(session, filters)
@@ -66,6 +68,18 @@ async def export_users(session: AsyncSession, filters: UserFilters) -> bytes:
         }
         for user in users
     ]
+    if actor is not None:
+        await outbox_repo.enqueue(
+            session,
+            event_type="iam.user.exported",
+            payload={
+                "actor_id": str(actor.id),
+                "actor_name": actor.display_name,
+                "request_id": get_request_id(),
+                "exported_rows": len(rows),
+                "filters": filters.model_dump(exclude_none=True) if hasattr(filters, "model_dump") else {},
+            },
+        )
     return await to_thread.run_sync(_build_export, rows)
 
 

@@ -161,12 +161,17 @@ class AuthService:
         normalized = normalize_username(username)
         user = await user_repo.get_user_by_username(self.session, normalized)
         who = {} if user is None else {"actor_id": str(user.id), "actor_name": user.display_name}
+        # 对不上账号时脱敏记录，防止用户把密码误输进用户名框后明文进入 180 天只增审计库。
+        mask_min_len = 4
+        logged_username = (
+            normalized if user is not None else (f"{normalized[:2]}***" if len(normalized) > mask_min_len else "***")
+        )
         await outbox_repo.enqueue(
             self.session,
             event_type="auth.login.failed",
             payload={
                 **who,
-                "username": normalized,
+                "username": logged_username,
                 "request_id": request_id,
                 "client_ip": client_ip,
                 "user_agent": user_agent,

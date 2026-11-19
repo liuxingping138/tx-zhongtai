@@ -77,7 +77,9 @@ class Settings(BaseServiceSettings):
     @model_validator(mode="after")
     def _reject_demo_internal_secrets_in_production(self) -> Settings:
         if self.environment == Environment.PRODUCTION:
-            markers = ("dev-", "example", "changeme", "test-secret")
+            if not self.cookie_secure:
+                raise ValueError("生产环境必须启用 IAM_COOKIE_SECURE=true，避免刷新 Cookie 走明文传输")
+            markers = ("dev-", "example", "changeme", "test-secret", "p6-only")
             tokens = list(self.internal_caller_secrets.values())
             if self.audit_ingest_secret:
                 tokens.append(self.audit_ingest_secret)
