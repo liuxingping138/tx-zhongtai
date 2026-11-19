@@ -74,11 +74,12 @@ const sites = computed(() => props.report.new_sites.filter(site => (site.provinc
       >
         <template #default="{ row }">
           <a
-            v-if="row.url"
+            v-if="row.url && /^https?:\/\//i.test(row.url)"
             :href="row.url"
             target="_blank"
             rel="noopener noreferrer"
           >{{ row.url }}</a>
+          <span v-else-if="row.url">{{ row.url }}</span>
         </template>
       </el-table-column>
     </el-table>

@@ -112,11 +112,11 @@ export function previewKnowledge(id: string): Promise<KnowledgePreviewPayload> {
 }
 
 export function fetchKnowledgeContentBlob(id: string): Promise<AxiosResponse<Blob>> {
-  return http.get(`/thinktank/knowledge/${id}/content`, { responseType: 'blob' })
+  return http.get(`/thinktank/knowledge/${id}/content`, { responseType: 'blob', timeout: 600_000 })
 }
 
 export function downloadKnowledgeBlob(id: string): Promise<AxiosResponse<Blob>> {
-  return http.get(`/thinktank/knowledge/${id}/download`, { responseType: 'blob' })
+  return http.get(`/thinktank/knowledge/${id}/download`, { responseType: 'blob', timeout: 600_000 })
 }
 
 export function favoriteKnowledge(id: string): Promise<{ id: string; is_favorited: boolean }> {

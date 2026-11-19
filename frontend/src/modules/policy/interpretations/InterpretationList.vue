@@ -141,9 +141,9 @@ onMounted(() => {
           :loading="exporting"
           @click="onExport"
         />
-        <!-- 勾选了才出现，平时不摆灰按钮 -->
+        <!-- 勾选了才出现，平时不摆灰按钮（后端要求 policy.base_tags:update） -->
         <el-button
-          v-if="canWrite && (checked.length || retagging)"
+          v-if="auth.canFull('policy.base_tags') && (checked.length || retagging)"
           :loading="retagging"
           @click="retagOpen = true"
         >

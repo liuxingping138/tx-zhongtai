@@ -45,10 +45,21 @@ onRemoteLogout(() => {
     void router.replace({ name: 'login', query: { redirect: router.currentRoute.value.fullPath } })
   }
 })
+let forbiddenReload: Promise<void> | null = null
 setForbiddenHandler(() => {
-  if (auth.isAuthenticated && !auth.mustChangePassword) {
-    void auth.loadProfile().catch(() => undefined)
-  }
+  if (!auth.isAuthenticated || auth.mustChangePassword || forbiddenReload) return
+  forbiddenReload = auth
+    .loadProfile()
+    .then(() => {
+      const resource = router.currentRoute.value.meta.resource
+      if (resource && !auth.canRead(resource)) {
+        void router.replace({ name: 'home' })
+      }
+    })
+    .catch(() => undefined)
+    .finally(() => {
+      forbiddenReload = null
+    })
 })
 
 app.mount('#app')

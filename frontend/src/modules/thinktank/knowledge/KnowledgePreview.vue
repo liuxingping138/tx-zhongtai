@@ -2,7 +2,7 @@
 import { ArrowLeft, ArrowRight, Delete, Download, Star, StarFilled, Tickets } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter, type RouteLocationRaw } from 'vue-router'
+import { onBeforeRouteUpdate, useRoute, useRouter, type RouteLocationRaw } from 'vue-router'
 
 import { downloadBlob } from '@/api/download'
 import { errorMessage } from '@/api/errors'
@@ -46,10 +46,18 @@ const provinces = ref<string[]>([])
 const accessScope = ref<KnowledgeAccessSummary | null>(null)
 const logsOpen = ref(false)
 const metaCardRef = ref<{ confirmDiscard: () => Promise<boolean>; startEdit: () => void } | null>(null)
-const previewCollapsed = ref(localStorage.getItem(COLLAPSE_KEY) === '1')
+const previewCollapsed = ref((() => {
+  try { return localStorage.getItem(COLLAPSE_KEY) === '1' } catch { return false }
+})())
 const total = ref(0)
 const prevId = ref<string | null>(null)
 const nextId = ref<string | null>(null)
+let pageSeq = 0
+let neighborSeq = 0
+
+function revokePdfUrl() {
+  if (pdfUrl.value) { URL.revokeObjectURL(pdfUrl.value); pdfUrl.value = '' }
+}
 
 const parsed = computed(() => parseReviewQuery(route.query, FILTER_KEYS))
 const position = computed(() => parsed.value.position)
@@ -67,49 +75,53 @@ const facts = computed(() => (item.value ? buildKnowledgeFacts(item.value, forma
 
 function setCollapsed(val: boolean) {
   previewCollapsed.value = val
-  localStorage.setItem(COLLAPSE_KEY, val ? '1' : '0')
+  try { localStorage.setItem(COLLAPSE_KEY, val ? '1' : '0') } catch { /* 禁用存储时忽略 */ }
 }
 
-async function applyBlobPreview(mode: 'pdf' | 'text', resp: { data: Blob; headers?: Record<string, unknown> }) {
+async function applyBlobPreview(mode: 'pdf' | 'text', resp: { data: Blob; headers?: Record<string, unknown> }, seq: number) {
   const ct = String((resp.headers?.['content-type'] as string | undefined) || resp.data.type || '').toLowerCase()
   if (mode === 'pdf' && ct.includes('pdf')) {
+    if (seq !== pageSeq) return
+    revokePdfUrl()
     pdfUrl.value = URL.createObjectURL(resp.data)
     return
   }
+  const text = await resp.data.text()
+  if (seq !== pageSeq) return
   previewMode.value = mode === 'pdf' ? 'summary' : mode
-  previewText.value = await resp.data.text()
+  previewText.value = text
 }
 
-async function loadContent(mode: 'pdf' | 'text' | 'summary', hasBinary: boolean) {
-  if (pdfUrl.value) {
-    URL.revokeObjectURL(pdfUrl.value)
-    pdfUrl.value = ''
-  }
+async function loadContent(targetId: string, mode: 'pdf' | 'text' | 'summary', hasBinary: boolean, seq: number) {
+  revokePdfUrl()
   if (!hasBinary || mode === 'summary') return
   contentLoading.value = true
   try {
-    const resp = await fetchKnowledgeContentBlob(fileId.value)
-    await applyBlobPreview(mode, resp)
-  } catch {
-    previewMode.value = 'summary'
+    const resp = await fetchKnowledgeContentBlob(targetId)
+    if (seq === pageSeq) await applyBlobPreview(mode, resp, seq)
+  } catch (err) {
+    if (seq === pageSeq) {
+      previewMode.value = 'summary'
+      ElMessage.warning(errorMessage(err, '加载原文预览失败，已回退摘要视图'))
+    }
   } finally {
-    contentLoading.value = false
+    if (seq === pageSeq) contentLoading.value = false
   }
 }
 
 async function loadNeighbors() {
+  const seq = ++neighborSeq
   prevId.value = null
   nextId.value = null
   if (position.value === null) return
   try {
     const win = windowAt(position.value)
     const res = await listKnowledge({ ...parsed.value.filters, page: win.page, page_size: win.size })
+    if (seq !== neighborSeq) return
     total.value = res.total
     prevId.value = win.offset > 0 ? (res.items[win.offset - 1]?.id ?? null) : null
     nextId.value = res.items[win.offset + 1]?.id ?? null
-  } catch {
-    // 邻居加载失败不影响当前详情
-  }
+  } catch { /* 邻居加载失败不影响当前详情 */ }
 }
 
 function consumeEditQuery() {
@@ -117,84 +129,87 @@ function consumeEditQuery() {
   const nextQuery = { ...route.query }
   delete nextQuery.edit
   void router.replace({ query: nextQuery })
-  if (item.value?.can_edit) {
-    void nextTick(() => metaCardRef.value?.startEdit())
-  }
+  if (item.value?.can_edit) void nextTick(() => metaCardRef.value?.startEdit())
+}
+
+function applyLoadedPage(
+  res: Awaited<ReturnType<typeof previewKnowledge>>,
+  opts: Awaited<ReturnType<typeof fetchFilterOptions>> | null,
+  scope: KnowledgeAccessSummary | null,
+) {
+  item.value = res.item
+  previewMode.value = res.preview.mode
+  previewText.value = res.preview.content_text
+  if (opts?.options?.prov_name?.items) provinces.value = opts.options.prov_name.items
+  if (scope) accessScope.value = scope
+  consumeEditQuery()
+  void loadNeighbors()
 }
 
 async function loadPage() {
-  if (!fileId.value) return
+  const targetId = fileId.value
+  if (!targetId) return
+  const seq = ++pageSeq
+  revokePdfUrl()
   loading.value = true
   error.value = ''
   try {
     const [res, opts, scope] = await Promise.all([
-      previewKnowledge(fileId.value),
+      previewKnowledge(targetId),
       fetchFilterOptions('/thinktank/knowledge').catch(() => null),
       getKnowledgeAccess().catch(() => null),
     ])
-    item.value = res.item
-    previewMode.value = res.preview.mode
-    previewText.value = res.preview.content_text
-    if (opts?.options?.prov_name?.items) provinces.value = opts.options.prov_name.items
-    if (scope) accessScope.value = scope
-    consumeEditQuery()
-    void loadNeighbors()
-    await loadContent(res.preview.mode, res.preview.has_binary)
+    if (seq !== pageSeq || targetId !== fileId.value) return
+    applyLoadedPage(res, opts, scope)
+    await loadContent(targetId, res.preview.mode, res.preview.has_binary, seq)
   } catch (err) {
-    error.value = errorMessage(err, '加载文件预览失败')
+    if (seq === pageSeq) error.value = errorMessage(err, '加载文件预览失败')
   } finally {
-    loading.value = false
+    if (seq === pageSeq) loading.value = false
   }
 }
 
-async function navigateTo(target: RouteLocationRaw) {
-  if (metaCardRef.value && !(await metaCardRef.value.confirmDiscard())) return
-  await router.push(target)
-}
+async function navigateTo(target: RouteLocationRaw) { await router.push(target) }
+
+onBeforeRouteUpdate(async (to, from) => {
+  if (to.params.id !== from.params.id && metaCardRef.value && !(await metaCardRef.value.confirmDiscard())) return false
+})
 
 async function onToggleFavorite() {
-  if (!item.value) return
+  const current = item.value
+  if (!current || current.id !== fileId.value) return
   try {
-    const res = item.value.is_favorited ? await unfavoriteKnowledge(item.value.id) : await favoriteKnowledge(item.value.id)
-    item.value.is_favorited = res.is_favorited
+    const res = current.is_favorited ? await unfavoriteKnowledge(current.id) : await favoriteKnowledge(current.id)
+    if (item.value?.id === current.id) item.value.is_favorited = res.is_favorited
     ElMessage.success(res.is_favorited ? '收藏成功' : '已取消收藏')
-  } catch (err) {
-    ElMessage.error(errorMessage(err, '收藏操作失败'))
-  }
+  } catch (err) { ElMessage.error(errorMessage(err, '收藏操作失败')) }
 }
 
 async function onDownload() {
-  if (!item.value) return
+  const current = item.value
+  if (!current || current.id !== fileId.value) return
   try {
-    const resp = await downloadKnowledgeBlob(item.value.id)
-    downloadBlob(resp.data, parseContentDispositionFilename(resp.headers?.['content-disposition'], item.value.file_name))
+    const resp = await downloadKnowledgeBlob(current.id)
+    downloadBlob(resp.data, parseContentDispositionFilename(resp.headers?.['content-disposition'], current.file_name))
     ElMessage.success('下载已开始')
-  } catch (err) {
-    ElMessage.error(errorMessage(err, '下载失败'))
-  }
+  } catch (err) { ElMessage.error(errorMessage(err, '下载失败')) }
 }
 
 async function onDelete() {
-  if (!item.value) return
+  const current = item.value
+  if (!current || current.id !== fileId.value) return
   try {
-    await ElMessageBox.confirm(`确认删除「${item.value.file_name}」吗？删除后将记入操作审计。`, '删除确认', { type: 'warning' })
-    await deleteKnowledge(item.value.id)
+    await ElMessageBox.confirm(`确认删除「${current.file_name}」吗？删除后将记入操作审计。`, '删除确认', { type: 'warning' })
+    if (item.value?.id !== current.id || fileId.value !== current.id) return
+    await deleteKnowledge(current.id)
     ElMessage.success('删除成功')
     await router.push(listRoute.value)
-  } catch (err) {
-    if (err !== 'cancel') ElMessage.error(errorMessage(err, '删除失败'))
-  }
+  } catch (err) { if (err !== 'cancel') ElMessage.error(errorMessage(err, '删除失败')) }
 }
 
-watch(() => route.params.id, () => {
-  void loadPage()
-})
-onBeforeUnmount(() => {
-  if (pdfUrl.value) URL.revokeObjectURL(pdfUrl.value)
-})
-onMounted(() => {
-  void loadPage()
-})
+watch(() => route.params.id, () => { void loadPage() })
+onBeforeUnmount(() => { pageSeq += 1; neighborSeq += 1; revokePdfUrl() })
+onMounted(() => { void loadPage() })
 </script>
 
 <template>

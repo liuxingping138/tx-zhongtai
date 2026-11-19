@@ -19,24 +19,36 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = 15
 const loading = ref(false)
+const loadError = ref('')
+let reqSeq = 0
 
 async function fetchLogs() {
-  if (!props.fileId) return
+  const targetId = props.fileId
+  if (!targetId) return
+  const seq = ++reqSeq
   loading.value = true
+  loadError.value = ''
   try {
-    const res = await listKnowledgeLogs(props.fileId, { page: page.value, page_size: pageSize })
+    const res = await listKnowledgeLogs(targetId, { page: page.value, page_size: pageSize })
+    if (seq !== reqSeq || targetId !== props.fileId) return
     logs.value = res.items
     total.value = res.total
   } catch (error) {
-    ElMessage.error(errorMessage(error, '加载文件操作日志失败'))
+    if (seq !== reqSeq) return
+    loadError.value = errorMessage(error, '加载文件操作日志失败')
+    ElMessage.error(loadError.value)
   } finally {
-    loading.value = false
+    if (seq === reqSeq) loading.value = false
   }
 }
 
 watch(
   () => [props.modelValue, props.fileId],
   ([open]) => {
+    reqSeq += 1
+    logs.value = []
+    total.value = 0
+    loadError.value = ''
     if (open) {
       page.value = 1
       void fetchLogs()
@@ -57,6 +69,13 @@ watch(
       <ParagraphSkeleton
         v-if="loading"
         :lines="6"
+      />
+      <el-alert
+        v-else-if="loadError"
+        :title="loadError"
+        type="error"
+        :closable="false"
+        show-icon
       />
       <el-empty
         v-else-if="logs.length === 0"
