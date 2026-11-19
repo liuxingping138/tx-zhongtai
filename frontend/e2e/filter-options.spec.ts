@@ -147,7 +147,7 @@ test('选了省份后地市用该省列表，不走服务端搜索', async ({ pa
 
   await page.waitForTimeout(400)
   expect(searches.filter(s => s.field === 'city_name')).toHaveLength(0)
-  expect(province).toBeTruthy()
+  await expect(province).toBeVisible()
 })
 
 test('操作日志的筛选项走同一套机制', async ({ page }) => {

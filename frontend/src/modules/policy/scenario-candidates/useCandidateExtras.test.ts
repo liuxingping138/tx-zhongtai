@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const api = vi.hoisted(() => ({ getCandidate: vi.fn(), getCandidateContext: vi.fn() }))
 vi.mock('@/api/scenarioCandidates', () => api)
 
+import { wasShown } from '@/api/errors'
 import { useCandidateExtras } from './useCandidateExtras'
 
 const detail = { id: 'c1', industries: [], children: [], reasons: [] }
@@ -25,11 +26,26 @@ describe('列表行的依据按需取', () => {
   })
 
   it('码表取不到照样有详情，只是写明码表那块看不了', async () => {
-    api.getCandidateContext.mockRejectedValue(new Error('down'))
+    const err = new Error('down')
+    api.getCandidateContext.mockRejectedValue(err)
     const found = await useCandidateExtras().ensure('c1')
     expect(found.detail).toEqual(detail)
     expect(found.context).toBeNull()
     expect(found.contextError).toBeTruthy()
+    expect(wasShown(err)).toBe(true)
+  })
+
+  it('任一请求刚失败就立即 markShown，避免慢请求拖过零延迟触发全局重复提示', async () => {
+    const fastErr = new Error('fast fail')
+    api.getCandidate.mockRejectedValueOnce(fastErr)
+    let resolveSlow!: (v: typeof context) => void
+    api.getCandidateContext.mockReturnValueOnce(new Promise(resolve => { resolveSlow = resolve }))
+    const pending = useCandidateExtras().ensure('c1')
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(wasShown(fastErr)).toBe(true)
+    resolveSlow(context)
+    await pending
   })
 
   it('详情没取到的下次重取；做完决定 drop 后也重取', async () => {

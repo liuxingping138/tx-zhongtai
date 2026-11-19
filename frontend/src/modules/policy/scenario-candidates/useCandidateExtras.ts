@@ -1,6 +1,6 @@
 import { reactive } from 'vue'
 
-import { errorMessage } from '@/api/errors'
+import { errorMessage, markShown } from '@/api/errors'
 import { getCandidate, getCandidateContext, type CandidateContext, type CandidateDetail } from '@/api/scenarioCandidates'
 
 /** 一个场景展开后、做决定时要的依据：详情（各行业几行、AI 的理由、下级）和码表上下文（同一位置已有、像它的）。 */
@@ -23,7 +23,12 @@ export function useCandidateExtras() {
   const pending = new Map<string, Promise<CandidateExtras>>()
 
   async function fetch(id: string, entry: CandidateExtras): Promise<CandidateExtras> {
-    const [detail, context] = await Promise.allSettled([getCandidate(id), getCandidateContext(id)])
+    const capture = <R>(promise: Promise<R>) =>
+      promise.catch((err: unknown) => {
+        markShown(err)
+        throw err
+      })
+    const [detail, context] = await Promise.allSettled([capture(getCandidate(id)), capture(getCandidateContext(id))])
     if (detail.status === 'fulfilled') entry.detail = detail.value
     else entry.error = errorMessage(detail.reason, '这个场景的详情没取到，请重试')
     if (context.status === 'fulfilled') entry.context = context.value

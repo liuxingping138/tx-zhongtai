@@ -91,4 +91,24 @@ describe('前端接口封装与后端 OpenAPI 一致', () => {
       expect(operations.some((op) => op.method === method && op.pattern.test(path)), `${method.toUpperCase()} ${path}`).toBe(true)
     }
   })
+
+  const EXPORT_PATHS = [
+    '/tender/purchaser/export',
+    '/tender/winbid/export',
+    '/system/users/export',
+    '/codebook/area-codes/export',
+    '/codebook/policy-types/export',
+    '/codebook/scenarios/export',
+    '/policy/interpretations/export',
+    '/policy/crawler-monitoring/sites/export',
+    '/policy/crawler-config/report/export',
+    '/policy/sources/export',
+    '/policy/base-tags/export',
+    '/thinktank/knowledge/export',
+  ]
+
+  it.each(EXPORT_PATHS)('导出接口 GET /api/v1%s 在后端 OpenAPI 中存在', path => {
+    const fullPath = `/api/v1${path}`
+    expect(operations.some(op => op.method === 'get' && op.pattern.test(fullPath)), `GET ${fullPath}`).toBe(true)
+  })
 })

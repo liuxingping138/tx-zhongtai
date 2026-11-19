@@ -69,7 +69,7 @@ const selection = useTableSelection<InterpretationItem>()
 const checked = selection.checked
 const statusOpen = ref(false)
 const retagOpen = ref(false)
-const { retagging, startAfterRetag } = useListRetagPoll(items, refresh)
+const { retagging, startAfterRetag } = useListRetagPoll(items, load)
 const STATUS_CHOICES = [
   { value: '人工验证', label: '人工验证', hint: '核对过、内容可用。之后 AI 重新解读、回填市场机会都不会再覆盖这些行。新增场景进不进码表在「新增场景审核」里按场景决定，和这里无关。' },
   { value: '待验证', label: '待验证', hint: '退回待核对。AI 重新解读时可以替换这些行。' },
@@ -83,8 +83,9 @@ async function afterStatus() {
   await refresh()
 }
 async function afterRetag() {
+  const ids = [...selection.ids.value]
   selection.clear()
-  await startAfterRetag()
+  await startAfterRetag(ids)
 }
 // 标题和「查看」进核对页：带上已生效的筛选和这条的位置，那边能翻上一条、下一条，读完就标人工验证。
 function detailRoute(row: InterpretationItem, index: number) {

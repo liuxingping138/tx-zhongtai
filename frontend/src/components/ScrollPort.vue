@@ -32,9 +32,29 @@ function measure() {
   state.yOffset = maxY > 0 ? (el.scrollTop / maxY) * (trackY - state.yThumb) : 0
 }
 
+const SCROLL_VALUES = new Set(['auto', 'scroll'])
+
+function canScrollAxis(scrollSize: number, clientSize: number, scrollPos: number, delta: number, overflow: string): boolean {
+  if (!delta || !SCROLL_VALUES.has(overflow)) return false
+  if (delta < 0) return scrollPos > 0
+  return scrollPos + clientSize < scrollSize - 1
+}
+
+function hasInnerScrollable(target: EventTarget | null, root: HTMLElement, deltaX: number, deltaY: number): boolean {
+  let node: Element | null = target instanceof Element ? target : null
+  while (node && node !== root) {
+    const style = getComputedStyle(node)
+    const canY = canScrollAxis(node.scrollHeight, node.clientHeight, node.scrollTop, deltaY, style.overflowY)
+    const canX = canScrollAxis(node.scrollWidth, node.clientWidth, node.scrollLeft, deltaX, style.overflowX)
+    if (canY || canX) return true
+    node = node.parentElement
+  }
+  return false
+}
+
 function onWheel(event: WheelEvent) {
   const el = view.value
-  if (!el) return
+  if (!el || hasInnerScrollable(event.target, el, event.deltaX, event.deltaY)) return
   const maxX = el.scrollWidth - el.clientWidth
   const maxY = el.scrollHeight - el.clientHeight
   const nextX = clamp(el.scrollLeft + event.deltaX, 0, Math.max(0, maxX))
@@ -73,20 +93,48 @@ function bindDrag(axis: 'x' | 'y', event: PointerEvent) {
 
 let resizeObserver: ResizeObserver | undefined
 let mutationObserver: MutationObserver | undefined
+let observedChild: Element | null = null
+let rafId: number | null = null
+
+function scheduleMeasure() {
+  if (rafId !== null) return
+  rafId = requestAnimationFrame(() => {
+    rafId = null
+    measure()
+  })
+}
+
+function syncObservedChild(el: HTMLElement) {
+  const next = el.firstElementChild
+  if (next === observedChild) return
+  if (observedChild) resizeObserver?.unobserve(observedChild)
+  observedChild = next
+  if (next) resizeObserver?.observe(next)
+}
+
 onMounted(() => {
   const el = view.value
   if (!el) return
   el.addEventListener('wheel', onWheel, { capture: true, passive: false })
-  resizeObserver = new ResizeObserver(measure)
+  resizeObserver = new ResizeObserver(scheduleMeasure)
   resizeObserver.observe(el)
-  mutationObserver = new MutationObserver(measure)
-  mutationObserver.observe(el, { childList: true, subtree: true, attributes: true })
-  requestAnimationFrame(measure)
+  syncObservedChild(el)
+  mutationObserver = new MutationObserver(() => {
+    syncObservedChild(el)
+    scheduleMeasure()
+  })
+  mutationObserver.observe(el, { childList: true, subtree: false })
+  scheduleMeasure()
 })
 onBeforeUnmount(() => {
   view.value?.removeEventListener('wheel', onWheel, true)
+  if (rafId !== null) {
+    cancelAnimationFrame(rafId)
+    rafId = null
+  }
   resizeObserver?.disconnect()
   mutationObserver?.disconnect()
+  observedChild = null
 })
 </script>
 <template>

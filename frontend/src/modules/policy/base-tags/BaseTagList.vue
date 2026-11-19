@@ -71,10 +71,11 @@ function detailRoute(row: BaseTagItem, index: number) {
 const selection = useTableSelection<BaseTagItem>()
 const checked = selection.checked
 const retagOpen = ref(false)
-const { retagging, startAfterRetag } = useListRetagPoll(items, refresh)
+const { retagging, startAfterRetag } = useListRetagPoll(items, load)
 async function afterRetag() {
+  const ids = [...selection.ids.value]
   selection.clear()
-  await startAfterRetag()
+  await startAfterRetag(ids)
 }
 
 async function onImport(file: File) {

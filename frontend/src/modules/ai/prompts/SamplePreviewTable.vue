@@ -51,8 +51,12 @@ const titleCol = computed(() => props.columns[0] ?? '')
         <tr
           v-for="row in items"
           :key="row.row"
+          tabindex="0"
+          role="button"
           :class="[`is-${row.status}`, { 'is-changed': row.change, 'is-active-row': activeRow === row.row }]"
           @click="emit('pick', row.row)"
+          @keydown.enter.prevent="emit('pick', row.row)"
+          @keydown.space.prevent="emit('pick', row.row)"
         >
           <td class="is-no">
             <span class="matrix__no">{{ row.row }}</span>

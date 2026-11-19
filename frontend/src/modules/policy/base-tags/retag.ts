@@ -19,61 +19,101 @@ export async function submitRetag(ids: string[], step: string): Promise<{ messag
   return { message, skipped: result.skipped }
 }
 
-/** 列表页批量重新打标后的后台轮询：一旦列表行的版本/更新时间或状态发生变化，立即停轮询并弹出完成通知。 */
+const MAX_POLL_TICKS = 30
+
+function delayForTick(tickNumber: number): number {
+  if (tickNumber <= 10) return 3000
+  if (tickNumber <= 20) return 5000
+  return 10000
+}
+
+/** 列表页批量重新打标后的后台轮询：采用退避间隔轮询目标行的版本/更新时间或状态变化，完成后按结果弹提示。 */
 export function useListRetagPoll<T extends { id: string; version: number; updated_at?: string; tagged_at?: string; ai_status?: string }>(
   items: Ref<T[]>,
   refresh: () => Promise<void>,
 ) {
   const retagging = ref(false)
-  let timer: ReturnType<typeof setInterval> | null = null
-  let remaining = 0
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let attempt = 0
   let inFlight = false
   let disposed = false
+  let runId = 0
+  let trackedIds = new Set<string>()
 
   function stop() {
+    runId += 1
     if (timer) {
-      clearInterval(timer)
+      clearTimeout(timer)
       timer = null
     }
-    remaining = 0
+    attempt = 0
     inFlight = false
     retagging.value = false
   }
 
-  function snapshot(rows: T[]): string {
-    return rows.map(r => `${r.id}:${r.version}:${r.updated_at ?? ''}:${r.tagged_at ?? ''}:${r.ai_status ?? ''}`).join('|')
+  function targetRows(rows: T[]): T[] {
+    return trackedIds.size > 0 ? rows.filter(r => trackedIds.has(r.id)) : rows
   }
 
-  async function tick(baseline: string) {
-    if (inFlight || disposed) return
+  function snapshot(rows: T[]): string | null {
+    const relevant = targetRows(rows)
+    if (trackedIds.size > 0 && relevant.length === 0) return null
+    return relevant.map(r => `${r.id}:${r.version}:${r.updated_at ?? ''}:${r.tagged_at ?? ''}:${r.ai_status ?? ''}`).join('|')
+  }
+
+  function notifyFinished(rows: T[]) {
+    const hasFailure = targetRows(rows).some(r => r.ai_status?.includes('失败'))
+    if (hasFailure) {
+      ElMessage.warning('重新打标结束，部分条目失败，请查看状态')
+      return
+    }
+    ElMessage.success('重新打标已完成，列表数据已自动更新')
+  }
+
+  function tryComplete(baseline: string | null): boolean {
+    const current = snapshot(items.value)
+    if (current === null || baseline === null || current === baseline) return false
+    stop()
+    notifyFinished(items.value)
+    return true
+  }
+
+  function scheduleNext(baseline: string | null, myRun: number) {
+    if (disposed || !retagging.value || myRun !== runId) return
+    attempt += 1
+    if (attempt > MAX_POLL_TICKS) {
+      stop()
+      ElMessage.info('后台仍在重新打标，稍后可手动刷新查看结果')
+      return
+    }
+    timer = setTimeout(() => {
+      timer = null
+      void tick(baseline, myRun)
+    }, delayForTick(attempt))
+  }
+
+  async function tick(baseline: string | null, myRun: number) {
+    if (inFlight || disposed || myRun !== runId) return
     inFlight = true
     try {
       await refresh()
-      if (disposed || !retagging.value) return
-      if (snapshot(items.value) !== baseline) {
-        stop()
-        ElMessage.success('重新打标已完成，列表数据已自动更新')
-      }
+      if (!disposed && myRun === runId) tryComplete(baseline)
     } finally {
       inFlight = false
+      if (myRun === runId) scheduleNext(baseline, myRun)
     }
   }
 
-  async function startAfterRetag() {
+  async function startAfterRetag(targetIds?: string[]) {
     stop()
+    const myRun = runId
+    trackedIds = new Set(targetIds ?? [])
     await refresh()
-    if (disposed) return
+    if (disposed || myRun !== runId) return
     const baseline = snapshot(items.value)
     retagging.value = true
-    remaining = 30
-    timer = setInterval(() => {
-      remaining -= 1
-      if (remaining <= 0) {
-        stop()
-        return
-      }
-      void tick(baseline)
-    }, 3000)
+    attempt = 0
+    scheduleNext(baseline, myRun)
   }
 
   onBeforeUnmount(() => {
