@@ -354,3 +354,21 @@
   - 后端：IAM 改人时的加锁顺序；授权目录的重读节流；Outbox 的租约回写；审计去重；爬虫同步的 advisory lock；分层没有反向 import。
   - 前端：导出都用 `applied`、没有裸 fetch、筛选都是多选；登录跳转防开放重定向；各类轮询在卸载时都会清理；echarts 和 SSE 都会释放。
   - 部署：`sync-to-server.sh --delete` 的排除清单完整；迁移没有 import 运行时 model；不可逆的 downgrade 都写明了理由；Docker 日志轮转由宿主机 `daemon.json` 配置。
+
+---
+
+## 四、整改执行记录（2026-11-19）
+
+### 已完成并验证通过（全仓 `make check && make test-unit` 绿灯）
+
+| 批次 | 提交 | 覆盖编号 | 摘要 |
+| --- | --- | --- | --- |
+| 阶段 0 止损 | `eafb716` | P0-2, P1-1, P1-4, P1-6(路径), P1-11, P2-1, P2-13, P2-14 | 修复四服务同名密钥校验覆盖与 compose 必填口令、备份恢复补齐智库、重打标路径修复、场景比对 500 分片与 ApiError 容错、停用任务不重试、CSP 放行 blob iframe、pre-commit/audit_deps/P6 补齐 thinktank 与 tender |
+| 前端高优修复 | `a316ea0` | P1-10, P2-8(前端), P2-17, P2-18, P3-4, P3-21, P3-22, P3-23 | 智库预览请求时序保护+revokeObjectURL+路由切页保护+localStorage 容错+600s 超时+预览报错提示、解读重打标权限改为 `policy.base_tags`、日志抽屉时序/清空/错误态、信源链接协议校验防 XSS、403 个人资料重载去重与无权跳回首页 |
+| 政策/招中标/智库 | `3178100` | P1-5, P1-12, P2-5, P2-7 | 政策导出正文改为工作线程短超时拉取清洗且故障抛 503、招中标源库拦截 `FOR UPDATE`/`INTO OUTFILE` 并设会话只读、智库预览存储故障不再回退占位摘要、智库模块档位缺失时 fail-closed |
+| IAM 与网关安全 | `4c3443b` | P2-11, P3-1, P3-3, P3-7(CSRF) | 生产强制 `IAM_COOKIE_SECURE=true`、`/login` 增加 Origin 检查、非 HTTPS 网关补齐安全头、CSRF 改为 `hmac.compare_digest`、用户导出写入 `iam.user.exported` 审计、未知账号登录失败脱敏入库 |
+| 平台与基础设施 | `e03b66c` | P1-8(连接/锁超时), P2-2, P2-10, P3-10, P3-15, P3-19 | 调度器心跳瞬时错误重试、Outbox 满批无等待排空、Postgres `max_connections=200`、全服务 Alembic 迁移 `SET lock_timeout='5s'`、全服务 uvicorn `--timeout-keep-alive 75`、`.dockerignore` 递归排除 `**/.env.*`、`make smoke` 严格校验状态码 |
+
+### 待后续确认/安排的剩余项
+- **需服务器/云安全组运维操作**：`P0-1`（关闭 5433 公网暴露与 Navicat 走 SSH 隧道）、`P2-15`（systemd 证书续期失败告警）、`P2-20`（Prometheus/Alertmanager 监控）、`P2-21`（CI 流水线）、`P2-12`（Docker 网络分段重构）。
+- **需结合业务/库结构变更或压测**：`P1-2`（用户管理员重置密码按权限子集限制，会改变现有管理员权限边界，建议业务确认后上）、`P1-3`（跨服务 AI 流水线幂等键协议改造）、`P1-7`（招中标独立 Outbox 审计库）、`P1-9`（政策大表 `CREATE INDEX CONCURRENTLY` 迁移）。
