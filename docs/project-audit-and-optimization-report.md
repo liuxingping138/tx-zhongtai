@@ -368,7 +368,15 @@
 | 政策/招中标/智库 | `3178100` | P1-5, P1-12, P2-5, P2-7 | 政策导出正文改为工作线程短超时拉取清洗且故障抛 503、招中标源库拦截 `FOR UPDATE`/`INTO OUTFILE` 并设会话只读、智库预览存储故障不再回退占位摘要、智库模块档位缺失时 fail-closed |
 | IAM 与网关安全 | `4c3443b` | P2-11, P3-1, P3-3, P3-7(CSRF) | 生产强制 `IAM_COOKIE_SECURE=true`、`/login` 增加 Origin 检查、非 HTTPS 网关补齐安全头、CSRF 改为 `hmac.compare_digest`、用户导出写入 `iam.user.exported` 审计、未知账号登录失败脱敏入库 |
 | 平台与基础设施 | `e03b66c` | P1-8(连接/锁超时), P2-2, P2-10, P3-10, P3-15, P3-19 | 调度器心跳瞬时错误重试、Outbox 满批无等待排空、Postgres `max_connections=200`、全服务 Alembic 迁移 `SET lock_timeout='5s'`、全服务 uvicorn `--timeout-keep-alive 75`、`.dockerignore` 递归排除 `**/.env.*`、`make smoke` 严格校验状态码 |
+| 批次 1：IAM 越权与审计 diff | `3b3fbf7` | P1-2, P3-2 | `user_guard.py` 限制非超管/无全局授权管理者仅可操作权限子集；`iam.user.updated` 审计记录前后字段 `changes` diff |
+| 批次 2：AI 流水线幂等与并发 | `241394f` | P1-3, P2-3, P2-4 | 跨服务 AI 流水线新增 `client_run_id` 幂等键并预置快照、异步释放锁不再阻塞事件循环、AI worker 心跳绑定锁连接防事件循环阻塞、policy-service `stop_quietly` 兜底止损 |
+| 批次 3：政策大表并发索引与防死锁 | `246ee13` | P1-9, P3-8 | `BaseTag` 并发创建默认排序联合索引（`postgresql_concurrently=True`）、末页/不足页跳过 `COUNT(*)`、`for_update` 固定按 `id` 排序 + 批量哈希查表 |
+| 批次 4：招中标审计/连接池与智库流式 | `49e4f3f` | P1-7, P2-6, P2-8(后端), P2-22 | 招中标导出接入统一审计上报与线程安全 `LifoQueue` MySQL 连接池；智库上传孤儿清理补 `commit`；智库 `/content` 与 `/download` 改为分块 `StreamingResponse` |
+| 批次 5：连接池治理/大下载分流与规则基线 | `8bbd666` | P1-8(全库引擎), P2-9, P2-15, P2-16, P3-11, P3-13, P3-14, P3-15, P3-17, P3-19 | 抽出 `create_service_engine` 统一全库 `statement_timeout`/`pool` 配额；调度器窗口函数消除 `2N` 查询；网关增加不缓冲大文件下载路由；worker 补 `init: true` 与 gateway 依赖顺序；证书续期失败 systemd 告警脚本；`scan_scope.py` 与 `check_code_rules.py` 规则收严 |
+| 批次 6：前端体验、去重、无障碍与契约 | `4970389` | P1-6(轮询/过滤), P2-19, P3-18, P3-20, P3-25 | 重打标按 `targetIds` 精确跟踪+退避轮询+仅调 `load` 不重载筛选项+部分失败/超时分级提示；`ScrollPort` 改 rAF 合帧与内层可滚放行；`useCandidateExtras` 失败即刻 `markShown` 去重；AI 预览行键盘 Enter/Space 无障碍；OpenAPI 导出接口契约全覆盖 |
+| 批次 7：文档与手册补齐 | 本次提交 | P2-13, P3-28 | 更新 `部署与维护.md`（补 `audit-worker`/`tender-service`/`thinktank-service`、`thinktank_db` 与 SSH 隧道说明、统一 `make SERVER=1 migrate`）、闭环 `系统全面审查与整改报告.md` `SEC-05` 引用并同步本报告执行台账 |
 
-### 待后续确认/安排的剩余项
-- **需服务器/云安全组运维操作**：`P0-1`（关闭 5433 公网暴露与 Navicat 走 SSH 隧道）、`P2-15`（systemd 证书续期失败告警）、`P2-20`（Prometheus/Alertmanager 监控）、`P2-21`（CI 流水线）、`P2-12`（Docker 网络分段重构）。
-- **需结合业务/库结构变更或压测**：`P1-2`（用户管理员重置密码按权限子集限制，会改变现有管理员权限边界，建议业务确认后上）、`P1-3`（跨服务 AI 流水线幂等键协议改造）、`P1-7`（招中标独立 Outbox 审计库）、`P1-9`（政策大表 `CREATE INDEX CONCURRENTLY` 迁移）。
+### 待外部环境/专项立项处理的剩余项
+- **部署上线时随 `.env` 一并落地**：`P0-1`（服务端 `.env` 设 `POSTGRES_BIND_ADDR=127.0.0.1`，Navicat 改用 SSH 隧道）、注入 `TENDER_AUDIT_INGEST_SECRET` 与 `AUDIT_INTERNAL_CALLER_SECRETS`、全量重建容器与执行 `make SERVER=1 migrate`。
+- **需云厂商控制台手工操作**：在云服务器安全组中移除 `5433` 端口公网入站放行规则（与服务端 `127.0.0.1` 绑定形成双保险）。
+- **明确延后至独立专项基建的条目**：`P2-12`（Docker 内部网络彻底隔离与非 root 容器用户改造）、`P2-20`（Prometheus/Alertmanager 监控告警栈）、`P2-21`（独立 CI 流水线建设）。
