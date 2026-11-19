@@ -18,8 +18,8 @@
 frontend/dist/
 frontend/.vite/
 
-.env
-.env.*
+**/.env
+**/.env.*
 !.env.example
 
 docs/

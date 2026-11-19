@@ -339,15 +339,20 @@ test-e2e: p6-fixtures
 smoke:
 	@echo "== 经网关冒烟验证（需要 make dev-up 已启动） =="
 	@set -e; \
-	GW=http://localhost$${GATEWAY_HTTP_PORT:+:$$GATEWAY_HTTP_PORT}; \
 	GW=http://localhost:$$(grep -E '^GATEWAY_HTTP_PORT=' .env | cut -d= -f2 || echo 8080); \
 	echo "网关地址: $$GW"; \
+	check() { \
+		expected="$$1"; shift; \
+		code=$$(curl -sS -o /dev/null -w "%{http_code}" "$$@"); \
+		echo "  status=$$code (expected $$expected)"; \
+		[ "$$code" = "$$expected" ] || { echo "冒烟失败: 期望 $$expected 实际 $$code" >&2; exit 1; }; \
+	}; \
 	echo "- 前端首页应为 200"; \
-	curl -sS -o /dev/null -w "  status=%{http_code}\n" $$GW/; \
+	check 200 "$$GW/"; \
 	echo "- 未接入业务前缀 /api/v1/customer 应为 404（网关拦截，不回退到前端 HTML）"; \
-	curl -sS -o /dev/null -w "  status=%{http_code}\n" $$GW/api/v1/customer/anything; \
+	check 404 "$$GW/api/v1/customer/anything"; \
 	echo "- GET /api/v1/auth/csrf 应为 200"; \
-	curl -sS -o /dev/null -w "  status=%{http_code}\n" $$GW/api/v1/auth/csrf; \
+	check 200 "$$GW/api/v1/auth/csrf"; \
 	echo "- 错误密码登录应为 401"; \
-	curl -sS -o /dev/null -w "  status=%{http_code}\n" -X POST $$GW/api/v1/auth/login -H 'Content-Type: application/json' -d '{"username":"nobody","password":"wrong-pass"}'; \
+	check 401 -X POST "$$GW/api/v1/auth/login" -H 'Content-Type: application/json' -d '{"username":"nobody","password":"wrong-pass"}'; \
 	echo "冒烟验证完成。"

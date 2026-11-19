@@ -41,4 +41,4 @@ EXPOSE 8007
 
 USER appuser
 
-CMD [".venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8007"]
+CMD [".venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--timeout-keep-alive", "75", "--port", "8007"]

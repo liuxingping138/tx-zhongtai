@@ -243,13 +243,16 @@ class AuditEmitter:
     async def outbox_loop(self, stop: asyncio.Event, settings: _AuditSettings) -> None:
         next_purge = 0.0
         while not stop.is_set():
+            delivered = 0
             try:
-                await self.deliver_pending(settings)
+                delivered = await self.deliver_pending(settings)
                 if time.monotonic() >= next_purge:
                     next_purge = time.monotonic() + PURGE_EVERY_SECONDS
                     await self.purge_delivered()
             except Exception:
                 self._logger.exception(f"{self._log_name}_outbox_loop_failed")
+            if delivered >= 20:  # noqa: PLR2004  满批时立即继续排空积压，不等轮询间隔
+                continue
             try:
                 await asyncio.wait_for(stop.wait(), timeout=settings.worker_poll_interval_seconds)
             except TimeoutError:

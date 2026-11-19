@@ -135,11 +135,26 @@ class SchedulerRunner:
 
     async def heartbeat(self, connection: AsyncConnection) -> None:
         model = self.scheduler.heartbeat_model
+        consecutive_errors = 0
+        max_transient_errors = 3
         while True:
             now = datetime.now(UTC)
             stmt = insert(model).values(id=1, seen_at=now)
-            await connection.execute(stmt.on_conflict_do_update(index_elements=["id"], set_={"seen_at": now}))
-            await connection.commit()
+            try:
+                await connection.execute(stmt.on_conflict_do_update(index_elements=["id"], set_={"seen_at": now}))
+                await connection.commit()
+                consecutive_errors = 0
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                consecutive_errors += 1
+                self.logger.warning(
+                    "scheduler_heartbeat_failed attempt=%s reason=%s", consecutive_errors, type(exc).__name__
+                )
+                with contextlib.suppress(Exception):
+                    await connection.rollback()
+                if consecutive_errors >= max_transient_errors:
+                    raise
             await asyncio.sleep(HEARTBEAT_SECONDS)
 
     async def drain(self, lane: str) -> None:
