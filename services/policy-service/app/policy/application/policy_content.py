@@ -60,10 +60,15 @@ async def policy_content(source_content_id: str | None) -> dict[str, Any]:
     }
 
 
+def _read_and_clean_batch(batch: list[str]) -> dict[str, str]:
+    raw_map = source.read_contents_for_page(batch)
+    return {cid: rules.clean_content(raw_html, 0) for cid, raw_html in raw_map.items() if raw_html}
+
+
 async def policy_contents_by_source_ids(source_content_ids: Sequence[str]) -> dict[str, str]:
     """批量按源政策 ID 读取正文并清洗，返回 {source_content_id: text}。
 
-    分批拉取并即时清洗释放原始 HTML，避免万级导出同时囤积全量富文本撑爆容器内存。
+    分批在工作线程中拉取并即时清洗释放原始 HTML，使用页面短超时连接；源库故障直接抛 503，不返回残缺正文。
     """
 
     valid_ids = [cid for cid in dict.fromkeys(source_content_ids) if cid]
@@ -73,14 +78,11 @@ async def policy_contents_by_source_ids(source_content_ids: Sequence[str]) -> di
     for start in range(0, len(valid_ids), _CONTENT_CHUNK):
         batch = valid_ids[start : start + _CONTENT_CHUNK]
         try:
-            raw_map: dict[str, str] = await anyio.to_thread.run_sync(source.read_contents, batch)
+            batch_cleaned: dict[str, str] = await anyio.to_thread.run_sync(_read_and_clean_batch, batch)
         except (OSError, pymysql.MySQLError) as exc:
-            logger.warning("批量读取源政策正文失败，导出将回退为空正文: %s", exc)
-            return cleaned
-        for cid, raw_html in raw_map.items():
-            if raw_html:
-                cleaned[cid] = rules.clean_content(raw_html, 0)
-        raw_map.clear()
+            logger.warning("批量读取源政策正文失败: %s", exc)
+            raise DependencyUnavailableError(SOURCE_DOWN) from exc
+        cleaned.update(batch_cleaned)
     return cleaned
 
 

@@ -43,7 +43,8 @@ async def get_knowledge_access(
     """加载当前用户在各文件类型、行业类型上的授权档位，并按子库菜单档位封顶。"""
 
     levels = await fetch_scope_levels(request, client, ALL_SCOPE_RESOURCES, "list")
-    module_level = getattr(request.state, "authz_level", None)
+    raw_level = getattr(request.state, "authz_level", None)
+    module_level = raw_level if isinstance(raw_level, str) and raw_level in {"READ", "EXPORT", "FULL"} else "NONE"
     return KnowledgeAccess.from_levels(levels, module_level=module_level)
 
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
@@ -14,6 +16,10 @@ from app.core.config import get_settings
 
 # 外部表包含多种字符串、日期、Decimal 类型，数据库驱动返回的行在响应层统一序列化。
 Row = dict[str, Any]
+_FORBIDDEN_SQL = re.compile(
+    r"\b(?:FOR\s+UPDATE|LOCK\s+IN\s+SHARE\s+MODE|INTO\s+(?:OUTFILE|DUMPFILE))\b",
+    re.IGNORECASE,
+)
 
 
 class Reader:
@@ -21,8 +27,8 @@ class Reader:
         self._connection = connection
 
     def select(self, sql: str, params: tuple[object, ...] = ()) -> list[Row]:
-        if not sql.lstrip().upper().startswith("SELECT ") or ";" in sql:
-            raise ValueError("招中标数据源仅允许单条 SELECT 查询")
+        if not sql.lstrip().upper().startswith("SELECT ") or ";" in sql or _FORBIDDEN_SQL.search(sql):
+            raise ValueError("招中标数据源仅允许单条只读 SELECT 查询")
         with self._connection.cursor() as cursor:
             cursor.execute(sql, params)
             return list(cursor.fetchall())
@@ -48,6 +54,8 @@ def source_reader(*, counting: bool = False) -> Iterator[Reader]:
             write_timeout=settings.mysql_read_timeout,
         )
         try:
+            with contextlib.suppress(pymysql.MySQLError), connection.cursor() as cur:
+                cur.execute("SET SESSION TRANSACTION READ ONLY")
             yield Reader(connection)
         finally:
             connection.close()

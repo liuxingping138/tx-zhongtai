@@ -259,7 +259,7 @@ async def read_file_content(
 
     settings = get_settings()
     try:
-        raw = await storage.read_object(settings, row.storage_path, raise_on_error=for_download)
+        raw = await storage.read_object(settings, row.storage_path, raise_on_error=True)
     except storage.StorageUnavailableError as exc:
         raise ApiError(
             "文件存储服务暂不可用，请稍后重试",

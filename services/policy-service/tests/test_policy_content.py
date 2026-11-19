@@ -159,16 +159,25 @@ async def test_policy_contents_by_source_ids(monkeypatch: pytest.MonkeyPatch) ->
     def fake_contents(content_ids: list[str]) -> dict[str, str]:
         return {cid: f"<p>{cid}正文内容</p>" for cid in content_ids}
 
-    monkeypatch.setattr(source, "read_contents", fake_contents)
+    monkeypatch.setattr(source, "read_contents_for_page", fake_contents)
     contents = await policy_content.policy_contents_by_source_ids(["c1", "c2", ""])
     assert contents == {"c1": "c1正文内容", "c2": "c2正文内容"}
+
+
+async def test_policy_contents_by_source_ids_raises_503_on_source_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def broken(_content_ids: list[str]) -> dict[str, str]:
+        raise OSError("mysql down")
+
+    monkeypatch.setattr(source, "read_contents_for_page", broken)
+    with pytest.raises(DependencyUnavailableError):
+        await policy_content.policy_contents_by_source_ids(["c1"])
 
 
 async def test_attach_policy_contents(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_contents(content_ids: list[str]) -> dict[str, str]:
         return {cid: f"{cid}正文" for cid in content_ids}
 
-    monkeypatch.setattr(source, "read_contents", fake_contents)
+    monkeypatch.setattr(source, "read_contents_for_page", fake_contents)
 
     item1 = SimpleNamespace(source_content_id="s1", policy_title="政策1")
     item2 = SimpleNamespace(source_content_id=None, policy_title="政策2")
