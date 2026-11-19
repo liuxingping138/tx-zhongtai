@@ -185,6 +185,90 @@ def test_internal_routes_reject_unknown_callers(monkeypatch: pytest.MonkeyPatch)
         app.dependency_overrides.clear()
 
 
+async def test_pipeline_run_idempotent_replay_and_invalid_body(
+    online: list[Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    existing_row = run(id=RUN_ID, source="pipeline")
+    calls = 0
+
+    async def fake_get(_session: Any, run_id: str, **_kwargs: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        return existing_row if calls > 1 and run_id == RUN_ID else None
+
+    monkeypatch.setattr(run_repo, "get", fake_get)
+    rows = [{"源ID": "p1", "政策标题": "甲"}]
+    first = await pipeline_runs.create(
+        FakeSession(),
+        ACTOR,
+        {"prompt_id": PROMPT_ID, "rows": rows, "client_run_id": RUN_ID},  # type: ignore[arg-type]
+    )
+    second = await pipeline_runs.create(
+        FakeSession(),
+        ACTOR,
+        {"prompt_id": PROMPT_ID, "rows": rows, "client_run_id": RUN_ID},  # type: ignore[arg-type]
+    )
+    assert first["id"] == RUN_ID and second["id"] == RUN_ID and len(online) == 1
+
+    from app.api.internal import _parse_pipeline_body
+
+    with pytest.raises(ApiError, match="请求体无效"):
+        _parse_pipeline_body(b"{bad-json")
+
+
+async def test_worker_lead_exits_when_lock_connection_drops(monkeypatch: pytest.MonkeyPatch) -> None:
+    import asyncio
+    from contextlib import asynccontextmanager
+
+    from app.worker import runner
+
+    class _DeadConn:
+        def __init__(self) -> None:
+            self.checks = 0
+
+        async def scalar(self, *_args: Any, **_kwargs: Any) -> Any:
+            self.checks += 1
+            if self.checks == 1:
+                return True
+            raise RuntimeError("connection lost")
+
+        async def commit(self) -> None:
+            return None
+
+        async def rollback(self) -> None:
+            return None
+
+        async def execute(self, *_args: Any, **_kwargs: Any) -> None:
+            return None
+
+    conn = _DeadConn()
+
+    @asynccontextmanager
+    async def _connect() -> Any:
+        yield conn
+
+    cancelled = False
+
+    async def fake_consume(_stop: asyncio.Event) -> None:
+        nonlocal cancelled
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            cancelled = True
+            raise
+
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(runner, "engine", SimpleNamespace(connect=_connect))
+    monkeypatch.setattr(runner, "consume", fake_consume)
+    monkeypatch.setattr(runner, "beat", noop)
+    monkeypatch.setattr(runner, "HEARTBEAT_SECONDS", 0.01)
+
+    with pytest.raises(RuntimeError, match="connection lost"):
+        await runner.lead(asyncio.Event())
+    assert cancelled is True
+
+
 def test_result_excel_cuts_cells_beyond_the_excel_limit(tmp_path: Any) -> None:
     """Excel 单元格超过 32767 字文件就打不开：结果表里截断并标明，完整内容在原始返回 CSV。"""
 

@@ -29,6 +29,7 @@ POLL_MISSES = 30
 SETTLE_SECONDS = 300
 # 只沿用最近几天内失败的那批：再早的数据多半已经被后来的批次重新跑过了。
 REUSE_DAYS = 3
+PIPELINE_IO_TIMEOUT = 180.0
 FINISHED = {"done", "cancelled", "failed", "interrupted"}
 # ai-service 对没轮到的行写「未执行（任务停止或中断）」：费用到上限或任务被停。这些行下批重做。
 NOT_RUN = "未执行"
@@ -166,23 +167,39 @@ async def ask(
 
     previous = await _reusable(run_id, run_field)
     sent = fitting_rows(rows)
-    body = {"prompt_id": prompt_id, "rows": rows[:sent], "cost_limit": str(spend.remaining()), "caller_name": caller}
-    created = await internal_clients.ai("POST", "/internal/v1/pipeline-runs", json={**body, "reuse_run_id": previous})
-    ai_run_id = str(created["id"])
-    await update_run(run_id, **{run_field: ai_run_id})
+    client_run_id = uuid.uuid4().hex
+    await update_run(run_id, **{run_field: client_run_id})
+    body = {
+        "prompt_id": prompt_id,
+        "rows": rows[:sent],
+        "cost_limit": str(spend.remaining()),
+        "caller_name": caller,
+        "reuse_run_id": previous,
+        "client_run_id": client_run_id,
+    }
+    ai_run_id = client_run_id
     try:
+        created = await internal_clients.ai(
+            "POST", "/internal/v1/pipeline-runs", json=body, request_timeout=PIPELINE_IO_TIMEOUT
+        )
+        returned_id = str(created["id"])
+        if returned_id != ai_run_id:
+            ai_run_id = returned_id
+            await update_run(run_id, **{run_field: ai_run_id})
         status = await _wait(run_id, ai_run_id, spend)
+        stage_cost = cost_of(status)
+        spend.run += stage_cost
+        await update_run(run_id, **{STAGE_COST[run_field]: stage_cost})
+        if status["status"] == "failed" and not status.get("done_count"):
+            # 一行都没跑就失败（模型不认识、快照丢了这类）：照常往下走会把整批记成「未执行」、批次却记成功，天天如此。
+            raise UserFacingError(f"AI 服务没能执行这一批：{status.get('error_message') or '没有说明原因'}")
+        data = await internal_clients.ai(
+            "GET", f"/internal/v1/pipeline-runs/{ai_run_id}/results", request_timeout=PIPELINE_IO_TIMEOUT
+        )
     except BaseException:
-        # 调度超时、进程停止、一直问不到：都先叫停那边，别让它在后台继续花钱。它已答好的行下一批沿用。
+        # 建任务超时、轮询中断或取结果失败：都先叫停那边，避免产生孤儿任务继续花钱。
         await asyncio.shield(stop_quietly(ai_run_id))
         raise
-    stage_cost = cost_of(status)
-    spend.run += stage_cost
-    await update_run(run_id, **{STAGE_COST[run_field]: stage_cost})
-    if status["status"] == "failed" and not status.get("done_count"):
-        # 一行都没跑就失败（模型不认识、快照丢了这类）：照常往下走会把整批记成「未执行」、批次却记成功，天天如此。
-        raise UserFacingError(f"AI 服务没能执行这一批：{status.get('error_message') or '没有说明原因'}")
-    data = await internal_clients.ai("GET", f"/internal/v1/pipeline-runs/{ai_run_id}/results")
     status["reused"] = int(created.get("reused") or 0)
     return status, [*data["items"], *({"error": TOO_LARGE, "items": []} for _ in rows[sent:])]
 

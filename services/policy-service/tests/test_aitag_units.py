@@ -792,6 +792,29 @@ async def test_giving_up_on_the_ai_run_stops_it_and_books_what_it_spent(
     assert (stored.status, stored.interpret_cost) == ("failed", Decimal("1.5"))
 
 
+async def test_ask_persists_client_run_id_and_stops_on_create_timeout(
+    monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]
+) -> None:
+    run_id = uuid.uuid4()
+    run_store[str(run_id)] = _run_row()
+    calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    async def ai(method: str, path: str, **kwargs: Any) -> Any:
+        calls.append((method, path, kwargs.get("json")))
+        if method == "POST" and path == "/internal/v1/pipeline-runs":
+            raise DependencyUnavailableError("create timeout")
+        return {}
+
+    monkeypatch.setattr(internal_clients, "ai", ai)
+    spend = pipeline.Spend(limit=Decimal(10), before=Decimal(0))
+    with pytest.raises(DependencyUnavailableError):
+        await pipeline.ask(run_id, spend, prompt_id="p", rows=[{"源ID": "1"}], caller="c", run_field="type_run_id")
+    saved_id = run_store[str(run_id)].type_run_id
+    assert len(saved_id) == 32
+    assert calls[0][2] is not None and calls[0][2]["client_run_id"] == saved_id
+    assert ("POST", f"/internal/v1/pipeline-runs/{saved_id}/stop", None) in calls
+
+
 async def test_the_next_batch_reuses_answers_from_the_failed_one(
     monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]
 ) -> None:

@@ -18,6 +18,7 @@ import anyio
 from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
 from platform_common.errors import ApiError, ErrorCode, NotFoundError
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application import batch_runs, prompts, releases
@@ -75,7 +76,7 @@ def _cost_limit(value: object) -> Decimal | None:
 
 
 async def _release(session: AsyncSession, prompt_id: str) -> TemplateRelease:
-    template = await prompts.require(session, prompt_id, lock=True)
+    template = await prompts.require(session, prompt_id)
     return await releases.current(session, template, "定时任务")
 
 
@@ -132,15 +133,35 @@ def _reuse_answers(previous: BatchRun, run_id: str, rows: list[dict[str, str]], 
     return copied
 
 
+async def _idempotent_replay(session: AsyncSession, client_run_id: str) -> dict[str, Any] | None:
+    if not client_run_id:
+        return None
+    if not storage.ID_PATTERN.fullmatch(client_run_id):
+        raise _invalid("client_run_id 格式无效")
+    existing = await run_repo.get(session, client_run_id, deleted=True)
+    if existing is not None and existing.source == RUN_SOURCE_PIPELINE:
+        return {**run_to_dict(existing), "reused": 0}
+    return None
+
+
 async def create(session: AsyncSession, caller: Actor, values: dict[str, Any]) -> dict[str, Any]:
+    client_run_id = str(values.get("client_run_id") or "").strip()
+    if replay := await _idempotent_replay(session, client_run_id):
+        return replay
     headers, rows = _checked_rows(values.get("rows"))
     release = await _release(session, str(values.get("prompt_id") or ""))
     model = await resolve_model(session, release.model_id, frozen=RELEASE_MODEL_DISABLED)
     code = await releases.release_code(release)
     prompts.require_code(release.content, code)
     previous = await _reusable(session, str(values.get("reuse_run_id") or ""), release, model.id)
+    run_id = client_run_id or new_id()
+    await anyio.to_thread.run_sync(_write_snapshot, run_id, headers, rows, code)
+    reused = 0
+    if previous is not None:
+        reused = await anyio.to_thread.run_sync(_reuse_answers, previous, run_id, rows, code)
+        logger.info("pipeline_run_reused run=%s previous=%s rows=%s", run_id, previous.id, reused)
     run = BatchRun(
-        id=new_id(),
+        id=run_id,
         prompt_id=release.prompt_id,
         prompt_title=release.title,
         prompt_category=release.category,
@@ -168,12 +189,16 @@ async def create(session: AsyncSession, caller: Actor, values: dict[str, Any]) -
         cost_limit=_cost_limit(values.get("cost_limit")),
     )
     run_repo.add(session, run)
-    await session.flush()
-    await anyio.to_thread.run_sync(_write_snapshot, run.id, headers, rows, code)
-    reused = 0
-    if previous is not None:
-        reused = await anyio.to_thread.run_sync(_reuse_answers, previous, run.id, rows, code)
-        logger.info("pipeline_run_reused run=%s previous=%s rows=%s", run.id, previous.id, reused)
+    try:
+        await session.flush()
+    except IntegrityError:
+        if not client_run_id:
+            raise
+        await session.rollback()
+        existing = await run_repo.get(session, client_run_id, deleted=True)
+        if existing is not None and existing.source == RUN_SOURCE_PIPELINE:
+            return {**run_to_dict(existing), "reused": 0}
+        raise
     changes: dict[str, Any] = {"prompt_id": release.prompt_id, "release_no": release.release_no, "rows": len(rows)}
     if reused:
         changes["reused_rows"] = reused

@@ -1957,32 +1957,12 @@
         ],
         "summary": "Create Run",
         "operationId": "create_run_internal_v1_pipeline_runs_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PipelineRunBody"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
               }
             }
           }
@@ -2334,54 +2314,6 @@
         ],
         "title": "ModelBody",
         "description": "单价按文本收，由应用层统一校验成小数：空串表示没配这一档。"
-      },
-      "PipelineRunBody": {
-        "properties": {
-          "prompt_id": {
-            "type": "string",
-            "maxLength": 32,
-            "title": "Prompt Id"
-          },
-          "rows": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "type": "array",
-            "title": "Rows"
-          },
-          "cost_limit": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 20
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cost Limit"
-          },
-          "caller_name": {
-            "type": "string",
-            "maxLength": 100,
-            "title": "Caller Name",
-            "default": "定时任务"
-          },
-          "reuse_run_id": {
-            "type": "string",
-            "maxLength": 32,
-            "title": "Reuse Run Id",
-            "default": ""
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "prompt_id",
-          "rows"
-        ],
-        "title": "PipelineRunBody"
       },
       "PromptBody": {
         "properties": {

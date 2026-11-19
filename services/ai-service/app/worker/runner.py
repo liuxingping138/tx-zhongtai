@@ -9,6 +9,7 @@ import logging
 import signal
 
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.application.batch_execute import execute
 from app.application.batch_queue import BULK_SOURCES, beat, bulk_limit, claim_next, recover_orphans
@@ -21,9 +22,12 @@ POLL_SECONDS = 2.0
 HEARTBEAT_SECONDS = 10.0
 
 
-async def heartbeat() -> None:
+async def heartbeat(lock_connection: AsyncConnection) -> None:
     while True:
-        # 库连接抖一下不能让它死掉：它一停，健康检查从此一直报不健康。
+        # 先确认持锁连接仍然活着（断连时 Postgres 会自动释放会话锁，必须立刻退出以免双 worker 并发）。
+        await lock_connection.scalar(text("SELECT 1"))
+        await lock_connection.commit()
+        # 写心跳库抖一下不能让 leader 退出，但连续报错会靠下一轮锁探活校验。
         try:
             await beat()
         except Exception:  # 下一次接着写
@@ -81,13 +85,20 @@ async def lead(stop: asyncio.Event) -> None:
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=POLL_SECONDS)
             return
-        beating = asyncio.create_task(heartbeat())
+        tasks = [
+            asyncio.create_task(heartbeat(connection)),
+            asyncio.create_task(consume(stop)),
+        ]
         try:
-            await consume(stop)
+            done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                task.result()
         finally:
-            beating.cancel()
-            await asyncio.gather(beating, return_exceptions=True)
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
             with contextlib.suppress(Exception):
+                await connection.rollback()
                 await connection.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": LEADER_LOCK})
                 await connection.commit()
 
