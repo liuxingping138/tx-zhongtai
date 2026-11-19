@@ -15,6 +15,8 @@ class Settings(BaseServiceSettings):
     iam_base_url: str = "http://iam-service:8001"
     iam_service_secret: str = ""
     iam_authorize_timeout_seconds: float = 2.0
+    audit_ingest_url: str = "http://audit-service:8002"
+    audit_ingest_secret: str = ""
     mysql_host: str = ""
     mysql_port: int = 3306
     mysql_user: str = ""

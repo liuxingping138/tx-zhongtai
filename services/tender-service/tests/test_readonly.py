@@ -276,7 +276,8 @@ def test_reader_rejects_writes_before_cursor_is_opened(sql):
     connection.cursor.assert_not_called()
 
 
-def test_reader_binds_and_closes_without_committing(monkeypatch):
+def test_reader_binds_and_returns_to_pool_without_committing(monkeypatch):
+    source.clear_pool()
     settings = Settings(mysql_host="example.invalid")
     monkeypatch.setattr(source, "get_settings", lambda: settings)
     connection = MagicMock()
@@ -284,12 +285,16 @@ def test_reader_binds_and_closes_without_committing(monkeypatch):
     connect = MagicMock(return_value=connection)
     monkeypatch.setattr(source.pymysql, "connect", connect)
     assert source._ready()
-    connection.close.assert_called_once()
     connection.commit.assert_not_called()
     assert connect.call_args.kwargs["autocommit"] is True
+    assert source._ready()
+    assert connect.call_count == 1
+    source.clear_pool()
+    connection.close.assert_called_once()
 
 
 def test_source_unavailable_is_503(monkeypatch):
+    source.clear_pool()
     monkeypatch.setattr(source, "get_settings", Settings)
     with pytest.raises(DependencyUnavailableError), source.source_reader():
         pass
@@ -579,3 +584,109 @@ def test_statistics_concurrent_distinct_ranges_do_not_503_and_same_key_coalesces
     monkeypatch.setattr(stats._COMPUTE_SEM, "acquire", lambda **_kw: False)
     with pytest.raises(DependencyUnavailableError, match="查询较多"):
         stats.get_statistics(StatsQuery(date_from="2026-11-04", date_to="2026-11-04"))
+
+
+async def test_forbidden_sql_and_source_pool(monkeypatch) -> None:
+    fake_conn = MagicMock()
+    reader = source.Reader(fake_conn)
+    for bad_sql in ("SELECT * FROM t FOR UPDATE", "SELECT * FROM t INTO OUTFILE '/tmp/x'"):
+        with pytest.raises(ValueError, match="只读 SELECT"):
+            reader.select(bad_sql)
+
+    pooled = MagicMock()
+    pooled_cur = MagicMock()
+    pooled.cursor.return_value.__enter__.return_value = pooled_cur
+    pooled.cursor.return_value.__exit__.return_value = False
+    monkeypatch.setattr(source.pymysql, "connect", MagicMock(return_value=pooled))
+    monkeypatch.setattr(
+        source,
+        "get_settings",
+        lambda: Settings(mysql_host="127.0.0.1", mysql_port=3306, mysql_user="ro", mysql_password="pw"),
+    )
+    source.clear_pool()
+    with source.source_reader() as r1:
+        assert r1 is not None
+    with source.source_reader() as r2:
+        assert r2 is not None
+    assert source.pymysql.connect.call_count == 1
+    assert pooled.ping.call_count == 1
+    source.clear_pool()
+
+    dead_conn = MagicMock()
+    dead_conn.ping.side_effect = pymysql.OperationalError(2006, "gone")
+    fresh_conn = MagicMock()
+    fresh_cur = MagicMock()
+    fresh_conn.cursor.return_value.__enter__.return_value = fresh_cur
+    fresh_conn.cursor.return_value.__exit__.return_value = False
+    monkeypatch.setattr(source.pymysql, "connect", MagicMock(return_value=fresh_conn))
+    source._bucket(("127.0.0.1", 3306, "ro", 20)).put_nowait(dead_conn)
+    with source.source_reader():
+        pass
+    dead_conn.close.assert_called_once()
+    with pytest.raises(RuntimeError, match="query_err"), source.source_reader():
+        raise RuntimeError("query_err")
+    fresh_conn.close.assert_called_once()
+    source.clear_pool()
+
+
+async def test_export_audit_reporting(monkeypatch) -> None:
+    import httpx
+    from platform_common.actors import Actor
+    from platform_common.config import Environment
+
+    from app.core import audit
+
+    monkeypatch.setattr(
+        audit,
+        "get_settings",
+        lambda: Settings.model_construct(
+            environment=Environment.PRODUCTION, iam_service_secret="real-secret-token", audit_ingest_secret=""
+        ),
+    )
+    with pytest.raises(DependencyUnavailableError, match="审计配置缺失"):
+        await audit.emit_export_audit(actor=Actor(id="u1", name="张"), kind="purchaser", exported_rows=1, filters={})
+
+    sent: list[dict[str, object]] = []
+
+    class _Client:
+        def __init__(self, **_kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_a):
+            return False
+
+        async def post(self, url: str, json: dict[str, object], headers: dict[str, str]):
+            sent.append({"url": url, "json": json, "headers": headers})
+            return httpx.Response(200)
+
+    monkeypatch.setattr(audit.httpx, "AsyncClient", _Client)
+    monkeypatch.setattr(
+        audit,
+        "get_settings",
+        lambda: Settings(
+            environment=Environment.PRODUCTION,
+            iam_service_secret="real-secret-token",
+            audit_ingest_secret="real-audit-token",
+        ),
+    )
+    await audit.emit_export_audit(actor=Actor(id="u1", name="张"), kind="winbid", exported_rows=3, filters={"page": 1})
+    assert sent and sent[0]["json"]["module_code"] == "tender.winbid"  # type: ignore[index]
+
+    class _BadClient(_Client):
+        async def post(self, url: str, json: dict[str, object], headers: dict[str, str]):
+            return httpx.Response(503)
+
+    monkeypatch.setattr(audit.httpx, "AsyncClient", _BadClient)
+    with pytest.raises(DependencyUnavailableError, match="审计服务暂不可用"):
+        await audit.emit_export_audit(actor=Actor(id="u1", name="张"), kind="winbid", exported_rows=3, filters={})
+
+    class _ErrClient(_Client):
+        async def post(self, url: str, json: dict[str, object], headers: dict[str, str]):
+            raise httpx.ConnectError("refused")
+
+    monkeypatch.setattr(audit.httpx, "AsyncClient", _ErrClient)
+    with pytest.raises(DependencyUnavailableError, match="审计服务暂不可用"):
+        await audit.emit_export_audit(actor=Actor(id="u1", name="张"), kind="winbid", exported_rows=3, filters={})

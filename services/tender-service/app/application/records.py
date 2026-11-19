@@ -3,9 +3,11 @@
 from datetime import date, datetime
 
 from anyio import to_thread
+from platform_common.actors import Actor
 from platform_common.errors import ApiError, ErrorCode, NotFoundError
 from platform_common.excel import build_workbook_async
 
+from app.core.audit import emit_export_audit
 from app.core.config import get_settings
 from app.core.source import Row, source_reader
 from app.domain.fields import Kind, Status, export_columns
@@ -88,7 +90,7 @@ def _format_export_row(row: Row) -> Row:
     return formatted
 
 
-async def export_records(kind: Kind, query: ListQuery) -> bytes:
+async def export_records(kind: Kind, query: ListQuery, *, actor: Actor | None = None) -> bytes:
     limit = get_settings().export_max_rows
     rows = await to_thread.run_sync(_read_export_rows, kind, query, limit)
     if len(rows) > limit:
@@ -98,9 +100,17 @@ async def export_records(kind: Kind, query: ListQuery) -> bytes:
             http_status=422,
         )
     sheet_name = "中标基础数据" if kind == "winbid" else "招标基础数据"
-    return await build_workbook_async(
+    payload = await build_workbook_async(
         export_columns(kind),
         [_format_export_row(row) for row in rows],
         sheet_name=sheet_name,
         include_audit=False,
     )
+    if actor is not None:
+        await emit_export_audit(
+            actor=actor,
+            kind=kind,
+            exported_rows=len(rows),
+            filters=query.model_dump(mode="json", exclude_none=True),
+        )
+    return payload

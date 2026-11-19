@@ -3,6 +3,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query, Response
+from platform_common.actors import Actor
 from platform_common.request_context import get_request_id
 from platform_common.responses import ApiResponse, ok
 
@@ -41,10 +42,13 @@ def record_router(kind: Kind) -> APIRouter:
     def count(query: Annotated[ListQuery, Query()]) -> ApiResponse[Row]:
         return ok(counts.get_count(kind, query), request_id=get_request_id())
 
-    @child.get("/export", dependencies=[Depends(require_tender_permission(resource, "export"))])
+    @child.get("/export")
     @classified(SecurityClass.RESOURCE_AUTHORIZED)
-    async def export_items(query: Annotated[ListQuery, Query()]) -> Response:
-        payload = await records.export_records(kind, query)
+    async def export_items(
+        query: Annotated[ListQuery, Query()],
+        actor: Actor = Depends(require_tender_permission(resource, "export")),
+    ) -> Response:
+        payload = await records.export_records(kind, query, actor=actor)
         return Response(
             content=payload,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

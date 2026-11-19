@@ -362,7 +362,7 @@ async def test_storage_unavailable_and_upload_rollback_cleanup(monkeypatch: pyte
     monkeypatch.setattr(knowledge.repo, "get_by_id", AsyncMock(return_value=row))
     monkeypatch.setattr(
         knowledge.storage,
-        "read_object",
+        "stream_object",
         AsyncMock(side_effect=knowledge.storage.StorageUnavailableError("timeout")),
     )
     session = _Session()
@@ -463,11 +463,17 @@ def test_http_routes_wire_dependencies(monkeypatch: pytest.MonkeyPatch) -> None:
         "toggle_favorite",
         AsyncMock(return_value={"id": str(row_id), "is_favorited": True}),
     )
+
+    async def _single():
+        yield b"hello"
+
     monkeypatch.setattr(
         knowledge_routes.service,
-        "read_file_content",
+        "stream_file_content",
         AsyncMock(
-            return_value=knowledge.FileContentResult(content=b"hello", filename="测试文件.txt", media_type="text/plain")
+            return_value=knowledge.FileStreamResult(
+                stream=_single(), filename="测试文件.txt", media_type="text/plain", content_length=5
+            )
         ),
     )
 
@@ -479,6 +485,47 @@ def test_http_routes_wire_dependencies(monkeypatch: pytest.MonkeyPatch) -> None:
         assert client.post(f"/api/v1/thinktank/knowledge/{row_id}/favorite").json()["data"]["is_favorited"] is True
         dl = client.get(f"/api/v1/thinktank/knowledge/{row_id}/download")
         assert dl.status_code == 200
+        assert dl.content == b"hello"
         assert "attachment" in dl.headers["content-disposition"]
     finally:
         app.dependency_overrides.clear()
+
+
+async def test_stream_file_content_and_commit_orphan_cleanup(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    row = _sample_file(storage_path="knowledge/stream.pdf")
+    (tmp_path / "knowledge").mkdir()
+    (tmp_path / "knowledge/stream.pdf").write_bytes(b"%PDF-1.4 stream-data")
+    monkeypatch.setattr(
+        knowledge, "get_settings", lambda: SimpleNamespace(storage_dir=str(tmp_path), minio_endpoint="")
+    )
+    monkeypatch.setattr(knowledge.repo, "get_by_id", AsyncMock(return_value=row))
+    monkeypatch.setattr(knowledge.repo, "add_op_log", AsyncMock())
+    _hook_events(monkeypatch, knowledge)
+
+    res = await knowledge.stream_file_content(
+        _Session(),  # type: ignore[arg-type]
+        actor=ACTOR,
+        access=FULL_ACCESS,
+        file_id=row.id,
+        for_download=True,
+    )
+    chunks = [chunk async for chunk in res.stream]
+    assert b"".join(chunks) == b"%PDF-1.4 stream-data"
+
+    # commit 阶段抛错同样触发对象补偿清理
+    monkeypatch.setattr(knowledge_write, "get_settings", lambda: SimpleNamespace(storage_dir=str(tmp_path)))
+    monkeypatch.setattr(knowledge_write.storage, "save_object", AsyncMock())
+    cleanup_mock = AsyncMock()
+    monkeypatch.setattr(knowledge_write.storage, "delete_object", cleanup_mock)
+    commit_fail_session = _Session()
+    commit_fail_session.commit = AsyncMock(side_effect=RuntimeError("commit_boom"))
+    with pytest.raises(RuntimeError, match="commit_boom"):
+        await knowledge_write.upload_knowledge_file(
+            commit_fail_session,  # type: ignore[arg-type]
+            actor=ACTOR,
+            access=FULL_ACCESS,
+            filename="方案.pdf",
+            content=b"%PDF",
+            metadata={"file_type": "产品", "industry_type": "教育"},
+        )
+    assert cleanup_mock.await_count == 1

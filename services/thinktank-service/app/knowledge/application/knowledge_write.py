@@ -263,6 +263,7 @@ async def upload_knowledge_file(
                 "file_size_bytes": len(content),
             },
         )
+        await session.commit()
     except Exception:
         try:
             await storage.delete_object(settings, rel_path)

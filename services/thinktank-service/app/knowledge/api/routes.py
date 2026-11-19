@@ -8,7 +8,7 @@ from typing import Annotated
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from platform_common.actors import Actor
 from platform_common.authz import AuthzClient
 from platform_common.enums import SecurityClass
@@ -256,16 +256,15 @@ async def get_item_content(
     session: AsyncSession = Depends(get_db_session, scope="function"),
     actor: Actor = Depends(require_thinktank_permission(RESOURCE, "preview")),
     access: KnowledgeAccess = Depends(get_knowledge_access),
-) -> Response:
-    res = await service.read_file_content(session, actor=actor, access=access, file_id=file_id, for_download=False)
-    return Response(
-        content=res.content,
-        media_type=res.media_type,
-        headers={
-            "Content-Disposition": _content_disposition("inline", res.filename),
-            "X-Content-Type-Options": "nosniff",
-        },
-    )
+) -> StreamingResponse:
+    res = await service.stream_file_content(session, actor=actor, access=access, file_id=file_id, for_download=False)
+    headers = {
+        "Content-Disposition": _content_disposition("inline", res.filename),
+        "X-Content-Type-Options": "nosniff",
+    }
+    if res.content_length is not None:
+        headers["Content-Length"] = str(res.content_length)
+    return StreamingResponse(res.stream, media_type=res.media_type, headers=headers)
 
 
 @router.get("/{file_id}/download")
@@ -275,16 +274,15 @@ async def download_item(
     session: AsyncSession = Depends(get_db_session, scope="function"),
     actor: Actor = Depends(require_thinktank_permission(RESOURCE, "download")),
     access: KnowledgeAccess = Depends(get_knowledge_access),
-) -> Response:
-    res = await service.read_file_content(session, actor=actor, access=access, file_id=file_id, for_download=True)
-    return Response(
-        content=res.content,
-        media_type=res.media_type,
-        headers={
-            "Content-Disposition": _content_disposition("attachment", res.filename),
-            "Access-Control-Expose-Headers": "Content-Disposition",
-        },
-    )
+) -> StreamingResponse:
+    res = await service.stream_file_content(session, actor=actor, access=access, file_id=file_id, for_download=True)
+    headers = {
+        "Content-Disposition": _content_disposition("attachment", res.filename),
+        "Access-Control-Expose-Headers": "Content-Disposition",
+    }
+    if res.content_length is not None:
+        headers["Content-Length"] = str(res.content_length)
+    return StreamingResponse(res.stream, media_type=res.media_type, headers=headers)
 
 
 @router.post("/{file_id}/favorite")

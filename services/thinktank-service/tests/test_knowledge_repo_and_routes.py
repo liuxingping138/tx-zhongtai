@@ -304,11 +304,17 @@ def test_remaining_http_routes(monkeypatch: pytest.MonkeyPatch) -> None:
         "preview_knowledge",
         AsyncMock(return_value={"item": {"id": str(fid)}, "preview": {"mode": "pdf"}}),
     )
+
+    async def _pdf_stream():  # type: ignore[no-untyped-def]
+        yield b"%PDF"
+
     monkeypatch.setattr(
         knowledge_routes.service,
-        "read_file_content",
+        "stream_file_content",
         AsyncMock(
-            return_value=knowledge.FileContentResult(content=b"%PDF", filename="a.pdf", media_type="application/pdf")
+            return_value=knowledge.FileStreamResult(
+                stream=_pdf_stream(), filename="a.pdf", media_type="application/pdf", content_length=4
+            )
         ),
     )
     monkeypatch.setattr(

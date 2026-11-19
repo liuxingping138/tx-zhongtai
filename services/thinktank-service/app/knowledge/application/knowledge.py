@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
 
@@ -26,6 +27,14 @@ class FileContentResult:
     content: bytes
     filename: str
     media_type: str
+
+
+@dataclass(frozen=True)
+class FileStreamResult:
+    stream: AsyncIterator[bytes]
+    filename: str
+    media_type: str
+    content_length: int | None = None
 
 
 def format_size(size_bytes: int) -> str:
@@ -243,6 +252,28 @@ def _fallback_summary_bytes(row: KnowledgeFile) -> bytes:
     return "\n".join(lines).encode("utf-8")
 
 
+async def _record_download_audit(session: AsyncSession, actor: Actor, row: KnowledgeFile) -> None:
+    await repo.add_op_log(
+        session,
+        file_id=row.id,
+        actor_id=actor.id,
+        actor_name=actor.name,
+        op_type="下载",
+        detail=f"下载资料「{row.file_name}」",
+    )
+    await enqueue_event(
+        session,
+        event_type="thinktank.knowledge.downloaded",
+        actor=actor,
+        target_id=str(row.id),
+        changes={
+            "file_name": row.file_name,
+            "file_type": row.file_type or "未定义",
+            "industry_type": row.industry_type or "无",
+        },
+    )
+
+
 async def read_file_content(
     session: AsyncSession,
     *,
@@ -251,6 +282,23 @@ async def read_file_content(
     file_id: uuid.UUID,
     for_download: bool,
 ) -> FileContentResult:
+    res = await stream_file_content(session, actor=actor, access=access, file_id=file_id, for_download=for_download)
+    content = b"".join([chunk async for chunk in res.stream])
+    return FileContentResult(content=content, filename=res.filename, media_type=res.media_type)
+
+
+async def _single_chunk_stream(data: bytes) -> AsyncIterator[bytes]:
+    yield data
+
+
+async def stream_file_content(
+    session: AsyncSession,
+    *,
+    actor: Actor,
+    access: KnowledgeAccess,
+    file_id: uuid.UUID,
+    for_download: bool,
+) -> FileStreamResult:
     row = await require_file(session, file_id)
     if for_download:
         await assert_export(session, actor, access, row, "download")
@@ -259,42 +307,27 @@ async def read_file_content(
 
     settings = get_settings()
     try:
-        raw = await storage.read_object(settings, row.storage_path, raise_on_error=True)
+        opened = await storage.stream_object(settings, row.storage_path)
     except storage.StorageUnavailableError as exc:
         raise ApiError(
             "文件存储服务暂不可用，请稍后重试",
             code=ErrorCode.DEPENDENCY_UNAVAILABLE,
             http_status=503,
         ) from exc
-    if raw is not None:
+
+    if opened is not None:
+        stream, size = opened
         media_type = storage.media_type_for_file(row.file_name, row.file_suffix)
         filename = row.file_name
     else:
         raw = _fallback_summary_bytes(row)
+        stream, size = _single_chunk_stream(raw), len(raw)
         media_type = "text/plain; charset=utf-8"
         filename = f"{row.file_name}.txt"
 
     if for_download:
-        await repo.add_op_log(
-            session,
-            file_id=row.id,
-            actor_id=actor.id,
-            actor_name=actor.name,
-            op_type="下载",
-            detail=f"下载资料「{row.file_name}」",
-        )
-        await enqueue_event(
-            session,
-            event_type="thinktank.knowledge.downloaded",
-            actor=actor,
-            target_id=str(row.id),
-            changes={
-                "file_name": row.file_name,
-                "file_type": row.file_type or "未定义",
-                "industry_type": row.industry_type or "无",
-            },
-        )
-    return FileContentResult(content=raw, filename=filename, media_type=media_type)
+        await _record_download_audit(session, actor, row)
+    return FileStreamResult(stream=stream, filename=filename, media_type=media_type, content_length=size)
 
 
 async def toggle_favorite(

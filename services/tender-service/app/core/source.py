@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import contextlib
+import queue
 import re
+import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
@@ -20,6 +22,29 @@ _FORBIDDEN_SQL = re.compile(
     r"\b(?:FOR\s+UPDATE|LOCK\s+IN\s+SHARE\s+MODE|INTO\s+(?:OUTFILE|DUMPFILE))\b",
     re.IGNORECASE,
 )
+_POOL_MAX_PER_KEY = 8
+_PoolKey = tuple[str, int, str, int]
+_POOL: dict[_PoolKey, queue.LifoQueue[pymysql.connections.Connection[pymysql.cursors.DictCursor]]] = {}
+_POOL_LOCK = threading.Lock()
+
+
+def _bucket(key: _PoolKey) -> queue.LifoQueue[pymysql.connections.Connection[pymysql.cursors.DictCursor]]:
+    with _POOL_LOCK:
+        q = _POOL.get(key)
+        if q is None:
+            q = queue.LifoQueue(maxsize=_POOL_MAX_PER_KEY)
+            _POOL[key] = q
+        return q
+
+
+def clear_pool() -> None:
+    with _POOL_LOCK:
+        buckets = list(_POOL.values())
+        _POOL.clear()
+    for q in buckets:
+        while not q.empty():
+            with contextlib.suppress(Exception):
+                q.get_nowait().close()
 
 
 class Reader:
@@ -39,28 +64,56 @@ def source_reader(*, counting: bool = False) -> Iterator[Reader]:
     settings = get_settings()
     if not settings.mysql_host:
         raise DependencyUnavailableError("招中标数据源尚未配置")
+    read_timeout = settings.mysql_count_timeout if counting else settings.mysql_read_timeout
+    key: _PoolKey = (settings.mysql_host, settings.mysql_port, settings.mysql_user, read_timeout)
+    bucket = _bucket(key)
+    connection: pymysql.connections.Connection[pymysql.cursors.DictCursor] | None = None
+    broken = False
     try:
-        connection = pymysql.connect(
-            host=settings.mysql_host,
-            port=settings.mysql_port,
-            user=settings.mysql_user,
-            password=settings.mysql_password,
-            database="bid_analyse",
-            charset="utf8mb4",
-            cursorclass=pymysql.cursors.DictCursor,
-            autocommit=True,
-            connect_timeout=settings.mysql_connect_timeout,
-            read_timeout=settings.mysql_count_timeout if counting else settings.mysql_read_timeout,
-            write_timeout=settings.mysql_read_timeout,
-        )
-        try:
+        while not bucket.empty():
+            candidate = bucket.get_nowait()
+            try:
+                candidate.ping(reconnect=True)
+                connection = candidate
+                break
+            except pymysql.MySQLError:
+                with contextlib.suppress(Exception):
+                    candidate.close()
+        if connection is None:
+            connection = pymysql.connect(
+                host=settings.mysql_host,
+                port=settings.mysql_port,
+                user=settings.mysql_user,
+                password=settings.mysql_password,
+                database="bid_analyse",
+                charset="utf8mb4",
+                cursorclass=pymysql.cursors.DictCursor,
+                autocommit=True,
+                connect_timeout=settings.mysql_connect_timeout,
+                read_timeout=read_timeout,
+                write_timeout=settings.mysql_read_timeout,
+            )
             with contextlib.suppress(pymysql.MySQLError), connection.cursor() as cur:
                 cur.execute("SET SESSION TRANSACTION READ ONLY")
+        try:
             yield Reader(connection)
-        finally:
-            connection.close()
+        except Exception:
+            broken = True
+            raise
     except pymysql.MySQLError as exc:
+        broken = True
         raise DependencyUnavailableError("招中标源库查询失败或超时，请缩小筛选范围后重试") from exc
+    finally:
+        if connection is not None:
+            if broken:
+                with contextlib.suppress(Exception):
+                    connection.close()
+            else:
+                try:
+                    bucket.put_nowait(connection)
+                except queue.Full:
+                    with contextlib.suppress(Exception):
+                        connection.close()
 
 
 def _ready() -> bool:

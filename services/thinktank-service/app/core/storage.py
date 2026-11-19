@@ -7,6 +7,7 @@ import base64
 import hashlib
 import hmac
 import uuid
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
@@ -273,6 +274,59 @@ async def read_object(
     if local is not None:
         return local
     if minio_error is not None and raise_on_error:
+        raise StorageUnavailableError(f"对象存储读取失败：{minio_error}") from minio_error
+    return None
+
+
+async def _iter_local_chunks(target: Path, chunk_size: int) -> AsyncIterator[bytes]:
+    with target.open("rb") as fp:
+        while chunk := await asyncio.to_thread(fp.read, chunk_size):
+            yield chunk
+
+
+async def _iter_minio_chunks(resp: httpx.Response, chunk_size: int, rel_path: str) -> AsyncIterator[bytes]:
+    try:
+        async for chunk in resp.aiter_bytes(chunk_size):
+            if chunk:
+                yield chunk
+    except httpx.HTTPError as exc:
+        logger.warning("minio_stream_failed", path=rel_path, error=str(exc))
+        raise StorageUnavailableError(f"对象存储流式读取失败：{exc}") from exc
+    finally:
+        await resp.aclose()
+
+
+async def stream_object(
+    settings: StorageSettings,
+    rel_path: str,
+    *,
+    chunk_size: int = 65536,
+) -> tuple[AsyncIterator[bytes], int | None] | None:
+    if not rel_path:
+        return None
+    target = _resolve_safe_path(settings.storage_dir, rel_path)
+    minio_error: httpx.HTTPError | None = None
+    if _use_minio(settings):
+        url, headers = _sign_s3_headers(settings, "GET", rel_path)
+        client = _get_storage_client()
+        try:
+            req = client.build_request("GET", url, headers=headers, timeout=_build_timeout(settings))
+            resp = await client.send(req, stream=True)
+            if resp.status_code == _HTTP_NOT_FOUND:
+                await resp.aclose()
+                return None
+            if resp.status_code >= httpx.codes.BAD_REQUEST:
+                await resp.aclose()
+                resp.raise_for_status()
+            raw_len = resp.headers.get("content-length")
+            size = int(raw_len) if raw_len and raw_len.isdigit() else None
+            return _iter_minio_chunks(resp, chunk_size, rel_path), size
+        except httpx.HTTPError as exc:
+            minio_error = exc
+            logger.warning("minio_stream_fallback", path=rel_path, error=str(exc))
+    if target.is_file():
+        return _iter_local_chunks(target, chunk_size), target.stat().st_size
+    if minio_error is not None:
         raise StorageUnavailableError(f"对象存储读取失败：{minio_error}") from minio_error
     return None
 
