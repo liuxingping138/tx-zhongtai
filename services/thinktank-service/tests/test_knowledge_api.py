@@ -275,6 +275,7 @@ async def test_upload_update_and_delete_file(monkeypatch: pytest.MonkeyPatch, tm
 async def test_export_undefined_and_upload_tags(monkeypatch: pytest.MonkeyPatch) -> None:
     undef_row = _sample_file(file_name="未分类调研.pdf", file_type="", is_defined=False)
     events = _hook_events(monkeypatch, export_import)
+    monkeypatch.setattr(export_import.repo, "count_undefined", AsyncMock(return_value=1))
     monkeypatch.setattr(export_import.repo, "list_undefined", AsyncMock(return_value=[undef_row]))
     monkeypatch.setattr(export_import.repo, "count_filtered", AsyncMock(return_value=1))
     monkeypatch.setattr(export_import.repo, "list_filtered", AsyncMock(return_value=[undef_row]))
@@ -305,6 +306,9 @@ async def test_export_undefined_and_upload_tags(monkeypatch: pytest.MonkeyPatch)
         await export_import.export_undefined_excel(session, actor=ACTOR, access=no_undef)  # type: ignore[arg-type]
 
     # 上传知识标签：第1行合法更新，第2行非法运营商类型写入跳过明细
+    missing_id = uuid.uuid4()
+    if str(missing_id).lower() < str(undef_row.id).lower():
+        undef_row.id, missing_id = missing_id, undef_row.id
     parsed_rows = [
         {
             "id": str(undef_row.id),
@@ -314,7 +318,7 @@ async def test_export_undefined_and_upload_tags(monkeypatch: pytest.MonkeyPatch)
             "industry_type": "教育",
         },
         {
-            "id": str(uuid.uuid4()),
+            "id": str(missing_id),
             "file_name": "不存在文件.pdf",
             "file_type": "产品",
             "operator_type": "非法",
@@ -331,6 +335,93 @@ async def test_export_undefined_and_upload_tags(monkeypatch: pytest.MonkeyPatch)
     assert undef_row.file_type == "产品"
     assert undef_row.is_defined is True
     assert events[-1]["event_type"] == "thinktank.knowledge.upload_tags"
+
+    # 重复提交无变化的行不再虚增 updated 计数
+    monkeypatch.setattr(export_import.repo, "get_for_update", AsyncMock(return_value=undef_row))
+    monkeypatch.setattr(export_import, "parse_sheet_async", AsyncMock(return_value=[parsed_rows[0]]))
+    unchanged_res = await export_import.upload_knowledge_tags(session, actor=ACTOR, access=FULL_ACCESS, content=b"xlsx")  # type: ignore[arg-type]
+    assert unchanged_res["updated"] == 0
+    assert unchanged_res["skipped"] == 0
+
+    # 导出未定义数据超过上限返回 422
+    monkeypatch.setattr(export_import.repo, "count_undefined", AsyncMock(return_value=200_000))
+    with pytest.raises(ApiError, match="超过上限"):
+        await export_import.export_undefined_excel(session, actor=ACTOR, access=FULL_ACCESS)  # type: ignore[arg-type]
+
+    # 原范围与目标范围无权时的区分提示
+    only_edu = KnowledgeAccess.from_levels(
+        {"thinktank.file_type.product": "FULL", "thinktank.industry_type.edu": "FULL"}
+    )
+    fin_row = _sample_file(file_type="产品", industry_type="金融")
+    assert "原范围" in (export_import._check_tag_row_permission(only_edu, fin_row, "产品", "教育") or "")
+    assert "目标范围" in (export_import._check_tag_row_permission(only_edu, undef_row, "产品", "金融") or "")
+
+
+async def test_storage_unavailable_and_upload_rollback_cleanup(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    row = _sample_file(file_type="产品", industry_type="金融", storage_path="knowledgeBase/sample.pdf")
+    monkeypatch.setattr(knowledge.repo, "get_by_id", AsyncMock(return_value=row))
+    monkeypatch.setattr(
+        knowledge.storage,
+        "read_object",
+        AsyncMock(side_effect=knowledge.storage.StorageUnavailableError("timeout")),
+    )
+    session = _Session()
+    with pytest.raises(ApiError, match="文件存储服务暂不可用") as exc_info:
+        await knowledge.read_file_content(session, actor=ACTOR, access=FULL_ACCESS, file_id=row.id, for_download=True)  # type: ignore[arg-type]
+    assert exc_info.value.http_status == 503
+
+    # 上传对象存储失败返回 503
+    monkeypatch.setattr(knowledge_write, "get_settings", lambda: SimpleNamespace(storage_dir=str(tmp_path)))
+    monkeypatch.setattr(
+        knowledge_write.storage,
+        "save_object",
+        AsyncMock(side_effect=knowledge_write.storage.StorageUnavailableError("down")),
+    )
+    with pytest.raises(ApiError, match="上传失败") as up_exc:
+        await knowledge_write.upload_knowledge_file(
+            session,  # type: ignore[arg-type]
+            actor=ACTOR,
+            access=FULL_ACCESS,
+            filename="方案.pdf",
+            content=b"%PDF",
+            metadata={"file_type": "产品", "industry_type": "教育"},
+        )
+    assert up_exc.value.http_status == 503
+
+    # 写库失败触发已上传对象的补偿清理
+    monkeypatch.setattr(knowledge_write.storage, "save_object", AsyncMock())
+    cleanup_mock = AsyncMock()
+    monkeypatch.setattr(knowledge_write.storage, "delete_object", cleanup_mock)
+    bad_session = _Session()
+    bad_session.flush = AsyncMock(side_effect=RuntimeError("db_boom"))
+    with pytest.raises(RuntimeError, match="db_boom"):
+        await knowledge_write.upload_knowledge_file(
+            bad_session,  # type: ignore[arg-type]
+            actor=ACTOR,
+            access=FULL_ACCESS,
+            filename="方案.pdf",
+            content=b"%PDF",
+            metadata={"file_type": "产品", "industry_type": "教育"},
+        )
+    assert cleanup_mock.await_count == 1
+
+    # 删除记录先提交数据库再删对象，对象存储异常不阻断删除
+    managed_row = _sample_file(file_type="产品", industry_type="教育")
+    managed_row.storage_path = knowledge_write.storage.new_object_key(managed_row.id, "pdf")
+    monkeypatch.setattr(knowledge_write.repo, "get_for_update", AsyncMock(return_value=managed_row))
+    _hook_events(monkeypatch, knowledge_write)
+    monkeypatch.setattr(
+        knowledge_write.storage,
+        "delete_object",
+        AsyncMock(side_effect=knowledge_write.storage.StorageUnavailableError("minio_down")),
+    )
+    del_session = _Session()
+    assert await knowledge_write.delete_knowledge_file(
+        del_session, actor=ACTOR, access=FULL_ACCESS, file_id=managed_row.id
+    ) == {  # type: ignore[arg-type]
+        "deleted": True
+    }
+    assert del_session.commit.await_count == 1
 
     # 同步码表省枚举（配置与未配置兜底）
     from app.common import codebook_client

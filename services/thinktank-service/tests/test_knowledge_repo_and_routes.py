@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, ClassVar
 from unittest.mock import AsyncMock
 
 import httpx
@@ -135,10 +135,9 @@ async def test_repo_crud_and_options_queries(monkeypatch: pytest.MonkeyPatch) ->
             _FakeResult([row]),  # list_undefined
             _FakeResult(scalar_val=row),  # get_by_file_name
             _FakeResult([fid]),  # favorite_ids_for_user
-            _FakeResult(),  # set_favorite(False) delete
             _FakeResult([log_row]),  # list_op_logs
         ],
-        scalars=[1, 1, None, None, fid, 1],
+        scalars=[1, 1, 1, None, fid, fid, 1],
     )
     sess.get = AsyncMock(return_value=row)  # type: ignore[method-assign]
 
@@ -146,6 +145,7 @@ async def test_repo_crud_and_options_queries(monkeypatch: pytest.MonkeyPatch) ->
     assert len(items) == 1 and total == 1
     assert await repo.count_filtered(sess, {}, access=FULL_ACCESS, user_id="u1") == 1  # type: ignore[arg-type]
     assert len(await repo.list_filtered(sess, {}, access=FULL_ACCESS, user_id="u1")) == 1  # type: ignore[arg-type]
+    assert await repo.count_undefined(sess, access=FULL_ACCESS) == 1  # type: ignore[arg-type]
     assert len(await repo.list_undefined(sess, access=FULL_ACCESS)) == 1  # type: ignore[arg-type]
     assert await repo.get_by_id(sess, fid) is row  # type: ignore[arg-type]
     assert await repo.get_for_update(sess, fid) is row  # type: ignore[arg-type]
@@ -169,6 +169,59 @@ async def test_repo_crud_and_options_queries(monkeypatch: pytest.MonkeyPatch) ->
     ]  # type: ignore[arg-type]
 
 
+class _FakeHttpClient:
+    is_closed = False
+    calls: ClassVar[list[tuple[str, str]]] = []
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        pass
+
+    async def __aenter__(self) -> _FakeHttpClient:
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        return None
+
+    async def aclose(self) -> None:
+        self.is_closed = True
+
+    async def put(
+        self,
+        url: str,
+        content: bytes = b"",
+        headers: dict[str, str] | None = None,
+        **_kwargs: Any,
+    ) -> httpx.Response:
+        self.calls.append(("PUT", url))
+        return httpx.Response(200, request=httpx.Request("PUT", url))
+
+    async def get(
+        self,
+        url: str,
+        headers: dict[str, str] | None = None,
+        **_kwargs: Any,
+    ) -> httpx.Response:
+        self.calls.append(("GET", url))
+        if "boom" in url:
+            raise httpx.ConnectError("refused")
+        if "missing" in url:
+            return httpx.Response(404, request=httpx.Request("GET", url))
+        if "provinces" in url:
+            return httpx.Response(
+                200, json={"data": {"items": ["上海市", "浙江省"]}}, request=httpx.Request("GET", url)
+            )
+        return httpx.Response(200, content=b"pdf-bytes", request=httpx.Request("GET", url))
+
+    async def delete(
+        self,
+        url: str,
+        headers: dict[str, str] | None = None,
+        **_kwargs: Any,
+    ) -> httpx.Response:
+        self.calls.append(("DELETE", url))
+        return httpx.Response(204, request=httpx.Request("DELETE", url))
+
+
 async def test_minio_http_and_codebook_client_http(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     minio_cfg = SimpleNamespace(
         storage_dir=str(tmp_path),
@@ -179,46 +232,20 @@ async def test_minio_http_and_codebook_client_http(monkeypatch: pytest.MonkeyPat
         minio_region="us-east-1",
         minio_timeout_seconds=5.0,
     )
-    calls: list[tuple[str, str]] = []
+    _FakeHttpClient.calls = []
 
-    class _FakeClient:
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            pass
-
-        async def __aenter__(self) -> _FakeClient:
-            return self
-
-        async def __aexit__(self, *args: Any) -> None:
-            return None
-
-        async def put(self, url: str, content: bytes = b"", headers: dict[str, str] | None = None) -> httpx.Response:
-            calls.append(("PUT", url))
-            return httpx.Response(200, request=httpx.Request("PUT", url))
-
-        async def get(self, url: str, headers: dict[str, str] | None = None) -> httpx.Response:
-            calls.append(("GET", url))
-            if "boom" in url:
-                raise httpx.ConnectError("refused")
-            if "missing" in url:
-                return httpx.Response(404, request=httpx.Request("GET", url))
-            if "provinces" in url:
-                return httpx.Response(
-                    200, json={"data": {"items": ["上海市", "浙江省"]}}, request=httpx.Request("GET", url)
-                )
-            return httpx.Response(200, content=b"pdf-bytes", request=httpx.Request("GET", url))
-
-        async def delete(self, url: str, headers: dict[str, str] | None = None) -> httpx.Response:
-            calls.append(("DELETE", url))
-            return httpx.Response(204, request=httpx.Request("DELETE", url))
-
-    monkeypatch.setattr(storage.httpx, "AsyncClient", _FakeClient)
+    await storage.close_storage_client()
+    monkeypatch.setattr(storage.httpx, "AsyncClient", _FakeHttpClient)
     await storage.save_object(minio_cfg, "knowledgeBase/a.pdf", b"pdf-bytes", content_type="application/pdf")
     assert await storage.read_object(minio_cfg, "knowledgeBase/a.pdf") == b"pdf-bytes"
     assert await storage.read_object(minio_cfg, "knowledgeBase/missing.pdf") is None
+    with pytest.raises(storage.StorageUnavailableError):
+        await storage.read_object(minio_cfg, "knowledgeBase/boom.pdf", raise_on_error=True)
     await storage.delete_object(minio_cfg, "knowledgeBase/a.pdf")
-    assert [m for m, _ in calls] == ["PUT", "GET", "GET", "DELETE"]
+    await storage.close_storage_client()
+    assert [m for m, _ in _FakeHttpClient.calls] == ["PUT", "GET", "GET", "GET", "DELETE"]
 
-    monkeypatch.setattr(codebook_client.httpx, "AsyncClient", _FakeClient)
+    monkeypatch.setattr(codebook_client.httpx, "AsyncClient", _FakeHttpClient)
     codebook_client.clear_province_cache()
     cb_cfg = SimpleNamespace(
         codebook_base_url="http://codebook:8004", codebook_service_secret="sec", codebook_timeout_seconds=1.0
@@ -232,6 +259,12 @@ async def test_minio_http_and_codebook_client_http(monkeypatch: pytest.MonkeyPat
         codebook_base_url="http://boom:8004", codebook_service_secret="sec", codebook_timeout_seconds=1.0
     )
     assert await codebook_client.get_provinces(bad_cfg, ("集团", "北京市")) == ["集团", "北京市"]
+
+
+def test_content_disposition_sanitizes_header_chars() -> None:
+    header = knowledge_routes._content_disposition("attachment", 'bad"\r\nname.pdf')
+    assert "\r" not in header and "\n" not in header
+    assert 'filename="bad___name.pdf"' in header
 
 
 def test_remaining_http_routes(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -69,6 +69,31 @@ def media_type_for_file(filename: str, suffix: str) -> str:
 
 _HTTP_NOT_FOUND = 404
 _HTTP_DELETE_OK = frozenset({200, 204, 404})
+_storage_client: httpx.AsyncClient | None = None
+
+
+class StorageUnavailableError(RuntimeError):
+    """对象存储（MinIO）请求失败或超时。"""
+
+
+def _build_timeout(settings: StorageSettings) -> httpx.Timeout:
+    connect = float(getattr(settings, "minio_timeout_seconds", 5.0) or 5.0)
+    io_timeout = float(getattr(settings, "minio_io_timeout_seconds", max(connect, 60.0)) or max(connect, 60.0))
+    return httpx.Timeout(connect=connect, read=io_timeout, write=io_timeout, pool=5.0)
+
+
+def _get_storage_client() -> httpx.AsyncClient:
+    global _storage_client  # noqa: PLW0603  进程级连接池复用，lifespan 关闭时释放
+    if _storage_client is None or _storage_client.is_closed:
+        _storage_client = httpx.AsyncClient(limits=httpx.Limits(max_connections=32, max_keepalive_connections=16))
+    return _storage_client
+
+
+async def close_storage_client() -> None:
+    global _storage_client  # noqa: PLW0603  lifespan 关闭时释放进程级连接池
+    if _storage_client is not None and not _storage_client.is_closed:
+        await _storage_client.aclose()
+    _storage_client = None
 
 
 def legacy_object_key(filename: str, size_bytes: int, ext_lower: str) -> str:
@@ -211,29 +236,45 @@ async def save_object(
     _resolve_safe_path(settings.storage_dir, rel_path)
     if _use_minio(settings):
         url, headers = _sign_s3_headers(settings, "PUT", rel_path, payload=content, content_type=content_type)
-        async with httpx.AsyncClient(timeout=settings.minio_timeout_seconds) as client:
-            resp = await client.put(url, content=content, headers=headers)
+        try:
+            resp = await _get_storage_client().put(
+                url, content=content, headers=headers, timeout=_build_timeout(settings)
+            )
             resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            logger.warning("minio_save_failed", path=rel_path, error=str(exc))
+            raise StorageUnavailableError(f"对象存储写入失败：{exc}") from exc
         return
     await save_bytes(settings.storage_dir, rel_path, content)
 
 
-async def read_object(settings: StorageSettings, rel_path: str) -> bytes | None:
+async def read_object(
+    settings: StorageSettings,
+    rel_path: str,
+    *,
+    raise_on_error: bool = False,
+) -> bytes | None:
     if not rel_path:
         return None
     _resolve_safe_path(settings.storage_dir, rel_path)
+    minio_error: httpx.HTTPError | None = None
     if _use_minio(settings):
         url, headers = _sign_s3_headers(settings, "GET", rel_path)
         try:
-            async with httpx.AsyncClient(timeout=settings.minio_timeout_seconds) as client:
-                resp = await client.get(url, headers=headers)
-                if resp.status_code == _HTTP_NOT_FOUND:
-                    return None
-                resp.raise_for_status()
-                return resp.content
+            resp = await _get_storage_client().get(url, headers=headers, timeout=_build_timeout(settings))
+            if resp.status_code == _HTTP_NOT_FOUND:
+                return None
+            resp.raise_for_status()
+            return resp.content
         except httpx.HTTPError as exc:
+            minio_error = exc
             logger.warning("minio_read_fallback", path=rel_path, error=str(exc))
-    return await read_bytes(settings.storage_dir, rel_path)
+    local = await read_bytes(settings.storage_dir, rel_path)
+    if local is not None:
+        return local
+    if minio_error is not None and raise_on_error:
+        raise StorageUnavailableError(f"对象存储读取失败：{minio_error}") from minio_error
+    return None
 
 
 async def delete_object(settings: StorageSettings, rel_path: str) -> None:
@@ -242,9 +283,12 @@ async def delete_object(settings: StorageSettings, rel_path: str) -> None:
     _resolve_safe_path(settings.storage_dir, rel_path)
     if _use_minio(settings):
         url, headers = _sign_s3_headers(settings, "DELETE", rel_path)
-        async with httpx.AsyncClient(timeout=settings.minio_timeout_seconds) as client:
-            resp = await client.delete(url, headers=headers)
+        try:
+            resp = await _get_storage_client().delete(url, headers=headers, timeout=_build_timeout(settings))
             if resp.status_code not in _HTTP_DELETE_OK:
                 resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            logger.warning("minio_delete_failed", path=rel_path, error=str(exc))
+            raise StorageUnavailableError(f"对象存储删除失败：{exc}") from exc
         return
     await delete_file(settings.storage_dir, rel_path)

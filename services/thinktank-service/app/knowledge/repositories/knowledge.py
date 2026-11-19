@@ -9,6 +9,7 @@ from platform_common.clock import utcnow
 from platform_common.filters import LIKE_ESCAPE, Filters, contains_ilike, escape_like, filter_values, in_any
 from platform_common.options import SEARCH_LIMIT, OptionColumns, preview_options, search_options
 from sqlalchemy import ColumnElement, delete, exists, false, func, or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.knowledge.domain.models import KnowledgeFavorite, KnowledgeFile, KnowledgeOpLog
@@ -194,6 +195,18 @@ async def list_filtered(
     return list((await session.execute(stmt)).scalars())
 
 
+async def count_undefined(
+    session: AsyncSession,
+    *,
+    access: KnowledgeAccess,
+) -> int:
+    conds = [
+        *_scope_conditions(access, export_mode=True),
+        KnowledgeFile.is_defined.is_(False),
+    ]
+    return int(await session.scalar(select(func.count()).select_from(KnowledgeFile).where(*conds)) or 0)
+
+
 async def list_undefined(
     session: AsyncSession,
     *,
@@ -231,21 +244,23 @@ async def is_favorited(session: AsyncSession, *, user_id: str, file_id: uuid.UUI
 
 
 async def set_favorite(session: AsyncSession, *, user_id: str, file_id: uuid.UUID, favorite: bool) -> bool:
-    existing = await is_favorited(session, user_id=user_id, file_id=file_id)
-    if favorite and not existing:
-        session.add(KnowledgeFavorite(user_id=user_id, file_id=file_id, created_at=utcnow()))
-        await session.flush()
-        return True
-    if not favorite and existing:
-        await session.execute(
-            delete(KnowledgeFavorite).where(
-                KnowledgeFavorite.user_id == user_id,
-                KnowledgeFavorite.file_id == file_id,
-            )
+    if favorite:
+        stmt = (
+            pg_insert(KnowledgeFavorite)
+            .values(user_id=user_id, file_id=file_id, created_at=utcnow())
+            .on_conflict_do_nothing(index_elements=["user_id", "file_id"])
+            .returning(KnowledgeFavorite.file_id)
         )
-        await session.flush()
-        return True
-    return False
+        return (await session.scalar(stmt)) is not None
+    del_stmt = (
+        delete(KnowledgeFavorite)
+        .where(
+            KnowledgeFavorite.user_id == user_id,
+            KnowledgeFavorite.file_id == file_id,
+        )
+        .returning(KnowledgeFavorite.file_id)
+    )
+    return (await session.scalar(del_stmt)) is not None
 
 
 async def add_op_log(

@@ -9,6 +9,7 @@ from platform_common.actors import Actor
 from platform_common.clock import utcnow
 from platform_common.columns import overlong_reasons, string_lengths
 from platform_common.errors import ApiError, ErrorCode, PermissionDeniedError, VersionConflictError
+from platform_common.logging_setup import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.audit_emit import enqueue_event
@@ -45,6 +46,7 @@ EDITABLE_FIELDS = (
 )
 
 FILE_LENGTHS = string_lengths(KnowledgeFile)
+logger = get_logger(__name__)
 
 
 async def _assert_edit(
@@ -195,12 +197,20 @@ async def upload_knowledge_file(
     now = utcnow()
     file_id = uuid.uuid4()
     rel_path = storage.new_object_key(file_id, ext.lower())
-    await storage.save_object(
-        get_settings(),
-        rel_path,
-        content,
-        content_type=storage.media_type_for_file(clean_name, ext),
-    )
+    settings = get_settings()
+    try:
+        await storage.save_object(
+            settings,
+            rel_path,
+            content,
+            content_type=storage.media_type_for_file(clean_name, ext),
+        )
+    except storage.StorageUnavailableError as exc:
+        raise ApiError(
+            "文件存储服务暂不可用，上传失败，请稍后重试",
+            code=ErrorCode.DEPENDENCY_UNAVAILABLE,
+            http_status=503,
+        ) from exc
 
     row = KnowledgeFile(
         id=file_id,
@@ -230,28 +240,35 @@ async def upload_knowledge_file(
         updated_by_id=actor.id,
         updated_by_name=actor.name,
     )
-    session.add(row)
-    await session.flush()
-    await repo.add_op_log(
-        session,
-        file_id=row.id,
-        actor_id=actor.id,
-        actor_name=actor.name,
-        op_type="上传",
-        detail=f"上传资料「{row.file_name}」（{format_size(len(content))}）",
-    )
-    await enqueue_event(
-        session,
-        event_type="thinktank.knowledge.created",
-        actor=actor,
-        target_id=str(row.id),
-        changes={
-            "file_name": row.file_name,
-            "file_type": row.file_type or "未定义",
-            "industry_type": row.industry_type or "无",
-            "file_size_bytes": len(content),
-        },
-    )
+    try:
+        session.add(row)
+        await session.flush()
+        await repo.add_op_log(
+            session,
+            file_id=row.id,
+            actor_id=actor.id,
+            actor_name=actor.name,
+            op_type="上传",
+            detail=f"上传资料「{row.file_name}」（{format_size(len(content))}）",
+        )
+        await enqueue_event(
+            session,
+            event_type="thinktank.knowledge.created",
+            actor=actor,
+            target_id=str(row.id),
+            changes={
+                "file_name": row.file_name,
+                "file_type": row.file_type or "未定义",
+                "industry_type": row.industry_type or "无",
+                "file_size_bytes": len(content),
+            },
+        )
+    except Exception:
+        try:
+            await storage.delete_object(settings, rel_path)
+        except Exception as cleanup_exc:  # noqa: BLE001  写库失败后的尽力补偿清理，不掩盖原始异常
+            logger.warning("upload_orphan_cleanup_failed", path=rel_path, error=str(cleanup_exc))
+        raise
     return to_out(row, is_favorited=False, access=access)
 
 
@@ -274,6 +291,11 @@ async def delete_knowledge_file(
     )
     await session.delete(row)
     await session.flush()
+    # 先提交数据库删除，再执行外部对象存储清理，避免提交回滚时物理文件已被误删或存储瞬断阻断删除。
+    await session.commit()
     if storage.is_managed_object_key(rel_path, row.id):
-        await storage.delete_object(get_settings(), rel_path)
+        try:
+            await storage.delete_object(get_settings(), rel_path)
+        except storage.StorageUnavailableError as exc:
+            logger.warning("delete_object_cleanup_failed", file_id=str(row.id), path=rel_path, error=str(exc))
     return {"deleted": True}

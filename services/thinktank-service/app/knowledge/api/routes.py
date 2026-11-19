@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from typing import Annotated
 from urllib.parse import quote
@@ -78,9 +79,13 @@ def knowledge_filters(
     }
 
 
+_UNSAFE_HEADER_CHARS = re.compile(r'[\x00-\x1f\x7f"\\]')
+
+
 def _content_disposition(disposition: str, filename: str) -> str:
-    ascii_fallback = filename.encode("ascii", "ignore").decode("ascii").strip() or "knowledge-file"
-    encoded = quote(filename)
+    safe_name = _UNSAFE_HEADER_CHARS.sub("_", filename).strip() or "knowledge-file"
+    ascii_fallback = safe_name.encode("ascii", "ignore").decode("ascii").strip() or "knowledge-file"
+    encoded = quote(safe_name)
     return f"{disposition}; filename=\"{ascii_fallback}\"; filename*=UTF-8''{encoded}"
 
 
@@ -255,7 +260,10 @@ async def get_item_content(
     return Response(
         content=res.content,
         media_type=res.media_type,
-        headers={"Content-Disposition": _content_disposition("inline", res.filename)},
+        headers={
+            "Content-Disposition": _content_disposition("inline", res.filename),
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 

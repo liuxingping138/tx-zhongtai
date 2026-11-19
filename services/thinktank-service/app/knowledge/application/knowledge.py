@@ -8,7 +8,7 @@ from typing import Any
 
 from platform_common.actors import Actor
 from platform_common.clock import format_beijing
-from platform_common.errors import NotFoundError, PermissionDeniedError
+from platform_common.errors import ApiError, ErrorCode, NotFoundError, PermissionDeniedError
 from platform_common.filters import Filters
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -258,7 +258,14 @@ async def read_file_content(
         await assert_read(session, actor, access, row, "preview_content")
 
     settings = get_settings()
-    raw = await storage.read_object(settings, row.storage_path)
+    try:
+        raw = await storage.read_object(settings, row.storage_path, raise_on_error=for_download)
+    except storage.StorageUnavailableError as exc:
+        raise ApiError(
+            "文件存储服务暂不可用，请稍后重试",
+            code=ErrorCode.DEPENDENCY_UNAVAILABLE,
+            http_status=503,
+        ) from exc
     if raw is not None:
         media_type = storage.media_type_for_file(row.file_name, row.file_suffix)
         filename = row.file_name

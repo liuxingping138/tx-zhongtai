@@ -12,7 +12,8 @@ from platform_common.logging_setup import get_logger
 logger = get_logger(__name__)
 
 _CACHE_TTL_SECONDS = 300.0
-_cache: dict[str, tuple[float, list[str]]] = {}
+_FAIL_CACHE_TTL_SECONDS = 30.0
+_cache: dict[str, tuple[float, float, list[str]]] = {}
 
 
 class CodebookSettings(Protocol):
@@ -45,8 +46,8 @@ async def get_provinces(settings: CodebookSettings, fallback: tuple[str, ...]) -
 
     now = time.monotonic()
     cached = _cache.get(base_url)
-    if cached is not None and now - cached[0] < _CACHE_TTL_SECONDS:
-        return list(cached[1])
+    if cached is not None and now < cached[0]:
+        return list(cached[2])
 
     try:
         async with httpx.AsyncClient(timeout=settings.codebook_timeout_seconds) as client:
@@ -58,8 +59,10 @@ async def get_provinces(settings: CodebookSettings, fallback: tuple[str, ...]) -
             payload = resp.json()
         items = (payload.get("data") or {}).get("items") or []
         merged = _merge_provinces(items, fallback)
-        _cache[base_url] = (now, merged)
+        _cache[base_url] = (now + _CACHE_TTL_SECONDS, now, merged)
         return list(merged)
     except (httpx.HTTPError, ValueError, TypeError) as exc:
         logger.warning("codebook_provinces_fallback", error=str(exc))
-        return list(fallback)
+        fallback_list = list(fallback)
+        _cache[base_url] = (now + _FAIL_CACHE_TTL_SECONDS, now, fallback_list)
+        return list(fallback_list)

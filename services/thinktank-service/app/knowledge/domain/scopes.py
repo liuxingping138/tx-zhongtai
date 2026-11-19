@@ -256,11 +256,7 @@ class KnowledgeAccess:
                 if ("" if label == "未定义" else label) in self.editable_file_types
             ],
             "readable_industries": [label for label in INDUSTRY_TYPES if label in self.readable_industries],
-            "exportable_industries": [
-                (label in self.exportable_industries and label) or ""
-                for label in INDUSTRY_TYPES
-                if label in self.exportable_industries
-            ],
+            "exportable_industries": [label for label in INDUSTRY_TYPES if label in self.exportable_industries],
             "editable_industries": [label for label in INDUSTRY_TYPES if label in self.editable_industries],
         }
 

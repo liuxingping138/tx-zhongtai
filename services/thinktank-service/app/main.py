@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from platform_common.body_limit import RequestBodyLimitMiddleware
@@ -19,6 +19,7 @@ from app.common.audit_emit import outbox_loop
 from app.common.security import get_authz_client
 from app.core.config import get_settings
 from app.core.database import check_database_ready
+from app.core.storage import close_storage_client
 from app.knowledge.api.routes import router as knowledge_router
 
 settings = get_settings()
@@ -34,6 +35,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
     stop.set()
     task.cancel()
+    with suppress(asyncio.CancelledError):
+        await task
+    await close_storage_client()
     client = get_authz_client(settings)
     await client.aclose()
 

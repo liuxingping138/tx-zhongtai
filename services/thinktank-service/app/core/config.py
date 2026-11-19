@@ -42,14 +42,20 @@ class Settings(BaseServiceSettings):
     minio_bucket: str = "tx-bifang-knowledge-emp-service-prod"
     minio_region: str = "us-east-1"
     minio_timeout_seconds: float = 5.0
+    minio_io_timeout_seconds: float = 60.0
 
     @model_validator(mode="after")
     def _reject_demo_secrets_in_production(self) -> Settings:
         if self.environment == Environment.PRODUCTION:
             markers = ("dev-", "example", "changeme", "test-secret", "p6-only")
-            for token in (self.iam_service_secret, self.audit_ingest_secret):
+            for token in (
+                self.iam_service_secret,
+                self.audit_ingest_secret,
+                self.codebook_service_secret,
+                self.minio_secret_key,
+            ):
                 if token and any(marker in token.lower() for marker in markers):
-                    raise ValueError("生产环境内部调用密钥看起来是示例值，拒绝启动")
+                    raise ValueError("生产环境内部调用或存储密钥看起来是示例值，拒绝启动")
         return self
 
 
