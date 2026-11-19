@@ -93,6 +93,7 @@ async def _save_types(
     copies: list[str] = []
     async with SessionLocal() as session:
         existing = await repo.base_tags_by_source(session, [str(row["content_id"]) for row in done_rows])
+        prepared: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any], Any, str]] = []
         for row, result in zip(done_rows, done_results, strict=True):
             types, remark = rules.tagging_outcome(result, known)
             ai_outputs = rules.extract_ai_outputs(result)
@@ -101,16 +102,15 @@ async def _save_types(
             current = existing.get(str(row["content_id"]))
             if current is not None and retag and result.get("error"):
                 # 网络、限流这类失败不是答案：上次判好的类型和解读留着，只记这次失败、出队。
-                # 不然一次失败就把类型清空、「是否解读」改成否，没人核对过的 AI 解读也跟着删掉。
                 base_tag_rows.note_retag_failed(current, remark)
                 continue
             if current is not None and retag:
                 values = rules.keep_manual_edits(values, current)
             digest = content_hash(values, BASE_TAG_FIELDS)
-            # 内容哈希唯一：手工导入过、同一批里有一模一样的一行（各地转发同一文件）就不重复建；
-            # 已有的行改完和另一行一样（原来只差一句失败备注）也不能写：
-            # 否则撞唯一约束整批回滚、队列还在，下次又白调一遍模型。
-            other = None if digest in seen else await repo.base_tag_by_hash(session, digest)
+            prepared.append((row, values, ai_outputs, current, digest))
+        known_hashes = await repo.base_tags_by_hashes(session, [item[4] for item in prepared])
+        for row, values, ai_outputs, current, digest in prepared:
+            other = None if digest in seen else known_hashes.get(digest)
             if digest in seen or (other is not None and other is not current):
                 if current is not None:
                     base_tag_rows.note_duplicate(current)

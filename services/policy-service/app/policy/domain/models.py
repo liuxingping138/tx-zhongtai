@@ -108,6 +108,7 @@ class BaseTag(Base):
         # 是否穿透是人填的，AI 行都空着，只给填了的行建。
         Index("ix_policy_base_tags_need_interpret", "need_interpret"),
         Index("ix_policy_base_tags_is_penetrate", "is_penetrate", postgresql_where=text("is_penetrate <> ''")),
+        Index("ix_policy_base_tags_default_order", "province_code", "policy_name", "id"),
         # 政策名称按关键词模糊查找（ILIKE '%词%'），三个字及以上走这个三元组索引。
         Index(
             "ix_policy_base_tags_policy_name_trgm",

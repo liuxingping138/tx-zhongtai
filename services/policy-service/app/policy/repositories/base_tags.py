@@ -119,11 +119,14 @@ async def list_items(
     page_size: int,
 ) -> tuple[list[BaseTag], int]:
     conds = _conditions(filters)
-    total = int(await session.scalar(select(func.count()).select_from(BaseTag).where(*conds)) or 0)
     result = await session.execute(
         select(BaseTag).where(*conds).order_by(*_ORDER).offset((page - 1) * page_size).limit(page_size)
     )
-    return list(result.scalars()), total
+    items = list(result.scalars())
+    if len(items) < page_size and (page == 1 or items):
+        return items, (page - 1) * page_size + len(items)
+    total = int(await session.scalar(select(func.count()).select_from(BaseTag).where(*conds)) or 0)
+    return items, total
 
 
 async def count_filtered(session: AsyncSession, filters: Filters) -> int:

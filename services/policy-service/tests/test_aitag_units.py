@@ -616,8 +616,8 @@ async def test_retag_keeps_manual_edits_and_does_not_duplicate_another_row(monke
     async def by_source(_session: Any, _ids: list[str]) -> dict[str, BaseTag]:
         return {"c1": failed, "c2": manual}
 
-    async def by_hash(_session: Any, digest: str) -> BaseTag | None:
-        return rows_by_hash.get(digest)
+    async def by_hashes(_session: Any, digests: list[str]) -> dict[str, BaseTag]:
+        return {d: rows_by_hash[d] for d in digests if d in rows_by_hash}
 
     async def task(_session: Any, _code: str, lock: bool = False) -> Any:
         return SimpleNamespace(cursor_date=DAY, cursor_content_id="")
@@ -626,7 +626,7 @@ async def test_retag_keeps_manual_edits_and_does_not_duplicate_another_row(monke
         return None
 
     monkeypatch.setattr(repo, "base_tags_by_source", by_source)
-    monkeypatch.setattr(repo, "base_tag_by_hash", by_hash)
+    monkeypatch.setattr(repo, "base_tags_by_hashes", by_hashes)
     monkeypatch.setattr(repo, "task", task)
     monkeypatch.setattr(tagging, "enqueue_event", noop)
     monkeypatch.setattr(tagging, "SessionLocal", FakeSession)
@@ -662,8 +662,9 @@ async def test_retag_of_several_copies_of_one_page_does_not_collide(monkeypatch:
     async def by_source(_session: Any, _ids: list[str]) -> dict[str, BaseTag]:
         return {"c1": second, "c2": third}
 
-    async def by_hash(_session: Any, digest: str) -> BaseTag | None:
-        return {row.content_hash: row for row in (done, second, third)}.get(digest)
+    async def by_hashes(_session: Any, digests: list[str]) -> dict[str, BaseTag]:
+        all_rows = {row.content_hash: row for row in (done, second, third)}
+        return {d: all_rows[d] for d in digests if d in all_rows}
 
     async def task(_session: Any, _code: str, lock: bool = False) -> Any:
         return SimpleNamespace(cursor_date=DAY, cursor_content_id="")
@@ -672,7 +673,7 @@ async def test_retag_of_several_copies_of_one_page_does_not_collide(monkeypatch:
         return None
 
     monkeypatch.setattr(repo, "base_tags_by_source", by_source)
-    monkeypatch.setattr(repo, "base_tag_by_hash", by_hash)
+    monkeypatch.setattr(repo, "base_tags_by_hashes", by_hashes)
     monkeypatch.setattr(repo, "task", task)
     monkeypatch.setattr(tagging, "enqueue_event", noop)
     monkeypatch.setattr(tagging, "SessionLocal", FakeSession)
@@ -929,8 +930,8 @@ async def test_retag_only_redoes_interpretation_when_the_type_changed(monkeypatc
     async def by_source(_session: Any, _ids: list[str]) -> dict[str, BaseTag]:
         return {"c1": same, "c2": changed}
 
-    async def none_by_hash(*_: Any) -> None:
-        return None
+    async def none_by_hashes(*_: Any) -> dict[str, BaseTag]:
+        return {}
 
     async def interpretations(_session: Any, ids: list[str]) -> dict[str, list[Any]]:
         return {"c2": [untouched_row, verified_row]} if "c2" in ids else {}
@@ -945,7 +946,7 @@ async def test_retag_only_redoes_interpretation_when_the_type_changed(monkeypatc
         return None
 
     monkeypatch.setattr(repo, "base_tags_by_source", by_source)
-    monkeypatch.setattr(repo, "base_tag_by_hash", none_by_hash)
+    monkeypatch.setattr(repo, "base_tags_by_hashes", none_by_hashes)
     monkeypatch.setattr(repo, "ai_interpretations", interpretations)
     monkeypatch.setattr(repo, "delete_rows", delete_rows)
     monkeypatch.setattr(repo, "task", task)
@@ -1002,8 +1003,8 @@ async def test_retag_keeps_interpretation_failures_and_the_old_result_when_the_c
     async def by_source(_session: Any, _ids: list[str]) -> dict[str, BaseTag]:
         return {"c1": same, "c2": broken}
 
-    async def none_by_hash(*_: Any) -> None:
-        return None
+    async def none_by_hashes(*_: Any) -> dict[str, BaseTag]:
+        return {}
 
     async def interpretations(*_: Any) -> dict[str, list[Any]]:
         return {}
@@ -1018,7 +1019,7 @@ async def test_retag_keeps_interpretation_failures_and_the_old_result_when_the_c
         return None
 
     monkeypatch.setattr(repo, "base_tags_by_source", by_source)
-    monkeypatch.setattr(repo, "base_tag_by_hash", none_by_hash)
+    monkeypatch.setattr(repo, "base_tags_by_hashes", none_by_hashes)
     monkeypatch.setattr(repo, "ai_interpretations", interpretations)
     monkeypatch.setattr(repo, "delete_rows", delete_rows)
     monkeypatch.setattr(repo, "task", task)
@@ -1099,8 +1100,8 @@ async def test_new_copies_of_an_existing_policy_are_remembered_so_a_rescan_does_
     async def by_source(*_: Any) -> dict[str, BaseTag]:
         return {}
 
-    async def by_hash(_session: Any, digest: str) -> BaseTag | None:
-        return existing if digest == existing.content_hash else None
+    async def by_hashes(_session: Any, digests: list[str]) -> dict[str, BaseTag]:
+        return {existing.content_hash: existing} if existing.content_hash in digests else {}
 
     async def mark(_session: Any, ids: list[str], *_: Any) -> None:
         marked.append(ids)
@@ -1112,7 +1113,7 @@ async def test_new_copies_of_an_existing_policy_are_remembered_so_a_rescan_does_
         return None
 
     monkeypatch.setattr(repo, "base_tags_by_source", by_source)
-    monkeypatch.setattr(repo, "base_tag_by_hash", by_hash)
+    monkeypatch.setattr(repo, "base_tags_by_hashes", by_hashes)
     monkeypatch.setattr(repo, "mark_skipped", mark)
     monkeypatch.setattr(repo, "task", task)
     monkeypatch.setattr(tagging, "enqueue_event", noop)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Collection
 from datetime import datetime
 from decimal import Decimal
 
@@ -77,7 +78,9 @@ async def run_of_ai_task(session: AsyncSession, run_field: str, ai_run_id: str) 
 async def base_tags_by_source(session: AsyncSession, source_ids: list[str]) -> dict[str, BaseTag]:
     if not source_ids:
         return {}
-    rows = await session.scalars(select(BaseTag).where(BaseTag.source_content_id.in_(source_ids)).with_for_update())
+    rows = await session.scalars(
+        select(BaseTag).where(BaseTag.source_content_id.in_(source_ids)).order_by(BaseTag.id).with_for_update()
+    )
     return {str(row.source_content_id): row for row in rows}
 
 
@@ -110,6 +113,18 @@ async def base_tag_by_hash(session: AsyncSession, digest: str) -> BaseTag | None
     return (await session.scalars(select(BaseTag).where(BaseTag.content_hash == digest))).first()
 
 
+async def base_tags_by_hashes(session: AsyncSession, digests: Collection[str]) -> dict[str, BaseTag]:
+    chunk_size = 1000
+    wanted = list(dict.fromkeys(digests))
+    found: dict[str, BaseTag] = {}
+    for start in range(0, len(wanted), chunk_size):
+        chunk = wanted[start : start + chunk_size]
+        rows = await session.scalars(select(BaseTag).where(BaseTag.content_hash.in_(chunk)))
+        for row in rows:
+            found[row.content_hash] = row
+    return found
+
+
 async def interpret_backlog(session: AsyncSession, limit: int) -> list[BaseTag]:
     """需要解读、还没解读过的 AI 打标政策，先打标的先解读。上一批费用到上限没做完的也在里面。"""
 
@@ -129,7 +144,7 @@ async def opportunity_backlog(session: AsyncSession, limit: int) -> list[BaseTag
 async def base_tags_by_ids(session: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, BaseTag]:
     if not ids:
         return {}
-    rows = await session.scalars(select(BaseTag).where(BaseTag.id.in_(ids)).with_for_update())
+    rows = await session.scalars(select(BaseTag).where(BaseTag.id.in_(ids)).order_by(BaseTag.id).with_for_update())
     return {row.id: row for row in rows}
 
 
