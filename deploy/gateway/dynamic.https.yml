@@ -81,6 +81,20 @@ http:
       middlewares: ["secure-headers"]
       priority: 110
       tls: {}
+    ai-download:
+      rule: "PathRegexp(`^/api/v1/ai/batch-runs/[^/]+/files/[^/]+$`)"
+      entryPoints: ["websecure"]
+      service: ai-service
+      middlewares: ["secure-headers"]
+      priority: 110
+      tls: {}
+    thinktank-download:
+      rule: "PathRegexp(`^/api/v1/thinktank/knowledge/[^/]+/(content|download)$`)"
+      entryPoints: ["websecure"]
+      service: thinktank-service
+      middlewares: ["secure-headers"]
+      priority: 110
+      tls: {}
     api-fallback:
       rule: "PathPrefix(`/api/v1`)"
       entryPoints: ["websecure"]

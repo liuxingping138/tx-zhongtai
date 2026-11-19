@@ -252,10 +252,12 @@ p6-up: p6-env jwt-keys-p6
 	# 不重建会拿到上一次验收留下的旧镜像，等于用过期代码做验收。
 	$(P6_COMPOSE) up -d --build
 	@echo "等待隔离网关..."
-	@for i in $$(seq 1 60); do \
-		if curl -sf -o /dev/null http://localhost:$$(grep -E '^GATEWAY_HTTP_PORT=' $(P6_ENV) | cut -d= -f2)/api/v1/auth/csrf; then break; fi; \
+	@ready=0; \
+	for i in $$(seq 1 60); do \
+		if curl -sf -o /dev/null http://localhost:$$(grep -E '^GATEWAY_HTTP_PORT=' $(P6_ENV) | cut -d= -f2)/api/v1/auth/csrf; then ready=1; break; fi; \
 		sleep 2; \
-	done
+	done; \
+	[ "$$ready" = "1" ] || { echo "隔离网关 120s 内未就绪" >&2; exit 1; }
 	@$(MAKE) p6-migrate
 	@$(MAKE) p6-seed
 	@$(MAKE) p6-admin
@@ -296,7 +298,8 @@ p6-backup:
 p6-restore:
 	@test -n "$(BACKUP)" || (echo "请设置 BACKUP=deploy/backups/<stamp>"; exit 2)
 	@set -a && . ./$(P6_ENV) && set +a && \
-	BACKUP_COMPOSE="$(P6_COMPOSE)" BACKUP_ENV_FILE="$(P6_ENV)" RESTORE_CONFIRM=$$IAM_DB_NAME bash scripts/restore.sh "$(BACKUP)"
+	BACKUP_COMPOSE="$(P6_COMPOSE)" BACKUP_ENV_FILE="$(P6_ENV)" RESTORE_CONFIRM=$$IAM_DB_NAME bash scripts/restore.sh "$(BACKUP)" && \
+	P6_COMPOSE="$(P6_COMPOSE)" python3 scripts/verify_restore_p6.py
 
 export-openapi:
 	@(cd services/iam-service && uv run python ../../scripts/export_openapi.py iam)

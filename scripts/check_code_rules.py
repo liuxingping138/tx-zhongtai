@@ -49,6 +49,10 @@ MIGRATION = re.compile(r"^services/[^/]+/migrations/versions/.+\.py$")
 PLAIN_INDEX_SQL = re.compile(
     r"CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?!CONCURRENTLY)(?:IF\s+NOT\s+EXISTS\s+)?\S+\s+ON\s+(\w+)", re.I
 )
+LOCKING_DDL_SQL = re.compile(
+    r"ALTER\s+TABLE\s+(\w+)\s+(?:ADD\s+CONSTRAINT\s+\S+\s+UNIQUE|ALTER\s+(?:COLUMN\s+)?\S+\s+(?:TYPE|SET\s+NOT\s+NULL))",
+    re.I,
+)
 # 这条规则之前已经上线的迁移：当时表还小或是建表时一起建，改历史迁移没有意义。
 INDEX_LOCK_BASELINE: dict[str, str] = {
     "services/audit-service/migrations/versions/c2b8d4e7a201_p2_audit_events.py": "建表时一起建",
@@ -57,6 +61,7 @@ INDEX_LOCK_BASELINE: dict[str, str] = {
     "services/policy-service/migrations/versions/c1d2e3f4a258_policy_title_trgm.py": "已上线，当时表很小",
     "services/policy-service/migrations/versions/d2e3f4a5b369_policy_filter_indexes.py": "已上线，当时表很小",
     "services/policy-service/migrations/versions/f7a8b9c0d035_base_tag_type_retag.py": "已上线，当时表很小",
+    "services/policy-service/migrations/versions/f1a2b3c4d419_policy_ai_tagging.py": "已上线，当时表很小",
     "services/policy-service/migrations/versions/a7b4c5d6e704_missing_searchable_indexes.py": (
         "已上线，当时表很小；表名在循环里，检查原来认不出来"
     ),
@@ -106,10 +111,27 @@ def _plain_index_tables(node: ast.AST, module_tables: frozenset[str]) -> list[tu
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "create_index":
         table = _index_table(node)
         return big(node.lineno, table) if table and not _concurrent(node) else []
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+        if node.func.attr == "create_unique_constraint":
+            table = _index_table(node)
+            return big(node.lineno, table) if table else []
+        if node.func.attr == "alter_column":
+            named = next((kw.value for kw in node.keywords if kw.arg == "table_name"), None)
+            t_node = node.args[0] if node.args else named
+            table = t_node.value if isinstance(t_node, ast.Constant) and isinstance(t_node.value, str) else None
+            has_unsafe = any(
+                (kw.arg == "type_")
+                or (kw.arg == "nullable" and isinstance(kw.value, ast.Constant) and kw.value.value is False)
+                for kw in node.keywords
+            )
+            if table and has_unsafe:
+                return big(node.lineno, table)
     text = _sql_text(node)
     if text is None:
         return []
-    return [item for match in PLAIN_INDEX_SQL.finditer(text) for item in big(node.lineno, match.group(1))]
+    found = [item for match in PLAIN_INDEX_SQL.finditer(text) for item in big(node.lineno, match.group(1))]
+    found += [item for match in LOCKING_DDL_SQL.finditer(text) for item in big(node.lineno, match.group(1))]
+    return found
 
 
 def index_lock_errors(rel: str, source: str) -> list[str]:

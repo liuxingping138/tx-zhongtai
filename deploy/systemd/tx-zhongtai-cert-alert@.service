@@ -1,0 +1,7 @@
+[Unit]
+Description=Alert when %i fails
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/tx-zhongtai-acme.env
+ExecStart=/usr/bin/bash -c 'logger -p user.err "tx-zhongtai unit failed: %i"; if [ -n "${CERT_ALERT_WEBHOOK:-}" ]; then curl -fsS -X POST -H "Content-Type: application/json" -d "{\"text\":\"tx-zhongtai cert unit failed: %i\"}" "$CERT_ALERT_WEBHOOK" || true; fi'

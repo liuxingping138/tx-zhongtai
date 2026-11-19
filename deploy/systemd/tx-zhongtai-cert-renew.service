@@ -2,6 +2,7 @@
 Description=Renew tx-zhongtai IP TLS certificate
 After=network-online.target docker.service
 Wants=network-online.target
+OnFailure=tx-zhongtai-cert-alert@%n.service
 
 [Service]
 Type=oneshot

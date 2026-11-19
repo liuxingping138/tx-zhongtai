@@ -231,13 +231,12 @@ class TestTriggerAndOverview:
             crawler=Job("crawler", "爬虫监测增量同步", _noop, watermark=watermark), other=Job("other", "其他", _noop)
         )
         monkeypatch.setattr(s, "run_data", lambda row: {"id": row.id})
-        monkeypatch.setattr(s, "active_run", AsyncMock(return_value=None))
 
         class Session(_Session):
             def __init__(self, seen_at: datetime | None) -> None:
                 # 库里多一条已退役的任务，页面不列。
                 rows = [_job(code="other", enabled=False), _job(), _job(code="retired")]
-                super().__init__(scalars=[rows], scalar_values=[None, None])
+                super().__init__(scalars=[rows, [], []])
                 self.seen_at = seen_at
 
             async def get(self, *_: Any) -> Any:
@@ -258,11 +257,10 @@ class TestTriggerAndOverview:
         monkeypatch.setattr(s, "run_data", lambda row: {"id": row.id})
         active = _run(status="running", sync_run_id=uuid.uuid4())
         last = _run(status="success", result={"processed": 50})
-        monkeypatch.setattr(s, "active_run", AsyncMock(side_effect=[active, None]))
 
         class Session(_Session):
             def __init__(self) -> None:
-                super().__init__(scalars=[[_job(), _job(code="other")]], scalar_values=[last, None])
+                super().__init__(scalars=[[_job(), _job(code="other")], [last], [active]])
 
             async def get(self, *_: Any) -> Any:
                 return None

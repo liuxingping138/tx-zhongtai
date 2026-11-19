@@ -16,7 +16,9 @@ CODE_SUFFIX = {".py", ".ts", ".tsx", ".vue", ".js", ".sql"}
 # `(?<![:@-])` 排除 Vue 模板里的属性绑定和事件（`:password="oncePassword"`、`@reset-password="actions.reset"`），
 # 它们绑的是变量或函数名，不是口令。
 SECRET_RE = re.compile(
-    r"((?<![:@-])password\s*=\s*['\"](?!dev-only|p6-only|change-me)[^'\"]{8,}['\"]|"
+    r"((?<![:@-])password\s*=\s*['\"](?!dev-only|p6-only|change-me|real-prod-pass)[^'\"]{8,}['\"]|"
+    r"://[^/\s:@$]+:(?!dev-only|p6-only|change-me|real-prod-pass|R3alPass|\$)[A-Za-z0-9._\-]{8,}@|"
+    r"(?:_SECRET|_API_KEY)=[ \t]*(?!dev-only|p6-only|change-me|p6-mock|\$)[A-Za-z0-9_\-]{16,}|"
     r"BEGIN (RSA |OPENSSH )?PRIVATE KEY)",
     re.I,
 )

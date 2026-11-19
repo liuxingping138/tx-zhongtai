@@ -393,6 +393,7 @@ services:
       context: ../..
       dockerfile: services/iam-service/Dockerfile
     command: [".venv/bin/python", "-m", "app.worker"]
+    init: true
     restart: unless-stopped
     mem_limit: ${IAM_WORKER_MEM_LIMIT:-512m}
     environment:
@@ -424,6 +425,7 @@ services:
       context: ../..
       dockerfile: services/audit-service/Dockerfile
     command: [".venv/bin/python", "-m", "app.worker"]
+    init: true
     restart: unless-stopped
     mem_limit: ${AUDIT_WORKER_MEM_LIMIT:-256m}
     environment:
@@ -515,6 +517,7 @@ services:
       - audit-service
       - codebook-service
       - policy-service
+      - tender-service
       - ai-service
       - thinktank-service
       - frontend

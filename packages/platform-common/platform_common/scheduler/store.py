@@ -118,6 +118,32 @@ class Scheduler:
             return row.result  # type: ignore[no-any-return]  # ORM 行是 Any，JSONB 列就是 dict | None
         return await job.summary(session, row.sync_run_id) or row.result
 
+    async def _latest_runs_by_job(self, session: AsyncSession, codes: list[str]) -> dict[str, Any]:
+        if not codes:
+            return {}
+        run = self.run_model
+        ranked = (
+            select(
+                run.id.label("run_id"),
+                func.row_number()
+                .over(partition_by=run.job_code, order_by=(run.created_at.desc(), run.id.desc()))
+                .label("rn"),
+            )
+            .where(run.job_code.in_(codes))
+            .subquery()
+        )
+        rows = (
+            await session.scalars(select(run).join(ranked, run.id == ranked.c.run_id).where(ranked.c.rn == 1))
+        ).all()
+        return {row.job_code: row for row in rows}
+
+    async def _active_runs_by_job(self, session: AsyncSession, codes: list[str]) -> dict[str, Any]:
+        if not codes:
+            return {}
+        run = self.run_model
+        rows = (await session.scalars(select(run).where(run.job_code.in_(codes), run.status.in_(ACTIVE)))).all()
+        return {row.job_code: row for row in rows}
+
     async def list_jobs(self, session: AsyncSession) -> dict[str, Any]:
         heartbeat = await session.get(self.heartbeat_model, 1)
         now = datetime.now(UTC)
@@ -126,11 +152,14 @@ class Scheduler:
             (row for row in (await session.scalars(select(self.job_model))).all() if row.code in self.jobs),
             key=lambda row: order.index(row.code),
         )
+        codes = [row.code for row in rows]
+        latest_by_code = await self._latest_runs_by_job(session, codes)
+        active_by_code = await self._active_runs_by_job(session, codes)
         items = []
         for row in rows:
             job = self.jobs[row.code]
-            last = await self._last_run(session, row.code)
-            active = await self.active_run(session, row.code)
+            last = latest_by_code.get(row.code)
+            active = active_by_code.get(row.code)
             items.append(
                 {
                     "code": row.code,

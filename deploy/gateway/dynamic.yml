@@ -61,6 +61,16 @@ http:
       entryPoints: ["web"]
       service: ai-service
       priority: 110
+    ai-download:
+      rule: "PathRegexp(`^/api/v1/ai/batch-runs/[^/]+/files/[^/]+$`)"
+      entryPoints: ["web"]
+      service: ai-service
+      priority: 110
+    thinktank-download:
+      rule: "PathRegexp(`^/api/v1/thinktank/knowledge/[^/]+/(content|download)$`)"
+      entryPoints: ["web"]
+      service: thinktank-service
+      priority: 110
     api-fallback:
       rule: "PathPrefix(`/api/v1`)"
       entryPoints: ["web"]

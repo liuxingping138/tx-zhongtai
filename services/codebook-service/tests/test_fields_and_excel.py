@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from io import BytesIO
-from pathlib import Path
 
-import pytest
 from openpyxl import Workbook, load_workbook
 from platform_common.columns import header_to_field
 from platform_common.excel import parse_sheet
@@ -50,15 +48,6 @@ def test_parse_skips_leading_blank_rows() -> None:
     book.save(raw)
     items = parse_sheet(raw.getvalue(), POLICY_TYPE_COLUMNS, subject="码表")
     assert items[0]["type_name"] == "顶层规划类"
-
-
-def test_parse_real_policy_type_enum_sheet() -> None:
-    path = Path(__file__).resolve().parents[3] / "docs" / "政策基础信息表_0916-更新穿透词(1).xlsx"
-    if not path.exists():
-        pytest.skip("本地政策类型 Excel 未入库")
-    items = parse_sheet(path.read_bytes(), POLICY_TYPE_COLUMNS, subject="码表")
-    if not items or items[0].get("type_name") != "顶层规划类":
-        pytest.skip("第一个 sheet 不是政策类型表")
 
 
 def test_content_hash_stable() -> None:

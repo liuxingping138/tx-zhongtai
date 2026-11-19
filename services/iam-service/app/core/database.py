@@ -4,22 +4,30 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 
+from platform_common.database import create_service_engine
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import get_settings
 
 settings = get_settings()
 
-engine = create_async_engine(settings.database_url, pool_pre_ping=True, echo=False)
+engine = create_service_engine(settings.database_url, service_name=settings.service_name)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 # 请求事务之外另起的短事务（登录失败、越权被拒的留痕，在线用户的最近活跃）用单独的小连接池。
 # 它们都是在请求自己还占着一条连接时再要一条：和请求共用一个池（5+10 条）的话，并发十几个这样的请求
 # 就都占着一条、等第二条，整池互相等到超时（30 秒）；业务服务问授权 2 秒超时，全平台一起 503。
 # 小池拿不到连接半秒就放弃，调用方要么忽略（最近活跃），要么只记日志（留痕），不拖住请求。
-side_engine = create_async_engine(
-    settings.database_url, pool_pre_ping=True, echo=False, pool_size=2, max_overflow=3, pool_timeout=0.5
+side_engine = create_service_engine(
+    settings.database_url,
+    service_name=f"{settings.service_name}-side",
+    pool_size=2,
+    max_overflow=3,
+    pool_timeout=0.5,
+    statement_timeout_ms=10_000,
+    idle_in_transaction_timeout_ms=30_000,
+    use_env_overrides=False,
 )
 SideSessionLocal = async_sessionmaker(side_engine, expire_on_commit=False, class_=AsyncSession)
 
