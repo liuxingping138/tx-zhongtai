@@ -44,8 +44,16 @@ class Settings(BaseServiceSettings):
     minio_timeout_seconds: float = 5.0
     minio_io_timeout_seconds: float = 60.0
 
+    def _optional_secret_fields(self) -> set[str]:
+        optional: set[str] = set()
+        if not self.minio_endpoint.strip():
+            optional.add("minio_secret_key")
+        if not self.codebook_base_url.strip():
+            optional.add("codebook_service_secret")
+        return optional
+
     @model_validator(mode="after")
-    def _reject_demo_secrets_in_production(self) -> Settings:
+    def _reject_service_demo_secrets_in_production(self) -> Settings:
         if self.environment == Environment.PRODUCTION:
             markers = ("dev-", "example", "changeme", "test-secret", "p6-only")
             for token in (

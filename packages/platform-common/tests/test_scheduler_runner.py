@@ -358,3 +358,15 @@ class TestLoop:
 
         runner.lead = lead  # type: ignore[method-assign]
         await asyncio.wait_for(runner.run(stop), timeout=1)
+
+    async def test_disabled_scheduled_job_does_not_retry_on_failure(self, batches: _Batches) -> None:
+        row = _row(job_code="sync", trigger="scheduled", attempts=1)
+        disabled_job = SimpleNamespace(code="sync", enabled=False)
+        db = _Db(rows={row.id: row, "sync": disabled_job})
+        batches.execute.side_effect = RuntimeError("transient network error")
+        runner = _runner(db, batches)
+
+        await runner.execute_claim((row.id, "sync", row.sync_run_id))
+
+        assert row.status == "failed"
+        assert row.finished_at is not None

@@ -52,7 +52,7 @@ services:
       AI_DB_PASSWORD: ${AI_DB_PASSWORD:?AI_DB_PASSWORD 未设置}
       THINKTANK_DB_NAME: ${THINKTANK_DB_NAME:-thinktank_db}
       THINKTANK_DB_USER: ${THINKTANK_DB_USER:-thinktank_app}
-      THINKTANK_DB_PASSWORD: ${THINKTANK_DB_PASSWORD:-dev-only-change-me-thinktank}
+      THINKTANK_DB_PASSWORD: ${THINKTANK_DB_PASSWORD:?THINKTANK_DB_PASSWORD 未设置}
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
@@ -448,7 +448,7 @@ services:
       THINKTANK_ENVIRONMENT: ${THINKTANK_ENVIRONMENT:-${ENVIRONMENT:-development}}
       THINKTANK_SERVICE_NAME: thinktank-service
       THINKTANK_LOG_LEVEL: ${THINKTANK_LOG_LEVEL:-INFO}
-      THINKTANK_DATABASE_URL: postgresql+asyncpg://${THINKTANK_DB_USER:-thinktank_app}:${THINKTANK_DB_PASSWORD:-dev-only-change-me-thinktank}@postgres:5432/${THINKTANK_DB_NAME:-thinktank_db}
+      THINKTANK_DATABASE_URL: postgresql+asyncpg://${THINKTANK_DB_USER:-thinktank_app}:${THINKTANK_DB_PASSWORD:?THINKTANK_DB_PASSWORD 未设置}@postgres:5432/${THINKTANK_DB_NAME:-thinktank_db}
       THINKTANK_CORS_ALLOW_ORIGINS: ${THINKTANK_CORS_ALLOW_ORIGINS:-[]}
       THINKTANK_IAM_BASE_URL: http://iam-service:8001
       THINKTANK_IAM_SERVICE_SECRET: ${THINKTANK_IAM_SERVICE_SECRET:-dev-only-change-me-internal}

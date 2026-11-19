@@ -440,6 +440,8 @@ def run() -> None:
     expect(code == 200, f"A17 codebook area-codes expected 200, got {code} {cbody}")
     code, pbody = admin_gw.call("GET", "/api/v1/policy/sources")
     expect(code == 200, f"A17 policy sources expected 200, got {code} {pbody}")
+    code, tbody = admin_gw.call("GET", "/api/v1/tender/purchaser")
+    expect(code != 401 and "鉴权" not in str(tbody), f"A17 tender auth failed: {code} {tbody}")
     code, kbody = admin_gw.call("GET", "/api/v1/thinktank/knowledge?page=1&page_size=5")
     expect(code == 200 and (kbody.get("data") or {}).get("total", 0) >= 1400, f"A17 thinktank list failed: {code} {kbody}")
     first_id = kbody["data"]["items"][0]["id"]

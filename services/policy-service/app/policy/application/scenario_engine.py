@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Any
 
 from platform_common.clock import utcnow
-from platform_common.errors import DependencyUnavailableError
+from platform_common.errors import ApiError, DependencyUnavailableError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common import internal_clients
@@ -276,27 +276,40 @@ async def recount(session: AsyncSession, candidate_ids: Iterable[uuid.UUID | Non
             candidate.last_seen_at = last
 
 
+SIMILAR_CHUNK = 500
+
+
 async def refresh_similar(candidates: list[ScenarioCandidate]) -> None:
     """新候选算一次码表里最像的已有场景，列表的「码表相似」「最像的已有场景」两列读它。取不到下次再算。"""
 
     todo = [candidate for candidate in candidates if not candidate.similar_level]
     if not todo:
         return
-    items = [
-        {
-            "key": str(candidate.id),
-            "path": [name for name in candidate.path() if name],
-            "industry_l1": [candidate.main_industry],
-        }
-        for candidate in todo
-    ]
-    try:
-        found = await internal_clients.codebook("POST", "/internal/v1/scenarios/context", json={"items": items})
-    except DependencyUnavailableError:
-        logger.warning("码表服务暂时取不到相似场景，%s 个新候选下次再算", len(todo))
+    found: list[dict[str, Any]] = []
+    succeeded: list[ScenarioCandidate] = []
+    for start in range(0, len(todo), SIMILAR_CHUNK):
+        chunk = todo[start : start + SIMILAR_CHUNK]
+        items = [
+            {
+                "key": str(candidate.id),
+                "path": [name for name in candidate.path() if name],
+                "industry_l1": [candidate.main_industry],
+            }
+            for candidate in chunk
+        ]
+        try:
+            batch = await internal_clients.codebook("POST", "/internal/v1/scenarios/context", json={"items": items})
+        except (DependencyUnavailableError, ApiError) as exc:
+            logger.warning(
+                "码表服务暂时取不到相似场景（%s），%s 个新候选下次再算", type(exc).__name__, len(todo) - start
+            )
+            break
+        found.extend(batch)
+        succeeded.extend(chunk)
+    if not succeeded:
         return
     by_key = {str(item.get("key")): item for item in found}
-    for candidate in todo:
+    for candidate in succeeded:
         context = by_key.get(str(candidate.id)) or {}
         similar = context.get("similar") or []
         best = similar[0] if similar else {}

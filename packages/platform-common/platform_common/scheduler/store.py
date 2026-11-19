@@ -244,9 +244,15 @@ class Scheduler:
         if candidate is None:
             return None
         # 与页面停用/入队使用相同的锁顺序：job -> run。
-        await self.get_job(session, candidate, lock=True)
+        job_row = await self.get_job(session, candidate, lock=True)
         row = await self.active_run(session, candidate)
         if row is None or row.status not in {"queued", "retrying"} or row.available_at > now:
+            return None
+        if not job_row.enabled and row.trigger == "scheduled":
+            row.status = "cancelled"
+            row.finished_at = now
+            row.error_message = "每日计划停用，待执行请求已取消"
+            await session.commit()
             return None
         row.status = "running"
         row.started_at = row.started_at or now

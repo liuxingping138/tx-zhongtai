@@ -72,7 +72,7 @@ class Settings(BaseServiceSettings):
     internal_timeout_seconds: float = 30.0
 
     @model_validator(mode="after")
-    def _reject_demo_secrets_in_production(self) -> Settings:
+    def _reject_service_demo_secrets_in_production(self) -> Settings:
         if self.environment == Environment.PRODUCTION:
             markers = ("dev-", "example", "changeme", "test-secret", "p6-only")
             internal = (self.ai_service_secret, self.codebook_service_secret)

@@ -33,7 +33,7 @@ class Settings(BaseServiceSettings):
     export_max_rows: int = 100_000
 
     @model_validator(mode="after")
-    def _reject_demo_secrets_in_production(self) -> Settings:
+    def _reject_service_demo_secrets_in_production(self) -> Settings:
         if self.environment == Environment.PRODUCTION:
             markers = ("dev-", "example", "changeme", "test-secret", "p6-only")
             for token in (self.iam_service_secret, self.audit_ingest_secret, *self.internal_caller_secrets.values()):

@@ -27,14 +27,14 @@ services:
       IAM_ENVIRONMENT: test
       IAM_REFRESH_REUSE_GRACE_SECONDS: "0"
       IAM_CSRF_ALLOWED_ORIGINS: '["http://localhost:8090","http://127.0.0.1:8090"]'
-      IAM_INTERNAL_CALLER_SECRETS: '{"audit-service":"p6-only-change-me-internal","codebook-service":"p6-only-change-me-internal","policy-service":"p6-only-change-me-internal","ai-service":"p6-only-change-me-internal","thinktank-service":"p6-only-change-me-internal"}'
+      IAM_INTERNAL_CALLER_SECRETS: '{"audit-service":"p6-only-change-me-internal","codebook-service":"p6-only-change-me-internal","policy-service":"p6-only-change-me-internal","ai-service":"p6-only-change-me-internal","tender-service":"p6-only-change-me-internal","thinktank-service":"p6-only-change-me-internal"}'
       IAM_AUDIT_INGEST_SECRET: p6-only-change-me-ingest
   iam-worker:
     volumes:
       - ../secrets/jwt-p6:/secrets/jwt
     environment:
       IAM_ENVIRONMENT: test
-      IAM_INTERNAL_CALLER_SECRETS: '{"audit-service":"p6-only-change-me-internal","codebook-service":"p6-only-change-me-internal","policy-service":"p6-only-change-me-internal","ai-service":"p6-only-change-me-internal","thinktank-service":"p6-only-change-me-internal"}'
+      IAM_INTERNAL_CALLER_SECRETS: '{"audit-service":"p6-only-change-me-internal","codebook-service":"p6-only-change-me-internal","policy-service":"p6-only-change-me-internal","ai-service":"p6-only-change-me-internal","tender-service":"p6-only-change-me-internal","thinktank-service":"p6-only-change-me-internal"}'
       IAM_AUDIT_INGEST_SECRET: p6-only-change-me-ingest
   audit-service:
     environment:
@@ -91,6 +91,10 @@ services:
     depends_on:
       llm-mock:
         condition: service_started
+  tender-service:
+    environment:
+      TENDER_ENVIRONMENT: test
+      TENDER_IAM_SERVICE_SECRET: p6-only-change-me-internal
   thinktank-service:
     environment:
       THINKTANK_ENVIRONMENT: test

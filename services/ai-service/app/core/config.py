@@ -53,7 +53,7 @@ class Settings(BaseServiceSettings):
     batch_stale_seconds: int = 90
 
     @model_validator(mode="after")
-    def _reject_demo_secrets_in_production(self) -> Settings:
+    def _reject_service_demo_secrets_in_production(self) -> Settings:
         if self.environment == Environment.PRODUCTION:
             if self.llm_base_url:
                 raise ValueError("生产环境不能把模型调用改发到其他地址（AI_LLM_BASE_URL 只给隔离验收用）")

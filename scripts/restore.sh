@@ -21,7 +21,7 @@ set -a
 source "$ENV_FILE"
 set +a
 
-SERVICES="iam audit policy codebook ai"
+SERVICES="iam audit policy codebook ai thinktank"
 
 svc_upper() { echo "$1" | tr '[:lower:]' '[:upper:]'; }
 
@@ -55,7 +55,7 @@ if [ -f "$BACKUP_PATH/SHA256SUMS" ]; then
 fi
 
 COMPOSE="${BACKUP_COMPOSE:?请设置 BACKUP_COMPOSE}"
-echo "恢复 $BACKUP_PATH -> $IAM_DB_NAME / $AUDIT_DB_NAME / $POLICY_DB_NAME / $CODEBOOK_DB_NAME / $AI_DB_NAME"
+echo "恢复 $BACKUP_PATH -> $IAM_DB_NAME / $AUDIT_DB_NAME / $POLICY_DB_NAME / $CODEBOOK_DB_NAME / $AI_DB_NAME / $THINKTANK_DB_NAME"
 
 # pg_restore --no-owner 后对象属主是超级用户。GRANT 不含 ALTER/DROP，
 # 随后只把当前库 public 里的表、序列、函数改回应用账号。

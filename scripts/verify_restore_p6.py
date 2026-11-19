@@ -7,11 +7,11 @@ import subprocess
 
 
 def main() -> None:
-    for name in ('IAM', 'AUDIT', 'POLICY', 'CODEBOOK', 'AI'):
+    for name in ('IAM', 'AUDIT', 'POLICY', 'CODEBOOK', 'AI', 'THINKTANK'):
         if not os.environ[f'{name}_DB_NAME'].endswith('_p6_db'):
             raise SystemExit('仅允许 P6 隔离库')
     compose = shlex.split(os.environ['P6_COMPOSE'])
-    for service in ('iam-service', 'audit-service', 'codebook-service', 'policy-service', 'ai-service'):
+    for service in ('iam-service', 'audit-service', 'codebook-service', 'policy-service', 'ai-service', 'thinktank-service'):
         prefix = [*compose, 'exec', '-T', service]
         subprocess.run([*prefix, '.venv/bin/alembic', 'upgrade', 'head'], check=True)
         code = '''from pathlib import Path

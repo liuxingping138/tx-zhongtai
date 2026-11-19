@@ -32,6 +32,7 @@ describe('retag', () => {
     api.requestRetag.mockResolvedValueOnce({ step: 'interpret', task: '政策解读', queued: 1, skipped: [] })
     sched.triggerJob.mockResolvedValueOnce({})
     expect((await submitRetag(['a'], 'interpret')).message).toContain('立即启动后台重打')
+    expect(sched.triggerJob).toHaveBeenCalledWith('policy_ai_interpret')
   })
 
   it('says nothing was queued when every policy was skipped', async () => {

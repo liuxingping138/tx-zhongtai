@@ -595,3 +595,49 @@ def test_match_filter_puts_each_scenario_in_exactly_one_bucket() -> None:
     assert "similar_level NOT IN ('高', '中')" in sql(domain.MATCH_NONE)
     with pytest.raises(KeyError):
         repo._conditions({"match": ["随便写的"]})
+
+
+@pytest.mark.asyncio
+async def test_refresh_similar_chunks_over_500_and_swallows_api_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """超过 500 条时按 500 分片调用码表，遇到 ApiError 不中断导入或归集。"""
+
+    chunk_sizes: list[int] = []
+
+    async def fake_codebook(_method: str, _path: str, **kwargs: Any) -> list[dict[str, Any]]:
+        items = kwargs["json"]["items"]
+        chunk_sizes.append(len(items))
+        return [
+            {"key": item["key"], "similar": [{"path": ["智慧交通"], "score": 0.8}], "best_level": "高"}
+            for item in items
+        ]
+
+    monkeypatch.setattr(internal_clients, "codebook", fake_codebook)
+    candidates = [
+        SimpleNamespace(
+            id=uuid.uuid4(),
+            main_industry="交通行业",
+            similar_level="",
+            similar_name="",
+            similar_score=0.0,
+            path=lambda: ("智慧交通", "场景A", ""),
+        )
+        for _ in range(502)
+    ]
+    await scenario_engine.refresh_similar(candidates)  # type: ignore[arg-type]
+    assert chunk_sizes == [500, 2]
+    assert all(c.similar_level == "高" for c in candidates)
+
+    async def fail_422(_method: str, _path: str, **_kwargs: Any) -> list[dict[str, Any]]:
+        raise ApiError("参数校验失败", http_status=422)
+
+    monkeypatch.setattr(internal_clients, "codebook", fail_422)
+    pending = SimpleNamespace(
+        id=uuid.uuid4(),
+        main_industry="交通行业",
+        similar_level="",
+        similar_name="",
+        similar_score=0.0,
+        path=lambda: ("智慧交通", "场景B", ""),
+    )
+    await scenario_engine.refresh_similar([pending])  # type: ignore[arg-type]
+    assert pending.similar_level == ""

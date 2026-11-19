@@ -12,7 +12,7 @@ export async function submitRetag(ids: string[], step: string): Promise<{ messag
   if (!result.queued) {
     return { message: '没有可以重新打标的政策', skipped: result.skipped }
   }
-  const triggered = await triggerJob(`policy_ai_${step}`, { base: '/policy' }).then(() => true, () => false)
+  const triggered = await triggerJob(`policy_ai_${step}`).then(() => true, () => false)
   const message = triggered
     ? `已将 ${result.queued} 条加入「${result.task}」并立即启动后台重打，稍候自动更新结果`
     : `已把 ${result.queued} 条放回「${result.task}」的待办，到任务调度执行它或等每日计划`

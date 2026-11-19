@@ -64,7 +64,13 @@ class SchedulerRunner:
                 else:
                     message = "执行进程中断，恢复后将重新执行"
                     await s.abandon_running(session, row, message)
-                    fail_run(row, message, datetime.now(UTC))
+                    job_row = await session.get(s.job_model, row.job_code)
+                    allow_retry = not (
+                        job_row is not None
+                        and not job_row.enabled
+                        and getattr(row, "trigger", "scheduled") == "scheduled"
+                    )
+                    fail_run(row, message, datetime.now(UTC), retry=allow_retry)
                     row.result = await s.result_of(session, row)
             await session.commit()
 
@@ -119,6 +125,9 @@ class SchedulerRunner:
             else:
                 failure = error
             if failure:
+                job_row = await session.get(s.job_model, code)
+                if job_row is not None and not job_row.enabled and getattr(row, "trigger", "scheduled") == "scheduled":
+                    retry = False
                 fail_run(row, failure, datetime.now(UTC), retry=retry)
             else:
                 row.status, row.finished_at, row.error_message = "success", datetime.now(UTC), None

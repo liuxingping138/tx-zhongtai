@@ -17,7 +17,7 @@ source "$ENV_FILE"
 set +a
 
 # 每个服务一套独立库，全部都要备。只备 iam+audit 会丢掉全部业务数据。
-SERVICES="iam audit policy codebook ai"
+SERVICES="iam audit policy codebook ai thinktank"
 for svc in $SERVICES; do
   eval "db=\${$(echo "$svc" | tr '[:lower:]' '[:upper:]')_DB_NAME:-}"
   guard_db_name "$db" "$svc"
