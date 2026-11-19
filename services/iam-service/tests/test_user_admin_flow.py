@@ -12,7 +12,7 @@ import pytest
 from platform_common.errors import ApiError, NotFoundError, PermissionDeniedError, VersionConflictError
 from sqlalchemy.exc import IntegrityError
 
-from app.application import user_admin
+from app.application import user_admin, user_guard
 from app.application.user_fields import NewUser, UserChanges
 from app.domain.enums import UserStatus
 from app.domain.filters import UserFilters
@@ -64,6 +64,7 @@ def env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
 
     monkeypatch.setattr(user_admin.outbox_repo, "enqueue", enqueue)
     monkeypatch.setattr(user_admin, "enqueue_independent", independent)
+    monkeypatch.setattr(user_guard, "enqueue_independent", independent)
     monkeypatch.setattr(user_admin.user_repo, "get_user_for_update", AsyncMock(side_effect=lambda *_: state.user))
     monkeypatch.setattr(user_admin.user_repo, "get_user_by_id", AsyncMock(side_effect=lambda *_: state.user))
     monkeypatch.setattr(
@@ -83,6 +84,12 @@ def env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     monkeypatch.setattr(user_admin.session_repo, "revoke_user_sessions", AsyncMock(return_value=2))
     monkeypatch.setattr(user_admin.grant_repo, "count_by_users", AsyncMock(return_value={}))
     monkeypatch.setattr(user_admin.grant_repo, "list_for_user", AsyncMock(return_value=[]))
+    state.effective_levels = {}
+    monkeypatch.setattr(
+        user_admin.resource_repo,
+        "list_effective_levels",
+        AsyncMock(side_effect=lambda _s, uid: state.effective_levels.get(uid, {})),
+    )
     return state
 
 
@@ -156,6 +163,11 @@ class TestUpdateUser:
             2,
         )
         assert env.events[0][0] == "iam.user.updated"
+        assert env.events[0][1]["changes"] == {
+            "display_name": {"before": "张三", "after": "张小三"},
+            "phone": {"before": "", "after": "13822004411"},
+            "email": {"before": "", "after": "a@b.com"},
+        }
 
     async def test_empty_phone_clears_it(self, env: SimpleNamespace) -> None:
         env.user.phone = "13822004411"
@@ -186,6 +198,32 @@ class TestProtections:
 
     async def test_a_superadmin_may_manage_a_superadmin(self, env: SimpleNamespace) -> None:
         env.superadmin_ids = {env.user.id, ACTOR.id}
+        assert await user_admin.reset_password(object(), ACTOR, env.user.id)  # type: ignore[arg-type]
+
+    async def test_user_admin_cannot_manage_user_with_extra_privileges(self, env: SimpleNamespace) -> None:
+        env.effective_levels = {
+            ACTOR.id: {"system.users": "FULL"},
+            env.user.id: {"system.users": "READ", "ai.billing": "READ"},
+        }
+        with pytest.raises(PermissionDeniedError, match="权限超出自身范围"):
+            await user_admin.reset_password(object(), ACTOR, env.user.id)  # type: ignore[arg-type]
+        assert env.independent[-1][0] == "iam.user.protect_denied"
+        assert env.independent[-1][1]["reason"] == "privilege_exceeds_actor"
+        assert env.user.id not in await user_admin.manageable_ids(object(), ACTOR, [env.user.id])  # type: ignore[arg-type]
+
+    async def test_user_admin_can_manage_subset_and_grant_admin_can_manage_any_non_superadmin(
+        self, env: SimpleNamespace
+    ) -> None:
+        env.effective_levels = {
+            ACTOR.id: {"system.users": "FULL", "policy.base_tags": "EXPORT"},
+            env.user.id: {"system.users": "READ", "policy.base_tags": "READ"},
+        }
+        assert env.user.id in await user_admin.manageable_ids(object(), ACTOR, [env.user.id])  # type: ignore[arg-type]
+        assert await user_admin.reset_password(object(), ACTOR, env.user.id)  # type: ignore[arg-type]
+
+        env.effective_levels[ACTOR.id] = {"system.users": "FULL", "system.permissions": "FULL"}
+        env.effective_levels[env.user.id] = {"ai.billing": "FULL"}
+        assert env.user.id in await user_admin.manageable_ids(object(), ACTOR, [env.user.id])  # type: ignore[arg-type]
         assert await user_admin.reset_password(object(), ACTOR, env.user.id)  # type: ignore[arg-type]
 
     async def test_last_loginable_superadmin_cannot_be_disabled(self, env: SimpleNamespace) -> None:

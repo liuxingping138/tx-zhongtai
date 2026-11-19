@@ -46,6 +46,16 @@ def level_satisfies(effective: str | None, required: str) -> bool:
     return LEVEL_RANK.get(effective, 0) >= LEVEL_RANK.get(required, 99)
 
 
+def levels_dominated(actor_levels: dict[str, str], target_levels: dict[str, str]) -> bool:
+    """判断操作人权限是否覆盖目标账号的全部资源档位。"""
+
+    for res_code, target_lvl in target_levels.items():
+        actor_lvl = actor_levels.get(res_code)
+        if actor_lvl is None or max_level([actor_lvl, target_lvl]) != actor_lvl:
+            return False
+    return True
+
+
 def evaluate_authorization(
     *,
     account_active: bool,

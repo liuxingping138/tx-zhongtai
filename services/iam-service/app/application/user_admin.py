@@ -20,7 +20,11 @@ from app.application.user_fields import (
     validate_display_name,
     validate_username,
 )
-from app.domain.authorization import max_level, remaining_loginable_superadmins
+from app.application.user_guard import assert_can_manage_target, manageable_ids
+from app.domain.authorization import (
+    max_level,
+    remaining_loginable_superadmins,
+)
 from app.domain.catalog import SUPERADMIN_ROLE_CODE
 from app.domain.enums import UserStatus
 from app.domain.filters import UserFilters
@@ -33,30 +37,7 @@ from app.repositories import sessions as session_repo
 from app.repositories import user_grants as grant_repo
 from app.repositories import users as user_repo
 
-
-async def assert_can_manage_target(session: AsyncSession, actor: User, target: User) -> None:
-    actor_is_super = await user_repo.user_has_builtin_superadmin(session, actor.id)
-    target_is_super = await user_repo.user_has_builtin_superadmin(session, target.id)
-    if target_is_super and not actor_is_super:
-        await enqueue_independent(
-            event_type="iam.user.protect_denied",
-            payload={
-                "actor_id": str(actor.id),
-                "target_id": str(target.id),
-                "outcome": "denied",
-                "reason": "protected_superadmin",
-            },
-        )
-        raise PermissionDeniedError("不能管理受保护的超级管理员账号")
-
-
-async def manageable_ids(session: AsyncSession, actor: User, user_ids: list[uuid.UUID]) -> set[uuid.UUID]:
-    """这批人里当前操作人能管的（停用、删除、重置密码、下线、解锁、改角色）。规则同 assert_can_manage_target：
-    不是超级管理员的不能管超级管理员。列表据此给每行 can_manage，页面不再给点了必然 403 的按钮。"""
-
-    if await user_repo.user_has_builtin_superadmin(session, actor.id):
-        return set(user_ids)
-    return set(user_ids) - await user_repo.builtin_superadmin_ids(session, user_ids)
+__all__ = ["assert_can_manage_target", "manageable_ids"]
 
 
 async def _guard_last_superadmin(
@@ -196,6 +177,7 @@ async def update_user(
     if user.version != changes.version:
         raise VersionConflictError()
     await assert_can_manage_target(session, actor, user)
+    before = {"status": user.status, "display_name": user.display_name, "phone": user.phone, "email": user.email}
     if status is not None and status != user.status:
         if status != UserStatus.ACTIVE:
             await _guard_last_superadmin(session, user, new_status=status, locked=locked_superadmins)
@@ -208,6 +190,8 @@ async def update_user(
         user.phone = normalize_phone(changes.phone)
     if changes.email is not None:
         user.email = normalize_email(changes.email)
+    after = {"status": user.status, "display_name": user.display_name, "phone": user.phone, "email": user.email}
+    diff = {k: {"before": before[k], "after": after[k]} for k in before if before[k] != after[k]}
     user.updated_at = utcnow()
     user.version += 1
     await outbox_repo.enqueue(
@@ -217,6 +201,7 @@ async def update_user(
             "actor_id": str(actor.id),
             "target_id": str(user.id),
             "status": user.status,
+            "changes": diff,
             "outcome": "success",
         },
     )
