@@ -8,7 +8,19 @@ import uuid
 from datetime import datetime
 
 from platform_common.orm_base import Base
-from sqlalchemy import ColumnElement, DateTime, Index, Integer, String, Text, UniqueConstraint, and_, func, literal, text
+from sqlalchemy import (
+    ColumnElement,
+    DateTime,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    and_,
+    func,
+    literal,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import InstrumentedAttribute, Mapped, mapped_column
 

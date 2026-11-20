@@ -47,7 +47,7 @@ def test_the_index_never_holds_the_whole_policy_name() -> None:
 def test_the_migration_builds_the_same_expression_as_the_model() -> None:
     module = _migration()
     assert module.down_revision == "b1c2d3e4f5a6"
-    assert module.COLUMNS == _model_columns()
+    assert _model_columns() == module.COLUMNS
 
 
 def test_the_list_order_matches_the_index_with_the_length_inline() -> None:
