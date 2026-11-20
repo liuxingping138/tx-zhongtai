@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import {
+  getInterpretation,
   importInterpretations,
   listInterpretations,
   setInterpretationsDataStatus,
@@ -69,7 +70,7 @@ const selection = useTableSelection<InterpretationItem>()
 const checked = selection.checked
 const statusOpen = ref(false)
 const retagOpen = ref(false)
-const { retagging, startAfterRetag } = useListRetagPoll(items, load)
+const { retagging, progress: retagProgress, startAfterRetag } = useListRetagPoll(load, getInterpretation)
 const STATUS_CHOICES = [
   { value: '人工验证', label: '人工验证', hint: '核对过、内容可用。之后 AI 重新解读、回填市场机会都不会再覆盖这些行。新增场景进不进码表在「新增场景审核」里按场景决定，和这里无关。' },
   { value: '待验证', label: '待验证', hint: '退回待核对。AI 重新解读时可以替换这些行。' },
@@ -148,7 +149,7 @@ onMounted(() => {
           :loading="retagging"
           @click="retagOpen = true"
         >
-          {{ retagging ? '正在重新打标…' : `重新打标（${checked.length}）` }}
+          {{ retagging ? `正在重新打标（${retagProgress.done}/${retagProgress.total}）…` : `重新打标（${checked.length}）` }}
         </el-button>
         <el-button
           v-if="canWrite && checked.length"

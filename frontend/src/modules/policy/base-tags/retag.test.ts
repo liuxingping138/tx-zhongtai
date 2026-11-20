@@ -1,4 +1,3 @@
-import { ref } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const api = vi.hoisted(() => ({ requestRetag: vi.fn() }))
@@ -8,7 +7,8 @@ vi.mock('@/api/aiTagging', () => api)
 vi.mock('@/api/scheduler', () => sched)
 vi.mock('element-plus', () => ({ ElMessage: msg }))
 
-import { submitRetag, useListRetagPoll } from './retag'
+import { ApiRequestError } from '@/api/errors'
+import { MAX_POLL_TICKS, submitRetag, useListRetagPoll } from './retag'
 import { TABLE_COLUMNS, mergeAiColumns, packBaseTagPatch } from './fields'
 import { TABLE_COLUMNS as INTERPRET_COLUMNS, mergeInterpretAiColumns, packInterpretationPatch } from '../interpretations/fields'
 
@@ -41,79 +41,82 @@ describe('retag', () => {
     expect((await submitRetag(['a'], 'interpret')).message).toBe('没有可以重新打标的政策')
   })
 
-  it('useListRetagPoll polls until items change or max ticks reached', async () => {
+  it('tracks the chosen rows by ID, wherever they are, and reports once every row is done', async () => {
     vi.useFakeTimers()
-    const items = ref([{ id: '1', version: 1, ai_status: '等待重新判断类型' }])
-    let calls = 0
-    const refresh = vi.fn(() => {
-      calls += 1
-      if (calls >= 2) items.value = [{ id: '1', version: 2, ai_status: '已完成' }]
-      return Promise.resolve()
-    })
-    const { retagging, startAfterRetag, stop } = useListRetagPoll(items, refresh)
-    await startAfterRetag()
+    const rows: Record<string, { id: string; version: number; ai_status: string }> = {
+      '1': { id: '1', version: 1, ai_status: '等待重新判断类型' },
+      '2': { id: '2', version: 1, ai_status: '等待重新判断类型' },
+    }
+    const fetchRow = vi.fn((id: string) => Promise.resolve({ ...rows[id] }))
+    const refresh = vi.fn(() => Promise.resolve())
+    const { retagging, progress, startAfterRetag, stop } = useListRetagPoll(refresh, fetchRow)
+    await startAfterRetag(['1', '2', '1'])
     expect(retagging.value).toBe(true)
-    await vi.advanceTimersByTimeAsync(3100)
+    expect(progress.value).toEqual({ done: 0, failed: 0, total: 2 })
+
+    rows['1'] = { id: '1', version: 2, ai_status: '已完成' }
+    await vi.advanceTimersByTimeAsync(3000)
+    // 只完成一条不算结束（原来任何一行变了就报「完成」）
+    expect(retagging.value).toBe(true)
+    expect(progress.value.done).toBe(1)
+    expect(msg.success).not.toHaveBeenCalled()
+
+    rows['2'] = { id: '2', version: 2, ai_status: '已完成' }
+    await vi.advanceTimersByTimeAsync(3000)
     expect(retagging.value).toBe(false)
-    expect(msg.success).toHaveBeenCalledOnce()
+    expect(msg.success).toHaveBeenCalledWith('重新打标已完成 2 条，列表数据已自动更新')
+    // 第二轮起只问还没完成的那一行
+    expect(fetchRow.mock.calls.slice(-1)).toEqual([['2']])
     stop()
   })
 
-  it('scopes polling to targetIds, ignores unrelated or missing pages, and warns on failure', async () => {
+  it('counts a replaced row (404) as done, counts failures, and retries transient errors', async () => {
     vi.useFakeTimers()
-    const items = ref([
-      { id: '1', version: 1, ai_status: '待处理' },
-      { id: '2', version: 1, ai_status: '待处理' },
-    ])
-    let step = 0
-    const refresh = vi.fn(() => {
-      step += 1
-      if (step === 2) items.value = [{ id: '1', version: 1, ai_status: '待处理' }, { id: '2', version: 2, ai_status: '已完成' }]
-      if (step === 3) items.value = [{ id: '99', version: 1, ai_status: '已完成' }]
-      if (step === 4) items.value = [{ id: '1', version: 2, ai_status: '打标失败' }]
-      return Promise.resolve()
+    let tick = 0
+    const fetchRow = vi.fn((id: string) => {
+      if (tick === 0) return Promise.resolve({ id, version: 1, ai_status: '待解读' })
+      if (id === 'a') return Promise.reject(new ApiRequestError({ status: 404, code: 'NOT_FOUND', message: '', requestId: null }))
+      if (tick === 1) return Promise.reject(new ApiRequestError({ status: 0, code: 'NETWORK_ERROR', message: '', requestId: null }))
+      return Promise.resolve({ id, version: 2, ai_status: '解读失败' })
     })
-    const { retagging, startAfterRetag } = useListRetagPoll(items, refresh)
-    await startAfterRetag(['1'])
+    const { retagging, progress, startAfterRetag } = useListRetagPoll(() => Promise.resolve(), fetchRow)
+    await startAfterRetag(['a', 'b'])
+    tick = 1
     await vi.advanceTimersByTimeAsync(3000)
+    expect(progress.value).toEqual({ done: 1, failed: 0, total: 2 })
     expect(retagging.value).toBe(true)
-    await vi.advanceTimersByTimeAsync(3000)
-    expect(retagging.value).toBe(true)
+    tick = 2
     await vi.advanceTimersByTimeAsync(3000)
     expect(retagging.value).toBe(false)
-    expect(msg.warning).toHaveBeenCalledWith('重新打标结束，部分条目失败，请查看状态')
-    expect(msg.success).not.toHaveBeenCalled()
+    expect(msg.warning).toHaveBeenCalledWith('重新打标结束：2 条已处理，其中 1 条失败，请按「打标状态」查看')
   })
 
-  it('uses stepped backoff delays and notifies info when max ticks exhaust', async () => {
+  it('keeps asking for about 15 minutes with stepped backoff, then says it is still running', async () => {
     vi.useFakeTimers()
-    const items = ref([{ id: '1', version: 1, ai_status: '待处理' }])
-    const refresh = vi.fn(() => Promise.resolve())
-    const { retagging, startAfterRetag } = useListRetagPoll(items, refresh)
+    const fetchRow = vi.fn((id: string) => Promise.resolve({ id, version: 1, ai_status: '待处理' }))
+    const { retagging, startAfterRetag } = useListRetagPoll(() => Promise.resolve(), fetchRow)
     await startAfterRetag(['1'])
-    expect(refresh).toHaveBeenCalledTimes(1)
+    expect(fetchRow).toHaveBeenCalledTimes(1)
 
     await vi.advanceTimersByTimeAsync(10 * 3000)
-    expect(refresh).toHaveBeenCalledTimes(11)
+    expect(fetchRow).toHaveBeenCalledTimes(11)
+    await vi.advanceTimersByTimeAsync(10 * 5000)
+    expect(fetchRow).toHaveBeenCalledTimes(21)
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
     expect(retagging.value).toBe(true)
 
-    await vi.advanceTimersByTimeAsync(3000)
-    expect(refresh).toHaveBeenCalledTimes(11)
-    await vi.advanceTimersByTimeAsync(2000)
-    expect(refresh).toHaveBeenCalledTimes(12)
-
-    await vi.advanceTimersByTimeAsync(9 * 5000)
-    expect(refresh).toHaveBeenCalledTimes(21)
-
-    await vi.advanceTimersByTimeAsync(5000)
-    expect(refresh).toHaveBeenCalledTimes(21)
-    await vi.advanceTimersByTimeAsync(5000)
-    expect(refresh).toHaveBeenCalledTimes(22)
-
-    await vi.advanceTimersByTimeAsync(9 * 10000)
-    expect(refresh).toHaveBeenCalledTimes(31)
+    await vi.advanceTimersByTimeAsync((MAX_POLL_TICKS - 20) * 10000 - 10 * 60_000)
+    expect(fetchRow).toHaveBeenCalledTimes(MAX_POLL_TICKS + 1)
+    await vi.advanceTimersByTimeAsync(10000)
     expect(retagging.value).toBe(false)
-    expect(msg.info).toHaveBeenCalledWith('后台仍在重新打标，稍后可手动刷新查看结果')
+    expect(msg.info).toHaveBeenCalledWith('后台仍在重新打标（已处理 0 / 1 条），稍后可手动刷新查看结果')
+  })
+
+  it('does not start polling when none of the chosen rows can be read', async () => {
+    const fetchRow = vi.fn(() => Promise.reject(new ApiRequestError({ status: 404, code: 'NOT_FOUND', message: '', requestId: null })))
+    const { retagging, startAfterRetag } = useListRetagPoll(() => Promise.resolve(), fetchRow)
+    await startAfterRetag(['x'])
+    expect(retagging.value).toBe(false)
   })
 })
 

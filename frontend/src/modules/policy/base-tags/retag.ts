@@ -1,6 +1,7 @@
-import { onBeforeUnmount, ref, type Ref } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { requestRetag, type AiTaskCode } from '@/api/aiTagging'
+import { ApiRequestError } from '@/api/errors'
 import { triggerJob } from '@/api/scheduler'
 
 /**
@@ -19,7 +20,9 @@ export async function submitRetag(ids: string[], step: string): Promise<{ messag
   return { message, skipped: result.skipped }
 }
 
-const MAX_POLL_TICKS = 30
+/** 约 15 分钟：前 10 次 3 秒、再 10 次 5 秒，之后每 10 秒一次。AI 一批常要好几分钟，3 分钟就放弃太早。 */
+export const MAX_POLL_TICKS = 102
+const FETCH_CHUNK = 10
 
 function delayForTick(tickNumber: number): number {
   if (tickNumber <= 10) return 3000
@@ -27,18 +30,56 @@ function delayForTick(tickNumber: number): number {
   return 10000
 }
 
-/** 列表页批量重新打标后的后台轮询：采用退避间隔轮询目标行的版本/更新时间或状态变化，完成后按结果弹提示。 */
-export function useListRetagPoll<T extends { id: string; version: number; updated_at?: string; tagged_at?: string; ai_status?: string }>(
-  items: Ref<T[]>,
+type RetagRow = { id: string; version: number; updated_at?: string; tagged_at?: string; ai_status?: string }
+/** 一行的打标结果：gone = 这一行已经没了（重新解读会换掉旧的解读行），算处理完。 */
+type RowState = { gone: true } | { gone: false; key: string; failed: boolean }
+
+function rowState(row: RetagRow): RowState {
+  const key = `${row.version}:${row.updated_at ?? ''}:${row.tagged_at ?? ''}:${row.ai_status ?? ''}`
+  return { gone: false, key, failed: Boolean(row.ai_status?.includes('失败')) }
+}
+
+/** 按 ID 取一行；404 是被换掉了，其他错误（网络抖动）返回 null，下次再问。 */
+async function readRow<T extends RetagRow>(fetchRow: (id: string) => Promise<T>, id: string): Promise<RowState | null> {
+  try {
+    return rowState(await fetchRow(id))
+  } catch (error) {
+    return error instanceof ApiRequestError && error.status === 404 ? { gone: true } : null
+  }
+}
+
+async function readRows<T extends RetagRow>(fetchRow: (id: string) => Promise<T>, ids: string[]): Promise<Map<string, RowState | null>> {
+  const states = new Map<string, RowState | null>()
+  for (let start = 0; start < ids.length; start += FETCH_CHUNK) {
+    const chunk = ids.slice(start, start + FETCH_CHUNK)
+    const read = await Promise.all(chunk.map((id) => readRow(fetchRow, id)))
+    chunk.forEach((id, index) => states.set(id, read[index]))
+  }
+  return states
+}
+
+function finishedMessage(done: number, failed: number): string {
+  return failed
+    ? `重新打标结束：${done} 条已处理，其中 ${failed} 条失败，请按「打标状态」查看`
+    : `重新打标已完成 ${done} 条，列表数据已自动更新`
+}
+
+/**
+ * 列表页批量重新打标后的后台轮询：按 ID 逐条去问勾选的那几行（不看当前页，翻页、筛选都不影响），
+ * 某一行的版本、打标时间或状态变了就算这一行处理完，行没了（重新解读换掉了旧解读行）也算；
+ * 全部处理完才提示，失败的单独数出来。最多问约 15 分钟。
+ */
+export function useListRetagPoll<T extends RetagRow>(
   refresh: () => Promise<void>,
+  fetchRow: (id: string) => Promise<T>,
 ) {
   const retagging = ref(false)
+  const progress = ref({ done: 0, failed: 0, total: 0 })
   let timer: ReturnType<typeof setTimeout> | null = null
   let attempt = 0
-  let inFlight = false
   let disposed = false
   let runId = 0
-  let trackedIds = new Set<string>()
+  let baseline = new Map<string, string>()
 
   function stop() {
     runId += 1
@@ -47,78 +88,87 @@ export function useListRetagPoll<T extends { id: string; version: number; update
       timer = null
     }
     attempt = 0
-    inFlight = false
     retagging.value = false
   }
 
-  function targetRows(rows: T[]): T[] {
-    return trackedIds.size > 0 ? rows.filter(r => trackedIds.has(r.id)) : rows
-  }
-
-  function snapshot(rows: T[]): string | null {
-    const relevant = targetRows(rows)
-    if (trackedIds.size > 0 && relevant.length === 0) return null
-    return relevant.map(r => `${r.id}:${r.version}:${r.updated_at ?? ''}:${r.tagged_at ?? ''}:${r.ai_status ?? ''}`).join('|')
-  }
-
-  function notifyFinished(rows: T[]) {
-    const hasFailure = targetRows(rows).some(r => r.ai_status?.includes('失败'))
-    if (hasFailure) {
-      ElMessage.warning('重新打标结束，部分条目失败，请查看状态')
-      return
-    }
-    ElMessage.success('重新打标已完成，列表数据已自动更新')
-  }
-
-  function tryComplete(baseline: string | null): boolean {
-    const current = snapshot(items.value)
-    if (current === null || baseline === null || current === baseline) return false
-    stop()
-    notifyFinished(items.value)
+  /** 记下这一行的结果，返回它是不是处理完了。 */
+  function settle(id: string, state: RowState | null): boolean {
+    if (state === null) return false
+    if (!state.gone && state.key === baseline.get(id)) return false
+    baseline.delete(id)
+    progress.value.done += 1
+    if (!state.gone && state.failed) progress.value.failed += 1
     return true
   }
 
-  function scheduleNext(baseline: string | null, myRun: number) {
-    if (disposed || !retagging.value || myRun !== runId) return
+  async function safeRefresh() {
+    await refresh().catch(() => undefined)
+  }
+
+  async function finish() {
+    const { done, failed } = progress.value
+    stop()
+    const ended = runId
+    await safeRefresh()
+    if (disposed || ended !== runId) return
+    if (failed) ElMessage.warning(finishedMessage(done, failed))
+    else ElMessage.success(finishedMessage(done, failed))
+  }
+
+  async function giveUp() {
+    const { done, total } = progress.value
+    stop()
+    const ended = runId
+    await safeRefresh()
+    if (disposed || ended !== runId) return
+    ElMessage.info(`后台仍在重新打标（已处理 ${done} / ${total} 条），稍后可手动刷新查看结果`)
+  }
+
+  function scheduleNext(myRun: number) {
+    if (disposed || myRun !== runId) return
     attempt += 1
     if (attempt > MAX_POLL_TICKS) {
-      stop()
-      ElMessage.info('后台仍在重新打标，稍后可手动刷新查看结果')
+      void giveUp()
       return
     }
     timer = setTimeout(() => {
       timer = null
-      void tick(baseline, myRun)
+      void tick(myRun)
     }, delayForTick(attempt))
   }
 
-  async function tick(baseline: string | null, myRun: number) {
-    if (inFlight || disposed || myRun !== runId) return
-    inFlight = true
-    try {
-      await refresh()
-      if (!disposed && myRun === runId) tryComplete(baseline)
-    } finally {
-      inFlight = false
-      if (myRun === runId) scheduleNext(baseline, myRun)
+  async function tick(myRun: number) {
+    const states = await readRows(fetchRow, [...baseline.keys()])
+    if (disposed || myRun !== runId) return
+    let changed = false
+    for (const [id, state] of states) changed = settle(id, state) || changed
+    if (baseline.size === 0) {
+      await finish()
+      return
     }
+    if (changed) await safeRefresh()
+    scheduleNext(myRun)
   }
 
-  async function startAfterRetag(targetIds?: string[]) {
+  async function startAfterRetag(targetIds: string[]) {
     stop()
     const myRun = runId
-    trackedIds = new Set(targetIds ?? [])
-    await refresh()
+    await safeRefresh()
+    const states = await readRows(fetchRow, [...new Set(targetIds)])
     if (disposed || myRun !== runId) return
-    const baseline = snapshot(items.value)
+    baseline = new Map()
+    for (const [id, state] of states) {
+      if (state && !state.gone) baseline.set(id, state.key)
+    }
+    progress.value = { done: 0, failed: 0, total: baseline.size }
+    if (baseline.size === 0) return
     retagging.value = true
-    attempt = 0
-    scheduleNext(baseline, myRun)
+    scheduleNext(myRun)
   }
 
   onBeforeUnmount(() => {
     disposed = true
     stop()
   })
-  return { retagging, startAfterRetag, stop }
+  return { retagging, progress, startAfterRetag, stop }
 }

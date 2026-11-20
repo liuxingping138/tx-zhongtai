@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import { importAfterAreaResolve } from '@/api/codebook'
-import { importBaseTags, listBaseTags, type BaseTagItem } from '@/api/policy'
+import { getBaseTag, importBaseTags, listBaseTags, type BaseTagItem } from '@/api/policy'
 import { errorMessage } from '@/api/errors'
 import { reportImportResult, runExcelImport } from '@/api/excelImport'
 import AuditLogButton from '@/components/AuditLogButton.vue'
@@ -71,7 +71,7 @@ function detailRoute(row: BaseTagItem, index: number) {
 const selection = useTableSelection<BaseTagItem>()
 const checked = selection.checked
 const retagOpen = ref(false)
-const { retagging, startAfterRetag } = useListRetagPoll(items, load)
+const { retagging, progress: retagProgress, startAfterRetag } = useListRetagPoll(load, getBaseTag)
 async function afterRetag() {
   const ids = [...selection.ids.value]
   selection.clear()
@@ -136,7 +136,7 @@ onMounted(() => {
           :loading="retagging"
           @click="retagOpen = true"
         >
-          {{ retagging ? '正在重新打标…' : `重新打标（${checked.length}）` }}
+          {{ retagging ? `正在重新打标（${retagProgress.done}/${retagProgress.total}）…` : `重新打标（${checked.length}）` }}
         </el-button>
         <AuditLogButton :module="RESOURCE" />
       </template>
