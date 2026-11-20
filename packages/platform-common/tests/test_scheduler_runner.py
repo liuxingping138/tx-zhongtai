@@ -370,3 +370,44 @@ class TestLoop:
 
         assert row.status == "failed"
         assert row.finished_at is not None
+
+
+class _BeatConnection:
+    """持锁连接的替身：execute 按顺序抛出 errors 里的异常，invalidated 表示连接已经断开。"""
+
+    def __init__(self, errors: list[Exception], *, invalidated: bool) -> None:
+        self.errors = errors
+        self.invalidated = invalidated
+        self.rollbacks = 0
+
+    async def execute(self, _statement: Any) -> None:
+        if self.errors:
+            raise self.errors.pop(0)
+        raise asyncio.CancelledError
+
+    async def commit(self) -> None:
+        return None
+
+    async def rollback(self) -> None:
+        self.rollbacks += 1
+
+
+class TestHeartbeat:
+    async def test_a_dropped_lock_connection_ends_the_leader_at_once(
+        self, batches: _Batches, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # 断开的连接回滚后会换新连接，心跳照样写得进去，进程却已不持锁：不能重试，要退出 leader。
+        monkeypatch.setattr(runner_module, "HEARTBEAT_SECONDS", 0)
+        connection = _BeatConnection([ConnectionError("lost")], invalidated=True)
+        with pytest.raises(ConnectionError):
+            await _runner(_Db(), batches).heartbeat(connection)  # type: ignore[arg-type]
+        assert connection.rollbacks == 0
+
+    async def test_a_transient_error_on_a_live_connection_is_retried(
+        self, batches: _Batches, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(runner_module, "HEARTBEAT_SECONDS", 0)
+        connection = _BeatConnection([TimeoutError("slow")], invalidated=False)
+        with pytest.raises(asyncio.CancelledError):
+            await _runner(_Db(), batches).heartbeat(connection)  # type: ignore[arg-type]
+        assert connection.rollbacks == 1

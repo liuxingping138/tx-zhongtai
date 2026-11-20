@@ -151,6 +151,10 @@ class SchedulerRunner:
                 self.logger.warning(
                     "scheduler_heartbeat_failed attempt=%s reason=%s", consecutive_errors, type(exc).__name__
                 )
+                # 连接断了，leader 会话锁跟着这条连接没了：rollback 之后 SQLAlchemy 会换一条新连接，
+                # 心跳写得进去、进程却已不持锁，别的 worker 拿到锁就会两边同时执行。直接退出 leader，由外层重新抢锁。
+                if connection.invalidated:
+                    raise
                 with contextlib.suppress(Exception):
                     await connection.rollback()
                 if consecutive_errors >= max_transient_errors:
