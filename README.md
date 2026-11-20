@@ -72,7 +72,7 @@ Python 3.12 由 uv 自动管理。Docker 要装（`make bootstrap` 会检查）�
 make bootstrap   # 安装 Python 和前端依赖、生成 .env（已有的不覆盖）、启用 git 钩子
 ```
 
-日常流程：在 Mac 上改代码，提交并推送到 GitLab，再把源码同步到服务器构建：
+日常流程：在 Mac 上改代码，提交并推送到 GitHub，再把源码同步到服务器构建：
 
 ```bash
 bash scripts/sync-to-server.sh

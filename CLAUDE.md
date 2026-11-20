@@ -18,7 +18,7 @@ AI提问已接入（独立的 ai-service：提示词模板、样本试跑与上�
 
 ## 常用命令
 
-当前运行环境是 `https://36.134.128.137:8443`（8091 HTTP 自动跳转；443 被同机其他站点占用）。在 Mac 上改代码并推送到 GitLab，再用 `scripts/sync-to-server.sh` 同步到服务器构建。不要在服务器 `git pull`，不要在本机 `make dev-up`。步骤见 `docs/guides/部署与维护.md`。
+当前运行环境是 `https://36.134.128.137:8443`（8091 HTTP 自动跳转；443 被同机其他站点占用）。在 Mac 上改代码并推送到 GitHub，再用 `scripts/sync-to-server.sh` 同步到服务器构建。不要在服务器 `git pull`，不要在本机 `make dev-up`。步骤见 `docs/guides/部署与维护.md`。
 服务器 `.env` 是 `ENVIRONMENT=production`：新增内部密钥类变量（compose 里默认 `dev-only-…`）必须先写进服务器 `.env`，否则服务拒绝启动。
 
 ```bash
