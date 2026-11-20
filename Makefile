@@ -299,7 +299,7 @@ p6-restore:
 	@test -n "$(BACKUP)" || (echo "请设置 BACKUP=deploy/backups/<stamp>"; exit 2)
 	@set -a && . ./$(P6_ENV) && set +a && \
 	BACKUP_COMPOSE="$(P6_COMPOSE)" BACKUP_ENV_FILE="$(P6_ENV)" RESTORE_CONFIRM=$$IAM_DB_NAME bash scripts/restore.sh "$(BACKUP)" && \
-	P6_COMPOSE="$(P6_COMPOSE)" python3 scripts/verify_restore_p6.py
+	P6_COMPOSE="$(P6_COMPOSE)" RESTORE_BACKUP="$(BACKUP)" python3 scripts/verify_restore_p6.py
 
 export-openapi:
 	@(cd services/iam-service && uv run python ../../scripts/export_openapi.py iam)

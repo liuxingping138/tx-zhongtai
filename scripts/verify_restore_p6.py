@@ -4,6 +4,36 @@ from __future__ import annotations
 import os
 import shlex
 import subprocess
+import tarfile
+from pathlib import Path
+
+# 备份目录里的附件包 -> 解到哪个容器的哪个目录（和 restore.sh 一致）
+FILE_ARCHIVES = (
+    ("ai-files.tar.gz", "ai-service", "/data/ai"),
+    ("thinktank-files.tar.gz", "thinktank-service", "/data/thinktank"),
+)
+
+
+def verify_files(compose: list[str], backup: Path) -> None:
+    """附件包里的每个文件恢复后都要在卷里：库回到了备份点、附件没回去，页面上就是一堆打不开的文件。"""
+
+    for name, service, root in FILE_ARCHIVES:
+        archive = backup / name
+        if not archive.is_file():
+            continue
+        with tarfile.open(archive) as tar:
+            files = [member.name for member in tar.getmembers() if member.isfile()]
+        script = 'cd "$1" && while IFS= read -r f; do [ -f "$f" ] || echo "$f"; done'
+        missing = subprocess.run(
+            [*compose, "exec", "-T", service, "sh", "-c", script, "sh", root],
+            input="".join(f"{path}\n" for path in files),
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout.splitlines()
+        if missing:
+            raise SystemExit(f"{name} 恢复后 {service}:{root} 缺 {len(missing)} 个文件，如 {missing[:3]}")
+        print(name, "restore_files_ok", len(files), flush=True)
 
 
 def main() -> None:
@@ -33,6 +63,9 @@ path.write_text(source)
         subprocess.run([*prefix, '.venv/bin/alembic', 'check'], check=True)
         print(service, 'restore_next_migration_ok', flush=True)
     print('RESTORE_MIGRATIONS_OK')
+    backup = os.environ.get("RESTORE_BACKUP", "")
+    if backup:
+        verify_files(compose, Path(backup))
 
 
 if __name__ == '__main__':

@@ -79,4 +79,23 @@ done
 
 # 审计库不归应用账号：上面统一改成应用账号的属主再收回给超级用户，audit_events 只给应用账号查和插，删除只给清理账号。
 $COMPOSE exec -T postgres sh < "$ROOT/deploy/compose/scripts/secure-audit-db.sh"
+
+# 附件卷和库要回到同一备份点：备份目录里有附件包（backup_business.sh 产出；backup.sh 只备库，没有）就一起灌回。
+# 只解包覆盖同名文件，备份之后新建的文件留着：库里已经没有引用它们，不影响页面。
+restore_files() {
+  archive="$BACKUP_PATH/$1"
+  service="$2"
+  target="$3"
+  [ -f "$archive" ] || return 0
+  tar -tzf "$archive" > /dev/null
+  $COMPOSE exec -T "$service" tar -C "$target" -xzf - < "$archive"
+  echo "  $1 -> $service:$target"
+}
+if [ -f "$BACKUP_PATH/ai-files.tar.gz" ]; then
+  # 批量任务边跑边写产物，灌回期间先停 ai-worker；服务本身要留着执行解包。
+  $COMPOSE stop ai-worker
+  restore_files ai-files.tar.gz ai-service /data/ai
+  $COMPOSE start ai-worker
+fi
+restore_files thinktank-files.tar.gz thinktank-service /data/thinktank
 echo "恢复完成"
