@@ -174,7 +174,10 @@ async def test_policy_contents_by_source_ids_raises_503_on_source_error(monkeypa
 
 
 async def test_attach_policy_contents(monkeypatch: pytest.MonkeyPatch) -> None:
+    events: list[str] = []
+
     def fake_contents(content_ids: list[str]) -> dict[str, str]:
+        events.append("read_source")
         return {cid: f"{cid}正文" for cid in content_ids}
 
     monkeypatch.setattr(source, "read_contents_for_page", fake_contents)
@@ -191,9 +194,21 @@ async def test_attach_policy_contents(monkeypatch: pytest.MonkeyPatch) -> None:
         async def execute(self, _stmt: Any) -> Any:
             return _FakeResult()
 
+        async def commit(self) -> None:
+            events.append("commit")
+
     rows: list[dict[str, Any]] = [{}, {}, {}]
     await policy_content.attach_policy_contents(_FakeSession(), [item1, item2, item3], rows)  # type: ignore[arg-type]
 
     assert rows[0]["policy_content"] == "s1正文"
     assert rows[1]["policy_content"] == "s2正文"
     assert rows[2]["policy_content"] == ""
+    # 先提交放掉 PostgreSQL 事务，再去源库读：读几百批期间事务开着会撞空闲事务超时
+    assert events[0] == "commit" and "read_source" in events
+
+
+async def test_attach_policy_contents_without_source_ids_never_touches_the_source() -> None:
+    rows: list[dict[str, Any]] = [{}]
+    item = SimpleNamespace(source_content_id=None, policy_title="")
+    await policy_content.attach_policy_contents(object(), [item], rows)  # type: ignore[arg-type]
+    assert rows == [{"policy_content": ""}]

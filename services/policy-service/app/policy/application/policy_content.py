@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common import policy_source as source
 from app.common import policy_text as rules
+from app.core.config import get_settings
 from app.policy.domain.models import BaseTag
 
 NO_SOURCE = "这条不是从源库打标的，没有正文"
@@ -109,6 +110,9 @@ async def attach_policy_contents(
 
     优先使用记录自带的 source_content_id；
     若缺失（如解读表手工/外部导入行），尝试按政策标题回查基础标签表的源 ID。
+
+    本库要读的都读完后先提交、放掉请求事务，再去源库读正文：几百批 MySQL 读取期间不发 PostgreSQL 语句，
+    事务一直开着会撞空闲事务超时被断开，最后提交失败、整个导出 500。之后的审计入队另起一个短事务。
     """
 
     id_map: dict[int, str] = {}
@@ -130,7 +134,19 @@ async def attach_policy_contents(
             if title in title_to_sid:
                 id_map[idx] = title_to_sid[title]
 
+    if not id_map:
+        for row in rows:
+            row["policy_content"] = ""
+        return
+    await session.commit()
     contents = await policy_contents_by_source_ids(list(id_map.values()))
     for idx, row in enumerate(rows):
         sid = id_map.get(idx)
         row["policy_content"] = contents.get(sid, "") if sid else ""
+
+
+def content_export_limit() -> int:
+    """带「政策正文」的导出单次最多多少行：通用导出上限和正文导出上限取小的。"""
+
+    settings = get_settings()
+    return min(settings.export_max_rows, settings.export_content_max_rows)

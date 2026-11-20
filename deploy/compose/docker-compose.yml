@@ -200,6 +200,7 @@ services:
       POLICY_SERVICE_NAME: policy-service
       POLICY_IMPORT_MAX_BYTES: ${POLICY_IMPORT_MAX_BYTES:-20971520}
       POLICY_EXPORT_MAX_ROWS: ${POLICY_EXPORT_MAX_ROWS:-100000}
+      POLICY_EXPORT_CONTENT_MAX_ROWS: ${POLICY_EXPORT_CONTENT_MAX_ROWS:-20000}
       POLICY_CRAWLER_HEALTH_NORMAL_DAYS: ${POLICY_CRAWLER_HEALTH_NORMAL_DAYS:-7}
       POLICY_CRAWLER_HEALTH_WATCH_DAYS: ${POLICY_CRAWLER_HEALTH_WATCH_DAYS:-30}
       POLICY_LOG_LEVEL: ${POLICY_LOG_LEVEL:-INFO}
@@ -243,6 +244,9 @@ services:
     environment:
       POLICY_ENVIRONMENT: ${POLICY_ENVIRONMENT:-${ENVIRONMENT:-development}}
       POLICY_SERVICE_NAME: policy-worker
+      # worker 跑的是几分钟到几小时的同步、打标和投递：语句和空闲事务超时只给对外接口的进程，这里关掉（0 = 不限）。
+      DB_STATEMENT_TIMEOUT_MS: "0"
+      DB_IDLE_IN_TRANSACTION_TIMEOUT_MS: "0"
       POLICY_IMPORT_MAX_BYTES: ${POLICY_IMPORT_MAX_BYTES:-20971520}
       POLICY_EXPORT_MAX_ROWS: ${POLICY_EXPORT_MAX_ROWS:-100000}
       POLICY_CRAWLER_HEALTH_NORMAL_DAYS: ${POLICY_CRAWLER_HEALTH_NORMAL_DAYS:-7}
@@ -357,6 +361,9 @@ services:
     environment:
       AI_ENVIRONMENT: ${AI_ENVIRONMENT:-${ENVIRONMENT:-development}}
       AI_SERVICE_NAME: ai-worker
+      # worker 跑的是几分钟到几小时的同步、打标和投递：语句和空闲事务超时只给对外接口的进程，这里关掉（0 = 不限）。
+      DB_STATEMENT_TIMEOUT_MS: "0"
+      DB_IDLE_IN_TRANSACTION_TIMEOUT_MS: "0"
       AI_LOG_LEVEL: ${AI_LOG_LEVEL:-INFO}
       AI_DATABASE_URL: postgresql+asyncpg://${AI_DB_USER}:${AI_DB_PASSWORD}@postgres:5432/${AI_DB_NAME}
       AI_CORS_ALLOW_ORIGINS: ${AI_CORS_ALLOW_ORIGINS:-[]}
@@ -399,6 +406,9 @@ services:
     environment:
       IAM_ENVIRONMENT: ${IAM_ENVIRONMENT:-${ENVIRONMENT:-development}}
       IAM_SERVICE_NAME: iam-worker
+      # worker 跑的是几分钟到几小时的同步、打标和投递：语句和空闲事务超时只给对外接口的进程，这里关掉（0 = 不限）。
+      DB_STATEMENT_TIMEOUT_MS: "0"
+      DB_IDLE_IN_TRANSACTION_TIMEOUT_MS: "0"
       IAM_WORKER_LEASE_SECONDS: ${IAM_WORKER_LEASE_SECONDS:-30}
       IAM_SESSION_RETENTION_DAYS: ${IAM_SESSION_RETENTION_DAYS:-30}
       IAM_LOG_LEVEL: ${IAM_LOG_LEVEL:-INFO}
@@ -431,6 +441,9 @@ services:
     environment:
       AUDIT_ENVIRONMENT: ${AUDIT_ENVIRONMENT:-${ENVIRONMENT:-development}}
       AUDIT_SERVICE_NAME: audit-worker
+      # worker 跑的是几分钟到几小时的同步、打标和投递：语句和空闲事务超时只给对外接口的进程，这里关掉（0 = 不限）。
+      DB_STATEMENT_TIMEOUT_MS: "0"
+      DB_IDLE_IN_TRANSACTION_TIMEOUT_MS: "0"
       AUDIT_LOG_LEVEL: ${AUDIT_LOG_LEVEL:-INFO}
       AUDIT_DATABASE_URL: postgresql+asyncpg://${AUDIT_DB_USER}:${AUDIT_DB_PASSWORD}@postgres:5432/${AUDIT_DB_NAME}
       AUDIT_CLEANUP_DATABASE_URL: postgresql+asyncpg://${AUDIT_CLEANUP_DB_USER:-audit_cleanup}:${AUDIT_CLEANUP_DB_PASSWORD}@postgres:5432/${AUDIT_DB_NAME}

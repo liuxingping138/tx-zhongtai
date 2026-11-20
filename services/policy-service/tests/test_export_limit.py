@@ -14,6 +14,7 @@ from platform_common.errors import ApiError
 
 from app.core.config import get_settings
 from app.policy.application import base_tags, interpretations, sources
+from app.policy.application.policy_content import content_export_limit
 
 MODULES = [
     (sources, "export_sources", {"site_name": "北京"}),
@@ -31,7 +32,8 @@ class _FakeActor:
 def test_export_rejects_when_over_limit(
     monkeypatch: pytest.MonkeyPatch, module, export_fn: str, filters: dict[str, str]
 ) -> None:
-    limit = get_settings().export_max_rows
+    # 基础标签、解读的导出带政策正文，上限是更小的正文导出上限
+    limit = get_settings().export_max_rows if module is sources else content_export_limit()
 
     async def fake_count(_session: object, _filters: object) -> int:
         return limit + 1
@@ -119,6 +121,12 @@ def test_export_allows_exactly_at_limit(monkeypatch: pytest.MonkeyPatch) -> None
 
 def test_default_export_limit_is_100k() -> None:
     assert get_settings().export_max_rows == 100_000
+
+
+def test_exports_with_policy_content_are_capped_lower() -> None:
+    # 带正文的导出要逐批到源库读，10 万行要十几分钟：默认最多 2 万行。
+    assert get_settings().export_content_max_rows == 20_000
+    assert content_export_limit() == 20_000
 
 
 def test_export_base_tags_and_interpretations_include_policy_content(monkeypatch: pytest.MonkeyPatch) -> None:

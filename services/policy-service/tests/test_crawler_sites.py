@@ -82,11 +82,34 @@ async def test_incremental_recomputes_touched_days_and_today(monkeypatch: pytest
     monkeypatch.setattr(sync, "fetch_affected_days", fetch)
     monkeypatch.setattr(sync, "_synced_days", AsyncMock(return_value={}))
     targets, new_mark = await sync.plan(
-        MagicMock(), sync.SyncWindow(mode=sync.MODE_INCREMENTAL, days=7, since=None, skip_existing=False), today=TODAY
+        AsyncMock(), sync.SyncWindow(mode=sync.MODE_INCREMENTAL, days=7, since=None, skip_existing=False), today=TODAY
     )
     assert targets == [TODAY, date(2026, 9, 21), date(2026, 9, 1)]
     assert new_mark == newer
     fetch.assert_called_once_with(mark - timedelta(hours=2))
+
+
+@pytest.mark.asyncio
+async def test_incremental_ends_the_postgres_transaction_before_reading_the_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # 源库在代理后找受影响日期要几分钟：读水位开的事务开着会撞空闲事务超时，断开的是持锁的连接。
+    mark = datetime(2026, 9, 22, 12, tzinfo=UTC)
+    events: list[str] = []
+    session = AsyncMock()
+    session.commit.side_effect = lambda: events.append("commit")
+
+    def fetch(_since: datetime) -> tuple[dict[date, datetime], None]:
+        events.append("fetch_source")
+        return {}, None
+
+    monkeypatch.setattr(sync, "_last_watermark", AsyncMock(return_value=mark))
+    monkeypatch.setattr(sync, "fetch_affected_days", fetch)
+    monkeypatch.setattr(sync, "_synced_days", AsyncMock(return_value={}))
+    await sync.plan(
+        session, sync.SyncWindow(mode=sync.MODE_INCREMENTAL, days=7, since=None, skip_existing=False), today=TODAY
+    )
+    assert events == ["commit", "fetch_source"]
 
 
 @pytest.mark.asyncio
@@ -105,7 +128,7 @@ async def test_retry_skips_days_already_recomputed_after_their_last_insert(monke
     monkeypatch.setattr(sync, "fetch_affected_days", MagicMock(return_value=(touched, last_in)))
     monkeypatch.setattr(sync, "_synced_days", AsyncMock(return_value=synced))
     targets, _ = await sync.plan(
-        MagicMock(), sync.SyncWindow(mode=sync.MODE_INCREMENTAL, days=7, since=None, skip_existing=False), today=TODAY
+        AsyncMock(), sync.SyncWindow(mode=sync.MODE_INCREMENTAL, days=7, since=None, skip_existing=False), today=TODAY
     )
     assert targets == [TODAY, date(2026, 9, 3), date(2026, 9, 2)]
 
@@ -116,7 +139,7 @@ async def test_incremental_keeps_watermark_when_nothing_new(monkeypatch: pytest.
     monkeypatch.setattr(sync, "_last_watermark", AsyncMock(return_value=mark))
     monkeypatch.setattr(sync, "fetch_affected_days", MagicMock(return_value=({}, None)))
     targets, new_mark = await sync.plan(
-        MagicMock(), sync.SyncWindow(mode=sync.MODE_INCREMENTAL, days=7, since=None, skip_existing=False), today=TODAY
+        AsyncMock(), sync.SyncWindow(mode=sync.MODE_INCREMENTAL, days=7, since=None, skip_existing=False), today=TODAY
     )
     assert targets == [TODAY]
     assert new_mark == mark

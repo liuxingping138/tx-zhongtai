@@ -34,6 +34,9 @@ class Settings(BaseServiceSettings):
     import_max_bytes: int = 20 * 1024 * 1024
     # 导出会把整表读进内存再生成 Excel，必须有上限，否则大表导出能把服务撑爆。
     export_max_rows: int = 100_000
+    # 基础标签、解读的导出带「政策正文」，要按 200 条一批到源库读、再提取文字：10 万行要读几百批、十几分钟，
+    # 网关和浏览器都等不了，所以带正文的导出另设更小的上限（取两者较小的）。
+    export_content_max_rows: int = 20_000
 
     # 爬虫监测：只读连爬虫库做按天聚合，结果落本服务库。服务进程不连它，只有同步 CLI 用。
     crawler_mysql_host: str = ""

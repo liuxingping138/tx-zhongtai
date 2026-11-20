@@ -289,6 +289,9 @@ async def plan(
     watermark = await _last_watermark(session)
     if watermark is None:
         raise RuntimeError("尚未建立同步水位，请先执行一次回填：make crawler-backfill")
+    # 先结束读水位开的事务再去源库：代理后找受影响日期可能要几分钟，事务开着会撞空闲事务超时，
+    # 被断开的正是持有同步会话锁（advisory lock）的那条连接。
+    await session.commit()
     touched, mark = await asyncio.to_thread(fetch_affected_days, watermark - _WATERMARK_OVERLAP)
     # 水位只在整次成功后才往前走：补录了好几天、一次跑不完超时后，重试和第二天都会把同一批日期从头再算，
     # 单日聚合最长要七八分钟，「重日」一多就永远超时。上一次（失败的那次）已经在这一天最后一条入库之后

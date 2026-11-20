@@ -15,10 +15,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common import internal_clients
 from app.common.audit_emit import enqueue_event
 from app.common.interpret_fields import KNOWN_INTERPRET_KEYS
-from app.core.config import get_settings
 from app.policy.application import scenario_engine
 from app.policy.application.importing import add_in_batches
-from app.policy.application.policy_content import attach_policy_contents, policy_content
+from app.policy.application.policy_content import attach_policy_contents, content_export_limit, policy_content
 from app.policy.application.region import make_policy_uid, make_relation_key
 from app.policy.domain.fields import (
     DATA_STATUS_CHOICES,
@@ -346,16 +345,17 @@ async def import_interpretations(session: AsyncSession, actor: Actor, content: b
 async def _assert_exportable(session: AsyncSession, filters: Filters) -> None:
     """导出前按当前筛选条件校验行数上限。
 
-    导出是把结果集整个读进内存再生成 Excel，没有上限时大表会把服务撑爆。
-    上限由 ``export_max_rows`` 配置，默认 10 万行；超限时提示先缩小筛选范围。
+    导出是把结果集整个读进内存再生成 Excel，没有上限时大表会把服务撑爆；这张表的导出还带「政策正文」，
+    要逐批到源库读，所以上限取 ``export_max_rows`` 和 ``export_content_max_rows`` 中小的（默认 2 万行）。
     """
 
-    limit = get_settings().export_max_rows
+    limit = content_export_limit()
     total = await repo.count_filtered(session, filters)
     if total > limit:
         scope = "筛选结果" if any(filters.values()) else "本表"
         raise ApiError(
-            f"{scope}共 {total} 条，超过单次导出上限 {limit} 条，请先缩小筛选范围后再导出。",
+            f"{scope}共 {total} 条，超过单次导出上限 {limit} 条（导出带政策正文，要到源库逐批读取），"
+            "请先缩小筛选范围后再导出。",
             code=ErrorCode.VALIDATION_ERROR,
             http_status=422,
         )
