@@ -78,3 +78,18 @@ def test_map_unknown_event_type_keeps_type() -> None:
     body = map_outbox_to_ingest(event)
     assert body["module_code"] == "iam"
     assert body["action_code"] == "custom.future.event"
+
+
+def test_user_export_is_filed_under_user_management() -> None:
+    # 没登记的话入库成模块 iam、动作是原始事件名，按「用户管理」筛操作日志看不到导出。
+    event = OutboxEvent(
+        event_id=uuid.uuid4(),
+        event_type="iam.user.exported",
+        schema_version=1,
+        payload={"actor_id": "u1", "actor_name": "管理员", "outcome": "success", "count": 3},
+        status=OutboxStatus.PENDING,
+        attempts=0,
+        created_at=datetime.now(UTC),
+    )
+    body = map_outbox_to_ingest(event)
+    assert (body["module_code"], body["action_code"], body["target_type"]) == ("system.users", "export", "user")

@@ -18,6 +18,7 @@ _EVENT_META: dict[str, tuple[str, str, str, str]] = {
     "iam.user.created": ("system.users", "create", "user", "创建用户"),
     "iam.user.updated": ("system.users", "update", "user", "更新用户"),
     "iam.user.deleted": ("system.users", "delete", "user", "删除用户"),
+    "iam.user.exported": ("system.users", "export", "user", "导出用户"),
     "iam.user.password_reset": ("system.users", "reset_password", "user", "重置密码"),
     "iam.user.sessions_revoked": ("system.users", "revoke_sessions", "user", "强制下线"),
     "iam.session.revoked": ("system.users", "revoke_session", "user", "下线一台设备"),
