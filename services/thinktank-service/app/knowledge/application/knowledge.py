@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from platform_common.actors import Actor
@@ -15,8 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.audit_emit import enqueue_event
 from app.common.codebook_client import get_provinces
-from app.core import storage
+from app.core import office_preview, storage
 from app.core.config import get_settings
+from app.knowledge.application.knowledge_preview import fallback_summary_bytes, load_office_preview_pdf
 from app.knowledge.domain.models import KnowledgeFile, KnowledgeOpLog
 from app.knowledge.domain.scopes import PROVINCES, KnowledgeAccess
 from app.knowledge.repositories import knowledge as repo
@@ -214,7 +216,10 @@ async def preview_knowledge(
         },
     )
     ext = storage.raw_extension(row.file_name) or row.file_suffix.upper()
-    if row.storage_path and ext == "PDF":
+    is_office_pdf = (
+        office_preview.office_extension(row.file_name, row.file_suffix) is not None and office_preview.has_libreoffice()
+    )
+    if row.storage_path and (ext == "PDF" or is_office_pdf):
         mode = "pdf"
     elif row.storage_path and ext in {"TXT", "MD", "CSV"}:
         mode = "text"
@@ -231,25 +236,6 @@ async def preview_knowledge(
             "content_text": row.content_text or fallback_text,
         },
     }
-
-
-def _fallback_summary_bytes(row: KnowledgeFile) -> bytes:
-    lines = [
-        f"资料名称：{row.file_name}",
-        f"文件类型：{row.file_type or '未定义'}",
-        f"运营商类型：{row.operator_type or '-'}",
-        f"部门归属：{row.depart_affiliation or '-'}",
-        f"行业类型：{row.industry_type or '无'}",
-        f"应用场景：{row.app_scenario or '无'}",
-        f"市场类别：{row.market_category or '无'}",
-        f"产品类型：{row.product_type or '无'}",
-        f"产品子类型：{row.product_sub_type or '无'}",
-        f"省份：{row.prov_name or '-'}",
-        f"资料时间：{row.data_time or '-'}",
-        "",
-        row.content_text or "（示例知识资料摘要）",
-    ]
-    return "\n".join(lines).encode("utf-8")
 
 
 async def _record_download_audit(session: AsyncSession, actor: Actor, row: KnowledgeFile) -> None:
@@ -306,6 +292,25 @@ async def stream_file_content(
         await assert_read(session, actor, access, row, "preview_content")
 
     settings = get_settings()
+    if not for_download and row.storage_path:
+        office_ext = office_preview.office_extension(row.file_name, row.file_suffix)
+        if office_ext is not None:
+            pdf_bytes = await load_office_preview_pdf(settings, row, office_ext)
+            if pdf_bytes is not None:
+                return FileStreamResult(
+                    stream=_single_chunk_stream(pdf_bytes),
+                    filename=f"{Path(row.file_name).stem}.pdf",
+                    media_type="application/pdf",
+                    content_length=len(pdf_bytes),
+                )
+            raw = fallback_summary_bytes(row)
+            return FileStreamResult(
+                stream=_single_chunk_stream(raw),
+                filename=f"{row.file_name}.txt",
+                media_type="text/plain; charset=utf-8",
+                content_length=len(raw),
+            )
+
     try:
         opened = await storage.stream_object(settings, row.storage_path)
     except storage.StorageUnavailableError as exc:
@@ -320,7 +325,7 @@ async def stream_file_content(
         media_type = storage.media_type_for_file(row.file_name, row.file_suffix)
         filename = row.file_name
     else:
-        raw = _fallback_summary_bytes(row)
+        raw = fallback_summary_bytes(row)
         stream, size = _single_chunk_stream(raw), len(raw)
         media_type = "text/plain; charset=utf-8"
         filename = f"{row.file_name}.txt"

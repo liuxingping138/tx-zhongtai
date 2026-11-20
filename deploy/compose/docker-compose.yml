@@ -462,7 +462,7 @@ services:
       context: ../..
       dockerfile: services/thinktank-service/Dockerfile
     restart: unless-stopped
-    mem_limit: ${THINKTANK_MEM_LIMIT:-1g}
+    mem_limit: ${THINKTANK_MEM_LIMIT:-1536m}
     environment:
       THINKTANK_ENVIRONMENT: ${THINKTANK_ENVIRONMENT:-${ENVIRONMENT:-development}}
       THINKTANK_SERVICE_NAME: thinktank-service

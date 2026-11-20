@@ -9,6 +9,7 @@ import { buildKnowledgeFacts, suffixTagType } from './fields'
 
 const props = defineProps<{
   item: KnowledgeItem
+  downloading?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -56,9 +57,10 @@ const facts = computed(() => buildKnowledgeFacts(props.item, formatTime))
           v-if="item.can_export"
           size="small"
           :icon="Download"
+          :loading="downloading"
           @click="emit('download')"
         >
-          下载源文件
+          {{ downloading ? '下载中…' : '下载源文件' }}
         </el-button>
         <el-button
           size="small"

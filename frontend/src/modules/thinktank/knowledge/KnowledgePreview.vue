@@ -46,6 +46,7 @@ const fileId = computed(() => String(route.params.id || ''))
 const loading = ref(true)
 const error = ref('')
 const contentLoading = ref(false)
+const downloading = ref(false)
 const item = ref<KnowledgeItem | null>(null)
 const previewMode = ref<'pdf' | 'text' | 'summary'>('summary')
 const previewText = ref('')
@@ -203,12 +204,17 @@ async function onToggleFavorite() {
 
 async function onDownload() {
   const current = item.value
-  if (!current || current.id !== fileId.value) return
+  if (!current || current.id !== fileId.value || downloading.value) return
+  downloading.value = true
+  const hint = ElMessage.info({ message: `正在下载「${current.file_name}」，请稍候…`, duration: 0 })
   try {
     const resp = await downloadKnowledgeBlob(current.id)
     downloadBlob(resp.data, parseContentDispositionFilename(resp.headers?.['content-disposition'], current.file_name))
-    ElMessage.success('下载已开始')
-  } catch (err) { ElMessage.error(errorMessage(err, '下载失败')) }
+    ElMessage.success('文件下载已开始')
+  } catch (err) { ElMessage.error(errorMessage(err, '下载失败')) } finally {
+    hint.close()
+    downloading.value = false
+  }
 }
 
 async function onDelete() {
@@ -288,6 +294,7 @@ onMounted(() => { void loadPage() })
     <template v-else-if="item">
       <KnowledgeSummaryCard
         :item="item"
+        :downloading="downloading"
         @toggle-favorite="onToggleFavorite"
         @download="onDownload"
         @open-logs="logsOpen = true"
@@ -324,6 +331,7 @@ onMounted(() => { void loadPage() })
           :collapsed="previewCollapsed"
           :meta-collapsed="metaCollapsed"
           :loading="contentLoading"
+          :downloading="downloading"
           :mode="previewMode"
           :pdf-url="pdfUrl"
           :text="previewText"

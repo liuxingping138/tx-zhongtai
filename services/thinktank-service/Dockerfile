@@ -9,7 +9,17 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_HTTP_TIMEOUT=120 \
     UV_DEFAULT_INDEX=$PYPI_INDEX
 
-RUN pip install --no-cache-dir --disable-pip-version-check --root-user-action=ignore --index-url "$PYPI_INDEX" uv==0.12.13
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      libreoffice-core \
+      libreoffice-impress \
+      libreoffice-writer \
+      libreoffice-calc \
+      fonts-noto-cjk \
+      fonts-liberation \
+      fonts-dejavu-core \
+ && rm -rf /var/lib/apt/lists/* \
+ && pip install --no-cache-dir --disable-pip-version-check --root-user-action=ignore --index-url "$PYPI_INDEX" uv==0.12.13
 
 RUN useradd --create-home --shell /usr/sbin/nologin appuser
 
@@ -39,6 +49,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 EXPOSE 8007
 
+ENV HOME=/tmp
 USER appuser
 
 CMD [".venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--timeout-keep-alive", "75", "--port", "8007"]

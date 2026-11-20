@@ -268,6 +268,7 @@ async def get_item_content(
     headers = {
         "Content-Disposition": _content_disposition("inline", res.filename),
         "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "private, max-age=300",
     }
     if res.content_length is not None:
         headers["Content-Length"] = str(res.content_length)

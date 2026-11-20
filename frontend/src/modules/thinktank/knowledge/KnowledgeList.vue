@@ -84,6 +84,7 @@ const { columns, defaults, selected } = useDetailColumns(TABLE_COLUMNS, EDITOR_G
 const uploadVisible = ref(false)
 const exportingUndefined = ref(false)
 const busyRowIds = reactive(new Set<string>())
+const downloadingRowIds = reactive(new Set<string>())
 const logTarget = ref<{ visible: boolean; id: string; name: string }>({ visible: false, id: '', name: '' })
 
 async function refresh() {
@@ -151,17 +152,19 @@ async function onToggleFavorite(row: KnowledgeItem) {
 }
 
 async function onDownload(row: KnowledgeItem) {
-  if (busyRowIds.has(row.id)) return
-  busyRowIds.add(row.id)
+  if (downloadingRowIds.has(row.id)) return
+  downloadingRowIds.add(row.id)
+  const hint = ElMessage.info({ message: `正在下载「${row.file_name}」，请稍候…`, duration: 0 })
   try {
     const resp = await downloadKnowledgeBlob(row.id)
     const filename = parseContentDispositionFilename(resp.headers?.['content-disposition'], row.file_name)
     downloadBlob(resp.data, filename)
-    ElMessage.success('开始下载文件')
+    ElMessage.success('文件下载已开始')
   } catch (error) {
     ElMessage.error(errorMessage(error, '下载失败'))
   } finally {
-    busyRowIds.delete(row.id)
+    hint.close()
+    downloadingRowIds.delete(row.id)
   }
 }
 
@@ -317,10 +320,10 @@ onMounted(async () => {
               v-if="row.can_export"
               type="button"
               class="row-action"
-              :disabled="busyRowIds.has(row.id)"
+              :disabled="downloadingRowIds.has(row.id)"
               @click="onDownload(row)"
             >
-              下载
+              {{ downloadingRowIds.has(row.id) ? '下载中…' : '下载' }}
             </button>
             <button
               type="button"

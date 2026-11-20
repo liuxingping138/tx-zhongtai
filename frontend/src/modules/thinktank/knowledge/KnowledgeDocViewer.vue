@@ -8,6 +8,7 @@ defineProps<{
   collapsed: boolean
   metaCollapsed: boolean
   loading: boolean
+  downloading?: boolean
   mode: 'pdf' | 'text' | 'summary'
   pdfUrl: string
   text: string
@@ -65,10 +66,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
           v-if="fullscreen && canExport"
           type="button"
           class="review__tool-btn"
+          :disabled="downloading"
           @click="emit('download')"
         >
           <el-icon><Download /></el-icon>
-          <span>下载</span>
+          <span>{{ downloading ? '下载中…' : '下载' }}</span>
         </button>
         <button
           type="button"
