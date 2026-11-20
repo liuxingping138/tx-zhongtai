@@ -111,8 +111,8 @@ export function previewKnowledge(id: string): Promise<KnowledgePreviewPayload> {
   return request(http.get(`/thinktank/knowledge/${id}/preview`))
 }
 
-export function fetchKnowledgeContentBlob(id: string): Promise<AxiosResponse<Blob>> {
-  return http.get(`/thinktank/knowledge/${id}/content`, { responseType: 'blob', timeout: 600_000 })
+export function fetchKnowledgeContentBlob(id: string, signal?: AbortSignal): Promise<AxiosResponse<Blob>> {
+  return http.get(`/thinktank/knowledge/${id}/content`, { responseType: 'blob', timeout: 600_000, signal })
 }
 
 export function downloadKnowledgeBlob(id: string): Promise<AxiosResponse<Blob>> {

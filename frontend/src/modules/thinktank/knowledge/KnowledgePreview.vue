@@ -27,7 +27,8 @@ import KnowledgeLogsDrawer from './KnowledgeLogsDrawer.vue'
 import KnowledgeMetaCard from './KnowledgeMetaCard.vue'
 import KnowledgeSummaryCard from './KnowledgeSummaryCard.vue'
 import { fetchNeighbors } from './neighborWindow'
-import { useKnowledgeContent } from './useKnowledgeContent'
+import { openRecord } from './previewFlow'
+import { isOfficeFile, useKnowledgeContent } from './useKnowledgeContent'
 import { usePreviewPanels } from './usePreviewPanels'
 import { FILTER_KEYS, parseContentDispositionFilename } from './fields'
 
@@ -67,6 +68,9 @@ function buildNeighborRoute(id: string | null, pos: number): RouteLocationRaw | 
 
 const prevTarget = computed(() => (position.value !== null ? buildNeighborRoute(prevId.value, position.value - 1) : null))
 const nextTarget = computed(() => (position.value !== null ? buildNeighborRoute(nextId.value, position.value + 1) : null))
+const contentLoadingText = computed(() => (item.value && isOfficeFile(item.value.file_name, item.value.file_suffix)
+  ? '正在转换并加载文档预览，首次打开可能需要数秒…'
+  : '正在加载文档预览…'))
 const watermarkText = computed(() => auth.user?.display_name || auth.user?.username || '智库预览')
 
 async function loadNeighbors() {
@@ -95,18 +99,17 @@ function consumeEditQuery() {
   }
 }
 
-function applyLoadedPage(
-  res: Awaited<ReturnType<typeof previewKnowledge>>,
-  opts: Awaited<ReturnType<typeof fetchFilterOptions>> | null,
-  scope: KnowledgeAccessSummary | null,
-) {
-  item.value = res.item
-  if (opts?.options?.prov_name?.items) provinces.value = opts.options.prov_name.items
-  if (scope) accessScope.value = scope
-  consumeEditQuery()
-  void loadNeighbors()
+/** 省份候选和可编辑范围跟着人走、不跟记录走：进页时后台取一次，不挡首屏，只有编辑标签时用得到。 */
+function loadEditOptions() {
+  fetchFilterOptions('/thinktank/knowledge')
+    .then((opts) => { if (opts?.options?.prov_name?.items) provinces.value = opts.options.prov_name.items })
+    .catch(() => { /* 取不到时省份只能手填 */ })
+  getKnowledgeAccess()
+    .then((scope) => { accessScope.value = scope })
+    .catch(() => { /* 取不到时编辑弹层不限候选 */ })
 }
 
+// 资料信息一到就出整页，原文（PDF 下载、Office 转码可能要几秒）在右栏自己转圈。
 async function loadPage() {
   const targetId = fileId.value
   if (!targetId) return
@@ -115,14 +118,17 @@ async function loadPage() {
   loading.value = true
   error.value = ''
   try {
-    const [res, opts, scope] = await Promise.all([
-      previewKnowledge(targetId),
-      fetchFilterOptions('/thinktank/knowledge').catch(() => null),
-      getKnowledgeAccess().catch(() => null),
-    ])
-    if (seq !== pageSeq || targetId !== fileId.value) return
-    applyLoadedPage(res, opts, scope)
-    await content.show(targetId, res.preview.mode, res.preview.content_text, res.preview.has_binary)
+    await openRecord({
+      fetchMeta: () => previewKnowledge(targetId),
+      isCurrent: () => seq === pageSeq && targetId === fileId.value,
+      onMeta: (res) => {
+        item.value = res.item
+        loading.value = false
+        consumeEditQuery()
+        void loadNeighbors()
+      },
+      startContent: res => content.show(targetId, res.preview.mode, res.preview.content_text, res.preview.has_binary),
+    })
   } catch (err) {
     if (seq === pageSeq) error.value = errorMessage(err, '加载文件预览失败')
   } finally {
@@ -174,8 +180,8 @@ async function onDelete() {
 }
 
 watch(() => route.params.id, () => { void loadPage() })
-onBeforeUnmount(() => { pageSeq += 1; neighborSeq += 1; content.cancel() })
-onMounted(() => { void loadPage() })
+onBeforeUnmount(() => { pageSeq += 1; neighborSeq += 1; content.dispose() })
+onMounted(() => { loadEditOptions(); void loadPage() })
 </script>
 
 <template>
@@ -275,6 +281,7 @@ onMounted(() => { void loadPage() })
           :collapsed="previewCollapsed"
           :meta-collapsed="metaCollapsed"
           :loading="contentLoading"
+          :loading-text="contentLoadingText"
           :downloading="downloading"
           :mode="previewMode"
           :pdf-url="pdfUrl"

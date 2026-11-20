@@ -9,6 +9,7 @@ defineProps<{
   collapsed: boolean
   metaCollapsed: boolean
   loading: boolean
+  loadingText?: string
   downloading?: boolean
   mode: 'pdf' | 'text' | 'summary'
   pdfUrl: string
@@ -119,10 +120,18 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <div class="review__content-body">
-        <ParagraphSkeleton
+        <div
           v-if="loading"
-          :lines="10"
-        />
+          class="viewer-loading"
+        >
+          <p
+            class="viewer-loading__text"
+            role="status"
+          >
+            {{ loadingText || '正在加载文档预览…' }}
+          </p>
+          <ParagraphSkeleton :lines="10" />
+        </div>
         <iframe
           v-else-if="mode === 'pdf' && pdfUrl"
           :key="`${pdfUrl}:${fullscreen ? 1 : 0}`"
@@ -160,7 +169,9 @@ onBeforeUnmount(() => {
 .review__panel { min-height: 0; display: flex; flex-direction: column; background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: 10px; overflow: hidden; }
 .review__content.is-fullscreen { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 2000; border: 0; border-radius: 0; }
 .review__content.is-fullscreen .review__content-body { overflow: hidden; }
-.review__content.is-fullscreen .viewer-frame { min-height: 0; height: 100%; }
+.review__content.is-fullscreen .viewer-loading { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; }
+.viewer-loading__text { margin: 0; color: var(--zt-ink-500); font-size: 13px; }
+.viewer-frame { min-height: 0; height: 100%; }
 .review__content-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--zt-border); background: var(--zt-soft); flex-wrap: wrap; }
 .review__content-meta { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .review__content-title { font-size: 13px; font-weight: 600; color: var(--zt-ink-700); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

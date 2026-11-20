@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useKnowledgeContent, type BlobResponse } from './useKnowledgeContent'
+import { CONTENT_CACHE_SIZE, isOfficeFile, useKnowledgeContent, type BlobResponse } from './useKnowledgeContent'
 
 function pdf(body = '%PDF'): BlobResponse {
   return { data: new Blob([body], { type: 'application/pdf' }), headers: { 'content-type': 'application/pdf' } }
@@ -25,15 +25,17 @@ describe('useKnowledgeContent', () => {
 
   afterEach(() => { vi.restoreAllMocks() })
 
-  it('上一条还在转码时切到只有摘要的记录：不会一直转圈，晚到的 PDF 也不会盖上来', async () => {
+  it('上一条还在转码时切到只有摘要的记录：中止旧请求，不会一直转圈，晚到的 PDF 也不会盖上来', async () => {
     const slow = deferred<BlobResponse>()
-    const content = useKnowledgeContent(() => slow.promise, vi.fn())
+    const signals: AbortSignal[] = []
+    const content = useKnowledgeContent((_id, signal) => { signals.push(signal!); return slow.promise }, vi.fn())
 
     const first = content.show('a', 'pdf', '摘要A', true)
     expect(content.loading.value).toBe(true)
 
     await content.show('b', 'summary', '摘要B', false)
     expect(content.loading.value).toBe(false)
+    expect(signals[0]?.aborted).toBe(true)
 
     slow.resolve(pdf())
     await first
@@ -44,19 +46,52 @@ describe('useKnowledgeContent', () => {
     expect(create).not.toHaveBeenCalled()
   })
 
-  it('PDF 显示成对象 URL，换记录和离开页面时释放', async () => {
-    const content = useKnowledgeContent(() => Promise.resolve(pdf()), vi.fn())
-    await content.show('a', 'pdf', '', true)
+  it('同一条记录在路上时再显示一次（重试、路由参数变化）只发一次 /content', async () => {
+    const slow = deferred<BlobResponse>()
+    const fetchBlob = vi.fn(() => slow.promise)
+    const content = useKnowledgeContent(fetchBlob, vi.fn())
+
+    const one = content.show('a', 'pdf', '', true)
+    const two = content.show('a', 'pdf', '', true)
+    slow.resolve(pdf())
+    await Promise.all([one, two])
+
+    expect(fetchBlob).toHaveBeenCalledOnce()
     expect(content.pdfUrl.value).toBe('blob:1')
     expect(content.loading.value).toBe(false)
+  })
 
+  it('看过的记录再回来直接用缓存，不再请求；离开页面全部释放', async () => {
+    const fetchBlob = vi.fn(() => Promise.resolve(pdf()))
+    const content = useKnowledgeContent(fetchBlob, vi.fn())
+    await content.show('a', 'pdf', '', true)
     await content.show('b', 'pdf', '', true)
-    expect(revoked).toEqual(['blob:1'])
     expect(content.pdfUrl.value).toBe('blob:2')
 
     content.cancel()
-    expect(revoked).toEqual(['blob:1', 'blob:2'])
+    await content.show('a', 'pdf', '', true)
+    expect(fetchBlob).toHaveBeenCalledTimes(2)
+    expect(content.pdfUrl.value).toBe('blob:1')
+    expect(content.loading.value).toBe(false)
+    expect(revoked).toEqual([])
+
+    content.dispose()
+    expect(revoked.sort()).toEqual(['blob:1', 'blob:2'])
     expect(content.pdfUrl.value).toBe('')
+  })
+
+  it(`最多留 ${CONTENT_CACHE_SIZE} 份，挤出最久没看的并释放它的对象 URL`, async () => {
+    const fetchBlob = vi.fn(() => Promise.resolve(pdf()))
+    const content = useKnowledgeContent(fetchBlob, vi.fn())
+    for (let i = 0; i < CONTENT_CACHE_SIZE; i += 1) await content.show(`r${i}`, 'pdf', '', true)
+    await content.show('r0', 'pdf', '', true) // 再看一次 r0，最久没看的变成 r1
+    await content.show('new', 'pdf', '', true)
+
+    expect(revoked).toEqual(['blob:2'])
+    await content.show('r0', 'pdf', '', true)
+    expect(fetchBlob).toHaveBeenCalledTimes(CONTENT_CACHE_SIZE + 1)
+    await content.show('r1', 'pdf', '', true)
+    expect(fetchBlob).toHaveBeenCalledTimes(CONTENT_CACHE_SIZE + 2)
   })
 
   it('要 PDF 却拿到文本时回退摘要；文本模式直接显示', async () => {
@@ -71,7 +106,7 @@ describe('useKnowledgeContent', () => {
     expect(content.text.value).toBe('资料名称：x')
   })
 
-  it('取原文失败回退摘要并提示；被作废的失败不提示', async () => {
+  it('取原文失败回退摘要并提示，不进缓存；被作废的失败不提示', async () => {
     const onError = vi.fn()
     const failing = deferred<BlobResponse>()
     const content = useKnowledgeContent(() => failing.promise.then(() => { throw new Error('503') }), onError)
@@ -82,10 +117,21 @@ describe('useKnowledgeContent', () => {
     await stale
     expect(onError).not.toHaveBeenCalled()
 
-    const now = useKnowledgeContent(() => Promise.reject(new Error('503')), onError)
+    const fetchBlob = vi.fn(() => Promise.reject(new Error('503')))
+    const now = useKnowledgeContent(fetchBlob, onError)
     await now.show('b', 'pdf', '摘要', true)
     expect(onError).toHaveBeenCalledOnce()
     expect(now.mode.value).toBe('summary')
     expect(now.loading.value).toBe(false)
+    await now.show('b', 'pdf', '摘要', true)
+    expect(fetchBlob).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('isOfficeFile', () => {
+  it('按扩展名或文件格式列识别要转码的 Office 文件', () => {
+    expect(isOfficeFile('方案.pptx', '')).toBe(true)
+    expect(isOfficeFile('无扩展名', 'WORD')).toBe(true)
+    expect(isOfficeFile('白皮书.pdf', 'PDF')).toBe(false)
   })
 })

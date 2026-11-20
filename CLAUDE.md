@@ -159,7 +159,7 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
   超时、请求取消都整组杀掉，compose 里 `init: true` 回收孤儿进程。转换进程仍在服务的网络里，要隔离网络得拆成单独的转换容器。
   没装 LibreOffice 时 Office 仍只显示资料摘要；转换失败、源文件不存在时 `/content` 回摘要 txt，存储连不上回 503。没有源文件的记录下载得到摘要 txt。
   源文件经 `/{id}/content`、`/{id}/download` 流式返回（网关 110 路由，不压缩不缓冲），客户端提前断开也关掉对象存储的流和缓存文件句柄；
-  `/content` 带 `Cache-Control: private, no-store`，撤权、删文件后浏览器不留旧内容。前端下载开始、失败用消息提示。
+  `/content` 带 `Cache-Control: private, no-store`，撤权、删文件后浏览器不留旧内容。预览页（`useKnowledgeContent`）资料信息一到就出整页、原文在右栏单独加载，同一条只发一次 `/content`、换记录中止旧请求，看过的原文在页内按最近使用留 6 份，离开预览页全部释放。前端下载开始、失败用消息提示。
   LibreOffice 让镜像变大，转码时占内存，默认 `THINKTANK_MEM_LIMIT` 是 1536m
 - 预览、下载、编辑等写知识库自己的操作记录（`/{id}/logs`），同时经 Outbox 上报审计（投递循环在服务 lifespan 里，没有单独 worker）。
   省份候选值经 codebook `/internal/v1/provinces` 取，取不到用内置列表（密钥 `CODEBOOK_THINKTANK_CALLER_SECRET`，compose 传给两边）
