@@ -359,8 +359,46 @@ def test_remaining_http_routes(monkeypatch: pytest.MonkeyPatch) -> None:
         assert client.get(f"/api/v1/thinktank/knowledge/{fid}/preview").status_code == 200
         content = client.get(f"/api/v1/thinktank/knowledge/{fid}/content")
         assert content.status_code == 200
-        # 撤权、删文件后下一次请求就生效，浏览器不能留着旧内容
+        # 无 ETag 的摘要兜底仍走 no-store
         assert content.headers["cache-control"] == "private, no-store"
+
+        monkeypatch.setattr(
+            knowledge_routes.service,
+            "stream_file_content",
+            AsyncMock(
+                return_value=knowledge.FileStreamResult(
+                    stream=_pdf_stream(),
+                    filename="a.pdf",
+                    media_type="application/pdf",
+                    content_length=4,
+                    etag='"demo-etag"',
+                )
+            ),
+        )
+        cached = client.get(f"/api/v1/thinktank/knowledge/{fid}/content")
+        assert cached.status_code == 200
+        assert cached.headers["etag"] == '"demo-etag"'
+        assert cached.headers["cache-control"] == "private, no-cache"
+        assert cached.headers["vary"] == "Authorization"
+
+        monkeypatch.setattr(
+            knowledge_routes.service,
+            "stream_file_content",
+            AsyncMock(
+                return_value=knowledge.FileStreamResult(
+                    stream=_pdf_stream(),
+                    filename="a.pdf",
+                    media_type="",
+                    etag='"demo-etag"',
+                    not_modified=True,
+                )
+            ),
+        )
+        not_mod = client.get(f"/api/v1/thinktank/knowledge/{fid}/content", headers={"If-None-Match": '"demo-etag"'})
+        assert not_mod.status_code == 304
+        assert not_mod.headers["etag"] == '"demo-etag"'
+        assert not_mod.headers["cache-control"] == "private, no-cache"
+        assert not_mod.headers["vary"] == "Authorization"
         assert client.delete(f"/api/v1/thinktank/knowledge/{fid}/favorite").json()["data"]["is_favorited"] is False
         assert client.get(f"/api/v1/thinktank/knowledge/{fid}/logs").status_code == 200
         assert (

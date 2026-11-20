@@ -10,7 +10,7 @@ from typing import Any
 
 from platform_common.actors import Actor
 from platform_common.clock import format_beijing
-from platform_common.errors import ApiError, ErrorCode, NotFoundError, PermissionDeniedError
+from platform_common.errors import NotFoundError, PermissionDeniedError
 from platform_common.filters import Filters
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,7 +18,15 @@ from app.common.audit_emit import enqueue_event
 from app.common.codebook_client import get_provinces
 from app.core import office_preview, storage
 from app.core.config import get_settings
-from app.knowledge.application.knowledge_preview import fallback_summary_bytes, open_office_preview_pdf
+from app.knowledge.application.knowledge_preview import (
+    etag_matches,
+    expected_preview_etag,
+    fallback_summary_bytes,
+    open_office_preview_pdf,
+    open_storage_or_summary,
+    preview_etag,
+    single_chunk_stream,
+)
 from app.knowledge.domain.models import KnowledgeFile, KnowledgeOpLog
 from app.knowledge.domain.scopes import PROVINCES, KnowledgeAccess
 from app.knowledge.repositories import knowledge as repo
@@ -37,6 +45,8 @@ class FileStreamResult:
     filename: str
     media_type: str
     content_length: int | None = None
+    etag: str | None = None
+    not_modified: bool = False
 
 
 def format_size(size_bytes: int) -> str:
@@ -273,10 +283,6 @@ async def read_file_content(
     return FileContentResult(content=content, filename=res.filename, media_type=res.media_type)
 
 
-async def _single_chunk_stream(data: bytes) -> AsyncIterator[bytes]:
-    yield data
-
-
 async def stream_file_content(
     session: AsyncSession,
     *,
@@ -284,12 +290,22 @@ async def stream_file_content(
     access: KnowledgeAccess,
     file_id: uuid.UUID,
     for_download: bool,
+    if_none_match: str | None = None,
 ) -> FileStreamResult:
     row = await require_file(session, file_id)
     if for_download:
         await assert_export(session, actor, access, row, "download")
     else:
         await assert_read(session, actor, access, row, "preview_content")
+        candidate_etag = expected_preview_etag(row)
+        if etag_matches(if_none_match, candidate_etag):
+            return FileStreamResult(
+                stream=single_chunk_stream(b""),
+                filename=row.file_name,
+                media_type="",
+                etag=candidate_etag,
+                not_modified=True,
+            )
 
     settings = get_settings()
     if not for_download and row.storage_path:
@@ -304,37 +320,20 @@ async def stream_file_content(
                     filename=f"{Path(row.file_name).stem}.pdf",
                     media_type="application/pdf",
                     content_length=opened_pdf[1],
+                    etag=preview_etag(row, kind="office-pdf"),
                 )
             raw = fallback_summary_bytes(row)
             return FileStreamResult(
-                stream=_single_chunk_stream(raw),
+                stream=single_chunk_stream(raw),
                 filename=f"{row.file_name}.txt",
                 media_type="text/plain; charset=utf-8",
                 content_length=len(raw),
             )
 
-    try:
-        opened = await storage.stream_object(settings, row.storage_path)
-    except storage.StorageUnavailableError as exc:
-        raise ApiError(
-            "文件存储服务暂不可用，请稍后重试",
-            code=ErrorCode.DEPENDENCY_UNAVAILABLE,
-            http_status=503,
-        ) from exc
-
-    if opened is not None:
-        stream, size = opened
-        media_type = storage.media_type_for_file(row.file_name, row.file_suffix)
-        filename = row.file_name
-    else:
-        raw = fallback_summary_bytes(row)
-        stream, size = _single_chunk_stream(raw), len(raw)
-        media_type = "text/plain; charset=utf-8"
-        filename = f"{row.file_name}.txt"
-
+    stream, filename, media_type, size, etag = await open_storage_or_summary(settings, row, for_download=for_download)
     if for_download:
         await _record_download_audit(session, actor, row)
-    return FileStreamResult(stream=stream, filename=filename, media_type=media_type, content_length=size)
+    return FileStreamResult(stream=stream, filename=filename, media_type=media_type, content_length=size, etag=etag)
 
 
 async def close_file_stream(result: FileStreamResult) -> None:

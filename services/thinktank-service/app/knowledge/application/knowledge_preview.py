@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
@@ -94,3 +96,48 @@ async def drop_preview_cache(settings: Any, row: KnowledgeFile) -> None:
         await asyncio.to_thread(preview_cache.remove, cache_dir, cache_key)
     except OSError as exc:
         logger.warning("preview_cache_cleanup_failed", file_id=str(row.id), error=str(exc))
+
+
+def preview_etag(row: KnowledgeFile, *, kind: str) -> str:
+    """基于文件标识、存储路径、大小与预览形态生成稳定 ETag，用于 private no-cache 条件协商。"""
+
+    digest = hashlib.sha256(f"{row.id}:{row.storage_path}:{row.file_size_bytes}:{kind}".encode()).hexdigest()[:24]
+    return f'"{digest}"'
+
+
+def etag_matches(if_none_match: str | None, etag: str | None) -> bool:
+    if not if_none_match or not etag:
+        return False
+    target = etag.strip().removeprefix("W/").strip()
+    for raw in if_none_match.split(","):
+        tag = raw.strip()
+        if tag == "*" or tag.removeprefix("W/").strip() == target:
+            return True
+    return False
+
+
+def expected_preview_etag(row: KnowledgeFile) -> str | None:
+    if not row.storage_path:
+        return None
+    office_ext = office_preview.office_extension(row.file_name, row.file_suffix)
+    return preview_etag(row, kind="office-pdf" if office_ext is not None else "raw")
+
+
+async def single_chunk_stream(data: bytes) -> AsyncIterator[bytes]:
+    yield data
+
+
+async def open_storage_or_summary(
+    settings: Any, row: KnowledgeFile, *, for_download: bool
+) -> tuple[AsyncIterator[bytes], str, str, int | None, str | None]:
+    try:
+        opened = await storage.stream_object(settings, row.storage_path)
+    except storage.StorageUnavailableError as exc:
+        raise _storage_unavailable(exc) from exc
+    if opened is not None:
+        stream, size = opened
+        media_type = storage.media_type_for_file(row.file_name, row.file_suffix)
+        etag = None if for_download else preview_etag(row, kind="raw")
+        return stream, row.file_name, media_type, size, etag
+    raw = fallback_summary_bytes(row)
+    return single_chunk_stream(raw), f"{row.file_name}.txt", "text/plain; charset=utf-8", len(raw), None

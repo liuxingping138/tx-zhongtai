@@ -260,16 +260,32 @@ def _streamed(res: service.FileStreamResult, headers: dict[str, str]) -> Streami
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def get_item_content(
     file_id: uuid.UUID,
+    request: Request,
     session: AsyncSession = Depends(get_db_session, scope="function"),
     actor: Actor = Depends(require_thinktank_permission(RESOURCE, "preview")),
     access: KnowledgeAccess = Depends(get_knowledge_access),
-) -> StreamingResponse:
-    res = await service.stream_file_content(session, actor=actor, access=access, file_id=file_id, for_download=False)
+) -> Response:
+    res = await service.stream_file_content(
+        session,
+        actor=actor,
+        access=access,
+        file_id=file_id,
+        for_download=False,
+        if_none_match=request.headers.get("if-none-match"),
+    )
+    if res.not_modified and res.etag:
+        return Response(
+            status_code=304,
+            headers={"ETag": res.etag, "Cache-Control": "private, no-cache", "Vary": "Authorization"},
+        )
     headers = {
         "Content-Disposition": _content_disposition("inline", res.filename),
         "X-Content-Type-Options": "nosniff",
-        "Cache-Control": "private, no-store",
+        "Cache-Control": "private, no-cache" if res.etag else "private, no-store",
     }
+    if res.etag:
+        headers["ETag"] = res.etag
+        headers["Vary"] = "Authorization"
     if res.content_length is not None:
         headers["Content-Length"] = str(res.content_length)
     return _streamed(res, headers)
