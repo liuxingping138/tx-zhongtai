@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+import contextlib
 import json
+from collections.abc import AsyncIterator
 from decimal import Decimal
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from platform_common.errors import ApiError
+from platform_common.errors import ApiError, NotFoundError
 from platform_common.internal_calls import internal_headers
+from sqlalchemy.exc import IntegrityError
 
-from app.application import batch_execute, pipeline_runs, prompts, releases, row_asking
+from app.application import batch_execute, batch_runs, pipeline_runs, prompts, releases, row_asking
 from app.application.batch_output import RowResult, append_raw, build_result, start_raw
 from app.application.sheets import read_run_input
 from app.core import storage
@@ -292,3 +295,83 @@ def test_result_excel_cuts_cells_beyond_the_excel_limit(tmp_path: Any) -> None:
     cell = str(sheet.cell(row=2, column=1).value)
     assert len(cell) <= 32_000 and cell.endswith("已截断）")
     assert sheet.cell(row=2, column=3).value == "教育"
+
+
+class _NestedSession(FakeSession):
+    """带保存点的替身：conflict=True 时模拟占位撞上已经插进去的真任务（主键冲突）。"""
+
+    def __init__(self, *, conflict: bool = False) -> None:
+        super().__init__()
+        self.conflict = conflict
+
+    @contextlib.asynccontextmanager
+    async def begin_nested(self) -> AsyncIterator[None]:
+        yield
+        if self.conflict:
+            raise IntegrityError("INSERT INTO ai_batch_runs", {}, Exception("duplicate key"))
+
+
+async def test_create_commits_the_template_lock_before_slow_io(
+    online: list[Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 读上线版本时锁模板行；取系统码表、写快照之前就提交，事务不跨几分钟的 I/O（会撞空闲事务超时）。
+    session = FakeSession()
+    locks: list[bool] = []
+    commits_at_fetch: list[int] = []
+
+    async def get(_session: Any, _prompt_id: str, *, lock: bool = False) -> Any:
+        locks.append(lock)
+        return template(content="草稿", release_id=RELEASE_ID)
+
+    async def fetch(_name: str) -> str:
+        commits_at_fetch.append(session.commits)
+        return "政策类型名称\n信息化建设类"
+
+    monkeypatch.setattr(prompt_repo, "get", get)
+    monkeypatch.setattr(releases, "fetch_code_table", fetch)
+    await pipeline_runs.create(session, ACTOR, {"prompt_id": PROMPT_ID, "rows": [{"源ID": "p1", "政策标题": "甲"}]})  # type: ignore[arg-type]
+    assert locks == [True]
+    assert commits_at_fetch == [1]
+    assert len(online) == 1
+
+
+@pytest.mark.parametrize("action", ["stop", "status"])
+async def test_unknown_run_gets_a_cancelled_tombstone(monkeypatch: pytest.MonkeyPatch, action: str) -> None:
+    # 政策服务建任务超时后叫停：这边行还没插进去。占位成已取消，迟到的建任务撞主键、按幂等返回已取消，不再执行。
+    async def missing(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    monkeypatch.setattr(run_repo, "get", missing)
+    monkeypatch.setattr(batch_runs, "reconcile_stale", noop)
+    session = _NestedSession()
+    if action == "stop":
+        data = await pipeline_runs.stop(session, ACTOR, RUN_ID)  # type: ignore[arg-type]
+    else:
+        data = await pipeline_runs.status(session, RUN_ID, ACTOR)  # type: ignore[arg-type]
+    assert data["id"] == RUN_ID and data["status"] == "cancelled"
+    [tombstone] = session.added
+    assert (tombstone.source, tombstone.status, tombstone.error_message) == (
+        "pipeline",
+        "cancelled",
+        pipeline_runs.TOMBSTONE_NOTE,
+    )
+
+
+async def test_tombstone_losing_the_race_reads_the_real_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    # 建任务刚好先插进去：占位撞主键作罢，照常返回那条真任务。
+    async def missing(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    async def require(_session: Any, run_id: str) -> Any:
+        return run(id=run_id, source="pipeline")
+
+    monkeypatch.setattr(run_repo, "get", missing)
+    monkeypatch.setattr(batch_runs, "reconcile_stale", noop)
+    monkeypatch.setattr(pipeline_runs, "require_run", require)
+    data = await pipeline_runs.status(_NestedSession(conflict=True), RUN_ID, ACTOR)  # type: ignore[arg-type]
+    assert data["status"] == "queued"
+
+
+async def test_tombstone_rejects_malformed_ids() -> None:
+    with pytest.raises(NotFoundError):
+        await pipeline_runs._tombstone(_NestedSession(), "../x", ACTOR)  # type: ignore[arg-type]

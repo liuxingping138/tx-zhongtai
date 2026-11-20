@@ -29,9 +29,17 @@ from app.application.batch_runs import require as require_run
 from app.application.batch_runs import to_dict as run_to_dict
 from app.application.sheets import has_run_input, read_run_input
 from app.core import storage
-from app.domain.categories import FULL_ACCESS
+from app.domain.categories import DEFAULT_CATEGORY, FULL_ACCESS
 from app.domain.code_tables import code_table_name
-from app.domain.models import ACTIVE_STATUSES, RUN_QUEUED, RUN_SOURCE_PIPELINE, BatchRun, TemplateRelease, new_id
+from app.domain.models import (
+    ACTIVE_STATUSES,
+    RUN_CANCELLED,
+    RUN_QUEUED,
+    RUN_SOURCE_PIPELINE,
+    BatchRun,
+    TemplateRelease,
+    new_id,
+)
 from app.domain.templating import build_myid, parse_fields, split_fields, template_variables
 from app.repositories import batch_runs as run_repo
 from app.repositories import releases as release_repo
@@ -41,6 +49,9 @@ logger = logging.getLogger("ai.pipeline")
 SOURCE_ID = "源ID"
 ROWS_MAX = 20_000
 PIPELINE_TIER = "flex"
+TOMBSTONE_TITLE = "（调用方已放弃的定时任务）"
+TOMBSTONE_NOTE = "调用方在任务建好之前已经放弃（超时或中断）：这一行占住任务ID，迟到的建任务请求不再执行"
+_ZERO_COUNTS = ("total_count", "done_count", "failed_count", "format_failed_count", "input_tokens", "output_tokens")
 
 
 def _invalid(message: str) -> ApiError:
@@ -76,7 +87,8 @@ def _cost_limit(value: object) -> Decimal | None:
 
 
 async def _release(session: AsyncSession, prompt_id: str) -> TemplateRelease:
-    template = await prompts.require(session, prompt_id)
+    # 读上线版本时锁住模板行：读的同时有人下线、重新上线，拿到的版本和模板对不上。读完调用方马上提交放锁。
+    template = await prompts.require(session, prompt_id, lock=True)
     return await releases.current(session, template, "定时任务")
 
 
@@ -151,9 +163,12 @@ async def create(session: AsyncSession, caller: Actor, values: dict[str, Any]) -
     headers, rows = _checked_rows(values.get("rows"))
     release = await _release(session, str(values.get("prompt_id") or ""))
     model = await resolve_model(session, release.model_id, frozen=RELEASE_MODEL_DISABLED)
+    previous = await _reusable(session, str(values.get("reuse_run_id") or ""), release, model.id)
+    # 库里要读的读完就提交，放掉模板行锁和读事务：下面取系统码表、写几十 MB 的快照、读上一批的原始返回
+    # 可能要几分钟，事务开着会撞接口进程的空闲事务超时被断开（整批失败、目录留在盘上），锁也会挡住上线、下线。
+    await session.commit()
     code = await releases.release_code(release)
     prompts.require_code(release.content, code)
-    previous = await _reusable(session, str(values.get("reuse_run_id") or ""), release, model.id)
     run_id = client_run_id or new_id()
     await anyio.to_thread.run_sync(_write_snapshot, run_id, headers, rows, code)
     reused = 0
@@ -172,9 +187,7 @@ async def create(session: AsyncSession, caller: Actor, values: dict[str, Any]) -
         thinking=False,
         row_limit=0,
         status=RUN_QUEUED,
-        **dict.fromkeys(
-            ("total_count", "done_count", "failed_count", "format_failed_count", "input_tokens", "output_tokens"), 0
-        ),
+        **dict.fromkeys(_ZERO_COUNTS, 0),
         search_calls=0,
         inference_cost=Decimal(0),
         search_cost=Decimal(0),
@@ -213,9 +226,58 @@ async def create(session: AsyncSession, caller: Actor, values: dict[str, Any]) -
     return {**run_to_dict(run), "reused": reused}
 
 
-async def status(session: AsyncSession, run_id: str) -> dict[str, Any]:
+async def _tombstone(session: AsyncSession, run_id: str, caller: Actor) -> BatchRun | None:
+    """调用方停止或查询一个还不存在的任务：插一行已取消的占位，抢不过（建任务刚好先插进去）返回 None。
+
+    政策服务建任务超时就立刻叫停，可这边的建任务请求可能还在写快照、行还没插进去，叫停只得到 404；
+    不占位的话迟到的建任务照样插入、worker 照样跑、照样花钱，政策服务却已经不管它，也不计入当日费用。
+    占位后迟到的插入撞主键，按幂等重放拿到这条已取消的任务，不会执行。
+    """
+
+    if not storage.ID_PATTERN.fullmatch(run_id):
+        raise NotFoundError("任务不存在或已删除")
+    now = utcnow()
+    tombstone = BatchRun(
+        id=run_id,
+        prompt_id="",
+        prompt_title=TOMBSTONE_TITLE,
+        prompt_category=DEFAULT_CATEGORY,
+        retry_round=1,
+        round_rows=0,
+        model_id="",
+        model_name="",
+        thinking=False,
+        row_limit=0,
+        status=RUN_CANCELLED,
+        **dict.fromkeys(_ZERO_COUNTS, 0),
+        search_calls=0,
+        inference_cost=Decimal(0),
+        search_cost=Decimal(0),
+        cancel_requested=False,
+        error_message=TOMBSTONE_NOTE,
+        created_at=now,
+        finished_at=now,
+        created_by_id=caller.id,
+        created_by_name=caller.name,
+        source=RUN_SOURCE_PIPELINE,
+        service_tier=PIPELINE_TIER,
+    )
+    try:
+        async with session.begin_nested():
+            run_repo.add(session, tombstone)
+    except IntegrityError:
+        return None
+    logger.warning("pipeline_run_tombstone run=%s caller=%s", run_id, caller.id)
+    return tombstone
+
+
+async def status(session: AsyncSession, run_id: str, caller: Actor) -> dict[str, Any]:
     # worker 被强杀又没拉起时，没心跳的任务要先纠正成「中断」，政策服务才不会一直轮询到自己超时。
     await batch_runs.reconcile_stale(session)
+    if await run_repo.get(session, run_id, deleted=True) is None and (
+        tombstone := await _tombstone(session, run_id, caller)
+    ):
+        return run_to_dict(tombstone)
     return run_to_dict(await require_run(session, run_id))
 
 
@@ -247,8 +309,15 @@ async def results(session: AsyncSession, run_id: str) -> dict[str, Any]:
 
 
 async def stop(session: AsyncSession, caller: Actor, run_id: str) -> dict[str, Any]:
-    """调用方超时或被中断时停掉自己发起的任务，别让它在后台继续花钱。"""
+    """调用方超时或被中断时停掉自己发起的任务，别让它在后台继续花钱。
 
+    任务还不存在（建任务的请求还在路上）就先占位成已取消，见 _tombstone。
+    """
+
+    if await run_repo.get(session, run_id, deleted=True) is None and (
+        tombstone := await _tombstone(session, run_id, caller)
+    ):
+        return run_to_dict(tombstone)
     return await batch_runs.stop_run(session, caller, FULL_ACCESS, run_id)
 
 

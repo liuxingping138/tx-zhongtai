@@ -298,7 +298,7 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
 - 每批调 ai-service 的 `/internal/v1/pipeline-runs`：用模板**上线版本**、低优档、以这个任务当日剩余额度为费用上限跑，worker 到上限自停；
   一批最多发 `pipeline.PIPELINE_ROWS_BUDGET`（56MB，ai-service 这个前缀收 64MB），超出的行记成未执行、下一批接着做；内部调用的 JSON 按 UTF-8 发（转义的话一个汉字 6 字节）；
   政策服务轮询到结束再取解析结果（ai-service 那边已跑过三轮）。轮询偶尔问不到不放弃（连续 `POLL_MISSES` 次才算失败）；
-  调度超时、进程中断、一直问不到都先停掉 ai-service 那边的任务，批次记失败时把已花的钱补进步骤费用列（`tagging._close`），重试时当日额度才算得到。
+  调度超时、进程中断、一直问不到都先停掉 ai-service 那边的任务（建任务的请求还在路上、任务还不存在时，ai-service 收到停止或查询会插一行已取消的占位，迟到的建任务撞主键按幂等返回它、不再执行；建任务读完上线版本就提交，不带着模板行锁和事务写快照），批次记失败时把已花的钱补进步骤费用列（`tagging._close`），重试时当日额度才算得到。
   下一批发起时带上复用期限内最近一次失败的 AI 任务（`pipeline._reusable` → `reuse_run_id`，不要求是最近一批）：同一上线版本、同一模型、同一码表、行数据一模一样且已答好的行，
   ai-service 直接抄进新任务（`pipeline_runs._reuse_answers`），不再花钱重问
 - 类型判断结果用系统政策类型码表核对（缺「类」字的旧写法补上能对上就算），写进基础标签：按 `source_content_id` 更新，

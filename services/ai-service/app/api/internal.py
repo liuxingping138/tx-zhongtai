@@ -84,8 +84,8 @@ async def get_run(
     session: AsyncSession = Depends(get_db_session, scope="function"),
     settings: Settings = Depends(get_settings),
 ) -> JSONResponse:
-    _caller(request, settings)
-    return success_json(await pipeline_runs.status(session, run_id))
+    service = _caller(request, settings)
+    return success_json(await pipeline_runs.status(session, run_id, Actor(id=service, name="定时任务")))
 
 
 @router.get("/pipeline-runs/{run_id}/results")

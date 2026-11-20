@@ -18,7 +18,8 @@ from app.application.legacy_import import _overwrite
 from app.application.run_costs import Ledger, Spend
 from app.core import storage
 from app.domain.models import RUN_SOURCE_PIPELINE, PromptTemplate
-from tests.helpers import RUN_ID, FakeSession, run, xlsx
+from app.repositories import batch_runs as run_repo
+from tests.helpers import ACTOR, RUN_ID, FakeSession, run, xlsx
 
 
 def test_pipeline_batches_cannot_be_retried_from_the_page() -> None:
@@ -117,7 +118,12 @@ async def test_internal_status_corrects_stale_runs_first(monkeypatch: pytest.Mon
 
     monkeypatch.setattr(batch_runs, "reconcile_stale", reconcile)
     monkeypatch.setattr(pipeline_runs, "require_run", require)
-    await pipeline_runs.status(FakeSession(), RUN_ID)  # type: ignore[arg-type]
+
+    async def found(*_args: Any, **_kwargs: Any) -> Any:
+        return run()
+
+    monkeypatch.setattr(run_repo, "get", found)
+    await pipeline_runs.status(FakeSession(), RUN_ID, ACTOR)  # type: ignore[arg-type]
     assert calls == ["reconcile", "require"]
 
 
