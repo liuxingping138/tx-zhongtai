@@ -9,7 +9,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_HTTP_TIMEOUT=120 \
     UV_DEFAULT_INDEX=$PYPI_INDEX
 
-RUN apt-get update \
+RUN sed -i 's|deb.debian.org|mirrors.cloud.tencent.com|g' /etc/apt/sources.list.d/debian.sources \
+ && apt-get update \
  && apt-get install -y --no-install-recommends \
       libreoffice-core \
       libreoffice-impress \
