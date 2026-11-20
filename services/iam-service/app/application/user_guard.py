@@ -54,8 +54,8 @@ async def manageable_ids(session: AsyncSession, actor: User, user_ids: list[uuid
     actor_levels = await resource_repo.list_effective_levels(session, actor.id)
     if actor_levels.get(SYSTEM_PERMISSIONS_CODE) == "FULL":
         return candidates
-    allowed: set[uuid.UUID] = set()
-    for uid in candidates:
-        if uid == actor.id or levels_dominated(actor_levels, await resource_repo.list_effective_levels(session, uid)):
-            allowed.add(uid)
-    return allowed
+    # 一页几十个人一次查完，不逐人查一遍授权。
+    others = [uid for uid in candidates if uid != actor.id]
+    levels = await resource_repo.list_effective_levels_for_users(session, others)
+    allowed = {uid for uid in others if levels_dominated(actor_levels, levels.get(uid, {}))}
+    return allowed | (candidates & {actor.id})

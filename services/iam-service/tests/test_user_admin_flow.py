@@ -90,6 +90,11 @@ def env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
         "list_effective_levels",
         AsyncMock(side_effect=lambda _s, uid: state.effective_levels.get(uid, {})),
     )
+    monkeypatch.setattr(
+        user_admin.resource_repo,
+        "list_effective_levels_for_users",
+        AsyncMock(side_effect=lambda _s, uids: {uid: state.effective_levels.get(uid, {}) for uid in uids}),
+    )
     return state
 
 
@@ -342,3 +347,16 @@ def test_temporary_passwords_always_pass_the_policy() -> None:
     from app.domain.password import validate_password_policy
 
     assert all(validate_password_policy(generate_temporary_password()) is None for _ in range(2000))
+
+
+async def test_manageable_ids_looks_up_a_whole_page_in_one_query(env: SimpleNamespace) -> None:
+    # 用户列表一页几十人：原来逐人查授权（N+1），现在一次查完，结果和逐人判断一样。
+    weaker, stronger = uuid.uuid4(), uuid.uuid4()
+    env.effective_levels = {
+        ACTOR.id: {"system.users": "FULL", "policy.base_tags": "EXPORT"},
+        weaker: {"policy.base_tags": "READ"},
+        stronger: {"ai.billing": "READ"},
+    }
+    result = await user_admin.manageable_ids(object(), ACTOR, [ACTOR.id, weaker, stronger])  # type: ignore[arg-type]
+    assert result == {ACTOR.id, weaker}
+    assert user_admin.resource_repo.list_effective_levels_for_users.await_count == 1  # type: ignore[attr-defined]

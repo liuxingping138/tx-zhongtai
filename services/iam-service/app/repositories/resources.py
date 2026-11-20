@@ -61,13 +61,23 @@ async def effective_level(session: AsyncSession, user_id: uuid.UUID, resource_id
 async def list_effective_levels(session: AsyncSession, user_id: uuid.UUID) -> dict[str, str]:
     """启用角色加单独授权，在已发布叶子资源上的最高授权。每次判定读取当前权威状态。"""
 
+    return (await list_effective_levels_for_users(session, [user_id])).get(user_id, {})
+
+
+async def list_effective_levels_for_users(
+    session: AsyncSession, user_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, dict[str, str]]:
+    """一批人各自的生效授权（口径同 list_effective_levels，一次查询）：用户列表每行判断能不能管，不逐人查。"""
+
+    if not user_ids:
+        return {}
     stmt = (
-        select(Resource.code, RoleGrant.level)
+        select(UserRole.user_id, Resource.code, RoleGrant.level)
         .join(RoleGrant, RoleGrant.resource_id == Resource.id)
         .join(Role, Role.id == RoleGrant.role_id)
         .join(UserRole, UserRole.role_id == Role.id)
         .where(
-            UserRole.user_id == user_id,
+            UserRole.user_id.in_(user_ids),
             Role.status == RoleStatus.ACTIVE,
             Resource.published.is_(True),
             Resource.node_type == NodeType.RESOURCE,
@@ -75,24 +85,22 @@ async def list_effective_levels(session: AsyncSession, user_id: uuid.UUID) -> di
     )
     # 角色之外单独给这个人的授权，和角色一起按模块取最高一档。
     direct = (
-        select(Resource.code, UserGrant.level)
+        select(UserGrant.user_id, Resource.code, UserGrant.level)
         .join(UserGrant, UserGrant.resource_id == Resource.id)
         .where(
-            UserGrant.user_id == user_id,
+            UserGrant.user_id.in_(user_ids),
             Resource.published.is_(True),
             Resource.node_type == NodeType.RESOURCE,
         )
     )
     result = await session.execute(stmt.union_all(direct))
-    grouped: dict[str, list[str]] = {}
-    for code, level in result.all():
-        grouped.setdefault(code, []).append(level)
-    merged: dict[str, str] = {}
-    for code, levels in grouped.items():
-        chosen = max_level(levels)
-        if chosen:
-            merged[code] = chosen
-    return merged
+    grouped: dict[uuid.UUID, dict[str, list[str]]] = {}
+    for user_id, code, level in result.all():
+        grouped.setdefault(user_id, {}).setdefault(code, []).append(level)
+    return {
+        user_id: {code: chosen for code, levels in by_code.items() if (chosen := max_level(levels))}
+        for user_id, by_code in grouped.items()
+    }
 
 
 async def list_effective_levels_by_prefixes(
