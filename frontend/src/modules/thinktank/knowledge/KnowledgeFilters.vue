@@ -37,19 +37,19 @@ interface FilterDef {
 }
 
 const FILTER_DEFS: readonly FilterDef[] = [
-  { field: 'file_name', label: '资料名称', placeholder: '名称关键词', kind: 'keyword' },
-  { field: 'file_type', label: '文件类型', placeholder: '文件类型', kind: 'select', size: 'medium' },
-  { field: 'operator_type', label: '运营商类型', placeholder: '运营商类型', kind: 'select', size: 'short' },
-  { field: 'product_type', label: '产品类型', placeholder: '产品类型', kind: 'select', size: 'short' },
-  { field: 'industry_type', label: '行业类型', placeholder: '行业类型', kind: 'select', size: 'short' },
-  { field: 'prov_name', label: '省份', placeholder: '省份', kind: 'select', size: 'short' },
-  { field: 'market_category', label: '市场类别', placeholder: '市场类别', kind: 'select', size: 'short' },
-  { field: 'depart_affiliation', label: '部门归属', placeholder: '部门归属', kind: 'select', size: 'medium' },
-  { field: 'app_scenario', label: '应用场景', placeholder: '应用场景', kind: 'select', size: 'medium' },
-  { field: 'product_sub_type', label: '产品子类型', placeholder: '子类型关键词', kind: 'keyword' },
-  { field: 'data_time', label: '资料时间', placeholder: '资料时间', kind: 'select', size: 'short' },
-  { field: 'tag_status', label: '定义状态', placeholder: '定义状态', kind: 'select', size: 'short' },
-  { field: 'favorite_only', label: '我的收藏', placeholder: '我的收藏', kind: 'select', size: 'short' },
+  { field: 'file_name', label: '资料名称', placeholder: '输入关键词', kind: 'keyword' },
+  { field: 'file_type', label: '文件类型', placeholder: '全部', kind: 'select', size: 'medium' },
+  { field: 'operator_type', label: '运营商类型', placeholder: '全部', kind: 'select', size: 'short' },
+  { field: 'product_type', label: '产品类型', placeholder: '全部', kind: 'select', size: 'short' },
+  { field: 'industry_type', label: '行业类型', placeholder: '全部', kind: 'select', size: 'short' },
+  { field: 'prov_name', label: '省份', placeholder: '全部', kind: 'select', size: 'short' },
+  { field: 'market_category', label: '市场类别', placeholder: '全部', kind: 'select', size: 'short' },
+  { field: 'depart_affiliation', label: '部门归属', placeholder: '全部', kind: 'select', size: 'medium' },
+  { field: 'app_scenario', label: '应用场景', placeholder: '全部', kind: 'select', size: 'medium' },
+  { field: 'product_sub_type', label: '产品子类型', placeholder: '输入关键词', kind: 'keyword' },
+  { field: 'data_time', label: '资料时间', placeholder: '全部', kind: 'select', size: 'short' },
+  { field: 'tag_status', label: '定义状态', placeholder: '全部', kind: 'select', size: 'short' },
+  { field: 'favorite_only', label: '我的收藏', placeholder: '全部', kind: 'select', size: 'short' },
 ]
 </script>
 

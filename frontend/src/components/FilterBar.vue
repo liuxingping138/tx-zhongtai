@@ -4,8 +4,13 @@ import { ArrowDown, ArrowUp, RefreshRight, Search } from '@element-plus/icons-vu
 import { foldFilterFields } from './filterFold'
 
 const props = withDefaults(
-  defineProps<{ query: Record<string, unknown>; applied?: Record<string, unknown>; collapsible?: boolean }>(),
-  { applied: undefined, collapsible: true },
+  defineProps<{
+    query: Record<string, unknown>
+    applied?: Record<string, unknown>
+    collapsible?: boolean
+    labelPosition?: 'top' | 'left'
+  }>(),
+  { applied: undefined, collapsible: true, labelPosition: 'top' },
 )
 const emit = defineEmits<{ search: []; reset: [] }>()
 const composing = ref(false)
@@ -94,8 +99,8 @@ function submit() {
 <template>
   <el-form
     class="filter-bar"
-    :class="{ 'is-pending': dirty }"
-    label-position="top"
+    :class="{ 'is-pending': dirty, 'filter-bar--left': labelPosition === 'left' }"
+    :label-position="labelPosition"
     novalidate
     @compositionstart="composing = true"
     @compositionend="composing = false"
@@ -176,6 +181,12 @@ function submit() {
 .filter-bar__toggle { padding: 0 2px; }
 .filter-bar__badge { min-width: 18px; margin-left: 4px; padding: 0 5px; border-radius: 9px; background: var(--zt-blue-600); color: var(--el-color-white); font-size: 12px; line-height: 18px; text-align: center; }
 .filter-bar :deep(.el-form-item__label) { color: var(--zt-ink-700); margin: 0 0 6px; padding: 0; line-height: 20px; font-size: 13px; }
+.filter-bar--left { align-items: center; }
+.filter-bar--left .filter-bar__fields { align-items: center; gap: 12px 16px; }
+.filter-bar--left .filter-bar__fields :deep(> .el-form-item) { display: flex; align-items: center; flex: 1 1 200px; max-width: 260px; }
+.filter-bar--left .filter-bar__fields :deep(> .el-form-item:first-child) { flex: 1.4 1 240px; max-width: 340px; }
+.filter-bar--left :deep(.el-form-item__label) { margin: 0 8px 0 0; line-height: 36px; white-space: nowrap; flex-shrink: 0; }
+.filter-bar--left :deep(.el-form-item__content) { flex: 1; min-width: 0; }
 .filter-bar :deep(.el-input), .filter-bar :deep(.el-select), .filter-bar :deep(.el-date-editor) { width: 100%; }
 .filter-bar :deep(.el-date-editor.el-date-editor--datetimerange) { min-width: 280px; }
 .filter-bar :deep(.el-input__wrapper), .filter-bar :deep(.el-select__wrapper), .filter-bar :deep(.el-date-editor) {

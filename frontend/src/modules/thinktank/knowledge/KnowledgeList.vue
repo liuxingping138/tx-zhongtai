@@ -249,6 +249,7 @@ onMounted(async () => {
           :query="query"
           :applied="listQuery.applied"
           :collapsible="false"
+          label-position="left"
           @search="listQuery.search"
           @reset="listQuery.resetFilters"
         >
