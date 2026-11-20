@@ -125,6 +125,7 @@ onBeforeUnmount(() => {
         />
         <iframe
           v-else-if="mode === 'pdf' && pdfUrl"
+          :key="`${pdfUrl}:${fullscreen ? 1 : 0}`"
           :src="pdfUrl"
           class="viewer-frame"
           title="文档在线预览"
