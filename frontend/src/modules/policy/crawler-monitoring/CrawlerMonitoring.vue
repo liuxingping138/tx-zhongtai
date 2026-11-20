@@ -12,7 +12,7 @@ import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
 import ExportButton from '@/components/ExportButton.vue'
 import FilterBar from '@/components/FilterBar.vue'
-import FilterChipSelect from '@/components/FilterChipSelect.vue'
+import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import { useExcelExport } from '@/composables/useExcelExport'
 import { useFilterOptions } from '@/composables/useFilterOptions'
@@ -151,32 +151,37 @@ onMounted(() => { void reloadData() })
         <FilterBar
           :query="query"
           :applied="listQuery.applied"
-          variant="chips"
-          chips-layout="inline"
           @search="listQuery.search"
           @reset="listQuery.resetFilters"
         >
-          <FilterChipSelect
-            v-model="query.site_name"
-            label="网站名称"
-            v-bind="filters.bind('site_name')"
-          />
-          <FilterChipSelect
-            v-model="query.province_name"
-            label="省份"
-            v-bind="filters.bind('province_name')"
-          />
-          <FilterChipSelect
-            v-model="query.city_name"
-            label="地市"
-            v-bind="filters.bind('city_name')"
-          />
-          <FilterChipSelect
-            v-model="query.status"
-            label="状态"
-            v-bind="filters.bind('status')"
-            :labels="statusLabels"
-          />
+          <el-form-item label="网站名称">
+            <FilterSelect
+              v-model="query.site_name"
+              v-bind="filters.bind('site_name')"
+            />
+          </el-form-item>
+          <el-form-item label="省份">
+            <FilterSelect
+              v-model="query.province_name"
+              v-bind="filters.bind('province_name')"
+              size="short"
+            />
+          </el-form-item>
+          <el-form-item label="地市">
+            <FilterSelect
+              v-model="query.city_name"
+              v-bind="filters.bind('city_name')"
+              size="short"
+            />
+          </el-form-item>
+          <el-form-item label="状态">
+            <FilterSelect
+              v-model="query.status"
+              v-bind="filters.bind('status')"
+              :labels="statusLabels"
+              size="short"
+            />
+          </el-form-item>
         </FilterBar>
       </template>
 

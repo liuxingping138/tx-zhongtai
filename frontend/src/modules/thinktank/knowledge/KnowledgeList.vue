@@ -24,7 +24,6 @@ import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
 import ExportButton from '@/components/ExportButton.vue'
 import FilterBar from '@/components/FilterBar.vue'
-import FilterKeyword from '@/components/FilterKeyword.vue'
 import ImportButton from '@/components/ImportButton.vue'
 import ListPage from '@/components/ListPage.vue'
 import { useDetailColumns } from '@/composables/useDetailColumns'
@@ -249,39 +248,16 @@ onMounted(async () => {
         <FilterBar
           :query="query"
           :applied="listQuery.applied"
-          variant="chips"
-          :more-keys="['market_category', 'depart_affiliation', 'app_scenario', 'data_time', 'tag_status']"
+          :collapsible="false"
+          label-position="left"
           @search="listQuery.search"
           @reset="listQuery.resetFilters"
         >
-          <template #search>
-            <FilterKeyword
-              v-model="query.file_name"
-              label="资料名称"
-              placeholder="搜索资料名称关键词…"
-              class="knowledge-search knowledge-search--main"
-            />
-            <FilterKeyword
-              v-model="query.product_sub_type"
-              label="产品子类型"
-              placeholder="搜索产品子类型…"
-              class="knowledge-search knowledge-search--sub"
-            />
-          </template>
           <KnowledgeFilters
             :query="query"
             :filters="filters"
-            group="primary"
             @update="onFilterUpdate"
           />
-          <template #more>
-            <KnowledgeFilters
-              :query="query"
-              :filters="filters"
-              group="more"
-              @update="onFilterUpdate"
-            />
-          </template>
         </FilterBar>
       </template>
 
@@ -386,13 +362,8 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-:deep(.knowledge-search--main) { flex: 1.5 1 240px; max-width: 360px; }
-:deep(.knowledge-search--sub) { flex: 1 1 180px; max-width: 240px; }
 .row-actions { display: inline-flex; align-items: center; gap: 4px; }
 .row-action { display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; text-decoration: none; }
 .row-action--primary { color: var(--zt-blue-600); }
 .row-action--danger { color: var(--zt-danger-text); }
-@media (max-width: 767px) {
-  :deep(.knowledge-search--main), :deep(.knowledge-search--sub) { flex: 1 1 100%; max-width: none; }
-}
 </style>

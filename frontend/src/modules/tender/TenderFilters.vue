@@ -1,10 +1,7 @@
 <script setup lang="ts">
-import { Search } from '@element-plus/icons-vue'
 import { onMounted, watch } from 'vue'
 import FilterBar from '@/components/FilterBar.vue'
-import FilterChipDate from '@/components/FilterChipDate.vue'
-import FilterChipInput from '@/components/FilterChipInput.vue'
-import FilterChipSelect from '@/components/FilterChipSelect.vue'
+import FilterSelect from '@/components/FilterSelect.vue'
 import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useAuthStore } from '@/stores/auth'
 import { applyDefaultDateRange, DATES, type TenderQuery } from './fields'
@@ -106,101 +103,117 @@ function setRange(key: typeof DATES[number]['key'], value: [string, string] | nu
     <FilterBar
       :query="query"
       :applied="applied"
-      variant="chips"
-      :more-keys="['project_content_id', 'collect_date_from', 'create_time_from']"
       @search="emit('search')"
       @reset="emit('reset')"
     >
-      <template #search>
-        <el-radio-group
-          v-model="query.project_status"
-          class="tender-filters__status"
-          aria-label="项目状态"
-          @change="(val: string | number | boolean | undefined) => onStatusChange(String(val ?? 'all'))"
-        >
-          <el-radio-button value="all">
-            全部
-          </el-radio-button>
-          <el-radio-button value="1">
-            通过
-          </el-radio-button>
-          <el-radio-button value="0">
-            未通过
-          </el-radio-button>
-        </el-radio-group>
+      <el-form-item label="项目名称">
         <el-input
           v-model="query.project_name"
-          class="tender-filters__name"
-          :prefix-icon="Search"
           clearable
-          placeholder="搜索项目名称关键词（需选日期范围）…"
-          aria-label="项目名称"
+          placeholder="输入关键词（需选日期范围）"
         />
+      </el-form-item>
+      <el-form-item label="项目状态">
+        <el-select
+          v-model="query.project_status"
+          placeholder="全部"
+          aria-label="项目状态"
+          @change="onStatusChange"
+        >
+          <el-option
+            value="all"
+            label="全部"
+          />
+          <el-option
+            value="1"
+            label="通过"
+          />
+          <el-option
+            value="0"
+            label="未通过"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="省份">
+        <FilterSelect
+          v-model="query.purchaser_provname"
+          v-bind="areaFilters.bind('prov_name')"
+          placeholder="选择或搜索省份"
+          size="short"
+        />
+      </el-form-item>
+      <el-form-item label="发布时间">
         <el-date-picker
           :model-value="range('public_date')"
-          class="tender-filters__date"
           type="daterange"
           value-format="YYYY-MM-DD"
           range-separator="至"
-          start-placeholder="发布开始"
-          end-placeholder="发布结束"
+          start-placeholder="开始"
+          end-placeholder="结束"
           unlink-panels
           :shortcuts="dateShortcuts"
-          aria-label="发布时间"
           @update:model-value="setRange('public_date', $event)"
         />
-      </template>
+      </el-form-item>
 
-      <FilterChipSelect
-        v-model="query.purchaser_provname"
-        label="省份"
-        v-bind="areaFilters.bind('prov_name')"
-      />
-      <FilterChipSelect
-        v-for="region in SECONDARY_REGIONS"
-        :key="region.key"
-        v-model="query[region.key]"
-        :label="region.label"
-        v-bind="areaFilters.bind(region.optionField)"
-      />
-      <FilterChipSelect
-        v-model="query.is_supp_scene"
-        label="是否补充场景"
-        :options="['0', '1']"
-        :labels="{ '0': '未补充', '1': '已补充' }"
-      />
-
-      <template #more>
-        <FilterChipInput
-          v-model="query.project_content_id"
-          label="项目ID"
-          placeholder="输入完整项目ID"
-        />
-        <FilterChipDate
+      <template #advanced>
+        <el-form-item
+          v-for="region in SECONDARY_REGIONS"
+          :key="region.key"
+          :label="region.label"
+        >
+          <FilterSelect
+            v-model="query[region.key]"
+            v-bind="areaFilters.bind(region.optionField)"
+            :placeholder="region.placeholder"
+            size="short"
+          />
+        </el-form-item>
+        <el-form-item label="项目ID">
+          <el-input
+            v-model="query.project_content_id"
+            placeholder="输入完整项目ID"
+            clearable
+          />
+        </el-form-item>
+        <el-form-item label="是否补充场景">
+          <FilterSelect
+            v-model="query.is_supp_scene"
+            :options="['0', '1']"
+            :labels="{ '0': '未补充', '1': '已补充' }"
+          />
+        </el-form-item>
+        <el-form-item
           v-for="field in ADVANCED_DATES"
           :key="field.key"
-          :model-value="range(field.key)"
           :label="field.label"
-          :shortcuts="dateShortcuts"
-          @update:model-value="setRange(field.key, $event)"
-        />
+        >
+          <el-date-picker
+            :model-value="range(field.key)"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            range-separator="至"
+            start-placeholder="开始"
+            end-placeholder="结束"
+            unlink-panels
+            @update:model-value="setRange(field.key, $event)"
+          />
+        </el-form-item>
       </template>
     </FilterBar>
   </div>
 </template>
 
 <style scoped>
-.tender-filters__status :deep(.el-radio-button__inner) {
-  height: 36px;
-  line-height: 34px;
-  padding: 0 12px;
+.tender-filters :deep(.filter-bar__fields) {
+  gap: var(--zt-space-3) var(--zt-space-4);
 }
-.tender-filters__name {
-  flex: 1.5 1 240px;
-  max-width: 340px;
+.tender-filters :deep(.filter-bar__fields > .el-form-item) {
+  flex: 1 1 160px;
+  max-width: 240px;
 }
-.tender-filters__date {
-  flex: 0 1 260px;
+.tender-filters :deep(.filter-bar__fields > .el-form-item:first-child) {
+  flex: 1.5 1 200px;
   max-width: 280px;
 }
 </style>

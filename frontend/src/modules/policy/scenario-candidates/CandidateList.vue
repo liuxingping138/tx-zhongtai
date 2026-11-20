@@ -15,9 +15,8 @@ import {
 } from '@/api/scenarioCandidates'
 import AuditLogButton from '@/components/AuditLogButton.vue'
 import FilterBar from '@/components/FilterBar.vue'
-import FilterChipInput from '@/components/FilterChipInput.vue'
-import FilterChipSelect from '@/components/FilterChipSelect.vue'
 import FilterKeyword from '@/components/FilterKeyword.vue'
+import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import { useFilterOptions } from '@/composables/useFilterOptions'
 import { hasActiveFilters, useListLoader } from '@/composables/useListLoader'
@@ -208,40 +207,47 @@ onMounted(() => {
         <FilterBar
           :query="draftFilters"
           :applied="appliedFilters"
-          variant="chips"
           @search="listQuery.search"
           @reset="resetFilters"
         >
-          <template #search>
+          <el-form-item label="场景名称">
             <FilterKeyword
               v-model="query.keyword"
               label="场景名称"
-              placeholder="搜索场景名称关键词…"
-              class="filter-search-main"
+              placeholder="输入场景名称关键词"
             />
+          </el-form-item>
+          <el-form-item label="一级行业">
+            <FilterSelect
+              v-model="query.industry_l1"
+              v-bind="filters.bind('industry_l1')"
+              size="short"
+            />
+          </el-form-item>
+          <el-form-item label="新增场景级别">
+            <FilterSelect
+              v-model="query.level_label"
+              v-bind="filters.bind('level_label')"
+              size="short"
+            />
+          </el-form-item>
+          <el-form-item label="码表里像它的">
+            <FilterSelect
+              v-model="query.match"
+              v-bind="filters.bind('match')"
+              size="short"
+            />
+          </el-form-item>
+          <template #advanced>
+            <el-form-item label="政策数不少于">
+              <el-input
+                v-model="query.min_policies"
+                class="candidates__min"
+                inputmode="numeric"
+                placeholder="如 3"
+              />
+            </el-form-item>
           </template>
-          <FilterChipSelect
-            v-model="query.industry_l1"
-            label="一级行业"
-            v-bind="filters.bind('industry_l1')"
-          />
-          <FilterChipSelect
-            v-model="query.level_label"
-            label="新增场景级别"
-            v-bind="filters.bind('level_label')"
-          />
-          <FilterChipSelect
-            v-model="query.match"
-            label="码表里像它的"
-            v-bind="filters.bind('match')"
-          />
-          <FilterChipInput
-            v-model="query.min_policies"
-            label="政策数"
-            prefix="≥ "
-            inputmode="numeric"
-            placeholder="输入最少政策数，如 3"
-          />
         </FilterBar>
       </template>
       <EnrichConfirm

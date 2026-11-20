@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Plus, Search } from '@element-plus/icons-vue'
+import { Plus } from '@element-plus/icons-vue'
 
 import { NO_ROLE, importUsers, listAllRoles, listUsers } from '@/api/system'
 import { errorMessage } from '@/api/errors'
@@ -10,7 +10,6 @@ import { reportImportResult, runExcelImport } from '@/api/excelImport'
 import type { RoleItem, UserItem } from '@/api/types'
 import ExportButton from '@/components/ExportButton.vue'
 import FilterBar from '@/components/FilterBar.vue'
-import FilterChipSelect from '@/components/FilterChipSelect.vue'
 import ImportButton from '@/components/ImportButton.vue'
 import ListPage from '@/components/ListPage.vue'
 import PasswordOnceDialog from '@/components/PasswordOnceDialog.vue'
@@ -58,12 +57,6 @@ const { items, total, loading, loadError, resultFiltered, load } = useListLoader
   },
   errorText: '加载用户失败',
 })
-
-const roleOptions = computed(() => [NO_ROLE, ...allRoles.value.map(role => role.id)])
-const roleLabels = computed<Record<string, string>>(() => ({
-  [NO_ROLE]: '待分配角色',
-  ...Object.fromEntries(allRoles.value.map(role => [role.id, role.name])),
-}))
 
 async function loadRoles() {
   if (!canReadRoles.value) return
@@ -218,32 +211,60 @@ onMounted(() => {
         <FilterBar
           :query="query"
           :applied="listQuery.applied"
-          variant="chips"
-          chips-layout="inline"
           @search="listQuery.search"
           @reset="listQuery.resetFilters"
         >
-          <el-input
-            v-model="query.keyword"
-            class="filter-search-main"
-            :prefix-icon="Search"
-            clearable
-            placeholder="搜索用户名、姓名、电话或邮箱…"
-            aria-label="关键词"
-          />
-          <FilterChipSelect
+          <el-form-item label="关键词">
+            <el-input
+              v-model="query.keyword"
+              clearable
+              placeholder="用户名、姓名、电话或邮箱"
+            />
+          </el-form-item>
+          <el-form-item
             v-if="canReadRoles"
-            v-model="query.role_id"
             label="角色"
-            :options="roleOptions"
-            :labels="roleLabels"
-          />
-          <FilterChipSelect
-            v-model="query.status"
-            label="状态"
-            :options="['active', 'disabled']"
-            :labels="{ active: '启用', disabled: '停用' }"
-          />
+          >
+            <el-select
+              v-model="query.role_id"
+              multiple
+              collapse-tags
+              collapse-tags-tooltip
+              clearable
+              filterable
+              placeholder="全部"
+            >
+              <el-option
+                label="待分配角色"
+                :value="NO_ROLE"
+              />
+              <el-option
+                v-for="role in allRoles"
+                :key="role.id"
+                :label="role.name"
+                :value="role.id"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="状态">
+            <el-select
+              v-model="query.status"
+              multiple
+              collapse-tags
+              collapse-tags-tooltip
+              clearable
+              placeholder="全部"
+            >
+              <el-option
+                label="启用"
+                value="active"
+              />
+              <el-option
+                label="停用"
+                value="disabled"
+              />
+            </el-select>
+          </el-form-item>
         </FilterBar>
       </template>
       <UserTable

@@ -7,7 +7,7 @@ import { errorMessage } from '@/api/errors'
 import { unlockLoginIp } from '@/api/system'
 import type { AuditEventItem } from '@/api/types'
 import FilterBar from '@/components/FilterBar.vue'
-import FilterChipSelect from '@/components/FilterChipSelect.vue'
+import FilterSelect from '@/components/FilterSelect.vue'
 import ListEmpty from '@/components/ListEmpty.vue'
 import ListPage from '@/components/ListPage.vue'
 import TableSkeleton from '@/components/TableSkeleton.vue'
@@ -174,31 +174,45 @@ onMounted(() => {
       <FilterBar
         :query="query"
         :applied="listQuery.applied"
-        variant="chips"
-        chips-layout="inline"
         @search="onSearch"
         @reset="onReset"
       >
-        <el-date-picker
-          v-model="query.range"
-          type="datetimerange"
-          start-placeholder="开始时间"
-          end-placeholder="结束时间"
-          value-format="YYYY-MM-DDTHH:mm:ss"
-          style="width: 330px; flex: none"
-          aria-label="时间范围"
-        />
-        <FilterChipSelect
-          v-model="query.actor_name"
-          label="账号"
-          v-bind="filters.bind('actor_name')"
-        />
-        <FilterChipSelect
-          v-model="query.outcome"
-          label="结果"
-          :options="['success', 'failure']"
-          :labels="{ success: '成功', failure: '失败' }"
-        />
+        <el-form-item
+          class="filter-form__item--wide"
+          label="时间"
+        >
+          <el-date-picker
+            v-model="query.range"
+            type="datetimerange"
+            start-placeholder="开始"
+            end-placeholder="结束"
+            value-format="YYYY-MM-DDTHH:mm:ss"
+          />
+        </el-form-item>
+        <el-form-item label="账号">
+          <FilterSelect
+            v-model="query.actor_name"
+            v-bind="filters.bind('actor_name')"
+            placeholder="输入或选择人员"
+          />
+        </el-form-item>
+        <el-form-item label="结果">
+          <el-select
+            v-model="query.outcome"
+            multiple
+            clearable
+            placeholder="全部"
+          >
+            <el-option
+              label="成功"
+              value="success"
+            />
+            <el-option
+              label="失败"
+              value="failure"
+            />
+          </el-select>
+        </el-form-item>
       </FilterBar>
     </template>
     <TableSkeleton
