@@ -73,7 +73,9 @@ def source_reader(*, counting: bool = False) -> Iterator[Reader]:
         while not bucket.empty():
             candidate = bucket.get_nowait()
             try:
-                candidate.ping(reconnect=True)
+                # 不让驱动自己重连：重连出来的新会话没有 SET SESSION TRANSACTION READ ONLY。
+                # 坏了就关掉，下面按新连接重新建、重新设只读。
+                candidate.ping(reconnect=False)
                 connection = candidate
                 break
             except pymysql.MySQLError:

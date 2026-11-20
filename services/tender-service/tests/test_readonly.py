@@ -623,6 +623,7 @@ async def test_forbidden_sql_and_source_pool(monkeypatch) -> None:
         assert r2 is not None
     assert source.pymysql.connect.call_count == 1
     assert pooled.ping.call_count == 1
+    pooled.ping.assert_called_with(reconnect=False)
     source.clear_pool()
 
     dead_conn = MagicMock()
@@ -636,6 +637,8 @@ async def test_forbidden_sql_and_source_pool(monkeypatch) -> None:
     with source.source_reader():
         pass
     dead_conn.close.assert_called_once()
+    # 换上的新连接重新设成只读，不靠驱动重连（重连的会话丢了只读设置）
+    fresh_cur.execute.assert_any_call("SET SESSION TRANSACTION READ ONLY")
     with pytest.raises(RuntimeError, match="query_err"), source.source_reader():
         raise RuntimeError("query_err")
     fresh_conn.close.assert_called_once()
