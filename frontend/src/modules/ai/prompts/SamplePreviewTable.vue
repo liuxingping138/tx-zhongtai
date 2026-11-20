@@ -48,18 +48,23 @@ const titleCol = computed(() => props.columns[0] ?? '')
         </tr>
       </thead>
       <tbody>
+        <!-- 整行可点只给鼠标；键盘走行号按钮。行本身不做 role="button"：里面还有「试发」按钮，
+             嵌套按钮读屏说不清，行上的 Enter 处理还会吞掉「试发」的回车（打开的是详情，不是试发）。 -->
         <tr
           v-for="row in items"
           :key="row.row"
-          tabindex="0"
-          role="button"
           :class="[`is-${row.status}`, { 'is-changed': row.change, 'is-active-row': activeRow === row.row }]"
           @click="emit('pick', row.row)"
-          @keydown.enter.prevent="emit('pick', row.row)"
-          @keydown.space.prevent="emit('pick', row.row)"
         >
           <td class="is-no">
-            <span class="matrix__no">{{ row.row }}</span>
+            <button
+              type="button"
+              class="matrix__no"
+              :aria-label="`查看第 ${row.row} 行详情`"
+              @click.stop="emit('pick', row.row)"
+            >
+              {{ row.row }}
+            </button>
           </td>
           <td
             v-if="titleCol"
@@ -127,7 +132,8 @@ const titleCol = computed(() => props.columns[0] ?? '')
 .matrix .is-field > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .matrix .is-empty { color: var(--zt-ink-400); }
 .matrix__was { display: block; overflow: hidden; color: var(--zt-ink-400); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
-.matrix__no { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 4px; border-radius: 6px; background: var(--zt-soft); color: var(--zt-ink-700); font-weight: 600; }
+.matrix__no { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 4px; border: 0; border-radius: 6px; background: var(--zt-soft); color: var(--zt-ink-700); font: inherit; font-weight: 600; cursor: pointer; }
+.matrix__no:focus-visible, .matrix__btn:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
 .is-changed .matrix__no { background: var(--el-color-primary-light-9); color: var(--zt-blue-700); }
 .matrix .is-act { white-space: nowrap; text-align: right; }
 .matrix__status { font-size: 11.5px; margin-right: 6px; }
