@@ -294,7 +294,10 @@ onMounted(async () => {
         </template>
 
         <template #row-actions="{ row, index }">
-          <div class="row-actions">
+          <div
+            v-if="row?.id"
+            class="row-actions"
+          >
             <RouterLink
               class="row-action"
               :to="detailRoute(row, index)"

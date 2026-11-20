@@ -20,12 +20,13 @@ import {
   type KnowledgeItem,
 } from '@/api/thinktank'
 import DetailSkeleton from '@/components/DetailSkeleton.vue'
-import { listQuery, parseReviewQuery, reviewQuery, windowAt } from '@/modules/policy/shared/reviewQuery'
+import { listQuery, parseReviewQuery, reviewQuery } from '@/modules/policy/shared/reviewQuery'
 import { useAuthStore } from '@/stores/auth'
 import KnowledgeDocViewer from './KnowledgeDocViewer.vue'
 import KnowledgeLogsDrawer from './KnowledgeLogsDrawer.vue'
 import KnowledgeMetaCard from './KnowledgeMetaCard.vue'
 import KnowledgeSummaryCard from './KnowledgeSummaryCard.vue'
+import { fetchNeighbors } from './neighborWindow'
 import { useKnowledgeContent } from './useKnowledgeContent'
 import { usePreviewPanels } from './usePreviewPanels'
 import { FILTER_KEYS, parseContentDispositionFilename } from './fields'
@@ -74,12 +75,12 @@ async function loadNeighbors() {
   nextId.value = null
   if (position.value === null) return
   try {
-    const win = windowAt(position.value)
-    const res = await listKnowledge({ ...parsed.value.filters, page: win.page, page_size: win.size })
+    const res = await fetchNeighbors(position.value, (page, pageSize) =>
+      listKnowledge({ ...parsed.value.filters, page, page_size: pageSize }))
     if (seq !== neighborSeq) return
     total.value = res.total
-    prevId.value = win.offset > 0 ? (res.items[win.offset - 1]?.id ?? null) : null
-    nextId.value = res.items[win.offset + 1]?.id ?? null
+    prevId.value = res.prevId
+    nextId.value = res.nextId
   } catch { /* 邻居加载失败不影响当前详情 */ }
 }
 

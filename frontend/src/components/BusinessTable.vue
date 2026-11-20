@@ -195,20 +195,21 @@ function editRoute(row: T, index: number): RouteLocationRaw {
           class-name="table-action"
         >
           <template #default="{ row, $index }">
-            <slot
-              name="row-actions"
-              :row="row"
-              :index="$index"
-            >
-              <RowActions
-                v-if="row.id"
-                :view="detailRoute ? detailRoute(row, $index) : undefined"
-                :edit="detailRoute ? editRoute(row, $index) : undefined"
-                :can-edit="canWrite"
-                @view="open(row)"
-                @edit="emit('edit', row)"
-              />
-            </slot>
+            <template v-if="row?.id">
+              <slot
+                name="row-actions"
+                :row="row"
+                :index="$index"
+              >
+                <RowActions
+                  :view="detailRoute ? detailRoute(row, $index) : undefined"
+                  :edit="detailRoute ? editRoute(row, $index) : undefined"
+                  :can-edit="canWrite"
+                  @view="open(row)"
+                  @edit="emit('edit', row)"
+                />
+              </slot>
+            </template>
           </template>
         </el-table-column>
       </el-table>

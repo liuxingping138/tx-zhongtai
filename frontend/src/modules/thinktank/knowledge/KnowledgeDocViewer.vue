@@ -31,13 +31,14 @@ let unlockScroll: (() => void) | null = null
 
 function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape' && fullscreen.value) {
+    event.preventDefault()
     fullscreen.value = false
   }
 }
 
 // 全屏时后面的页面不跟着滚；焦点先放到「退出全屏」上，Esc 立即可用。
 // 点进 PDF 后按键被内嵌的 PDF 阅读器拿走、页面收不到 Esc，所以按钮上写明。
-watch(fullscreen, on => {
+watch(fullscreen, (on) => {
   if (on) {
     unlockScroll = lockScroll(document.body)
     void nextTick(() => toggleBtn.value?.focus())
@@ -47,97 +48,102 @@ watch(fullscreen, on => {
   }
 })
 
-onMounted(() => window.addEventListener('keydown', onKeydown))
+onMounted(() => window.addEventListener('keydown', onKeydown, true))
 onBeforeUnmount(() => {
-  window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('keydown', onKeydown, true)
   unlockScroll?.()
 })
 </script>
 
 <template>
-  <aside
+  <Teleport
     v-if="!collapsed"
-    class="review__panel review__content"
-    :class="{ 'is-fullscreen': fullscreen }"
+    to="body"
+    :disabled="!fullscreen"
   >
-    <div class="review__content-bar">
-      <div class="review__content-meta">
-        <span class="review__content-title">{{ fullscreen ? fileName : '文档在线预览' }}</span>
-        <el-tag
-          size="small"
-          type="info"
-          effect="plain"
-        >
-          水印：{{ watermark }}
-        </el-tag>
-      </div>
-      <div class="review__content-tools">
-        <button
-          v-if="!fullscreen"
-          type="button"
-          class="review__tool-btn"
-          @click="emit('update:metaCollapsed', !metaCollapsed)"
-        >
-          {{ metaCollapsed ? '展开标签' : '收起标签' }}
-        </button>
-        <button
-          v-if="fullscreen && canExport"
-          type="button"
-          class="review__tool-btn"
-          :disabled="downloading"
-          @click="emit('download')"
-        >
-          <el-icon><Download /></el-icon>
-          <span>{{ downloading ? '下载中…' : '下载' }}</span>
-        </button>
-        <button
-          ref="toggleBtn"
-          type="button"
-          class="review__tool-btn review__tool-btn--primary"
-          :title="fullscreen ? '退出全屏（Esc；正在 PDF 里操作时请点这里）' : '全屏预览'"
-          @click="fullscreen = !fullscreen"
-        >
-          <el-icon>
-            <Close v-if="fullscreen" />
-            <FullScreen v-else />
-          </el-icon>
-          <span>{{ fullscreen ? '退出全屏' : '全屏预览' }}</span>
-        </button>
-        <button
-          v-if="!fullscreen"
-          type="button"
-          class="review__tool-btn"
-          @click="emit('update:collapsed', true)"
-        >
-          收起 →
-        </button>
-      </div>
-    </div>
-    <div class="review__content-body">
-      <ParagraphSkeleton
-        v-if="loading"
-        :lines="10"
-      />
-      <iframe
-        v-else-if="mode === 'pdf' && pdfUrl"
-        :src="pdfUrl"
-        class="viewer-frame"
-        title="文档在线预览"
-      />
-      <div
-        v-else
-        class="viewer-text-wrap"
-      >
-        <div
-          v-if="mode === 'summary' && canExport"
-          class="viewer-hint"
-        >
-          当前文件格式（{{ fileSuffix }}）暂不支持网页直出渲染，可点击上方「下载源文件」查看完整原版文档。
+    <aside
+      class="review__panel review__content"
+      :class="{ 'is-fullscreen': fullscreen }"
+    >
+      <div class="review__content-bar">
+        <div class="review__content-meta">
+          <span class="review__content-title">{{ fullscreen ? fileName : '文档在线预览' }}</span>
+          <el-tag
+            size="small"
+            type="info"
+            effect="plain"
+          >
+            水印：{{ watermark }}
+          </el-tag>
         </div>
-        <pre class="viewer-text">{{ text }}</pre>
+        <div class="review__content-tools">
+          <button
+            v-if="!fullscreen"
+            type="button"
+            class="review__tool-btn"
+            @click="emit('update:metaCollapsed', !metaCollapsed)"
+          >
+            {{ metaCollapsed ? '展开标签' : '收起标签' }}
+          </button>
+          <button
+            v-if="fullscreen && canExport"
+            type="button"
+            class="review__tool-btn"
+            :disabled="downloading"
+            @click="emit('download')"
+          >
+            <el-icon><Download /></el-icon>
+            <span>{{ downloading ? '下载中…' : '下载' }}</span>
+          </button>
+          <button
+            ref="toggleBtn"
+            type="button"
+            class="review__tool-btn review__tool-btn--primary"
+            :title="fullscreen ? '退出全屏（Esc；正在 PDF 里操作时请点这里）' : '全屏预览'"
+            @click="fullscreen = !fullscreen"
+          >
+            <el-icon>
+              <Close v-if="fullscreen" />
+              <FullScreen v-else />
+            </el-icon>
+            <span>{{ fullscreen ? '退出全屏' : '全屏预览' }}</span>
+          </button>
+          <button
+            v-if="!fullscreen"
+            type="button"
+            class="review__tool-btn"
+            @click="emit('update:collapsed', true)"
+          >
+            收起 →
+          </button>
+        </div>
       </div>
-    </div>
-  </aside>
+      <div class="review__content-body">
+        <ParagraphSkeleton
+          v-if="loading"
+          :lines="10"
+        />
+        <iframe
+          v-else-if="mode === 'pdf' && pdfUrl"
+          :src="pdfUrl"
+          class="viewer-frame"
+          title="文档在线预览"
+        />
+        <div
+          v-else
+          class="viewer-text-wrap"
+        >
+          <div
+            v-if="mode === 'summary' && canExport"
+            class="viewer-hint"
+          >
+            当前文件格式（{{ fileSuffix }}）暂不支持网页直出渲染，可点击上方「下载源文件」查看完整原版文档。
+          </div>
+          <pre class="viewer-text">{{ text }}</pre>
+        </div>
+      </div>
+    </aside>
+  </Teleport>
 
   <button
     v-else
@@ -151,7 +157,9 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .review__panel { min-height: 0; display: flex; flex-direction: column; background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: 10px; overflow: hidden; }
-.review__content.is-fullscreen { position: fixed; inset: 0; z-index: 2000; border: 0; border-radius: 0; }
+.review__content.is-fullscreen { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 2000; border: 0; border-radius: 0; }
+.review__content.is-fullscreen .review__content-body { overflow: hidden; }
+.review__content.is-fullscreen .viewer-frame { min-height: 0; height: 100%; }
 .review__content-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--zt-border); background: var(--zt-soft); flex-wrap: wrap; }
 .review__content-meta { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .review__content-title { font-size: 13px; font-weight: 600; color: var(--zt-ink-700); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
