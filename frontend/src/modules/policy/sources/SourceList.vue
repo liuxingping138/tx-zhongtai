@@ -12,6 +12,8 @@ import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
 import ExportButton from '@/components/ExportButton.vue'
 import FilterBar from '@/components/FilterBar.vue'
+import FilterChipDate from '@/components/FilterChipDate.vue'
+import FilterChipSelect from '@/components/FilterChipSelect.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ImportButton from '@/components/ImportButton.vue'
 import ListPage from '@/components/ListPage.vue'
@@ -213,75 +215,59 @@ onMounted(() => {
         <FilterBar
           :query="query"
           :applied="listQuery.applied"
+          variant="chips"
+          :more-keys="['site_code', 'online_from', 'tag']"
           @search="listQuery.search"
           @reset="listQuery.resetFilters"
         >
-          <el-form-item label="网站名称">
+          <template #search>
             <FilterSelect
               v-model="query.site_name"
               v-bind="filters.bind('site_name')"
+              placeholder="搜索或选择网站名称…"
+              class="filter-search-main"
             />
-          </el-form-item>
-          <el-form-item label="省份">
-            <FilterSelect
-              v-model="query.province_name"
-              v-bind="filters.bind('province_name')"
-              size="short"
+          </template>
+          <FilterChipSelect
+            v-model="query.province_name"
+            label="省份"
+            v-bind="filters.bind('province_name')"
+          />
+          <FilterChipSelect
+            v-model="query.city_name"
+            label="地市"
+            v-bind="cityBinding"
+          />
+          <FilterChipSelect
+            v-model="query.site_type"
+            label="网站类型"
+            v-bind="filters.bind('site_type')"
+          />
+          <FilterChipSelect
+            v-model="query.crawler_status"
+            label="爬虫状态"
+            v-bind="filters.bind('crawler_status')"
+          />
+          <FilterChipSelect
+            v-model="query.crawl_priority"
+            label="网站优先级"
+            v-bind="filters.bind('crawl_priority')"
+          />
+          <template #more>
+            <FilterChipSelect
+              v-model="query.site_code"
+              label="网站编码"
+              v-bind="filters.bind('site_code')"
             />
-          </el-form-item>
-          <el-form-item label="地市">
-            <FilterSelect
-              v-model="query.city_name"
-              v-bind="cityBinding"
-              size="short"
-            />
-          </el-form-item>
-          <template #advanced>
-            <el-form-item label="网站类型">
-              <FilterSelect
-                v-model="query.site_type"
-                v-bind="filters.bind('site_type')"
-              />
-            </el-form-item>
-            <el-form-item label="爬虫状态">
-              <FilterSelect
-                v-model="query.crawler_status"
-                v-bind="filters.bind('crawler_status')"
-                size="short"
-              />
-            </el-form-item>
-            <el-form-item label="网站编码">
-              <FilterSelect
-                v-model="query.site_code"
-                v-bind="filters.bind('site_code')"
-              />
-            </el-form-item>
-            <el-form-item
+            <FilterChipDate
+              v-model="onlineRange"
               label="上线时间"
-              class="filter-form__item--wide"
-            >
-              <el-date-picker
-                v-model="onlineRange"
-                type="daterange"
-                value-format="YYYY-MM-DD"
-                range-separator="至"
-                start-placeholder="开始日期"
-                end-placeholder="结束日期"
-                unlink-panels
-              />
-            </el-form-item>
-            <el-form-item label="标签">
-              <FilterSelect
-                v-model="query.tag"
-                v-bind="filters.bind('tag')"
-              />
-            </el-form-item>
-            <el-form-item label="网站优先级">
-              <FilterSelect
-                v-model="query.crawl_priority"
-                v-bind="filters.bind('crawl_priority')"
-              />
-            </el-form-item>
+            />
+            <FilterChipSelect
+              v-model="query.tag"
+              label="标签"
+              v-bind="filters.bind('tag')"
+            />
           </template>
         </FilterBar>
       </template>

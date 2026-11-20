@@ -250,6 +250,7 @@ onMounted(async () => {
           :query="query"
           :applied="listQuery.applied"
           variant="chips"
+          :more-keys="['market_category', 'depart_affiliation', 'app_scenario', 'data_time', 'tag_status']"
           @search="listQuery.search"
           @reset="listQuery.resetFilters"
         >
@@ -270,8 +271,17 @@ onMounted(async () => {
           <KnowledgeFilters
             :query="query"
             :filters="filters"
+            group="primary"
             @update="onFilterUpdate"
           />
+          <template #more>
+            <KnowledgeFilters
+              :query="query"
+              :filters="filters"
+              group="more"
+              @update="onFilterUpdate"
+            />
+          </template>
         </FilterBar>
       </template>
 

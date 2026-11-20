@@ -115,16 +115,17 @@ onMounted(() => {
         <FilterBar
           :query="query"
           :applied="listQuery.applied"
+          variant="chips"
+          chips-layout="inline"
           @search="listQuery.search"
           @reset="listQuery.resetFilters"
         >
-          <el-form-item label="关键字">
-            <FilterSelect
-              v-model="query.keyword"
-              v-bind="filters.bind('type_name')"
-              placeholder="输入或选择政策类型"
-            />
-          </el-form-item>
+          <FilterSelect
+            v-model="query.keyword"
+            v-bind="filters.bind('type_name')"
+            placeholder="搜索或选择政策类型…"
+            class="filter-search-main"
+          />
         </FilterBar>
       </template>
       <template #tools>

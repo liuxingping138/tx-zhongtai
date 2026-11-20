@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ArrowDown, ArrowUp, RefreshRight, Search } from '@element-plus/icons-vue'
+import { computed, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue'
+import { ArrowDown, ArrowUp, Plus, RefreshRight, Search } from '@element-plus/icons-vue'
 import { foldFilterFields } from './filterFold'
 
 const props = withDefaults(
@@ -10,21 +10,47 @@ const props = withDefaults(
     collapsible?: boolean
     labelPosition?: 'top' | 'left'
     variant?: 'form' | 'chips'
+    chipsLayout?: 'auto' | 'two-row' | 'inline'
+    moreKeys?: readonly string[]
   }>(),
-  { applied: undefined, collapsible: true, labelPosition: 'top', variant: 'form' },
+  {
+    applied: undefined,
+    collapsible: true,
+    labelPosition: 'top',
+    variant: 'form',
+    chipsLayout: 'auto',
+    moreKeys: () => [],
+  },
 )
 const emit = defineEmits<{ search: []; reset: [] }>()
+const slots = useSlots()
 const composing = ref(false)
+const moreExpanded = ref(false)
+
+function isFilledValue(value: unknown): boolean {
+  return Array.isArray(value) ? value.length > 0 : value !== '' && value !== null && value !== undefined
+}
 
 function filledEntries(source: Record<string, unknown> = {}) {
   return Object.entries(source).filter(([key, value]) =>
-    !['page', 'page_size'].includes(key) && (Array.isArray(value) ? value.length > 0 : value !== '' && value !== null && value !== undefined))
+    !['page', 'page_size'].includes(key) && isFilledValue(value))
 }
 
 function filledSignature(source: Record<string, unknown> = {}) {
   const next = Object.fromEntries(filledEntries(source).sort(([left], [right]) => left.localeCompare(right)))
   return JSON.stringify(next)
 }
+
+const isInlineChips = computed(() => {
+  if (props.variant !== 'chips') return false
+  if (props.chipsLayout === 'inline') return true
+  if (props.chipsLayout === 'two-row') return false
+  return !slots.search
+})
+
+const hasMoreChips = computed(() => Boolean(slots.more))
+const moreFilledCount = computed(() =>
+  props.moreKeys.filter(key => isFilledValue(props.query[key])).length)
 
 const count = computed(() => filledEntries(props.applied ?? {}).length)
 const dirty = computed(() => filledSignature(props.query) !== filledSignature(props.applied ?? {}))
@@ -108,6 +134,7 @@ function submit() {
     :class="{
       'is-pending': dirty,
       'filter-bar--chips': variant === 'chips',
+      'filter-bar--chips-inline': isInlineChips,
       'filter-bar--left': variant === 'form' && labelPosition === 'left',
     }"
     :label-position="variant === 'chips' ? 'top' : labelPosition"
@@ -120,7 +147,11 @@ function submit() {
       v-if="variant === 'chips'"
       class="filter-bar__search"
     >
-      <slot name="search" />
+      <slot
+        v-if="!isInlineChips"
+        name="search"
+      />
+      <slot v-else />
     </div>
     <div
       v-else
@@ -180,10 +211,34 @@ function submit() {
       </div>
     </div>
     <div
-      v-if="variant === 'chips'"
+      v-if="variant === 'chips' && !isInlineChips"
       class="filter-bar__chips-row"
     >
       <slot />
+      <slot
+        v-if="hasMoreChips && moreExpanded"
+        name="more"
+      />
+      <button
+        v-if="hasMoreChips"
+        type="button"
+        class="filter-bar__more-chip"
+        :class="{ 'is-active': !moreExpanded && moreFilledCount > 0 }"
+        :aria-expanded="moreExpanded"
+        @click="moreExpanded = !moreExpanded"
+      >
+        <el-icon v-if="!moreExpanded">
+          <Plus />
+        </el-icon>
+        <span>{{ moreExpanded ? '收起更多' : '更多筛选' }}</span>
+        <span
+          v-if="!moreExpanded && moreFilledCount > 0"
+          class="filter-bar__more-count"
+        >{{ moreFilledCount }}</span>
+        <el-icon v-if="moreExpanded">
+          <ArrowUp />
+        </el-icon>
+      </button>
     </div>
   </el-form>
 </template>
@@ -212,9 +267,17 @@ function submit() {
 .filter-bar--left :deep(.el-form-item__content) { flex: 1; min-width: 0; }
 .filter-bar--chips { align-items: center; gap: 12px; }
 .filter-bar__search { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: 1 1 360px; min-width: 0; }
+.filter-bar__search :deep(.filter-search-main) { flex: 1 1 260px; max-width: 380px; }
+.filter-bar--chips-inline .filter-bar__search { flex: 1 1 480px; }
 .filter-bar__chips-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: 1 0 100%; }
 .filter-bar--chips .filter-bar__actions { flex-direction: row; align-items: center; gap: 12px; }
-.filter-bar--chips :deep(.el-input__wrapper) { min-height: 36px; border-radius: 8px; }
+.filter-bar--chips :deep(.el-input__wrapper),
+.filter-bar--chips :deep(.el-select__wrapper),
+.filter-bar--chips :deep(.el-date-editor) { min-height: 36px; border-radius: 8px; }
+.filter-bar__more-chip { display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 12px; border: 1px dashed var(--zt-border-strong); border-radius: 8px; background: transparent; color: var(--zt-ink-500); font-size: 13px; line-height: 1; cursor: pointer; transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease; }
+.filter-bar__more-chip:hover { background: var(--zt-soft); border-color: var(--zt-ink-400); color: var(--zt-ink-900); }
+.filter-bar__more-chip.is-active { background: var(--zt-row-hover); border-style: solid; border-color: transparent; color: var(--zt-blue-700); font-weight: 500; }
+.filter-bar__more-count { min-width: 16px; height: 16px; padding: 0 5px; border-radius: 8px; background: var(--zt-blue-600); color: var(--el-color-white); font-size: 11px; line-height: 16px; text-align: center; }
 .filter-bar :deep(.el-input), .filter-bar :deep(.el-select), .filter-bar :deep(.el-date-editor) { width: 100%; }
 .filter-bar :deep(.el-date-editor.el-date-editor--datetimerange) { min-width: 280px; }
 .filter-bar :deep(.el-input__wrapper), .filter-bar :deep(.el-select__wrapper), .filter-bar :deep(.el-date-editor) {

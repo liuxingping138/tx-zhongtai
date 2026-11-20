@@ -17,8 +17,8 @@ import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
 import ExportButton from '@/components/ExportButton.vue'
 import FilterBar from '@/components/FilterBar.vue'
+import FilterChipSelect from '@/components/FilterChipSelect.vue'
 import FilterKeyword from '@/components/FilterKeyword.vue'
-import FilterSelect from '@/components/FilterSelect.vue'
 import ImportButton from '@/components/ImportButton.vue'
 import ListPage from '@/components/ListPage.vue'
 import RecordEditorDrawer from '@/components/RecordEditorDrawer.vue'
@@ -131,51 +131,43 @@ onMounted(() => {
         <FilterBar
           :query="query"
           :applied="listQuery.applied"
+          variant="chips"
           @search="listQuery.search"
           @reset="listQuery.resetFilters"
         >
-          <el-form-item label="场景名称">
+          <template #search>
             <FilterKeyword
               v-model="query.scenario_name"
               label="场景名称"
-              placeholder="输入场景名称关键词，一二三级都查"
+              placeholder="搜索场景名称关键词（一二三级都查）…"
+              class="filter-search-main"
             />
-          </el-form-item>
-          <el-form-item label="一级行业">
-            <FilterSelect
-              v-model="query.industry_l1"
-              v-bind="filters.bind('industry_l1')"
-              size="short"
-            />
-          </el-form-item>
-          <el-form-item label="场景标签">
-            <FilterSelect
-              v-model="query.scenario_tag"
-              v-bind="filters.bind('scenario_tag')"
-            />
-          </el-form-item>
-          <template #advanced>
-            <el-form-item label="客群名称">
-              <FilterSelect
-                v-model="query.customer_group_name"
-                v-bind="filters.bind('customer_group_name')"
-              />
-            </el-form-item>
-            <el-form-item label="是否新增场景">
-              <FilterSelect
-                v-model="query.is_new_scenario"
-                v-bind="filters.bind('is_new_scenario')"
-                size="short"
-              />
-            </el-form-item>
-            <el-form-item label="补充状态">
-              <FilterSelect
-                v-model="query.enrich_status"
-                v-bind="filters.bind('enrich_status')"
-                size="short"
-              />
-            </el-form-item>
           </template>
+          <FilterChipSelect
+            v-model="query.industry_l1"
+            label="一级行业"
+            v-bind="filters.bind('industry_l1')"
+          />
+          <FilterChipSelect
+            v-model="query.scenario_tag"
+            label="场景标签"
+            v-bind="filters.bind('scenario_tag')"
+          />
+          <FilterChipSelect
+            v-model="query.customer_group_name"
+            label="客群名称"
+            v-bind="filters.bind('customer_group_name')"
+          />
+          <FilterChipSelect
+            v-model="query.is_new_scenario"
+            label="是否新增场景"
+            v-bind="filters.bind('is_new_scenario')"
+          />
+          <FilterChipSelect
+            v-model="query.enrich_status"
+            label="补充状态"
+            v-bind="filters.bind('enrich_status')"
+          />
         </FilterBar>
       </template>
       <template #tools>

@@ -210,7 +210,9 @@ defineExpose({ open, keyword, displayOptions, emptyText, summaryText, searching,
 .filter-chip { display: inline-flex; align-items: center; gap: 4px; height: 32px; max-width: 240px; padding: 0 12px; border: 1px solid var(--zt-border-strong); border-radius: 8px; background: var(--zt-panel); color: var(--zt-ink-700); font-size: 13px; line-height: 1; cursor: pointer; transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease; }
 .filter-chip:hover { background: var(--zt-soft); border-color: var(--zt-ink-400); color: var(--zt-ink-900); }
 .filter-chip.is-open { border-color: var(--zt-blue-600); box-shadow: 0 0 0 3px var(--zt-focus-ring); }
-.filter-chip.is-active { background: var(--zt-row-hover); border-color: var(--zt-blue-600); color: var(--zt-blue-700); padding-right: 8px; }
+.filter-chip.is-active { background: var(--zt-row-hover); border-color: transparent; color: var(--zt-blue-700); padding-right: 8px; }
+.filter-chip.is-active:hover { background: var(--el-color-primary-light-8); border-color: transparent; color: var(--zt-blue-700); }
+.filter-chip.is-active.is-open { border-color: var(--zt-blue-600); }
 .filter-chip__label, .filter-chip__key { white-space: nowrap; }
 .filter-chip__key { font-weight: 500; }
 .filter-chip__val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }

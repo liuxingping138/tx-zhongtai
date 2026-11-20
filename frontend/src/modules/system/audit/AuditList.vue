@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 import { getAuditEvent, listAuditEvents } from '@/api/audit'
 import { errorMessage } from '@/api/errors'
+import FilterChipSelect from '@/components/FilterChipSelect.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
 import ListPage from '@/components/ListPage.vue'
 import FilterBar from '@/components/FilterBar.vue'
@@ -138,84 +139,56 @@ onMounted(() => {
         <FilterBar
           :query="query"
           :applied="listQuery.applied"
+          variant="chips"
           @search="onSearch"
           @reset="onResetFilters"
         >
-          <el-form-item
-            class="filter-form__item--wide"
-            label="时间"
-          >
+          <template #search>
             <el-date-picker
               v-model="query.range"
               type="datetimerange"
-              start-placeholder="开始"
-              end-placeholder="结束"
+              start-placeholder="开始时间"
+              end-placeholder="结束时间"
               value-format="YYYY-MM-DDTHH:mm:ss"
+              style="width: 330px; flex: none"
+              aria-label="时间范围"
             />
-          </el-form-item>
-          <el-form-item label="人员">
             <FilterSelect
               v-model="query.actor_name"
               v-bind="filters.bind('actor_name')"
-              placeholder="输入或选择人员"
+              placeholder="输入或选择人员…"
+              style="width: 220px; flex: none"
             />
-          </el-form-item>
-          <el-form-item label="业务模块">
-            <FilterSelect
-              v-model="query.directory"
-              :options="DIRECTORIES"
-              placeholder="选择业务模块"
-            />
-          </el-form-item>
-          <el-form-item label="类型">
-            <FilterSelect
-              v-model="query.business_line"
-              :options="LINES"
-              :labels="LINE_LABELS"
-              placeholder="政策 / 客户 / 招投标"
-            />
-          </el-form-item>
-          <el-form-item label="模块">
-            <FilterSelect
-              v-model="query.module_code"
-              v-bind="moduleBinding"
-              :labels="MODULE_LABELS"
-              placeholder="输入或选择模块"
-            />
-          </el-form-item>
-          <template #advanced>
-            <el-form-item label="动作">
-              <FilterSelect
-                v-model="query.action_code"
-                v-bind="filters.bind('action_code')"
-                :labels="ACTION_LABELS"
-                placeholder="输入或选择动作"
-              />
-            </el-form-item>
-            <el-form-item label="结果">
-              <el-select
-                v-model="query.outcome"
-                multiple
-                collapse-tags
-                collapse-tags-tooltip
-                clearable
-                placeholder="全部"
-              >
-                <el-option
-                  label="成功"
-                  value="success"
-                />
-                <el-option
-                  label="失败"
-                  value="failure"
-                />
-                <el-option
-                  label="拒绝"
-                  value="denied"
-                />
-              </el-select>
-            </el-form-item>
           </template>
+          <FilterChipSelect
+            v-model="query.directory"
+            label="业务模块"
+            :options="DIRECTORIES"
+          />
+          <FilterChipSelect
+            v-model="query.business_line"
+            label="类型"
+            :options="LINES"
+            :labels="LINE_LABELS"
+          />
+          <FilterChipSelect
+            v-model="query.module_code"
+            label="模块"
+            v-bind="moduleBinding"
+            :labels="MODULE_LABELS"
+          />
+          <FilterChipSelect
+            v-model="query.action_code"
+            label="动作"
+            v-bind="filters.bind('action_code')"
+            :labels="ACTION_LABELS"
+          />
+          <FilterChipSelect
+            v-model="query.outcome"
+            label="结果"
+            :options="['success', 'failure', 'denied']"
+            :labels="{ success: '成功', failure: '失败', denied: '拒绝' }"
+          />
         </FilterBar>
       </template>
       <TableSkeleton

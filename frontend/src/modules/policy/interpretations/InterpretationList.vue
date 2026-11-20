@@ -18,8 +18,8 @@ import { reviewQuery } from '../shared/reviewQuery'
 import ColumnPicker from '@/components/ColumnPicker.vue'
 import ExportButton from '@/components/ExportButton.vue'
 import FilterBar from '@/components/FilterBar.vue'
+import FilterChipSelect from '@/components/FilterChipSelect.vue'
 import FilterKeyword from '@/components/FilterKeyword.vue'
-import FilterSelect from '@/components/FilterSelect.vue'
 import ImportButton from '@/components/ImportButton.vue'
 import ListPage from '@/components/ListPage.vue'
 import { useDetailColumns } from '@/composables/useDetailColumns'
@@ -163,73 +163,60 @@ onMounted(() => {
         <FilterBar
           :query="query"
           :applied="listQuery.applied"
+          variant="chips"
+          :more-keys="['is_new_scenario', 'new_scenario_level', 'info_level']"
           @search="listQuery.search"
           @reset="listQuery.resetFilters"
         >
-          <el-form-item label="政策原文名称">
+          <template #search>
             <FilterKeyword
               v-model="query.policy_title"
               label="政策原文名称"
-              placeholder="输入政策名称关键词"
+              placeholder="搜索政策原文名称关键词…"
+              class="filter-search-main"
             />
-          </el-form-item>
-          <el-form-item label="一级行业">
-            <FilterSelect
-              v-model="query.industry_l1"
-              v-bind="filters.bind('industry_l1')"
-              size="short"
+          </template>
+          <FilterChipSelect
+            v-model="query.industry_l1"
+            label="一级行业"
+            v-bind="filters.bind('industry_l1')"
+          />
+          <FilterChipSelect
+            v-model="query.scenario_l1_name"
+            label="一级场景"
+            v-bind="filters.bind('scenario_l1_name')"
+          />
+          <FilterChipSelect
+            v-model="query.scenario_state"
+            label="场景状态"
+            v-bind="filters.bind('scenario_state')"
+          />
+          <FilterChipSelect
+            v-model="query.data_status"
+            label="数据状态"
+            v-bind="filters.bind('data_status')"
+          />
+          <FilterChipSelect
+            v-model="query.opportunity_type"
+            label="机会类型"
+            v-bind="filters.bind('opportunity_type')"
+          />
+          <template #more>
+            <FilterChipSelect
+              v-model="query.is_new_scenario"
+              label="是否新增场景"
+              v-bind="filters.bind('is_new_scenario')"
             />
-          </el-form-item>
-          <el-form-item label="一级场景">
-            <FilterSelect
-              v-model="query.scenario_l1_name"
-              v-bind="filters.bind('scenario_l1_name')"
-              size="short"
+            <FilterChipSelect
+              v-model="query.new_scenario_level"
+              label="新增场景级别"
+              v-bind="filters.bind('new_scenario_level')"
             />
-          </el-form-item>
-          <template #advanced>
-            <el-form-item label="是否新增场景">
-              <FilterSelect
-                v-model="query.is_new_scenario"
-                v-bind="filters.bind('is_new_scenario')"
-                size="short"
-              />
-            </el-form-item>
-            <el-form-item label="新增场景级别">
-              <FilterSelect
-                v-model="query.new_scenario_level"
-                v-bind="filters.bind('new_scenario_level')"
-                size="short"
-              />
-            </el-form-item>
-            <el-form-item label="场景状态">
-              <FilterSelect
-                v-model="query.scenario_state"
-                v-bind="filters.bind('scenario_state')"
-                size="short"
-              />
-            </el-form-item>
-            <el-form-item label="数据状态">
-              <FilterSelect
-                v-model="query.data_status"
-                v-bind="filters.bind('data_status')"
-                size="short"
-              />
-            </el-form-item>
-            <el-form-item label="信息化等级">
-              <FilterSelect
-                v-model="query.info_level"
-                v-bind="filters.bind('info_level')"
-                size="short"
-              />
-            </el-form-item>
-            <el-form-item label="机会类型">
-              <FilterSelect
-                v-model="query.opportunity_type"
-                v-bind="filters.bind('opportunity_type')"
-                size="short"
-              />
-            </el-form-item>
+            <FilterChipSelect
+              v-model="query.info_level"
+              label="信息化等级"
+              v-bind="filters.bind('info_level')"
+            />
           </template>
         </FilterBar>
       </template>

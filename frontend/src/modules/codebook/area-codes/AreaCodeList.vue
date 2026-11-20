@@ -17,7 +17,7 @@ import BusinessTable from '@/components/BusinessTable.vue'
 import ColumnPicker from '@/components/ColumnPicker.vue'
 import ExportButton from '@/components/ExportButton.vue'
 import FilterBar from '@/components/FilterBar.vue'
-import FilterSelect from '@/components/FilterSelect.vue'
+import FilterChipSelect from '@/components/FilterChipSelect.vue'
 import ImportButton from '@/components/ImportButton.vue'
 import ListPage from '@/components/ListPage.vue'
 import RecordEditorDrawer from '@/components/RecordEditorDrawer.vue'
@@ -126,30 +126,26 @@ onMounted(() => {
         <FilterBar
           :query="query"
           :applied="listQuery.applied"
+          variant="chips"
+          chips-layout="inline"
           @search="listQuery.search"
           @reset="listQuery.resetFilters"
         >
-          <el-form-item label="省份">
-            <FilterSelect
-              v-model="query.prov_name"
-              v-bind="filters.bind('prov_name')"
-              size="short"
-            />
-          </el-form-item>
-          <el-form-item label="城市">
-            <FilterSelect
-              v-model="query.city_name"
-              v-bind="filters.bind('city_name')"
-              size="short"
-            />
-          </el-form-item>
-          <el-form-item label="区县">
-            <FilterSelect
-              v-model="query.county_name"
-              v-bind="filters.bind('county_name')"
-              size="short"
-            />
-          </el-form-item>
+          <FilterChipSelect
+            v-model="query.prov_name"
+            label="省份"
+            v-bind="filters.bind('prov_name')"
+          />
+          <FilterChipSelect
+            v-model="query.city_name"
+            label="城市"
+            v-bind="filters.bind('city_name')"
+          />
+          <FilterChipSelect
+            v-model="query.county_name"
+            label="区县"
+            v-bind="filters.bind('county_name')"
+          />
         </FilterBar>
       </template>
       <template #tools>

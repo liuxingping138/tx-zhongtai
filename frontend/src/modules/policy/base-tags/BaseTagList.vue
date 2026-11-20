@@ -12,8 +12,8 @@ import { reviewQuery } from '../shared/reviewQuery'
 import ColumnPicker from '@/components/ColumnPicker.vue'
 import ExportButton from '@/components/ExportButton.vue'
 import FilterBar from '@/components/FilterBar.vue'
+import FilterChipSelect from '@/components/FilterChipSelect.vue'
 import FilterKeyword from '@/components/FilterKeyword.vue'
-import FilterSelect from '@/components/FilterSelect.vue'
 import ImportButton from '@/components/ImportButton.vue'
 import ListPage from '@/components/ListPage.vue'
 import { useDetailColumns } from '@/composables/useDetailColumns'
@@ -144,64 +144,55 @@ onMounted(() => {
         <FilterBar
           :query="query"
           :applied="listQuery.applied"
+          variant="chips"
+          :more-keys="['is_policy', 'is_penetrate', 'need_interpret']"
           @search="listQuery.search"
           @reset="listQuery.resetFilters"
         >
-          <el-form-item label="政策名称">
+          <template #search>
             <FilterKeyword
               v-model="query.policy_name"
               label="政策名称"
-              placeholder="输入政策名称关键词"
+              placeholder="搜索政策名称关键词…"
+              class="filter-search-main"
             />
-          </el-form-item>
-          <el-form-item label="省份">
-            <FilterSelect
-              v-model="query.province_name"
-              v-bind="filters.bind('province_name')"
-              size="short"
+          </template>
+          <FilterChipSelect
+            v-model="query.province_name"
+            label="省份"
+            v-bind="filters.bind('province_name')"
+          />
+          <FilterChipSelect
+            v-model="query.policy_types"
+            label="政策类型"
+            v-bind="filters.bind('policy_types')"
+          />
+          <FilterChipSelect
+            v-model="query.is_info_policy"
+            label="是否信息化政策"
+            :options="['是', '否']"
+          />
+          <FilterChipSelect
+            v-model="query.ai_status"
+            label="打标状态"
+            :options="AI_STATUS_CHOICES"
+          />
+          <template #more>
+            <FilterChipSelect
+              v-model="query.is_policy"
+              label="是否政策"
+              :options="['是', '否', '疑似']"
             />
-          </el-form-item>
-          <el-form-item label="政策类型">
-            <FilterSelect
-              v-model="query.policy_types"
-              v-bind="filters.bind('policy_types')"
+            <FilterChipSelect
+              v-model="query.is_penetrate"
+              label="是否穿透"
+              v-bind="filters.bind('is_penetrate')"
             />
-          </el-form-item>
-          <el-form-item label="是否信息化政策">
-            <FilterSelect
-              v-model="query.is_info_policy"
-              :options="['是', '否']"
-              size="short"
+            <FilterChipSelect
+              v-model="query.need_interpret"
+              label="是否解读"
+              v-bind="filters.bind('need_interpret')"
             />
-          </el-form-item>
-          <template #advanced>
-            <el-form-item label="是否政策">
-              <FilterSelect
-                v-model="query.is_policy"
-                :options="['是', '否', '疑似']"
-                size="short"
-              />
-            </el-form-item>
-            <el-form-item label="是否穿透">
-              <FilterSelect
-                v-model="query.is_penetrate"
-                v-bind="filters.bind('is_penetrate')"
-                size="short"
-              />
-            </el-form-item>
-            <el-form-item label="是否解读">
-              <FilterSelect
-                v-model="query.need_interpret"
-                v-bind="filters.bind('need_interpret')"
-                size="short"
-              />
-            </el-form-item>
-            <el-form-item label="打标状态">
-              <FilterSelect
-                v-model="query.ai_status"
-                :options="AI_STATUS_CHOICES"
-              />
-            </el-form-item>
           </template>
         </FilterBar>
       </template>

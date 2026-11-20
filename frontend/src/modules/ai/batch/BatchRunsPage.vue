@@ -6,6 +6,7 @@ import { Plus, Refresh } from '@element-plus/icons-vue'
 import { batchOptions, batchRunFilterOptions, getBatchRun, listBatchRuns, type AiModel, type BatchRun, type BatchRunFilters, type PromptTemplate, type TemplateCategory } from '@/api/ai'
 import { errorMessage, isApiError } from '@/api/errors'
 import FilterBar from '@/components/FilterBar.vue'
+import FilterChipSelect from '@/components/FilterChipSelect.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
 import { useAuthStore } from '@/stores/auth'
 import { RUN_MODE_TEXT, RUN_SOURCE_TEXT, RUN_STATUS_TEXT, isActive } from '../shared/aiText'
@@ -187,60 +188,47 @@ async function created(): Promise<void> {
         class="batch__filters"
         :query="query"
         :applied="applied"
+        variant="chips"
         @search="search"
         @reset="resetFilters"
       >
-        <el-form-item label="模板名称">
+        <template #search>
           <FilterSelect
             v-model="query.prompt_title"
             :options="filterOptions.prompt_title"
-            placeholder="输入或选择模板"
+            placeholder="搜索或选择模板名称…"
+            class="filter-search-main"
           />
-        </el-form-item>
-        <el-form-item label="模板类型">
-          <FilterSelect
-            v-model="query.prompt_category"
-            :options="categories.map(item => item.code)"
-            :labels="categoryLabels"
-            placeholder="全部"
-            size="short"
-          />
-        </el-form-item>
-        <el-form-item label="来源">
-          <FilterSelect
-            v-model="query.source"
-            :options="SOURCE_OPTIONS"
-            :labels="RUN_SOURCE_TEXT"
-            placeholder="全部"
-            size="short"
-          />
-        </el-form-item>
-        <el-form-item label="运行范围">
-          <FilterSelect
-            v-model="query.run_mode"
-            :options="RUN_MODE_OPTIONS"
-            :labels="RUN_MODE_TEXT"
-            placeholder="全部"
-            size="short"
-          />
-        </el-form-item>
-        <el-form-item label="状态">
-          <FilterSelect
-            v-model="query.status"
-            :options="STATUS_OPTIONS"
-            :labels="RUN_STATUS_TEXT"
-            placeholder="全部"
-            size="short"
-          />
-        </el-form-item>
-        <el-form-item label="发起人">
-          <FilterSelect
-            v-model="query.created_by_name"
-            :options="filterOptions.created_by_name"
-            placeholder="输入或选择发起人"
-            size="short"
-          />
-        </el-form-item>
+        </template>
+        <FilterChipSelect
+          v-model="query.prompt_category"
+          label="模板类型"
+          :options="categories.map(item => item.code)"
+          :labels="categoryLabels"
+        />
+        <FilterChipSelect
+          v-model="query.source"
+          label="来源"
+          :options="SOURCE_OPTIONS"
+          :labels="RUN_SOURCE_TEXT"
+        />
+        <FilterChipSelect
+          v-model="query.run_mode"
+          label="运行范围"
+          :options="RUN_MODE_OPTIONS"
+          :labels="RUN_MODE_TEXT"
+        />
+        <FilterChipSelect
+          v-model="query.status"
+          label="状态"
+          :options="STATUS_OPTIONS"
+          :labels="RUN_STATUS_TEXT"
+        />
+        <FilterChipSelect
+          v-model="query.created_by_name"
+          label="发起人"
+          :options="filterOptions.created_by_name"
+        />
       </FilterBar>
       <!-- 和别的列表一样：筛选下面一行写总数，右边是工具栏；页面标题只给读屏 -->
       <div class="batch__toolbar">
