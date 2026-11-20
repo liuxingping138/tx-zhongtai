@@ -31,8 +31,8 @@ test('码表两级目录与智库知识库主流程', async ({ page }) => {
   await logsDialog.locator('.el-drawer__close-btn').click()
   await expect(logsDialog).toBeHidden()
 
-  // 点击查看跳转到独立详情预览工作台（含上一条/下一条翻页与内联编辑）
-  await firstRow.getByRole('link', { name: '查看', exact: true }).click()
+  // 点击预览跳转到独立详情预览工作台（含上一条/下一条翻页与内联编辑）
+  await firstRow.getByRole('link', { name: '预览', exact: true }).click()
   await expect(page).toHaveURL(/\/thinktank\/knowledge\/.+/)
   await expect(page.getByRole('button', { name: '基本信息', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: /收藏/ })).toBeVisible()

@@ -295,7 +295,7 @@ onMounted(async () => {
               class="row-action"
               :to="detailRoute(row, index)"
             >
-              查看
+              预览
             </RouterLink>
             <RouterLink
               v-if="row.can_edit"

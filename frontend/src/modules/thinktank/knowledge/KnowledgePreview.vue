@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, ArrowRight, Delete, Download, Star, StarFilled, Tickets } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteUpdate, useRoute, useRouter, type RouteLocationRaw } from 'vue-router'
@@ -19,20 +19,28 @@ import {
   type KnowledgeAccessSummary,
   type KnowledgeItem,
 } from '@/api/thinktank'
-import AuditLogButton from '@/components/AuditLogButton.vue'
 import DetailSkeleton from '@/components/DetailSkeleton.vue'
 import { listQuery, parseReviewQuery, reviewQuery, windowAt } from '@/modules/policy/shared/reviewQuery'
 import { useAuthStore } from '@/stores/auth'
-import { formatTime } from '@/utils/time'
 import KnowledgeDocViewer from './KnowledgeDocViewer.vue'
 import KnowledgeLogsDrawer from './KnowledgeLogsDrawer.vue'
 import KnowledgeMetaCard from './KnowledgeMetaCard.vue'
-import { buildKnowledgeFacts, FILTER_KEYS, parseContentDispositionFilename, suffixTagType } from './fields'
+import KnowledgeSummaryCard from './KnowledgeSummaryCard.vue'
+import { FILTER_KEYS, parseContentDispositionFilename } from './fields'
 
 const COLLAPSE_KEY = 'thinktank.knowledge.previewCollapsed'
+const META_COLLAPSE_KEY = 'thinktank.knowledge.metaCollapsed'
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+
+function readFlag(key: string): boolean {
+  try { return localStorage.getItem(key) === '1' } catch { return false }
+}
+
+function writeFlag(key: string, val: boolean) {
+  try { localStorage.setItem(key, val ? '1' : '0') } catch { /* 禁用存储时忽略 */ }
+}
 
 const fileId = computed(() => String(route.params.id || ''))
 const loading = ref(true)
@@ -46,9 +54,8 @@ const provinces = ref<string[]>([])
 const accessScope = ref<KnowledgeAccessSummary | null>(null)
 const logsOpen = ref(false)
 const metaCardRef = ref<{ confirmDiscard: () => Promise<boolean>; startEdit: () => void } | null>(null)
-const previewCollapsed = ref((() => {
-  try { return localStorage.getItem(COLLAPSE_KEY) === '1' } catch { return false }
-})())
+const previewCollapsed = ref(readFlag(COLLAPSE_KEY))
+const metaCollapsed = ref(readFlag(META_COLLAPSE_KEY))
 const total = ref(0)
 const prevId = ref<string | null>(null)
 const nextId = ref<string | null>(null)
@@ -71,11 +78,17 @@ function buildNeighborRoute(id: string | null, pos: number): RouteLocationRaw | 
 const prevTarget = computed(() => (position.value !== null ? buildNeighborRoute(prevId.value, position.value - 1) : null))
 const nextTarget = computed(() => (position.value !== null ? buildNeighborRoute(nextId.value, position.value + 1) : null))
 const watermarkText = computed(() => auth.user?.display_name || auth.user?.username || '智库预览')
-const facts = computed(() => (item.value ? buildKnowledgeFacts(item.value, formatTime) : []))
 
 function setCollapsed(val: boolean) {
   previewCollapsed.value = val
-  try { localStorage.setItem(COLLAPSE_KEY, val ? '1' : '0') } catch { /* 禁用存储时忽略 */ }
+  if (val) { metaCollapsed.value = false; writeFlag(META_COLLAPSE_KEY, false) }
+  writeFlag(COLLAPSE_KEY, val)
+}
+
+function setMetaCollapsed(val: boolean) {
+  metaCollapsed.value = val
+  if (val) { previewCollapsed.value = false; writeFlag(COLLAPSE_KEY, false) }
+  writeFlag(META_COLLAPSE_KEY, val)
 }
 
 async function applyBlobPreview(mode: 'pdf' | 'text', resp: { data: Blob; headers?: Record<string, unknown> }, seq: number) {
@@ -129,7 +142,10 @@ function consumeEditQuery() {
   const nextQuery = { ...route.query }
   delete nextQuery.edit
   void router.replace({ query: nextQuery })
-  if (item.value?.can_edit) void nextTick(() => metaCardRef.value?.startEdit())
+  if (item.value?.can_edit) {
+    metaCollapsed.value = false
+    void nextTick(() => metaCardRef.value?.startEdit())
+  }
 }
 
 function applyLoadedPage(
@@ -270,81 +286,23 @@ onMounted(() => { void loadPage() })
     </div>
 
     <template v-else-if="item">
-      <section class="review__summary">
-        <div class="review__title-row">
-          <div class="review__heading">
-            <h1 class="review__title">
-              {{ item.file_name }}
-            </h1>
-            <el-tag
-              size="small"
-              :type="suffixTagType(item.file_suffix)"
-            >
-              {{ item.file_suffix || 'FILE' }}
-            </el-tag>
-            <el-tag
-              size="small"
-              :type="item.is_defined ? 'success' : 'warning'"
-              effect="plain"
-            >
-              {{ item.is_defined ? '已定义' : '未定义' }}
-            </el-tag>
-          </div>
-          <div class="review__actions">
-            <el-button
-              size="small"
-              :icon="item.is_favorited ? StarFilled : Star"
-              :type="item.is_favorited ? 'warning' : 'default'"
-              plain
-              @click="onToggleFavorite"
-            >
-              {{ item.is_favorited ? '已收藏' : '收藏' }}
-            </el-button>
-            <el-button
-              v-if="item.can_export"
-              size="small"
-              :icon="Download"
-              @click="onDownload"
-            >
-              下载源文件
-            </el-button>
-            <el-button
-              size="small"
-              :icon="Tickets"
-              @click="logsOpen = true"
-            >
-              日志
-            </el-button>
-            <AuditLogButton module="thinktank.knowledge" />
-            <el-button
-              v-if="item.can_edit"
-              size="small"
-              type="danger"
-              plain
-              :icon="Delete"
-              @click="onDelete"
-            >
-              删除
-            </el-button>
-          </div>
-        </div>
-        <dl class="review__facts">
-          <div
-            v-for="fact in facts"
-            :key="fact.label"
-            class="review__fact"
-          >
-            <dt>{{ fact.label }}</dt>
-            <dd>{{ fact.value }}</dd>
-          </div>
-        </dl>
-      </section>
+      <KnowledgeSummaryCard
+        :item="item"
+        @toggle-favorite="onToggleFavorite"
+        @download="onDownload"
+        @open-logs="logsOpen = true"
+        @delete="onDelete"
+      />
 
       <div
         class="review__body"
-        :class="{ 'is-content-collapsed': previewCollapsed }"
+        :class="{
+          'is-content-collapsed': previewCollapsed,
+          'is-meta-collapsed': metaCollapsed && !previewCollapsed,
+        }"
       >
         <KnowledgeMetaCard
+          v-if="!metaCollapsed || previewCollapsed"
           ref="metaCardRef"
           :item="item"
           :provinces="provinces"
@@ -353,16 +311,29 @@ onMounted(() => { void loadPage() })
           @updated="item = $event"
         />
 
+        <button
+          v-else
+          type="button"
+          class="review__meta-rail"
+          @click="setMetaCollapsed(false)"
+        >
+          <span>标签信息 →</span>
+        </button>
+
         <KnowledgeDocViewer
           :collapsed="previewCollapsed"
+          :meta-collapsed="metaCollapsed"
           :loading="contentLoading"
           :mode="previewMode"
           :pdf-url="pdfUrl"
           :text="previewText"
+          :file-name="item.file_name"
           :file-suffix="item.file_suffix"
           :can-export="item.can_export"
           :watermark="watermarkText"
           @update:collapsed="setCollapsed"
+          @update:meta-collapsed="setMetaCollapsed"
+          @download="onDownload"
         />
       </div>
 
@@ -376,25 +347,20 @@ onMounted(() => { void loadPage() })
 </template>
 
 <style scoped>
-.review { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+.review { flex: 1; min-height: 640px; height: calc(100vh - 96px); display: flex; flex-direction: column; gap: 12px; }
 .review__bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .review__back { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px; border: 1px solid var(--zt-border); border-radius: 8px; background: var(--zt-panel); color: var(--zt-ink-700); font-size: 13px; cursor: pointer; }
 .review__back:hover { color: var(--zt-blue-600); border-color: var(--zt-blue-600); }
 .review__pager { display: flex; align-items: center; gap: 8px; }
 .review__progress { margin-right: 4px; color: var(--zt-ink-500); font-size: 13px; }
 .review__error { display: flex; align-items: center; gap: 12px; }
-.review__summary { padding: 16px 20px; background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: 10px; display: flex; flex-direction: column; gap: 12px; }
-.review__title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.review__heading { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
-.review__title { margin: 0; font-size: 17px; font-weight: 600; color: var(--zt-ink-900); line-height: 1.4; overflow-wrap: anywhere; }
-.review__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.review__facts { margin: 0; padding-top: 12px; border-top: 1px solid var(--zt-border); display: flex; flex-wrap: wrap; gap: 8px 24px; }
-.review__fact { display: flex; align-items: baseline; gap: 8px; font-size: 13px; line-height: 1.5; }
-.review__fact dt { color: var(--zt-ink-500); }
-.review__fact dd { margin: 0; color: var(--zt-ink-900); }
-.review__body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; }
+.review__body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(380px, 440px) minmax(0, 1fr); gap: 12px; }
 .review__body.is-content-collapsed { grid-template-columns: minmax(0, 1fr) 40px; }
+.review__body.is-meta-collapsed { grid-template-columns: 40px minmax(0, 1fr); }
+.review__meta-rail { border: 1px solid var(--zt-border); border-radius: 10px; background: var(--zt-panel); color: var(--zt-ink-700); font-size: 13px; cursor: pointer; writing-mode: vertical-rl; display: flex; align-items: center; justify-content: center; letter-spacing: 2px; }
+.review__meta-rail:hover { color: var(--zt-blue-600); border-color: var(--zt-blue-600); }
 @media (max-width: 1024px) {
-  .review__body, .review__body.is-content-collapsed { grid-template-columns: 1fr; }
+  .review { height: auto; }
+  .review__body, .review__body.is-content-collapsed, .review__body.is-meta-collapsed { grid-template-columns: 1fr; }
 }
 </style>
