@@ -5,10 +5,11 @@
 | 模块 | 内容 |
 | --- | --- |
 | 招中标 | 原始/交付招标与中标列表、每日接入及人工处理统计、按需正文 |
-| 政策 | 信源、基础标签、解读、新增场景审核，支持 Excel 导入导出 |
-| 码表管理 | 政策类型、行业场景、省市区编码 |
+| 政策 | 信源、基础标签、解读、新增场景审核，支持 Excel 导入导出；政策 AI 打标的五个定时任务 |
+| 码表管理 | 政策类型、行业场景、省市区编码（菜单在「数据字典」下） |
 | 爬虫监测 | 按网站统计采集情况与爬虫配置统计的只读页面，数据从外部爬虫库同步汇总 |
 | AI提问 | 提示词模板与样本试跑、按 Excel 逐行批量提问、模型配置、费用账单 |
+| 智库 | 知识库：按文件类型 × 行业类型授权的资料检索、在线预览、收藏、下载、标签完善与操作记录，文件存 MinIO（未配置时落本地卷） |
 | 系统管理 | 用户、角色与权限、在线用户、登录日志、操作日志、任务调度 |
 
 客户还没有开发，只有占位目录。产品名称统一为「业务数据运营平台」，仓库、包名和部署标识沿用 `tx-zhongtai`。
@@ -27,7 +28,7 @@
 
 - 前端：Vue 3 + TypeScript + Vite + Element Plus + Vue Router + Pinia + Axios，pnpm 管理依赖
 - 后端：Python 3.12 + FastAPI + SQLAlchemy 2（异步）+ Alembic，uv 管理依赖
-- 数据库与缓存：PostgreSQL 17 + Redis 7，每个服务一个独立的库
+- 数据库与缓存：PostgreSQL 17 + Redis 7，有库的服务各一个独立的库（`iam_db` / `audit_db` / `codebook_db` / `policy_db` / `ai_db` / `thinktank_db`）；招中标只读外部 MySQL，没有本地库
 - 网关：Traefik 3（文件 Provider）
 - 容器：Docker Compose，镜像版本全部锁定，不用 `latest`
 
@@ -38,16 +39,18 @@ tx-zhongtai/
 ├── frontend/                  # Vue 管理端
 ├── services/
 │   ├── iam-service/           # 账号、会话、角色权限、菜单；iam-worker 共用此镜像
-│   ├── audit-service/         # 操作日志的写入、查询与到期清理
-│   ├── policy-service/        # 政策、爬虫监测、任务调度；policy-worker 共用此镜像
+│   ├── audit-service/         # 操作日志的写入、查询与到期清理；audit-worker 共用此镜像
+│   ├── policy-service/        # 政策、爬虫监测、爬虫配置统计、政策 AI 打标；policy-worker 共用此镜像
 │   ├── codebook-service/      # 码表
 │   ├── ai-service/            # AI提问；ai-worker 共用此镜像执行批量任务
 │   ├── customer-service/      # 占位
-│   └── tender-service/        # 招中标只读查询与统计
+│   ├── tender-service/        # 招中标只读查询与统计（无本地库）
+│   └── thinktank-service/     # 智库知识库；文件存 MinIO 或本地卷
 ├── packages/platform-common/  # 跨服务公共包：响应与异常、鉴权、Outbox、审计、Excel、筛选等
 ├── deploy/
 │   ├── gateway/               # Traefik 配置
-│   └── compose/               # docker-compose.yml、Postgres 初始化脚本
+│   ├── compose/               # docker-compose.yml（及 HTTPS、P6 叠加文件）、Postgres 初始化与补建脚本
+│   └── systemd/               # IP 证书续期与到期检查的定时单元
 ├── tests/                     # 跨服务验收（P6）与越权、并发探针
 ├── scripts/                   # 同步到服务器、隔离验收、备份恢复、代码规则检查等
 ├── docs/                      # 设计决策与操作手册
