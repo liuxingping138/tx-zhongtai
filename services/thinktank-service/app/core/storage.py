@@ -7,7 +7,7 @@ import base64
 import hashlib
 import hmac
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
@@ -284,7 +284,7 @@ async def _iter_local_chunks(target: Path, chunk_size: int) -> AsyncIterator[byt
             yield chunk
 
 
-async def _iter_minio_chunks(resp: httpx.Response, chunk_size: int, rel_path: str) -> AsyncIterator[bytes]:
+async def _iter_minio_chunks(resp: httpx.Response, chunk_size: int, rel_path: str) -> AsyncGenerator[bytes, None]:
     try:
         async for chunk in resp.aiter_bytes(chunk_size):
             if chunk:
@@ -294,6 +294,36 @@ async def _iter_minio_chunks(resp: httpx.Response, chunk_size: int, rel_path: st
         raise StorageUnavailableError(f"对象存储流式读取失败：{exc}") from exc
     finally:
         await resp.aclose()
+
+
+class MinioChunks:
+    """对象存储的流式响应：按块读出，另外能在没开始读之前关掉。
+
+    客户端在开始下发前就断开时，异步生成器从没启动过，它的 finally 不会执行，httpx 的流式响应一直占着连接池，
+    要等到垃圾回收才释放。路由的后台任务调 aclose，不管读没读过都把响应关掉（重复关闭无副作用）。
+    """
+
+    def __init__(self, resp: httpx.Response, chunk_size: int, rel_path: str) -> None:
+        self._resp = resp
+        self._chunks = _iter_minio_chunks(resp, chunk_size, rel_path)
+
+    def __aiter__(self) -> MinioChunks:
+        return self
+
+    async def __anext__(self) -> bytes:
+        return await self._chunks.__anext__()
+
+    async def aclose(self) -> None:
+        await self._chunks.aclose()
+        await self._resp.aclose()
+
+
+async def close_stream(stream: AsyncIterator[bytes]) -> None:
+    """把 stream_object 返回的流关掉；本地文件、内存里的流没有要释放的连接，有 aclose 就调。"""
+
+    close = getattr(stream, "aclose", None)
+    if close is not None:
+        await close()
 
 
 async def stream_object(
@@ -320,7 +350,7 @@ async def stream_object(
                 resp.raise_for_status()
             raw_len = resp.headers.get("content-length")
             size = int(raw_len) if raw_len and raw_len.isdigit() else None
-            return _iter_minio_chunks(resp, chunk_size, rel_path), size
+            return MinioChunks(resp, chunk_size, rel_path), size
         except httpx.HTTPError as exc:
             minio_error = exc
             logger.warning("minio_stream_fallback", path=rel_path, error=str(exc))

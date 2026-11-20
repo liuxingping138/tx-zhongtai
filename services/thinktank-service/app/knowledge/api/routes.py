@@ -22,6 +22,7 @@ from platform_common.http_utils import (
     success_json,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.background import BackgroundTask
 
 from app.common.security import classified, fetch_scope_levels, get_authz_client, require_thinktank_permission
 from app.core.config import Settings, get_settings
@@ -249,6 +250,12 @@ async def preview_item(
     return success_json(await service.preview_knowledge(session, actor=actor, access=access, file_id=file_id))
 
 
+def _streamed(res: service.FileStreamResult, headers: dict[str, str]) -> StreamingResponse:
+    # 客户端在开始下发前断开时流从没被读过，不主动关的话对象存储的连接要等垃圾回收才释放。
+    background = BackgroundTask(service.close_file_stream, res)
+    return StreamingResponse(res.stream, media_type=res.media_type, headers=headers, background=background)
+
+
 @router.get("/{file_id}/content")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def get_item_content(
@@ -264,7 +271,7 @@ async def get_item_content(
     }
     if res.content_length is not None:
         headers["Content-Length"] = str(res.content_length)
-    return StreamingResponse(res.stream, media_type=res.media_type, headers=headers)
+    return _streamed(res, headers)
 
 
 @router.get("/{file_id}/download")
@@ -282,7 +289,7 @@ async def download_item(
     }
     if res.content_length is not None:
         headers["Content-Length"] = str(res.content_length)
-    return StreamingResponse(res.stream, media_type=res.media_type, headers=headers)
+    return _streamed(res, headers)
 
 
 @router.post("/{file_id}/favorite")

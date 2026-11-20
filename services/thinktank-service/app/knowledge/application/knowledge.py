@@ -330,6 +330,12 @@ async def stream_file_content(
     return FileStreamResult(stream=stream, filename=filename, media_type=media_type, content_length=size)
 
 
+async def close_file_stream(result: FileStreamResult) -> None:
+    """响应结束（含客户端提前断开）后关掉对象存储的流，见 storage.MinioChunks。"""
+
+    await storage.close_stream(result.stream)
+
+
 async def toggle_favorite(
     session: AsyncSession,
     *,
