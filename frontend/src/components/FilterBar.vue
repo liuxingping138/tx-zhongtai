@@ -9,8 +9,9 @@ const props = withDefaults(
     applied?: Record<string, unknown>
     collapsible?: boolean
     labelPosition?: 'top' | 'left'
+    variant?: 'form' | 'chips'
   }>(),
-  { applied: undefined, collapsible: true, labelPosition: 'top' },
+  { applied: undefined, collapsible: true, labelPosition: 'top', variant: 'form' },
 )
 const emit = defineEmits<{ search: []; reset: [] }>()
 const composing = ref(false)
@@ -56,6 +57,11 @@ function hasValue(item: HTMLElement) {
 }
 
 function measure() {
+  if (props.variant === 'chips') {
+    foldedCount.value = 0
+    foldedFilled.value = 0
+    return
+  }
   const box = fields.value
   if (!box) return
   const items = [...box.children].filter((node): node is HTMLElement => node instanceof HTMLElement)
@@ -99,14 +105,25 @@ function submit() {
 <template>
   <el-form
     class="filter-bar"
-    :class="{ 'is-pending': dirty, 'filter-bar--left': labelPosition === 'left' }"
-    :label-position="labelPosition"
+    :class="{
+      'is-pending': dirty,
+      'filter-bar--chips': variant === 'chips',
+      'filter-bar--left': variant === 'form' && labelPosition === 'left',
+    }"
+    :label-position="variant === 'chips' ? 'top' : labelPosition"
     novalidate
     @compositionstart="composing = true"
     @compositionend="composing = false"
     @submit.prevent="submit"
   >
     <div
+      v-if="variant === 'chips'"
+      class="filter-bar__search"
+    >
+      <slot name="search" />
+    </div>
+    <div
+      v-else
       ref="fields"
       class="filter-bar__fields"
       :class="{ 'is-folded': folded }"
@@ -141,7 +158,7 @@ function submit() {
           重置
         </el-button>
         <el-button
-          v-if="foldedCount > 0"
+          v-if="variant !== 'chips' && foldedCount > 0"
           class="filter-bar__toggle"
           link
           type="primary"
@@ -161,6 +178,12 @@ function submit() {
           </el-icon>
         </el-button>
       </div>
+    </div>
+    <div
+      v-if="variant === 'chips'"
+      class="filter-bar__chips-row"
+    >
+      <slot />
     </div>
   </el-form>
 </template>
@@ -187,6 +210,11 @@ function submit() {
 .filter-bar--left .filter-bar__fields :deep(> .el-form-item:first-child) { flex: 1.4 1 240px; max-width: 340px; }
 .filter-bar--left :deep(.el-form-item__label) { margin: 0 8px 0 0; line-height: 36px; white-space: nowrap; flex-shrink: 0; }
 .filter-bar--left :deep(.el-form-item__content) { flex: 1; min-width: 0; }
+.filter-bar--chips { align-items: center; gap: 12px; }
+.filter-bar__search { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: 1 1 360px; min-width: 0; }
+.filter-bar__chips-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: 1 0 100%; }
+.filter-bar--chips .filter-bar__actions { flex-direction: row; align-items: center; gap: 12px; }
+.filter-bar--chips :deep(.el-input__wrapper) { min-height: 36px; border-radius: 8px; }
 .filter-bar :deep(.el-input), .filter-bar :deep(.el-select), .filter-bar :deep(.el-date-editor) { width: 100%; }
 .filter-bar :deep(.el-date-editor.el-date-editor--datetimerange) { min-width: 280px; }
 .filter-bar :deep(.el-input__wrapper), .filter-bar :deep(.el-select__wrapper), .filter-bar :deep(.el-date-editor) {
