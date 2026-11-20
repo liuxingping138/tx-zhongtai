@@ -16,6 +16,7 @@ from app.common.audit_emit import enqueue_event
 from app.core import storage
 from app.core.config import get_settings
 from app.knowledge.application.knowledge import audit_denial, format_size, require_file, to_out
+from app.knowledge.application.knowledge_preview import drop_preview_cache
 from app.knowledge.domain.fields import UNDEFINED_TAG_COLUMNS
 from app.knowledge.domain.models import KnowledgeFile
 from app.knowledge.domain.scopes import (
@@ -294,6 +295,7 @@ async def delete_knowledge_file(
     await session.flush()
     # 先提交数据库删除，再执行外部对象存储清理，避免提交回滚时物理文件已被误删或存储瞬断阻断删除。
     await session.commit()
+    await drop_preview_cache(get_settings(), row)
     if storage.is_managed_object_key(rel_path, row.id):
         try:
             await storage.delete_object(get_settings(), rel_path)

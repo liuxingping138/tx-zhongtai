@@ -462,6 +462,8 @@ services:
       context: ../..
       dockerfile: services/thinktank-service/Dockerfile
     restart: unless-stopped
+    # 预览转码起 LibreOffice 子进程：没有 init 时 uvicorn 当 1 号进程，被杀掉的 soffice.bin 没人回收成僵尸。
+    init: true
     mem_limit: ${THINKTANK_MEM_LIMIT:-1536m}
     environment:
       THINKTANK_ENVIRONMENT: ${THINKTANK_ENVIRONMENT:-${ENVIRONMENT:-development}}
@@ -479,6 +481,7 @@ services:
       THINKTANK_IMPORT_MAX_BYTES: ${THINKTANK_IMPORT_MAX_BYTES:-20971520}
       THINKTANK_EXPORT_MAX_ROWS: ${THINKTANK_EXPORT_MAX_ROWS:-100000}
       THINKTANK_STORAGE_DIR: /data/thinktank
+      THINKTANK_PREVIEW_CACHE_MAX_BYTES: ${THINKTANK_PREVIEW_CACHE_MAX_BYTES:-2147483648}
       THINKTANK_MINIO_ENDPOINT: ${THINKTANK_MINIO_ENDPOINT:-}
       THINKTANK_MINIO_ACCESS_KEY: ${THINKTANK_MINIO_ACCESS_KEY:-}
       THINKTANK_MINIO_SECRET_KEY: ${THINKTANK_MINIO_SECRET_KEY:-}

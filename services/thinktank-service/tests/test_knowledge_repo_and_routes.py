@@ -357,7 +357,10 @@ def test_remaining_http_routes(monkeypatch: pytest.MonkeyPatch) -> None:
         )
         assert client.get(f"/api/v1/thinktank/knowledge/{fid}").status_code == 200
         assert client.get(f"/api/v1/thinktank/knowledge/{fid}/preview").status_code == 200
-        assert client.get(f"/api/v1/thinktank/knowledge/{fid}/content").status_code == 200
+        content = client.get(f"/api/v1/thinktank/knowledge/{fid}/content")
+        assert content.status_code == 200
+        # 撤权、删文件后下一次请求就生效，浏览器不能留着旧内容
+        assert content.headers["cache-control"] == "private, no-store"
         assert client.delete(f"/api/v1/thinktank/knowledge/{fid}/favorite").json()["data"]["is_favorited"] is False
         assert client.get(f"/api/v1/thinktank/knowledge/{fid}/logs").status_code == 200
         assert (

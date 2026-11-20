@@ -142,7 +142,10 @@ function setRange(key: typeof DATES[number]['key'], value: [string, string] | nu
           size="short"
         />
       </el-form-item>
-      <el-form-item label="发布时间">
+      <el-form-item
+        label="发布时间"
+        class="filter-form__item--wide"
+      >
         <el-date-picker
           :model-value="range('public_date')"
           type="daterange"
@@ -187,6 +190,7 @@ function setRange(key: typeof DATES[number]['key'], value: [string, string] | nu
           v-for="field in ADVANCED_DATES"
           :key="field.key"
           :label="field.label"
+          class="filter-form__item--wide"
         >
           <el-date-picker
             :model-value="range(field.key)"

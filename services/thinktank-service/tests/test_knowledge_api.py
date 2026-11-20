@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,6 +16,7 @@ from platform_common.actors import Actor
 from platform_common.errors import ApiError, PermissionDeniedError, VersionConflictError
 from platform_common.route_audit import iter_api_routes
 
+from app.core import preview_cache
 from app.core.database import get_db_session
 from app.knowledge.api import routes as knowledge_routes
 from app.knowledge.application import export_import, knowledge, knowledge_write
@@ -262,6 +264,11 @@ async def test_upload_update_and_delete_file(monkeypatch: pytest.MonkeyPatch, tm
     assert updated["industry_type"] == "中小|教育"
     assert events[-1]["event_type"] == "thinktank.knowledge.updated"
 
+    # 删文件时连它的 Office 预览缓存一起删，删掉的资料不留在磁盘上
+    cache_dir = tmp_path / "preview_cache"
+    key = preview_cache.cache_key_for(str(stored_row.id), stored_row.storage_path, stored_row.file_size_bytes)
+    await asyncio.to_thread(cache_dir.mkdir)
+    await asyncio.to_thread((cache_dir / f"{key}.pdf").write_bytes, b"%PDF")
     deleted = await knowledge_write.delete_knowledge_file(
         session,
         actor=ACTOR,
@@ -270,6 +277,7 @@ async def test_upload_update_and_delete_file(monkeypatch: pytest.MonkeyPatch, tm
     )
     assert deleted == {"deleted": True}
     assert events[-1]["event_type"] == "thinktank.knowledge.deleted"
+    assert not await asyncio.to_thread((cache_dir / f"{key}.pdf").exists)
 
 
 async def test_export_undefined_and_upload_tags(monkeypatch: pytest.MonkeyPatch) -> None:

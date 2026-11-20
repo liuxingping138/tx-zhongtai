@@ -34,6 +34,8 @@ class Settings(BaseServiceSettings):
     import_max_bytes: int = 20 * 1024 * 1024
     export_max_rows: int = 100_000
     storage_dir: str = "./data/thinktank"
+    # Office 预览转出的 PDF 缓存（storage_dir/preview_cache）总量上限，超了从最久没用的删起
+    preview_cache_max_bytes: int = 2 * 1024 * 1024 * 1024
 
     # 原服务器 MinIO 对象存储（配置 endpoint 后优先读写 MinIO，未配置则回退本地 storage_dir）
     minio_endpoint: str = ""

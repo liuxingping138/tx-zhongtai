@@ -18,7 +18,7 @@ from app.common.audit_emit import enqueue_event
 from app.common.codebook_client import get_provinces
 from app.core import office_preview, storage
 from app.core.config import get_settings
-from app.knowledge.application.knowledge_preview import fallback_summary_bytes, load_office_preview_pdf
+from app.knowledge.application.knowledge_preview import fallback_summary_bytes, open_office_preview_pdf
 from app.knowledge.domain.models import KnowledgeFile, KnowledgeOpLog
 from app.knowledge.domain.scopes import PROVINCES, KnowledgeAccess
 from app.knowledge.repositories import knowledge as repo
@@ -295,13 +295,15 @@ async def stream_file_content(
     if not for_download and row.storage_path:
         office_ext = office_preview.office_extension(row.file_name, row.file_suffix)
         if office_ext is not None:
-            pdf_bytes = await load_office_preview_pdf(settings, row, office_ext)
-            if pdf_bytes is not None:
+            # 转码可能排队、最长一分钟：先交还数据库连接，否则几个人同时预览就占满连接池，全服务 503。
+            await session.commit()
+            opened_pdf = await open_office_preview_pdf(settings, row, office_ext)
+            if opened_pdf is not None:
                 return FileStreamResult(
-                    stream=_single_chunk_stream(pdf_bytes),
+                    stream=opened_pdf[0],
                     filename=f"{Path(row.file_name).stem}.pdf",
                     media_type="application/pdf",
-                    content_length=len(pdf_bytes),
+                    content_length=opened_pdf[1],
                 )
             raw = fallback_summary_bytes(row)
             return FileStreamResult(

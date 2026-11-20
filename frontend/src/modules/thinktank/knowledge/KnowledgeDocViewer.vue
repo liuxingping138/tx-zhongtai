@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { Close, Download, FullScreen } from '@element-plus/icons-vue'
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import ParagraphSkeleton from '@/components/ParagraphSkeleton.vue'
+import { lockScroll } from './scrollLock'
 
 defineProps<{
   collapsed: boolean
@@ -25,6 +26,8 @@ const emit = defineEmits<{
 }>()
 
 const fullscreen = ref(false)
+const toggleBtn = ref<HTMLButtonElement>()
+let unlockScroll: (() => void) | null = null
 
 function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape' && fullscreen.value) {
@@ -32,8 +35,23 @@ function onKeydown(event: KeyboardEvent) {
   }
 }
 
+// 全屏时后面的页面不跟着滚；焦点先放到「退出全屏」上，Esc 立即可用。
+// 点进 PDF 后按键被内嵌的 PDF 阅读器拿走、页面收不到 Esc，所以按钮上写明。
+watch(fullscreen, on => {
+  if (on) {
+    unlockScroll = lockScroll(document.body)
+    void nextTick(() => toggleBtn.value?.focus())
+  } else {
+    unlockScroll?.()
+    unlockScroll = null
+  }
+})
+
 onMounted(() => window.addEventListener('keydown', onKeydown))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown)
+  unlockScroll?.()
+})
 </script>
 
 <template>
@@ -73,8 +91,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
           <span>{{ downloading ? '下载中…' : '下载' }}</span>
         </button>
         <button
+          ref="toggleBtn"
           type="button"
           class="review__tool-btn review__tool-btn--primary"
+          :title="fullscreen ? '退出全屏（Esc；正在 PDF 里操作时请点这里）' : '全屏预览'"
           @click="fullscreen = !fullscreen"
         >
           <el-icon>

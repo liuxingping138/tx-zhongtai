@@ -26,46 +26,34 @@ import KnowledgeDocViewer from './KnowledgeDocViewer.vue'
 import KnowledgeLogsDrawer from './KnowledgeLogsDrawer.vue'
 import KnowledgeMetaCard from './KnowledgeMetaCard.vue'
 import KnowledgeSummaryCard from './KnowledgeSummaryCard.vue'
+import { useKnowledgeContent } from './useKnowledgeContent'
+import { usePreviewPanels } from './usePreviewPanels'
 import { FILTER_KEYS, parseContentDispositionFilename } from './fields'
 
-const COLLAPSE_KEY = 'thinktank.knowledge.previewCollapsed'
-const META_COLLAPSE_KEY = 'thinktank.knowledge.metaCollapsed'
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 
-function readFlag(key: string): boolean {
-  try { return localStorage.getItem(key) === '1' } catch { return false }
-}
-
-function writeFlag(key: string, val: boolean) {
-  try { localStorage.setItem(key, val ? '1' : '0') } catch { /* 禁用存储时忽略 */ }
-}
-
 const fileId = computed(() => String(route.params.id || ''))
 const loading = ref(true)
 const error = ref('')
-const contentLoading = ref(false)
 const downloading = ref(false)
 const item = ref<KnowledgeItem | null>(null)
-const previewMode = ref<'pdf' | 'text' | 'summary'>('summary')
-const previewText = ref('')
-const pdfUrl = ref('')
 const provinces = ref<string[]>([])
 const accessScope = ref<KnowledgeAccessSummary | null>(null)
 const logsOpen = ref(false)
 const metaCardRef = ref<{ confirmDiscard: () => Promise<boolean>; startEdit: () => void } | null>(null)
-const previewCollapsed = ref(readFlag(COLLAPSE_KEY))
-const metaCollapsed = ref(readFlag(META_COLLAPSE_KEY))
+const { previewCollapsed, metaCollapsed, setPreviewCollapsed, setMetaCollapsed } = usePreviewPanels(() => metaCardRef.value)
+const content = useKnowledgeContent(
+  fetchKnowledgeContentBlob,
+  err => ElMessage.warning(errorMessage(err, '加载原文预览失败，已回退摘要视图')),
+)
+const { loading: contentLoading, mode: previewMode, text: previewText, pdfUrl } = content
 const total = ref(0)
 const prevId = ref<string | null>(null)
 const nextId = ref<string | null>(null)
 let pageSeq = 0
 let neighborSeq = 0
-
-function revokePdfUrl() {
-  if (pdfUrl.value) { URL.revokeObjectURL(pdfUrl.value); pdfUrl.value = '' }
-}
 
 const parsed = computed(() => parseReviewQuery(route.query, FILTER_KEYS))
 const position = computed(() => parsed.value.position)
@@ -79,49 +67,6 @@ function buildNeighborRoute(id: string | null, pos: number): RouteLocationRaw | 
 const prevTarget = computed(() => (position.value !== null ? buildNeighborRoute(prevId.value, position.value - 1) : null))
 const nextTarget = computed(() => (position.value !== null ? buildNeighborRoute(nextId.value, position.value + 1) : null))
 const watermarkText = computed(() => auth.user?.display_name || auth.user?.username || '智库预览')
-
-function setCollapsed(val: boolean) {
-  previewCollapsed.value = val
-  if (val) { metaCollapsed.value = false; writeFlag(META_COLLAPSE_KEY, false) }
-  writeFlag(COLLAPSE_KEY, val)
-}
-
-function setMetaCollapsed(val: boolean) {
-  metaCollapsed.value = val
-  if (val) { previewCollapsed.value = false; writeFlag(COLLAPSE_KEY, false) }
-  writeFlag(META_COLLAPSE_KEY, val)
-}
-
-async function applyBlobPreview(mode: 'pdf' | 'text', resp: { data: Blob; headers?: Record<string, unknown> }, seq: number) {
-  const ct = String((resp.headers?.['content-type'] as string | undefined) || resp.data.type || '').toLowerCase()
-  if (mode === 'pdf' && ct.includes('pdf')) {
-    if (seq !== pageSeq) return
-    revokePdfUrl()
-    pdfUrl.value = URL.createObjectURL(resp.data)
-    return
-  }
-  const text = await resp.data.text()
-  if (seq !== pageSeq) return
-  previewMode.value = mode === 'pdf' ? 'summary' : mode
-  previewText.value = text
-}
-
-async function loadContent(targetId: string, mode: 'pdf' | 'text' | 'summary', hasBinary: boolean, seq: number) {
-  revokePdfUrl()
-  if (!hasBinary || mode === 'summary') return
-  contentLoading.value = true
-  try {
-    const resp = await fetchKnowledgeContentBlob(targetId)
-    if (seq === pageSeq) await applyBlobPreview(mode, resp, seq)
-  } catch (err) {
-    if (seq === pageSeq) {
-      previewMode.value = 'summary'
-      ElMessage.warning(errorMessage(err, '加载原文预览失败，已回退摘要视图'))
-    }
-  } finally {
-    if (seq === pageSeq) contentLoading.value = false
-  }
-}
 
 async function loadNeighbors() {
   const seq = ++neighborSeq
@@ -155,8 +100,6 @@ function applyLoadedPage(
   scope: KnowledgeAccessSummary | null,
 ) {
   item.value = res.item
-  previewMode.value = res.preview.mode
-  previewText.value = res.preview.content_text
   if (opts?.options?.prov_name?.items) provinces.value = opts.options.prov_name.items
   if (scope) accessScope.value = scope
   consumeEditQuery()
@@ -167,7 +110,7 @@ async function loadPage() {
   const targetId = fileId.value
   if (!targetId) return
   const seq = ++pageSeq
-  revokePdfUrl()
+  content.cancel()
   loading.value = true
   error.value = ''
   try {
@@ -178,7 +121,7 @@ async function loadPage() {
     ])
     if (seq !== pageSeq || targetId !== fileId.value) return
     applyLoadedPage(res, opts, scope)
-    await loadContent(targetId, res.preview.mode, res.preview.has_binary, seq)
+    await content.show(targetId, res.preview.mode, res.preview.content_text, res.preview.has_binary)
   } catch (err) {
     if (seq === pageSeq) error.value = errorMessage(err, '加载文件预览失败')
   } finally {
@@ -230,7 +173,7 @@ async function onDelete() {
 }
 
 watch(() => route.params.id, () => { void loadPage() })
-onBeforeUnmount(() => { pageSeq += 1; neighborSeq += 1; revokePdfUrl() })
+onBeforeUnmount(() => { pageSeq += 1; neighborSeq += 1; content.cancel() })
 onMounted(() => { void loadPage() })
 </script>
 
@@ -339,7 +282,7 @@ onMounted(() => { void loadPage() })
           :file-suffix="item.file_suffix"
           :can-export="item.can_export"
           :watermark="watermarkText"
-          @update:collapsed="setCollapsed"
+          @update:collapsed="setPreviewCollapsed"
           @update:meta-collapsed="setMetaCollapsed"
           @download="onDownload"
         />

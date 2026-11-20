@@ -186,7 +186,9 @@ function submit() {
 .filter-bar--left .filter-bar__fields :deep(> .el-form-item) { display: flex; align-items: center; flex: 1 1 200px; max-width: 270px; }
 .filter-bar--left .filter-bar__fields :deep(> .el-form-item:first-child) { flex: 1.4 1 240px; max-width: 340px; }
 .filter-bar--left .filter-bar__fields :deep(> .el-form-item:only-child) { flex: 0 1 380px; max-width: 380px; }
-.filter-bar--left .filter-bar__fields :deep(> .filter-form__item--wide) { flex: 2 1 360px; max-width: 560px; }
+/* 日期区间放进 270px 里看不全「开始 至 结束」，没标 --wide 的也按宽框排 */
+.filter-bar--left .filter-bar__fields :deep(> .filter-form__item--wide),
+.filter-bar--left .filter-bar__fields :deep(> .el-form-item:has(.el-date-editor--daterange, .el-date-editor--datetimerange)) { flex: 2 1 360px; max-width: 560px; }
 .filter-bar--left :deep(.el-form-item__label) { margin: 0 8px 0 0; line-height: 36px; white-space: nowrap; flex-shrink: 0; }
 .filter-bar--left :deep(.el-form-item__content) { flex: 1; min-width: 0; }
 .filter-bar :deep(.el-input), .filter-bar :deep(.el-select), .filter-bar :deep(.el-date-editor) { width: 100%; }

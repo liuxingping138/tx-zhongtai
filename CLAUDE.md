@@ -150,8 +150,17 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
   越权访问单条记录也记审计
 - 文件存储 `app/core/storage.py`：配了 `THINKTANK_MINIO_ENDPOINT` 读写 MinIO（S3v4 签名，沿用原服务器的对象键），没配落本地卷 `thinktank-data`（`/data/thinktank`）；
   存储连不上回 503。上传只收 PDF / Word / Excel / PPT / TXT / CSV / MD，单个上限 `THINKTANK_UPLOAD_MAX_BYTES`（50MB），网关这个前缀另用 `thinktank-limit`
-- 预览：PDF 在页面里内嵌显示，TXT / MD / CSV 显示文本，Office 等其他格式只显示资料摘要并提示下载源文件（服务端不做格式转换）；没有源文件的记录下载得到摘要 txt。
-  源文件经 `/{id}/content`、`/{id}/download` 流式返回（网关 110 路由，不压缩不缓冲），客户端提前断开也关掉对象存储的流；前端下载开始、失败用消息提示
+- 预览：PDF 在页面里内嵌显示，TXT / MD / CSV 显示文本；Word / Excel / PPT 由镜像里的 LibreOffice 转成 PDF 内嵌显示（`app/core/office_preview.py`），
+  转好的缓存在 `/data/thinktank/preview_cache/`（`app/core/preview_cache.py`；按文件 ID + 对象键 + 大小命名，原子写入）：命中刷新修改时间，总量超过
+  `THINKTANK_PREVIEW_CACHE_MAX_BYTES`（2GB）从最久没用的删起，删知识文件时连缓存一起删，业务备份不打包它。同时最多转 2 个，单个 60 秒超时，同一个文件同时只转一次；
+  转失败记 `{key}.fail`，10 分钟内再打开直接回摘要、不再占名额重转。拿到名额后才把源文件按块写进临时文件，
+  转码前先提交事务交还数据库连接（转码可能排队一分钟，占着连接会拖垮连接池），缓存 PDF 在下发前就打开、按块读出（之后被淘汰也能读完）。
+  soffice 单开进程组、只带最少的环境变量（不把数据库口令、存储密钥交给处理上传文档的进程），每次用独立配置关掉宏和外部链接更新，
+  超时、请求取消都整组杀掉，compose 里 `init: true` 回收孤儿进程。转换进程仍在服务的网络里，要隔离网络得拆成单独的转换容器。
+  没装 LibreOffice 时 Office 仍只显示资料摘要；转换失败、源文件不存在时 `/content` 回摘要 txt，存储连不上回 503。没有源文件的记录下载得到摘要 txt。
+  源文件经 `/{id}/content`、`/{id}/download` 流式返回（网关 110 路由，不压缩不缓冲），客户端提前断开也关掉对象存储的流和缓存文件句柄；
+  `/content` 带 `Cache-Control: private, no-store`，撤权、删文件后浏览器不留旧内容。前端下载开始、失败用消息提示。
+  LibreOffice 让镜像变大，转码时占内存，默认 `THINKTANK_MEM_LIMIT` 是 1536m
 - 预览、下载、编辑等写知识库自己的操作记录（`/{id}/logs`），同时经 Outbox 上报审计（投递循环在服务 lifespan 里，没有单独 worker）。
   省份候选值经 codebook `/internal/v1/provinces` 取，取不到用内置列表（密钥 `CODEBOOK_THINKTANK_CALLER_SECRET`，compose 传给两边）
 - 历史资料、操作记录和收藏用 `python -m app.cli.seed_knowledge`（`make seed-knowledge`）从 `services/thinktank-service/data` 导入

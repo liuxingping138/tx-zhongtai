@@ -48,7 +48,7 @@ set -e
 tar -tzf "$TMP/ai-files.tar.gz" > /dev/null
 echo "已打包 AI提问附件"
 set +e
-$BACKUP_COMPOSE exec -T thinktank-service tar --warning=no-file-changed --ignore-failed-read -C /data/thinktank -czf - . > "$TMP/thinktank-files.tar.gz"
+$BACKUP_COMPOSE exec -T thinktank-service tar --warning=no-file-changed --ignore-failed-read --exclude=./preview_cache -C /data/thinktank -czf - . > "$TMP/thinktank-files.tar.gz"
 TT_TAR_STATUS=$?
 set -e
 [ "$TT_TAR_STATUS" -le 1 ] || { echo "打包智库附件失败（tar 退出码 $TT_TAR_STATUS）" >&2; exit 1; }
