@@ -7,7 +7,7 @@ from platform_common.actors import Actor
 from platform_common.errors import ApiError, ErrorCode, NotFoundError
 from platform_common.excel import build_workbook_async
 
-from app.core.audit import emit_export_audit
+from app.core.audit import emit_content_audit, emit_export_audit
 from app.core.config import get_settings
 from app.core.source import Row, source_reader
 from app.domain.fields import Kind, Status, export_columns
@@ -76,6 +76,14 @@ def get_content(kind: Kind, status: Status, record_id: int) -> Row:
     if not str(content.get("html") or "").strip():
         raise NotFoundError("已关联到源记录，但正文内容为空")
     return {"html": content["html"]}
+
+
+async def view_content(kind: Kind, status: Status, record_id: int, *, actor: Actor) -> Row:
+    """页面查看正文：读到了才记一条审计；审计写不进去抛 503，正文不返回。"""
+
+    body = await to_thread.run_sync(get_content, kind, status, record_id)
+    await emit_content_audit(actor=actor, kind=kind, record_id=record_id, project_status=status)
+    return body
 
 
 def _read_export_rows(kind: Kind, query: ListQuery, limit: int) -> list[Row]:

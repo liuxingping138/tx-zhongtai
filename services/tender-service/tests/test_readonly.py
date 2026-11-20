@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import pymysql
 import pytest
 from fastapi.testclient import TestClient
+from platform_common.actors import Actor
 from platform_common.errors import DependencyUnavailableError, NotFoundError
 from platform_common.route_audit import audit_routes, iter_api_routes, permission_map
 from pydantic import ValidationError
@@ -12,7 +13,7 @@ from pydantic import ValidationError
 from app.application import counts
 from app.application import records as service
 from app.application import statistics as stats
-from app.core import source
+from app.core import audit, source
 from app.core.config import Settings
 from app.domain.fields import TABLES, columns
 from app.domain.queries import ListQuery, StatsQuery
@@ -378,11 +379,21 @@ def test_http_routes_validate_filters_and_return_envelopes(monkeypatch):
         if route.path.startswith("/api/"):
             for dependency in route.dependencies:
                 app.dependency_overrides[dependency.dependency] = lambda: None
+            # 查看正文、导出要拿操作人写审计，权限依赖挂在参数上
+            for sub in route.dependant.dependencies:
+                if sub.call is not None:
+                    app.dependency_overrides[sub.call] = lambda: Actor(id="u1", name="测试")
     monkeypatch.setattr(
         service, "list_records", lambda kind, query: {"items": [], "has_more": False, "page": query.page}
     )
     monkeypatch.setattr(service, "get_record", lambda *args: {"id": "123"})
     monkeypatch.setattr(service, "get_content", lambda *args: {"html": "<p>正文</p>"})
+    audited: list[dict[str, object]] = []
+
+    async def fake_audit(**kwargs: object) -> None:
+        audited.append(kwargs)
+
+    monkeypatch.setattr(service, "emit_content_audit", fake_audit)
     monkeypatch.setattr(counts, "get_count", lambda *args: {"state": "ready", "data": {"total": 3}})
     monkeypatch.setattr(counts, "get_totals", lambda: {"state": "pending", "data": None})
     monkeypatch.setattr(stats, "get_statistics", lambda query: {"daily": []})
@@ -402,6 +413,8 @@ def test_http_routes_validate_filters_and_return_envelopes(monkeypatch):
                 response = client.get("/api/v1/tender" + path)
                 assert response.status_code == 200, response.text
                 assert response.json()["code"] == "OK"
+            actor = Actor(id="u1", name="测试")
+            assert audited == [{"actor": actor, "kind": "winbid", "record_id": 123, "project_status": "1"}]
     finally:
         app.dependency_overrides.clear()
 
@@ -634,8 +647,6 @@ async def test_export_audit_reporting(monkeypatch) -> None:
     from platform_common.actors import Actor
     from platform_common.config import Environment
 
-    from app.core import audit
-
     monkeypatch.setattr(
         audit,
         "get_settings",
@@ -690,3 +701,51 @@ async def test_export_audit_reporting(monkeypatch) -> None:
     monkeypatch.setattr(audit.httpx, "AsyncClient", _ErrClient)
     with pytest.raises(DependencyUnavailableError, match="审计服务暂不可用"):
         await audit.emit_export_audit(actor=Actor(id="u1", name="张"), kind="winbid", exported_rows=3, filters={})
+
+
+def test_content_is_withheld_when_the_audit_cannot_be_written(monkeypatch):
+    # 正文和导出一样：审计写不进去就回 503，不放出没留痕的标书正文。
+    for route in iter_api_routes(app):
+        for sub in route.dependant.dependencies:
+            if sub.call is not None:
+                app.dependency_overrides[sub.call] = lambda: Actor(id="u1", name="测试")
+    monkeypatch.setattr(service, "get_content", lambda *args: {"html": "<p>正文</p>"})
+
+    async def audit_down(**_kwargs):
+        raise DependencyUnavailableError("审计服务暂不可用，正文暂不能查看")
+
+    monkeypatch.setattr(service, "emit_content_audit", audit_down)
+    try:
+        with TestClient(app) as client:
+            response = client.get("/api/v1/tender/purchaser/9/content")
+        assert response.status_code == 503
+        assert "<p>" not in response.text
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_content_audit_names_the_record(monkeypatch):
+    sent = {}
+
+    class Client:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def post(self, url, json, headers):
+            sent.update(json)
+            return MagicMock(is_success=True)
+
+    from app.core import audit
+
+    monkeypatch.setattr(audit, "get_settings", lambda: Settings(audit_ingest_secret="s" * 32))
+    monkeypatch.setattr(audit.httpx, "AsyncClient", Client)
+    await audit.emit_content_audit(actor=Actor(id="u1", name="测试"), kind="winbid", record_id=42, project_status="0")
+    assert sent["module_code"] == "tender.winbid"
+    assert sent["action_code"] == "read"
+    assert sent["target_id"] == "42"

@@ -62,12 +62,16 @@ def record_router(kind: Kind) -> APIRouter:
     ) -> ApiResponse[Row]:
         return ok(records.get_record(kind, project_status, record_id), request_id=get_request_id())
 
-    @child.get("/{record_id}/content", dependencies=[Depends(require_tender_permission(resource, "read"))])
+    # 正文是整篇标书：和导出一样同步写审计，写不进去回 503，不放出没留痕的正文。
+    @child.get("/{record_id}/content")
     @classified(SecurityClass.RESOURCE_AUTHORIZED)
-    def content(
-        record_id: Annotated[int, Path(gt=0)], project_status: Annotated[Status, Query()] = "1"
+    async def content(
+        record_id: Annotated[int, Path(gt=0)],
+        project_status: Annotated[Status, Query()] = "1",
+        actor: Actor = Depends(require_tender_permission(resource, "read")),
     ) -> ApiResponse[Row]:
-        return ok(records.get_content(kind, project_status, record_id), request_id=get_request_id())
+        body = await records.view_content(kind, project_status, record_id, actor=actor)
+        return ok(body, request_id=get_request_id())
 
     return child
 
