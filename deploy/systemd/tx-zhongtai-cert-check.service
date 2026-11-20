@@ -1,0 +1,9 @@
+[Unit]
+Description=Check tx-zhongtai TLS certificate expires in more than 48 hours
+OnFailure=tx-zhongtai-cert-alert@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/data/tx-zhongtai
+ExecStart=/usr/bin/bash /data/tx-zhongtai/scripts/check_ip_cert_expiry.sh
+TimeoutStartSec=1min
