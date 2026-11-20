@@ -49,6 +49,7 @@ const { previewCollapsed, metaCollapsed, setPreviewCollapsed, setMetaCollapsed }
 const content = useKnowledgeContent(
   fetchKnowledgeContentBlob,
   err => ElMessage.warning(errorMessage(err, '加载原文预览失败，已回退摘要视图')),
+  { persistent: true, getOwner: () => auth.user?.id ?? '' },
 )
 const { loading: contentLoading, mode: previewMode, text: previewText, pdfUrl } = content
 const total = ref(0)
@@ -95,6 +96,7 @@ function consumeEditQuery() {
   void router.replace({ query: nextQuery })
   if (item.value?.can_edit) {
     metaCollapsed.value = false
+    previewCollapsed.value = true
     void nextTick(() => metaCardRef.value?.startEdit())
   }
 }
@@ -127,9 +129,13 @@ async function loadPage() {
         consumeEditQuery()
         void loadNeighbors()
       },
-      startContent: res => content.show(targetId, res.preview.mode, res.preview.content_text, res.preview.has_binary),
+      startContent: (res) => {
+        const version = `${res.item.updated_at || ''}:${res.item.file_size_bytes || 0}`
+        return content.show(targetId, res.preview.mode, res.preview.content_text, res.preview.has_binary, version)
+      },
     })
   } catch (err) {
+    content.evict(targetId)
     if (seq === pageSeq) error.value = errorMessage(err, '加载文件预览失败')
   } finally {
     if (seq === pageSeq) loading.value = false
@@ -174,6 +180,7 @@ async function onDelete() {
     await ElMessageBox.confirm(`确认删除「${current.file_name}」吗？删除后将记入操作审计。`, '删除确认', { type: 'warning' })
     if (item.value?.id !== current.id || fileId.value !== current.id) return
     await deleteKnowledge(current.id)
+    content.evict(current.id)
     ElMessage.success('删除成功')
     await router.push(listRoute.value)
   } catch (err) { if (err !== 'cancel') ElMessage.error(errorMessage(err, '删除失败')) }
@@ -181,7 +188,14 @@ async function onDelete() {
 
 watch(() => route.params.id, () => { void loadPage() })
 onBeforeUnmount(() => { pageSeq += 1; neighborSeq += 1; content.dispose() })
-onMounted(() => { loadEditOptions(); void loadPage() })
+onMounted(() => {
+  if (route.query.edit !== '1') {
+    metaCollapsed.value = false
+    previewCollapsed.value = false
+  }
+  loadEditOptions()
+  void loadPage()
+})
 </script>
 
 <template>

@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CONTENT_CACHE_SIZE, isOfficeFile, useKnowledgeContent, type BlobResponse } from './useKnowledgeContent'
+import {
+  clearKnowledgeContentCache,
+  CONTENT_CACHE_SIZE,
+  isOfficeFile,
+  useKnowledgeContent,
+  type BlobResponse,
+} from './useKnowledgeContent'
 
 function pdf(body = '%PDF'): BlobResponse {
   return { data: new Blob([body], { type: 'application/pdf' }), headers: { 'content-type': 'application/pdf' } }
@@ -125,6 +131,37 @@ describe('useKnowledgeContent', () => {
     expect(now.loading.value).toBe(false)
     await now.show('b', 'pdf', '摘要', true)
     expect(fetchBlob).toHaveBeenCalledTimes(2)
+  })
+
+  it('会话级缓存跨页面实例复用，版本变更、换账号或 evict 时自动失效并释放 URL', async () => {
+    clearKnowledgeContentCache()
+    let owner = 'u1'
+    const fetchBlob = vi.fn(() => Promise.resolve(pdf()))
+
+    const firstPage = useKnowledgeContent(fetchBlob, vi.fn(), { persistent: true, getOwner: () => owner })
+    await firstPage.show('doc1', 'pdf', '', true, 'v1')
+    expect(firstPage.pdfUrl.value).toBe('blob:1')
+    firstPage.dispose()
+    expect(revoked).toEqual([])
+
+    const secondPage = useKnowledgeContent(fetchBlob, vi.fn(), { persistent: true, getOwner: () => owner })
+    await secondPage.show('doc1', 'pdf', '', true, 'v1')
+    expect(fetchBlob).toHaveBeenCalledOnce()
+    expect(secondPage.pdfUrl.value).toBe('blob:1')
+
+    await secondPage.show('doc1', 'pdf', '', true, 'v2')
+    expect(fetchBlob).toHaveBeenCalledTimes(2)
+    expect(revoked).toContain('blob:1')
+    expect(secondPage.pdfUrl.value).toBe('blob:2')
+
+    owner = 'u2'
+    await secondPage.show('doc1', 'pdf', '', true, 'v2')
+    expect(fetchBlob).toHaveBeenCalledTimes(3)
+    expect(revoked).toContain('blob:2')
+
+    secondPage.evict('doc1')
+    expect(revoked).toContain('blob:3')
+    clearKnowledgeContentCache()
   })
 })
 
