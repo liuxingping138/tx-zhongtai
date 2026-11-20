@@ -3,7 +3,7 @@
 只做两件事：发请求、把服务端事件归一成下面几种字典，逐个产出：
     {"text": 增量}          {"reasoning": 思考过程增量}
     {"tool_event": {...}}   联网搜索进度
-    {"usage": {...}}        token 用量，联网次数在 usage["web_search"]
+    {"usage": {...}}        token 用量（含命中上下文缓存的 cached_tokens），联网次数在 usage["web_search"]
     {"error": 中文说明}     {"response_id": id}  只在正常完成时给，供多轮对话接续
 错误事件可能带 "retryable": True：限流、5xx、超时、断连、被截断，换个时间重发大概率能成功。
 """
@@ -47,8 +47,25 @@ def _pick(source: Any, *keys: str) -> Any:
     return None
 
 
+def _cached_tokens(usage: dict[str, Any], input_tokens: int) -> int:
+    """输入里命中上下文缓存的 token。各家写法不同，按 Responses、Chat Completions、平铺的顺序找，都没有算 0。
+    夹在 0 到输入 token 之间：缓存部分按缓存价、其余按输入价算钱，超出输入数会算出负的未命中部分。"""
+
+    for parent in ("input_tokens_details", "prompt_tokens_details"):
+        value = _pick(_pick(usage, parent), "cached_tokens")
+        if value is not None:
+            break
+    else:
+        value = _pick(usage, "cached_tokens")
+    try:
+        cached = int(value or 0)
+    except (TypeError, ValueError):
+        cached = 0
+    return min(max(cached, 0), input_tokens)
+
+
 def extract_usage(response: Any) -> dict[str, int] | None:
-    """统一成 input/output/total_tokens；方舟在 usage.tool_usage.web_search 给权威的联网次数。"""
+    """统一成 input/output/total/cached_tokens；方舟在 usage.tool_usage.web_search 给权威的联网次数。"""
 
     usage = _pick(response, "usage")
     if not isinstance(usage, dict):
@@ -58,6 +75,7 @@ def extract_usage(response: Any) -> dict[str, int] | None:
     if input_tokens is None and output_tokens is None:
         return None
     result = {"input_tokens": int(input_tokens or 0), "output_tokens": int(output_tokens or 0)}
+    result["cached_tokens"] = _cached_tokens(usage, result["input_tokens"])
     result["total_tokens"] = int(_pick(usage, "total_tokens") or result["input_tokens"] + result["output_tokens"])
     searches = _pick(_pick(usage, "tool_usage"), "web_search")
     if isinstance(searches, int | str) and str(searches).isdigit():

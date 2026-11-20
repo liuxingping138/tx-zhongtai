@@ -2269,6 +2269,18 @@
             "title": "Peak Hours",
             "default": ""
           },
+          "cache_price": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Cache Price",
+            "default": ""
+          },
+          "peak_cache_price": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "Peak Cache Price",
+            "default": ""
+          },
           "search_price": {
             "type": "string",
             "maxLength": 20,

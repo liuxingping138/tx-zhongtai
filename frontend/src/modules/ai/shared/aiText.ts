@@ -87,14 +87,29 @@ export interface Usage {
   input: number
   output: number
   search: number
+  /** 输入里命中上下文缓存的 token（含在 input 里），按缓存单价计费 */
+  cached: number
 }
 
-export function costOf(model: Pick<AiModel, 'input_price' | 'output_price' | 'search_price'> | undefined, usage: Usage): { inference: number; search: number } {
+type PricedModel = Pick<AiModel, 'input_price' | 'output_price' | 'search_price'> & Partial<Pick<AiModel, 'cache_price'>>
+
+/** 和后端 llm_models.calc_costs 同一口径：未命中的输入按输入价、命中缓存的按缓存价（没给缓存价按输入价）、输出按输出价。 */
+export function costOf(model: PricedModel | undefined, usage: Usage): { inference: number; search: number } {
   if (!model) return { inference: 0, search: 0 }
+  const cached = Math.min(Math.max(usage.cached || 0, 0), Math.max(usage.input, 0))
+  const cachePrice = model.cache_price ? Number(model.cache_price) : Number(model.input_price)
   return {
-    inference: (usage.input / 1000) * Number(model.input_price) + (usage.output / 1000) * Number(model.output_price),
+    inference: ((usage.input - cached) / 1000) * Number(model.input_price)
+      + (cached / 1000) * cachePrice
+      + (usage.output / 1000) * Number(model.output_price),
     search: usage.search * Number(model.search_price),
   }
+}
+
+/** 缓存命中率：命中缓存的输入 ÷ 全部输入，取整到 0.1%；没有命中（或没有输入）返回空串，页面就不显示。 */
+export function cacheHitText(input: number, cached: number): string {
+  if (!input || !cached || cached <= 0) return ''
+  return `${String(Number(((Math.min(cached, input) / input) * 100).toFixed(1)))}%`
 }
 
 /** 费用保留到小数点后 4 位：单次提问常在千分之一元量级。 */

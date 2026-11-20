@@ -23,10 +23,13 @@ class Spend:
     search_calls: int = 0
     inference_cost: Decimal = Decimal(0)
     search_cost: Decimal = Decimal(0)
+    # 放在最后：调用处按位置传前五个字段，加在中间会把费用错位。
+    cached_tokens: int = 0
 
     def add(self, other: Spend) -> None:
         self.input_tokens += other.input_tokens
         self.output_tokens += other.output_tokens
+        self.cached_tokens += other.cached_tokens
         self.search_calls += other.search_calls
         self.inference_cost += other.inference_cost
         self.search_cost += other.search_cost
@@ -59,6 +62,7 @@ async def book(session: AsyncSession, run_id: str, taken: dict[date, Spend]) -> 
             "day": day,
             "input_tokens": spend.input_tokens,
             "output_tokens": spend.output_tokens,
+            "cached_tokens": spend.cached_tokens,
             "search_calls": spend.search_calls,
             "inference_cost": spend.inference_cost,
             "search_cost": spend.search_cost,

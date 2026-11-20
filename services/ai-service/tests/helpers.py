@@ -65,6 +65,8 @@ def ai_model(**overrides: Any) -> AiModel:
         "peak_input_price": None,
         "peak_output_price": None,
         "peak_hours": "",
+        "cache_price": None,
+        "peak_cache_price": None,
         "search_price": Decimal("0.004"),
         "rate_limit": "",
         "enabled": True,

@@ -174,7 +174,9 @@ async def start_run(
         thinking=bool(values.get("thinking")) and model.supports_thinking,
         row_limit=limit if 0 < limit < summary["rows"] else 0,
         status=RUN_QUEUED,
-        **dict.fromkeys(("done_count", "failed_count", "format_failed_count", "input_tokens", "output_tokens"), 0),
+        **dict.fromkeys(
+            ("done_count", "failed_count", "format_failed_count", "input_tokens", "output_tokens", "cached_tokens"), 0
+        ),
         total_count=min(limit, summary["rows"]) if limit else summary["rows"],
         search_calls=0,
         inference_cost=Decimal(0),

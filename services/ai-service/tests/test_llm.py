@@ -53,7 +53,7 @@ async def test_stream_normalizes_text_reasoning_search_usage_and_response_id() -
         {"tool_event": {"stage": "web_search_in_progress", "message": "已发起联网搜索"}},
         {"text": "你好"},
         {"text": "！"},
-        {"usage": {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15, "web_search": 2}},
+        {"usage": {"input_tokens": 10, "output_tokens": 5, "cached_tokens": 0, "total_tokens": 15, "web_search": 2}},
         {"response_id": "resp_1"},
     ]
 
@@ -117,6 +117,7 @@ def test_usage_and_sse_parsing_edge_cases() -> None:
     assert extract_usage({"usage": {"prompt_tokens": 3, "completion_tokens": 4}}) == {
         "input_tokens": 3,
         "output_tokens": 4,
+        "cached_tokens": 0,
         "total_tokens": 7,
     }
     assert extract_usage({"usage": {}}) is None

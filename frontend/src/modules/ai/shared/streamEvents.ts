@@ -10,9 +10,10 @@ export interface StreamTarget {
 type Handler = (target: StreamTarget, value: unknown) => void
 
 function applyUsage(target: StreamTarget, value: unknown): void {
-  const usage = value as { input_tokens?: number; output_tokens?: number; web_search?: number }
+  const usage = value as { input_tokens?: number; output_tokens?: number; cached_tokens?: number; web_search?: number }
   target.stats.usage.input = usage.input_tokens ?? 0
   target.stats.usage.output = usage.output_tokens ?? 0
+  target.stats.usage.cached = usage.cached_tokens ?? 0
   if (typeof usage.web_search === 'number') target.stats.usage.search = usage.web_search
 }
 

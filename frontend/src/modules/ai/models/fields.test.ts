@@ -20,6 +20,8 @@ const flash: ModelConfig = {
   peak_input_price: '',
   peak_output_price: '',
   peak_hours: '',
+  cache_price: '0.0001',
+  peak_cache_price: '',
   search_price: '0.004',
   rate_limit: '500 RPM',
   enabled: true,
@@ -43,6 +45,17 @@ describe('模型配置表单转换', () => {
   it('「按模型默认」和「停用」换回空串和 false', () => {
     const body = toBody({ ...CREATE_DEFAULTS, id: 'm', name: 'm', endpoint: 'ep', reasoning_effort: '按模型默认', enabled: '停用' })
     expect([body.service_tier, body.reasoning_effort, body.enabled, body.web_search, body.sort_order]).toEqual(['', '', false, false, 100])
+  })
+
+  it('缓存单价进表单、列表和保存的请求体，没填时是空串（后端按输入价算）', () => {
+    const fields = EDITOR_GROUPS.flatMap(group => group.fields).map(field => field.key)
+    expect(fields).toEqual(expect.arrayContaining(['cache_price', 'peak_cache_price']))
+    const props = TABLE_COLUMNS.map(col => col.prop)
+    expect(props.indexOf('cache_price')).toBeGreaterThan(props.indexOf('peak_output_price'))
+    expect(props.indexOf('peak_cache_price')).toBe(props.indexOf('cache_price') + 1)
+    const body = toBody({ ...CREATE_DEFAULTS, id: 'm', name: 'm', endpoint: 'ep', cache_price: ' 0.000016 ', peak_cache_price: '0.000032' })
+    expect([body.cache_price, body.peak_cache_price]).toEqual(['0.000016', '0.000032'])
+    expect(toBody({ ...CREATE_DEFAULTS, id: 'm' }).cache_price).toBe('')
   })
 
   it('编辑时模型ID只读，新增时可填', () => {

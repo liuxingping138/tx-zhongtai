@@ -51,7 +51,15 @@ ROWS_MAX = 20_000
 PIPELINE_TIER = "flex"
 TOMBSTONE_TITLE = "（调用方已放弃的定时任务）"
 TOMBSTONE_NOTE = "调用方在任务建好之前已经放弃（超时或中断）：这一行占住任务ID，迟到的建任务请求不再执行"
-_ZERO_COUNTS = ("total_count", "done_count", "failed_count", "format_failed_count", "input_tokens", "output_tokens")
+_ZERO_COUNTS = (
+    "total_count",
+    "done_count",
+    "failed_count",
+    "format_failed_count",
+    "input_tokens",
+    "output_tokens",
+    "cached_tokens",
+)
 
 
 def _invalid(message: str) -> ApiError:

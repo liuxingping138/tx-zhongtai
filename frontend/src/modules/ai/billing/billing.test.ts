@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import type { BillingRow } from '@/api/aiBilling'
-import { colorMap, dailySeries, daysBetween, filterOptions, filterRows, groupBy, money, presetRange, pruneFilters, pruneInPlace, summarize, tokens, type BillingFilters } from './billing'
+import { cachedText, colorMap, dailySeries, daysBetween, filterOptions, filterRows, groupBy, money, presetRange, pruneFilters, pruneInPlace, summarize, tokens, totalCards, type BillingFilters } from './billing'
 
 /** owner：业务分类 + 一级业务板块，默认「测试 / 政策」 */
 const row = (day: string, model: string, purpose: string, cost: string, calls = 1, owner: [string, string] = ['测试', '政策']): BillingRow =>
-  ({ day, model, scene: owner[0], category: owner[1], purpose, calls, input_tokens: 1000 * calls, output_tokens: 100 * calls, cost })
+  ({ day, model, scene: owner[0], category: owner[1], purpose, calls, input_tokens: 1000 * calls, output_tokens: 100 * calls, cached_tokens: 400 * calls, cost })
 
 const ROWS = [
   row('2026-10-20', '方舟Flash', '批量任务', '1.5', 2, ['测试', '客户']),
@@ -15,8 +15,23 @@ const ROWS = [
 const NONE: BillingFilters = { scenes: [], categories: [], purposes: [], models: [] }
 
 describe('费用账单', () => {
+  it('合计卡片和明细表带上缓存命中 token 与命中率，没有命中时写明', () => {
+    const total = summarize(ROWS)
+    const cache = totalCards(total).at(-1)
+    expect(cache).toEqual({ label: '缓存命中 token', value: '2,400', note: '占输入 40%，按缓存单价计费', main: false })
+    expect(totalCards({ ...total, cached_tokens: 0 }).at(-1)?.note).toBe('没有命中上下文缓存')
+    expect(totalCards(total).filter(card => card.main).map(card => card.label)).toEqual(['合计费用'])
+    expect(cachedText({ input_tokens: 30_000, cached_tokens: 20_000 })).toBe('2.0万（66.7%）')
+    expect(cachedText({ input_tokens: 1000, cached_tokens: 0 })).toBe('0')
+  })
+
+  it('旧接口没有缓存字段时按 0 合计', () => {
+    const legacy = { ...row('2026-10-22', 'm', '试发', '0.1'), cached_tokens: undefined } as unknown as BillingRow
+    expect(summarize([legacy]).cached_tokens).toBe(0)
+  })
+
   it('按模型、用途筛选后合计', () => {
-    expect(summarize(filterRows(ROWS, { ...NONE, models: ['方舟Flash'] }))).toEqual({ calls: 3, input_tokens: 3000, output_tokens: 300, cost: 1.75 })
+    expect(summarize(filterRows(ROWS, { ...NONE, models: ['方舟Flash'] }))).toEqual({ calls: 3, input_tokens: 3000, output_tokens: 300, cached_tokens: 1200, cost: 1.75 })
     expect(filterRows(ROWS, { ...NONE, purposes: ['多轮对话'] })).toHaveLength(1)
     expect(filterRows(ROWS, NONE)).toHaveLength(3)
   })

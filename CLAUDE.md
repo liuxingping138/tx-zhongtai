@@ -217,7 +217,10 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
   保存即生效；请求体和计价规则在 `app/domain/llm_models.py`。模型只停用不删除：模板和历史任务按模型 ID 引用。密钥 `AI_ARK_API_KEY` /
   `AI_BAIDU_API_KEY` 仍在环境变量里，没配的那家在页面上显示为不可用，不会换别家顶替
 - 计价按调用时刻：低优档用低优价，配了高峰价的在北京时间工作日高峰时段用高峰价（不认节假日），其余用常规价。
-  批量任务每行完成时按当时单价累加费用，不在结束时按总 token 一次算
+  批量任务每行完成时按当时单价累加费用，不在结束时按总 token 一次算。
+  上下文缓存：`core/llm.extract_usage` 从用量里取命中缓存的 `cached_tokens`（依次认 `input_tokens_details` / `prompt_tokens_details` / 平铺，夹在 0 到输入数之间），
+  `calc_costs` 按「未命中输入 × 输入价 + 命中 × 缓存价 + 输出 × 输出价」算。缓存价（`ai_models.cache_price`）不分低优、常规档，配了 `peak_cache_price` 的工作日高峰时段用它，
+  没配缓存价按此刻输入价（和没有缓存计价时一样）。命中数记在任务、费用流水、试发用量上，账单和任务详情显示命中率；原始返回 CSV 末尾多一列 `cached_tokens`，这列上线前开始的任务续跑照旧 8 列写（`batch_output.raw_columns`）
 - 模板里 `@【列名】` 引用 Excel 当前行，`@【上传码表】` 引用码表全文；返回的 `[{字段: 值}]` 按「新增输出字段」解析，
   一个提问解析出多条就展开成多行。规则在 `app/domain/templating.py`，与旧系统一致，改了会影响已有模板的结果
 - 模板分政策、客户、招投标三类（`app/domain/categories.py`），类型也是授权单位：IAM 资源 `ai.category.*` 查看档能看这类模板和批量历史，

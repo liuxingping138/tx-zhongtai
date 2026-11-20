@@ -7,7 +7,7 @@ function target(): StreamTarget {
   return {
     user: { text: '原文' },
     reply: { text: '', reasoning: '', tip: '', error: '' },
-    stats: { model: null, usage: { input: 0, output: 0, search: 0 } },
+    stats: { model: null, usage: { input: 0, output: 0, search: 0, cached: 0 } },
   }
 }
 
@@ -29,7 +29,7 @@ describe('流式事件', () => {
     expect(t.user.text).toBe('替换后的提示词')
     expect(t.stats.model).toBe(model)
     expect(t.reply).toMatchObject({ text: '你好', reasoning: '想', tip: '已发起联网搜索' })
-    expect(t.stats.usage).toEqual({ input: 10, output: 5, search: 2 })
+    expect(t.stats.usage).toEqual({ input: 10, output: 5, search: 2, cached: 0 })
   })
 
   it('usage 带权威联网次数时覆盖事件计数；错误和未知事件', () => {
@@ -41,6 +41,14 @@ describe('流式事件', () => {
     expect(t.stats.usage.search).toBe(4)
     expect(t.reply.error).toBe('限流')
     expect(t.reply.text).toBe('')
+  })
+
+  it('用量里带命中缓存的 token；没带时算 0', () => {
+    const t = target()
+    applyStreamEvent(t, { usage: { input_tokens: 3000, output_tokens: 10, cached_tokens: 2000 } })
+    expect(t.stats.usage).toMatchObject({ input: 3000, cached: 2000 })
+    applyStreamEvent(t, { usage: { input_tokens: 100, output_tokens: 1 } })
+    expect(t.stats.usage.cached).toBe(0)
   })
 
   it('试发按输出字段解析的结果：解析出的列表，或者 null（格式不对），都要记下', () => {

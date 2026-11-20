@@ -11,6 +11,8 @@ export interface AiModel {
   /** 此刻适用的单价（每千 token）：低优档、分时计价的模型会随时段变 */
   input_price: string
   output_price: string
+  /** 此刻命中上下文缓存的输入单价（每千 token）；模型没配缓存价时等于输入单价 */
+  cache_price: string
   search_price: string
   /** 上面的价是哪一档：低优档、高峰价（工作日几点到几点）、平时价，单一价为空 */
   price_note: string
@@ -161,6 +163,8 @@ export interface BatchRun {
   can_run_all: boolean
   percent: number
   total_tokens_kilo: number
+  input_tokens: number
+  cached_tokens: number
   inference_cost: number
   search_cost: number
   search_calls: number
@@ -367,6 +371,9 @@ export interface ModelConfig {
   peak_input_price: string
   peak_output_price: string
   peak_hours: string
+  /** 命中上下文缓存的输入单价（不分低优、常规档）和工作日高峰时段的缓存单价；空串表示没配，缓存部分按输入单价算 */
+  cache_price: string
+  peak_cache_price: string
   search_price: string
   rate_limit: string
   enabled: boolean

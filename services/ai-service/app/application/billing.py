@@ -74,8 +74,9 @@ async def record_call(
     when = utcnow()
     input_tokens = int(tally.usage.get("input_tokens", 0))
     output_tokens = int(tally.usage.get("output_tokens", 0))
+    cached_tokens = min(int(tally.usage.get("cached_tokens", 0)), input_tokens)
     searches = int(tally.usage.get("web_search", tally.search_events))
-    inference, search = calc_costs(model, input_tokens, output_tokens, searches, when)
+    inference, search = calc_costs(model, input_tokens, output_tokens, searches, when, cached_tokens)
     try:
         async with SessionLocal() as session:
             repo.add_call(
@@ -87,6 +88,7 @@ async def record_call(
                     model_name=model.name,
                     input_tokens=input_tokens,
                     output_tokens=output_tokens,
+                    cached_tokens=cached_tokens,
                     search_calls=searches,
                     inference_cost=inference,
                     search_cost=search,
@@ -129,8 +131,8 @@ async def daily(session: AsyncSession, date_from: date, date_to: date) -> dict[s
         category = category_name(row["category"])
         key = (str(row["day"]), model, row["scene"], category, row["purpose"])
         if key in merged:
-            for field in ("calls", "input_tokens", "output_tokens", "cost"):
-                merged[key][field] = (merged[key][field] or 0) + (row[field] or 0)
+            for field in ("calls", "input_tokens", "output_tokens", "cached_tokens", "cost"):
+                merged[key][field] = (merged[key].get(field) or 0) + (row.get(field) or 0)
         else:
             merged[key] = {**row, "model": model, "category": category}
     items = [
@@ -143,6 +145,7 @@ async def daily(session: AsyncSession, date_from: date, date_to: date) -> dict[s
             "calls": int(row["calls"] or 0),
             "input_tokens": int(row["input_tokens"] or 0),
             "output_tokens": int(row["output_tokens"] or 0),
+            "cached_tokens": int(row.get("cached_tokens") or 0),
             "cost": str(Decimal(row["cost"] or 0)),
         }
         for row in merged.values()

@@ -4,7 +4,7 @@ import { ArrowDown } from '@element-plus/icons-vue'
 
 import { getBatchRunRows, type BatchRun, type RunFileKind, type RunRows as Rows } from '@/api/ai'
 import { errorMessage } from '@/api/errors'
-import { RUN_SOURCE_TEXT, RUN_STATUS_TEXT, formatYuan, isActive, roundText, runModeText, runStatusType } from '../shared/aiText'
+import { RUN_SOURCE_TEXT, RUN_STATUS_TEXT, cacheHitText, formatYuan, isActive, roundText, runModeText, runStatusType } from '../shared/aiText'
 import RunRows from '../shared/RunRows.vue'
 import { RUN_FILES, deleteRun, downloadRunFile, retryRun, runAllRun, stopRun } from './runActions'
 
@@ -192,6 +192,9 @@ async function act(action: (current: BatchRun) => Promise<boolean>, close = fals
           {{ failedText }}
         </dd>
         <dt>费用</dt><dd>{{ formatYuan(run.inference_cost + run.search_cost) }} · {{ run.total_tokens_kilo.toFixed(3) }} 千 token</dd>
+        <template v-if="run.cached_tokens > 0">
+          <dt>缓存命中</dt><dd>{{ run.cached_tokens.toLocaleString('zh-CN') }} token（占输入 {{ cacheHitText(run.input_tokens, run.cached_tokens) }}，按缓存单价计费）</dd>
+        </template>
         <dt>发起</dt><dd>{{ run.created_by_name }} · {{ run.created_at }}</dd>
         <dt>结束</dt><dd>{{ run.finished_at || '—' }}</dd>
       </dl>

@@ -13,6 +13,8 @@ export interface BillingRow {
   calls: number
   input_tokens: number
   output_tokens: number
+  /** 输入 token 里命中上下文缓存的部分（已含在 input_tokens 里），按缓存单价计费 */
+  cached_tokens: number
   cost: string
 }
 

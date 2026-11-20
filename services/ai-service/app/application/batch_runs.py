@@ -116,6 +116,9 @@ def to_dict(run: BatchRun) -> dict[str, Any]:
         "can_run_all": _can_run_all(run),
         "percent": _percent(run),
         "total_tokens_kilo": _kilo_tokens(run),
+        # 命中上下文缓存的输入 token（包含在 input_tokens 里），页面据此显示命中率。
+        "input_tokens": run.input_tokens,
+        "cached_tokens": run.cached_tokens,
         "inference_cost": float(run.inference_cost),
         "search_cost": float(run.search_cost),
         "search_calls": run.search_calls,

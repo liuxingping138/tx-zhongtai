@@ -44,7 +44,7 @@ _FINISHED = {"done", "failed", "cancelled", "interrupted"}
 _KILO = Decimal(1000)
 
 # 提问内容整段写在 CSV 一格里，默认 128KB 的字段上限不够。
-csv.field_size_limit(sys.maxsize)
+csv.field_size_limit(min(sys.maxsize, 2**31 - 1))  # Windows 的 C long 是 32 位，sys.maxsize 会溢出
 
 
 @dataclass

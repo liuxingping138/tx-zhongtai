@@ -67,6 +67,9 @@ class ModelBody(_Body):
     peak_input_price: str = _price()
     peak_output_price: str = _price()
     peak_hours: str = Field(default="", max_length=100)
+    # 命中上下文缓存的输入单价，空串表示没配、按输入价算；高峰缓存单价按 peak_hours 的时段生效。
+    cache_price: str = _price()
+    peak_cache_price: str = _price()
     search_price: str = _price()
     rate_limit: str = Field(default="", max_length=500)
     enabled: bool = True

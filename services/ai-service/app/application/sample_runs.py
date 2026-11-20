@@ -84,7 +84,9 @@ async def start(
         row_limit=rows,
         total_count=rows,
         status=RUN_QUEUED,
-        **dict.fromkeys(("done_count", "failed_count", "format_failed_count", "input_tokens", "output_tokens"), 0),
+        **dict.fromkeys(
+            ("done_count", "failed_count", "format_failed_count", "input_tokens", "output_tokens", "cached_tokens"), 0
+        ),
         search_calls=0,
         inference_cost=Decimal(0),
         search_cost=Decimal(0),

@@ -27,7 +27,7 @@ def add_call(session: AsyncSession, usage: CallUsage) -> None:
     session.add(usage)
 
 
-_COST_COLUMNS = ("input_tokens", "output_tokens", "search_calls", "inference_cost", "search_cost")
+_COST_COLUMNS = ("input_tokens", "output_tokens", "cached_tokens", "search_calls", "inference_cost", "search_cost")
 
 
 async def add_run_costs(session: AsyncSession, rows: list[dict[str, Any]]) -> None:
@@ -82,6 +82,7 @@ async def daily(session: AsyncSession, since: datetime, until: datetime) -> list
             func.count().label("calls"),
             func.sum(RunCost.input_tokens).label("input_tokens"),
             func.sum(RunCost.output_tokens).label("output_tokens"),
+            func.sum(RunCost.cached_tokens).label("cached_tokens"),
             func.sum(RunCost.inference_cost + RunCost.search_cost).label("cost"),
         )
         .join(BatchRun, BatchRun.id == RunCost.run_id)
@@ -100,6 +101,7 @@ async def daily(session: AsyncSession, since: datetime, until: datetime) -> list
             func.count().label("calls"),
             func.sum(BatchRun.input_tokens).label("input_tokens"),
             func.sum(BatchRun.output_tokens).label("output_tokens"),
+            func.sum(BatchRun.cached_tokens).label("cached_tokens"),
             func.sum(BatchRun.inference_cost + BatchRun.search_cost).label("cost"),
         )
         .where(
@@ -128,6 +130,7 @@ async def daily(session: AsyncSession, since: datetime, until: datetime) -> list
             func.count().label("calls"),
             func.sum(CallUsage.input_tokens).label("input_tokens"),
             func.sum(CallUsage.output_tokens).label("output_tokens"),
+            func.sum(CallUsage.cached_tokens).label("cached_tokens"),
             func.sum(CallUsage.inference_cost + CallUsage.search_cost).label("cost"),
         )
         .where(CallUsage.created_at >= since, CallUsage.created_at < until)

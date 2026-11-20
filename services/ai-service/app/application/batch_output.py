@@ -21,9 +21,12 @@ from app.application.sheets import excel_cell
 from app.domain.templating import extract_fields, parse_fields
 
 # 「提问」列是整段提示词：政策全文加六级码表能到十几万字，csv 默认 131072 字的单格上限会让整份结果读不回来，钱白花。
-csv.field_size_limit(sys.maxsize)
+csv.field_size_limit(min(sys.maxsize, 2**31 - 1))  # Windows 的 C long 是 32 位，sys.maxsize 会溢出
 
-RAW_COLUMNS = ["myid", "提问", "model_name", "content", "input_tokens", "output_tokens", "error", "search_count"]
+# cached_tokens（命中上下文缓存的输入 token）加在最后：这一列上线前开始的任务，原始返回只有前 8 列，
+# 续跑时按文件自己的表头接着写（raw_columns），读的时候缺这一列算 0。
+LEGACY_RAW_COLUMNS = ["myid", "提问", "model_name", "content", "input_tokens", "output_tokens", "error", "search_count"]
+RAW_COLUMNS = [*LEGACY_RAW_COLUMNS, "cached_tokens"]
 META_COLUMNS = ["model_name", "input_tokens", "output_tokens", "error", "search_count"]
 FAILED_COLUMNS = ["myid", "提问", "失败类型", "error", "耗时(秒)"]
 # 模型正常回答了但解析不出输出字段。写在 error 列里，原始返回 CSV 不用加列，续跑时也能从文件认出来。
@@ -61,6 +64,7 @@ class RowResult:
     elapsed: float
     retryable: bool = False
     attempts: int = 1
+    cached_tokens: int = 0
     # 这一行在原始返回 CSV 里的字节位置（结果记录里记的）：详情预览按它直接取，不用从头扫几个 G。-1 表示不知道。
     offset: int = -1
 
@@ -84,6 +88,7 @@ class RowResult:
             str(self.output_tokens),
             self.error,
             str(self.search_calls),
+            str(self.cached_tokens),
         ]
 
 
@@ -108,6 +113,22 @@ def start_raw(path: Path) -> None:
     outcomes_path(path).write_text("", encoding="utf-8")
 
 
+def raw_columns(path: Path) -> list[str]:
+    """已有原始返回的列：缓存列上线前开始的任务是旧的 8 列，续跑、抄答案时照它写，不然新行多一格、整份读错位。"""
+
+    if not path.is_file():
+        return RAW_COLUMNS
+    with path.open(encoding="utf-8-sig", newline="") as handle:
+        header = next(csv.reader(handle), None)
+    return LEGACY_RAW_COLUMNS if header == LEGACY_RAW_COLUMNS else RAW_COLUMNS
+
+
+def _fit(row: list[str], columns: list[str]) -> list[str]:
+    """按目标文件的列裁掉新加的列（旧文件不认 cached_tokens）。"""
+
+    return row[: len(columns)]
+
+
 def outcomes_path(raw: Path) -> Path:
     return raw.with_suffix(OUTCOMES_SUFFIX)
 
@@ -116,7 +137,7 @@ def _append_outcome(raw: Path, row: list[str], offset: int) -> None:
     target = outcomes_path(raw)
     if not target.is_file():
         return
-    record = dict(zip(RAW_COLUMNS, row, strict=True))
+    record = dict(zip(RAW_COLUMNS, row, strict=False))
     line: dict[str, str | int] = {"myid": record["myid"], "error": record["error"], "at": offset}
     if record["error"]:
         line["text"] = record["content"][:OUTCOME_TEXT_MAX]
@@ -160,9 +181,9 @@ def raw_at(path: Path, offset: int) -> RowResult | None:
         binary.seek(offset)
         with io.TextIOWrapper(binary, encoding="utf-8", newline="") as handle:
             row = next(csv.reader(handle), None)
-    if row is None or len(row) != len(RAW_COLUMNS):
+    if row is None or len(row) not in (len(RAW_COLUMNS), len(LEGACY_RAW_COLUMNS)):
         return None
-    record = dict(zip(RAW_COLUMNS, row, strict=True))
+    record = dict(zip(RAW_COLUMNS, row, strict=False))
     return RowResult(
         myid=record["myid"].strip(),
         prompt="",
@@ -172,6 +193,7 @@ def raw_at(path: Path, offset: int) -> RowResult | None:
         search_calls=_int(record["search_count"]),
         error=record["error"],
         elapsed=0.0,
+        cached_tokens=_int(record.get("cached_tokens")),
     )
 
 
@@ -200,6 +222,7 @@ def iter_raw(path: Path, *, with_prompt: bool = False) -> Generator[RowResult]:
                 search_calls=_int(row.get("search_count")),
                 error=row.get("error") or "",
                 elapsed=0.0,
+                cached_tokens=_int(row.get("cached_tokens")),
             )
 
 
@@ -213,7 +236,7 @@ def _int(value: str | None) -> int:
 def append_raw(path: Path, row: list[str]) -> None:
     """同一任务同时只能有一个写入方（batch_execute 用 Job.write_lock 排队），记下的字节位置才准。"""
 
-    safe_row = sanitize_csv_row(row)
+    safe_row = sanitize_csv_row(_fit(row, raw_columns(path)))
     offset = path.stat().st_size if path.is_file() else 0
     with path.open("a", newline="", encoding="utf-8-sig") as handle:
         csv.writer(handle).writerow(safe_row)
@@ -257,6 +280,7 @@ def copy_answers(source: Path, target: Path, mapping: dict[str, list[str]], fiel
     if not chosen:
         return 0
     start_raw(target)
+    columns = raw_columns(target)
     copied = 0
     with (
         source.open(encoding="utf-8-sig", newline="") as reader,
@@ -272,7 +296,7 @@ def copy_answers(source: Path, target: Path, mapping: dict[str, list[str]], fiel
             if index not in chosen:
                 continue
             for new_id in mapping[myid]:
-                values = [new_id if column == "myid" else row.get(column) or "" for column in RAW_COLUMNS]
+                values = [new_id if column == "myid" else row.get(column) or "" for column in columns]
                 writer_handle.flush()
                 offset = target.stat().st_size
                 writer.writerow(values)

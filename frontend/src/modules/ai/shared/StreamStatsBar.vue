@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatYuan } from './aiText'
+import { cacheHitText, formatYuan } from './aiText'
 import type { StreamStats } from './useAnswerStream'
 
 defineProps<{ stats: StreamStats; cost: { inference: number; search: number } }>()
@@ -14,6 +14,9 @@ defineProps<{ stats: StreamStats; cost: { inference: number; search: number } }>
     <div><dt>模型</dt><dd>{{ stats.model.name }}</dd></div>
     <div><dt>深度思考</dt><dd>{{ stats.thinking ? '开' : '关' }}</dd></div>
     <div><dt>输入</dt><dd>{{ stats.usage.input.toLocaleString() }} token</dd></div>
+    <div v-if="stats.usage.cached > 0">
+      <dt>缓存命中</dt><dd>{{ stats.usage.cached.toLocaleString() }} token（{{ cacheHitText(stats.usage.input, stats.usage.cached) }}）</dd>
+    </div>
     <div><dt>输出</dt><dd>{{ stats.usage.output.toLocaleString() }} token</dd></div>
     <div v-if="stats.model.web_search">
       <dt>联网</dt><dd>{{ stats.usage.search }} 次</dd>

@@ -57,6 +57,7 @@ async def call_model_once(model: LlmModel, prompt: str, thinking: bool, client: 
         text=text,
         input_tokens=usage.get("input_tokens", 0),
         output_tokens=usage.get("output_tokens", 0),
+        cached_tokens=usage.get("cached_tokens", 0),
         search_calls=usage.get("web_search", search_events),
         error=errors[-1]["error"] if errors else "",
         elapsed=round(time.monotonic() - started, 2),
@@ -88,12 +89,17 @@ async def ask_row(  # noqa: PLR0913  请求参数与停止信号各自独立，�
     """问一行，按规则自动补救。几次尝试的 token 和联网次数都算进这一行：钱已经花出去了。"""
 
     delays = list(RETRY_DELAYS)
-    spent = [0, 0, 0]
+    spent = [0, 0, 0, 0]
     attempts = 0
     while True:
         result = await call_model_once(model, prompt, thinking, client)
         attempts += 1
-        spent = [spent[0] + result.input_tokens, spent[1] + result.output_tokens, spent[2] + result.search_calls]
+        spent = [
+            spent[0] + result.input_tokens,
+            spent[1] + result.output_tokens,
+            spent[2] + result.search_calls,
+            spent[3] + result.cached_tokens,
+        ]
         if result.error and result.retryable and delays:
             delay = delays.pop(0) * random.uniform(1.0, 1.5)  # noqa: S311  退避抖动，不涉及安全
             if stop is None:
@@ -110,6 +116,6 @@ async def ask_row(  # noqa: PLR0913  请求参数与停止信号各自独立，�
                 continue
             result.error = f"{FORMAT_ERROR_PREFIX}：回答里没有解析出输出字段（{'、'.join(fields)}）"
         break
-    result.input_tokens, result.output_tokens, result.search_calls = spent
+    result.input_tokens, result.output_tokens, result.search_calls, result.cached_tokens = spent
     result.attempts = attempts
     return result

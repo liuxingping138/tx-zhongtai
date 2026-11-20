@@ -1,5 +1,6 @@
 /** 费用账单页的纯计算：筛选、合计、分组、按天序列和固定配色。 */
 import type { BillingRow } from '@/api/aiBilling'
+import { cacheHitText } from '../shared/aiText'
 
 export type GroupKey = 'model' | 'purpose' | 'day'
 
@@ -8,6 +9,8 @@ export interface BillingGroup {
   calls: number
   input_tokens: number
   output_tokens: number
+  /** 输入 token 里命中上下文缓存的部分 */
+  cached_tokens: number
   cost: number
   /** 占所选范围合计费用的比例，0～1 */
   share: number
@@ -70,10 +73,30 @@ export function summarize(rows: BillingRow[]): Omit<BillingGroup, 'name' | 'shar
       calls: sum.calls + row.calls,
       input_tokens: sum.input_tokens + row.input_tokens,
       output_tokens: sum.output_tokens + row.output_tokens,
+      // 缓存列上线前的接口没有这个字段，按 0 算
+      cached_tokens: sum.cached_tokens + (row.cached_tokens ?? 0),
       cost: sum.cost + Number(row.cost),
     }),
-    { calls: 0, input_tokens: 0, output_tokens: 0, cost: 0 },
+    { calls: 0, input_tokens: 0, output_tokens: 0, cached_tokens: 0, cost: 0 },
   )
+}
+
+/** 页面顶部的合计卡片。缓存命中 token 已含在输入 token 里，按缓存单价计费，另列一张看命中率。 */
+export function totalCards(total: Omit<BillingGroup, 'name' | 'share'>): { label: string; value: string; note: string; main: boolean }[] {
+  const hit = cacheHitText(total.input_tokens, total.cached_tokens)
+  return [
+    { label: '合计费用', value: money(total.cost), note: '所选周期模型调用总支出', main: true },
+    { label: '调用次数', value: total.calls.toLocaleString('zh-CN'), note: '批量任务与单次请求累计', main: false },
+    { label: '输入 token', value: tokens(total.input_tokens), note: '提示词与文档上下文消耗', main: false },
+    { label: '输出 token', value: tokens(total.output_tokens), note: '模型结构化生成结果消耗', main: false },
+    { label: '缓存命中 token', value: tokens(total.cached_tokens), note: hit ? `占输入 ${hit}，按缓存单价计费` : '没有命中上下文缓存', main: false },
+  ]
+}
+
+/** 明细表的缓存命中列：token 数，有命中时带上占输入的比例。 */
+export function cachedText(group: Pick<BillingGroup, 'input_tokens' | 'cached_tokens'>): string {
+  const hit = cacheHitText(group.input_tokens, group.cached_tokens)
+  return hit ? `${tokens(group.cached_tokens)}（${hit}）` : tokens(group.cached_tokens)
 }
 
 /** 按模型 / 用途按费用从高到低；按日期从近到远。 */

@@ -129,6 +129,13 @@ class AiModel(Base):
         Numeric(12, 6), nullable=True, comment="高峰输出单价(元/千token)"
     )
     peak_hours: Mapped[str] = mapped_column(String(100), nullable=False, default="", comment="高峰时段")
+    # 命中上下文缓存的输入单价，不分常规、低优档；空表示没配，按输入价算（见 llm_models.LlmModel.cache_price_at）。
+    cache_price: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 6), nullable=True, comment="缓存输入单价（元/千token）"
+    )
+    peak_cache_price: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 6), nullable=True, comment="高峰缓存单价（元/千token）"
+    )
     search_price: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False, comment="联网单价(元/次)")
     rate_limit: Mapped[str] = mapped_column(Text, nullable=False, default="", comment="限流说明")
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, comment="是否启用")
@@ -168,6 +175,9 @@ class BatchRun(Base):
     # 大任务每行带着码表全文，累计 token 会超过 int4 的 21 亿，写不进去整批就不落账。
     input_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, comment="输入token")
     output_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, comment="输出token")
+    cached_tokens: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0", comment="缓存命中token"
+    )
     search_calls: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="联网次数")
     inference_cost: Mapped[Decimal] = mapped_column(
         Numeric(12, 6), nullable=False, default=Decimal(0), comment="推理费用(元)"
@@ -238,6 +248,9 @@ class RunCost(Base):
     day: Mapped[date] = mapped_column(Date, primary_key=True, index=True, comment="花费日期（北京）")
     input_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, comment="输入token")
     output_tokens: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, comment="输出token")
+    cached_tokens: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0", comment="缓存命中token"
+    )
     search_calls: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="联网次数")
     inference_cost: Mapped[Decimal] = mapped_column(
         Numeric(12, 6), nullable=False, default=Decimal(0), comment="推理费用(元)"
@@ -263,6 +276,9 @@ class CallUsage(Base):
     model_name: Mapped[str] = mapped_column(String(100), nullable=False, comment="模型名称")
     input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="输入token")
     output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="输出token")
+    cached_tokens: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0", comment="缓存命中token"
+    )
     search_calls: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="联网次数")
     inference_cost: Mapped[Decimal] = mapped_column(
         Numeric(12, 6), nullable=False, default=Decimal(0), comment="推理费用(元)"

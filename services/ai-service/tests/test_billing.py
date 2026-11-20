@@ -68,13 +68,13 @@ async def test_daily_checks_the_range_and_formats_rows(monkeypatch: pytest.Monke
         return [
             {"day": date(2026, 10, 22), "model_id": "b", "model_name": "旧名",
              "scene": "测试", "category": "policy", "purpose": "试发", "calls": 2,
-             "input_tokens": 10, "output_tokens": 5, "cost": Decimal("0.010000")},
+             "input_tokens": 10, "output_tokens": 5, "cached_tokens": 4, "cost": Decimal("0.010000")},
             {"day": date(2026, 10, 22), "model_id": "b2", "model_name": "B",
              "scene": "测试", "category": "policy", "purpose": "试发", "calls": 1,
-             "input_tokens": 1, "output_tokens": 1, "cost": Decimal("0.001000")},
+             "input_tokens": 1, "output_tokens": 1, "cached_tokens": 1, "cost": Decimal("0.001000")},
             {"day": date(2026, 10, 21), "model_id": "gone", "model_name": "A",
              "scene": "日常调度", "category": "tender", "purpose": "批量提问", "calls": 1,
-             "input_tokens": None, "output_tokens": None, "cost": None},
+             "input_tokens": None, "output_tokens": None, "cached_tokens": None, "cost": None},
         ]  # fmt: skip
 
     monkeypatch.setattr(billing.repo, "daily", daily)
@@ -86,10 +86,11 @@ async def test_daily_checks_the_range_and_formats_rows(monkeypatch: pytest.Monke
     data = await billing.daily(None, date(2026, 10, 21), date(2026, 10, 22))  # type: ignore[arg-type]
     # 北京时间 10-21 零点到 10-23 零点。
     assert seen == [(datetime(2026, 10, 20, 16, tzinfo=UTC), datetime(2026, 10, 22, 16, tzinfo=UTC))]
-    assert [(item["day"], item["model"], item["cost"], item["input_tokens"]) for item in data["items"]] == [
-        ("2026-10-21", "A", "0", 0),
-        ("2026-10-22", "B", "0.011000", 11),
+    rows = [
+        (item["day"], item["model"], item["cost"], item["input_tokens"], item["cached_tokens"])
+        for item in data["items"]
     ]
+    assert rows == [("2026-10-21", "A", "0", 0, 0), ("2026-10-22", "B", "0.011000", 11, 5)]
     # 模板类型编码换成页面上的中文名，业务分类原样带出，前端据此联动筛选。
     assert [(item["scene"], item["category"]) for item in data["items"]] == [("日常调度", "招投标"), ("测试", "政策")]
     with pytest.raises(ApiError, match="开始日期不能晚于结束日期"):

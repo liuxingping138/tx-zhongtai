@@ -1,8 +1,11 @@
 """大模型的调用参数与计费规则。模型清单存在 ai_models 表里，在「模型配置」页维护，这里只有规则。
 
 价格单位：输入/输出 元每千 token，联网 元每次。
-推理费用 = 输入token/1000×输入价 + 输出token/1000×输出价；联网费用 = 联网次数 × 联网价。
+推理费用 = 未命中缓存的输入token/1000×输入价 + 命中缓存的输入token/1000×缓存价 + 输出token/1000×输出价；
+联网费用 = 联网次数 × 联网价。
 输入/输出价按调用时刻选：低优档用低优价；配了高峰价的，工作日高峰时段用高峰价；其余用常规价。
+缓存价不分常规、低优档：配了高峰缓存价的工作日高峰时段用它，其余用缓存价；没配缓存价的按此刻的输入价算，
+和没有缓存计价之前算出来的钱一样。
 """
 
 from __future__ import annotations
@@ -49,6 +52,8 @@ class LlmModel:
     peak_output_price: Decimal | None = None
     peak_hours: str = ""
     search_price: Decimal = Decimal(0)
+    cache_price: Decimal | None = None
+    peak_cache_price: Decimal | None = None
 
     @property
     def provider_name(self) -> str:
@@ -71,12 +76,22 @@ class LlmModel:
             return self.peak_input_price, self.peak_output_price
         return self.input_price, self.output_price
 
+    def cache_price_at(self, when: datetime) -> Decimal:
+        """命中上下文缓存的输入按什么价算。没配缓存价的模型按此刻的输入价，费用和以前一样。"""
+
+        if self.peak_cache_price is not None and in_peak(when, self.peak_hours):
+            return self.peak_cache_price
+        if self.cache_price is not None:
+            return self.cache_price
+        return self.prices_at(when)[0]
+
     def price_note(self, when: datetime) -> str:
         """prices_at 给的是哪一档：页面价格旁边写清，免得同一个模型上午下午看到的价不一样，以为价格乱跳。"""
 
         if self.service_tier == "flex" and self.flex_input_price is not None and self.flex_output_price is not None:
             return "低优档"
-        if self.peak_input_price is None or self.peak_output_price is None:
+        peak_io = self.peak_input_price is not None and self.peak_output_price is not None
+        if not peak_io and self.peak_cache_price is None:
             return ""
         hours = (self.peak_hours or DEFAULT_PEAK_HOURS).replace(",", "、")
         return f"高峰价（工作日 {hours}）" if in_peak(when, self.peak_hours) else f"平时价（工作日 {hours} 涨价）"
@@ -151,13 +166,22 @@ def build_body(model: LlmModel, message: str, *, thinking: bool = False) -> dict
 
 
 def calc_costs(
-    model: LlmModel, input_tokens: int, output_tokens: int, search_calls: int, when: datetime
+    model: LlmModel,
+    input_tokens: int,
+    output_tokens: int,
+    search_calls: int,
+    when: datetime,
+    cached_tokens: int = 0,
 ) -> tuple[Decimal, Decimal]:
-    """(推理费用, 联网费用)，单位元，保留 6 位。"""
+    """(推理费用, 联网费用)，单位元，保留 6 位。cached_tokens 是输入里命中缓存的部分，夹在 0 到输入数之间。"""
 
     input_price, output_price = model.prices_at(when)
+    cached = min(max(cached_tokens, 0), max(input_tokens, 0))
+    uncached = max(input_tokens - cached, 0)
     inference = (
-        Decimal(input_tokens) / _THOUSAND * input_price + Decimal(output_tokens) / _THOUSAND * output_price
+        Decimal(uncached) / _THOUSAND * input_price
+        + Decimal(cached) / _THOUSAND * model.cache_price_at(when)
+        + Decimal(output_tokens) / _THOUSAND * output_price
     ).quantize(_COST_QUANT, rounding=ROUND_HALF_UP)
     search = (Decimal(search_calls) * model.search_price).quantize(_COST_QUANT, rounding=ROUND_HALF_UP)
     return inference, search

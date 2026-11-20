@@ -38,6 +38,8 @@ _PRICE_FIELDS = (
     "flex_output_price",
     "peak_input_price",
     "peak_output_price",
+    "cache_price",
+    "peak_cache_price",
     "search_price",
 )
 _TEXT_LIMITS = {"name": 100, "endpoint": 128, "rate_limit": 500}
@@ -65,6 +67,8 @@ def to_model(row: AiModel) -> LlmModel:
         peak_output_price=row.peak_output_price,
         peak_hours=row.peak_hours,
         search_price=row.search_price,
+        cache_price=row.cache_price,
+        peak_cache_price=row.peak_cache_price,
     )
 
 
@@ -138,7 +142,8 @@ def _choice(values: dict[str, Any], key: str, allowed: tuple[str, ...], label: s
 
 
 def _validated_prices(values: dict[str, Any], service_tier: str) -> dict[str, Any]:
-    """单价成对校验：低优、高峰两档各自要么都填要么都不填；选了低优档就得有低优价。"""
+    """单价成对校验：低优、高峰两档各自要么都填要么都不填；选了低优档就得有低优价。
+    缓存价可以不填（按输入价算）；填高峰缓存价要先有缓存价，平时段才有价可用。"""
 
     out: dict[str, Any] = {}
     out["input_price"] = _price(values, "input_price", "常规输入单价", required=True)
@@ -154,14 +159,19 @@ def _validated_prices(values: dict[str, Any], service_tier: str) -> dict[str, An
     out["peak_output_price"] = _price(values, "peak_output_price", "高峰输出单价", required=False)
     if (out["peak_input_price"] is None) != (out["peak_output_price"] is None):
         raise _invalid("高峰输入、输出单价要一起填或都不填")
+    out["cache_price"] = _price(values, "cache_price", "缓存单价", required=False)
+    out["peak_cache_price"] = _price(values, "peak_cache_price", "高峰缓存单价", required=False)
+    if out["peak_cache_price"] is not None and out["cache_price"] is None:
+        raise _invalid("填了高峰缓存单价，也要填平时的缓存单价")
+    has_peak = out["peak_input_price"] is not None or out["peak_cache_price"] is not None
     peak_hours = str(values.get("peak_hours") or "").strip()
-    if out["peak_input_price"] is not None:
+    if has_peak:
         peak_hours = peak_hours or DEFAULT_PEAK_HOURS
         try:
             parse_peak_hours(peak_hours)
         except ValueError as exc:
             raise _invalid(f"高峰时段格式不对（{exc}），应形如 09:00-12:00,14:00-18:00") from None
-    out["peak_hours"] = peak_hours if out["peak_input_price"] is not None else ""
+    out["peak_hours"] = peak_hours if has_peak else ""
     return out
 
 

@@ -95,7 +95,7 @@ def test_raw_log_and_failed_files(tmp_path: Path) -> None:
     start_raw(raw)
     append_raw(raw, _result("a1", "答").raw_row("模型A"))
     with raw.open(encoding="utf-8-sig") as handle:
-        assert list(csv.reader(handle))[1] == ["a1", "问 a1", "模型A", "答", "10", "5", "", "1"]
+        assert list(csv.reader(handle))[1] == ["a1", "问 a1", "模型A", "答", "10", "5", "", "1", "0"]
     log = tmp_path / "run.log"
     append_log(log, "第一行")
     assert log.read_text(encoding="utf-8") == "第一行\n"

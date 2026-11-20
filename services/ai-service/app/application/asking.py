@@ -53,6 +53,7 @@ def model_info(model: LlmModel) -> dict[str, Any]:
         "available": bool(api_key_for(model)),
         "input_price": str(input_price),
         "output_price": str(output_price),
+        "cache_price": str(model.cache_price_at(now)),
         "search_price": str(model.search_price),
         "price_note": model.price_note(now),
     }

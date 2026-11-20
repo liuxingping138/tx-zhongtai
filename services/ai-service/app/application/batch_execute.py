@@ -86,6 +86,7 @@ class Job:
     stop_reason: str = ""
     input_tokens: int = 0
     output_tokens: int = 0
+    cached_tokens: int = 0
     search_calls: int = 0
     inference_cost: Decimal = Decimal(0)
     search_cost: Decimal = Decimal(0)
@@ -124,12 +125,17 @@ async def _record(job: Job, result: RowResult) -> None:
     job.results[result.myid] = result
     job.input_tokens += result.input_tokens
     job.output_tokens += result.output_tokens
+    job.cached_tokens += result.cached_tokens
     job.search_calls += result.search_calls
     now = utcnow()
-    inference, search = calc_costs(job.model, result.input_tokens, result.output_tokens, result.search_calls, now)
+    inference, search = calc_costs(
+        job.model, result.input_tokens, result.output_tokens, result.search_calls, now, result.cached_tokens
+    )
     job.inference_cost += inference
     job.search_cost += search
-    job.ledger.add(now, Spend(result.input_tokens, result.output_tokens, result.search_calls, inference, search))
+    spend = Spend(result.input_tokens, result.output_tokens, result.search_calls, inference, search)
+    spend.cached_tokens = result.cached_tokens
+    job.ledger.add(now, spend)
     limit = job.run.cost_limit
     if limit is not None and job.inference_cost + job.search_cost >= limit and not job.stop.is_set():
         # 在途的几行仍会返回并计费，所以实际花费会略超上限，超出部分不超过并发数那几行。
@@ -203,6 +209,7 @@ def _progress(job: Job, *, final: bool = False) -> dict[str, Any]:
         "format_failed_count": sum(1 for item in failed if item.format_error),
         "input_tokens": job.input_tokens,
         "output_tokens": job.output_tokens,
+        "cached_tokens": job.cached_tokens,
         "search_calls": job.search_calls,
         "inference_cost": job.inference_cost,
         "search_cost": job.search_cost,
@@ -281,6 +288,7 @@ async def _load(run: BatchRun) -> Job:
         format_retries=FORMAT_RETRIES if sample else 0,
         input_tokens=run.input_tokens,
         output_tokens=run.output_tokens,
+        cached_tokens=run.cached_tokens or 0,
         search_calls=run.search_calls,
         inference_cost=run.inference_cost,
         search_cost=run.search_cost,

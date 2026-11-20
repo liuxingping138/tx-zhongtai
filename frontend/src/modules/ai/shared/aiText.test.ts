@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   CODE_TABLE_FIELD,
   appendBlock,
+  cacheHitText,
   costOf,
   formatState,
   formatYuan,
@@ -55,11 +56,30 @@ describe('@ 插入变量', () => {
 describe('费用与状态', () => {
   it('按千 token 单价和联网单价计算', () => {
     const model = { input_price: '0.0015', output_price: '0.0045', search_price: '0.004' }
-    const cost = costOf(model, { input: 2000, output: 1000, search: 3 })
+    const cost = costOf(model, { input: 2000, output: 1000, search: 3, cached: 0 })
     expect(cost.inference).toBeCloseTo(0.0075)
     expect(cost.search).toBeCloseTo(0.012)
-    expect(costOf(undefined, { input: 1, output: 1, search: 1 })).toEqual({ inference: 0, search: 0 })
+    expect(costOf(undefined, { input: 1, output: 1, search: 1, cached: 0 })).toEqual({ inference: 0, search: 0 })
     expect(formatYuan(0.00751)).toBe('¥0.0075')
+  })
+
+  it('命中上下文缓存的输入按缓存单价算，没给缓存价按输入价，和后端 calc_costs 一致', () => {
+    const model = { input_price: '0.0008', output_price: '0.0032', search_price: '0', cache_price: '0.000016' }
+    // 1000 未命中 × 0.0008 + 2000 命中 × 0.000016 + 1000 输出 × 0.0032
+    expect(costOf(model, { input: 3000, output: 1000, search: 0, cached: 2000 }).inference).toBeCloseTo(0.004032, 9)
+    const plain = { input_price: '0.0008', output_price: '0.0032', search_price: '0' }
+    expect(costOf(plain, { input: 3000, output: 1000, search: 0, cached: 2000 }).inference)
+      .toBeCloseTo(costOf(plain, { input: 3000, output: 1000, search: 0, cached: 0 }).inference, 9)
+    // 命中数越界时夹住，不会算出负的未命中部分
+    expect(costOf(model, { input: 1000, output: 0, search: 0, cached: 5000 }).inference).toBeCloseTo(0.000016, 9)
+    expect(costOf(model, { input: 1000, output: 0, search: 0, cached: -5 }).inference).toBeCloseTo(0.0008, 9)
+  })
+
+  it('缓存命中率：没有命中不显示', () => {
+    expect(cacheHitText(3000, 2000)).toBe('66.7%')
+    expect(cacheHitText(1000, 1000)).toBe('100%')
+    expect(cacheHitText(1000, 0)).toBe('')
+    expect(cacheHitText(0, 10)).toBe('')
   })
 
   it('状态颜色与是否仍在运行', () => {

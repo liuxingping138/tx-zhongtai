@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from app.application import legacy_import as service
-from app.application.batch_output import RAW_COLUMNS
+from app.application.batch_output import LEGACY_RAW_COLUMNS
 from app.core import storage
 from app.domain.models import BatchRun, PromptTemplate
 from app.repositories import batch_runs as run_repo
@@ -65,7 +65,7 @@ def _bundle(root: Path) -> Path:
     (outputs / "ask_result.xlsx").write_bytes(b"result")
     with (outputs / "temp.csv").open("w", newline="", encoding="utf-8-sig") as handle:
         writer = csv.writer(handle)
-        writer.writerow(RAW_COLUMNS)
+        writer.writerow(LEGACY_RAW_COLUMNS)
         writer.writerow(["a1000001", "问", "m", "答", "100", "20", "", "1"])
         writer.writerow(["a1000002", "问", "m", "答", "300", "80", "返回格式不对：没有字段", "0"])
         writer.writerow(["a1000003", "问", "m", "", "0", "0", "HTTP 500", "0"])

@@ -35,7 +35,7 @@ function now(): string {
 export function useAnswerStream() {
   const messages = ref<ChatMessage[]>([])
   const running = ref(false)
-  const stats = reactive<StreamStats>({ model: null, thinking: false, usage: { input: 0, output: 0, search: 0 } })
+  const stats = reactive<StreamStats>({ model: null, thinking: false, usage: { input: 0, output: 0, search: 0, cached: 0 } })
   let controller: AbortController | null = null
 
   const cost = computed(() => costOf(stats.model ?? undefined, stats.usage))
@@ -46,7 +46,7 @@ export function useAnswerStream() {
     const reply = reactive<ChatMessage>({ role: 'assistant', text: '', reasoning: '', tip: '', error: '', time: now() })
     messages.value.push(user, reply)
     stats.thinking = thinking
-    stats.usage = { input: 0, output: 0, search: 0 }
+    stats.usage = { input: 0, output: 0, search: 0, cached: 0 }
     running.value = true
     controller = new AbortController()
     try {
@@ -70,7 +70,7 @@ export function useAnswerStream() {
     stop()
     messages.value = []
     stats.model = null
-    stats.usage = { input: 0, output: 0, search: 0 }
+    stats.usage = { input: 0, output: 0, search: 0, cached: 0 }
   }
 
   return { messages, running, stats, cost, send, stop, clear }

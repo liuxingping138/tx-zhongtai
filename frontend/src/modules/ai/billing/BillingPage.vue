@@ -12,7 +12,7 @@ import TableSkeleton from '@/components/TableSkeleton.vue'
 import { useTheme } from '@/composables/useTheme'
 import {
   colorMap, dailySeries, filterOptions, filterRows, groupBy,
-  money, presetRange, pruneInPlace, SCENES, summarize, tokens,
+  cachedText, money, presetRange, pruneInPlace, SCENES, summarize, tokens, totalCards,
   type BillingFilters, type GroupKey, type RangePreset,
 } from './billing'
 import { costOption } from './billingChart'
@@ -221,8 +221,8 @@ onMounted(load)
     </el-alert>
     <CardSkeleton
       v-if="loading && rows.length === 0"
-      :count="4"
-      :columns="4"
+      :count="5"
+      :columns="5"
       variant="kpi"
     />
     <section
@@ -230,25 +230,14 @@ onMounted(load)
       class="billing__totals"
       aria-label="合计"
     >
-      <div class="billing__total">
-        <span>合计费用</span>
-        <strong>{{ money(total.cost) }}</strong>
-        <small>所选周期模型调用总支出</small>
-      </div>
-      <div>
-        <span>调用次数</span>
-        <strong>{{ total.calls.toLocaleString('zh-CN') }}</strong>
-        <small>批量任务与单次请求累计</small>
-      </div>
-      <div>
-        <span>输入 token</span>
-        <strong>{{ tokens(total.input_tokens) }}</strong>
-        <small>提示词与文档上下文消耗</small>
-      </div>
-      <div>
-        <span>输出 token</span>
-        <strong>{{ tokens(total.output_tokens) }}</strong>
-        <small>模型结构化生成结果消耗</small>
+      <div
+        v-for="card in totalCards(total)"
+        :key="card.label"
+        :class="{ billing__total: card.main }"
+      >
+        <span>{{ card.label }}</span>
+        <strong>{{ card.value }}</strong>
+        <small>{{ card.note }}</small>
       </div>
     </section>
     <section
@@ -303,7 +292,7 @@ onMounted(load)
       </el-tabs>
       <TableSkeleton
         v-if="loading && rows.length === 0"
-        :columns="6"
+        :columns="7"
       />
       <el-table
         v-else
@@ -343,6 +332,15 @@ onMounted(load)
         >
           <template #default="{ row }">
             {{ tokens(row.input_tokens) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="缓存命中"
+          width="150"
+          align="right"
+        >
+          <template #default="{ row }">
+            {{ cachedText(row) }}
           </template>
         </el-table-column>
         <el-table-column

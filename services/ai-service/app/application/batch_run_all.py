@@ -76,7 +76,9 @@ async def run_all(session: AsyncSession, actor: Actor, access: CategoryAccess, r
         thinking=source.thinking,
         row_limit=0,
         status=RUN_QUEUED,
-        **dict.fromkeys(("done_count", "failed_count", "format_failed_count", "input_tokens", "output_tokens"), 0),
+        **dict.fromkeys(
+            ("done_count", "failed_count", "format_failed_count", "input_tokens", "output_tokens", "cached_tokens"), 0
+        ),
         total_count=rows,
         search_calls=0,
         inference_cost=Decimal(0),
