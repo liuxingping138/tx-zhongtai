@@ -18,7 +18,7 @@
 |---|---|---|
 | 页面结构、总数、分页、加载失败 | `components/ListPage.vue` | title/hint、total/page/pageSize/loading/error，retry/change 处理；结果区必须用 ScrollPort；概览走 `summary` 插槽（筛选之前，不参与拉伸）；筛选多的（操作日志）用 `expandedResults` 变体加高结果区 |
 | 结果区滚动 | `components/ScrollPort.vue` | 常显横/纵滑槽；两指分轴；默认每页 20 条时未露出的行必须能上下滚到。不要用 Element Plus 悬浮条替代 |
-| 查询 | `components/FilterBar.vue`、`FilterSelect.vue`、`FilterKeyword.vue` | query 与 applied；默认只露第一行，第一行之后的框收进「展开」，按实际排版判断（`filterFold.ts`，有单测），收起的框用 visibility 藏、不进 Tab 顺序；advanced 只作字段分组。`FilterSelect` 一律多选，query 里筛选字段默认值是 `[]`（不是 `''`），重置也赋 `[]`；状态卡片这类「点一下筛选、再点取消」的入口用 `toggleValue`。几百万行的名称、标题字段用 `FilterKeyword`（同样以 `string[]` 做 v-model；回车交给 FilterBar 的表单提交，组件里不要再绑 `keyup.enter`，否则一次回车查两次、还绕过输入法组合判断），后端照旧 `ilike_any`，并给该列建 pg_trgm 的 GIN 索引；不要再放进 `*_OPTION_COLUMNS` 去重取候选 |
+| 查询 | `components/FilterBar.vue`、`FilterSelect.vue`、`FilterKeyword.vue` | query 与 applied；标签在框上方（FilterBar 的 `el-form` 固定 `label-position="top"`，页面不另设）；默认只露第一行，第一行之后的框收进「展开」，按实际排版判断（`filterFold.ts`，有单测），收起的框用 visibility 藏、不进 Tab 顺序；advanced 只作字段分组。`FilterSelect` 一律多选，query 里筛选字段默认值是 `[]`（不是 `''`），重置也赋 `[]`；状态卡片这类「点一下筛选、再点取消」的入口用 `toggleValue`。几百万行的名称、标题字段用 `FilterKeyword`（同样以 `string[]` 做 v-model；回车交给 FilterBar 的表单提交，组件里不要再绑 `keyup.enter`，否则一次回车查两次、还绕过输入法组合判断），后端照旧 `ilike_any`，并给该列建 pg_trgm 的 GIN 索引；不要再放进 `*_OPTION_COLUMNS` 去重取候选 |
 | 筛选项候选值 | `composables/useFilterOptions.ts` | `v-bind="filters.bind('字段')"`；候选少的字段整份预发、本地过滤，候选多的自动转服务端搜索。不要再自己 reactive 一份 options |
 | 查询与 URL 恢复 | `composables/useListQuery.ts` | `useListQuery(query, load, 私有字段?)`，人名等个人信息放私有字段，不写 URL；FilterBar 直接接 `@search="listQuery.search"`（回第一页、生效草稿、加载）和 `@reset="listQuery.resetFilters"`（筛选恢复初始值，每页条数不变）。状态卡片这类单列切换用 `replaceApplied` + `toggleValue` |
 | 列表加载 | `composables/useListLoader.ts` | 传 `requested/commitPage`（来自 useListQuery）、`fetch`、`errorText`；返回 items/total/loading/loadError/resultFiltered/load。只采用最后一次请求的结果，不要在页面里再写请求序号 |
@@ -40,7 +40,7 @@
 | 操作记录入口 | `components/AuditLogButton.vue` | `module` 填资源编码，点击跳到操作日志并按该模块筛选；没有操作日志查看权限时自动隐藏 |
 | 图表 | `components/charts/BaseChart.vue`、`echarts.ts` | 传 `option`、中文 `label`、`height`，点击图形发 `select`。option 由纯函数生成并写单测（参照 `modules/policy/crawler-monitoring/charts.ts`），组件内配色用 `useChartPalette()`（随浅色/深色主题实时响应），纯函数默认参用 `chartPalette()`，统一浮层样式用 `tooltipStyle(palette)`；新图表类型先在 `echarts.ts` 注册。ECharts 按需注册、随页面懒加载，不进公共 vendor |
 | 权限展示 | `permissions/catalog.ts`、`permissions/matrix.ts`、`modules/system/roles/PermissionTable.vue` | 按菜单分组，名称与菜单一致，一项一档。有导出动作才出现「导出」，有写操作才出现「管理」。说明从资源树推导，不在页面里手写模块清单。勾选联动、整组勾选、锁定、搜索等纯逻辑在 `matrix.ts`（有单测），组件只渲染。新增模块只需在 iam 目录登记动作并给导出动作标 `EXPORT` |
-| 账号菜单与外观偏好 | `layouts/UserAccountMenu.vue`、`composables/useTheme.ts`、`composables/useDensity.ts` | 顶部栏右侧：表格密度切换（标准/紧凑）、浅色/深色主题切换、账号胶囊按钮（点击弹出 Google Workspace 风格账号浮层卡片：头像、显示名、`@username`、`/me.roles` 角色标签、个人设置/修改密码/退出登录）；左侧栏底部仅放收起按钮 |
+| 账号菜单与外观偏好 | `layouts/UserAccountMenu.vue`、`composables/useTheme.ts`、`composables/useTableDensity.ts` | 顶部栏右侧：表格密度切换（标准/紧凑）、浅色/深色主题切换、账号胶囊按钮（点击弹出 Google Workspace 风格账号浮层卡片：头像、显示名、`@username`、`/me.roles` 角色标签、个人设置/修改密码/退出登录）；左侧栏底部仅放收起按钮 |
 | 个人设置页 | `views/ProfileView.vue` | Google Account 双栏均衡仪表盘：顶部身份横幅 + 左栏基本资料即时编辑卡片、界面偏好设置卡片 + 右栏账号安全卡片、角色与模块权限概览卡片 |
 | 浮层焦点 | `layouts/AdminLayout.vue` | 打开时把焦点送进浮层、关闭后送回触发按钮；落回 body 会让键盘用户从头 Tab |
 | 键盘焦点描边 | `styles/workspace.css` | 全局描边只给链接、按钮、复选框和单选框。能打字的输入框鼠标点一下也算 `:focus-visible`，不要给 `input` 加全局 outline：Element Plus 输入框靠外框变色表示聚焦，再描一圈就是框里套框 |

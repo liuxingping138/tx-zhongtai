@@ -4,14 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目定位
 
-一体化业务数据平台，最终包含：客户、招投标、政策、场景、爬虫监测、码表管理、AI提问、系统管理。
-主要业务数据围绕「客群」串联；爬虫监测、AI提问是独立模块，与客群无直接关联。
+一体化业务数据平台，最终包含：客户、招投标、政策、场景、爬虫监测、码表管理、AI提问、智库、系统管理。
+主要业务数据围绕「客群」串联；爬虫监测、AI提问、智库是独立模块，与客群无直接关联。
 
 当前进度：公共框架已到 P6（账号/会话/RBAC、Outbox、审计、隔离验收、备份恢复、OpenAPI），
 政策三张表（信源、基础标签、解读）与码表三张表（政策类型、行业场景、省市区编码）已接入，
 爬虫监测已接入（只读统计页，数据来自外部爬虫库采集总表的按天聚合，按网站统计），
 爬虫配置统计已接入（按规则表把信源标成已爬，按周按省统计上线栏目数），
-AI提问已接入（独立的 ai-service：提示词模板、样本试跑与上线、按 Excel 逐行跑的批量任务，从旧 Django 项目 difyapi/chat_web 迁来）。
+AI提问已接入（独立的 ai-service：提示词模板、样本试跑与上线、按 Excel 逐行跑的批量任务，从旧 Django 项目 difyapi/chat_web 迁来），
+智库已接入（独立的 thinktank-service：知识库，按文件类型 × 行业类型授权，文件存 MinIO）。
 **客户仅有占位目录**，未开发——不要提前暴露无功能入口。招中标已实现独立只读 tender-service（接口、页面、菜单与部署配置），部署说明见 docs/guides/招中标模块.md。
 其余文档按 设计决策 / 操作手册 分类，索引见 `docs/README.md`。文档只写与现有代码一致的现状，过时内容直接删除，历史留在 git 里。
 
@@ -71,19 +72,22 @@ Navicat 连 `36.134.128.137:5433`。
 frontend/              Vue 管理端（pnpm）
 services/
   iam-service/         账号、会话、RBAC、菜单；Compose 里 iam-worker 共用此镜像
-  audit-service/       审计写入、查询、到期清理
+  audit-service/       审计写入、查询、到期清理；Compose 里 audit-worker 共用此镜像跑到期清理
   policy-service/      政策：信源、基础标签、解读、爬虫监测
   codebook-service/    码表：政策类型、行业场景、省市区编码
   ai-service/          AI提问：提示词模板、批量任务；Compose 里 ai-worker 共用此镜像执行批量任务
   customer-service/    占位，仅 .gitkeep
-  tender-service/      招中标只读查询、按采集日统计、按需正文
+  tender-service/      招中标只读查询、按采集日统计、按需正文（没有本地库）
+  thinktank-service/   智库：知识库（预留报告库、方案库）
 packages/platform-common/   跨服务公共包（见下）
 deploy/gateway/        Traefik 静态+动态配置
-deploy/compose/        docker-compose.yml、Postgres 初始化脚本
+deploy/compose/        docker-compose.yml（及 https / p6 叠加文件）、Postgres 初始化与 provision-* 补建脚本
+deploy/systemd/       IP 证书续期、到期检查的 systemd 单元
 ```
 
-每个服务一套独立数据库（`iam_db` / `audit_db` / `policy_db` / `codebook_db` / `ai_db`），
-服务间不直连对方的库。
+每个服务一套独立数据库（`iam_db` / `audit_db` / `policy_db` / `codebook_db` / `ai_db` / `thinktank_db`），
+服务间不直连对方的库。tender-service 没有本地库，只读外部 MySQL。服务端口 iam 8001、audit 8002、codebook 8003、
+policy 8004、ai 8005、tender 8006、thinktank 8007，都只在容器网络内。
 
 ### 关键：公共能力一律放 platform-common
 
@@ -134,6 +138,23 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
 - 统计只读原始表，按 `collect_date` 分日；状态 1 同时计入信息化标签、基础字段补充，场景工作量暂为 0。两项工序不能相加当作处理数据量。
 - 正文按需：项目 ID 长度 <=13 时读 `bid_analyse.qlm_saas_content.infoid` 对应的 `infocontent`；其他读 `crawler2021.zhaobiao2021_prod.uid` 对应 `content`，必须同时限制 `create_time = 原始表.collect_date`（用户已确认 uid）。
 - 源库雪花 ID 序列化成字符串。全表精确计数在有界后台线程中执行，前端轮询；列表 LIMIT 多取一条判断下一页，不等待 COUNT。统计缓存只在服务内存，不建源表和平台业务表。
+
+### 智库：独立知识库，文件在对象存储
+
+- `thinktank-service`（库 `thinktank_db`）目前只有知识库（`app/knowledge/`，预留报告库、方案库）。菜单「智库 → 知识库」`/thinktank/knowledge`，
+  单个文件的预览工作台 `/thinktank/knowledge/:id`。码表管理下的「智库码表」目录（`menu.codebook.thinktank`）目前没有子菜单
+- 两层授权：模块资源 `thinktank.knowledge` 决定能做什么（查看档：列表、详情、预览、收藏；导出档：导出、导出未定义、下载源文件；
+  完整档：上传、编辑、导入标签表、删除）；数据范围资源 `thinktank.file_type.*`、`thinktank.industry_type.*` 决定能碰哪些文件
+  （IAM `app/domain/thinktank_catalog.py` 和服务 `app/knowledge/domain/scopes.py` 的编码一一对应，改一边要改另一边）。
+  范围档位按模块档位封顶（`KnowledgeAccess.from_levels`）；看和下载要文件类型命中、行业任一命中，编辑要文件的全部行业都有完整档。
+  越权访问单条记录也记审计
+- 文件存储 `app/core/storage.py`：配了 `THINKTANK_MINIO_ENDPOINT` 读写 MinIO（S3v4 签名，沿用原服务器的对象键），没配落本地卷 `thinktank-data`（`/data/thinktank`）；
+  存储连不上回 503。上传只收 PDF / Word / Excel / PPT / TXT / CSV / MD，单个上限 `THINKTANK_UPLOAD_MAX_BYTES`（50MB），网关这个前缀另用 `thinktank-limit`
+- 预览：PDF 在页面里内嵌显示，TXT / MD / CSV 显示文本，Office 等其他格式只显示资料摘要并提示下载源文件（服务端不做格式转换）；没有源文件的记录下载得到摘要 txt。
+  源文件经 `/{id}/content`、`/{id}/download` 流式返回（网关 110 路由，不压缩不缓冲），客户端提前断开也关掉对象存储的流；前端下载开始、失败用消息提示
+- 预览、下载、编辑等写知识库自己的操作记录（`/{id}/logs`），同时经 Outbox 上报审计（投递循环在服务 lifespan 里，没有单独 worker）。
+  省份候选值经 codebook `/internal/v1/provinces` 取，取不到用内置列表（密钥 `CODEBOOK_THINKTANK_CALLER_SECRET`，compose 传给两边）
+- 历史资料、操作记录和收藏用 `python -m app.cli.seed_knowledge`（`make seed-knowledge`）从 `services/thinktank-service/data` 导入
 
 ### 爬虫监测是只读统计，数据靠同步进来
 
@@ -253,11 +274,12 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
 
 业务写操作调 `enqueue_event(...)` 写本服务的 `*_outbox` 表（与业务同事务），
 再由 worker 投递到 audit-service。失败按指数退避重试（最长 15 分钟一次，默认 100 次，约一天），超上限置 dead；只有内容本身不合格（400/413/422）立即 dead，401/403（换密钥、容器重建有先后）照常重试。可用 `make outbox-replay` 重放（服务器上 `make SERVER=1 outbox-replay`）
-（覆盖 iam/policy/codebook/ai，`OUTBOX_SERVICES=policy-service` 只跑一个）。
+（覆盖 iam/policy/codebook/ai/thinktank，`OUTBOX_SERVICES=policy-service` 只跑一个）。
+tender-service 没有库也没有 Outbox：导出、查看正文同步上报审计，上报失败回 503（见 `docs/guides/招中标模块.md`）。
 
 认领时置 delivering 并写 `lease_until`，回写只在租约没被别人重新认领时生效。进程在投递途中重启，
 租约到期后会被重新认领，不会永远卡在 delivering。IAM 默认租约 30 秒（`IAM_WORKER_LEASE_SECONDS`）；
-policy / codebook / ai 走公共 Outbox，默认 5 分钟。审计服务按 `event_id` 去重，重投不重复入库。
+policy / codebook / ai / thinktank 走公共 Outbox（投递循环在各服务 lifespan 里），默认 5 分钟。审计服务按 `event_id` 去重，重投不重复入库。
 
 审计库（库、public schema、全部表）归超级用户所有，`audit_events` 对应用账号只有 SELECT/INSERT：属主是应用账号时
 「收回删改权」防不住被攻破的应用账号（属主能把权限授回给自己、直接删表删库）。所以审计迁移用超级用户跑（生产环境超级用户口令为空或还是示例值时 `migrate_audit` 拒绝执行），
@@ -339,8 +361,9 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
 
 Traefik 文件 Provider（非 Docker Provider）。路由优先级：
 具体业务前缀（100）> 未接入业务的 `/api/v1` 兜底 404（50）> 前端 SPA 兜底（1）。
-`/health/*`、`/internal/*` 未声明路由，不对外暴露。除 `/api/v1/ai/stream`（优先级 110）外全部路由挂了 `compress` 中间件，
-xlsx/zip/图片在 `excludedContentTypes` 里排除。
+`/health/*`、`/internal/*` 未声明路由，不对外暴露。优先级 110 的三条路由不挂 `compress` 和请求缓冲：`/api/v1/ai/stream`（流式回答）、
+AI 批量产物下载、智库文件的 `content` / `download`（大文件流式下发）；其余路由都挂 `compress`，xlsx/zip/图片在 `excludedContentTypes` 里排除。
+请求体上限 `request-limit` 是 20MB+256KB，`/api/v1/thinktank` 用 `thinktank-limit`（50MB+256KB）。
 
 ## 硬性开发约定
 
@@ -449,7 +472,7 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
 
 - 本期不执行生产部署；`deploy/gateway/traefik.prod.yml.example` 只是 HTTPS 模板
 - `client_ip` 无条件信任 `X-Forwarded-For` 首段，成立前提是服务只能经网关访问
-  （Traefik 会清洗客户端自带的该头）。服务端口 8001–8006 不得直接对外暴露，
+  （Traefik 会清洗客户端自带的该头）。服务端口 8001–8007 不得直接对外暴露，
   也不要在 Traefik 前再加一层不做同样清洗的代理
 - 导出不分页，整个结果集读进内存再生成 Excel，靠 `export_max_rows` 兜底
 - 筛选项服务端搜索最坏情况线性扫索引（20002 行约 5ms），到 20 万行量级再考虑 pg_trgm

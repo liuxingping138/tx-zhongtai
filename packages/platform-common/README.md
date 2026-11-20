@@ -14,5 +14,13 @@
 - `platform_common.filters` / `platform_common.options`：列表筛选和筛选项预览。
 - `platform_common.excel` / `platform_common.columns`：Excel 读写、表头匹配。解析有解压大小、行列数和并发上限。
 - `platform_common.http_utils` / `platform_common.body_limit`：统一响应、上传大小限制。上传在鉴权通过之后才解析。
+- `platform_common.xlsx_writer`：不经 openpyxl、直接写只含文本的 xlsx，业务导出走它。
+- `platform_common.config` / `platform_common.public_config`：服务配置基类（生产环境拒绝示例密钥）、容器里只打印白名单参数。
+- `platform_common.database`：`create_service_engine`，全部服务的连接池与 PostgreSQL 超时只在这里设（见 `docs/design/实现决策.md`「连接预算与超时」）。
+- `platform_common.audit_emit`：`AuditEmitter`，审计入队与后台投递。
+- `platform_common.internal_calls`：服务间 `/internal/*` 调用的请求头。
+- `platform_common.route_audit`：路由安全分级体检（`audit_routes`、`iter_api_routes`、`mark_permission_dependency`；`@classified` 在 `service_authz`）。
+- `platform_common.scheduler`：每日定时任务引擎（队列、leader 锁、执行通道、重试、页面接口），见 `docs/guides/任务调度.md`。
+- `platform_common.clock` / `orm_base` / `enums` / `actors` / `redaction` / `similarity`：时钟与北京时间、ORM Base、公共枚举、操作者身份、日志脱敏键、名称字面相似度。
 
 不允许通过本包导入任何服务的数据库模型或业务表。
