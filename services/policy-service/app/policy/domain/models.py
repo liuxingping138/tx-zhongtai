@@ -8,13 +8,15 @@ import uuid
 from datetime import datetime
 
 from platform_common.orm_base import Base
-from sqlalchemy import ColumnElement, DateTime, Index, Integer, String, Text, UniqueConstraint, and_, literal, text
+from sqlalchemy import ColumnElement, DateTime, Index, Integer, String, Text, UniqueConstraint, and_, func, literal, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import InstrumentedAttribute, Mapped, mapped_column
 
 from app.policy.domain.fields import BASE_TAG_COLUMNS
 
 YES = "是"
+# 基础标签默认排序只看政策名称的前多少个字，见 ix_policy_base_tags_default_order。
+DEFAULT_ORDER_NAME_CHARS = 200
 
 
 def _uuid() -> uuid.UUID:
@@ -108,7 +110,15 @@ class BaseTag(Base):
         # 是否穿透是人填的，AI 行都空着，只给填了的行建。
         Index("ix_policy_base_tags_need_interpret", "need_interpret"),
         Index("ix_policy_base_tags_is_penetrate", "is_penetrate", postgresql_where=text("is_penetrate <> ''")),
-        Index("ix_policy_base_tags_default_order", "province_code", "policy_name", "id"),
+        # 默认排序（省份编码、名称、ID）的索引。名称是 Text，源库有把整段脚本当标题的：btree 单条索引项超过约
+        # 2704 字节就写不进去，整批打标、导入回滚。所以只按名称前 DEFAULT_ORDER_NAME_CHARS 个字排，
+        # 列表的 ORDER BY 用同一个表达式（default_order），才走得上这个索引。
+        Index(
+            "ix_policy_base_tags_default_order",
+            "province_code",
+            text(f"left(policy_name, {DEFAULT_ORDER_NAME_CHARS})"),
+            "id",
+        ),
         # 政策名称按关键词模糊查找（ILIKE '%词%'），三个字及以上走这个三元组索引。
         Index(
             "ix_policy_base_tags_policy_name_trgm",
@@ -277,6 +287,17 @@ def unclassified_interpretation() -> ColumnElement[bool]:
     """还没和行业场景码表比对过的解读行。"""
 
     return Interpretation.scenario_state == _const("")
+
+
+def default_order() -> tuple[InstrumentedAttribute[str], ColumnElement[str], InstrumentedAttribute[uuid.UUID]]:
+    """基础标签列表、导出共用的排序，和 ix_policy_base_tags_default_order 的表达式一字不差。
+
+    截取长度直接写进 SQL：写成绑定参数的话通用执行计划里 left(policy_name, $1) 对不上索引表达式。
+    最后按 ID 兜底：同名的记录每次查询先后一致，翻页不重复不漏。
+    """
+
+    name = func.left(BaseTag.policy_name, literal(DEFAULT_ORDER_NAME_CHARS, Integer(), literal_execute=True))
+    return (BaseTag.province_code, name, BaseTag.id)
 
 
 SOURCE_FIELDS = (

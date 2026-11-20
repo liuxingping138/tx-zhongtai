@@ -9,11 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
 from app.policy.domain.fields import AI_NOTE_INTERPRET_FAILED, AI_NOTE_OPPORTUNITY_FAILED, TYPE_NOTES
-from app.policy.domain.models import BaseTag, awaiting_interpretation, awaiting_opportunity
+from app.policy.domain.models import BaseTag, awaiting_interpretation, awaiting_opportunity, default_order
 
-# 列表、导出共用的排序。最后按 ID 兜底：同名的记录每次查询先后一致，翻页不重复不漏，
-# 详情页按位置取上一条、下一条也不会跳乱。
-_ORDER = (BaseTag.province_code, BaseTag.policy_name, BaseTag.id)
+# 列表、导出共用的排序（名称只取前 200 字，和默认排序索引一致）。最后按 ID 兜底：同名的记录每次查询先后一致，
+# 翻页不重复不漏，详情页按位置取上一条、下一条也不会跳乱。
+_ORDER = default_order()
 
 
 async def get_by_id(session: AsyncSession, item_id: uuid.UUID) -> BaseTag | None:
