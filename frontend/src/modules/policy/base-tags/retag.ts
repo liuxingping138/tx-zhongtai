@@ -53,7 +53,7 @@ async function readRows<T extends RetagRow>(fetchRow: (id: string) => Promise<T>
   for (let start = 0; start < ids.length; start += FETCH_CHUNK) {
     const chunk = ids.slice(start, start + FETCH_CHUNK)
     const read = await Promise.all(chunk.map((id) => readRow(fetchRow, id)))
-    chunk.forEach((id, index) => states.set(id, read[index]))
+    chunk.forEach((id, index) => states.set(id, read[index] ?? null))
   }
   return states
 }

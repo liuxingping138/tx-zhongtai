@@ -4,7 +4,7 @@ import source from './SamplePreviewTable.vue?raw'
 // 单测跑在 node 环境、不挂组件，这里按模板源码守住 P3-25 引入过的键盘回归：
 // 整行 role="button" 带 @keydown.enter.prevent 时，焦点在行内「试发」按钮上按回车会冒泡到行、被 preventDefault，
 // 打开的是详情而不是试发；按钮套在 role="button" 里读屏也说不清。
-const template = source.slice(source.indexOf('<template>'), source.indexOf('</template>'))
+const template = source.slice(source.indexOf('<template>'), source.indexOf('</template>')).replace(/<!--[\s\S]*?-->/g, '')
 const rowTag = template.slice(template.indexOf('<tr\n          v-for'), template.indexOf('>', template.indexOf('<tr\n          v-for')))
 
 describe('SamplePreviewTable 键盘操作', () => {

@@ -47,7 +47,7 @@ describe('retag', () => {
       '1': { id: '1', version: 1, ai_status: '等待重新判断类型' },
       '2': { id: '2', version: 1, ai_status: '等待重新判断类型' },
     }
-    const fetchRow = vi.fn((id: string) => Promise.resolve({ ...rows[id] }))
+    const fetchRow = vi.fn((id: string) => Promise.resolve({ id, version: 0, ai_status: '', ...rows[id] }))
     const refresh = vi.fn(() => Promise.resolve())
     const { retagging, progress, startAfterRetag, stop } = useListRetagPoll(refresh, fetchRow)
     await startAfterRetag(['1', '2', '1'])
