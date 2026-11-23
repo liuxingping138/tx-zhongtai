@@ -133,6 +133,13 @@ async def open_preview_pdf(settings: Any, row: KnowledgeFile, office_ext: str | 
     return PreviewPdf(stream=opened[0], filename=filename, size=opened[1], etag=etag)
 
 
+async def preview_cached(settings: Any, row: KnowledgeFile) -> bool:
+    """预览用 PDF 已在缓存里（不记一次使用，免得预热把它排到最近用过）。"""
+
+    path = preview_cache.pdf_path(_cache_dir(settings), _cache_key(row))
+    return await asyncio.to_thread(path.is_file)
+
+
 async def drop_preview_cache(settings: Any, row: KnowledgeFile) -> None:
     """删文件后清掉它的预览缓存（含改版前的旧形态）；清不掉只记日志，不影响删除（容量上限迟早会把它淘汰）。"""
 

@@ -154,7 +154,9 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
   服务器出口只有 3～4 Mbps，所以预览用的是另一份 PDF（`app/core/pdf_optimize.py`）：超过 `THINKTANK_PREVIEW_COMPRESS_MIN_BYTES`（3MB）的和 Office 转出的先用 Ghostscript 把内嵌图片降到
   `THINKTANK_PREVIEW_COMPRESS_DPI`（144，没小到原来 90% 就不用），再 `qpdf --linearize` 把第一页排到文件开头；任一步失败退回上一步，工具都没有也缓存原文件，之后的 Range 读本地盘不再去对象存储。
   **「下载源文件」（`/download`）永远是对象存储里的原文件**。缓存在 `/data/thinktank/preview_cache/`（`app/core/preview_cache.py`；按文件 ID + 对象键 + 大小 + 形态 `preview-v2` 命名，原子写入）：命中刷新修改时间，总量超过
-  `THINKTANK_PREVIEW_CACHE_MAX_BYTES`（2GB）从最久没用的删起，删知识文件时连缓存（含改版前不带形态的旧键）一起删，业务备份不打包它。同一个文件同时只做一次（`preview_cache.KeyLocks`），转码、压缩各自同时最多 2 个；soffice 单个 60 秒，gs、qpdf 每条 `THINKTANK_PREVIEW_OPTIMIZE_TIMEOUT_SECONDS`（120 秒）；
+  `THINKTANK_PREVIEW_CACHE_MAX_BYTES`（2GB）从最久没用的删起，删知识文件时连缓存（含改版前不带形态的旧键）一起删，业务备份不打包它。同一个文件同时只做一次（`preview_cache.KeyLocks`），转码、压缩各自同时最多 2 个；
+  上传 PDF / Office 后由 `application/preview_warmup.py` 经 `BackgroundTasks` 在响应发出、事务提交后预热这份缓存（`THINKTANK_PREVIEW_WARMUP_ON_UPLOAD`，默认开）：自开短会话读行，文件已删、类型不用预览、已有缓存、名额被占着（`has_free_slot`）都跳过，
+  结果只记日志 `preview_warmup_done` / `preview_warmup_skipped` / `preview_warmup_failed`，不抛异常；soffice 单个 60 秒，gs、qpdf 每条 `THINKTANK_PREVIEW_OPTIMIZE_TIMEOUT_SECONDS`（120 秒）；
   Office 转失败、PDF 写缓存失败记 `{key}.fail`，10 分钟内不再占名额重做（Office 回摘要，PDF 从存储整份下发、不支持 Range）。拿到名额后才把源文件按块写进临时文件，
   取源文件、转码、压缩前先提交事务交还数据库连接（可能排队一两分钟，占着连接会拖垮连接池），缓存 PDF 在下发前就打开、按块读出（之后被淘汰也能读完）。
   外部命令经 `app/core/subprocess_guard.py` 单开进程组、只带最少的环境变量（不把数据库口令、存储密钥交给处理上传文档的进程），soffice 每次用独立配置关掉宏和外部链接更新，gs 带 `-dSAFER`，
@@ -164,7 +166,11 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
   （`app/knowledge/api/content_response.py`）；摘要 txt 不支持 Range、`private, no-store`。`/content`、`/download` 走网关 110 路由，不压缩（gzip 会破坏 206）不缓冲，客户端提前断开也关掉对象存储的流和缓存文件句柄。
   前端（`PdfStreamViewer.vue` + `usePdfStream.ts`）：PDF.js 及其 worker、CMap、标准字体、wasm 都打进本站静态资源（`vite.config.ts` 的 `pdfjsAssets`，发布在 `/assets/pdfjs-<版本>/`），不走外网 CDN，
   网关和 nginx 的 CSP 为它放行 `worker-src 'self' blob:`。`disableStream` + `disableAutoFetch` 只取当前要画的页；令牌放在请求头，PDF.js 打开后请求头不再变，所以 401 时续期一次后重开文档（页内取数 401 同样处理）。
-  只渲染可见页和上下各 2 页，其余页按已量过的尺寸留占位、画布清空；换记录、离开页面立即 `loadingTask.destroy()` 中止在途 Range。服务端回的不是 PDF（摘要 txt）时阅读器报 `unavailable`，
+  只渲染可见页和上下各 2 页，其余页按已量过的尺寸留占位、画布清空；换记录、离开页面立即 `loadingTask.destroy()` 中止在途 Range。
+  1x 屏上宽度不到 900px 的页按至少 1.5 倍像素画（`pdfLayout.outputScale`，仍受单张画布像素上限约束），双栏预览不发虚。
+  画好的页再盖 PDF.js `TextLayer`（`usePageTextLayer.ts`，样式在 `PdfPageCanvas.vue`、颜色取 `theme.css` 的 `--zt-pdf-*`）可选字复制，页面移出范围、缩放、换文档时 cancel 并清空。
+  文档内查找（工具栏按钮或 Ctrl/⌘+F，`usePdfSearch.ts` + `PdfSearchBar.vue`）**输入查找词之后**才从第 1 页逐页 `getTextContent`（按文档缓存，换词、关闭、换文档立即作废这一轮），
+  不能为了查找在打开时预取文字或整份；高亮画在文字层上（`textHighlight.ts`），全屏时 Esc 先关查找、再退出全屏（`KnowledgeDocViewer.vue`）。服务端回的不是 PDF（摘要 txt）时阅读器报 `unavailable`，
   `useKnowledgeContent.fallbackToText` 改按文本取。文本原文同一条只发一次 `/content`、换记录中止旧请求，按最近使用留 6 份。前端下载开始、失败用消息提示。
   LibreOffice、Ghostscript 让镜像变大，转码、压缩时占内存，默认 `THINKTANK_MEM_LIMIT` 是 1536m
 - 预览、下载、编辑等写知识库自己的操作记录（`/{id}/logs`），同时经 Outbox 上报审计（投递循环在服务 lifespan 里，没有单独 worker）。
@@ -452,6 +458,8 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
   或 `in_any`（枚举精确）。只写 `str | None` 会让多选只剩最后一个值生效
 - Excel 下载经 `useExcelExport`（底层 `downloadFile`），**不要用裸 fetch**——会绕开 401 自动续期和统一中文错误提示；
   导出传 `applied` 而非 `query`：`query` 是用户还没点查询的输入
+- vitest 默认 `node` 环境；要挂载组件或碰 DOM 的单测在文件第一行写 `// @vitest-environment happy-dom`，用 `@vue/test-utils` 挂载（例：`modules/thinktank/knowledge/PdfStreamViewer.test.ts`）。
+  单测共用的替身放 `*.testkit.ts`（不计覆盖率、不被当成测试文件）
 - 改了界面规则同步 DESIGN.md，改了公共组件用法同步 UI开发规范.md
 
 ### Git 提交信息

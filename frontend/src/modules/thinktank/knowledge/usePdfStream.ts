@@ -117,6 +117,14 @@ export function usePdfStream(deps: PdfStreamDeps) {
     return doc.value ? doc.value.getPage(pageNumber) : null
   }
 
+  /** 某页的文字块（和文字层同一份 getTextContent，下标一一对应）：只在查找时才调，按需取那一页的数据。 */
+  async function getPageText(pageNumber: number): Promise<string[] | null> {
+    const pdf = doc.value
+    if (!pdf) return null
+    const content = await (await pdf.getPage(pageNumber)).getTextContent()
+    return content.items.flatMap(item => ('str' in item ? [item.str] : []))
+  }
+
   /** 某页取数或渲染失败：401 说明令牌在看的过程中过期了，续期后重开；其他错误留给那一页自己显示。 */
   async function onPageError(err: unknown): Promise<boolean> {
     if (responseStatus(err) !== HTTP_UNAUTHORIZED || !url) return false
@@ -141,5 +149,5 @@ export function usePdfStream(deps: PdfStreamDeps) {
     await release()
   }
 
-  return { status, errorText, numPages, baseSize, doc, generation, open, retry, getPage, onPageError, close }
+  return { status, errorText, numPages, baseSize, doc, generation, open, retry, getPage, getPageText, onPageError, close }
 }

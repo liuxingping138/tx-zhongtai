@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from platform_common.actors import Actor
 from platform_common.authz import AuthzClient
@@ -26,7 +26,7 @@ from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
 from app.knowledge.api.content_response import content_disposition, inline_content_response, streamed
 from app.knowledge.api.schemas import KnowledgePatch
-from app.knowledge.application import export_import
+from app.knowledge.application import export_import, preview_warmup
 from app.knowledge.application import knowledge as service
 from app.knowledge.application import knowledge_write as write_service
 from app.knowledge.domain.scopes import ALL_SCOPE_RESOURCES, KnowledgeAccess
@@ -166,6 +166,7 @@ async def export_undefined_items(
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def upload_file(
     request: Request,
+    background_tasks: BackgroundTasks,
     file_type: str = Query(default=""),
     operator_type: str = Query(default=""),
     depart_affiliation: str = Query(default=""),
@@ -199,6 +200,8 @@ async def upload_file(
     created = await write_service.upload_knowledge_file(
         session, actor=actor, access=access, filename=filename, content=content, metadata=metadata
     )
+    # 上传已提交：响应发出后在后台把预览缓存做好，第一个打开的人也直接读缓存
+    preview_warmup.schedule_upload_warmup(background_tasks, settings, created["id"])
     return success_json(created, status_code=201)
 
 

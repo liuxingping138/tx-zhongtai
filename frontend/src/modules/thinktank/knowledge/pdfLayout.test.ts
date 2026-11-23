@@ -3,10 +3,12 @@ import {
   clampPage,
   clampScale,
   fitWidthScale,
+  LOW_DPR_FLOOR,
   MAX_CANVAS_PIXELS,
   MAX_SCALE,
   MIN_SCALE,
   mostVisiblePage,
+  NARROW_PAGE_WIDTH,
   outputScale,
   pagesToRender,
   stepZoom,
@@ -58,10 +60,20 @@ describe('pdfLayout', () => {
 
   it('画布像素倍数跟设备像素比，但不超过上限', () => {
     expect(outputScale(600, 800, 2)).toBe(2)
-    expect(outputScale(600, 800, 0)).toBe(1)
+    expect(outputScale(1200, 800, 0)).toBe(1)
     expect(outputScale(0, 0, 2)).toBe(2)
     const ratio = outputScale(4000, 6000, 3)
     expect(ratio).toBeLessThan(3)
     expect(4000 * 6000 * ratio * ratio).toBeLessThanOrEqual(MAX_CANVAS_PIXELS + 1)
+  })
+
+  it('oversamples narrow pages on 1x screens so split-pane previews stay crisp', () => {
+    expect(outputScale(600, 800, 1)).toBe(LOW_DPR_FLOOR)
+    expect(outputScale(600, 800, 1.25)).toBe(LOW_DPR_FLOOR)
+    expect(outputScale(NARROW_PAGE_WIDTH, 1200, 1)).toBe(1)
+    expect(outputScale(600, 800, 2)).toBe(2)
+    const capped = outputScale(899, 40_000, 1)
+    expect(capped).toBeLessThan(LOW_DPR_FLOOR)
+    expect(899 * 40_000 * capped * capped).toBeLessThanOrEqual(MAX_CANVAS_PIXELS + 1)
   })
 })

@@ -72,9 +72,15 @@ export function mostVisiblePage(ratios: ReadonlyMap<number, number>, current: nu
   return best
 }
 
-/** 画布的像素倍数：跟着设备像素比画得清楚，但不超过 MAX_CANVAS_PIXELS。 */
+/** 普通 1080p 屏（像素比不到这个数）上窄于 NARROW_PAGE_WIDTH 的页按至少这个倍数画：缩小显示时细字不发虚。 */
+export const LOW_DPR_FLOOR = 1.5
+/** 双栏预览里页面常被压到 900px 以下；更宽的页本来就够清楚，不多占显存。 */
+export const NARROW_PAGE_WIDTH = 900
+
+/** 画布的像素倍数：跟着设备像素比画得清楚（1x 屏上的窄页超采样到 1.5 倍），但不超过 MAX_CANVAS_PIXELS。 */
 export function outputScale(cssWidth: number, cssHeight: number, devicePixelRatio: number): number {
-  const ratio = devicePixelRatio > 0 ? devicePixelRatio : 1
+  const dpr = devicePixelRatio > 0 ? devicePixelRatio : 1
+  const ratio = dpr < LOW_DPR_FLOOR && cssWidth > 0 && cssWidth < NARROW_PAGE_WIDTH ? LOW_DPR_FLOOR : dpr
   const area = cssWidth * cssHeight
   if (area <= 0) return ratio
   return Math.min(ratio, Math.sqrt(MAX_CANVAS_PIXELS / area))

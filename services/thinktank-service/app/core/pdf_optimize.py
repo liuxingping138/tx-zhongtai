@@ -54,6 +54,12 @@ class CacheSlot:
     max_bytes: int
 
 
+def has_free_slot() -> bool:
+    """还有空闲的压缩名额：上传后的预热只在有空时做，不和正在看的人抢。"""
+
+    return not _OPTIMIZE_SEMAPHORE.locked()
+
+
 def _gs_binary() -> str | None:
     return shutil.which("gs")
 

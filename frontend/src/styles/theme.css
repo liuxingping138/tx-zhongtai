@@ -77,6 +77,11 @@
   --chart-weekend-bar: rgba(51, 85, 221, 0.28);
   --chart-tooltip-shadow: 0 12px 32px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.06);
 
+  /* PDF 预览文字层：选中文字、查找命中（当前那处更深），叠在画布上所以都是半透明。 */
+  --zt-pdf-selection: color-mix(in srgb, var(--zt-blue-600) 30%, transparent);
+  --zt-pdf-match: color-mix(in srgb, var(--zt-warning) 35%, transparent);
+  --zt-pdf-match-active: color-mix(in srgb, var(--zt-danger) 45%, transparent);
+
   /* 遮罩层（加载中）的半透明底。 */
   --zt-loading-mask: rgb(255 255 255 / 78%);
 

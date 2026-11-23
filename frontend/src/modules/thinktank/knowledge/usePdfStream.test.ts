@@ -167,4 +167,19 @@ describe('usePdfStream', () => {
     expect(stream.status.value).toBe('ready')
     expect(getDocument).toHaveBeenCalledTimes(2)
   })
+
+  it('查找时才按页取文字块，跳过标记内容；没有文档时返回 null', async () => {
+    const doc = fakeDoc(2)
+    const getTextContent = vi.fn(() => Promise.resolve({ items: [{ str: '数字' }, { type: 'beginMarkedContent' }, { str: '政府' }] }))
+    doc.getPage.mockImplementation(() => Promise.resolve({
+      getViewport: ({ scale }: { scale: number }) => ({ width: 600 * scale, height: 800 * scale }),
+      getTextContent,
+    }))
+    const { stream } = setup([task(doc)])
+    expect(await stream.getPageText(1)).toBeNull()
+    await stream.open('/content')
+    expect(getTextContent).not.toHaveBeenCalled()
+    expect(await stream.getPageText(2)).toEqual(['数字', '政府'])
+    expect(doc.getPage).toHaveBeenLastCalledWith(2)
+  })
 })

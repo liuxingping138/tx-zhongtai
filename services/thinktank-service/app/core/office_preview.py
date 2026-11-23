@@ -67,6 +67,12 @@ def has_libreoffice() -> bool:
     return _soffice_binary() is not None
 
 
+def has_free_slot() -> bool:
+    """还有空闲的转换名额：上传后的预热只在有空时做，不和正在看的人抢。"""
+
+    return not _CONVERT_SEMAPHORE.locked()
+
+
 def _write_profile(profile_dir: Path) -> None:
     user_dir = profile_dir / "user"
     user_dir.mkdir(parents=True, exist_ok=True)

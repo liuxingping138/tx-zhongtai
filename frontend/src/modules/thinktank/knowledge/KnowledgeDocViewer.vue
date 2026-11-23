@@ -30,12 +30,24 @@ const emit = defineEmits<{
 
 const fullscreen = ref(false)
 const toggleBtn = ref<HTMLButtonElement>()
+const pdfViewer = ref<InstanceType<typeof PdfStreamViewer>>()
 let unlockScroll: (() => void) | null = null
 
+function isFindShortcut(event: KeyboardEvent): boolean {
+  return (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f'
+}
+
+// 全屏时焦点常在顶栏按钮上：Ctrl+F 也交给 PDF 阅读器查找；Esc 先关查找，查找没开才退出全屏。
 function onKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape' && fullscreen.value) {
+  if (!fullscreen.value) return
+  if (isFindShortcut(event) && pdfViewer.value) {
     event.preventDefault()
-    fullscreen.value = false
+    event.stopPropagation()
+    pdfViewer.value.openSearch()
+  } else if (event.key === 'Escape') {
+    event.preventDefault()
+    if (pdfViewer.value?.closeSearch()) event.stopPropagation()
+    else fullscreen.value = false
   }
 }
 
@@ -136,6 +148,7 @@ onBeforeUnmount(() => {
         </div>
         <PdfStreamViewer
           v-else-if="mode === 'pdf' && pdfUrl"
+          ref="pdfViewer"
           :url="pdfUrl"
           :loading-text="loadingText"
           :can-download="canExport"

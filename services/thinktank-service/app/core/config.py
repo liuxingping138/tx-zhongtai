@@ -41,6 +41,8 @@ class Settings(BaseServiceSettings):
     preview_compress_min_bytes: int = 3 * 1024 * 1024
     preview_compress_dpi: int = 144
     preview_optimize_timeout_seconds: float = 120.0
+    # 上传 PDF / Office 后在后台先做好预览缓存，第一个打开的人也不用等转码、压缩；转码名额被占着就不做
+    preview_warmup_on_upload: bool = True
 
     # 原服务器 MinIO 对象存储（配置 endpoint 后优先读写 MinIO，未配置则回退本地 storage_dir）
     minio_endpoint: str = ""

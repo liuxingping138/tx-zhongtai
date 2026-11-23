@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ArrowLeft, ArrowRight, Download, ZoomIn, ZoomOut } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, Download, Search, ZoomIn, ZoomOut } from '@element-plus/icons-vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowReactive, watch } from 'vue'
 
 import { afterRefreshFailure } from '@/api/http'
 import { getAccessToken, refreshSession } from '@/api/session'
 import ParagraphSkeleton from '@/components/ParagraphSkeleton.vue'
 import PdfPageCanvas from './PdfPageCanvas.vue'
+import PdfSearchBar from './PdfSearchBar.vue'
 import {
   clampPage,
   clampScale,
@@ -17,10 +18,12 @@ import {
   type PageSize,
 } from './pdfLayout'
 import { loadPdfJs } from './pdfjs'
+import { usePdfSearch, type SearchHit } from './usePdfSearch'
 import { usePdfStream } from './usePdfStream'
 
 // 按 Range 分段读的 PDF 阅读器：PDF.js 先取第一页用到的几段就出图，只渲染看得到的页（上下各多 2 页），
 // 其余页按第一页（或已量过的）尺寸留占位、画布释放。不用浏览器内嵌的 PDF 插件，全屏时也能按宽度重新铺满。
+// 画好的页盖一层文字层可选字复制；Ctrl+F 查找只在输入查找词后才逐页取文字，打开文档时不多取一页。
 const props = defineProps<{
   url: string
   loadingText?: string
@@ -38,6 +41,7 @@ const pdf = usePdfStream({
 const { status, errorText, numPages, baseSize, generation } = pdf
 
 const scroller = ref<HTMLElement>()
+const searchBar = ref<InstanceType<typeof PdfSearchBar>>()
 const containerWidth = ref(0)
 const fitWidth = ref(true)
 const manualScale = ref(1)
@@ -48,6 +52,15 @@ const sizes = shallowReactive(new Map<number, PageSize>())
 const ratios = new Map<number, number>()
 let intersection: IntersectionObserver | null = null
 let resize: ResizeObserver | null = null
+/** 刚换了当前匹配：那处高亮画好后滚过去一次（之后这页重画不再拽着滚动条走）。 */
+let pendingFocus = false
+
+const search = usePdfSearch({
+  numPages,
+  pageText: n => (pdf.doc.value ? pdf.getPageText(n).then(items => items ?? []) : null),
+  onJump,
+})
+const { open: searchOpen, query: searchQuery, needle, hits, label: searchLabel } = search
 
 const scale = computed(() => (fitWidth.value ? fitWidthScale(containerWidth.value, baseSize.value.width) : manualScale.value))
 const rendered = computed(() => pagesToRender(visible.value, numPages.value))
@@ -98,6 +111,42 @@ function commitPageInput() {
   pageInput.value = String(currentPage.value)
 }
 
+function onJump(hit: SearchHit) {
+  pendingFocus = true
+  if (!visible.value.includes(hit.page)) scrollToPage(hit.page)
+}
+
+/** 当前那处滚到可视区上方三分之一处，左右也挪进来（放大后横向滚动时）。 */
+function onMatchFocus(el: HTMLElement) {
+  const root = scroller.value
+  if (!pendingFocus || !root) return
+  pendingFocus = false
+  const box = el.getBoundingClientRect()
+  const view = root.getBoundingClientRect()
+  root.scrollTop += box.top - view.top - root.clientHeight / 3
+  if (box.left < view.left || box.right > view.right) root.scrollLeft += box.left - view.left - root.clientWidth / 3
+}
+
+function openSearch() {
+  if (status.value !== 'ready') return
+  search.show()
+  void nextTick(() => searchBar.value?.focus())
+}
+
+/** 关掉查找；本来就没开返回 false（全屏时 Esc 先关查找，再退出全屏）。 */
+function closeSearch(): boolean {
+  const closed = search.close()
+  if (closed) scroller.value?.focus()
+  return closed
+}
+
+function onKeydown(event: KeyboardEvent) {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f' && status.value === 'ready') {
+    event.preventDefault()
+    openSearch()
+  }
+}
+
 function zoom(direction: 1 | -1) {
   manualScale.value = clampScale(stepZoom(scale.value, direction))
   fitWidth.value = false
@@ -126,6 +175,7 @@ watch(scale, () => {
 })
 // 文档（重新）打开后挂上可见性观察；令牌过期重开时页面列表会重新挂载，回到原来那页。
 watch(generation, () => {
+  search.reset()
   const keep = currentPage.value
   void nextTick(() => {
     if (keep > 1) scrollToPage(keep)
@@ -135,6 +185,7 @@ watch(generation, () => {
 watch(status, (value) => { if (value === 'invalid') emit('unavailable') })
 watch(() => props.url, (url) => {
   reset()
+  search.close()
   void pdf.open(url)
 }, { immediate: true })
 
@@ -143,7 +194,9 @@ onMounted(() => {
   resize = new ResizeObserver(() => { containerWidth.value = scroller.value?.clientWidth ?? 0 })
   resize.observe(scroller.value)
 })
+defineExpose({ openSearch, closeSearch })
 onBeforeUnmount(() => {
+  search.close()
   intersection?.disconnect()
   resize?.disconnect()
   void pdf.close()
@@ -151,7 +204,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="pdf-viewer">
+  <div
+    class="pdf-viewer"
+    @keydown="onKeydown"
+  >
     <div
       v-if="status === 'ready'"
       class="pdf-viewer__bar"
@@ -192,6 +248,16 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="pdf-viewer__btn"
+          :class="{ 'is-active': searchOpen }"
+          title="查找（Ctrl+F）"
+          aria-label="查找"
+          @click="searchOpen ? closeSearch() : openSearch()"
+        >
+          <el-icon><Search /></el-icon>
+        </button>
+        <button
+          type="button"
+          class="pdf-viewer__btn"
           title="缩小"
           @click="zoom(-1)"
         >
@@ -225,9 +291,21 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
+    <PdfSearchBar
+      v-if="status === 'ready' && searchOpen"
+      ref="searchBar"
+      :query="searchQuery"
+      :label="searchLabel"
+      :total="hits.length"
+      @update:query="search.setQuery"
+      @submit="search.submit"
+      @step="search.step"
+      @close="closeSearch"
+    />
     <div
       ref="scroller"
       class="pdf-viewer__scroll"
+      tabindex="0"
     >
       <div
         v-if="status === 'loading'"
@@ -282,7 +360,10 @@ onBeforeUnmount(() => {
           :active="rendered.has(n)"
           :generation="generation"
           :get-page="pdf.getPage"
+          :query="needle"
+          :selected="search.pageSelection(n)"
           @measured="onMeasured"
+          @match-focus="onMatchFocus"
           @failed="onPageFailed"
         />
       </div>
@@ -302,6 +383,7 @@ onBeforeUnmount(() => {
 .pdf-viewer__zoom { min-width: 44px; text-align: center; }
 .pdf-viewer__page-input { width: 44px; height: 24px; margin: 0 2px; padding: 0 4px; border: 1px solid var(--zt-border); border-radius: 4px; background: var(--zt-panel); color: var(--zt-ink-900); font-size: 12px; text-align: center; }
 .pdf-viewer__page-input:focus { outline: none; border-color: var(--zt-blue-600); box-shadow: var(--zt-focus-ring); }
+.pdf-viewer__scroll:focus-visible { outline: 2px solid var(--zt-focus-ring); outline-offset: -2px; }
 .pdf-viewer__scroll { position: relative; flex: 1; min-height: 560px; overflow: auto; scrollbar-gutter: stable; background: var(--zt-surface-subtle); }
 .pdf-viewer__pages { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 12px 16px; width: max-content; min-width: 100%; box-sizing: border-box; }
 .pdf-viewer__status { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; }

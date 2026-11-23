@@ -56,9 +56,9 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text-summary'],
-      // 单测管 TS 逻辑；.vue 页面由 e2e 覆盖，main.ts 只做挂载。
+      // 单测管 TS 逻辑；.vue 页面由 e2e 覆盖，main.ts 只做挂载；*.testkit.ts 是单测共用的替身。
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts', 'src/**/*.d.ts', 'src/main.ts'],
+      exclude: ['src/**/*.test.ts', 'src/**/*.testkit.ts', 'src/**/*.d.ts', 'src/main.ts'],
       // 下限与后端一样只升不降，补了测试就调高（工程规范第 5 节）。
       thresholds: { statements: 93, branches: 85, functions: 91, lines: 94 },
     },
