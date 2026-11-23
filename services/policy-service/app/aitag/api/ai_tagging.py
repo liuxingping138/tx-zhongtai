@@ -113,10 +113,14 @@ async def contract(
 async def sample_rows(
     task: Task,
     day: date | None = Query(default=None, description="类型判断用：源政策的采集日期"),
-    limit: int = Query(default=10, ge=1, le=50),
+    limit: int = Query(default=10, ge=1, le=500),
+    province: str | None = Query(default=None, max_length=64, description="按省份筛选（可选）"),
+    keyword: str | None = Query(default=None, max_length=100, description="政策名称关键词（可选）"),
+    industry_l1: str | None = Query(default=None, max_length=64, description="市场机会用：按一级行业筛选（可选）"),
     session: AsyncSession = Depends(get_db_session, scope="function"),
     _: Actor = Depends(require_policy_permission(TEMPLATE_RESOURCE, "list")),
 ) -> JSONResponse:
-    """从数据库取模板的测试数据，和正式打标交给模板的一模一样。前端再存成模板的测试 Excel。"""
+    """从数据库取模板的测试/批量验证数据，和正式打标交给模板的一模一样。"""
 
-    return success_json(await samples.samples(session, task, day, limit))
+    flt = samples.SampleFilter(province=province or "", keyword=keyword or "", industry_l1=industry_l1 or "")
+    return success_json(await samples.samples(session, task, day, limit, flt))

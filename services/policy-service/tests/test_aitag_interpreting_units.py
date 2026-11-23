@@ -80,11 +80,20 @@ class FakeAi:
     def __init__(self) -> None:
         self.created: list[dict[str, Any]] = []
 
-    def _row(self, source_id: str, stage: str) -> dict[str, Any]:
+    def _row(self, row: dict[str, Any], stage: str) -> dict[str, Any]:
+        source_id = row["源ID"]
         if source_id == "c2":
             return {"source_id": "c2", "items": [], "error": "限流"}
         if source_id == "c3":
             return {"source_id": "c3", "items": [], "error": "未执行（任务停止或中断）"}
+        if stage == "市场机会":
+            scene = row.get("一级场景", "")
+            items = (
+                [{"行业": row.get("一级行业", ""), "场景": scene, "市场机会": f"机会-{scene}"}]
+                if scene == "数字政府"
+                else []
+            )
+            return {"source_id": source_id, "items": items, "error": ""}
         return {"source_id": source_id, "items": ANSWERS[stage][source_id], "error": ""}
 
     async def __call__(self, method: str, path: str, **kwargs: Any) -> Any:
@@ -94,7 +103,7 @@ class FakeAi:
         if path.endswith("/results"):
             body = self.created[-1]
             stage = next(name for name in ANSWERS if name in body["caller_name"])
-            return {"items": [self._row(row["源ID"], stage) for row in body["rows"]]}
+            return {"items": [self._row(row, stage) for row in body["rows"]]}
         return {"status": "done", "inference_cost": "0.2", "search_cost": "0", "error_message": "达到本批费用上限"}
 
 
@@ -235,11 +244,19 @@ async def test_opportunities_fill_matching_untouched_rows(world: SimpleNamespace
     matched, other, verified = row("数字政府"), row("城市大脑"), row("数字政府", "人工验证")
     world.tags, world.rows = [_tag("c1")], {"c1": [matched, other, verified]}
     note = await interpreting.opportunity_step(uuid.uuid4(), CONFIG, Spend(limit=Decimal(10), before=Decimal(0)))  # type: ignore[arg-type]
-    assert (matched.market_opportunity, other.market_opportunity, verified.market_opportunity) == ("机会A", "", "")
+    assert (matched.market_opportunity, other.market_opportunity, verified.market_opportunity) == (
+        "机会-数字政府",
+        "",
+        "",
+    )
     # 回填要加版本号：正开着这行编辑的人保存时会提示「被改过」，不会用空值把这次结果冲掉。
     assert (matched.version, other.version) == (2, 1)
-    assert "党政行业/数字政府" in world.created[0]["rows"][0]["行业场景"]
-    assert world.tags[0].opportunity_at is not None and "回填 1 行" in note
+    sent_rows = world.created[0]["rows"]
+    assert [(r["一级行业"], r["一级场景"]) for r in sent_rows] == [("党政行业", "数字政府"), ("党政行业", "城市大脑")]
+    assert sent_rows[0]["行业场景"] == "党政行业/数字政府"
+    assert (
+        world.tags[0].opportunity_at is not None and "回填 1 行" in note and "没有返回市场机会" in world.tags[0].remark
+    )
 
 
 async def test_policies_without_interpretation_rows_skip_the_model(world: SimpleNamespace) -> None:

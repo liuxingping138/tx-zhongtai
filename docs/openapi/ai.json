@@ -1403,6 +1403,86 @@
         }
       }
     },
+    "/api/v1/ai/batch-runs/from-rows/preview": {
+      "post": {
+        "tags": [
+          "ai-batch-runs"
+        ],
+        "summary": "Preview Rows",
+        "description": "从政策库取数后预检：不调用模型、不建任务。",
+        "operationId": "preview_rows_api_v1_ai_batch_runs_from_rows_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchRowsPreviewBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/batch-runs/from-rows": {
+      "post": {
+        "tags": [
+          "ai-batch-runs"
+        ],
+        "summary": "Start Run From Rows",
+        "description": "从政策库取数直接发起离线批量验证任务。",
+        "operationId": "start_run_from_rows_api_v1_ai_batch_runs_from_rows_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchRowsStartBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/ai/batch-runs/{run_id}": {
       "get": {
         "tags": [
@@ -2167,6 +2247,132 @@
         ],
         "title": "AskBody",
         "description": "row：测试样本第几条数据（从 0 数）；output_fields：编辑页上现在的输出字段，答完按它解析。"
+      },
+      "BatchRowsPreviewBody": {
+        "properties": {
+          "prompt_id": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Prompt Id"
+          },
+          "version": {
+            "type": "string",
+            "enum": [
+              "release",
+              "draft"
+            ],
+            "title": "Version",
+            "default": "release"
+          },
+          "file_name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 6,
+            "pattern": "\\.xlsx$",
+            "title": "File Name"
+          },
+          "headers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Headers"
+          },
+          "rows": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Rows"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "prompt_id",
+          "file_name",
+          "headers",
+          "rows"
+        ],
+        "title": "BatchRowsPreviewBody",
+        "description": "批量任务从政策库取数时的预检请求。"
+      },
+      "BatchRowsStartBody": {
+        "properties": {
+          "prompt_id": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Prompt Id"
+          },
+          "version": {
+            "type": "string",
+            "enum": [
+              "release",
+              "draft"
+            ],
+            "title": "Version",
+            "default": "release"
+          },
+          "file_name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 6,
+            "pattern": "\\.xlsx$",
+            "title": "File Name"
+          },
+          "headers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Headers"
+          },
+          "rows": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Rows"
+          },
+          "thinking": {
+            "type": "boolean",
+            "title": "Thinking",
+            "default": false
+          },
+          "limit": {
+            "type": "integer",
+            "maximum": 100000.0,
+            "minimum": 0.0,
+            "title": "Limit",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "prompt_id",
+          "file_name",
+          "headers",
+          "rows"
+        ],
+        "title": "BatchRowsStartBody",
+        "description": "批量任务从政策库取数时的发起请求。"
       },
       "HTTPValidationError": {
         "properties": {

@@ -112,15 +112,62 @@ def relation_key(content_id: str, values: dict[str, str]) -> str:
     return f"{content_id[:UID_MAX]}{code}{values.get('opportunity_type', '')}"
 
 
-# 市场机会这一步多给模板的一列：这条政策解读出的「一级行业/一级场景」，一行一个。
+# 市场机会这一步给模板的行业场景列：模式 A 按（一级行业、一级场景）逐组展开，同时保留「行业场景」兼容旧模板。
+INDUSTRY_L1_COLUMN = "一级行业"
+SCENARIO_L1_COLUMN = "一级场景"
 SCENES_COLUMN = "行业场景"
 
 
 def opportunity_prompt_row(base: dict[str, str], rows: list[dict[str, str]]) -> dict[str, str]:
-    """市场机会这一步额外带上解读出的「一级行业/一级场景」，模板可以用 @【行业场景】引用，按它逐个写机会。"""
+    """兼容方法：把一条政策解读出的所有「一级行业/一级场景」拼成一列。"""
 
     pairs = list(dict.fromkeys(f"{row['industry_l1']}/{row['scenario_l1_name']}" for row in rows))
     return {**base, SCENES_COLUMN: "\n".join(pairs)}
+
+
+def opportunity_prompt_rows(
+    base: dict[str, str], rows: list[dict[str, str]]
+) -> list[tuple[tuple[str, str], dict[str, str]]]:
+    """模式 A：按解读出的（一级行业、一级场景）去重逐组展开，每组生成一条市场机会输入行。"""
+
+    pairs = list(dict.fromkeys((row["industry_l1"], row["scenario_l1_name"]) for row in rows))
+    return [
+        (
+            (industry, scene),
+            {
+                **base,
+                INDUSTRY_L1_COLUMN: industry,
+                SCENARIO_L1_COLUMN: scene,
+                SCENES_COLUMN: f"{industry}/{scene}",
+            },
+        )
+        for industry, scene in pairs
+    ]
+
+
+def extract_opportunity_text(items: list[dict[str, Any]], industry: str, scene: str) -> str:
+    """从单组（一级行业、一级场景）的模型输出里提取市场机会文本，精准回填到对应解读行。"""
+
+    texts = [
+        (item, _clean(item.get("市场机会") or item.get("政策市场机会"))) for item in items if isinstance(item, dict)
+    ]
+    texts = [(item, text) for item, text in texts if text]
+    if not texts:
+        return ""
+    exact = [
+        text
+        for item, text in texts
+        if _clean(item.get("行业") or item.get("一级行业")) == industry
+        and _clean(item.get("场景") or item.get("一级场景")) == scene
+    ]
+    if exact:
+        return "\n\n".join(exact)
+    by_industry = [
+        text for item, text in texts if industry and _clean(item.get("行业") or item.get("一级行业")) == industry
+    ]
+    if by_industry:
+        return "\n\n".join(by_industry)
+    return "\n\n".join(text for _, text in texts)
 
 
 def match_opportunities(items: list[dict[str, Any]], rows: list[dict[str, str]]) -> dict[int, str]:

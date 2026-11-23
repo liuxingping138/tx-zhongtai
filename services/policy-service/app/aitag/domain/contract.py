@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from app.aitag.domain import describing
-from app.aitag.domain.interpret_rules import ANSWER_FIELDS, SCENES_COLUMN
+from app.aitag.domain.interpret_rules import ANSWER_FIELDS, INDUSTRY_L1_COLUMN, SCENARIO_L1_COLUMN, SCENES_COLUMN
 from app.aitag.domain.rules import PROMPT_COLUMNS, SOURCE_ID, TYPE_FIELD, TYPE_FIELDS
 from app.policy.domain.candidates import AI_COLUMNS, AI_PATHS, AI_REASON_FIELD, AI_SIMILAR_FIELD, AI_VERDICT_FIELD
 
@@ -20,7 +20,7 @@ BODY_COLUMN = "政策正文"
 COLUMNS: dict[str, tuple[str, ...]] = {
     "type": (SOURCE_ID, *PROMPT_COLUMNS),
     "interpret": (SOURCE_ID, *PROMPT_COLUMNS),
-    "opportunity": (SOURCE_ID, *PROMPT_COLUMNS, SCENES_COLUMN),
+    "opportunity": (SOURCE_ID, INDUSTRY_L1_COLUMN, SCENARIO_L1_COLUMN, *PROMPT_COLUMNS, SCENES_COLUMN),
     "scenario": AI_COLUMNS,
     "enrich": describing.COLUMNS,
 }
@@ -94,11 +94,9 @@ def check_template(
         warnings.append(f"没有用 @【{BODY_COLUMN}】，模型只看得到标题，判断会不准")
     if task == "scenario" and AI_PATHS not in variables:
         warnings.append(f"没有用 @【{AI_PATHS}】，模型看不到码表里这个行业下有哪些场景，找不出相似的")
-    if task == "opportunity" and not {"行业", "一级行业"} & set(output_fields):
-        warnings.append("没有输出「行业」「场景」：一条政策有几条市场机会时，分不清各是哪条解读行的")
-    if task == "opportunity" and SCENES_COLUMN not in variables:
+    if task == "opportunity" and not {INDUSTRY_L1_COLUMN, SCENARIO_L1_COLUMN, SCENES_COLUMN} & set(variables):
         warnings.append(
-            f"没有用 @【{SCENES_COLUMN}】，模型不知道这条政策解读出了哪些行业场景，市场机会可能对不上解读行"
+            f"没有用 @【{INDUSTRY_L1_COLUMN}】、@【{SCENARIO_L1_COLUMN}】，模型不知道要针对哪组行业场景写市场机会"
         )
     if CODE_VARIABLE in variables and not system_code:
         warnings.append("码表用的是上传的文件，定时任务按上线时冻结的那份跑；要和系统码表口径一致，请改选系统码表")

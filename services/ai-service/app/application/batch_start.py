@@ -15,6 +15,7 @@ import anyio
 from platform_common.actors import Actor
 from platform_common.clock import utcnow
 from platform_common.errors import ApiError, ErrorCode
+from platform_common.excel import run_excel_parse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application import releases
@@ -24,7 +25,9 @@ from app.application.batch_inputs import blank_input, inspect_upload, snapshot_i
 from app.application.batch_runs import reconcile_stale, to_dict
 from app.application.prompts import code_text, require_code
 from app.application.prompts import require_editable as require_editable_prompt
+from app.application.sheets import rows_workbook
 from app.core import storage
+from app.core.config import get_settings
 from app.domain.categories import CategoryAccess
 from app.domain.llm_models import LlmModel
 from app.domain.models import RUN_QUEUED, RUN_SOURCE_MANUAL, BatchRun, PromptTemplate, TemplateRelease, new_id
@@ -215,3 +218,40 @@ async def start_run(
         },
     )
     return to_dict(run)
+
+
+async def _rows_upload(data: dict[str, Any]) -> tuple[str, bytes]:
+    content = await run_excel_parse(rows_workbook, list(data["headers"]), list(data["rows"]), "数据")
+    max_bytes = get_settings().upload_max_bytes
+    if len(content) > max_bytes:
+        raise ApiError(
+            f"抽取的数据超过单次上限（{max_bytes // (1024 * 1024)}MB），请减少条数后重试",
+            code=ErrorCode.VALIDATION_ERROR,
+            http_status=413,
+        )
+    return str(data["file_name"]), content
+
+
+async def preview_rows(
+    session: AsyncSession,
+    access: CategoryAccess,
+    prompt_id: str,
+    data: dict[str, Any],
+    *,
+    version: str = VERSION_RELEASE,
+) -> dict[str, Any]:
+    """从数据库取数后的预检：转为 Excel 复用同一套列校验与行数统计。"""
+
+    return await preview_input(session, access, prompt_id, await _rows_upload(data), version=version)
+
+
+async def start_run_from_rows(
+    session: AsyncSession,
+    actor: Actor,
+    access: CategoryAccess,
+    values: dict[str, Any],
+    data: dict[str, Any],
+) -> dict[str, Any]:
+    """从数据库取数发起离线批量验证任务（不写回政策库，产物同手工上传任务）。"""
+
+    return await start_run(session, actor, access, values, upload=await _rows_upload(data))

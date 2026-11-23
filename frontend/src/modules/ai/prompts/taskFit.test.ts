@@ -14,7 +14,7 @@ const INTERPRET: ContractTask = {
   required_fields: ['一级行业', '一级场景'],
   optional_fields: [['政策要文', '政策概览'], ['二级行业'], ['三级行业'], ['二级场景'], ['三级场景'], ['备注']],
 }
-const CHANCE: ContractTask = { ...TASK, code: 'opportunity', name: '政策市场机会', columns: [...BASE, '行业场景'], required_fields: ['市场机会'] }
+const CHANCE: ContractTask = { ...TASK, code: 'opportunity', name: '政策市场机会', columns: [...BASE, '一级行业', '一级场景', '行业场景'], required_fields: ['市场机会'] }
 
 describe('模板放进打标任务前的检查', () => {
   it('列和输出字段都对得上就没有问题', () => {
@@ -32,12 +32,14 @@ describe('模板放进打标任务前的检查', () => {
     expect(fitLevel({ check, skip: false })).toBe('error')
   })
 
-  it('能跑但可能不理想的给提醒：没用正文、市场机会没输出和没用行业场景、码表不是系统的', () => {
+  it('能跑但可能不理想的给提醒：没用正文、没用一级行业/一级场景、码表不是系统的', () => {
     const check = checkTemplate(CHANCE, ['政策标题', '上传码表'], ['市场机会'], false)
     expect(check.errors).toEqual([])
-    expect(check.warnings).toHaveLength(4)
+    expect(check.warnings).toHaveLength(3)
     expect(fitLevel({ check, skip: false })).toBe('warn')
-    // 输出写成「一级行业 / 一级场景」也认，和政策服务的规则一致。
+    // 模式 A：引用「一级行业」「一级场景」「政策正文」，只输出「市场机会」也没有提醒。
+    expect(checkTemplate(CHANCE, ['一级行业', '一级场景', '政策正文'], ['市场机会'], true).warnings).toEqual([])
+    // 兼容旧写法：引用「行业场景」同样认可。
     expect(checkTemplate(CHANCE, ['政策正文', '行业场景'], ['一级行业', '一级场景', '市场机会'], true).warnings).toEqual([])
   })
 

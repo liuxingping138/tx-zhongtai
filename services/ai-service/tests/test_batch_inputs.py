@@ -235,3 +235,25 @@ async def test_running_a_release_needs_edit_rights_on_the_releases_own_category(
     customer_only = CategoryAccess(readable=frozenset({"customer"}), editable=frozenset({"customer"}))
     with pytest.raises(PermissionDeniedError):
         await batch_start.preview_input(FakeSession(), customer_only, PROMPT_ID, ("a.xlsx", xlsx([["名称"], ["甲"]])))  # type: ignore[arg-type]
+
+
+async def test_preview_and_start_run_from_db_rows(monkeypatch: pytest.MonkeyPatch) -> None:
+    added = _online(monkeypatch, release())
+    payload = {
+        "file_name": "数据库样本-政策市场机会-2条.xlsx",
+        "headers": ["名称", "一级行业"],
+        "rows": [["甲", "政务"], ["乙", "教育"]],
+    }
+    summary = await batch_start.preview_rows(FakeSession(), FULL_ACCESS, PROMPT_ID, payload)  # type: ignore[arg-type]
+    assert summary["name"] == "数据库样本-政策市场机会-2条.xlsx" and summary["rows"] == 2
+    assert added == []
+    created = await batch_start.start_run_from_rows(
+        FakeSession(),  # type: ignore[arg-type]
+        ACTOR,
+        FULL_ACCESS,
+        {"prompt_id": PROMPT_ID, "version": "release", "thinking": False, "limit": 0},
+        payload,
+    )
+    assert len(added) == 1 and created["source"] == "manual" and created["total_count"] == 2
+    headers, rows = read_sheet((storage.run_dir(created["id"]) / "source.xlsx").read_bytes())
+    assert headers == ["名称", "一级行业"] and [row["名称"] for row in rows] == ["甲", "乙"]

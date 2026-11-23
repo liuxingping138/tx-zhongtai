@@ -48,11 +48,12 @@ async function openSampling(): Promise<void> {
       </el-button>
       <el-button
         v-if="kind === 'excel' && canEdit && sampleTasks?.length"
-        link
+        size="small"
         type="primary"
+        plain
         @click="openSampling"
       >
-        从数据库取
+        从政策库取数
       </el-button>
       <el-button
         v-if="canExport && name"

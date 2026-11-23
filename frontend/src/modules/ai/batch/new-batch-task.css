@@ -1,0 +1,24 @@
+.new-task__steps { min-width: 0; margin: 0; padding: 0; border: 0; }
+.new-task__step { padding: 4px 0 22px; margin-bottom: 20px; border-bottom: 1px solid var(--zt-border); }
+.new-task__step:last-child { margin-bottom: 0; border-bottom: 0; }
+.new-task__step-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.new-task__step-head h3 { margin: 0; }
+.new-task__step h3 { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; color: var(--zt-ink-900); font-size: 15px; font-weight: 650; }
+.new-task__step h3 span { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--zt-blue-600); color: var(--el-color-white); font-size: 12px; }
+.new-task__hint { margin: 8px 0 0; color: var(--zt-ink-500); font-size: 12px; line-height: 1.6; }
+.new-task__upload { display: flex; flex-wrap: wrap; gap: 8px; }
+.new-task__upload .el-button { margin: 0; }
+.new-task__file { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--zt-success-border); border-radius: 6px; background: var(--zt-success-soft); }
+.new-task__file > .el-icon { flex: none; color: var(--zt-success); font-size: 20px; }
+.new-task__file div { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.new-task__file strong { overflow: hidden; color: var(--zt-ink-900); text-overflow: ellipsis; white-space: nowrap; }
+.new-task__file span { color: var(--zt-ink-500); font-size: 12px; }
+.new-task__scope { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 8px; }
+.new-task__test-rows { display: flex; align-items: center; gap: 8px; margin: 0 0 12px 24px; color: var(--zt-ink-700); font-size: 13px; }
+.new-task__test-rows .el-input-number { width: 100px; }
+.new-task__footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.new-task__footer p { margin: 0; color: var(--zt-ink-500); font-size: 13px; text-align: left; }
+.new-task__warn { margin: 0 0 16px; padding: 8px 12px; border: 1px solid var(--zt-warning-border); border-radius: var(--zt-radius); background: var(--zt-warning-soft); color: var(--zt-warning-text); font-size: 13px; line-height: 20px; }
+.new-task__estimate { display: flex; flex-direction: column; font-size: 12px; }
+.new-task__estimate b { color: var(--zt-ink-900); font-size: 16px; font-variant-numeric: tabular-nums; }
+.new-task__footer .el-button { margin: 0; }

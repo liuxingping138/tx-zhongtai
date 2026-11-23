@@ -1,4 +1,4 @@
-import { AI_BASE as BASE, type BatchRun, type RunRows, type RunStatus } from './ai'
+import { AI_BASE as BASE, type BatchInputSummary, type BatchRun, type RunRows, type RunStatus, type RunVersion } from './ai'
 import { http, request } from './http'
 
 /** 模板页的样本试跑和试发选行：第几次试跑、和哪一次比、测试样本的逐行数据。 */
@@ -67,5 +67,19 @@ export function startSampleRun(promptId: string, body: { thinking: boolean; limi
 
 export function stopSampleRun(promptId: string): Promise<SampleRunState> {
   return request(http.post(`${BASE}/prompts/${promptId}/sample-run/stop`))
+}
+
+/** 从政策库抽取的数据行，供批量任务预检与发起 */
+export interface BatchRowsPayload { file_name: string; headers: string[]; rows: string[][] }
+
+export function previewBatchRows(promptId: string, version: RunVersion, data: BatchRowsPayload): Promise<BatchInputSummary> {
+  return request(http.post(`${BASE}/batch-runs/from-rows/preview`, { prompt_id: promptId, version, ...data }, { timeout: 300_000 }))
+}
+
+export function startBatchRunFromRows(
+  payload: { prompt_id: string; version: RunVersion; thinking: boolean; limit: number },
+  data: BatchRowsPayload,
+): Promise<BatchRun> {
+  return request(http.post(`${BASE}/batch-runs/from-rows`, { ...payload, ...data }, { timeout: 300_000 }))
 }
 

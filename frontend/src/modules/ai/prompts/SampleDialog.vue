@@ -14,8 +14,8 @@ const open = defineModel<boolean>({ required: true })
 
 const HINTS: Record<AiTaskCode, string> = {
   type: '取这一天采集的源政策，和「政策类型判断」按天读的一样。',
-  interpret: '取最近被判为「需要解读」的政策，要先跑过政策类型判断才有。',
-  opportunity: '取最近解读过的政策，多一列 @【行业场景】：这条政策解读出的一级行业/一级场景。',
+  interpret: '取最近被判为「需要解读」（含信息化建设类）的政策，要先跑过政策类型判断才有。',
+  opportunity: '取最近解读过的政策，按「一级行业 + 一级场景」逐组展开，提供 @【一级行业】、@【一级场景】、@【政策正文】 等列，与定时任务完全一致。',
   scenario: '取「新增场景审核」里待审的场景，带上 @【同行业已有场景】：码表里同一个一级行业下的全部场景。',
   enrich: '取码表里待补描述的新增场景，带上 @【上级场景描述】 @【同级场景示例】当范文。',
 }
@@ -23,19 +23,31 @@ const yesterday = () => new Date(Date.now() - 86_400_000).toLocaleDateString('sv
 const task = ref<AiTaskCode>('type')
 const day = ref(yesterday())
 const limit = ref(10)
+const province = ref('')
+const keyword = ref('')
+const industryL1 = ref('')
 const busy = ref(false)
 const columns = computed(() => props.tasks.find(item => item.code === task.value)?.columns ?? [])
+const showProvince = computed(() => ['type', 'interpret', 'opportunity'].includes(task.value))
+const showKeyword = computed(() => ['interpret', 'opportunity'].includes(task.value))
 
 watch(open, visible => {
   if (!visible) return
   task.value = guessTask(props.tasks, props.template.fields)
   day.value = yesterday()
+  province.value = ''
+  keyword.value = ''
+  industryL1.value = ''
 })
 
 async function confirm(): Promise<void> {
   busy.value = true
   try {
-    const sample = await getTaggingSamples(task.value, day.value, limit.value)
+    const sample = await getTaggingSamples(task.value, day.value, limit.value, {
+      province: province.value,
+      keyword: keyword.value,
+      industry_l1: industryL1.value,
+    })
     const saved = await savePromptTestRows(props.template.id, { file_name: sample.file_name, headers: sample.headers, rows: sample.rows })
     ElMessage.success(`已取${sample.note}，测试数据已换成它`)
     open.value = false
@@ -96,6 +108,36 @@ async function confirm(): Promise<void> {
             controls-position="right"
           />
         </el-form-item>
+        <el-form-item
+          v-if="showProvince"
+          label="省份（可选）"
+        >
+          <el-input
+            v-model="province"
+            placeholder="如：广东省，留空不限"
+            clearable
+          />
+        </el-form-item>
+        <el-form-item
+          v-if="task === 'opportunity'"
+          label="一级行业（可选）"
+        >
+          <el-input
+            v-model="industryL1"
+            placeholder="如：党政行业，留空不限"
+            clearable
+          />
+        </el-form-item>
+        <el-form-item
+          v-if="showKeyword"
+          label="政策名称关键词（可选）"
+        >
+          <el-input
+            v-model="keyword"
+            placeholder="留空不限"
+            clearable
+          />
+        </el-form-item>
       </div>
       <p class="sample__note">
         列：{{ columns.map(name => `@【${name}】`).join('、') }}。正文按这个任务的设置整理（全文或截取），和正式打标一致。
@@ -122,6 +164,6 @@ async function confirm(): Promise<void> {
 <style scoped>
 .sample__hint { width: 100%; margin: 4px 0 0; color: var(--zt-ink-500); font-size: 12px; line-height: 1.6; }
 .sample__row { display: flex; flex-wrap: wrap; gap: 0 16px; }
-.sample__row :deep(.el-date-editor), .sample__row :deep(.el-input-number) { width: 180px; }
+.sample__row :deep(.el-date-editor), .sample__row :deep(.el-input-number), .sample__row :deep(.el-input) { width: 180px; }
 .sample__note { margin: 0; padding: 8px 12px; border-radius: 4px; background: var(--zt-soft); color: var(--zt-ink-700); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
 </style>

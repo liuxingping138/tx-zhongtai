@@ -9,7 +9,13 @@ from platform_common.filters import Filters
 from platform_common.http_utils import read_named_upload, success_json
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas import RunFileKind, file_response, path_response
+from app.api.schemas import (
+    BatchRowsPreviewBody,
+    BatchRowsStartBody,
+    RunFileKind,
+    file_response,
+    path_response,
+)
 from app.api.security import CategoryAccess, SecurityClass, classified, get_category_access, require_ai_permission
 from app.application import batch_run_all, batch_start, prompts
 from app.application import batch_runs as service
@@ -138,6 +144,47 @@ async def start_run(
     return success_json(
         await batch_start.start_run(session, actor, access, values, upload=(filename, content)), status_code=201
     )
+
+
+@router.post("/from-rows/preview")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def preview_rows(
+    body: BatchRowsPreviewBody,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    access: CategoryAccess = Depends(get_category_access),
+    _: Actor = Depends(require_ai_permission(RESOURCE, "run")),
+) -> JSONResponse:
+    """从政策库取数后预检：不调用模型、不建任务。"""
+
+    return success_json(
+        await batch_start.preview_rows(
+            session,
+            access,
+            body.prompt_id,
+            {"file_name": body.file_name, "headers": body.headers, "rows": body.rows},
+            version=body.version,
+        )
+    )
+
+
+@router.post("/from-rows")
+@classified(SecurityClass.RESOURCE_AUTHORIZED)
+async def start_run_from_rows(
+    body: BatchRowsStartBody,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    access: CategoryAccess = Depends(get_category_access),
+    actor: Actor = Depends(require_ai_permission(RESOURCE, "run")),
+) -> JSONResponse:
+    """从政策库取数直接发起离线批量验证任务。"""
+
+    values = {
+        "prompt_id": body.prompt_id,
+        "thinking": body.thinking,
+        "limit": body.limit,
+        "version": body.version,
+    }
+    data = {"file_name": body.file_name, "headers": body.headers, "rows": body.rows}
+    return success_json(await batch_start.start_run_from_rows(session, actor, access, values, data), status_code=201)
 
 
 @router.get("/{run_id}")

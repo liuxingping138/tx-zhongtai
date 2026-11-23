@@ -382,7 +382,7 @@
           "政策AI打标"
         ],
         "summary": "Sample Rows",
-        "description": "从数据库取模板的测试数据，和正式打标交给模板的一模一样。前端再存成模板的测试 Excel。",
+        "description": "从数据库取模板的测试/批量验证数据，和正式打标交给模板的一模一样。",
         "operationId": "sample_rows_api_v1_policy_ai_tagging_samples_get",
         "parameters": [
           {
@@ -426,11 +426,68 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 50,
+              "maximum": 500,
               "minimum": 1,
               "default": 10,
               "title": "Limit"
             }
+          },
+          {
+            "name": "province",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按省份筛选（可选）",
+              "title": "Province"
+            },
+            "description": "按省份筛选（可选）"
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "政策名称关键词（可选）",
+              "title": "Keyword"
+            },
+            "description": "政策名称关键词（可选）"
+          },
+          {
+            "name": "industry_l1",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "市场机会用：按一级行业筛选（可选）",
+              "title": "Industry L1"
+            },
+            "description": "市场机会用：按一级行业筛选（可选）"
           }
         ],
         "responses": {

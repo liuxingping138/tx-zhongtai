@@ -47,6 +47,13 @@ const RUN_MODE_OPTIONS = Object.keys(RUN_MODE_TEXT)
 const SOURCE_OPTIONS = Object.keys(RUN_SOURCE_TEXT)
 const STATUS_OPTIONS = Object.keys(RUN_STATUS_TEXT)
 const filtered = computed(() => Object.values(applied.value).some(values => values.length > 0))
+const sourceTab = computed({
+  get: () => (applied.value.source.length === 1 ? applied.value.source[0] : 'all'),
+  set: (val: string) => {
+    query.source = val === 'all' ? [] : [val]
+    search()
+  },
+})
 const canManageViewing = computed(() => Boolean(viewing.value && canRun.value && editableCategories.value.includes(viewing.value.prompt_category)))
 
 /** 每次新建都重取模板：页面开着时别人上线了新版本、新建了模板，下拉和「线上第几版」要跟上。 */
@@ -244,7 +251,24 @@ async function created(): Promise<void> {
       </FilterBar>
       <!-- 和别的列表一样：筛选下面一行写总数，右边是工具栏；页面标题只给读屏 -->
       <div class="batch__toolbar">
-        <span class="batch__total">共 <strong>{{ total }}</strong> 个任务</span>
+        <div class="batch__left">
+          <el-radio-group
+            v-model="sourceTab"
+            size="small"
+            aria-label="按来源筛选"
+          >
+            <el-radio-button value="all">
+              全部
+            </el-radio-button>
+            <el-radio-button value="manual">
+              手工验证
+            </el-radio-button>
+            <el-radio-button value="pipeline">
+              定时打标
+            </el-radio-button>
+          </el-radio-group>
+          <span class="batch__total">共 <strong>{{ total }}</strong> 个任务</span>
+        </div>
         <div class="batch__tools">
           <el-button
             :icon="Refresh"
@@ -296,6 +320,7 @@ async function created(): Promise<void> {
 .batch { height: calc(100dvh - var(--workspace-header-height) - 48px); min-height: 520px; }
 .batch__panel { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
 .batch__toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; }
+.batch__left { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .batch__total { color: var(--zt-ink-700); font-size: 14px; font-variant-numeric: tabular-nums; }
 .batch__total strong { margin: 0 2px; color: var(--zt-ink-900); font-size: 16px; }
 .batch__tools { display: flex; gap: 8px; }

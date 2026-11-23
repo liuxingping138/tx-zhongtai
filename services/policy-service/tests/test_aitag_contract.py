@@ -21,14 +21,17 @@ def test_template_checks_split_must_fix_from_worth_knowing() -> None:
     assert bad["errors"][0].startswith("用了这个任务不提供的列：@【企业名称】")
     assert bad["errors"][1] == "输出字段缺少：一级行业、一级场景，结果写不回表"
     chance = check_template("opportunity", ["政策标题", "上传码表"], ["市场机会"], system_code=False)
-    # 没用正文、没输出行业场景、没用行业场景、上传码表
-    assert chance["errors"] == [] and len(chance["warnings"]) == 4
-    # 输出写成「一级行业 / 一级场景」也认：解读那一步的写法，照着写市场机会模板很常见。
+    # 没用正文、没用一级行业/一级场景、上传码表
+    assert chance["errors"] == [] and len(chance["warnings"]) == 3
+    # 模式 A：引用「一级行业」「一级场景」「政策正文」，只输出「市场机会」也完全合格，无提醒。
+    mode_a = check_template("opportunity", ["一级行业", "一级场景", "政策正文"], ["市场机会"], True)
+    assert mode_a == {"errors": [], "warnings": []}
+    # 兼容旧写法：引用「行业场景」同样认可。
     named = check_template("opportunity", ["政策正文", "行业场景"], ["一级行业", "一级场景", "市场机会"], True)
     assert named == {"errors": [], "warnings": []}
-    # 行业场景只有市场机会这一步才有。
-    assert check_template("type", ["政策正文", "行业场景"], ["政策类型名称"], True)["errors"]
-    assert "行业场景" in COLUMNS["opportunity"] and "源ID" in COLUMNS["type"]
+    # 一级行业、一级场景、行业场景只有市场机会这一步才有。
+    assert check_template("type", ["政策正文", "一级行业"], ["政策类型名称"], True)["errors"]
+    assert {"一级行业", "一级场景", "行业场景"} <= set(COLUMNS["opportunity"]) and "源ID" in COLUMNS["type"]
 
 
 def test_interpret_template_with_only_the_required_fields_warns_which_columns_stay_empty() -> None:
@@ -72,7 +75,7 @@ async def test_type_samples_are_the_rows_the_type_task_would_send(
     with pytest.raises(ApiError, match="请选择采集日期"):
         await samples.samples(None, "type", None, 10)  # type: ignore[arg-type]
     with pytest.raises(ApiError, match="条数要在"):
-        await samples.samples(None, "type", day, 99)  # type: ignore[arg-type]
+        await samples.samples(None, "type", day, 501)  # type: ignore[arg-type]
 
 
 async def test_opportunity_samples_carry_the_interpreted_scenes(monkeypatch: pytest.MonkeyPatch, config: None) -> None:
@@ -85,14 +88,28 @@ async def test_opportunity_samples_carry_the_interpreted_scenes(monkeypatch: pyt
         return [tag] if interpreted else []
 
     async def interpretations(*_: Any) -> dict[str, list[Any]]:
-        return {"c9": [SimpleNamespace(industry_l1="党政行业", scenario_l1_name="数字政府")] * 2}
+        return {
+            "c9": [
+                SimpleNamespace(industry_l1="党政行业", scenario_l1_name="数字政府"),
+                SimpleNamespace(industry_l1="党政行业", scenario_l1_name="数字政府"),
+                SimpleNamespace(industry_l1="教育行业", scenario_l1_name="智慧校园"),
+            ]
+        }
 
     monkeypatch.setattr(samples.repo, "recent_tags", recent)
     monkeypatch.setattr(samples.repo, "ai_interpretations", interpretations)
     monkeypatch.setattr(samples.source, "read_contents_for_page", lambda ids: {"c9": "正文"})
     out = await samples.samples(None, "opportunity", None, 5)  # type: ignore[arg-type]
-    row = dict(zip(out["headers"], out["rows"][0], strict=True))
-    assert row["行业场景"] == "党政行业/数字政府" and row["政策正文"] == "正文"
+    assert len(out["rows"]) == 2
+    row0 = dict(zip(out["headers"], out["rows"][0], strict=True))
+    row1 = dict(zip(out["headers"], out["rows"][1], strict=True))
+    assert (row0["一级行业"], row0["一级场景"], row0["行业场景"], row0["政策正文"]) == (
+        "党政行业",
+        "数字政府",
+        "党政行业/数字政府",
+        "正文",
+    )
+    assert (row1["一级行业"], row1["一级场景"]) == ("教育行业", "智慧校园")
     with pytest.raises(NotFoundError, match="还没有被判为「需要解读」的政策"):
         await samples.samples(None, "interpret", None, 5)  # type: ignore[arg-type]
 

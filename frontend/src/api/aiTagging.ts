@@ -92,8 +92,26 @@ export interface RetagResult {
 }
 export const requestRetag = (ids: string[], step: AiTaskCode) => request<RetagResult>(http.post(`${base}/retag`, { ids, step }))
 export const getTaggingContract = () => request<{ tasks: ContractTask[] }>(http.get(`${base}/contract`))
-export const getTaggingSamples = (task: AiTaskCode, day: string, limit: number) =>
-  request<TaggingSamples>(http.get(`${base}/samples`, { params: { task, limit, ...(task === 'type' ? { day } : {}) }, timeout: 120_000 }))
+export interface SampleExtraFilters {
+  province?: string
+  keyword?: string
+  industry_l1?: string
+}
+
+export const getTaggingSamples = (task: AiTaskCode, day: string, limit: number, filters: SampleExtraFilters = {}) =>
+  request<TaggingSamples>(
+    http.get(`${base}/samples`, {
+      params: {
+        task,
+        limit,
+        ...(task === 'type' ? { day } : {}),
+        ...(filters.province?.trim() ? { province: filters.province.trim() } : {}),
+        ...(filters.keyword?.trim() ? { keyword: filters.keyword.trim() } : {}),
+        ...(task === 'opportunity' && filters.industry_l1?.trim() ? { industry_l1: filters.industry_l1.trim() } : {}),
+      },
+      timeout: 120_000,
+    }),
+  )
 export type AiTaskUpdate = Omit<AiTask, 'spent_today' | 'spent_month' | 'current' | 'pending'>
 
 export const updateAiTask = (code: AiTaskCode, body: AiTaskBody) =>

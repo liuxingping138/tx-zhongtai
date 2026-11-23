@@ -90,11 +90,15 @@ def _connect_for_page() -> Any:
     return mysql_connect(database, connect_timeout=PAGE_CONNECT_TIMEOUT, read_timeout=PAGE_READ_TIMEOUT)
 
 
-def read_day_for_page(day: date, limit: int) -> tuple[list[dict[str, Any]], dict[str, str]]:
+def read_day_for_page(
+    day: date, limit: int, provinces: list[str] | None = None
+) -> tuple[list[dict[str, Any]], dict[str, str]]:
     """「从数据库取测试数据」：人在页面上等，一次连接读这天前 limit 条政策和它们的正文。超时同 read_page，不重试。"""
 
+    picked = list(provinces or [])
+    sql = _batch_sql(picked)
     with _connect_for_page() as connection, connection.cursor() as cursor:
-        cursor.execute(_BATCH_SQL, (day, "", limit))
+        cursor.execute(sql, (day, "", *picked, limit))
         rows = cast(list[dict[str, Any]], cursor.fetchall())
         return rows, _contents(cursor, [str(row["content_id"]) for row in rows])
 

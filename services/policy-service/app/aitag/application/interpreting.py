@@ -196,45 +196,52 @@ async def interpret_step(run_id: uuid.UUID, config: PolicyAiTask, spend: Spend) 
     return note
 
 
-async def _save_opportunities(run_id: uuid.UUID, tags: list[BaseTag], results: list[dict[str, Any]]) -> dict[str, int]:
+async def _save_opportunities(
+    run_id: uuid.UUID,
+    tags: list[BaseTag],
+    plans: list[tuple[BaseTag, str, str]],
+    results: list[dict[str, Any]],
+) -> dict[str, int]:
     filled = failed = 0
+    by_tag: dict[uuid.UUID, list[tuple[str, str, dict[str, Any]]]] = {}
+    for (snapshot, industry, scene), result in zip(plans, results, strict=True):
+        by_tag.setdefault(snapshot.id, []).append((industry, scene, result))
     async with SessionLocal() as session:
         locked = await repo.base_tags_by_ids(session, [tag.id for tag in tags])
         grouped = await repo.ai_interpretations(session, [str(tag.source_content_id) for tag in tags])
-        for snapshot, result in zip(tags, results, strict=True):
+        for snapshot in tags:
             tag = locked.get(snapshot.id)
-            if tag is None or not_run(result):
+            entries = by_tag.get(snapshot.id, [])
+            if tag is None or not entries or any(not_run(result) for _, _, result in entries):
                 continue
             tag.opportunity_at = utcnow()
-            if result.get("error"):
-                failed += 1
-                _append_remark(tag, f"{OPPORTUNITY_FAILED}：{str(result['error'])[:200]}")
-                continue
             rows = grouped.get(str(tag.source_content_id), [])
-            matches = rules.match_opportunities(
-                result.get("items") or [],
-                [{"industry_l1": row.industry_l1, "scenario_l1_name": row.scenario_l1_name} for row in rows],
-            )
-            if not matches:
-                # 钱花了一条也没写回：记成失败，列表上筛得出来，不能悄悄当成补完了。
+            errors: list[str] = []
+            for industry, scene, result in entries:
+                if result.get("error"):
+                    errors.append(f"{industry}/{scene}：{str(result['error'])[:120]}")
+                    continue
+                text = rules.extract_opportunity_text(result.get("items") or [], industry, scene)
+                if not text:
+                    errors.append(f"{industry}/{scene}：没有返回市场机会")
+                    continue
+                for row in rows:
+                    if row.industry_l1 == industry and row.scenario_l1_name == scene and untouched(row):
+                        row.market_opportunity = text
+                        row.updated_at = row.tagged_at = utcnow()
+                        # 有人正在核对页编辑这行（那时市场机会还空着），不加版本号的话他一保存，空值就把这次结果冲掉，
+                        # 这行从此算人工改过，也不会再补。
+                        row.version += 1
+                        filled += 1
+            if errors:
                 failed += 1
-                _append_remark(tag, f"{OPPORTUNITY_FAILED}：回答里的行业、场景和这条政策的解读行一条也对不上")
-                continue
-            for index, text in matches.items():
-                row = rows[index]
-                if untouched(row):
-                    row.market_opportunity = text
-                    row.updated_at = row.tagged_at = utcnow()
-                    # 有人正在核对页编辑这行（那时市场机会还空着），不加版本号的话他一保存，空值就把这次结果冲掉，
-                    # 这行从此算人工改过，也不会再补。
-                    row.version += 1
-                    filled += 1
+                _append_remark(tag, f"{OPPORTUNITY_FAILED}：{'；'.join(errors)[:200]}")
         await enqueue_event(
             session,
             event_type="policy.ai_tagging.opportunity",
             actor=ROBOT,
             target_id=str(run_id),
-            extra={"policies": len(tags), "rows": filled, "failed": failed},
+            extra={"policies": len(tags), "groups": len(plans), "rows": filled, "failed": failed},
         )
         await session.commit()
     return {"rows": filled, "failed": failed}
@@ -261,11 +268,15 @@ async def opportunity_step(run_id: uuid.UUID, config: PolicyAiTask, spend: Spend
     if not tags:
         return "没有待补市场机会的政策"
     base_rows = await _prompt_rows(tags, config.content_max_chars)
-    rows = [
-        rules.opportunity_prompt_row(row, rows_by_source[str(tag.source_content_id)])
-        for tag, row in zip(tags, base_rows, strict=True)
-    ]
-    await update_run(run_id, stage="opportunity", source_rows=len(tags))
+    plans: list[tuple[BaseTag, str, str]] = []
+    rows: list[dict[str, str]] = []
+    for tag, base_row in zip(tags, base_rows, strict=True):
+        for (industry, scene), prompt_row in rules.opportunity_prompt_rows(
+            base_row, rows_by_source[str(tag.source_content_id)]
+        ):
+            plans.append((tag, industry, scene))
+            rows.append(prompt_row)
+    await update_run(run_id, stage="opportunity", source_rows=len(rows))
     status, results = await ask(
         run_id,
         spend,
@@ -274,10 +285,13 @@ async def opportunity_step(run_id: uuid.UUID, config: PolicyAiTask, spend: Spend
         caller="政策AI打标·市场机会",
         run_field="opportunity_run_id",
     )
-    counts = await _save_opportunities(run_id, tags, results)
+    counts = await _save_opportunities(run_id, tags, plans, results)
     await update_run(run_id, opportunity_rows=counts["rows"], opportunity_failed=counts["failed"])
-    left = sum(1 for result in results if not_run(result))
-    note = f"{len(tags)} 条政策{reused_note(status)}回填 {counts['rows']} 行，失败 {counts['failed']} 条"
-    if left:
-        note += f"；{status.get('error_message') or '任务提前停止'}，{left} 条下批接着补"
+    unfinished = {tag.id for (tag, _, _), result in zip(plans, results, strict=True) if not_run(result)}
+    note = (
+        f"{len(tags)} 条政策（{len(rows)} 组行业场景）{reused_note(status)}"
+        f"回填 {counts['rows']} 行，失败 {counts['failed']} 条"
+    )
+    if unfinished:
+        note += f"；{status.get('error_message') or '任务提前停止'}，{len(unfinished)} 条下批接着补"
     return note

@@ -5,26 +5,36 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { CircleCheckFilled, Download, Upload } from '@element-plus/icons-vue'
 
 import { previewBatchInput, startBatchRun, type AiModel, type BatchInputSummary, type PromptTemplate, type RunVersion } from '@/api/ai'
+import { startBatchRunFromRows, type BatchRowsPayload } from '@/api/aiSamples'
+import { getTaggingContract, type ContractTask } from '@/api/aiTagging'
 import { errorMessage } from '@/api/errors'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
+import { useAuthStore } from '@/stores/auth'
 import { estimateCost } from '../prompts/sampleView'
 import { formatYuan } from '../shared/aiText'
 import { downloadBatchInputTemplate } from '../shared/downloads'
+import BatchDbPicker from './BatchDbPicker.vue'
 import BatchVersionPick from './BatchVersionPick.vue'
 import { confirmedLabel, defaultVersion, runSpec } from './batchVersion'
 
 /**
- * 新建批量任务：选模板和跑哪一版（线上版本或当前草稿），上传这次的数据，选跑全部还是先跑几条。
+ * 新建批量任务：选模板和跑哪一版（线上版本或当前草稿），上传 Excel 或从政策库取数，选跑全部还是先跑几条。
  * 发起时把这一版的提示词、输出字段、模型和码表冻结进任务，之后改模板、上线新版本都不影响它；模板的测试样本不参与。
  */
 const props = defineProps<{ templates: PromptTemplate[]; models: AiModel[] }>()
 const open = defineModel<boolean>({ required: true })
 const emit = defineEmits<{ created: [] }>()
+const auth = useAuthStore()
 const templateId = ref('')
 const version = ref<RunVersion>('release')
 const thinking = ref(false)
+const inputMode = ref<'upload' | 'db'>('upload')
 const file = ref<File | null>(null)
+const dbPayload = ref<BatchRowsPayload | null>(null)
+const dbNote = ref('')
 const summary = ref<BatchInputSummary | null>(null)
+const sampleTasks = ref<ContractTask[]>([])
+let contractLoaded = false
 const testRowsMax = computed(() => (summary.value ? Math.max(summary.value.rows - 1, 1) : 100000)) // 输入框按它做 key：Element Plus 只在挂载时写 aria-valuemax
 const previewing = ref(false)
 const downloading = ref(false)
@@ -36,6 +46,7 @@ const picker = ref<HTMLInputElement>()
 let sequence = 0
 
 const template = computed(() => props.templates.find(item => item.id === templateId.value))
+const canPickFromDb = computed(() => template.value?.category === 'policy' && sampleTasks.value.length > 0)
 const spec = computed(() => runSpec(template.value, version.value, props.models))
 const model = computed(() => spec.value?.model)
 /** 没选模板时「跑哪一版」那步不显示，后面的步骤号跟着往前挪，不跳号。 */
@@ -53,36 +64,63 @@ const estimate = computed(() => (summary.value
     })
   : null))
 const noFields = computed(() => (spec.value ? missingFieldsWarning(spec.value.content, spec.value.fields) : ''))
+const hasData = computed(() => Boolean(summary.value && (file.value || dbPayload.value)))
 const blocker = computed(() => {
   if (!template.value || !spec.value) return '选一个模板'
   if (spec.value.problem) return spec.value.problem
   if (previewing.value) return '正在检查数据…'
-  if (!summary.value || !file.value) return '上传这次要跑的数据'
+  if (!hasData.value) return inputMode.value === 'db' ? '先从政策库拉取并检查数据' : '上传这次要跑的数据'
   return ''
 })
 
-watch(open, value => {
-  sequence++
-  if (!value) return
-  templateId.value = ''
-  thinking.value = false
-  file.value = null
-  summary.value = null
-  failure.value = ''
-  scope.value = 'all'
-  testRows.value = 10
-}, { flush: 'sync' })
-// 只选了模板不算没保存的工作；选好的数据文件丢了要重新找，离开前提醒。
-useUnsavedForm(open, () => file.value?.name ?? '', starting)
-watch(templateId, () => { version.value = defaultVersion(template.value) })
-// 换了模板或版本，要的列可能不同：已选的数据要重新检查。
-watch([templateId, version], () => {
+function clearData(): void {
   sequence++
   file.value = null
+  dbPayload.value = null
+  dbNote.value = ''
   summary.value = null
   failure.value = ''
   previewing.value = false
+}
+
+async function ensureContract(): Promise<void> {
+  if (contractLoaded || !auth.canRead('policy.base_tags')) return
+  contractLoaded = true
+  try {
+    sampleTasks.value = (await getTaggingContract()).tasks
+  } catch {
+    contractLoaded = false
+  }
+}
+
+watch(open, value => {
+  clearData()
+  if (!value) return
+  templateId.value = ''
+  thinking.value = false
+  inputMode.value = 'upload'
+  scope.value = 'all'
+  testRows.value = 10
+  void ensureContract()
+}, { flush: 'sync' })
+// 只选了模板不算没保存的工作；选好的数据丢了要重新找，离开前提醒。
+useUnsavedForm(open, () => file.value?.name ?? dbPayload.value?.file_name ?? '', starting)
+watch(templateId, () => {
+  version.value = defaultVersion(template.value)
+  if (template.value?.category !== 'policy') inputMode.value = 'upload'
 })
+// 换了模板、版本或数据来源，要的列可能不同：已选的数据要重新检查。
+watch([templateId, version, inputMode], clearData)
+
+function onDbLoaded(result: { payload: BatchRowsPayload; summary: BatchInputSummary; note: string }): void {
+  file.value = null
+  dbPayload.value = result.payload
+  dbNote.value = result.note
+  summary.value = result.summary
+  failure.value = ''
+  testRows.value = Math.max(Math.min(10, result.summary.rows - 1), 1)
+  if (result.summary.rows <= 1) scope.value = 'all'
+}
 
 async function pick(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
@@ -132,7 +170,6 @@ function confirmText(title: string, data: NonNullable<typeof summary.value>, row
 async function start(): Promise<void> {
   if (blocker.value || starting.value) return
   const selected = template.value!
-  const input = file.value!
   const data = summary.value!
   const rows = count.value
   const ok = await ElMessageBox.confirm(
@@ -144,7 +181,9 @@ async function start(): Promise<void> {
   starting.value = true
   try {
     const useThinking = thinking.value && Boolean(model.value?.supports_thinking)
-    await startBatchRun({ prompt_id: selected.id, version: version.value, thinking: useThinking, limit: rows === data.rows ? 0 : rows }, input)
+    const req = { prompt_id: selected.id, version: version.value, thinking: useThinking, limit: rows === data.rows ? 0 : rows }
+    if (dbPayload.value) await startBatchRunFromRows(req, dbPayload.value)
+    else await startBatchRun(req, file.value!)
     ElMessage.success(`已加入队列，共 ${rows} 条`)
     open.value = false
     emit('created')
@@ -157,7 +196,7 @@ async function start(): Promise<void> {
 
 function close(done: () => void): void {
   if (starting.value) return
-  if (!file.value) { done(); return }
+  if (!file.value && !dbPayload.value) { done(); return }
   void ElMessageBox.confirm('选好的数据还没提交，关闭后要重新选。', '关闭新建任务？', { confirmButtonText: '关闭', cancelButtonText: '继续填写' })
     .then(() => { sequence++; done() }, () => {})
 }
@@ -195,7 +234,22 @@ function close(done: () => void): void {
         {{ noFields }}
       </p>
       <section class="new-task__step">
-        <h3><span>{{ stepNo(3) }}</span>上传这次的数据</h3>
+        <div class="new-task__step-head">
+          <h3><span>{{ stepNo(3) }}</span>选择这次的数据</h3>
+          <el-radio-group
+            v-if="canPickFromDb"
+            v-model="inputMode"
+            size="small"
+            :disabled="starting"
+          >
+            <el-radio-button value="upload">
+              上传 Excel
+            </el-radio-button>
+            <el-radio-button value="db">
+              从政策库取数
+            </el-radio-button>
+          </el-radio-group>
+        </div>
         <input
           ref="picker"
           type="file"
@@ -211,44 +265,50 @@ function close(done: () => void): void {
           <el-icon><CircleCheckFilled /></el-icon>
           <div>
             <strong>{{ summary.name }}</strong>
-            <span>{{ summary.rows.toLocaleString() }} 行数据 · {{ summary.headers.length }} 列，模板要的列都有</span>
+            <span>{{ dbNote || `${summary.rows.toLocaleString()} 行数据 · ${summary.headers.length} 列，模板要的列都有` }}</span>
           </div>
           <el-button
             size="small"
             :disabled="starting"
-            @click="picker?.click()"
+            @click="inputMode === 'db' ? clearData() : picker?.click()"
           >
-            换一个
+            {{ inputMode === 'db' ? '重新抽取' : '换一个' }}
           </el-button>
         </div>
-        <div
-          v-else
-          class="new-task__upload"
-        >
-          <el-button
-            :icon="Upload"
-            :loading="previewing"
-            :disabled="!spec || Boolean(spec.problem) || starting"
-            @click="picker?.click()"
-          >
-            选择 .xlsx 文件
-          </el-button>
-          <el-button
-            v-if="spec?.columns.length"
-            :icon="Download"
-            :loading="downloading"
-            :disabled="starting"
-            @click="downloadTemplate"
-          >
-            下载数据模板
-          </el-button>
-        </div>
-        <p
-          v-if="!summary"
-          class="new-task__hint"
-        >
-          {{ uploadHint }}
-        </p>
+        <BatchDbPicker
+          v-else-if="inputMode === 'db' && canPickFromDb && template"
+          :template="template"
+          :version="version"
+          :tasks="sampleTasks"
+          :disabled="!spec || Boolean(spec.problem) || starting"
+          @loaded="onDbLoaded"
+          @error="msg => failure = msg"
+          @loading="busy => previewing = busy"
+        />
+        <template v-else>
+          <div class="new-task__upload">
+            <el-button
+              :icon="Upload"
+              :loading="previewing"
+              :disabled="!spec || Boolean(spec.problem) || starting"
+              @click="picker?.click()"
+            >
+              选择 .xlsx 文件
+            </el-button>
+            <el-button
+              v-if="spec?.columns.length"
+              :icon="Download"
+              :loading="downloading"
+              :disabled="starting"
+              @click="downloadTemplate"
+            >
+              下载数据模板
+            </el-button>
+          </div>
+          <p class="new-task__hint">
+            {{ uploadHint }}
+          </p>
+        </template>
       </section>
 
       <section class="new-task__step">
@@ -329,28 +389,4 @@ function close(done: () => void): void {
   </el-drawer>
 </template>
 
-<style scoped>
-.new-task__steps { min-width: 0; margin: 0; padding: 0; border: 0; }
-.new-task__step { padding: 4px 0 22px; margin-bottom: 20px; border-bottom: 1px solid var(--zt-border); }
-.new-task__step:last-child { margin-bottom: 0; border-bottom: 0; }
-.new-task__step h3 { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; color: var(--zt-ink-900); font-size: 15px; font-weight: 650; }
-.new-task__step h3 span { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--zt-blue-600); color: var(--el-color-white); font-size: 12px; }
-.new-task__hint { margin: 8px 0 0; color: var(--zt-ink-500); font-size: 12px; line-height: 1.6; }
-.new-task__upload { display: flex; flex-wrap: wrap; gap: 8px; }
-.new-task__upload .el-button { margin: 0; }
-.new-task__file { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--zt-success-border); border-radius: 6px; background: var(--zt-success-soft); }
-.new-task__file > .el-icon { flex: none; color: var(--zt-success); font-size: 20px; }
-.new-task__file div { display: flex; flex: 1; flex-direction: column; min-width: 0; }
-.new-task__file strong { overflow: hidden; color: var(--zt-ink-900); text-overflow: ellipsis; white-space: nowrap; }
-.new-task__file span { color: var(--zt-ink-500); font-size: 12px; }
-.new-task__scope { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 8px; }
-.new-task__test-rows { display: flex; align-items: center; gap: 8px; margin: 0 0 12px 24px; color: var(--zt-ink-700); font-size: 13px; }
-.new-task__test-rows .el-input-number { width: 100px; }
-.new-task__footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.new-task__footer p { margin: 0; color: var(--zt-ink-500); font-size: 13px; text-align: left; }
-.new-task__warn { margin: 0 0 16px; padding: 8px 12px; border: 1px solid var(--zt-warning-border); border-radius: var(--zt-radius); background: var(--zt-warning-soft); color: var(--zt-warning-text); font-size: 13px; line-height: 20px; }
-
-.new-task__estimate { display: flex; flex-direction: column; font-size: 12px; }
-.new-task__estimate b { color: var(--zt-ink-900); font-size: 16px; font-variant-numeric: tabular-nums; }
-.new-task__footer .el-button { margin: 0; }
-</style>
+<style scoped src="./new-batch-task.css"></style>

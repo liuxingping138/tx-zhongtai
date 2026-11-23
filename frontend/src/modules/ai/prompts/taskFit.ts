@@ -3,6 +3,8 @@ import type { ContractTask, TemplateCheck } from '@/api/aiTagging'
 import { CODE_TABLE_FIELD } from '../shared/aiText'
 
 const BODY = '政策正文'
+const INDUSTRY_L1 = '一级行业'
+const SCENARIO_L1 = '一级场景'
 const SCENES = '行业场景'
 const SCENARIO_PATHS = '同行业已有场景'
 const FIELD_ALIASES: Record<string, string[]> = {
@@ -30,7 +32,7 @@ export function checkTemplate(task: ContractTask, variables: string[], fields: s
     ...emptyFieldWarnings(task, fields),
     ...bodyWarnings(task, variables),
     ...scenarioWarnings(task, variables),
-    ...opportunityWarnings(task, variables, fields),
+    ...opportunityWarnings(task, variables),
     ...codeWarnings(variables, systemCode),
   ]
   return { errors, warnings }
@@ -60,16 +62,11 @@ function emptyFieldWarnings(task: ContractTask, fields: string[]): string[] {
 }
 
 /** 市场机会这一步特有的提醒。 */
-function opportunityWarnings(task: ContractTask, variables: string[], fields: string[]): string[] {
+function opportunityWarnings(task: ContractTask, variables: string[]): string[] {
   if (task.code !== 'opportunity') return []
-  const warnings: string[] = []
-  if (!fields.some(name => name === '行业' || name === '一级行业')) {
-    warnings.push('没有输出「行业」「场景」：一条政策有几条市场机会时，分不清各是哪条解读行的')
-  }
-  if (!variables.includes(SCENES)) {
-    warnings.push(`没有用 @【${SCENES}】，模型不知道这条政策解读出了哪些行业场景，市场机会可能对不上解读行`)
-  }
-  return warnings
+  const hasSceneVar = [INDUSTRY_L1, SCENARIO_L1, SCENES].some(name => variables.includes(name))
+  if (hasSceneVar) return []
+  return [`没有用 @【${INDUSTRY_L1}】、@【${SCENARIO_L1}】，模型不知道要针对哪组行业场景写市场机会`]
 }
 
 export type FitLevel = 'ok' | 'warn' | 'error' | 'skip'

@@ -30,6 +30,23 @@ class TestRowsBody(_Body):
     rows: list[list[str]] = Field(min_length=1, max_length=200)
 
 
+class BatchRowsPreviewBody(_Body):
+    """批量任务从政策库取数时的预检请求。"""
+
+    prompt_id: str = Field(min_length=1, max_length=32)
+    version: Literal["release", "draft"] = "release"
+    file_name: str = Field(min_length=6, max_length=120, pattern=r"\.xlsx$")
+    headers: list[str] = Field(min_length=1, max_length=50)
+    rows: list[list[str]] = Field(min_length=1, max_length=500)
+
+
+class BatchRowsStartBody(BatchRowsPreviewBody):
+    """批量任务从政策库取数时的发起请求。"""
+
+    thinking: bool = False
+    limit: int = Field(default=0, ge=0, le=100_000)
+
+
 class PromptBody(_Body):
     title: str = Field(max_length=255)
     category: str = Field(max_length=16)

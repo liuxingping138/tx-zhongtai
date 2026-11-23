@@ -61,8 +61,33 @@ def test_opportunities_match_by_industry_and_scene_then_fall_back() -> None:
 
 def test_opportunity_prompt_lists_the_interpreted_scenes_once() -> None:
     base = {"源ID": "c1", "政策标题": "t"}
-    rows = [{"industry_l1": "党政行业", "scenario_l1_name": "数字政府"}] * 2
-    assert rules.opportunity_prompt_row(base, rows)["行业场景"] == "党政行业/数字政府"
+    rows = [
+        {"industry_l1": "党政行业", "scenario_l1_name": "数字政府"},
+        {"industry_l1": "党政行业", "scenario_l1_name": "数字政府"},
+        {"industry_l1": "交通行业", "scenario_l1_name": "车路云"},
+    ]
+    assert rules.opportunity_prompt_row(base, rows)["行业场景"] == "党政行业/数字政府\n交通行业/车路云"
+    expanded = rules.opportunity_prompt_rows(base, rows)
+    assert [pair for pair, _ in expanded] == [("党政行业", "数字政府"), ("交通行业", "车路云")]
+    assert (expanded[0][1]["一级行业"], expanded[0][1]["一级场景"], expanded[0][1]["行业场景"]) == (
+        "党政行业",
+        "数字政府",
+        "党政行业/数字政府",
+    )
+    assert (
+        rules.extract_opportunity_text([{"市场机会": "聚焦数字政府建设"}], "党政行业", "数字政府") == "聚焦数字政府建设"
+    )
+    assert (
+        rules.extract_opportunity_text(
+            [
+                {"行业": "交通行业", "场景": "车路云", "市场机会": "交通机会"},
+                {"行业": "党政行业", "场景": "数字政府", "市场机会": "政务机会"},
+            ],
+            "党政行业",
+            "数字政府",
+        )
+        == "政务机会"
+    )
 
 
 def test_later_steps_reuse_the_first_step_column_names() -> None:
