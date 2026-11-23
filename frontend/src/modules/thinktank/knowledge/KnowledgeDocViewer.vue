@@ -3,6 +3,7 @@ import { Close, Download, FullScreen } from '@element-plus/icons-vue'
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import ParagraphSkeleton from '@/components/ParagraphSkeleton.vue'
+import PdfStreamViewer from './PdfStreamViewer.vue'
 import { lockScroll } from './scrollLock'
 
 defineProps<{
@@ -24,6 +25,7 @@ const emit = defineEmits<{
   'update:collapsed': [value: boolean]
   'update:metaCollapsed': [value: boolean]
   download: []
+  unavailable: []
 }>()
 
 const fullscreen = ref(false)
@@ -38,7 +40,7 @@ function onKeydown(event: KeyboardEvent) {
 }
 
 // 全屏时后面的页面不跟着滚；焦点先放到「退出全屏」上，Esc 立即可用。
-// 点进 PDF 后按键被内嵌的 PDF 阅读器拿走、页面收不到 Esc，所以按钮上写明。
+// PDF 由页面里的 PDF.js 画在画布上（不是浏览器内嵌插件），全屏后按新宽度重排、按键也不会被插件拿走。
 watch(fullscreen, (on) => {
   if (on) {
     unlockScroll = lockScroll(document.body)
@@ -100,7 +102,7 @@ onBeforeUnmount(() => {
             ref="toggleBtn"
             type="button"
             class="review__tool-btn review__tool-btn--primary"
-            :title="fullscreen ? '退出全屏（Esc；正在 PDF 里操作时请点这里）' : '全屏预览'"
+            :title="fullscreen ? '退出全屏（Esc）' : '全屏预览'"
             @click="fullscreen = !fullscreen"
           >
             <el-icon>
@@ -132,12 +134,14 @@ onBeforeUnmount(() => {
           </p>
           <ParagraphSkeleton :lines="10" />
         </div>
-        <iframe
+        <PdfStreamViewer
           v-else-if="mode === 'pdf' && pdfUrl"
-          :key="`${pdfUrl}:${fullscreen ? 1 : 0}`"
-          :src="pdfUrl"
-          class="viewer-frame"
-          title="文档在线预览"
+          :url="pdfUrl"
+          :loading-text="loadingText"
+          :can-download="canExport"
+          :downloading="downloading"
+          @unavailable="emit('unavailable')"
+          @download="emit('download')"
         />
         <div
           v-else
@@ -171,7 +175,6 @@ onBeforeUnmount(() => {
 .review__content.is-fullscreen .review__content-body { overflow: hidden; }
 .review__content.is-fullscreen .viewer-loading { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; }
 .viewer-loading__text { margin: 0; color: var(--zt-ink-500); font-size: 13px; }
-.viewer-frame { min-height: 0; height: 100%; }
 .review__content-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--zt-border); background: var(--zt-soft); flex-wrap: wrap; }
 .review__content-meta { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .review__content-title { font-size: 13px; font-weight: 600; color: var(--zt-ink-700); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -183,7 +186,6 @@ onBeforeUnmount(() => {
 .review__content-body { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
 .review__content-rail { border: 1px solid var(--zt-border); border-radius: 10px; background: var(--zt-panel); color: var(--zt-ink-700); font-size: 13px; cursor: pointer; writing-mode: vertical-rl; display: flex; align-items: center; justify-content: center; letter-spacing: 2px; }
 .review__content-rail:hover { color: var(--zt-blue-600); border-color: var(--zt-blue-600); }
-.viewer-frame { width: 100%; height: 100%; min-height: 560px; border: 0; flex: 1; }
 .viewer-text-wrap { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; flex: 1; }
 .viewer-hint { padding: 8px 12px; border-radius: 8px; background: var(--zt-row-hover); color: var(--zt-blue-600); font-size: 12px; }
 .viewer-text { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: 14px; line-height: 1.75; color: var(--zt-ink-900); }

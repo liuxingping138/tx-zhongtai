@@ -5,7 +5,6 @@ from __future__ import annotations
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from platform_common.actors import Actor
@@ -19,12 +18,13 @@ from app.common.codebook_client import get_provinces
 from app.core import office_preview, storage
 from app.core.config import get_settings
 from app.knowledge.application.knowledge_preview import (
+    PDF_MEDIA_TYPE,
     etag_matches,
     expected_preview_etag,
     fallback_summary_bytes,
-    open_office_preview_pdf,
+    is_pdf_file,
+    open_preview_pdf,
     open_storage_or_summary,
-    preview_etag,
     single_chunk_stream,
 )
 from app.knowledge.domain.models import KnowledgeFile, KnowledgeOpLog
@@ -47,6 +47,8 @@ class FileStreamResult:
     content_length: int | None = None
     etag: str | None = None
     not_modified: bool = False
+    # 流是本地缓存文件（preview_cache.FileChunks），可以按 HTTP Range 分段下发
+    ranged: bool = False
 
 
 def format_size(size_bytes: int) -> str:
@@ -310,18 +312,20 @@ async def stream_file_content(
     settings = get_settings()
     if not for_download and row.storage_path:
         office_ext = office_preview.office_extension(row.file_name, row.file_suffix)
-        if office_ext is not None:
-            # 转码可能排队、最长一分钟：先交还数据库连接，否则几个人同时预览就占满连接池，全服务 503。
+        if office_ext is not None or is_pdf_file(row):
+            # 拉源文件、转码、压缩可能排队一两分钟：先交还数据库连接，否则几个人同时预览就占满连接池，全服务 503。
             await session.commit()
-            opened_pdf = await open_office_preview_pdf(settings, row, office_ext)
-            if opened_pdf is not None:
+            pdf = await open_preview_pdf(settings, row, office_ext)
+            if pdf is not None:
                 return FileStreamResult(
-                    stream=opened_pdf[0],
-                    filename=f"{Path(row.file_name).stem}.pdf",
-                    media_type="application/pdf",
-                    content_length=opened_pdf[1],
-                    etag=preview_etag(row, kind="office-pdf"),
+                    stream=pdf.stream,
+                    filename=pdf.filename,
+                    media_type=PDF_MEDIA_TYPE,
+                    content_length=pdf.size,
+                    etag=pdf.etag,
+                    ranged=True,
                 )
+        if office_ext is not None:
             raw = fallback_summary_bytes(row)
             return FileStreamResult(
                 stream=single_chunk_stream(raw),

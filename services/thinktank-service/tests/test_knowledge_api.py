@@ -23,6 +23,7 @@ from app.knowledge.application import export_import, knowledge, knowledge_write
 from app.knowledge.domain.models import KnowledgeFile, KnowledgeOpLog
 from app.knowledge.domain.scopes import FULL_ACCESS, KnowledgeAccess
 from app.main import app
+from tests.helpers import no_pdf_tools, preview_settings
 
 ACTOR = Actor(id="u1", name="测试管理员")
 NOW = datetime(2026, 11, 18, 8, 0, tzinfo=UTC)
@@ -94,7 +95,8 @@ async def test_preview_favorite_download_logs_and_audit(monkeypatch: pytest.Monk
     from app.core.config import get_settings
 
     get_settings.cache_clear()
-    monkeypatch.setattr(knowledge, "get_settings", lambda: SimpleNamespace(storage_dir=str(tmp_path)))
+    monkeypatch.setattr(knowledge, "get_settings", lambda: preview_settings(tmp_path))
+    no_pdf_tools(monkeypatch)
 
     op_logs: list[dict[str, Any]] = []
     events = _hook_events(monkeypatch, knowledge)

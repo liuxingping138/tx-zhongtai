@@ -36,6 +36,11 @@ class Settings(BaseServiceSettings):
     storage_dir: str = "./data/thinktank"
     # Office 预览转出的 PDF 缓存（storage_dir/preview_cache）总量上限，超了从最久没用的删起
     preview_cache_max_bytes: int = 2 * 1024 * 1024 * 1024
+    # 预览用 PDF：超过这个大小的先用 Ghostscript 把内嵌图片降到 preview_compress_dpi（Office 转出的一律压），
+    # 再用 qpdf 线性化；每个外部命令最长跑 preview_optimize_timeout_seconds 秒，超时就用上一步的结果。
+    preview_compress_min_bytes: int = 3 * 1024 * 1024
+    preview_compress_dpi: int = 144
+    preview_optimize_timeout_seconds: float = 120.0
 
     # 原服务器 MinIO 对象存储（配置 endpoint 后优先读写 MinIO，未配置则回退本地 storage_dir）
     minio_endpoint: str = ""

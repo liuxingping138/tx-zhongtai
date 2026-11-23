@@ -5,7 +5,7 @@ from __future__ import annotations
 import httpx
 
 from app.core import storage
-from app.knowledge.api import routes
+from app.knowledge.api import content_response
 from app.knowledge.application import knowledge
 
 
@@ -45,7 +45,7 @@ def test_file_responses_close_the_stream_in_the_background() -> None:
     result = knowledge.FileStreamResult(
         stream=storage.MinioChunks(resp, 1024, "a.pdf"), filename="a.pdf", media_type="application/pdf"
     )
-    response = routes._streamed(result, {})
+    response = content_response.streamed(result, {})
     assert response.background is not None
     assert response.background.func is knowledge.close_file_stream
     assert response.background.args == (result,)

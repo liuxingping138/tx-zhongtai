@@ -1,6 +1,7 @@
-"""Office 预览转出的 PDF 的磁盘缓存：原子写入、按最近使用淘汰、失败标记、删文件时清掉。
+"""预览用 PDF 的磁盘缓存（Office 转出的、PDF 瘦身线性化后的）：原子写入、按最近使用淘汰、失败标记、删文件时清掉。
 
-缓存文件名是 `{key}.pdf`，key 由文件 ID + 对象键 + 大小算出（`cache_key_for`），不含用户输入，不会拼出目录穿越。
+缓存文件名是 `{key}.pdf`，key 由文件 ID + 对象键 + 大小（+ 形态）算出（`cache_key_for`），不含用户输入，
+不会拼出目录穿越。
 命中时更新修改时间，超过容量上限时从最久没用的删起（LRU）。转换失败记 `{key}.fail`，一段时间内不再重转，
 免得一个总超时的文件每打开一次就占一个转换名额一分钟。
 """
@@ -15,6 +16,7 @@ import os
 import shutil
 import tempfile
 import time
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import BinaryIO
 
@@ -24,8 +26,36 @@ FAIL_TTL_SECONDS = 600
 _STALE_TMP_SECONDS = 3600
 
 
-def cache_key_for(file_id: str, storage_path: str, size_bytes: int) -> str:
-    return hashlib.sha256(f"{file_id}:{storage_path}:{size_bytes}".encode()).hexdigest()
+def cache_key_for(file_id: str, storage_path: str, size_bytes: int, variant: str = "") -> str:
+    """`variant` 区分同一文件的不同预览形态；处理方式变了换一个，旧缓存不再命中，按容量上限慢慢淘汰。"""
+
+    raw = f"{file_id}:{storage_path}:{size_bytes}" + (f":{variant}" if variant else "")
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+class KeyLocks:
+    """同一个文件同时只处理一次。记着每把锁有几个人在用，最后一个人走了才删，
+    不会在前一个人刚放锁、排队的人还没拿到时就删掉，让后来的人另起一把锁并行重做。"""
+
+    def __init__(self) -> None:
+        self._locks: dict[str, tuple[asyncio.Lock, int]] = {}
+
+    @contextlib.asynccontextmanager
+    async def hold(self, key: str) -> AsyncIterator[None]:
+        lock, users = self._locks.get(key, (asyncio.Lock(), 0))
+        self._locks[key] = (lock, users + 1)
+        try:
+            async with lock:
+                yield
+        finally:
+            lock, users = self._locks[key]
+            if users <= 1:
+                del self._locks[key]
+            else:
+                self._locks[key] = (lock, users - 1)
+
+    def __len__(self) -> int:
+        return len(self._locks)
 
 
 def pdf_path(cache_dir: str, key: str) -> Path:
@@ -145,19 +175,30 @@ def remove(cache_dir: str, key: str) -> None:
 
 
 class FileChunks:
-    """已打开的缓存文件按块读出；没开始读客户端就断开时，路由的后台任务调 aclose 关掉文件句柄。"""
+    """已打开的缓存文件按块读出；没开始读客户端就断开时，路由的后台任务调 aclose 关掉文件句柄。
+
+    `select_range` 之后只读那一段（HTTP Range），不把整份文件读出来。
+    """
 
     def __init__(self, fp: BinaryIO) -> None:
         self._fp = fp
+        self._remaining: int | None = None
+
+    def select_range(self, start: int, length: int) -> None:
+        self._fp.seek(start)
+        self._remaining = length
 
     def __aiter__(self) -> FileChunks:
         return self
 
     async def __anext__(self) -> bytes:
-        chunk = await asyncio.to_thread(self._fp.read, CHUNK_SIZE)
+        size = CHUNK_SIZE if self._remaining is None else min(CHUNK_SIZE, self._remaining)
+        chunk = await asyncio.to_thread(self._fp.read, size) if size > 0 else b""
         if not chunk:
             self._fp.close()
             raise StopAsyncIteration
+        if self._remaining is not None:
+            self._remaining -= len(chunk)
         return chunk
 
     async def aclose(self) -> None:

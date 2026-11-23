@@ -91,7 +91,7 @@ http:
         contentTypeNosniff: true
         frameDeny: true
         referrerPolicy: "strict-origin-when-cross-origin"
-        contentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'"
+        contentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'"
     # JSON 和前端资源都是高压缩比文本：筛选项接口未压缩时约 940KB，
     # 前端主包约 1.1MB。Traefik 默认只压缩超过 1KB 的响应，小响应不受影响。
     compress:

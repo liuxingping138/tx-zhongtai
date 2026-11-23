@@ -150,17 +150,23 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
   越权访问单条记录也记审计
 - 文件存储 `app/core/storage.py`：配了 `THINKTANK_MINIO_ENDPOINT` 读写 MinIO（S3v4 签名，沿用原服务器的对象键），没配落本地卷 `thinktank-data`（`/data/thinktank`）；
   存储连不上回 503。上传只收 PDF / Word / Excel / PPT / TXT / CSV / MD，单个上限 `THINKTANK_UPLOAD_MAX_BYTES`（50MB），网关这个前缀另用 `thinktank-limit`
-- 预览：PDF 在页面里内嵌显示，TXT / MD / CSV 显示文本；Word / Excel / PPT 由镜像里的 LibreOffice 转成 PDF 内嵌显示（`app/core/office_preview.py`），
-  转好的缓存在 `/data/thinktank/preview_cache/`（`app/core/preview_cache.py`；按文件 ID + 对象键 + 大小命名，原子写入）：命中刷新修改时间，总量超过
-  `THINKTANK_PREVIEW_CACHE_MAX_BYTES`（2GB）从最久没用的删起，删知识文件时连缓存一起删，业务备份不打包它。同时最多转 2 个，单个 60 秒超时，同一个文件同时只转一次；
-  转失败记 `{key}.fail`，10 分钟内再打开直接回摘要、不再占名额重转。拿到名额后才把源文件按块写进临时文件，
-  转码前先提交事务交还数据库连接（转码可能排队一分钟，占着连接会拖垮连接池），缓存 PDF 在下发前就打开、按块读出（之后被淘汰也能读完）。
-  soffice 单开进程组、只带最少的环境变量（不把数据库口令、存储密钥交给处理上传文档的进程），每次用独立配置关掉宏和外部链接更新，
+- 预览：PDF 由页面里的 PDF.js 按 Range 分段读、按页画到画布上（不用浏览器内嵌插件），TXT / MD / CSV 显示文本；Word / Excel / PPT 由镜像里的 LibreOffice 转成 PDF（`app/core/office_preview.py`）后同样按页显示。
+  服务器出口只有 3～4 Mbps，所以预览用的是另一份 PDF（`app/core/pdf_optimize.py`）：超过 `THINKTANK_PREVIEW_COMPRESS_MIN_BYTES`（3MB）的和 Office 转出的先用 Ghostscript 把内嵌图片降到
+  `THINKTANK_PREVIEW_COMPRESS_DPI`（144，没小到原来 90% 就不用），再 `qpdf --linearize` 把第一页排到文件开头；任一步失败退回上一步，工具都没有也缓存原文件，之后的 Range 读本地盘不再去对象存储。
+  **「下载源文件」（`/download`）永远是对象存储里的原文件**。缓存在 `/data/thinktank/preview_cache/`（`app/core/preview_cache.py`；按文件 ID + 对象键 + 大小 + 形态 `preview-v2` 命名，原子写入）：命中刷新修改时间，总量超过
+  `THINKTANK_PREVIEW_CACHE_MAX_BYTES`（2GB）从最久没用的删起，删知识文件时连缓存（含改版前不带形态的旧键）一起删，业务备份不打包它。同一个文件同时只做一次（`preview_cache.KeyLocks`），转码、压缩各自同时最多 2 个；soffice 单个 60 秒，gs、qpdf 每条 `THINKTANK_PREVIEW_OPTIMIZE_TIMEOUT_SECONDS`（120 秒）；
+  Office 转失败、PDF 写缓存失败记 `{key}.fail`，10 分钟内不再占名额重做（Office 回摘要，PDF 从存储整份下发、不支持 Range）。拿到名额后才把源文件按块写进临时文件，
+  取源文件、转码、压缩前先提交事务交还数据库连接（可能排队一两分钟，占着连接会拖垮连接池），缓存 PDF 在下发前就打开、按块读出（之后被淘汰也能读完）。
+  外部命令经 `app/core/subprocess_guard.py` 单开进程组、只带最少的环境变量（不把数据库口令、存储密钥交给处理上传文档的进程），soffice 每次用独立配置关掉宏和外部链接更新，gs 带 `-dSAFER`，
   超时、请求取消都整组杀掉，compose 里 `init: true` 回收孤儿进程。转换进程仍在服务的网络里，要隔离网络得拆成单独的转换容器。
   没装 LibreOffice 时 Office 仍只显示资料摘要；转换失败、源文件不存在时 `/content` 回摘要 txt，存储连不上回 503。没有源文件的记录下载得到摘要 txt。
-  源文件经 `/{id}/content`、`/{id}/download` 流式返回（网关 110 路由，不压缩不缓冲），客户端提前断开也关掉对象存储的流和缓存文件句柄；
-  `/content` 带 `Cache-Control: private, no-store`，撤权、删文件后浏览器不留旧内容。预览页（`useKnowledgeContent`）资料信息一到就出整页、原文在右栏单独加载，同一条只发一次 `/content`、换记录中止旧请求，看过的原文在页内按最近使用留 6 份，离开预览页全部释放。前端下载开始、失败用消息提示。
-  LibreOffice 让镜像变大，转码时占内存，默认 `THINKTANK_MEM_LIMIT` 是 1536m
+  `/content`（GET、HEAD）每次请求、每一段 Range 都重新鉴权；本地缓存的 PDF 回 `Accept-Ranges: bytes`、ETag（`private, no-cache` + `If-None-Match` → 304），单段 Range 回 206、起点超出或写法不对回 416、多段或 `If-Range` 对不上回整份
+  （`app/knowledge/api/content_response.py`）；摘要 txt 不支持 Range、`private, no-store`。`/content`、`/download` 走网关 110 路由，不压缩（gzip 会破坏 206）不缓冲，客户端提前断开也关掉对象存储的流和缓存文件句柄。
+  前端（`PdfStreamViewer.vue` + `usePdfStream.ts`）：PDF.js 及其 worker、CMap、标准字体、wasm 都打进本站静态资源（`vite.config.ts` 的 `pdfjsAssets`，发布在 `/assets/pdfjs-<版本>/`），不走外网 CDN，
+  网关和 nginx 的 CSP 为它放行 `worker-src 'self' blob:`。`disableStream` + `disableAutoFetch` 只取当前要画的页；令牌放在请求头，PDF.js 打开后请求头不再变，所以 401 时续期一次后重开文档（页内取数 401 同样处理）。
+  只渲染可见页和上下各 2 页，其余页按已量过的尺寸留占位、画布清空；换记录、离开页面立即 `loadingTask.destroy()` 中止在途 Range。服务端回的不是 PDF（摘要 txt）时阅读器报 `unavailable`，
+  `useKnowledgeContent.fallbackToText` 改按文本取。文本原文同一条只发一次 `/content`、换记录中止旧请求，按最近使用留 6 份。前端下载开始、失败用消息提示。
+  LibreOffice、Ghostscript 让镜像变大，转码、压缩时占内存，默认 `THINKTANK_MEM_LIMIT` 是 1536m
 - 预览、下载、编辑等写知识库自己的操作记录（`/{id}/logs`），同时经 Outbox 上报审计（投递循环在服务 lifespan 里，没有单独 worker）。
   省份候选值经 codebook `/internal/v1/provinces` 取，取不到用内置列表（密钥 `CODEBOOK_THINKTANK_CALLER_SECRET`，compose 传给两边）
 - 历史资料、操作记录和收藏用 `python -m app.cli.seed_knowledge`（`make seed-knowledge`）从 `services/thinktank-service/data` 导入

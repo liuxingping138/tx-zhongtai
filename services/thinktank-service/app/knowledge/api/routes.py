@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import re
 import uuid
 from typing import Annotated
-from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -22,11 +20,11 @@ from platform_common.http_utils import (
     success_json,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.background import BackgroundTask
 
 from app.common.security import classified, fetch_scope_levels, get_authz_client, require_thinktank_permission
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
+from app.knowledge.api.content_response import content_disposition, inline_content_response, streamed
 from app.knowledge.api.schemas import KnowledgePatch
 from app.knowledge.application import export_import
 from app.knowledge.application import knowledge as service
@@ -79,16 +77,6 @@ def knowledge_filters(
         "tag_status": tag_status,
         "favorite_only": favorite_only,
     }
-
-
-_UNSAFE_HEADER_CHARS = re.compile(r'[\x00-\x1f\x7f"\\]')
-
-
-def _content_disposition(disposition: str, filename: str) -> str:
-    safe_name = _UNSAFE_HEADER_CHARS.sub("_", filename).strip() or "knowledge-file"
-    ascii_fallback = safe_name.encode("ascii", "ignore").decode("ascii").strip() or "knowledge-file"
-    encoded = quote(safe_name)
-    return f"{disposition}; filename=\"{ascii_fallback}\"; filename*=UTF-8''{encoded}"
 
 
 @router.get("")
@@ -155,7 +143,7 @@ async def export_items(
     return Response(
         content=payload,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": _content_disposition("attachment", "知识库资料.xlsx")},
+        headers={"Content-Disposition": content_disposition("attachment", "知识库资料.xlsx")},
     )
 
 
@@ -170,7 +158,7 @@ async def export_undefined_items(
     return Response(
         content=payload,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": _content_disposition("attachment", "未定义标签数据.xlsx")},
+        headers={"Content-Disposition": content_disposition("attachment", "未定义标签数据.xlsx")},
     )
 
 
@@ -250,13 +238,9 @@ async def preview_item(
     return success_json(await service.preview_knowledge(session, actor=actor, access=access, file_id=file_id))
 
 
-def _streamed(res: service.FileStreamResult, headers: dict[str, str]) -> StreamingResponse:
-    # 客户端在开始下发前断开时流从没被读过，不主动关的话对象存储的连接要等垃圾回收才释放。
-    background = BackgroundTask(service.close_file_stream, res)
-    return StreamingResponse(res.stream, media_type=res.media_type, headers=headers, background=background)
-
-
+# HEAD 给按 Range 取数的客户端先拿大小和 ETag；每次请求（含每一段 Range）都重新鉴权。
 @router.get("/{file_id}/content")
+@router.head("/{file_id}/content")
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def get_item_content(
     file_id: uuid.UUID,
@@ -273,22 +257,12 @@ async def get_item_content(
         for_download=False,
         if_none_match=request.headers.get("if-none-match"),
     )
-    if res.not_modified and res.etag:
-        return Response(
-            status_code=304,
-            headers={"ETag": res.etag, "Cache-Control": "private, no-cache", "Vary": "Authorization"},
-        )
-    headers = {
-        "Content-Disposition": _content_disposition("inline", res.filename),
-        "X-Content-Type-Options": "nosniff",
-        "Cache-Control": "private, no-cache" if res.etag else "private, no-store",
-    }
-    if res.etag:
-        headers["ETag"] = res.etag
-        headers["Vary"] = "Authorization"
-    if res.content_length is not None:
-        headers["Content-Length"] = str(res.content_length)
-    return _streamed(res, headers)
+    return inline_content_response(
+        res,
+        head=request.method == "HEAD",
+        range_header=request.headers.get("range"),
+        if_range=request.headers.get("if-range"),
+    )
 
 
 @router.get("/{file_id}/download")
@@ -301,12 +275,12 @@ async def download_item(
 ) -> StreamingResponse:
     res = await service.stream_file_content(session, actor=actor, access=access, file_id=file_id, for_download=True)
     headers = {
-        "Content-Disposition": _content_disposition("attachment", res.filename),
+        "Content-Disposition": content_disposition("attachment", res.filename),
         "Access-Control-Expose-Headers": "Content-Disposition",
     }
     if res.content_length is not None:
         headers["Content-Length"] = str(res.content_length)
-    return _streamed(res, headers)
+    return streamed(res, headers)
 
 
 @router.post("/{file_id}/favorite")

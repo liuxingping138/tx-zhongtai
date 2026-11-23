@@ -111,7 +111,7 @@ function loadEditOptions() {
     .catch(() => { /* 取不到时编辑弹层不限候选 */ })
 }
 
-// 资料信息一到就出整页，原文（PDF 下载、Office 转码可能要几秒）在右栏自己转圈。
+// 资料信息一到就出整页，原文在右栏自己加载：PDF 按 Range 先出第一页，Office 首次打开要转码几秒。
 async function loadPage() {
   const targetId = fileId.value
   if (!targetId) return
@@ -307,6 +307,7 @@ onMounted(() => {
           @update:collapsed="setPreviewCollapsed"
           @update:meta-collapsed="setMetaCollapsed"
           @download="onDownload"
+          @unavailable="content.fallbackToText()"
         />
       </div>
 

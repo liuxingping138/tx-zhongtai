@@ -1113,6 +1113,45 @@
       }
     },
     "/api/v1/thinktank/knowledge/{file_id}/content": {
+      "head": {
+        "tags": [
+          "thinktank-knowledge"
+        ],
+        "summary": "Get Item Content",
+        "operationId": "get_item_content_api_v1_thinktank_knowledge__file_id__content_head",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "File Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "get": {
         "tags": [
           "thinktank-knowledge"

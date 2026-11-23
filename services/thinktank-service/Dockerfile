@@ -19,6 +19,8 @@ RUN sed -i 's|deb.debian.org|mirrors.cloud.tencent.com|g' /etc/apt/sources.list.
       fonts-noto-cjk \
       fonts-liberation \
       fonts-dejavu-core \
+      ghostscript \
+      qpdf \
  && rm -rf /var/lib/apt/lists/* \
  && pip install --no-cache-dir --disable-pip-version-check --root-user-action=ignore --index-url "$PYPI_INDEX" uv==0.12.13
 

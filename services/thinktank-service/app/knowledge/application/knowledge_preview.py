@@ -1,20 +1,37 @@
-"""知识库文件在线预览辅助：Office 转 PDF 缓存读取与文本摘要兜底。"""
+"""知识库文件在线预览辅助：预览用 PDF（Office 转出的、PDF 压缩线性化后的）的缓存读取与文本摘要兜底。"""
 
 from __future__ import annotations
 
 import asyncio
 import hashlib
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from platform_common.errors import ApiError, ErrorCode
 from platform_common.logging_setup import get_logger
 
-from app.core import office_preview, preview_cache, storage
+from app.core import office_preview, pdf_optimize, preview_cache, storage
 from app.knowledge.domain.models import KnowledgeFile
 
 logger = get_logger(__name__)
+
+PDF_MEDIA_TYPE = "application/pdf"
+# 预览缓存和 ETag 的形态标记：处理方式变了就换一个，旧缓存不再命中，浏览器里的旧副本也不再被 304 沿用。
+_CACHE_VARIANT = "preview-v2"
+_ETAG_OFFICE = "office-pdf-v2"
+_ETAG_PDF = "pdf-v2"
+
+
+@dataclass(frozen=True)
+class PreviewPdf:
+    """已打开的预览用 PDF：本地缓存文件，能按 Range 分段读。"""
+
+    stream: preview_cache.FileChunks
+    filename: str
+    size: int
+    etag: str
 
 
 def fallback_summary_bytes(row: KnowledgeFile) -> bytes:
@@ -64,36 +81,65 @@ def _source_writer(settings: Any, storage_path: str) -> office_preview.SourceWri
     return write
 
 
-def _cache_location(settings: Any, row: KnowledgeFile) -> tuple[str, str]:
-    cache_dir = str(Path(settings.storage_dir) / "preview_cache")
-    return cache_dir, preview_cache.cache_key_for(str(row.id), row.storage_path, row.file_size_bytes)
+def _cache_dir(settings: Any) -> str:
+    return str(Path(settings.storage_dir) / "preview_cache")
 
 
-async def open_office_preview_pdf(
-    settings: Any, row: KnowledgeFile, office_ext: str
-) -> tuple[preview_cache.FileChunks, int] | None:
-    """返回已打开的 PDF 流和大小：先查磁盘缓存，未命中时拉源文件由 LibreOffice 转码。转不出来返回 None。"""
+def _cache_key(row: KnowledgeFile, variant: str = _CACHE_VARIANT) -> str:
+    return preview_cache.cache_key_for(str(row.id), row.storage_path, row.file_size_bytes, variant)
 
-    cache_dir, cache_key = _cache_location(settings, row)
-    pdf_path = await office_preview.convert_office_to_pdf(
-        _source_writer(settings, row.storage_path),
-        office_ext,
-        cache_dir=cache_dir,
-        cache_key=cache_key,
-        max_cache_bytes=settings.preview_cache_max_bytes,
+
+def _optimize_options(settings: Any) -> pdf_optimize.OptimizeOptions:
+    return pdf_optimize.OptimizeOptions(
+        compress_min_bytes=settings.preview_compress_min_bytes,
+        dpi=settings.preview_compress_dpi,
+        timeout_seconds=settings.preview_optimize_timeout_seconds,
     )
+
+
+def is_pdf_file(row: KnowledgeFile) -> bool:
+    return storage.media_type_for_file(row.file_name, row.file_suffix) == PDF_MEDIA_TYPE
+
+
+async def open_preview_pdf(settings: Any, row: KnowledgeFile, office_ext: str | None) -> PreviewPdf | None:
+    """返回已打开的预览用 PDF：先查磁盘缓存，未命中时拉源文件，Office 由 LibreOffice 转码，再压缩、线性化。
+
+    Office 转不出来、源文件不存在、PDF 最近写缓存失败过返回 None。调用前先交还数据库连接：转码、压缩可能要一两分钟。
+    """
+
+    cache_dir, cache_key = _cache_dir(settings), _cache_key(row)
+    writer = _source_writer(settings, row.storage_path)
+    options = _optimize_options(settings)
+    if office_ext is not None:
+        pdf_path = await office_preview.convert_office_to_pdf(
+            writer,
+            office_ext,
+            cache_dir=cache_dir,
+            cache_key=cache_key,
+            max_cache_bytes=settings.preview_cache_max_bytes,
+            optimize=options,
+        )
+        filename, etag = f"{Path(row.file_name).stem}.pdf", preview_etag(row, kind=_ETAG_OFFICE)
+    else:
+        slot = pdf_optimize.CacheSlot(cache_dir, cache_key, settings.preview_cache_max_bytes)
+        pdf_path = await pdf_optimize.prepare_pdf_preview(writer, slot, options)
+        filename, etag = row.file_name, preview_etag(row, kind=_ETAG_PDF)
     if pdf_path is None:
         return None
-    # 刚查到就被别的请求淘汰掉的极少见，当作这次没转出来，回摘要。
-    return await asyncio.to_thread(preview_cache.open_pdf, pdf_path)
+    # 刚查到就被别的请求淘汰掉的极少见，当作这次没做出来。
+    opened = await asyncio.to_thread(preview_cache.open_pdf, pdf_path)
+    if opened is None:
+        return None
+    return PreviewPdf(stream=opened[0], filename=filename, size=opened[1], etag=etag)
 
 
 async def drop_preview_cache(settings: Any, row: KnowledgeFile) -> None:
-    """删文件后清掉它的预览缓存；清不掉只记日志，不影响删除（容量上限迟早会把它淘汰）。"""
+    """删文件后清掉它的预览缓存（含改版前的旧形态）；清不掉只记日志，不影响删除（容量上限迟早会把它淘汰）。"""
 
-    cache_dir, cache_key = _cache_location(settings, row)
+    cache_dir = _cache_dir(settings)
     try:
-        await asyncio.to_thread(preview_cache.remove, cache_dir, cache_key)
+        for key in (_cache_key(row), _cache_key(row, variant="")):
+            await asyncio.to_thread(preview_cache.remove, cache_dir, key)
     except OSError as exc:
         logger.warning("preview_cache_cleanup_failed", file_id=str(row.id), error=str(exc))
 
@@ -119,8 +165,9 @@ def etag_matches(if_none_match: str | None, etag: str | None) -> bool:
 def expected_preview_etag(row: KnowledgeFile) -> str | None:
     if not row.storage_path:
         return None
-    office_ext = office_preview.office_extension(row.file_name, row.file_suffix)
-    return preview_etag(row, kind="office-pdf" if office_ext is not None else "raw")
+    if office_preview.office_extension(row.file_name, row.file_suffix) is not None:
+        return preview_etag(row, kind=_ETAG_OFFICE)
+    return preview_etag(row, kind=_ETAG_PDF if is_pdf_file(row) else "raw")
 
 
 async def single_chunk_stream(data: bytes) -> AsyncIterator[bytes]:

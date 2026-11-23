@@ -6,7 +6,6 @@ import asyncio
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -14,10 +13,11 @@ import pytest
 from platform_common.actors import Actor
 from platform_common.errors import ApiError
 
-from app.core import office_preview, preview_cache, storage
+from app.core import office_preview, preview_cache, storage, subprocess_guard
 from app.knowledge.application import knowledge
 from app.knowledge.domain.models import KnowledgeFile
 from app.knowledge.domain.scopes import FULL_ACCESS
+from tests.helpers import no_pdf_tools, preview_settings
 
 ACTOR = Actor(id="u-1", name="测试用户")
 NOW = datetime(2026, 11, 20, 4, 0, tzinfo=UTC)
@@ -158,7 +158,7 @@ async def test_same_file_converts_once_even_when_waiters_queue(monkeypatch: pyte
 
 
 async def test_key_locks_serialize_and_clean_up() -> None:
-    locks = office_preview._KeyLocks()
+    locks = preview_cache.KeyLocks()
     active = 0
     peak = 0
 
@@ -202,9 +202,9 @@ async def test_run_soffice_subprocess(monkeypatch: pytest.MonkeyPatch, tmp_path:
     src.write_bytes(b"pptx")
     profile = tmp_path / "profile"
     killed: list[int] = []
-    monkeypatch.setattr(office_preview.sys, "platform", "linux")
-    monkeypatch.setattr(office_preview.os, "killpg", lambda pid, sig: killed.append(pid), raising=False)
-    monkeypatch.setattr(office_preview.signal, "SIGKILL", 9, raising=False)  # Windows 上跑单测时没有这个常量
+    monkeypatch.setattr(subprocess_guard.sys, "platform", "linux")
+    monkeypatch.setattr(subprocess_guard.os, "killpg", lambda pid, sig: killed.append(pid), raising=False)
+    monkeypatch.setattr(subprocess_guard.signal, "SIGKILL", 9, raising=False)  # Windows 上跑单测时没有这个常量
     monkeypatch.setenv("THINKTANK_MINIO_SECRET_KEY", "secret")
 
     async def ok() -> tuple[bytes, bytes]:
@@ -270,8 +270,9 @@ def _opened_stream(*_args: Any, **_kwargs: Any) -> tuple[Any, int]:
 
 async def test_stream_office_preview_cache_and_fallback(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     row = _pptx_row()
-    settings = SimpleNamespace(storage_dir=str(tmp_path), preview_cache_max_bytes=10**9)
+    settings = preview_settings(tmp_path)
     monkeypatch.setattr(knowledge, "get_settings", lambda: settings)
+    no_pdf_tools(monkeypatch)
     monkeypatch.setattr(knowledge.repo, "get_by_id", AsyncMock(return_value=row))
     monkeypatch.setattr(knowledge.repo, "is_favorited", AsyncMock(return_value=False))
     monkeypatch.setattr(knowledge.repo, "add_op_log", AsyncMock())

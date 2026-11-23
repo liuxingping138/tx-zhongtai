@@ -19,6 +19,7 @@ from sqlalchemy.dialects import postgresql
 from app.common import codebook_client
 from app.core import storage
 from app.core.database import get_db_session
+from app.knowledge.api import content_response
 from app.knowledge.api import routes as knowledge_routes
 from app.knowledge.application import knowledge
 from app.knowledge.domain.models import KnowledgeFile, KnowledgeOpLog
@@ -262,7 +263,7 @@ async def test_minio_http_and_codebook_client_http(monkeypatch: pytest.MonkeyPat
 
 
 def test_content_disposition_sanitizes_header_chars() -> None:
-    header = knowledge_routes._content_disposition("attachment", 'bad"\r\nname.pdf')
+    header = content_response.content_disposition("attachment", 'bad"\r\nname.pdf')
     assert "\r" not in header and "\n" not in header
     assert 'filename="bad___name.pdf"' in header
 
