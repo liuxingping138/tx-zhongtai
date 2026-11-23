@@ -162,7 +162,6 @@ export function listBaseTags(params: {
   province_name?: FilterParam
   policy_types?: FilterParam
   is_policy?: FilterParam
-  is_info_policy?: FilterParam
   is_penetrate?: FilterParam
   need_interpret?: FilterParam
   ai_status?: FilterParam

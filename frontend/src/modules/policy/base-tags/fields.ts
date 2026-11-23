@@ -7,8 +7,6 @@ export const TABLE_COLUMNS: DataColumn[] = [
   { prop: 'ai_status', label: '打标状态', width: 130 },
   { prop: '是否政策', label: '是否政策', width: 96 },
   { prop: 'policy_types', label: '政策类型', minWidth: 200, grow: 1, wrap: true },
-  { prop: '是否信息化政策', label: '是否信息化政策', width: 128 },
-  { prop: '信息化标签', label: '信息化标签', minWidth: 160, wrap: true },
   { prop: '判定简因', label: '判定简因', minWidth: 220, wrap: true },
   { prop: 'issuing_dept', label: '出台部门', width: 220 },
   { prop: 'issuer_industry', label: '发文机构行业', minWidth: 140 },
@@ -32,10 +30,10 @@ export const TABLE_COLUMNS: DataColumn[] = [
 ]
 
 /** 窄屏卡片的摘要字段，也是列设置早期「精简默认列」的识别依据。 */
-export const SUMMARY_KEYS = ['policy_name', 'province_name', 'policy_types', '是否信息化政策', 'issued_at', 'need_interpret']
+export const SUMMARY_KEYS = ['policy_name', 'province_name', 'policy_types', 'issued_at', 'need_interpret']
 
 /** 列表的筛选字段，和列表页 query 里的一致；核对页靠它从地址栏带上筛选，翻上一条、下一条。 */
-export const FILTER_KEYS = ['policy_name', 'province_name', 'policy_types', 'is_policy', 'is_info_policy', 'is_penetrate', 'need_interpret', 'ai_status']
+export const FILTER_KEYS = ['policy_name', 'province_name', 'policy_types', 'is_policy', 'is_penetrate', 'need_interpret', 'ai_status']
 
 export const EDITOR_GROUPS: EditorGroup[] = [
   {
@@ -66,8 +64,6 @@ export const EDITOR_GROUPS: EditorGroup[] = [
     fields: [
       { key: '是否政策', label: '是否政策', choices: ['是', '否', '疑似'] },
       { key: 'policy_types', label: '政策类型' },
-      { key: '是否信息化政策', label: '是否信息化政策', choices: ['是', '否'] },
-      { key: '信息化标签', label: '信息化标签', maxLength: 255 },
       { key: '判定简因', label: '判定简因', long: true },
       { key: 'is_penetrate', label: '是否穿透', maxLength: 32 },
       { key: 'need_interpret', label: '是否解读', maxLength: 64 },
@@ -96,11 +92,15 @@ export function packBaseTagPatch(form: Record<string, string>, version: number) 
   return { ...core, ai_outputs, version }
 }
 
+const IGNORED_AI_COLUMNS = new Set(['是否信息化政策', '信息化标签'])
+
 /** 将模板新增的动态输出字段并入列清单。 */
 export function mergeAiColumns(baseCols: readonly DataColumn[], aiFields: string[]): DataColumn[] {
   const known = new Set(baseCols.map(col => col.prop))
-  const extra = aiFields.filter(name => !known.has(name)).map(name => ({ prop: name, label: name, minWidth: 150, wrap: true }))
-  return extra.length ? [...baseCols.slice(0, 7), ...extra, ...baseCols.slice(7)] : [...baseCols]
+  const extra = aiFields
+    .filter(name => !known.has(name) && !IGNORED_AI_COLUMNS.has(name))
+    .map(name => ({ prop: name, label: name, minWidth: 150, wrap: true }))
+  return extra.length ? [...baseCols.slice(0, 5), ...extra, ...baseCols.slice(5)] : [...baseCols]
 }
 
 /** 「打标状态」筛选：AI 打标失败、要重打的，以及排着队的待办。和后端 policy.domain.fields.AI_STATUS_CHOICES 一致。 */

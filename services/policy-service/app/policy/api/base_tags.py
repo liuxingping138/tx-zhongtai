@@ -30,7 +30,6 @@ def base_tag_filters(
     need_interpret: list[str] | None = Query(default=None),
     ai_status: list[str] | None = Query(default=None, description="打标状态：类型判断失败、解读失败、待解读等"),
     is_policy: list[str] | None = Query(default=None, description="是否政策：是、否、疑似"),
-    is_info_policy: list[str] | None = Query(default=None, description="是否信息化政策：是、否"),
 ) -> Filters:
     # 不认识的打标状态（状态改过名，旧书签、旧链接里还带着）回 422 说清楚，不能在查询时撞成 500。
     unknown = [value for value in ai_status or [] if value not in AI_STATUS_CHOICES]
@@ -48,7 +47,6 @@ def base_tag_filters(
         "need_interpret": need_interpret,
         "ai_status": ai_status,
         "is_policy": is_policy if isinstance(is_policy, list) else None,
-        "is_info_policy": is_info_policy if isinstance(is_info_policy, list) else None,
     }
 
 

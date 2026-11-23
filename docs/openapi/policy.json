@@ -1412,27 +1412,6 @@
               "title": "Is Policy"
             },
             "description": "是否政策：是、否、疑似"
-          },
-          {
-            "name": "is_info_policy",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "是否信息化政策：是、否",
-              "title": "Is Info Policy"
-            },
-            "description": "是否信息化政策：是、否"
           }
         ],
         "responses": {
@@ -1682,27 +1661,6 @@
               "title": "Is Policy"
             },
             "description": "是否政策：是、否、疑似"
-          },
-          {
-            "name": "is_info_policy",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "是否信息化政策：是、否",
-              "title": "Is Info Policy"
-            },
-            "description": "是否信息化政策：是、否"
           }
         ],
         "responses": {

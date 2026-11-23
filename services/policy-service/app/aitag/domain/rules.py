@@ -20,8 +20,8 @@ INFORMATIZATION = "信息化建设类"
 TYPE_FIELD = "政策类型名称"
 TYPE_FIELDS = ("政策类型", "政策类型名称")
 IS_POLICY_FIELD = "是否政策"
-IS_INFO_FIELD = "是否信息化政策"
-DEFAULT_AI_OUTPUT_FIELDS = ("是否政策", "是否信息化政策", "信息化标签", "判定简因")
+IGNORED_AI_OUTPUT_FIELDS = ("是否信息化政策", "信息化标签")
+DEFAULT_AI_OUTPUT_FIELDS = ("是否政策", "判定简因")
 _BLANK_OUTPUTS = {"-", "—", "无", "none", "null"}
 # 解读、市场机会失败时追加到基础标签备注里的前缀；重新打标时据此清掉旧的失败说明，列表也按它筛。
 INTERPRET_FAILED = AI_NOTE_INTERPRET_FAILED
@@ -72,19 +72,15 @@ def parse_policy_types(answer: str, known: list[str]) -> tuple[list[str], list[s
 
 
 def _need_interpret(types: list[str], ai_outputs: dict[str, str] | None) -> str:
-    """是否进入政策解读：「是否政策 = 否」不解读；有「是否信息化政策」按它定；否则看类型含不含信息化建设类。"""
+    """是否进入政策解读：「是否政策 = 否」不解读；否则只看政策类型是否包含「信息化建设类」。"""
 
-    if ai_outputs:
-        if ai_outputs.get(IS_POLICY_FIELD) == "否":
-            return "否"
-        info_flag = ai_outputs.get(IS_INFO_FIELD, "")
-        if info_flag:
-            return "是" if info_flag.startswith("是") else "否"
+    if ai_outputs and ai_outputs.get(IS_POLICY_FIELD) == "否":
+        return "否"
     return "是" if INFORMATIZATION in types else "否"
 
 
 def extract_ai_outputs(result: dict[str, Any]) -> dict[str, str]:
-    """取出模型按模板输出的所有扩展字段（源ID、政策类型本身已落独立列，不重复存）。"""
+    """取出模型按模板输出的所有扩展字段（源ID、政策类型及已移除的旧信息化字段不重复存）。"""
 
     if result.get("error"):
         return {}
@@ -93,7 +89,7 @@ def extract_ai_outputs(result: dict[str, Any]) -> dict[str, str]:
         if not isinstance(item, dict):
             continue
         for key, raw in item.items():
-            if not isinstance(key, str) or key in (SOURCE_ID, *TYPE_FIELDS):
+            if not isinstance(key, str) or key in (SOURCE_ID, *TYPE_FIELDS, *IGNORED_AI_OUTPUT_FIELDS):
                 continue
             val = _text(raw)
             if val.lower() in _BLANK_OUTPUTS:

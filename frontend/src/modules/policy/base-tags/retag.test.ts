@@ -122,14 +122,14 @@ describe('retag', () => {
 
 describe('packBaseTagPatch & packInterpretationPatch', () => {
   it('splits core fields and dynamic AI output fields', () => {
-    const patch = packBaseTagPatch({ policy_name: '政策A', 是否政策: '是', 是否信息化政策: '是' }, 3)
+    const patch = packBaseTagPatch({ policy_name: '政策A', 是否政策: '是', 判定简因: '符合政策定义' }, 3)
     expect(patch).toEqual({
       policy_name: '政策A',
-      ai_outputs: { 是否政策: '是', 是否信息化政策: '是' },
+      ai_outputs: { 是否政策: '是', 判定简因: '符合政策定义' },
       version: 3,
     })
     expect(mergeAiColumns(TABLE_COLUMNS, ['是否政策', '新扩展字段']).some(c => c.prop === '新扩展字段')).toBe(true)
-    expect(mergeAiColumns(TABLE_COLUMNS, ['是否政策']).length).toBe(TABLE_COLUMNS.length)
+    expect(mergeAiColumns(TABLE_COLUMNS, ['是否政策', '是否信息化政策', '信息化标签']).length).toBe(TABLE_COLUMNS.length)
 
     const interpPatch = packInterpretationPatch(
       { policy_title: '解读A', industry_l1: '政务', 政策亮点: '5000万补贴' },

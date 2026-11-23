@@ -12,7 +12,7 @@ import { EDITOR_GROUPS, FILTER_KEYS, TABLE_COLUMNS, packBaseTagPatch } from './f
 import RetagDialog from './RetagDialog.vue'
 
 const RESOURCE = 'policy.base_tags'
-const FACTS = ['province_name', '是否政策', 'policy_types', '是否信息化政策', 'issued_at', 'need_interpret']
+const FACTS = ['province_name', '是否政策', 'policy_types', 'issued_at', 'need_interpret']
 const auth = useAuthStore()
 const canWrite = computed(() => auth.canFull(RESOURCE))
 const { columns } = useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)

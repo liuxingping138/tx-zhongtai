@@ -40,7 +40,6 @@ const query = reactive({
   province_name: [] as string[],
   policy_types: [] as string[],
   is_policy: [] as string[],
-  is_info_policy: [] as string[],
   is_penetrate: [] as string[],
   need_interpret: [] as string[],
   ai_status: [] as string[],
@@ -165,13 +164,6 @@ onMounted(() => {
             <FilterSelect
               v-model="query.policy_types"
               v-bind="filters.bind('policy_types')"
-            />
-          </el-form-item>
-          <el-form-item label="是否信息化政策">
-            <FilterSelect
-              v-model="query.is_info_policy"
-              :options="['是', '否']"
-              size="short"
             />
           </el-form-item>
           <template #advanced>
