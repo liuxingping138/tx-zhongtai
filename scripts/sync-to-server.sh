@@ -20,7 +20,8 @@ if [ -z "${ALLOW_DIRTY:-}" ] && [ -n "$(git -C "$root" status --porcelain)" ]; t
 fi
 
 # 依赖与缓存在服务器上各自生成；后半段是服务器独有或含密码的文件。
-rsync -az --delete -e "ssh -i $HOME/.ssh/tx-zhongtai-deploy -o IdentitiesOnly=yes" \
+# --chmod=u+rwX,go+rX：Linux 沙盒（umask 077）新建的源码文件本机权限可能是 600，原样同步过去会让容器内非 root 的 appuser 报 PermissionError。
+rsync -az --chmod=u+rwX,go+rX --delete -e "ssh -i $HOME/.ssh/tx-zhongtai-deploy -o IdentitiesOnly=yes" \
   --exclude '.git/' \
   --exclude 'node_modules/' \
   --exclude '.pnpm-store/' \
