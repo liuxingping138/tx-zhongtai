@@ -171,7 +171,7 @@ async def test_office_pdf_is_always_compressed(monkeypatch: pytest.MonkeyPatch, 
 
     monkeypatch.setattr(office_preview, "_run_soffice", soffice)
     path = await office_preview.convert_office_to_pdf(
-        _Writer(b"pptx"), "PPTX", cache_dir=str(tmp_path / "c"), cache_key="o", max_cache_bytes=10**9, optimize=OPTIONS
+        _Writer(b"pptx"), "PPTX", pdf_optimize.CacheSlot(str(tmp_path / "c"), "o", 10**9), optimize=OPTIONS
     )
     assert path is not None
     assert await asyncio.to_thread(path.read_bytes) == b"LINEAR:" + SMALL[:5]

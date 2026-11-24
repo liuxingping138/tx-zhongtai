@@ -7,11 +7,17 @@ import KnowledgeDocViewer from './KnowledgeDocViewer.vue'
 
 // PDF 阅读器换成只带查找开关的替身：这里只验全屏时的按键先后。
 const searchOpen = ref(false)
+/** 替身的文档是否已打开好：没好时 openSearch 返回 false（和真的阅读器一样）。 */
+const docReady = ref(true)
 const PdfStreamViewerStub = defineComponent({
   name: 'PdfStreamViewer',
   setup(_, { expose }) {
     expose({
-      openSearch: () => { searchOpen.value = true },
+      openSearch: () => {
+        if (!docReady.value) return false
+        searchOpen.value = true
+        return true
+      },
       closeSearch: () => {
         const was = searchOpen.value
         searchOpen.value = false
@@ -50,6 +56,7 @@ function press(key: string, init: KeyboardEventInit = {}) {
 describe('KnowledgeDocViewer 全屏按键', () => {
   afterEach(() => {
     searchOpen.value = false
+    docReady.value = true
     document.body.innerHTML = ''
   })
 
@@ -80,6 +87,15 @@ describe('KnowledgeDocViewer 全屏按键', () => {
     expect(searchOpen.value).toBe(false)
     expect(spy).toHaveBeenCalled()
     window.removeEventListener('keydown', spy)
+    wrapper.unmount()
+  })
+  it('全屏时文档还在加载：Ctrl/⌘+F 不拦，交给浏览器自己的查找', async () => {
+    const wrapper = mountViewer()
+    await wrapper.find('.review__tool-btn--primary').trigger('click')
+    docReady.value = false
+    expect(press('f', { ctrlKey: true }).defaultPrevented).toBe(false)
+    expect(press('f', { metaKey: true }).defaultPrevented).toBe(false)
+    expect(searchOpen.value).toBe(false)
     wrapper.unmount()
   })
 })

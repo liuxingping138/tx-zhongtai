@@ -17,6 +17,7 @@ from starlette.background import BackgroundTask
 
 from app.core import preview_cache
 from app.knowledge.application import knowledge as service
+from app.knowledge.application.knowledge_preview import FileStreamResult
 
 _UNSAFE_HEADER_CHARS = re.compile(r'[\x00-\x1f\x7f"\\]')
 _RANGE_SPEC = re.compile(r"^(\d*)-(\d*)$")
@@ -78,7 +79,7 @@ def parse_range(header: str | None, total: int) -> ByteRange | None:
     return _bounds(matched.group(1), matched.group(2), total)
 
 
-def streamed(res: service.FileStreamResult, headers: dict[str, str], *, status_code: int = 200) -> StreamingResponse:
+def streamed(res: FileStreamResult, headers: dict[str, str], *, status_code: int = 200) -> StreamingResponse:
     # 客户端在开始下发前断开时流从没被读过，不主动关的话对象存储的连接要等垃圾回收才释放。
     background = BackgroundTask(service.close_file_stream, res)
     return StreamingResponse(
@@ -86,7 +87,7 @@ def streamed(res: service.FileStreamResult, headers: dict[str, str], *, status_c
     )
 
 
-def _closed(res: service.FileStreamResult, headers: dict[str, str], *, status_code: int) -> Response:
+def _closed(res: FileStreamResult, headers: dict[str, str], *, status_code: int) -> Response:
     """不带正文的响应（HEAD、416）：已经打开的缓存文件在响应发完后关掉。"""
 
     background = BackgroundTask(service.close_file_stream, res)
@@ -100,7 +101,7 @@ def not_modified(etag: str) -> Response:
     )
 
 
-def _base_headers(res: service.FileStreamResult) -> dict[str, str]:
+def _base_headers(res: FileStreamResult) -> dict[str, str]:
     headers = {
         "Content-Disposition": content_disposition("inline", res.filename),
         "X-Content-Type-Options": "nosniff",
@@ -112,9 +113,7 @@ def _base_headers(res: service.FileStreamResult) -> dict[str, str]:
     return headers
 
 
-def _ranged_response(
-    res: service.FileStreamResult, *, head: bool, range_header: str | None, if_range: str | None
-) -> Response:
+def _ranged_response(res: FileStreamResult, *, head: bool, range_header: str | None, if_range: str | None) -> Response:
     total = res.content_length or 0
     headers = {**_base_headers(res), "Accept-Ranges": "bytes"}
     if if_range is not None and if_range.strip() != res.etag:
@@ -137,7 +136,7 @@ def _ranged_response(
 
 
 def inline_content_response(
-    res: service.FileStreamResult, *, head: bool, range_header: str | None, if_range: str | None
+    res: FileStreamResult, *, head: bool, range_header: str | None, if_range: str | None
 ) -> Response:
     """预览原文的响应：本地缓存的 PDF 支持 Range 和 HEAD，其余整份下发。"""
 

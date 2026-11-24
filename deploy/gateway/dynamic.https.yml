@@ -119,7 +119,9 @@ http:
         contentTypeNosniff: true
         frameDeny: true
         referrerPolicy: "strict-origin-when-cross-origin"
-        contentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'"
+        # 'wasm-unsafe-eval' 只放行编译 WebAssembly（不放行 eval）：PDF.js 在 worker 里用 wasm 解码扫描件常见的
+        # JBIG2 / JPEG 2000 图片和 ICC 颜色；worker 脚本也经这个中间件拿到同一份 CSP，不放行就退回慢的 JS 解码。
+        contentSecurityPolicy: "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'"
     compress:
       compress:
         excludedContentTypes:

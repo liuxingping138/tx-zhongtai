@@ -19,7 +19,7 @@ from platform_common.route_audit import iter_api_routes
 from app.core import preview_cache
 from app.core.database import get_db_session
 from app.knowledge.api import routes as knowledge_routes
-from app.knowledge.application import export_import, knowledge, knowledge_write
+from app.knowledge.application import export_import, knowledge, knowledge_preview, knowledge_write
 from app.knowledge.domain.models import KnowledgeFile, KnowledgeOpLog
 from app.knowledge.domain.scopes import FULL_ACCESS, KnowledgeAccess
 from app.main import app
@@ -481,7 +481,7 @@ def test_http_routes_wire_dependencies(monkeypatch: pytest.MonkeyPatch) -> None:
         knowledge_routes.service,
         "stream_file_content",
         AsyncMock(
-            return_value=knowledge.FileStreamResult(
+            return_value=knowledge_preview.FileStreamResult(
                 stream=_single(), filename="测试文件.txt", media_type="text/plain", content_length=5
             )
         ),

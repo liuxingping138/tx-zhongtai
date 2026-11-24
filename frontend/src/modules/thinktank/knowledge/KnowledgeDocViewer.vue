@@ -40,10 +40,12 @@ function isFindShortcut(event: KeyboardEvent): boolean {
 // 全屏时焦点常在顶栏按钮上：Ctrl+F 也交给 PDF 阅读器查找；Esc 先关查找，查找没开才退出全屏。
 function onKeydown(event: KeyboardEvent) {
   if (!fullscreen.value) return
-  if (isFindShortcut(event) && pdfViewer.value) {
-    event.preventDefault()
-    event.stopPropagation()
-    pdfViewer.value.openSearch()
+  if (isFindShortcut(event)) {
+    // 文档还在加载时阅读器不开查找：不拦，浏览器自己的查找照常可用
+    if (pdfViewer.value?.openSearch()) {
+      event.preventDefault()
+      event.stopPropagation()
+    }
   } else if (event.key === 'Escape') {
     event.preventDefault()
     if (pdfViewer.value?.closeSearch()) event.stopPropagation()

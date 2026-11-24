@@ -2,6 +2,7 @@ import type { PDFDocumentLoadingTask, PDFDocumentProxy, PDFPageProxy } from 'pdf
 import { ref, shallowRef } from 'vue'
 
 import { DEFAULT_PAGE_SIZE, type PageSize } from './pdfLayout'
+import { textSource, type PageTextSource } from './pdfSearch'
 import { documentOptions, isCancelled, isInvalidPdf, responseStatus, type PdfJsLib } from './pdfjs'
 
 /** idle 没有文档；invalid 拿到的不是 PDF（服务端回了摘要文本），由上层改用文本显示。 */
@@ -74,6 +75,10 @@ export function usePdfStream(deps: PdfStreamDeps) {
       return await attempt(target, mine)
     } catch (err) {
       if (mine !== seq || responseStatus(err) !== HTTP_UNAUTHORIZED) throw err
+      // 失败的那次也要 destroy：每次 getDocument 都单独起一个 worker 线程，不 destroy 就一直留着
+      const failed = task
+      task = null
+      await failed?.destroy().catch(() => undefined)
       await deps.refresh()
       return attempt(target, mine)
     }
@@ -117,12 +122,12 @@ export function usePdfStream(deps: PdfStreamDeps) {
     return doc.value ? doc.value.getPage(pageNumber) : null
   }
 
-  /** 某页的文字块（和文字层同一份 getTextContent，下标一一对应）：只在查找时才调，按需取那一页的数据。 */
-  async function getPageText(pageNumber: number): Promise<string[] | null> {
+  /** 某页的文字块和每块后面是否换行（和文字层同一份 getTextContent，下标一一对应）：只在查找时才调，按需取那一页的数据。 */
+  async function getPageText(pageNumber: number): Promise<PageTextSource | null> {
     const pdf = doc.value
     if (!pdf) return null
     const content = await (await pdf.getPage(pageNumber)).getTextContent()
-    return content.items.flatMap(item => ('str' in item ? [item.str] : []))
+    return textSource(content.items)
   }
 
   /** 某页取数或渲染失败：401 说明令牌在看的过程中过期了，续期后重开；其他错误留给那一页自己显示。 */

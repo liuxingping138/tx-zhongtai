@@ -11,18 +11,22 @@ LibreOffice 的 soffice 是壳脚本，真正干活的 soffice.bin 是孙进程�
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.core import pdf_optimize, preview_cache, storage, subprocess_guard
+from platform_common.logging_setup import get_logger
+
+from app.core import pdf_optimize, preview_cache, preview_slots, storage, subprocess_guard
+
+logger = get_logger(__name__)
 
 OFFICE_EXTENSIONS: frozenset[str] = frozenset({"PPT", "PPTX", "DOC", "DOCX", "XLS", "XLSX"})
 # 文件名没有扩展名时按「文件格式」列猜：PPT 本身就在上面，WORD / EXCEL 是旧系统的写法。
 # LibreOffice 按内容识别格式，扩展名只是提示，猜成新格式也能打开旧格式的文件。
 _FALLBACK_EXT_BY_SUFFIX: dict[str, str] = {"WORD": "DOCX", "EXCEL": "XLSX"}
-_CONVERT_SEMAPHORE = asyncio.Semaphore(2)
 _CONVERT_TIMEOUT_SECONDS = 60.0
 # 每次转换的独立配置：宏一律不跑；Writer（0=从不）、Calc（1=从不）打开文档时不更新外部链接；不信任文档里的外部引用。
 _PROFILE_XCU = """<?xml version="1.0" encoding="UTF-8"?>
@@ -65,12 +69,6 @@ def _soffice_binary() -> str | None:
 
 def has_libreoffice() -> bool:
     return _soffice_binary() is not None
-
-
-def has_free_slot() -> bool:
-    """还有空闲的转换名额：上传后的预热只在有空时做，不和正在看的人抢。"""
-
-    return not _CONVERT_SEMAPHORE.locked()
 
 
 def _write_profile(profile_dir: Path) -> None:
@@ -132,25 +130,36 @@ async def _convert_once(
         if pdf_path is None:
             await preview_cache.mark_failed(slot.cache_dir, slot.cache_key)
             return None
-        if slot.optimize is not None:
-            pdf_path = await pdf_optimize.optimize_file(pdf_path, tmp_root, slot.optimize, force_compress=True)
-        return await preview_cache.store(pdf_path, slot.cache_dir, slot.cache_key, max_bytes=slot.max_bytes)
+        try:
+            if slot.optimize is not None:
+                pdf_path = await pdf_optimize.optimize_file(pdf_path, tmp_root, slot.optimize, force_compress=True)
+            return await preview_cache.store(pdf_path, slot.cache_dir, slot.cache_key, max_bytes=slot.max_bytes)
+        except preview_cache.FileDeletedError:
+            raise  # 转换途中文件被删：不是失败，不记失败标记
+        except OSError as exc:
+            # 写缓存失败（如磁盘满）、起不了 gs / qpdf：记失败标记，10 分钟内回摘要，不再每打开一次就占名额重转
+            logger.warning("office_preview_cache_failed", error=str(exc))
+            with contextlib.suppress(OSError):
+                await preview_cache.mark_failed(slot.cache_dir, slot.cache_key)
+            return None
 
 
 async def convert_office_to_pdf(
     write_source: SourceWriter,
     ext: str,
+    cache: pdf_optimize.CacheSlot,
     *,
-    cache_dir: str,
-    cache_key: str,
-    max_cache_bytes: int,
     optimize: pdf_optimize.OptimizeOptions | None = None,
+    wait: bool = True,
 ) -> Path | None:
     """转出 PDF 并缓存到磁盘，返回缓存文件路径；源文件不存在、转换失败或未安装 LibreOffice 时返回 None。
 
     给了 `optimize` 就把转出的 PDF 压缩、线性化后再缓存。
     源文件在拿到转换名额之后才读，排队的请求不占内存。最近转失败过的直接返回 None，不再占名额重转。
+    名额和 PDF 压缩共用（`preview_slots`）；`wait=False` 时名额已满抛 `preview_slots.SlotBusyError`。
     """
+
+    cache_dir, cache_key = cache.cache_dir, cache.cache_key
 
     cached = await preview_cache.lookup(cache_dir, cache_key)
     if cached is not None:
@@ -164,6 +173,6 @@ async def convert_office_to_pdf(
             return cached
         if await preview_cache.failed_recently(cache_dir, cache_key):
             return None  # 排队时前一个人刚转失败
-        async with _CONVERT_SEMAPHORE:
-            slot = _CacheSlot(cache_dir, cache_key, max_cache_bytes, optimize)
+        async with preview_slots.hold(wait=wait):
+            slot = _CacheSlot(cache_dir, cache_key, cache.max_bytes, optimize)
             return await _convert_once(binary, write_source, ext, slot, _CONVERT_TIMEOUT_SECONDS)

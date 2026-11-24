@@ -28,6 +28,8 @@ export function loadPdfJs(): Promise<PdfJsLib> {
  *   （PDF.js 文档：不关 stream 的话 disableAutoFetch 不起作用，整份仍会顺着第一个请求下完，和 Range 抢带宽）。
  * - 令牌放在请求头里；PDF.js 打开文档时就把请求头定下来了，过期后要续期并重新打开（见 usePdfStream）。
  * - CMap、标准字体、wasm、ICC 都从本站取：内网、CSP 只放行 'self' 也能正确显示中文。
+ *   wasm 解码扫描件常见的 JBIG2 / JPEG 2000 图片和 ICC 颜色，网关和 nginx 的 CSP 为此给 script-src 加了
+ *   'wasm-unsafe-eval'（只放行编译 WebAssembly，不放行 eval）；去掉的话 PDF.js 退回慢得多的 JS 解码，ICC 颜色没有退路。
  */
 export function documentOptions(url: string, token: string, assetBase = __PDFJS_ASSET_BASE__): DocumentInitParameters {
   return {

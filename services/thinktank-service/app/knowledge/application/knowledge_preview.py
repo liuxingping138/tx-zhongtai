@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from platform_common.errors import ApiError, ErrorCode
+from platform_common.errors import ApiError, ErrorCode, NotFoundError
 from platform_common.logging_setup import get_logger
 
 from app.core import office_preview, pdf_optimize, preview_cache, storage
@@ -22,6 +22,26 @@ PDF_MEDIA_TYPE = "application/pdf"
 _CACHE_VARIANT = "preview-v2"
 _ETAG_OFFICE = "office-pdf-v2"
 _ETAG_PDF = "pdf-v2"
+
+
+@dataclass(frozen=True)
+class FileStreamResult:
+    stream: AsyncIterator[bytes]
+    filename: str
+    media_type: str
+    content_length: int | None = None
+    etag: str | None = None
+    not_modified: bool = False
+    # 流是本地缓存文件（preview_cache.FileChunks），可以按 HTTP Range 分段下发
+    ranged: bool = False
+
+
+def not_modified_result(filename: str, etag: str) -> FileStreamResult:
+    """条件请求命中（304）：不带正文。"""
+
+    return FileStreamResult(
+        stream=single_chunk_stream(b""), filename=filename, media_type="", etag=etag, not_modified=True
+    )
 
 
 @dataclass(frozen=True)
@@ -101,36 +121,48 @@ def is_pdf_file(row: KnowledgeFile) -> bool:
     return storage.media_type_for_file(row.file_name, row.file_suffix) == PDF_MEDIA_TYPE
 
 
-async def open_preview_pdf(settings: Any, row: KnowledgeFile, office_ext: str | None) -> PreviewPdf | None:
-    """返回已打开的预览用 PDF：先查磁盘缓存，未命中时拉源文件，Office 由 LibreOffice 转码，再压缩、线性化。
-
-    Office 转不出来、源文件不存在、PDF 最近写缓存失败过返回 None。调用前先交还数据库连接：转码、压缩可能要一两分钟。
-    """
-
+async def _prepare(settings: Any, row: KnowledgeFile, office_ext: str | None, *, wait: bool) -> Path | None:
     cache_dir, cache_key = _cache_dir(settings), _cache_key(row)
     writer = _source_writer(settings, row.storage_path)
     options = _optimize_options(settings)
+    slot = pdf_optimize.CacheSlot(cache_dir, cache_key, settings.preview_cache_max_bytes)
+    try:
+        if office_ext is not None:
+            return await office_preview.convert_office_to_pdf(writer, office_ext, slot, optimize=options, wait=wait)
+        return await pdf_optimize.prepare_pdf_preview(writer, slot, options, wait=wait)
+    except preview_cache.FileDeletedError as exc:
+        raise NotFoundError("知识文件不存在") from exc
+
+
+async def open_preview_pdf(
+    settings: Any, row: KnowledgeFile, office_ext: str | None, *, wait: bool = True
+) -> PreviewPdf | None:
+    """返回已打开的预览用 PDF：先查磁盘缓存，未命中时拉源文件，Office 由 LibreOffice 转码，再压缩、线性化。
+
+    Office 转不出来、源文件不存在、PDF 最近写缓存失败过返回 None；转换途中文件被删了抛 NotFoundError。
+    调用前先交还数据库连接：转码、压缩可能要一两分钟。
+    `wait=False`（上传后的预热）：名额已满抛 `preview_slots.SlotBusyError`，不排队。
+    """
+
+    pdf_path = await _prepare(settings, row, office_ext, wait=wait)
     if office_ext is not None:
-        pdf_path = await office_preview.convert_office_to_pdf(
-            writer,
-            office_ext,
-            cache_dir=cache_dir,
-            cache_key=cache_key,
-            max_cache_bytes=settings.preview_cache_max_bytes,
-            optimize=options,
-        )
-        filename, etag = f"{Path(row.file_name).stem}.pdf", preview_etag(row, kind=_ETAG_OFFICE)
+        filename, kind = f"{Path(row.file_name).stem}.pdf", _ETAG_OFFICE
     else:
-        slot = pdf_optimize.CacheSlot(cache_dir, cache_key, settings.preview_cache_max_bytes)
-        pdf_path = await pdf_optimize.prepare_pdf_preview(writer, slot, options)
-        filename, etag = row.file_name, preview_etag(row, kind=_ETAG_PDF)
+        filename, kind = row.file_name, _ETAG_PDF
     if pdf_path is None:
         return None
     # 刚查到就被别的请求淘汰掉的极少见，当作这次没做出来。
     opened = await asyncio.to_thread(preview_cache.open_pdf, pdf_path)
     if opened is None:
         return None
-    return PreviewPdf(stream=opened[0], filename=filename, size=opened[1], etag=etag)
+    stream, size = opened
+    # ETag 按缓存文件的实际内容算：淘汰后重做出来的字节不同，ETag 也跟着变，浏览器不会把新旧两份的 Range 拼在一起。
+    try:
+        content = await asyncio.to_thread(stream.fingerprint)
+    except OSError:
+        await stream.aclose()
+        raise
+    return PreviewPdf(stream=stream, filename=filename, size=size, etag=preview_etag(row, kind=f"{kind}:{content}"))
 
 
 async def preview_cached(settings: Any, row: KnowledgeFile) -> bool:
@@ -170,11 +202,16 @@ def etag_matches(if_none_match: str | None, etag: str | None) -> bool:
 
 
 def expected_preview_etag(row: KnowledgeFile) -> str | None:
-    if not row.storage_path:
+    """不打开文件就能算出的 ETag（文本等对象存储直读的原文件）。
+
+    预览用 PDF（PDF、Office 转出的）的 ETag 按缓存文件内容算，要打开缓存后才知道，这里返回 None。
+    """
+
+    if not row.storage_path or is_pdf_file(row):
         return None
     if office_preview.office_extension(row.file_name, row.file_suffix) is not None:
-        return preview_etag(row, kind=_ETAG_OFFICE)
-    return preview_etag(row, kind=_ETAG_PDF if is_pdf_file(row) else "raw")
+        return None
+    return preview_etag(row, kind="raw")
 
 
 async def single_chunk_stream(data: bytes) -> AsyncIterator[bytes]:

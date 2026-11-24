@@ -57,8 +57,10 @@ let pendingFocus = false
 
 const search = usePdfSearch({
   numPages,
-  pageText: n => (pdf.doc.value ? pdf.getPageText(n).then(items => items ?? []) : null),
+  pageText: n => (pdf.doc.value ? pdf.getPageText(n).then(source => source ?? { items: [], eol: [] }) : null),
   onJump,
+  // 查找途中令牌过期：和某页取数 401 一样续期后重开，重开后按原词重找
+  onAuthError: (err) => { void pdf.onPageError(err) },
 })
 const { open: searchOpen, query: searchQuery, needle, hits, label: searchLabel } = search
 
@@ -127,10 +129,12 @@ function onMatchFocus(el: HTMLElement) {
   if (box.left < view.left || box.right > view.right) root.scrollLeft += box.left - view.left - root.clientWidth / 3
 }
 
-function openSearch() {
-  if (status.value !== 'ready') return
+/** 打开查找；文档还没打开好（加载中、出错）返回 false，调用方不拦 Ctrl/⌘+F，交给浏览器自己的查找。 */
+function openSearch(): boolean {
+  if (status.value !== 'ready') return false
   search.show()
   void nextTick(() => searchBar.value?.focus())
+  return true
 }
 
 /** 关掉查找；本来就没开返回 false（全屏时 Esc 先关查找，再退出全屏）。 */

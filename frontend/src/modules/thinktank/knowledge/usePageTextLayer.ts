@@ -1,7 +1,7 @@
 import type { PageViewport, PDFPageProxy, TextLayer } from 'pdfjs-dist'
 import type { Ref } from 'vue'
 
-import { buildPageText, findInPage, segmentsByItem, type PageText } from './pdfSearch'
+import { buildPageText, findInPage, segmentsByItem, textSource, type PageText } from './pdfSearch'
 import { loadPdfJs, type PdfJsLib } from './pdfjs'
 import { paintHighlights } from './textHighlight'
 
@@ -55,7 +55,8 @@ export function usePageTextLayer(options: PageTextLayerOptions) {
     layer = next
     await next.render()
     if (mine !== seq) return
-    text = buildPageText(next.textContentItemsStr)
+    // 换行标记取自同一份 getTextContent（跳过标记内容后与 textContentItemsStr 一一对应），查找时西文跨行补空格
+    text = buildPageText(next.textContentItemsStr, textSource(content.items).eol)
     paint()
   }
 

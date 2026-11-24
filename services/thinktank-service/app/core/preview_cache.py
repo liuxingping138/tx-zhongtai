@@ -4,6 +4,8 @@
 不会拼出目录穿越。
 命中时更新修改时间，超过容量上限时从最久没用的删起（LRU）。转换失败记 `{key}.fail`，一段时间内不再重转，
 免得一个总超时的文件每打开一次就占一个转换名额一分钟。
+删文件时写 `{key}.deleted`（墓碑）再删缓存：删的那一刻正在转码、压缩的（上传后的预热、有人正打开）做完写进缓存时
+看到墓碑就把刚写的删掉，删掉的资料不会因为晚到的转换结果留在磁盘上。
 """
 
 from __future__ import annotations
@@ -24,6 +26,10 @@ CHUNK_SIZE = 65536
 FAIL_TTL_SECONDS = 600
 # 中途被杀留下的临时文件，超过这个时间就当残留清掉（正常写一份 PDF 用不了这么久）。
 _STALE_TMP_SECONDS = 3600
+# 墓碑留这么久：比任何一次转换（含排队）都长得多。key 含文件 ID，新上传的文件是新 ID，不会撞上旧墓碑。
+_TOMBSTONE_TTL_SECONDS = 86400
+# 算内容指纹时读开头、结尾各这么多字节（trailer 和线性化的首页 trailer 都在里面）
+FINGERPRINT_BYTES = 64 * 1024
 
 
 def cache_key_for(file_id: str, storage_path: str, size_bytes: int, variant: str = "") -> str:
@@ -66,6 +72,10 @@ def _fail_path(cache_dir: str, key: str) -> Path:
     return Path(cache_dir) / f"{key}.fail"
 
 
+def _tombstone_path(cache_dir: str, key: str) -> Path:
+    return Path(cache_dir) / f"{key}.deleted"
+
+
 def _hit(path: Path) -> Path | None:
     try:
         os.utime(path)  # 记下最近一次使用，淘汰时按它排
@@ -100,6 +110,10 @@ async def mark_failed(cache_dir: str, key: str) -> None:
     await asyncio.to_thread(_touch, _fail_path(cache_dir, key))
 
 
+class FileDeletedError(FileNotFoundError):
+    """转换途中文件被删了：结果没有留进缓存。"""
+
+
 def _install(source: Path, target: Path) -> None:
     """先复制成缓存目录里的唯一临时文件、落盘后再改名：读的人只会看到完整文件，并发写也不会互相截断。"""
 
@@ -117,6 +131,10 @@ def _install(source: Path, target: Path) -> None:
         raise
     with contextlib.suppress(FileNotFoundError):
         _fail_path(str(target.parent), target.stem).unlink()
+    # 先改名、后看墓碑；删除那边先写墓碑、后删缓存。两边无论怎么交错，晚到的结果总有一边删得掉。
+    if _tombstone_path(str(target.parent), target.stem).exists():
+        target.unlink(missing_ok=True)
+        raise FileDeletedError(target.stem)
 
 
 def _stat_or_none(path: Path) -> os.stat_result | None:
@@ -127,7 +145,8 @@ def _stat_or_none(path: Path) -> os.stat_result | None:
 
 
 def _drop_expired(cache_dir: Path, now: float) -> None:
-    for pattern, ttl in (("*.fail", FAIL_TTL_SECONDS), (".*.tmp", _STALE_TMP_SECONDS)):
+    expiring = (("*.fail", FAIL_TTL_SECONDS), (".*.tmp", _STALE_TMP_SECONDS), ("*.deleted", _TOMBSTONE_TTL_SECONDS))
+    for pattern, ttl in expiring:
         for path in cache_dir.glob(pattern):
             st = _stat_or_none(path)
             if st is not None and now - st.st_mtime >= ttl:
@@ -159,7 +178,7 @@ def prune(cache_dir: str, max_bytes: int, *, keep: Path | None = None, now: floa
 
 
 async def store(source: Path, cache_dir: str, key: str, *, max_bytes: int) -> Path:
-    """把转好的 PDF 放进缓存并按容量上限淘汰，返回缓存路径。"""
+    """把转好的 PDF 放进缓存并按容量上限淘汰，返回缓存路径；文件在转换途中被删了抛 FileDeletedError。"""
 
     target = pdf_path(cache_dir, key)
     await asyncio.to_thread(_install, source, target)
@@ -168,8 +187,12 @@ async def store(source: Path, cache_dir: str, key: str, *, max_bytes: int) -> Pa
 
 
 def remove(cache_dir: str, key: str) -> None:
-    """删文件时把它的预览缓存和失败标记一起删掉，删掉的资料不再留在磁盘上。"""
+    """删文件时把它的预览缓存和失败标记一起删掉，删掉的资料不再留在磁盘上。
 
+    先写墓碑再删缓存：正在做的转换写完缓存后看到墓碑会自己删掉（见 `_install`）。
+    """
+
+    _touch(_tombstone_path(cache_dir, key))
     pdf_path(cache_dir, key).unlink(missing_ok=True)
     _fail_path(cache_dir, key).unlink(missing_ok=True)
 
@@ -183,6 +206,23 @@ class FileChunks:
     def __init__(self, fp: BinaryIO) -> None:
         self._fp = fp
         self._remaining: int | None = None
+
+    def fingerprint(self) -> str:
+        """这份文件内容的指纹：大小 + 开头、结尾各一段的 SHA-256。
+
+        给 ETag 用：同一个文件被淘汰后重做，gs / qpdf 每次写的 /ID、创建时间不同（文件尾的 trailer，
+        线性化后文件头也有一份），字节就不一样；ETag 只按库里的行算的话新旧两份同一个 ETag，
+        浏览器缓存着的旧 Range 会被 304 沿用、和新文件的段拼在一起。用 pread 读，不动下发的读取位置。
+        """
+
+        fd = self._fp.fileno()
+        size = os.fstat(fd).st_size
+        digest = hashlib.sha256(str(size).encode())
+        digest.update(os.pread(fd, FINGERPRINT_BYTES, 0))
+        if size > FINGERPRINT_BYTES:
+            tail = max(size - FINGERPRINT_BYTES, FINGERPRINT_BYTES)
+            digest.update(os.pread(fd, FINGERPRINT_BYTES, tail))
+        return digest.hexdigest()
 
     def select_range(self, start: int, length: int) -> None:
         self._fp.seek(start)

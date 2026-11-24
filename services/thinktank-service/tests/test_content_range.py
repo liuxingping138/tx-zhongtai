@@ -83,10 +83,10 @@ def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[tuple[Te
             if dep.name == "actor":
                 app.dependency_overrides[dep.call] = _actor
 
-    def _result(*_args: Any, **_kwargs: Any) -> knowledge.FileStreamResult:
+    def _result(*_args: Any, **_kwargs: Any) -> knowledge_preview.FileStreamResult:
         opened = preview_cache.open_pdf(pdf)
         assert opened is not None
-        return knowledge.FileStreamResult(
+        return knowledge_preview.FileStreamResult(
             stream=opened[0],
             filename="方案.pdf",
             media_type="application/pdf",
@@ -183,14 +183,14 @@ def test_every_range_request_is_authorized(client: tuple[TestClient, list[str], 
 def test_not_modified_and_text_fallback(client: tuple[TestClient, list[str], AsyncMock]) -> None:
     http, _authorized, service = client
     service.side_effect = None
-    service.return_value = knowledge.FileStreamResult(
+    service.return_value = knowledge_preview.FileStreamResult(
         stream=knowledge.single_chunk_stream(b""), filename="a.pdf", media_type="", etag=ETAG, not_modified=True
     )
     res = http.get(_url(), headers={"If-None-Match": ETAG, "Range": "bytes=0-9"})
     assert res.status_code == 304 and res.headers["etag"] == ETAG
 
     # 文本摘要不是本地缓存文件：不支持 Range，也不缓存
-    service.return_value = knowledge.FileStreamResult(
+    service.return_value = knowledge_preview.FileStreamResult(
         stream=knowledge.single_chunk_stream(b"summary"),
         filename="a.pptx.txt",
         media_type="text/plain; charset=utf-8",
@@ -248,13 +248,34 @@ async def test_pdf_preview_is_cached_ranged_and_download_stays_original(
     kwargs: dict[str, Any] = {"actor": ACTOR, "access": FULL_ACCESS, "file_id": row.id}
     res = await knowledge.stream_file_content(session, for_download=False, **kwargs)  # type: ignore[arg-type]
     assert res.ranged is True and res.media_type == "application/pdf"
-    assert res.etag == knowledge_preview.expected_preview_etag(row)
+    assert res.etag and knowledge_preview.expected_preview_etag(row) is None  # 要打开缓存才知道 ETag
     assert b"".join([c async for c in res.stream]) == b"LINEAR:" + BODY
     assert session.commit.await_count == 1  # 拉源文件、跑工具前先交还数据库连接
 
     again = await knowledge.stream_file_content(session, for_download=False, **kwargs)  # type: ignore[arg-type]
     await knowledge.close_file_stream(again)
     assert stream_spy.await_count == 1  # 第二次（以及之后的每段 Range）读本地缓存
+    assert again.etag == res.etag
+
+    cached = await knowledge.stream_file_content(
+        session,
+        for_download=False,
+        if_none_match=res.etag,
+        **kwargs,  # type: ignore[arg-type]
+    )
+    assert cached.not_modified is True and cached.etag == res.etag
+
+    # 缓存被淘汰后重做出来的字节不同（gs / qpdf 每次写新的 /ID）：ETag 跟着变，旧副本不再被 304 沿用。
+    cache_file = next((tmp_path / "preview_cache").glob("*.pdf"))
+    cache_file.write_bytes(b"LINEAR2:" + BODY)
+    rebuilt = await knowledge.stream_file_content(
+        session,
+        for_download=False,
+        if_none_match=res.etag,
+        **kwargs,  # type: ignore[arg-type]
+    )
+    await knowledge.close_file_stream(rebuilt)
+    assert rebuilt.not_modified is False and rebuilt.etag != res.etag
 
     download = await knowledge.stream_file_content(session, for_download=True, **kwargs)  # type: ignore[arg-type]
     assert download.ranged is False
@@ -294,4 +315,5 @@ async def test_drop_preview_cache_removes_current_and_legacy_entries(tmp_path: P
     for key in keys:
         (cache_dir / f"{key}.pdf").write_bytes(b"%PDF")
     await knowledge_preview.drop_preview_cache(settings, row)
-    assert list(cache_dir.iterdir()) == []
+    # 只剩两份墓碑（正在做的转换写完缓存后据此删掉自己），PDF 都删了
+    assert sorted(p.name for p in cache_dir.iterdir()) == sorted(f"{key}.deleted" for key in keys)

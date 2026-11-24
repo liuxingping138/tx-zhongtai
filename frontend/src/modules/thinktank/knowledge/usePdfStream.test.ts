@@ -69,8 +69,10 @@ describe('usePdfStream', () => {
   })
 
   it('打开时 401：续期一次、用新令牌重开', async () => {
-    const { stream, calls, deps } = setup([task(unauthorized, false), task(fakeDoc())])
+    const failed = task(unauthorized, false)
+    const { stream, calls, deps } = setup([failed, task(fakeDoc())])
     await stream.open('/content')
+    expect(failed.destroy).toHaveBeenCalledOnce() // 失败的那次也销毁，不留下它的 worker 线程
     expect(deps.refresh).toHaveBeenCalledOnce()
     expect(calls.map(c => c.httpHeaders)).toEqual([{ Authorization: 'Bearer t1' }, { Authorization: 'Bearer t2' }])
     expect(stream.status.value).toBe('ready')
@@ -170,7 +172,7 @@ describe('usePdfStream', () => {
 
   it('查找时才按页取文字块，跳过标记内容；没有文档时返回 null', async () => {
     const doc = fakeDoc(2)
-    const getTextContent = vi.fn(() => Promise.resolve({ items: [{ str: '数字' }, { type: 'beginMarkedContent' }, { str: '政府' }] }))
+    const getTextContent = vi.fn(() => Promise.resolve({ items: [{ str: '数字', hasEOL: true }, { type: 'beginMarkedContent' }, { str: '政府' }] }))
     doc.getPage.mockImplementation(() => Promise.resolve({
       getViewport: ({ scale }: { scale: number }) => ({ width: 600 * scale, height: 800 * scale }),
       getTextContent,
@@ -179,7 +181,7 @@ describe('usePdfStream', () => {
     expect(await stream.getPageText(1)).toBeNull()
     await stream.open('/content')
     expect(getTextContent).not.toHaveBeenCalled()
-    expect(await stream.getPageText(2)).toEqual(['数字', '政府'])
+    expect(await stream.getPageText(2)).toEqual({ items: ['数字', '政府'], eol: [true, false] })
     expect(doc.getPage).toHaveBeenLastCalledWith(2)
   })
 })

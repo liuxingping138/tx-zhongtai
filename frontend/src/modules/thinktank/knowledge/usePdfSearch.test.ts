@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 
+import type { PageTextSource } from './pdfSearch'
 import { SEARCH_DEBOUNCE_MS, usePdfSearch, type SearchHit } from './usePdfSearch'
 
 function deferred<T>() {
@@ -9,12 +10,17 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-function setup(pages: string[][], pageText?: (n: number) => Promise<string[]> | null) {
+function source(items: string[]): PageTextSource {
+  return { items, eol: items.map(() => false) }
+}
+
+function setup(pages: string[][], pageText?: (n: number) => Promise<PageTextSource> | null) {
   const numPages = ref(pages.length)
   const jumps: SearchHit[] = []
-  const fetch = vi.fn(pageText ?? ((n: number) => Promise.resolve(pages[n - 1]!)))
-  const search = usePdfSearch({ numPages, pageText: fetch, onJump: hit => jumps.push(hit) })
-  return { search, fetch, jumps, numPages }
+  const fetch = vi.fn(pageText ?? ((n: number) => Promise.resolve(source(pages[n - 1]!))))
+  const onAuthError = vi.fn()
+  const search = usePdfSearch({ numPages, pageText: fetch, onJump: hit => jumps.push(hit), onAuthError })
+  return { search, fetch, jumps, numPages, onAuthError }
 }
 
 async function settle() {
@@ -86,14 +92,14 @@ describe('usePdfSearch', () => {
   })
 
   it('换查找词立即作废上一轮：后面的页不再去取', async () => {
-    const slow = deferred<string[]>()
-    const { search, fetch } = setup([['a'], ['b'], ['c']], n => (n === 1 ? slow.promise : Promise.resolve(['政府'])))
+    const slow = deferred<PageTextSource>()
+    const { search, fetch } = setup([['a'], ['b'], ['c']], n => (n === 1 ? slow.promise : Promise.resolve(source(['政府']))))
     search.setQuery('政府')
     await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS)
     expect(search.scanning.value).toBe(true)
     expect(search.label.value).toBe('正在查找…')
     search.setQuery('数字')
-    slow.resolve(['政府'])
+    slow.resolve(source(['政府']))
     await Promise.resolve()
     await Promise.resolve()
     expect(fetch).toHaveBeenCalledTimes(1)
@@ -101,14 +107,14 @@ describe('usePdfSearch', () => {
   })
 
   it('关掉查找：作废这一轮、清掉结果；没开时返回 false', async () => {
-    const slow = deferred<string[]>()
+    const slow = deferred<PageTextSource>()
     const { search, fetch } = setup([['a'], ['b']], () => slow.promise)
     expect(search.close()).toBe(false)
     search.show()
     search.setQuery('政府')
     await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS)
     expect(search.close()).toBe(true)
-    slow.resolve(['政府'])
+    slow.resolve(source(['政府']))
     await settle()
     expect(fetch).toHaveBeenCalledTimes(1)
     expect(search.open.value).toBe(false)
@@ -122,7 +128,7 @@ describe('usePdfSearch', () => {
     let fail = false
     const { search, fetch } = setup(pages, (n) => {
       if (fail && n === 2) return Promise.reject(new Error('net'))
-      return Promise.resolve(pages[n - 1]!)
+      return Promise.resolve(source(pages[n - 1]!))
     })
     search.show()
     search.setQuery('政府')
@@ -146,5 +152,27 @@ describe('usePdfSearch', () => {
     await settle()
     expect(search.hits.value).toEqual([])
     expect(search.selected.value).toBeNull()
+  })
+  it('取文字时令牌过期（401）：停下这一轮交给阅读器续期重开，不报「无匹配」；重开后按原词重找', async () => {
+    const pages = [['政府'], ['政府'], ['政府']]
+    let expired = true
+    const { search, fetch, onAuthError } = setup(pages, (n) => {
+      if (expired && n === 2) return Promise.reject(Object.assign(new Error('401'), { name: 'ResponseException', status: 401 }))
+      return Promise.resolve(source(pages[n - 1]!))
+    })
+    search.show()
+    search.setQuery('政府')
+    await settle()
+    expect(onAuthError).toHaveBeenCalledOnce()
+    expect((onAuthError.mock.calls[0]![0] as { status: number }).status).toBe(401)
+    expect(fetch).toHaveBeenCalledTimes(2) // 第 3 页不再去取
+    expect(search.scanning.value).toBe(true)
+    expect(search.label.value).not.toBe('无匹配')
+
+    expired = false
+    search.reset() // 阅读器续期、重开文档后
+    await settle()
+    expect(search.hits.value.map(hit => hit.page)).toEqual([1, 2, 3])
+    expect(search.scanning.value).toBe(false)
   })
 })

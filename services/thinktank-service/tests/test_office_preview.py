@@ -13,7 +13,7 @@ import pytest
 from platform_common.actors import Actor
 from platform_common.errors import ApiError
 
-from app.core import office_preview, preview_cache, storage, subprocess_guard
+from app.core import office_preview, pdf_optimize, preview_cache, storage, subprocess_guard
 from app.knowledge.application import knowledge
 from app.knowledge.domain.models import KnowledgeFile
 from app.knowledge.domain.scopes import FULL_ACCESS
@@ -102,9 +102,7 @@ def _fake_soffice(pdf: bytes | None, delay: float = 0) -> AsyncMock:
 
 
 def _convert(writer: _Writer, cache_dir: str, key: str) -> Any:
-    return office_preview.convert_office_to_pdf(
-        writer, "PPTX", cache_dir=cache_dir, cache_key=key, max_cache_bytes=10**9
-    )
+    return office_preview.convert_office_to_pdf(writer, "PPTX", pdf_optimize.CacheSlot(cache_dir, key, 10**9))
 
 
 async def test_convert_office_to_pdf_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -180,17 +178,28 @@ async def test_key_locks_serialize_and_clean_up() -> None:
     assert len(locks) == 0
 
 
+class _Stderr:
+    """假的 stderr 管道：第一次 read 时跑一遍子进程要做的事、返回它写的 stderr，之后是 EOF。"""
+
+    def __init__(self, produce: Any) -> None:
+        self._produce = produce
+        self._done = False
+
+    async def read(self, _size: int) -> bytes:
+        if self._done:
+            return b""
+        self._done = True
+        _out, err = await self._produce()
+        return bytes(err)
+
+
 class _Proc:
     pid = 4321
 
     def __init__(self, returncode: int, on_communicate: Any) -> None:
         self.returncode = returncode
-        self._on_communicate = on_communicate
+        self.stderr = _Stderr(on_communicate)
         self.waited = False
-
-    async def communicate(self) -> tuple[bytes, bytes]:
-        result: tuple[bytes, bytes] = await self._on_communicate()
-        return result
 
     async def wait(self) -> int:
         self.waited = True

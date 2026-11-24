@@ -21,7 +21,7 @@ from app.core import storage
 from app.core.database import get_db_session
 from app.knowledge.api import content_response
 from app.knowledge.api import routes as knowledge_routes
-from app.knowledge.application import knowledge
+from app.knowledge.application import knowledge_preview
 from app.knowledge.domain.models import KnowledgeFile, KnowledgeOpLog
 from app.knowledge.domain.scopes import FULL_ACCESS, KnowledgeAccess
 from app.knowledge.repositories import knowledge as repo
@@ -313,7 +313,7 @@ def test_remaining_http_routes(monkeypatch: pytest.MonkeyPatch) -> None:
         knowledge_routes.service,
         "stream_file_content",
         AsyncMock(
-            return_value=knowledge.FileStreamResult(
+            return_value=knowledge_preview.FileStreamResult(
                 stream=_pdf_stream(), filename="a.pdf", media_type="application/pdf", content_length=4
             )
         ),
@@ -367,7 +367,7 @@ def test_remaining_http_routes(monkeypatch: pytest.MonkeyPatch) -> None:
             knowledge_routes.service,
             "stream_file_content",
             AsyncMock(
-                return_value=knowledge.FileStreamResult(
+                return_value=knowledge_preview.FileStreamResult(
                     stream=_pdf_stream(),
                     filename="a.pdf",
                     media_type="application/pdf",
@@ -386,7 +386,7 @@ def test_remaining_http_routes(monkeypatch: pytest.MonkeyPatch) -> None:
             knowledge_routes.service,
             "stream_file_content",
             AsyncMock(
-                return_value=knowledge.FileStreamResult(
+                return_value=knowledge_preview.FileStreamResult(
                     stream=_pdf_stream(),
                     filename="a.pdf",
                     media_type="",

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
 
@@ -19,10 +18,12 @@ from app.core import office_preview, storage
 from app.core.config import get_settings
 from app.knowledge.application.knowledge_preview import (
     PDF_MEDIA_TYPE,
+    FileStreamResult,
     etag_matches,
     expected_preview_etag,
     fallback_summary_bytes,
     is_pdf_file,
+    not_modified_result,
     open_preview_pdf,
     open_storage_or_summary,
     single_chunk_stream,
@@ -37,18 +38,6 @@ class FileContentResult:
     content: bytes
     filename: str
     media_type: str
-
-
-@dataclass(frozen=True)
-class FileStreamResult:
-    stream: AsyncIterator[bytes]
-    filename: str
-    media_type: str
-    content_length: int | None = None
-    etag: str | None = None
-    not_modified: bool = False
-    # 流是本地缓存文件（preview_cache.FileChunks），可以按 HTTP Range 分段下发
-    ranged: bool = False
 
 
 def format_size(size_bytes: int) -> str:
@@ -300,14 +289,8 @@ async def stream_file_content(
     else:
         await assert_read(session, actor, access, row, "preview_content")
         candidate_etag = expected_preview_etag(row)
-        if etag_matches(if_none_match, candidate_etag):
-            return FileStreamResult(
-                stream=single_chunk_stream(b""),
-                filename=row.file_name,
-                media_type="",
-                etag=candidate_etag,
-                not_modified=True,
-            )
+        if candidate_etag is not None and etag_matches(if_none_match, candidate_etag):
+            return not_modified_result(row.file_name, candidate_etag)
 
     settings = get_settings()
     if not for_download and row.storage_path:
@@ -316,6 +299,9 @@ async def stream_file_content(
             # 拉源文件、转码、压缩可能排队一两分钟：先交还数据库连接，否则几个人同时预览就占满连接池，全服务 503。
             await session.commit()
             pdf = await open_preview_pdf(settings, row, office_ext)
+            if pdf is not None and etag_matches(if_none_match, pdf.etag):
+                await storage.close_stream(pdf.stream)
+                return not_modified_result(row.file_name, pdf.etag)
             if pdf is not None:
                 return FileStreamResult(
                     stream=pdf.stream,

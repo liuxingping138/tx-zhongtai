@@ -30,16 +30,57 @@ export function normalizeQuery(query: string): string {
   return normalizeText(query.trim())
 }
 
-/** 文字块直接首尾相接拼成整页文本（中文换行不该插空格）；块之间的位置偏移记在 starts 里。 */
-export function buildPageText(items: readonly string[]): PageText {
+/** 一页的文字块，外加每块后面是不是换行（PDF.js TextItem.hasEOL，下标与 items 一一对应）。 */
+export interface PageTextSource {
+  items: string[]
+  eol: boolean[]
+}
+
+/** getTextContent 的条目换成查找用的文字块：跳过标记内容（没有 str），和 TextLayer 的 textDivs 一一对应。 */
+export function textSource(items: ReadonlyArray<object>): PageTextSource {
+  const out: PageTextSource = { items: [], eol: [] }
+  for (const item of items) {
+    if (!('str' in item)) continue
+    out.items.push(String(item.str))
+    out.eol.push('hasEOL' in item && item.hasEOL === true)
+  }
+  return out
+}
+
+/** 中日韩文字和全角标点：换行两边是这些字时不插空格，中文一句话跨行照样能连着找到。 */
+const CJK = String.raw`\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\u3000-\u303f\uff00-\uffef`
+// 按码点比（u 标志）：扩展区汉字是两个 UTF-16 单元，只看最后一个单元会认不出来
+const ENDS_CJK_OR_SPACE = new RegExp(String.raw`[${CJK}\s]$`, 'u')
+const STARTS_CJK_OR_SPACE = new RegExp(String.raw`^[${CJK}\s]`, 'u')
+
+/** 换行处要不要补一个空格：两边都是西文（字母、数字、半角标点）时补，「of⏎line」才能用「of line」找到。 */
+function needsSpace(left: string, right: string): boolean {
+  if (!left || !right) return false
+  return !ENDS_CJK_OR_SPACE.test(left.slice(-2)) && !STARTS_CJK_OR_SPACE.test(right)
+}
+
+/**
+ * 文字块拼成整页文本；块之间的位置偏移记在 starts 里。
+ *
+ * 一般直接首尾相接（中文换行不该插空格）；某块后面是换行、两边又都是西文时中间补一个空格。
+ * 补的空格不属于任何块：匹配跨过它时两边的块各高亮自己那一截。
+ */
+export function buildPageText(items: readonly string[], eol: readonly boolean[] = []): PageText {
   const starts: number[] = []
   let text = ''
-  for (const str of items) {
+  // PDF.js 常把换行记在一个空块上：换行之后遇到第一个有字的块时，拿已拼好的文本末尾和它比
+  let afterBreak = false
+  items.forEach((str, index) => {
+    if (afterBreak && str) {
+      if (needsSpace(text, str)) text += ' '
+      afterBreak = false
+    }
     starts.push(text.length)
     // toLowerCase 个别字符会改变长度（如 İ）：那样的块按原文找，位置才对得上
     const lowered = normalizeText(str)
     text += lowered.length === str.length ? lowered : str
-  }
+    if (eol[index]) afterBreak = true
+  })
   return { items: [...items], starts, text }
 }
 

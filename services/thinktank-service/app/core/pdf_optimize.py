@@ -8,13 +8,15 @@
 任何一步失败都退回上一步的结果，工具都没装也照样缓存原文件：之后的 Range 请求读本地盘，不再每次去对象存储拉整份。
 下载（`/download`）不经过这里，永远给对象存储里的原文件。
 
-和 Office 转换一样：同一个文件同时只做一次，同时最多做 2 个，子进程单开进程组、超时整组杀掉、只带最少的环境变量；
+和 Office 转换一样：同一个文件同时只做一次，和 Office 转换合计同时最多做 2 个（`preview_slots`），
+子进程单开进程组、超时整组杀掉、只带最少的环境变量；
 写缓存失败（如磁盘满）记失败标记，10 分钟内直接回退到从对象存储整份读，不再占名额重做。
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import shutil
 import tempfile
 from collections.abc import Awaitable, Callable
@@ -23,7 +25,7 @@ from pathlib import Path
 
 from platform_common.logging_setup import get_logger
 
-from app.core import preview_cache, subprocess_guard
+from app.core import preview_cache, preview_slots, subprocess_guard
 
 logger = get_logger(__name__)
 
@@ -31,7 +33,6 @@ logger = get_logger(__name__)
 MIN_SAVING_RATIO = 0.9
 # qpdf 退出码：0 成功，3 有警告但输出可用（常见于小毛病的 PDF），其他为失败。
 _QPDF_OK = frozenset({0, 3})
-_OPTIMIZE_SEMAPHORE = asyncio.Semaphore(2)
 _KEY_LOCKS = preview_cache.KeyLocks()
 
 # 写源文件的回调：把源文件写到给定路径，源文件不存在返回 False。
@@ -52,12 +53,6 @@ class CacheSlot:
     cache_dir: str
     cache_key: str
     max_bytes: int
-
-
-def has_free_slot() -> bool:
-    """还有空闲的压缩名额：上传后的预热只在有空时做，不和正在看的人抢。"""
-
-    return not _OPTIMIZE_SEMAPHORE.locked()
 
 
 def _gs_binary() -> str | None:
@@ -166,14 +161,22 @@ async def _prepare_once(write_source: SourceWriter, slot: CacheSlot, options: Op
         try:
             best = await optimize_file(source, work_dir, options, force_compress=False)
             return await preview_cache.store(best, slot.cache_dir, slot.cache_key, max_bytes=slot.max_bytes)
+        except preview_cache.FileDeletedError:
+            raise  # 转换途中文件被删：不是失败，不记失败标记
         except OSError as exc:
             logger.warning("pdf_preview_cache_failed", error=str(exc))
-            await preview_cache.mark_failed(slot.cache_dir, slot.cache_key)
+            with contextlib.suppress(OSError):  # 磁盘满时连失败标记也可能写不进去，照样回退
+                await preview_cache.mark_failed(slot.cache_dir, slot.cache_key)
             return None
 
 
-async def prepare_pdf_preview(write_source: SourceWriter, slot: CacheSlot, options: OptimizeOptions) -> Path | None:
-    """返回缓存里给预览用的 PDF 路径；源文件不存在或最近写缓存失败过返回 None（调用方整份读原文件）。"""
+async def prepare_pdf_preview(
+    write_source: SourceWriter, slot: CacheSlot, options: OptimizeOptions, *, wait: bool = True
+) -> Path | None:
+    """返回缓存里给预览用的 PDF 路径；源文件不存在或最近写缓存失败过返回 None（调用方整份读原文件）。
+
+    `wait=False`（上传后的预热）：要做的时候名额已满就抛 `preview_slots.SlotBusyError`，不排队。
+    """
 
     cached = await preview_cache.lookup(slot.cache_dir, slot.cache_key)
     if cached is not None:
@@ -186,5 +189,5 @@ async def prepare_pdf_preview(write_source: SourceWriter, slot: CacheSlot, optio
             return cached  # 排队时前一个人已经做好
         if await preview_cache.failed_recently(slot.cache_dir, slot.cache_key):
             return None
-        async with _OPTIMIZE_SEMAPHORE:
+        async with preview_slots.hold(wait=wait):
             return await _prepare_once(write_source, slot, options)

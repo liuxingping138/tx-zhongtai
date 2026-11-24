@@ -6,7 +6,7 @@ import httpx
 
 from app.core import storage
 from app.knowledge.api import content_response
-from app.knowledge.application import knowledge
+from app.knowledge.application import knowledge, knowledge_preview
 
 
 def _response(body: bytes = b"abc") -> httpx.Response:
@@ -42,7 +42,7 @@ async def test_local_streams_without_aclose_are_ignored() -> None:
 
 def test_file_responses_close_the_stream_in_the_background() -> None:
     resp = _response()
-    result = knowledge.FileStreamResult(
+    result = knowledge_preview.FileStreamResult(
         stream=storage.MinioChunks(resp, 1024, "a.pdf"), filename="a.pdf", media_type="application/pdf"
     )
     response = content_response.streamed(result, {})

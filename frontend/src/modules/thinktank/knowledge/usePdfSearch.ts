@@ -1,6 +1,7 @@
 import { computed, ref, shallowRef, triggerRef, type Ref } from 'vue'
 
-import { buildPageText, findInPage, matchLabel, normalizeQuery, type PageMatch, type PageText } from './pdfSearch'
+import { buildPageText, findInPage, matchLabel, normalizeQuery, type PageMatch, type PageText, type PageTextSource } from './pdfSearch'
+import { responseStatus } from './pdfjs'
 
 /** 一处匹配：第几页、本页第几处，以及在整页文本里的位置。 */
 export interface SearchHit extends PageMatch {
@@ -11,10 +12,20 @@ export interface SearchHit extends PageMatch {
 export interface PdfSearchDeps {
   numPages: Ref<number>
   /** 取某页的文字块（与文字层一致）；文档没打开时返回 null。 */
-  pageText: (pageNumber: number) => Promise<string[]> | null
+  pageText: (pageNumber: number) => Promise<PageTextSource> | null
   /** 当前匹配换了：滚到那一页。 */
   onJump: (hit: SearchHit) => void
+  /**
+   * 取文字时令牌过期（401）：交给阅读器续期并重开文档。这一轮就此停下、保持「正在查找」，
+   * 重开后 reset() 按原词重找；不能把后面的页当成没有匹配。
+   */
+  onAuthError?: (err: unknown) => void
 }
+
+const HTTP_UNAUTHORIZED = 401
+
+/** 这一页因为令牌过期没取到：整轮停下等重开，不是「这页没有匹配」。 */
+interface AuthExpired { authError: unknown }
 
 /** 停止输入这么久才开始找：一边打字一边整份翻页取文字会白白多发很多 Range 请求。 */
 export const SEARCH_DEBOUNCE_MS = 250
@@ -56,16 +67,17 @@ export function usePdfSearch(deps: PdfSearchDeps) {
     needle.value = ''
   }
 
-  async function textOf(pageNumber: number): Promise<PageText | null> {
+  async function textOf(pageNumber: number): Promise<PageText | AuthExpired | null> {
     const known = cache.get(pageNumber)
     if (known) return known
     try {
-      const items = await deps.pageText(pageNumber)
-      if (!items) return null
-      const page = buildPageText(items)
+      const source = await deps.pageText(pageNumber)
+      if (!source) return null
+      const page = buildPageText(source.items, source.eol)
       cache.set(pageNumber, page)
       return page
-    } catch {
+    } catch (err) {
+      if (responseStatus(err) === HTTP_UNAUTHORIZED) return { authError: err }
       return null // 这一页取不到（网络抖动、文档刚被关掉）：当作没有匹配，下次查找再取
     }
   }
@@ -91,6 +103,11 @@ export function usePdfSearch(deps: PdfSearchDeps) {
     for (let pageNumber = 1; pageNumber <= deps.numPages.value; pageNumber += 1) {
       const page = await textOf(pageNumber)
       if (mine !== seq) return
+      if (page && 'authError' in page) {
+        seq += 1 // 作废这一轮；scanning 保持 true，重开文档后 reset() 重找
+        deps.onAuthError?.(page.authError)
+        return
+      }
       if (page) collect(pageNumber, page)
     }
     scanning.value = false

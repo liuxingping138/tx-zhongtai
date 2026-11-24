@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 from platform_common.actors import Actor
 from platform_common.route_audit import iter_api_routes
 
-from app.core import office_preview, pdf_optimize, preview_cache
+from app.core import office_preview, preview_cache, preview_slots
 from app.core.database import get_db_session
 from app.knowledge.api import routes as knowledge_routes
 from app.knowledge.application import knowledge_preview, preview_warmup
@@ -110,8 +110,8 @@ async def test_warm_pdf_fills_cache_and_logs_done(monkeypatch: pytest.MonkeyPatc
         (_row(storage_path=""), {}, "no_source"),
         (_row("说明.txt", "TXT", "k/a.txt"), {}, "not_previewable"),
         (_row("方案.pptx", "PPTX", "k/a.pptx"), {"has_libreoffice": False}, "no_libreoffice"),
-        (_row("方案.pptx", "PPTX", "k/a.pptx"), {"has_libreoffice": True, "office_busy": True}, "busy"),
-        (_row(), {"pdf_busy": True}, "busy"),
+        (_row("方案.pptx", "PPTX", "k/a.pptx"), {"has_libreoffice": True, "busy": True}, "busy"),
+        (_row(), {"busy": True}, "busy"),
     ],
 )
 async def test_warm_skips(
@@ -123,8 +123,7 @@ async def test_warm_skips(
 ) -> None:
     _settings(tmp_path, monkeypatch)
     monkeypatch.setattr(office_preview, "has_libreoffice", lambda: patches.get("has_libreoffice", False))
-    monkeypatch.setattr(office_preview, "has_free_slot", lambda: not patches.get("office_busy", False))
-    monkeypatch.setattr(pdf_optimize, "has_free_slot", lambda: not patches.get("pdf_busy", False))
+    monkeypatch.setattr(preview_slots, "has_free_slot", lambda: not patches.get("busy", False))
     opened = AsyncMock()
     monkeypatch.setattr(preview_warmup, "open_preview_pdf", opened)
     logs = _logs(monkeypatch)
