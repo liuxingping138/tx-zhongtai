@@ -137,14 +137,14 @@ async def _source_rows(day: date, limit: int, max_chars: int, province: str | No
 
 def _sample_pairs(rows: list[Any], industry: str) -> list[dict[str, str]]:
     """这条政策拿来做市场机会样本的组：优先用没人改过的 AI 行（定时任务只问这些）；
-    都被人核对过、改过的，退到它所有有名称的行，取测试数据不该因此拿不到。"""
+    都被人核对过、改过的，退到它所有有名称的行，取测试数据不该因此拿不到。
 
-    picked = [row for row in rows if untouched(row)] or rows
-    return [
-        {"industry_l1": row.industry_l1, "scenario_l1_name": row.scenario_l1_name}
-        for row in picked
-        if not industry or row.industry_l1.strip() == industry
-    ]
+    先按一级行业筛、再挑没人改过的：反过来的话，这个行业的行都被人改过、别的行业还有 AI 行时，
+    这条政策（仓储正是因为它有这个行业的行才取出来的）一组都拿不到。"""
+
+    matched = [row for row in rows if not industry or (row.industry_l1 or "").strip() == industry]
+    picked = [row for row in matched if untouched(row)] or matched
+    return [{"industry_l1": row.industry_l1, "scenario_l1_name": row.scenario_l1_name} for row in picked]
 
 
 def _no_tags(task: str, flt: SampleFilter) -> ApiError:
