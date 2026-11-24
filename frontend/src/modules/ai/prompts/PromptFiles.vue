@@ -51,6 +51,7 @@ async function openSampling(): Promise<void> {
         size="small"
         type="primary"
         plain
+        :disabled="files.busy.value !== null"
         @click="openSampling"
       >
         从政策库取数
@@ -77,9 +78,11 @@ async function openSampling(): Promise<void> {
       v-if="template"
       v-model="sampling"
       :template="template"
+      :fields="sampleOptions?.draftFields"
       :tasks="sampleOptions?.tasks ?? []"
       :provinces="sampleOptions?.provinces"
       :industries="sampleOptions?.industries"
+      :save-rows="files.saveRows"
       @done="item => emit('changed', item)"
     />
   </div>

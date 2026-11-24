@@ -150,6 +150,20 @@ def _labels(item: dict[str, Any]) -> tuple[str, str]:
     return _clean(item.get("行业") or item.get("一级行业")), _clean(item.get("场景") or item.get("一级场景"))
 
 
+def _matched_opportunity_items(items: list[dict[str, Any]], industry: str, scene: str) -> list[dict[str, Any]]:
+    valid = [
+        (_labels(item), item)
+        for item in items
+        if isinstance(item, dict) and _clean(item.get("市场机会") or item.get("政策市场机会"))
+    ]
+    if len(valid) == 1:
+        return [valid[0][1]]
+    exact = [item for labels, item in valid if labels == (industry, scene)]
+    if exact:
+        return exact
+    return [item for (ind, scn), item in valid if ind in ("", industry) and scn in ("", scene)]
+
+
 def extract_opportunity_text(items: list[dict[str, Any]], industry: str, scene: str) -> str:
     """从单组（一级行业、一级场景）的模型输出里取市场机会文本，回填到这一组的解读行。
 
@@ -157,19 +171,21 @@ def extract_opportunity_text(items: list[dict[str, Any]], industry: str, scene: 
     只回了一段的，就算名称写法不一样也是这组的。回了好几段、都标着别的行业场景时取不到（返回空），
     不能把别的场景的机会抄到这一行。"""
 
-    texts = [
-        (_labels(item), _clean(item.get("市场机会") or item.get("政策市场机会")))
-        for item in items
-        if isinstance(item, dict)
-    ]
-    texts = [(labels, text) for labels, text in texts if text]
-    if len(texts) == 1:
-        return texts[0][1]
-    exact = [text for labels, text in texts if labels == (industry, scene)]
-    if exact:
-        return "\n\n".join(exact)
-    compatible = [text for (ind, scn), text in texts if ind in ("", industry) and scn in ("", scene)]
-    return "\n\n".join(compatible)
+    matched = _matched_opportunity_items(items, industry, scene)
+    return "\n\n".join(_clean(item.get("市场机会") or item.get("政策市场机会")) for item in matched)
+
+
+def extract_opportunity_outputs(items: list[dict[str, Any]], industry: str, scene: str) -> dict[str, str]:
+    """取出与当前（一级行业、一级场景）组匹配的市场机会输出中的动态扩展字段。"""
+
+    merged: dict[str, str] = {}
+    for item in _matched_opportunity_items(items, industry, scene):
+        for key, val in extract_ai_outputs(item).items():
+            if key not in merged:
+                merged[key] = val
+            elif val and val not in merged[key].split("\n\n"):
+                merged[key] = f"{merged[key]}\n\n{val}" if merged[key] else val
+    return merged
 
 
 def base_prompt_row(tag: Any, content: str) -> dict[str, str]:

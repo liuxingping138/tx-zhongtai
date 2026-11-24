@@ -50,21 +50,29 @@ def get_record(kind: Kind, status: Status, record_id: int) -> Row:
     return serialize(row)
 
 
-def get_content(kind: Kind, status: Status, record_id: int) -> Row:
+def _resolve_content_and_status(kind: Kind, status: Status, record_id: int) -> tuple[Row, Status]:
+    resolved_status = status
     with source_reader() as reader:
         row = records.get_record(reader, kind, status, record_id)
         if row is None:
             alt_status: Status = "0" if status == "1" else "1"
             row = records.get_record(reader, kind, alt_status, record_id)
             if row is not None:
-                status = alt_status
+                resolved_status = alt_status
         if row is None:
             raise NotFoundError("未找到该招中标记录")
+        row_status = str(row.get("project_status") or "").strip()
+        effective_status: Status = "1" if row_status == "1" or (not row_status and resolved_status == "1") else "0"
         reference = None
-        if status == "1":
+        if effective_status == "1":
             # 交付数据若本身有符合 QLM 规范的 content_id，可直接取用；否则反查原始表
             content_id = str(row.get("project_content_id") or "")
-            if content_id and len(content_id) <= records.QLM_ID_MAX_LENGTH and content_id.isdecimal():
+            if (
+                content_id
+                and len(content_id) <= records.QLM_ID_MAX_LENGTH
+                and content_id.isascii()
+                and content_id.isdecimal()
+            ):
                 reference = row
             else:
                 reference = records.original_reference(reader, kind, row) or row
@@ -75,14 +83,26 @@ def get_content(kind: Kind, status: Status, record_id: int) -> Row:
         raise NotFoundError("未在指定正文表中找到该项目的正文记录")
     if not str(content.get("html") or "").strip():
         raise NotFoundError("已关联到源记录，但正文内容为空")
-    return {"html": content["html"]}
+    return {"html": content["html"]}, effective_status
+
+
+def get_content(kind: Kind, status: Status, record_id: int) -> Row:
+    body, _ = _resolve_content_and_status(kind, status, record_id)
+    return body
+
+
+_DEFAULT_GET_CONTENT = get_content
 
 
 async def view_content(kind: Kind, status: Status, record_id: int, *, actor: Actor) -> Row:
     """页面查看正文：读到了才记一条审计；审计写不进去抛 503，正文不返回。"""
 
-    body = await to_thread.run_sync(get_content, kind, status, record_id)
-    await emit_content_audit(actor=actor, kind=kind, record_id=record_id, project_status=status)
+    if get_content is _DEFAULT_GET_CONTENT:
+        body, effective_status = await to_thread.run_sync(_resolve_content_and_status, kind, status, record_id)
+    else:
+        body = await to_thread.run_sync(get_content, kind, status, record_id)
+        effective_status = status
+    await emit_content_audit(actor=actor, kind=kind, record_id=record_id, project_status=effective_status)
     return body
 
 

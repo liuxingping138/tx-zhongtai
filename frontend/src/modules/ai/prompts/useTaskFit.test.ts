@@ -33,11 +33,14 @@ describe('政策类模板的定时任务适配', () => {
     expect(fit.results.value.map(item => [item.code, item.check.errors.length, item.skip])).toEqual([['type', 0, false], ['opportunity', 2, true]])
     expect(fit.visible.value).toBe(true)
     expect(fit.sampleTasks.value).toHaveLength(2)
+    expect(fit.sampleOptions.value.draftFields).toEqual(['政策类型名称'])
     expect(fit.usedBy('p1')).toEqual(['政策类型判断'])
     expect(fit.usedBy('p2')).toEqual([])
     expect(fit.usedBy('')).toEqual([])
 
     form.content = ''
+    form.output_fields = '市场机会|商机优先级'
+    expect(fit.sampleOptions.value.draftFields).toEqual(['市场机会', '商机优先级'])
     form.output_fields = ''
     expect(fit.results.value).toEqual([])
     expect(fit.visible.value).toBe(true)

@@ -13,17 +13,23 @@ vi.mock('@/api/aiTagging', () => ({ getTaggingSamples: api.samples }))
 vi.mock('@/api/aiSamples', () => ({ previewBatchRows: api.preview }))
 
 const TASKS = [
+  { code: 'type', name: '政策类型判断', columns: ['源ID', '政策正文'], required_fields: ['政策类型名称'], optional_fields: [] },
   { code: 'opportunity', name: '政策市场机会', columns: ['源ID', '一级行业', '一级场景'], required_fields: ['市场机会'], optional_fields: [] },
 ] as unknown as ContractTask[]
 const SAMPLE = { file_name: '数据库样本.xlsx', headers: ['一级行业'], rows: [['党政行业']], note: '取了 1 条' } as unknown as TaggingSamples
 
 // 只留按钮能点：Element Plus 的输入控件这里不关心。
 const ElButton: Component = { emits: ['click'], setup: (_, { slots, emit }) => () => h('button', { onClick: () => emit('click') }, slots.default?.()) }
-const stubs = { 'el-button': ElButton, 'el-radio-group': true, 'el-radio-button': true, 'el-date-picker': true, 'el-input-number': true, 'el-input': true, 'el-select': true, 'el-option': true }
+const stubs = { 'el-button': ElButton, 'el-radio-group': true, 'el-radio-button': true, 'el-date-picker': true, 'el-input-number': true, 'el-input': true, 'el-select': true, 'el-option': true, CodebookFilterSelect: true }
 
 function mountPicker() {
   return mount(BatchDbPicker, {
-    props: { template: template(), version: 'release', tasks: TASKS, disabled: false },
+    props: {
+      template: template({ fields: ['市场机会'], release: { ...template().release!, fields: ['市场机会'] } }),
+      version: 'release',
+      tasks: TASKS,
+      disabled: false,
+    },
     global: { stubs },
   })
 }
@@ -83,5 +89,47 @@ describe('BatchDbPicker 从政策库取数', () => {
     late.resolve(SAMPLE)
     await flushPromises()
     expect(api.preview).not.toHaveBeenCalled()
+  })
+
+  it('按所选版本（线上版本 vs 草稿）的输出字段及晚到的任务契约推断默认取数步骤', async () => {
+    api.samples.mockResolvedValue(SAMPLE)
+    api.preview.mockResolvedValue(summary())
+    const tpl = template({
+      fields: ['市场机会'],
+      release: { ...template().release!, fields: ['政策类型名称'] },
+    })
+    const wrapper = mount(BatchDbPicker, {
+      props: { template: tpl, version: 'release', tasks: [], disabled: false },
+      global: { stubs },
+    })
+    // 契约异步加载完成后，线上版本只有「政策类型名称」-> 推断为 type
+    await wrapper.setProps({ tasks: TASKS })
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+    expect(api.samples).toHaveBeenLastCalledWith('type', expect.any(String), 20, expect.anything())
+
+    // 切到草稿（输出字段为「市场机会」）-> 自动切为 opportunity；设一级行业与关键词后再切回线上（type），隐藏筛选项自动清空
+    await wrapper.setProps({ version: 'draft' })
+    wrapper.findComponent({ name: 'CodebookFilterSelect' })
+    const vm = wrapper.vm as unknown as { industryL1: string; keyword: string }
+    vm.industryL1 = '党政行业'
+    vm.keyword = '算力'
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+    expect(api.samples).toHaveBeenLastCalledWith('opportunity', expect.any(String), 20, {
+      province: '',
+      keyword: '算力',
+      industry_l1: '党政行业',
+    })
+
+    await wrapper.setProps({ version: 'release' })
+    await flushPromises()
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+    expect(api.samples).toHaveBeenLastCalledWith('type', expect.any(String), 20, {
+      province: '',
+      keyword: '',
+      industry_l1: '',
+    })
   })
 })

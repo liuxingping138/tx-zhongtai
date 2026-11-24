@@ -101,7 +101,7 @@ async def _resolve_tags(
 async def request(session: AsyncSession, actor: Actor, item_ids: list[uuid.UUID], step: str) -> dict[str, Any]:
     """把勾选的政策（或政策解读行所属的政策）放回某个任务的待办。返回放回几条、跳过的各是什么原因。"""
 
-    if step not in TASKS:
+    if step not in _STEP_NOTES:
         raise ApiError("不认识的打标步骤", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     skipped: Counter[str] = Counter()
     tags, missing = await _resolve_tags(session, list(item_ids), skipped)

@@ -83,9 +83,12 @@ export type AiTaskBody = Pick<AiTask, 'prompt_id' | 'batch_size' | 'content_max_
 const base = '/policy/ai-tagging'
 export const listAiTasks = () => request<{ items: AiTask[] }>(http.get(`${base}/tasks`))
 export const listAiTemplates = () => request<{ items: OnlineTemplate[]; error: string }>(http.get(`${base}/templates`))
+/** 政策基础标签 / 政策解读可回退重打的三个步骤（新增场景找相似、补描述不对应单条政策）。 */
+export type PolicyRetagStep = 'type' | 'interpret' | 'opportunity'
+
 /** 基础标签列表上勾选政策重新打标：放回某个任务的待办，下次执行那个任务时处理。 */
 export interface RetagResult {
-  step: AiTaskCode
+  step: PolicyRetagStep
   task: string
   queued: number
   skipped: { reason: string; count: number }[]
@@ -100,9 +103,10 @@ export interface SampleOptions {
   tasks: ContractTask[]
   provinces: string[]
   industries: string[]
+  draftFields?: string[]
 }
 
-export const requestRetag = (ids: string[], step: AiTaskCode) => request<RetagResult>(http.post(`${base}/retag`, { ids, step }))
+export const requestRetag = (ids: string[], step: PolicyRetagStep) => request<RetagResult>(http.post(`${base}/retag`, { ids, step }))
 export const getTaggingContract = () => request<TaggingContract>(http.get(`${base}/contract`))
 export interface SampleExtraFilters {
   province?: string
@@ -110,20 +114,23 @@ export interface SampleExtraFilters {
   industry_l1?: string
 }
 
+const SAMPLE_FILTER_TASKS: Record<keyof SampleExtraFilters, readonly AiTaskCode[]> = {
+  province: ['type', 'interpret', 'opportunity'],
+  keyword: ['interpret', 'opportunity'],
+  industry_l1: ['opportunity'],
+}
+
+function sampleParams(task: AiTaskCode, day: string, limit: number, filters: SampleExtraFilters): Record<string, string | number> {
+  const params: Record<string, string | number> = task === 'type' ? { task, day, limit } : { task, limit }
+  for (const [key, allowed] of Object.entries(SAMPLE_FILTER_TASKS) as [keyof SampleExtraFilters, readonly AiTaskCode[]][]) {
+    const val = (filters[key] ?? '').trim()
+    if (val && allowed.includes(task)) params[key] = val
+  }
+  return params
+}
+
 export const getTaggingSamples = (task: AiTaskCode, day: string, limit: number, filters: SampleExtraFilters = {}) =>
-  request<TaggingSamples>(
-    http.get(`${base}/samples`, {
-      params: {
-        task,
-        limit,
-        ...(task === 'type' ? { day } : {}),
-        ...(filters.province?.trim() ? { province: filters.province.trim() } : {}),
-        ...(filters.keyword?.trim() ? { keyword: filters.keyword.trim() } : {}),
-        ...(task === 'opportunity' && filters.industry_l1?.trim() ? { industry_l1: filters.industry_l1.trim() } : {}),
-      },
-      timeout: 120_000,
-    }),
-  )
+  request<TaggingSamples>(http.get(`${base}/samples`, { params: sampleParams(task, day, limit, filters), timeout: 120_000 }))
 export type AiTaskUpdate = Omit<AiTask, 'spent_today' | 'spent_month' | 'current' | 'pending'>
 
 export const updateAiTask = (code: AiTaskCode, body: AiTaskBody) =>

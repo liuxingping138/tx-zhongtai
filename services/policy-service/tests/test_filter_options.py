@@ -76,3 +76,27 @@ async def test_level_one_industry_and_scenario_options_come_from_the_code_table(
     monkeypatch.setattr(internal_clients, "codebook", down)
     data = await interpretation_service.list_interpretation_options(None)  # type: ignore[arg-type]
     assert data["options"]["industry_l1"]["items"] == [] and data["options"]["info_level"]["items"] == ["高"]
+
+
+async def test_interpretation_options_include_dynamic_fields_from_mode_a_opportunity_templates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def preview(_session: Any) -> dict[str, Any]:
+        return {"options": {}}
+
+    async def l1_names() -> tuple[list[str], list[str]]:
+        return ["党政行业"], ["数字政府"]
+
+    async def ai_templates(_method: str, _path: str, **_: Any) -> list[dict[str, Any]]:
+        return [
+            {"output_fields": ["政策类型名称", "判定简因"]},
+            {"output_fields": ["一级行业", "判断", "最像的已有场景", "理由"]},
+            {"output_fields": ["一级行业", "一级场景", "核心政策条款"]},
+            {"output_fields": ["市场机会", "行业场景", "商机优先级"]},
+        ]
+
+    monkeypatch.setattr(options_repo, "interpretation_options", preview)
+    monkeypatch.setattr(internal_clients, "scenario_l1_names", l1_names)
+    monkeypatch.setattr(internal_clients, "ai", ai_templates)
+    data = await interpretation_service.list_interpretation_options(None)  # type: ignore[arg-type]
+    assert data["ai_fields"] == ["核心政策条款", "商机优先级"]

@@ -6,6 +6,7 @@ import { type PromptTemplate, type RunVersion } from '@/api/ai'
 import { previewBatchRows, type BatchRowsPayload, type BatchRowsSummary } from '@/api/aiSamples'
 import { getTaggingSamples, type AiTaskCode, type ContractTask } from '@/api/aiTagging'
 import { errorMessage } from '@/api/errors'
+import CodebookFilterSelect from '../shared/CodebookFilterSelect.vue'
 import { guessTask } from '../prompts/taskFit'
 
 /** 从政策库取到、检查过的数据，带上是给哪个模板、哪一版检查的：父组件据此丢掉过时的结果。 */
@@ -44,16 +45,27 @@ const busy = ref(false)
 const showProvince = computed(() => ['type', 'interpret', 'opportunity'].includes(task.value))
 const showKeyword = computed(() => ['interpret', 'opportunity'].includes(task.value))
 const columns = computed(() => props.tasks.find(item => item.code === task.value)?.columns ?? [])
+const activeFields = computed(() => (props.version === 'release' && props.template.release
+  ? props.template.release.fields
+  : props.template.fields))
 // 每次换模板、换版本、面板被卸载都作废在途的请求：慢的旧结果回来时不再交给父组件。
 let token = 0
 
 watch(() => props.template.id, () => {
-  task.value = guessTask(props.tasks, props.template.fields)
+  task.value = guessTask(props.tasks, activeFields.value)
   day.value = yesterday()
   province.value = ''
   keyword.value = ''
   industryL1.value = ''
 }, { immediate: true })
+watch(() => [props.version, props.tasks.length], () => {
+  task.value = guessTask(props.tasks, activeFields.value)
+})
+watch(task, next => {
+  if (!showProvince.value) province.value = ''
+  if (!showKeyword.value) keyword.value = ''
+  if (next !== 'opportunity') industryL1.value = ''
+})
 watch(() => [props.template.id, props.version], () => {
   token++
   busy.value = false
@@ -134,43 +146,23 @@ async function fetchAndPreview(): Promise<void> {
       </label>
       <label v-if="showProvince">
         <span>省份（可选）</span>
-        <el-select
+        <CodebookFilterSelect
           v-model="province"
           size="small"
-          filterable
-          clearable
-          allow-create
-          default-first-option
+          :options="provinces"
           placeholder="搜索或选择省份"
           :disabled="disabled || busy"
-        >
-          <el-option
-            v-for="name in provinces ?? []"
-            :key="name"
-            :label="name"
-            :value="name"
-          />
-        </el-select>
+        />
       </label>
       <label v-if="task === 'opportunity'">
         <span>一级行业（可选）</span>
-        <el-select
+        <CodebookFilterSelect
           v-model="industryL1"
           size="small"
-          filterable
-          clearable
-          allow-create
-          default-first-option
+          :options="industries"
           placeholder="搜索或选择一级行业"
           :disabled="disabled || busy"
-        >
-          <el-option
-            v-for="name in industries ?? []"
-            :key="name"
-            :label="name"
-            :value="name"
-          />
-        </el-select>
+        />
       </label>
       <label v-if="showKeyword">
         <span>政策关键词（可选）</span>

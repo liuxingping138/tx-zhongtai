@@ -40,6 +40,7 @@ KNOWN_INTERPRET_KEYS = {
     SOURCE_ID,
     *ANSWER_FIELDS,
     *EXTRA_INTERPRET_ALIASES,
+    "行业场景",
     "省/直辖市",
     "省份",
 }

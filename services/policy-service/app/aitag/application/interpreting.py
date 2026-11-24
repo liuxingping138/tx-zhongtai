@@ -218,13 +218,21 @@ def _fill_group(rows: list[Interpretation], industry: str, scene: str, result: d
 
     if result.get("error"):
         return 0, f"{industry}/{scene}：{str(result['error'])[:120]}"
-    text = rules.extract_opportunity_text(result.get("items") or [], industry, scene)
+    items = result.get("items") or []
+    text = rules.extract_opportunity_text(items, industry, scene)
     if not text:
         return 0, f"{industry}/{scene}：没有返回这一组的市场机会"
+    extra = rules.extract_opportunity_outputs(items, industry, scene)
     filled = 0
     for row in rows:
         if row.industry_l1.strip() == industry and row.scenario_l1_name.strip() == scene and untouched(row):
             row.market_opportunity = text
+            if extra:
+                merged = dict(getattr(row, "ai_outputs", None) or {})
+                for key, val in extra.items():
+                    if val or key not in merged:
+                        merged[key] = val
+                row.ai_outputs = merged
             row.updated_at = row.tagged_at = utcnow()
             # 有人正在核对页编辑这行（那时市场机会还空着），不加版本号的话他一保存，空值就把这次结果冲掉，
             # 这行从此算人工改过，也不会再补。

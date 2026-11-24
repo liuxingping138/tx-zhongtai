@@ -1,6 +1,6 @@
 import { onBeforeUnmount, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { requestRetag, type AiTaskCode } from '@/api/aiTagging'
+import { requestRetag, type PolicyRetagStep } from '@/api/aiTagging'
 import { ApiRequestError } from '@/api/errors'
 import { triggerJob } from '@/api/scheduler'
 
@@ -9,7 +9,7 @@ import { triggerJob } from '@/api/scheduler'
  * 列表页勾选多条、核对页对当前这条都走这里，结果交给 BatchChoiceDialog 显示（有跳过的逐条说原因）。
  */
 export async function submitRetag(ids: string[], step: string): Promise<{ message: string; skipped: { reason: string; count: number }[] }> {
-  const result = await requestRetag(ids, step as AiTaskCode)
+  const result = await requestRetag(ids, step as PolicyRetagStep)
   if (!result.queued) {
     return { message: '没有可以重新打标的政策', skipped: result.skipped }
   }

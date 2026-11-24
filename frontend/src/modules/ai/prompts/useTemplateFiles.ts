@@ -1,7 +1,7 @@
 import { ref, type Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
-import { deletePromptFile, uploadPromptFile, type PromptFileKind, type PromptTemplate } from '@/api/ai'
+import { deletePromptFile, savePromptTestRows, uploadPromptFile, type PromptFileKind, type PromptTemplate } from '@/api/ai'
 import { errorMessage } from '@/api/errors'
 import { downloadPromptFile } from '../shared/downloads'
 
@@ -102,7 +102,21 @@ export function useTemplateFiles(options: Options) {
     }
   }
 
-  return { busy, accept: ACCEPT, bind, ensure, pick, received, remove, download }
+  /** 从数据库取来的样本写进模板测试 Excel，同样走 inTurn 串行队列并置 busy，避免与保存/上传/删除并发冲突。 */
+  async function saveRows(body: { file_name: string; headers: string[]; rows: string[][] }): Promise<PromptTemplate> {
+    const template = options.template.value
+    if (!template) throw new Error('模板尚未创建')
+    busy.value = 'excel'
+    try {
+      const updated = await queued(() => savePromptTestRows(template.id, body))
+      options.changed(updated)
+      return updated
+    } finally {
+      busy.value = null
+    }
+  }
+
+  return { busy, accept: ACCEPT, bind, ensure, pick, received, remove, download, saveRows }
 }
 
 export type TemplateFiles = ReturnType<typeof useTemplateFiles>

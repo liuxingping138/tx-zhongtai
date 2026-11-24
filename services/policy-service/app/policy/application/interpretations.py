@@ -159,7 +159,10 @@ async def _active_interpret_ai_fields() -> list[str]:
         items = await internal_clients.ai("GET", "/internal/v1/online-templates", params={"category": "policy"})
         for item in items or []:
             item_fields = [str(f).strip() for f in (item.get("output_fields") or []) if str(f).strip()]
-            if set(item_fields) & {"一级行业", "行业", "一级场景", "场景"}:
+            names = set(item_fields)
+            is_interpret = bool(names & {"一级行业", "行业"}) and bool(names & {"一级场景", "一级场景名称", "场景"})
+            is_opportunity = bool(names & {"市场机会", "政策市场机会"})
+            if is_interpret or is_opportunity:
                 fields.extend(name for name in item_fields if name not in KNOWN_INTERPRET_KEYS and name not in fields)
     except (ApiError, DependencyUnavailableError):
         logger.warning("AI 模板服务暂时取不到，解读表暂不附加动态模板字段")

@@ -752,3 +752,37 @@ async def test_content_audit_names_the_record(monkeypatch):
     assert sent["module_code"] == "tender.winbid"
     assert sent["action_code"] == "read"
     assert sent["target_id"] == "42"
+
+
+async def test_view_content_records_resolved_project_status_on_fallback_and_all(monkeypatch):
+    recorded: list[str] = []
+
+    async def capture_audit(*, project_status: str, **_kwargs):
+        recorded.append(project_status)
+
+    monkeypatch.setattr(service, "emit_content_audit", capture_audit)
+    # 请求 status="0" 未命中，回退到 status="1"（交付表）命中后，审计必须记真实状态 "1"
+    fallback_reader = Reader(
+        [
+            [],
+            [{"id": 20, "project_content_id": "a" * 32, "collect_date": "wrong", "project_status": "1"}],
+            [{"project_content_id": "a" * 32, "collect_date": "2026-11-12"}],
+            [{"html": "<p>回退正文</p>"}],
+        ]
+    )
+    bind_reader(monkeypatch, service, fallback_reader)
+    body = await service.view_content("winbid", "0", 20, actor=Actor(id="u1", name="测试"))
+    assert body == {"html": "<p>回退正文</p>"}
+
+    # 请求 status="all" 在总表里读到 project_status="1" 的记录：按交付记录反查原始采集日并记状态 "1"
+    all_reader = Reader(
+        [
+            [{"id": 21, "project_content_id": "b" * 32, "collect_date": "wrong", "project_status": "1"}],
+            [{"project_content_id": "b" * 32, "collect_date": "2026-11-10"}],
+            [{"html": "<p>总表交付正文</p>"}],
+        ]
+    )
+    bind_reader(monkeypatch, service, all_reader)
+    body_all = await service.view_content("winbid", "all", 21, actor=Actor(id="u1", name="测试"))
+    assert body_all == {"html": "<p>总表交付正文</p>"}
+    assert recorded == ["1", "1"]

@@ -13,20 +13,21 @@ from typing import Any
 import anyio
 from platform_common.actors import Actor
 from platform_common.clock import format_beijing, utcnow
+from platform_common.errors import ApiError, ErrorCode
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.asking import resolve_model
 from app.application.audit_emit import enqueue_event
 from app.application.batch_output import append_log, copy_answers
-from app.application.batch_runs import require, to_dict
-from app.application.batch_start import ensure_idle, invalid
-from app.application.prompts import require_editable as require_editable_prompt
+from app.application.batch_runs import reconcile_stale, require_editable, to_dict
+from app.application.batch_start import invalid
 from app.application.sheets import has_run_input, run_input_head
 from app.core import storage
 from app.domain.categories import CategoryAccess
 from app.domain.models import ACTIVE_STATUSES, RUN_QUEUED, RUN_SOURCE_MANUAL, BatchRun, new_id
 from app.domain.templating import build_myid, split_fields
 from app.repositories import batch_runs as repo
+from app.repositories import prompts as prompt_repo
 
 FROZEN_MODEL = "它是这个任务发起时用的模型，请重新上传数据发起"
 
@@ -51,17 +52,30 @@ def _copy_inputs(source: BatchRun, run_id: str) -> int:
     return copied
 
 
+async def _ensure_prompt_idle(session: AsyncSession, prompt_id: str) -> None:
+    """若原模板仍在，先加行锁与发起/重跑串行互斥；模板已删或改过类型也不阻断已冻结的任务跑全部。"""
+
+    if storage.ID_PATTERN.fullmatch(prompt_id):
+        await prompt_repo.get(session, prompt_id, lock=True)
+    running = await repo.active_for_prompt(session, prompt_id)
+    if running is not None:
+        raise ApiError(
+            f"这个模板已有任务在运行（{running.done_count}/{running.total_count or '?'} 条），请等它结束或先停止",
+            code=ErrorCode.VERSION_CONFLICT,
+            http_status=409,
+        )
+
+
 async def run_all(session: AsyncSession, actor: Actor, access: CategoryAccess, run_id: str) -> dict[str, Any]:
-    source = await require(session, run_id)
+    await reconcile_stale(session)
+    source = await require_editable(session, access, run_id, lock=True)
     if source.source != RUN_SOURCE_MANUAL or source.row_limit <= 0:
         raise invalid("只有页面发起、只跑了前几行的任务能用同一份数据跑全部")
     if source.status in ACTIVE_STATUSES:
         raise invalid("这次还没跑完，等它结束再跑全部")
     if not await anyio.to_thread.run_sync(has_run_input, storage.run_dir(source.id)):
         raise invalid("这个任务没有保存数据文件（旧系统迁来的），请重新上传数据发起")
-    template = await require_editable_prompt(session, access, source.prompt_id, lock=True)
-    access.require_edit(source.prompt_category)
-    await ensure_idle(session, template)
+    await _ensure_prompt_idle(session, source.prompt_id)
     model = await resolve_model(session, source.model_id, frozen=FROZEN_MODEL)
     _, rows = await anyio.to_thread.run_sync(run_input_head, storage.run_dir(source.id))
     run = BatchRun(

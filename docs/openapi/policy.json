@@ -4829,9 +4829,7 @@
             "enum": [
               "type",
               "interpret",
-              "opportunity",
-              "scenario",
-              "enrich"
+              "opportunity"
             ],
             "title": "Step"
           }

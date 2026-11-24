@@ -5,10 +5,18 @@ import { ElMessage } from 'element-plus'
 import { savePromptTestRows, type PromptTemplate } from '@/api/ai'
 import { getTaggingSamples, type AiTaskCode, type ContractTask } from '@/api/aiTagging'
 import { errorMessage } from '@/api/errors'
+import CodebookFilterSelect from '../shared/CodebookFilterSelect.vue'
 import { guessTask } from './taskFit'
 
 /** 从数据库取测试数据：和正式打标交给模板的一模一样，存成模板的测试 Excel（替换原来的）。 */
-const props = defineProps<{ template: PromptTemplate; tasks: ContractTask[]; provinces?: string[]; industries?: string[] }>()
+const props = defineProps<{
+  template: PromptTemplate
+  fields?: string[]
+  tasks: ContractTask[]
+  provinces?: string[]
+  industries?: string[]
+  saveRows?: (body: { file_name: string; headers: string[]; rows: string[][] }) => Promise<PromptTemplate>
+}>()
 const emit = defineEmits<{ done: [template: PromptTemplate] }>()
 const open = defineModel<boolean>({ required: true })
 
@@ -33,11 +41,16 @@ const showKeyword = computed(() => ['interpret', 'opportunity'].includes(task.va
 
 watch(open, visible => {
   if (!visible) return
-  task.value = guessTask(props.tasks, props.template.fields)
+  task.value = guessTask(props.tasks, props.fields ?? props.template.fields)
   day.value = yesterday()
   province.value = ''
   keyword.value = ''
   industryL1.value = ''
+})
+watch(task, next => {
+  if (!showProvince.value) province.value = ''
+  if (!showKeyword.value) keyword.value = ''
+  if (next !== 'opportunity') industryL1.value = ''
 })
 
 async function confirm(): Promise<void> {
@@ -48,7 +61,8 @@ async function confirm(): Promise<void> {
       keyword: keyword.value,
       industry_l1: industryL1.value,
     })
-    const saved = await savePromptTestRows(props.template.id, { file_name: sample.file_name, headers: sample.headers, rows: sample.rows })
+    const payload = { file_name: sample.file_name, headers: sample.headers, rows: sample.rows }
+    const saved = props.saveRows ? await props.saveRows(payload) : await savePromptTestRows(props.template.id, payload)
     ElMessage.success(`已取${sample.note}，测试数据已换成它`)
     open.value = false
     emit('done', saved)
@@ -112,41 +126,21 @@ async function confirm(): Promise<void> {
           v-if="showProvince"
           label="省份（可选）"
         >
-          <el-select
+          <CodebookFilterSelect
             v-model="province"
-            filterable
-            clearable
-            allow-create
-            default-first-option
+            :options="provinces"
             placeholder="搜索或选择省份"
-          >
-            <el-option
-              v-for="name in provinces ?? []"
-              :key="name"
-              :label="name"
-              :value="name"
-            />
-          </el-select>
+          />
         </el-form-item>
         <el-form-item
           v-if="task === 'opportunity'"
           label="一级行业（可选）"
         >
-          <el-select
+          <CodebookFilterSelect
             v-model="industryL1"
-            filterable
-            clearable
-            allow-create
-            default-first-option
+            :options="industries"
             placeholder="搜索或选择一级行业"
-          >
-            <el-option
-              v-for="name in industries ?? []"
-              :key="name"
-              :label="name"
-              :value="name"
-            />
-          </el-select>
+          />
         </el-form-item>
         <el-form-item
           v-if="showKeyword"

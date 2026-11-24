@@ -52,6 +52,7 @@ export function useTaskFit(form: Draft) {
     tasks: sampleTasks.value,
     provinces: provinces.value,
     industries: industries.value,
+    draftFields: splitFields(form.output_fields),
   }))
   /** 哪些定时任务在用这个模板：只有政策类会被定时任务选用；政策类但约定没取到（没权限、服务暂时不可用）时是 null，说不清就不乱说。 */
   function usedBy(promptId: string): string[] | null {

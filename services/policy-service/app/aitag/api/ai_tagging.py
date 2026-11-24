@@ -27,13 +27,14 @@ from app.core.database import get_db_session
 router = APIRouter(prefix="/api/v1/policy/ai-tagging", tags=["政策AI打标"])
 RESOURCE = "system.scheduler"
 Task = Literal["type", "interpret", "opportunity", "scenario", "enrich"]
+RetagStep = Literal["type", "interpret", "opportunity"]
 
 
 class RetagBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
-    step: Task
+    step: RetagStep
 
 
 class TaskBody(BaseModel):

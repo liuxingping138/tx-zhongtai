@@ -392,3 +392,41 @@ async def test_one_batch_asks_about_batch_size_times_groups_per_policy_without_s
     config.batch_size = 2
     await interpreting.opportunity_step(uuid.uuid4(), config, Spend(limit=Decimal(10), before=Decimal(0)))  # type: ignore[arg-type]
     assert batches[-1] == ["智慧校园", "车路云"] and c2.opportunity_at and c3.opportunity_at
+
+
+async def test_opportunities_merge_dynamic_ai_outputs_without_losing_interpret_fields(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """市场机会模板输出的扩展字段写进 ai_outputs，并保留政策解读阶段已写入的扩展字段，忽略已知列与行业场景列。"""
+
+    row = _scene_row("党政行业", "数字政府")
+    row.ai_outputs = {"核心政策条款": "给予算力券支持"}
+    world.tags, world.rows = [_tag("c1")], {"c1": [row]}
+    _scripted_ask(
+        monkeypatch,
+        {
+            "数字政府": {
+                "items": [
+                    {
+                        "一级行业": "党政行业",
+                        "一级场景": "数字政府",
+                        "行业场景": "党政行业/数字政府",
+                        "市场机会": "政务云扩容",
+                        "核心政策条款": "无",
+                        "商机优先级": "高",
+                        "推进建议": "对接大数据局",
+                        "预算规模": "-",
+                    }
+                ],
+                "error": "",
+            }
+        },
+    )
+    await interpreting.opportunity_step(uuid.uuid4(), CONFIG, Spend(limit=Decimal(10), before=Decimal(0)))  # type: ignore[arg-type]
+    assert row.market_opportunity == "政务云扩容"
+    assert row.ai_outputs == {
+        "核心政策条款": "给予算力券支持",
+        "商机优先级": "高",
+        "推进建议": "对接大数据局",
+        "预算规模": "",
+    }

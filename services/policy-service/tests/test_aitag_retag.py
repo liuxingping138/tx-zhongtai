@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock
 import pytest
 from platform_common.errors import ApiError, NotFoundError
 
+from app.aitag.api.ai_tagging import RetagBody
 from app.aitag.application import retag
 from app.aitag.domain.rules import drop_notes
 from app.aitag.repositories import source
@@ -79,6 +80,15 @@ async def test_type_and_opportunity_retags(tags: dict[uuid.UUID, Any]) -> None:
     assert typed.opportunity_at is None and typed.interpreted_at == EARLIER
     with pytest.raises(ApiError, match="不认识的打标步骤"):
         await retag.request(None, ACTOR, [typed.id], "nope")  # type: ignore[arg-type]
+    # 新增场景找相似、补描述不是单条政策的重打步骤：必须报 422 而非 KeyError，且不误清 opportunity_at。
+    typed.opportunity_at = EARLIER
+    version_before = typed.version
+    for non_policy_step in ("scenario", "enrich"):
+        with pytest.raises(ApiError, match="不认识的打标步骤"):
+            await retag.request(None, ACTOR, [typed.id], non_policy_step)  # type: ignore[arg-type]
+        with pytest.raises(ValueError):
+            RetagBody(ids=[typed.id], step=non_policy_step)  # type: ignore[arg-type]
+    assert typed.opportunity_at == EARLIER and typed.version == version_before
 
 
 async def test_reasking_opportunities_clears_them_on_untouched_rows_only(

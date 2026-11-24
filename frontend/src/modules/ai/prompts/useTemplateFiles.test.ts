@@ -5,7 +5,7 @@ import type { PromptTemplate } from '@/api/ai'
 
 const message = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }))
 const confirm = vi.hoisted(() => vi.fn<() => Promise<unknown>>())
-const api = vi.hoisted(() => ({ uploadPromptFile: vi.fn(), deletePromptFile: vi.fn() }))
+const api = vi.hoisted(() => ({ uploadPromptFile: vi.fn(), deletePromptFile: vi.fn(), savePromptTestRows: vi.fn() }))
 const download = vi.hoisted(() => vi.fn())
 vi.mock('element-plus', () => ({ ElMessage: message, ElMessageBox: { confirm } }))
 vi.mock('@/api/ai', () => api)
@@ -122,6 +122,28 @@ describe('模板附件：新模板上传时顺便保存', () => {
     expect(message.error).toHaveBeenCalledWith('下载失败，请重试')
     await setup().files.download('excel')
     expect(download).toHaveBeenCalledTimes(3)
+  })
+
+  it('saveRows 走 inTurn 串行队列并更新模板，避免与保存并发撞版本号', async () => {
+    const order: string[] = []
+    const inTurn = async <T>(task: () => Promise<T>): Promise<T> => {
+      order.push('queued')
+      return task()
+    }
+    const current = ref<PromptTemplate | null>(saved)
+    const changed = vi.fn()
+    const files = useTemplateFiles({ template: current, canCreate: () => true, create: () => Promise.resolve(saved), changed, inTurn })
+    const updated: PromptTemplate = { ...saved, excel_name: '数据库样本.xlsx', excel_rows: 10, version: 2 }
+    api.savePromptTestRows.mockImplementationOnce(() => {
+      order.push(`saveRows:${files.busy.value}`)
+      return Promise.resolve(updated)
+    })
+    const payload = { file_name: '数据库样本.xlsx', headers: ['源ID'], rows: [['c1']] }
+    expect(await files.saveRows(payload)).toEqual(updated)
+    expect(files.busy.value).toBeNull()
+    expect(order).toEqual(['queued', 'saveRows:excel'])
+    expect(api.savePromptTestRows).toHaveBeenCalledWith('t1', payload)
+    expect(changed).toHaveBeenCalledWith(updated)
   })
 })
 

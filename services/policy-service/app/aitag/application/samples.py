@@ -80,9 +80,10 @@ class SampleFilter:
     keyword: str = ""
     industry_l1: str = ""
 
-    @property
-    def active(self) -> bool:
-        return bool(self.province.strip() or self.keyword.strip() or self.industry_l1.strip())
+    def active_for(self, task: str) -> bool:
+        if self.province.strip() or self.keyword.strip():
+            return True
+        return task == "opportunity" and bool(self.industry_l1.strip())
 
 
 async def contract(session: AsyncSession) -> dict[str, Any]:
@@ -142,13 +143,14 @@ def _sample_pairs(rows: list[Any], industry: str) -> list[dict[str, str]]:
     先按一级行业筛、再挑没人改过的：反过来的话，这个行业的行都被人改过、别的行业还有 AI 行时，
     这条政策（仓储正是因为它有这个行业的行才取出来的）一组都拿不到。"""
 
-    matched = [row for row in rows if not industry or (row.industry_l1 or "").strip() == industry]
+    named = [row for row in rows if (row.industry_l1 or "").strip() and (row.scenario_l1_name or "").strip()]
+    matched = [row for row in named if not industry or (row.industry_l1 or "").strip() == industry]
     picked = [row for row in matched if untouched(row)] or matched
     return [{"industry_l1": row.industry_l1, "scenario_l1_name": row.scenario_l1_name} for row in picked]
 
 
 def _no_tags(task: str, flt: SampleFilter) -> ApiError:
-    if flt.active:
+    if flt.active_for(task):
         return _empty("按当前筛选条件没有找到匹配的政策，请放宽条件重试")
     if task == "interpret":
         return _empty("还没有被判为「需要解读」的政策：请先在任务调度跑一批政策类型判断，或先上传 Excel 测试")
