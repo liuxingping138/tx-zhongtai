@@ -8,7 +8,7 @@ import { errorMessage } from '@/api/errors'
 import { guessTask } from './taskFit'
 
 /** 从数据库取测试数据：和正式打标交给模板的一模一样，存成模板的测试 Excel（替换原来的）。 */
-const props = defineProps<{ template: PromptTemplate; tasks: ContractTask[] }>()
+const props = defineProps<{ template: PromptTemplate; tasks: ContractTask[]; provinces?: string[]; industries?: string[] }>()
 const emit = defineEmits<{ done: [template: PromptTemplate] }>()
 const open = defineModel<boolean>({ required: true })
 
@@ -112,21 +112,41 @@ async function confirm(): Promise<void> {
           v-if="showProvince"
           label="省份（可选）"
         >
-          <el-input
+          <el-select
             v-model="province"
-            placeholder="如：广东省，留空不限"
+            filterable
             clearable
-          />
+            allow-create
+            default-first-option
+            placeholder="搜索或选择省份"
+          >
+            <el-option
+              v-for="name in provinces ?? []"
+              :key="name"
+              :label="name"
+              :value="name"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item
           v-if="task === 'opportunity'"
           label="一级行业（可选）"
         >
-          <el-input
+          <el-select
             v-model="industryL1"
-            placeholder="如：党政行业，留空不限"
+            filterable
             clearable
-          />
+            allow-create
+            default-first-option
+            placeholder="搜索或选择一级行业"
+          >
+            <el-option
+              v-for="name in industries ?? []"
+              :key="name"
+              :label="name"
+              :value="name"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item
           v-if="showKeyword"
@@ -164,6 +184,6 @@ async function confirm(): Promise<void> {
 <style scoped>
 .sample__hint { width: 100%; margin: 4px 0 0; color: var(--zt-ink-500); font-size: 12px; line-height: 1.6; }
 .sample__row { display: flex; flex-wrap: wrap; gap: 0 16px; }
-.sample__row :deep(.el-date-editor), .sample__row :deep(.el-input-number), .sample__row :deep(.el-input) { width: 180px; }
+.sample__row :deep(.el-date-editor), .sample__row :deep(.el-input-number), .sample__row :deep(.el-input), .sample__row :deep(.el-select) { width: 180px; }
 .sample__note { margin: 0; padding: 8px 12px; border-radius: 4px; background: var(--zt-soft); color: var(--zt-ink-700); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
 </style>

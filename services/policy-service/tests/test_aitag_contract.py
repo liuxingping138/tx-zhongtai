@@ -121,8 +121,14 @@ async def test_opportunity_samples_carry_the_interpreted_scenes(monkeypatch: pyt
     async def configured(*_: Any) -> dict[str, Any]:
         return {"interpret": SimpleNamespace(prompt_id="p-interpret")}
 
+    async def fake_l1() -> tuple[list[str], list[str]]:
+        return ["党政行业", "教育行业"], ["数字政府"]
+
     monkeypatch.setattr(samples.repo, "tasks", configured)
-    tasks = (await samples.contract(None))["tasks"]  # type: ignore[arg-type]
+    monkeypatch.setattr(samples.internal_clients, "scenario_l1_names", fake_l1)
+    payload = await samples.contract(None)  # type: ignore[arg-type]
+    tasks = payload["tasks"]
+    assert "广东省" in payload["provinces"] and payload["industries"] == ["党政行业", "教育行业"]
     assert [task["code"] for task in tasks] == ["type", "interpret", "opportunity", "scenario", "enrich"]
     assert [task["prompt_id"] for task in tasks] == ["", "p-interpret", "", "", ""]
     assert ["二级行业"] in tasks[1]["optional_fields"] and tasks[0]["optional_fields"] == []

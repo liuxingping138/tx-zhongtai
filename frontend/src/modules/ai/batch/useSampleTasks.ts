@@ -8,17 +8,22 @@ import { useAuthStore } from '@/stores/auth'
 export function useSampleTasks() {
   const auth = useAuthStore()
   const tasks = ref<ContractTask[]>([])
+  const provinces = ref<string[]>([])
+  const industries = ref<string[]>([])
   let loaded = false
 
   async function ensure(): Promise<void> {
     if (loaded || !auth.canRead('policy.base_tags')) return
     loaded = true
     try {
-      tasks.value = (await getTaggingContract()).tasks
+      const data = await getTaggingContract()
+      tasks.value = data.tasks
+      provinces.value = data.provinces ?? []
+      industries.value = data.industries ?? []
     } catch {
       loaded = false
     }
   }
 
-  return { tasks, ensure }
+  return { tasks, provinces, industries, ensure }
 }

@@ -1,6 +1,6 @@
 import { computed, ref, type Ref } from 'vue'
 
-import { getTaggingContract, type ContractTask } from '@/api/aiTagging'
+import { getTaggingContract, type ContractTask, type SampleOptions } from '@/api/aiTagging'
 import { useAuthStore } from '@/stores/auth'
 import { splitFields } from '../shared/aiText'
 import { usedVariables } from './promptVariables'
@@ -20,13 +20,18 @@ interface Draft {
 export function useTaskFit(form: Draft) {
   const auth = useAuthStore()
   const tasks: Ref<ContractTask[]> = ref([])
+  const provinces: Ref<string[]> = ref([])
+  const industries: Ref<string[]> = ref([])
   let loaded = false
 
   async function load(): Promise<void> {
     if (loaded || !auth.canRead('policy.base_tags')) return
     loaded = true
     try {
-      tasks.value = (await getTaggingContract()).tasks
+      const data = await getTaggingContract()
+      tasks.value = data.tasks
+      provinces.value = data.provinces ?? []
+      industries.value = data.industries ?? []
     } catch {
       loaded = false // 政策服务暂时不可用：这一块先不显示，下次切到政策类模板再试
     }
@@ -43,6 +48,11 @@ export function useTaskFit(form: Draft) {
     return fitResults(tasks.value, variables, fields, Boolean(form.code_table))
   })
   const sampleTasks = computed(() => (isPolicy.value ? tasks.value : []))
+  const sampleOptions = computed<SampleOptions>(() => ({
+    tasks: sampleTasks.value,
+    provinces: provinces.value,
+    industries: industries.value,
+  }))
   /** 哪些定时任务在用这个模板：只有政策类会被定时任务选用；政策类但约定没取到（没权限、服务暂时不可用）时是 null，说不清就不乱说。 */
   function usedBy(promptId: string): string[] | null {
     if (!isPolicy.value) return []
@@ -50,5 +60,5 @@ export function useTaskFit(form: Draft) {
     return tasks.value.filter(task => promptId && task.prompt_id === promptId).map(task => task.name)
   }
 
-  return { load, visible, results, sampleTasks, usedBy }
+  return { load, visible, results, sampleTasks, sampleOptions, usedBy }
 }

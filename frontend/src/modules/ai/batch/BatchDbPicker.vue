@@ -16,6 +16,8 @@ const props = defineProps<{
   template: PromptTemplate
   version: RunVersion
   tasks: ContractTask[]
+  provinces?: string[]
+  industries?: string[]
   disabled: boolean
 }>()
 const emit = defineEmits<{
@@ -132,23 +134,43 @@ async function fetchAndPreview(): Promise<void> {
       </label>
       <label v-if="showProvince">
         <span>省份（可选）</span>
-        <el-input
+        <el-select
           v-model="province"
           size="small"
-          placeholder="如：广东省"
+          filterable
           clearable
+          allow-create
+          default-first-option
+          placeholder="搜索或选择省份"
           :disabled="disabled || busy"
-        />
+        >
+          <el-option
+            v-for="name in provinces ?? []"
+            :key="name"
+            :label="name"
+            :value="name"
+          />
+        </el-select>
       </label>
       <label v-if="task === 'opportunity'">
         <span>一级行业（可选）</span>
-        <el-input
+        <el-select
           v-model="industryL1"
           size="small"
-          placeholder="如：党政行业"
+          filterable
           clearable
+          allow-create
+          default-first-option
+          placeholder="搜索或选择一级行业"
           :disabled="disabled || busy"
-        />
+        >
+          <el-option
+            v-for="name in industries ?? []"
+            :key="name"
+            :label="name"
+            :value="name"
+          />
+        </el-select>
       </label>
       <label v-if="showKeyword">
         <span>政策关键词（可选）</span>
@@ -183,7 +205,7 @@ async function fetchAndPreview(): Promise<void> {
 .db-pick__hint { margin: 0; color: var(--zt-ink-700); font-size: 12px; line-height: 1.5; }
 .db-pick__fields { display: flex; flex-wrap: wrap; gap: 8px 12px; }
 .db-pick__fields label { display: flex; flex-direction: column; gap: 4px; color: var(--zt-ink-700); font-size: 12px; }
-.db-pick__fields :deep(.el-date-editor), .db-pick__fields :deep(.el-input-number), .db-pick__fields :deep(.el-input) { width: 150px; }
+.db-pick__fields :deep(.el-date-editor), .db-pick__fields :deep(.el-input-number), .db-pick__fields :deep(.el-input), .db-pick__fields :deep(.el-select) { width: 150px; }
 .db-pick__bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
 .db-pick__cols { flex: 1 1 200px; color: var(--zt-ink-500); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 </style>

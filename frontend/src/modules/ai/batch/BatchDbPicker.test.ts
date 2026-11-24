@@ -19,7 +19,7 @@ const SAMPLE = { file_name: '数据库样本.xlsx', headers: ['一级行业'], r
 
 // 只留按钮能点：Element Plus 的输入控件这里不关心。
 const ElButton: Component = { emits: ['click'], setup: (_, { slots, emit }) => () => h('button', { onClick: () => emit('click') }, slots.default?.()) }
-const stubs = { 'el-button': ElButton, 'el-radio-group': true, 'el-radio-button': true, 'el-date-picker': true, 'el-input-number': true, 'el-input': true }
+const stubs = { 'el-button': ElButton, 'el-radio-group': true, 'el-radio-button': true, 'el-date-picker': true, 'el-input-number': true, 'el-input': true, 'el-select': true, 'el-option': true }
 
 function mountPicker() {
   return mount(BatchDbPicker, {

@@ -327,7 +327,7 @@ function onStep(key: StepKey): void {
             :files="files"
             :can-edit="canEdit"
             :can-export="canExport"
-            :sample-tasks="taskFit.sampleTasks.value"
+            :sample-options="taskFit.sampleOptions.value"
             :show-fit="taskFit.visible.value"
             :fit="taskFit.results.value"
             @files-changed="replace"

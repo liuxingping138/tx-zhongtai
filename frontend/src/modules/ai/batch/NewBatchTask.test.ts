@@ -15,7 +15,12 @@ vi.mock('@/api/ai', () => ({ previewBatchInput: vi.fn(), startBatchRun: api.uplo
 vi.mock('@/api/aiSamples', () => ({ startBatchRunFromRows: api.fromRows }))
 vi.mock('@/api/aiTagging', () => ({ getTaggingSamples: vi.fn() }))
 vi.mock('./useSampleTasks', () => ({
-  useSampleTasks: () => ({ tasks: ref([{ code: 'opportunity', name: '政策市场机会', columns: [] }]), ensure: () => Promise.resolve() }),
+  useSampleTasks: () => ({
+    tasks: ref([{ code: 'opportunity', name: '政策市场机会', columns: [] }]),
+    provinces: ref(['广东省']),
+    industries: ref(['党政行业']),
+    ensure: () => Promise.resolve(),
+  }),
 }))
 
 // 抽屉要把正文和底部按钮都画出来；其余子组件用自动替身：只看父组件怎么收结果、什么时候锁住选择。

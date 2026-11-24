@@ -27,8 +27,44 @@ from app.aitag.domain.contract import COLUMNS, OPTIONAL_FIELDS, REQUIRED_FIELDS
 from app.aitag.domain.tasks import TASKS
 from app.aitag.repositories import source
 from app.aitag.repositories import tagging as repo
+from app.common import internal_clients
 
 LIMIT_RANGE = (1, 500)
+# 省市区编码表里的标准省级名称（31 个省级行政区 + 全国），与源库 prov_name、政策基础标签 province_name 口径一致。
+STANDARD_PROVINCES: tuple[str, ...] = (
+    "全国",
+    "北京市",
+    "天津市",
+    "河北省",
+    "山西省",
+    "内蒙古自治区",
+    "辽宁省",
+    "吉林省",
+    "黑龙江省",
+    "上海市",
+    "江苏省",
+    "浙江省",
+    "安徽省",
+    "福建省",
+    "江西省",
+    "山东省",
+    "河南省",
+    "湖北省",
+    "湖南省",
+    "广东省",
+    "广西壮族自治区",
+    "海南省",
+    "重庆市",
+    "四川省",
+    "贵州省",
+    "云南省",
+    "西藏自治区",
+    "陕西省",
+    "甘肃省",
+    "青海省",
+    "宁夏回族自治区",
+    "新疆维吾尔自治区",
+)
 # 一次返回的总字数上限。前端拿到后原样发给 AI 服务（UTF-8 一个汉字 3 字节），要远低于网关 20MB 的请求上限；
 # AI 服务那边按同一个数拦（batch_start.ROWS_CHARS_MAX）。
 CHARS_BUDGET = 5_000_000
@@ -50,9 +86,13 @@ class SampleFilter:
 
 
 async def contract(session: AsyncSession) -> dict[str, Any]:
-    """三个任务各给模板哪些列、要模板输出哪些字段，以及现在用的是哪个模板（模板页据此说清上线影响谁）。"""
+    """打标任务各给模板哪些列、要输出哪些字段、现在用的哪个模板，以及抽样筛选的标准省份与一级行业候选。"""
 
     configured = await repo.tasks(session)
+    try:
+        industries, _ = await internal_clients.scenario_l1_names()
+    except (ApiError, DependencyUnavailableError):
+        industries = []
     return {
         "tasks": [
             {
@@ -64,7 +104,9 @@ async def contract(session: AsyncSession) -> dict[str, Any]:
                 "prompt_id": task.prompt_id if (task := configured.get(code)) else "",
             }
             for code, name in TASKS.items()
-        ]
+        ],
+        "provinces": list(STANDARD_PROVINCES),
+        "industries": industries,
     }
 
 

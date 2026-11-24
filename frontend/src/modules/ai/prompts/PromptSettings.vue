@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 
 import type { AiModel, PromptTemplate, SystemCodeTable, TemplateCategory } from '@/api/ai'
-import type { ContractTask } from '@/api/aiTagging'
+import type { SampleOptions } from '@/api/aiTagging'
 import ModelPicker from '../shared/ModelPicker.vue'
 import { CODE_TABLE_FIELD } from '../shared/aiText'
 import CodePreviewDialog from './CodePreviewDialog.vue'
@@ -20,7 +20,7 @@ const props = defineProps<{
   files: TemplateFiles
   canEdit: boolean
   canExport: boolean
-  sampleTasks: ContractTask[]
+  sampleOptions: SampleOptions
   showFit: boolean
   fit: TaskFitResult[]
 }>()
@@ -184,7 +184,7 @@ async function setCodeMode(next: CodeMode): Promise<void> {
         :files="files"
         :can-edit="canEdit"
         :can-export="canExport"
-        :sample-tasks="sampleTasks"
+        :sample-options="sampleOptions"
         @changed="item => emit('files-changed', item)"
       />
     </div>

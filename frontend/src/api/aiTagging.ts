@@ -90,8 +90,20 @@ export interface RetagResult {
   queued: number
   skipped: { reason: string; count: number }[]
 }
+export interface TaggingContract {
+  tasks: ContractTask[]
+  provinces?: string[]
+  industries?: string[]
+}
+
+export interface SampleOptions {
+  tasks: ContractTask[]
+  provinces: string[]
+  industries: string[]
+}
+
 export const requestRetag = (ids: string[], step: AiTaskCode) => request<RetagResult>(http.post(`${base}/retag`, { ids, step }))
-export const getTaggingContract = () => request<{ tasks: ContractTask[] }>(http.get(`${base}/contract`))
+export const getTaggingContract = () => request<TaggingContract>(http.get(`${base}/contract`))
 export interface SampleExtraFilters {
   province?: string
   keyword?: string

@@ -2,19 +2,19 @@
 import { computed, ref } from 'vue'
 
 import type { PromptFileKind, PromptTemplate } from '@/api/ai'
-import type { ContractTask } from '@/api/aiTagging'
+import type { SampleOptions } from '@/api/aiTagging'
 import SampleDialog from './SampleDialog.vue'
 import type { TemplateFiles } from './useTemplateFiles'
 
 /** 模板的一个附件：测试样本（.xlsx）或上传的码表（.txt）。上传、删除、下载都交给编辑页的 files；新模板上传时顺便保存。
- * sampleTasks：政策类模板能从数据库取测试样本（和正式打标的输入一致），空数组就不显示这个入口。 */
+ * sampleOptions：政策类模板能从数据库取测试样本（和正式打标的输入一致），tasks 为空就不显示这个入口。 */
 const props = defineProps<{
   template: PromptTemplate | null
   kind: PromptFileKind
   files: TemplateFiles
   canEdit: boolean
   canExport: boolean
-  sampleTasks?: ContractTask[]
+  sampleOptions?: SampleOptions
 }>()
 const emit = defineEmits<{ changed: [template: PromptTemplate] }>()
 const sampling = ref(false)
@@ -47,7 +47,7 @@ async function openSampling(): Promise<void> {
         {{ name ? '重新上传' : kind === 'code' ? '上传码表' : '上传 Excel' }}
       </el-button>
       <el-button
-        v-if="kind === 'excel' && canEdit && sampleTasks?.length"
+        v-if="kind === 'excel' && canEdit && sampleOptions?.tasks.length"
         size="small"
         type="primary"
         plain
@@ -77,7 +77,9 @@ async function openSampling(): Promise<void> {
       v-if="template"
       v-model="sampling"
       :template="template"
-      :tasks="sampleTasks ?? []"
+      :tasks="sampleOptions?.tasks ?? []"
+      :provinces="sampleOptions?.provinces"
+      :industries="sampleOptions?.industries"
       @done="item => emit('changed', item)"
     />
   </div>

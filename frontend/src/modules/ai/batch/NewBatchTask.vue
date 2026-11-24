@@ -31,7 +31,7 @@ const file = ref<File | null>(null)
 const dbPayload = ref<BatchRowsPayload | null>(null)
 const dbNote = ref('')
 const summary = ref<BatchRowsSummary | null>(null)
-const { tasks: sampleTasks, ensure: ensureContract } = useSampleTasks()
+const { tasks: sampleTasks, provinces: sampleProvinces, industries: sampleIndustries, ensure: ensureContract } = useSampleTasks()
 const testRowsMax = computed(() => (summary.value ? Math.max(summary.value.rows - 1, 1) : 100000)) // 输入框按它做 key：Element Plus 只在挂载时写 aria-valuemax
 const previewing = ref(false)
 const downloading = ref(false)
@@ -270,6 +270,8 @@ function close(done: () => void): void {
           :template="template"
           :version="version"
           :tasks="sampleTasks"
+          :provinces="sampleProvinces"
+          :industries="sampleIndustries"
           :disabled="!spec || Boolean(spec.problem) || starting"
           @loaded="onDbLoaded"
           @error="msg => failure = msg"
