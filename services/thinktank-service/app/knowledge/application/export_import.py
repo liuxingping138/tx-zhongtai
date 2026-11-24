@@ -18,7 +18,7 @@ from app.knowledge.application.knowledge import format_size
 from app.knowledge.application.knowledge_write import validate_metadata_values
 from app.knowledge.domain.fields import KNOWLEDGE_EXPORT_COLUMNS, TAG_WRITABLE_FIELDS, UNDEFINED_TAG_COLUMNS
 from app.knowledge.domain.models import KnowledgeFile
-from app.knowledge.domain.scopes import KnowledgeAccess, normalize_file_type_input
+from app.knowledge.domain.scopes import KnowledgeAccess, normalize_tag_values
 from app.knowledge.repositories import knowledge as repo
 
 
@@ -179,9 +179,7 @@ async def _process_tag_row(
     if target is None:
         return "skipped", "未找到对应的知识文件"
 
-    cleaned = {f: row_dict.get(f, "").strip() for f in TAG_WRITABLE_FIELDS if f in row_dict}
-    if "file_type" in cleaned:
-        cleaned["file_type"] = normalize_file_type_input(cleaned["file_type"])
+    cleaned = normalize_tag_values({f: row_dict.get(f, "").strip() for f in TAG_WRITABLE_FIELDS if f in row_dict})
     reasons = validate_metadata_values(cleaned)
     if reasons:
         return "skipped", "；".join(reasons)

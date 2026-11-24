@@ -27,6 +27,7 @@ from app.knowledge.domain.scopes import (
     PRODUCT_TYPES,
     KnowledgeAccess,
     normalize_file_type_input,
+    normalize_tag_values,
     split_multi_tags,
 )
 from app.knowledge.repositories import knowledge as repo
@@ -108,9 +109,7 @@ async def update_metadata(
     await _assert_edit(session, actor, access, row, action="update")
     if data.get("version") != row.version:
         raise VersionConflictError("该资料已被他人更新，请刷新后重试")
-    cleaned = {k: str(v or "").strip() for k, v in data.items() if k in EDITABLE_FIELDS}
-    if "file_type" in cleaned:
-        cleaned["file_type"] = normalize_file_type_input(cleaned["file_type"])
+    cleaned = normalize_tag_values({k: str(v or "").strip() for k, v in data.items() if k in EDITABLE_FIELDS})
     _raise_if_invalid(cleaned)
     if "file_name" in cleaned and not cleaned["file_name"]:
         raise ApiError("资料名称不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
@@ -171,7 +170,7 @@ async def upload_knowledge_file(
             http_status=422,
         )
     cleaned = {k: str(v or "").strip() for k, v in metadata.items() if k in EDITABLE_FIELDS}
-    cleaned["file_type"] = normalize_file_type_input(cleaned.get("file_type"))
+    cleaned = normalize_tag_values({**cleaned, "file_type": cleaned.get("file_type", "")})
     _raise_if_invalid({**cleaned, "file_name": clean_name})
     file_type = cleaned["file_type"]
     industry_type = cleaned.get("industry_type", "")

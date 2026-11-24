@@ -143,6 +143,26 @@ def normalize_file_type_input(raw: str | None) -> str:
     return val
 
 
+# 竖线分隔的多值标签列。
+MULTI_TAG_FIELDS: tuple[str, ...] = ("industry_type", "product_type")
+
+
+def normalize_tag_values(values: dict[str, str]) -> dict[str, str]:
+    """写库前把标签整理成存储口径：文件类型「未定义」存空串；多值标签去掉竖线两边的空格、空段和重复，存成 `a|b`。
+
+    列表、导出的范围和筛选在 SQL 里按 `a|b` 原样比对，单条的权限检查却会拆开、去空格再比：
+    存成 `中小 | 教育` 的话，只有教育范围的人能按 ID 打开它，列表和导出里却看不到。
+    """
+
+    cleaned = dict(values)
+    if "file_type" in cleaned:
+        cleaned["file_type"] = normalize_file_type_input(cleaned["file_type"])
+    for field in MULTI_TAG_FIELDS:
+        if field in cleaned:
+            cleaned[field] = "|".join(dict.fromkeys(split_multi_tags(cleaned[field])))
+    return cleaned
+
+
 @dataclass(frozen=True)
 class KnowledgeAccess:
     """当前用户在文件类型与行业类型上的权限范围。按 IAM 资源档位算出，一次请求内不变。"""

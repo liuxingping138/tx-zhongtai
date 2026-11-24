@@ -15,7 +15,7 @@ dest="${dest:-/data/tx-zhongtai}"
 # 同步到生产目录的必须是提交过的代码：带着没提交、没测过的改动推过去，下一次 up --build 就进了生产，
 # 网关的动态配置（watch: true）更是立刻生效。P6 走 scripts/p6-on-server.sh，同步到单独的目录，允许没提交。
 if [ -z "${ALLOW_DIRTY:-}" ] && [ -n "$(git -C "$root" status --porcelain)" ]; then
-  echo "工作区有没提交的改动，不同步到 $dest。先提交；只想跑 P6 用 scripts/p6-on-server.sh。" >&2
+  echo "工作区有没提交的改动，不同步到 ${dest}。先提交；只想跑 P6 用 scripts/p6-on-server.sh。" >&2
   exit 1
 fi
 

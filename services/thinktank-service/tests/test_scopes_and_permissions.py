@@ -18,6 +18,7 @@ from app.knowledge.domain.scopes import (
     KnowledgeAccess,
     effective_industry_tags,
     normalize_file_type_input,
+    normalize_tag_values,
     split_multi_tags,
 )
 
@@ -29,6 +30,19 @@ def test_tag_helpers() -> None:
     assert effective_industry_tags("党政|教育") == ["党政", "教育"]
     assert normalize_file_type_input("未定义") == ""
     assert normalize_file_type_input(" 产品 ") == "产品"
+
+
+def test_tags_are_stored_in_the_form_sql_scope_matches() -> None:
+    # 列表、导出按 `a|b` 原样比对：存成「中小 | 教育」的话，教育范围的人在列表里看不到它
+    assert normalize_tag_values(
+        {"industry_type": "中小 | 教育|| 中小", "product_type": " 云 |网", "remark": "a | b"}
+    ) == {
+        "industry_type": "中小|教育",
+        "product_type": "云|网",
+        "remark": "a | b",
+    }
+    assert normalize_tag_values({"file_type": "未定义"}) == {"file_type": ""}
+    assert normalize_tag_values({}) == {}
 
 
 def test_access_levels_orthogonal_file_type_and_industry() -> None:
