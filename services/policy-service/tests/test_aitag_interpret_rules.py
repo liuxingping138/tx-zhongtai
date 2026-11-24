@@ -37,36 +37,41 @@ def test_relation_key_uses_names_until_the_scenario_has_a_code() -> None:
     assert rules.relation_key("c1", coded) == "c101010300234569261000TO_G"
 
 
-def test_opportunities_match_by_industry_and_scene_then_fall_back() -> None:
-    rows = [
-        {"industry_l1": "党政行业", "scenario_l1_name": "数字政府"},
-        {"industry_l1": "党政行业", "scenario_l1_name": "智慧城市"},
-        {"industry_l1": "教育行业", "scenario_l1_name": "智慧校园"},
-    ]
-    items = [
-        {"行业": "党政行业", "场景": "数字政府", "市场机会": "机会A"},
-        {"行业": "教育行业", "场景": "不存在的场景", "市场机会": "机会B"},
-        {"行业": "医卫行业", "场景": "智慧医院", "市场机会": "机会C"},
+def test_opportunity_text_only_takes_answers_for_the_asked_group() -> None:
+    def pick(items: list[dict[str, str]]) -> str:
+        return rules.extract_opportunity_text(items, "党政行业", "数字政府")
+
+    # 只回了一段：一次只问一组，就算没标、或名称写法不一样也是这组的。
+    assert pick([{"市场机会": "聚焦数字政府建设"}]) == "聚焦数字政府建设"
+    assert pick([{"行业": "党政", "场景": "数字政府建设", "市场机会": "改写了名称"}]) == "改写了名称"
+    # 好几段：标着这组的优先；空机会忽略。
+    exact = [
+        {"行业": "交通行业", "场景": "车路云", "市场机会": "交通机会"},
+        {"一级行业": "党政行业", "一级场景": "数字政府", "市场机会": "政务机会"},
         {"行业": "党政行业", "场景": "数字政府", "市场机会": "-"},
     ]
-    # 精确对上 -> 行 0；场景对不上退到同一级行业 -> 行 2；行业也对不上的丢掉；空机会忽略。
-    assert rules.match_opportunities(items, rows) == {0: "机会A", 2: "机会B"}
-    # 只给了一段又哪都对不上：整条政策的行都用它。
-    assert rules.match_opportunities([{"行业": "x", "场景": "y", "市场机会": "整体机会"}], rows) == {
-        0: "整体机会",
-        1: "整体机会",
-        2: "整体机会",
-    }
+    assert pick(exact) == "政务机会"
+    # 没标的、只标了对得上的一半也算这组的。
+    assert pick([{"市场机会": "甲"}, {"行业": "党政行业", "市场机会": "乙"}]) == "甲\n\n乙"
+    # 好几段都标着别的行业场景：取不到，不能把别的场景的机会抄到这一行。
+    others = [
+        {"行业": "交通行业", "场景": "车路云", "市场机会": "交通机会"},
+        {"行业": "党政行业", "场景": "城市大脑", "市场机会": "城市机会"},
+    ]
+    assert pick(others) == ""
+    assert pick([]) == "" and pick([{"市场机会": "无"}]) == ""
 
 
-def test_opportunity_prompt_lists_the_interpreted_scenes_once() -> None:
+def test_opportunity_prompt_rows_one_per_interpreted_group() -> None:
     base = {"源ID": "c1", "政策标题": "t"}
     rows = [
         {"industry_l1": "党政行业", "scenario_l1_name": "数字政府"},
         {"industry_l1": "党政行业", "scenario_l1_name": "数字政府"},
         {"industry_l1": "交通行业", "scenario_l1_name": "车路云"},
+        # 行业或场景空着的组不问：问了白花钱，也写不回哪一行。
+        {"industry_l1": "", "scenario_l1_name": "车路云"},
+        {"industry_l1": "教育行业", "scenario_l1_name": " "},
     ]
-    assert rules.opportunity_prompt_row(base, rows)["行业场景"] == "党政行业/数字政府\n交通行业/车路云"
     expanded = rules.opportunity_prompt_rows(base, rows)
     assert [pair for pair, _ in expanded] == [("党政行业", "数字政府"), ("交通行业", "车路云")]
     assert (expanded[0][1]["一级行业"], expanded[0][1]["一级场景"], expanded[0][1]["行业场景"]) == (
@@ -74,20 +79,7 @@ def test_opportunity_prompt_lists_the_interpreted_scenes_once() -> None:
         "数字政府",
         "党政行业/数字政府",
     )
-    assert (
-        rules.extract_opportunity_text([{"市场机会": "聚焦数字政府建设"}], "党政行业", "数字政府") == "聚焦数字政府建设"
-    )
-    assert (
-        rules.extract_opportunity_text(
-            [
-                {"行业": "交通行业", "场景": "车路云", "市场机会": "交通机会"},
-                {"行业": "党政行业", "场景": "数字政府", "市场机会": "政务机会"},
-            ],
-            "党政行业",
-            "数字政府",
-        )
-        == "政务机会"
-    )
+    assert expanded[1][1]["源ID"] == "c1" and expanded[1][1]["政策标题"] == "t"
 
 
 def test_later_steps_reuse_the_first_step_column_names() -> None:

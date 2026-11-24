@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Download } from '@element-plus/icons-vue'
 
-import { type BatchInputSummary, type PromptTemplate, type RunVersion } from '@/api/ai'
-import { previewBatchRows, type BatchRowsPayload } from '@/api/aiSamples'
+import { type PromptTemplate, type RunVersion } from '@/api/ai'
+import { previewBatchRows, type BatchRowsPayload, type BatchRowsSummary } from '@/api/aiSamples'
 import { getTaggingSamples, type AiTaskCode, type ContractTask } from '@/api/aiTagging'
 import { errorMessage } from '@/api/errors'
 import { guessTask } from '../prompts/taskFit'
+
+/** 从政策库取到、检查过的数据，带上是给哪个模板、哪一版检查的：父组件据此丢掉过时的结果。 */
+export interface DbLoaded { payload: BatchRowsPayload; summary: BatchRowsSummary; note: string; templateId: string; version: RunVersion }
 
 /** 批量任务「从政策库取数」面板：按打标步骤和条件拉取 1～500 条并复用预检，结果不写回正式政策表。 */
 const props = defineProps<{
@@ -16,7 +19,7 @@ const props = defineProps<{
   disabled: boolean
 }>()
 const emit = defineEmits<{
-  loaded: [result: { payload: BatchRowsPayload; summary: BatchInputSummary; note: string }]
+  loaded: [result: DbLoaded]
   error: [message: string]
   loading: [busy: boolean]
 }>()
@@ -24,7 +27,7 @@ const emit = defineEmits<{
 const HINTS: Record<AiTaskCode, string> = {
   type: '从外部源库按采集日期拉取政策，与「政策类型判断」定时任务口径一致。',
   interpret: '从「政策基础标签表」拉取含信息化建设类（需要解读）的政策。',
-  opportunity: '从「政策解读列表」按「一级行业 + 一级场景」逐组展开，提供 @【一级行业】、@【一级场景】、@【政策正文】 等列。',
+  opportunity: '从「政策解读列表」按「一级行业 + 一级场景」逐组展开（一组一行），提供 @【一级行业】、@【一级场景】、@【政策正文】 等列。',
   scenario: '从「新增场景审核」拉取待审场景与同行业已有场景。',
   enrich: '从码表拉取待补描述的新增场景。',
 }
@@ -39,6 +42,8 @@ const busy = ref(false)
 const showProvince = computed(() => ['type', 'interpret', 'opportunity'].includes(task.value))
 const showKeyword = computed(() => ['interpret', 'opportunity'].includes(task.value))
 const columns = computed(() => props.tasks.find(item => item.code === task.value)?.columns ?? [])
+// 每次换模板、换版本、面板被卸载都作废在途的请求：慢的旧结果回来时不再交给父组件。
+let token = 0
 
 watch(() => props.template.id, () => {
   task.value = guessTask(props.tasks, props.template.fields)
@@ -47,9 +52,16 @@ watch(() => props.template.id, () => {
   keyword.value = ''
   industryL1.value = ''
 }, { immediate: true })
+watch(() => [props.template.id, props.version], () => {
+  token++
+  busy.value = false
+})
+onBeforeUnmount(() => { token++ })
 
 async function fetchAndPreview(): Promise<void> {
   if (busy.value || props.disabled) return
+  const current = ++token
+  const asked = { templateId: props.template.id, version: props.version }
   busy.value = true
   emit('loading', true)
   emit('error', '')
@@ -59,14 +71,17 @@ async function fetchAndPreview(): Promise<void> {
       keyword: keyword.value,
       industry_l1: industryL1.value,
     })
+    if (current !== token) return
     const payload: BatchRowsPayload = { file_name: sample.file_name, headers: sample.headers, rows: sample.rows }
-    const summary = await previewBatchRows(props.template.id, props.version, payload)
-    emit('loaded', { payload, summary, note: sample.note })
+    const summary = await previewBatchRows(asked.templateId, asked.version, payload)
+    if (current === token) emit('loaded', { payload, summary, note: sample.note, ...asked })
   } catch (error) {
-    emit('error', errorMessage(error, '从政策库拉取数据失败，请调整条件后重试'))
+    if (current === token) emit('error', errorMessage(error, '从政策库拉取数据失败，请调整条件后重试'))
   } finally {
-    busy.value = false
-    emit('loading', false)
+    if (current === token) {
+      busy.value = false
+      emit('loading', false)
+    }
   }
 }
 </script>

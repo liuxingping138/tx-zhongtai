@@ -49,7 +49,11 @@ def tags(monkeypatch: pytest.MonkeyPatch) -> dict[uuid.UUID, Any]:
     async def by_ids(_session: Any, ids: list[uuid.UUID]) -> dict[uuid.UUID, Any]:
         return {item_id: store[item_id] for item_id in ids if item_id in store}
 
+    async def no_rows(_session: Any, _ids: list[str]) -> dict[str, list[Any]]:
+        return {}
+
     monkeypatch.setattr(retag.repo, "base_tags_by_ids", by_ids)
+    monkeypatch.setattr(retag.repo, "ai_interpretations", no_rows)
     monkeypatch.setattr(retag, "enqueue_event", AsyncMock())
     return store
 
@@ -75,6 +79,40 @@ async def test_type_and_opportunity_retags(tags: dict[uuid.UUID, Any]) -> None:
     assert typed.opportunity_at is None and typed.interpreted_at == EARLIER
     with pytest.raises(ApiError, match="不认识的打标步骤"):
         await retag.request(None, ACTOR, [typed.id], "nope")  # type: ignore[arg-type]
+
+
+async def test_reasking_opportunities_clears_them_on_untouched_rows_only(
+    tags: dict[uuid.UUID, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """市场机会那一步只问空着的组：重新补时不清空没人改过的行，就会把这些政策全部跳过。"""
+
+    def row(status: str = "待验证", updated: datetime = EARLIER) -> SimpleNamespace:
+        return SimpleNamespace(
+            data_status=status,
+            tagged_at=EARLIER,
+            updated_at=updated,
+            source_content_id="c1",
+            market_opportunity="旧机会",
+            version=1,
+        )
+
+    ai_row, edited, verified = row(), row(updated=datetime(2026, 10, 23, tzinfo=UTC)), row("人工验证")
+    asked: list[list[str]] = []
+
+    async def grouped(_session: Any, ids: list[str]) -> dict[str, list[Any]]:
+        asked.append(ids)
+        return {"c1": [ai_row, edited, verified]}
+
+    monkeypatch.setattr(retag.repo, "ai_interpretations", grouped)
+    reread, tag = _tag(), _tag()
+    tags.update({reread.id: reread, tag.id: tag})
+    await retag.request(None, ACTOR, [reread.id], "interpret")  # type: ignore[arg-type]
+    assert asked == [] and ai_row.market_opportunity == "旧机会"  # 重新解读会整行重写，不用这里清
+    await retag.request(None, ACTOR, [tag.id], "opportunity")  # type: ignore[arg-type]
+    assert asked == [["c1"]]
+    assert (ai_row.market_opportunity, ai_row.version, ai_row.updated_at) == ("", 2, EARLIER)
+    assert edited.market_opportunity == verified.market_opportunity == "旧机会"
+    assert edited.version == verified.version == 1
 
 
 async def test_asking_to_rejudge_types_clears_the_old_failure_and_keeps_the_place_in_the_queue(

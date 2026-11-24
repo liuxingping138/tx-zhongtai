@@ -141,7 +141,12 @@ def _require_lengths(values: dict[str, str]) -> None:
 def _apply_ai_outputs(row: BaseTag, raw_outputs: Any) -> dict[str, Any]:
     if not isinstance(raw_outputs, dict):
         return {}
-    current_extra = dict(getattr(row, "ai_outputs", None) or {})
+    # 已去掉的旧字段（是否信息化政策、信息化标签）还留在老数据里：改的时候顺手清掉，不再写回。
+    current_extra = {
+        str(k): v
+        for k, v in (getattr(row, "ai_outputs", None) or {}).items()
+        if str(k) not in _IGNORED_AI_OUTPUT_FIELDS
+    }
     extra_changes: dict[str, Any] = {}
     for raw_k, raw_v in raw_outputs.items():
         key = str(raw_k).strip()

@@ -5,7 +5,8 @@ from collections.abc import Collection
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import ColumnElement, ScalarSelect, func, select
+from platform_common.filters import contains_ilike
+from sqlalchemy import ColumnElement, ScalarSelect, func, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
@@ -170,6 +171,25 @@ async def ai_interpretations(session: AsyncSession, source_ids: list[str]) -> di
     return grouped
 
 
+async def interpretations_by_source_ids(
+    session: AsyncSession, source_ids: list[str]
+) -> dict[str, list[Interpretation]]:
+    """只读版的 ai_interpretations：页面取测试数据用，不加行锁。
+    加锁的话人在页面上取 500 条样本，会和正在回填的打标、核对页的编辑互相等锁。"""
+
+    if not source_ids:
+        return {}
+    rows = await session.scalars(
+        select(Interpretation)
+        .where(Interpretation.source_content_id.in_(source_ids))
+        .order_by(Interpretation.created_at, Interpretation.id)
+    )
+    grouped: dict[str, list[Interpretation]] = {}
+    for row in rows:
+        grouped.setdefault(str(row.source_content_id), []).append(row)
+    return grouped
+
+
 async def taken_relation_keys(session: AsyncSession, keys: list[str]) -> set[str]:
     if not keys:
         return set()
@@ -261,6 +281,16 @@ async def pending_counts(session: AsyncSession) -> dict[str, int]:
     return {"type": int(row[0]), "interpret": int(row[1]), "opportunity": int(row[2]), "scenario": int(scenario or 0)}
 
 
+# 取测试数据是人在页面上等，查询最多跑这么久；不沿用连接上给批处理的 5 分钟。
+SAMPLE_STATEMENT_TIMEOUT = "15s"
+
+
+async def limit_sample_queries(session: AsyncSession) -> None:
+    """这个事务里后面的查询最多跑 SAMPLE_STATEMENT_TIMEOUT（SET LOCAL，事务结束就失效，不影响连接池里的连接）。"""
+
+    await session.execute(text(f"SET LOCAL statement_timeout = '{SAMPLE_STATEMENT_TIMEOUT}'"))
+
+
 async def recent_tags(
     session: AsyncSession,
     *,
@@ -270,7 +300,10 @@ async def recent_tags(
     keyword: str | None = None,
     industry_l1: str | None = None,
 ) -> list[BaseTag]:
-    """取测试/验证数据用：最近打标的要解读政策（interpreted=False），或最近解读过的政策（interpreted=True）。"""
+    """取测试/验证数据用：最近打标的要解读政策（interpreted=False），或最近解读过的政策（interpreted=True）。
+
+    省份、一级行业按原值精确比对（各有 B 树索引，和类型判断按源库 prov_name 原样比对一致）；
+    政策名称关键词按包含匹配，百分号、下划线和反斜杠按字面处理（走三元组索引）。"""
 
     condition = (
         BaseTag.interpreted_at.is_not(None)
@@ -278,13 +311,13 @@ async def recent_tags(
         else (BaseTag.need_interpret == "是") & BaseTag.source_content_id.is_not(None)
     )
     if province and province.strip():
-        condition = condition & BaseTag.province_name.ilike(f"%{province.strip()}%")
+        condition = condition & (BaseTag.province_name == province.strip())
     if keyword and keyword.strip():
-        condition = condition & BaseTag.policy_name.ilike(f"%{keyword.strip()}%")
+        condition = condition & contains_ilike(BaseTag.policy_name, keyword.strip())
     if interpreted and industry_l1 and industry_l1.strip():
         matched_sources = select(Interpretation.source_content_id).where(
             Interpretation.source_content_id.is_not(None),
-            Interpretation.industry_l1.ilike(f"%{industry_l1.strip()}%"),
+            Interpretation.industry_l1 == industry_l1.strip(),
         )
         condition = condition & BaseTag.source_content_id.in_(matched_sources)
     order = BaseTag.interpreted_at if interpreted else BaseTag.tagged_at

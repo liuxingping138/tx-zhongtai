@@ -25,7 +25,7 @@ from app.application.batch_inputs import blank_input, inspect_upload, snapshot_i
 from app.application.batch_runs import reconcile_stale, to_dict
 from app.application.prompts import code_text, require_code
 from app.application.prompts import require_editable as require_editable_prompt
-from app.application.sheets import rows_workbook
+from app.application.sheets import CELL_MAX, rows_workbook
 from app.core import storage
 from app.core.config import get_settings
 from app.domain.categories import CategoryAccess
@@ -220,6 +220,29 @@ async def start_run(
     return to_dict(run)
 
 
+# 从政策库取数时一次最多这么多字（表头加全部单元格）。政策服务取样本按同一个数截（samples.CHARS_BUDGET），
+# 这里再拦一次，超了在生成 Excel 之前就说清楚，不白占线程池。UTF-8 一个汉字 3 字节，远低于网关 20MB 的请求上限。
+ROWS_CHARS_MAX = 5_000_000
+
+
+def _check_rows(data: dict[str, Any]) -> int:
+    """生成 Excel 前先查：总字数不超上限、每行不比表头多列。返回超过 Excel 单元格上限、会被截断的格数。"""
+
+    headers, rows = list(data["headers"]), list(data["rows"])
+    total = sum(len(name) for name in headers) + sum(len(cell) for row in rows for cell in row)
+    if total > ROWS_CHARS_MAX:
+        raise ApiError(
+            f"抽取的数据共 {total // 10_000} 万字，超过单次上限 {ROWS_CHARS_MAX // 10_000} 万字，"
+            "请减少条数或截取正文后重试",
+            code=ErrorCode.VALIDATION_ERROR,
+            http_status=413,
+        )
+    wide = next((index for index, row in enumerate(rows, start=1) if len(row) > len(headers)), 0)
+    if wide:
+        raise invalid(f"第 {wide} 行比表头多出几列，数据和表头对不上")
+    return sum(1 for row in rows for cell in row if len(cell) > CELL_MAX)
+
+
 async def _rows_upload(data: dict[str, Any]) -> tuple[str, bytes]:
     content = await run_excel_parse(rows_workbook, list(data["headers"]), list(data["rows"]), "数据")
     max_bytes = get_settings().upload_max_bytes
@@ -232,6 +255,15 @@ async def _rows_upload(data: dict[str, Any]) -> tuple[str, bytes]:
     return str(data["file_name"]), content
 
 
+def truncation_warning(cells: int) -> str:
+    if not cells:
+        return ""
+    return (
+        f"有 {cells} 个单元格超过 Excel 单元格上限 {CELL_MAX:,} 字，批量任务按 Excel 跑，这些格子会被截断；"
+        "定时打标不经 Excel、不截断，要对比结果请把正文改成截取"
+    )
+
+
 async def preview_rows(
     session: AsyncSession,
     access: CategoryAccess,
@@ -240,9 +272,11 @@ async def preview_rows(
     *,
     version: str = VERSION_RELEASE,
 ) -> dict[str, Any]:
-    """从数据库取数后的预检：转为 Excel 复用同一套列校验与行数统计。"""
+    """从数据库取数后的预检：转为 Excel 复用同一套列校验与行数统计，并说明有没有格子会被截断。"""
 
-    return await preview_input(session, access, prompt_id, await _rows_upload(data), version=version)
+    cells = _check_rows(data)
+    summary = await preview_input(session, access, prompt_id, await _rows_upload(data), version=version)
+    return {**summary, "truncated_cells": cells, "warning": truncation_warning(cells)}
 
 
 async def start_run_from_rows(
@@ -254,4 +288,5 @@ async def start_run_from_rows(
 ) -> dict[str, Any]:
     """从数据库取数发起离线批量验证任务（不写回政策库，产物同手工上传任务）。"""
 
+    _check_rows(data)
     return await start_run(session, actor, access, values, upload=await _rows_upload(data))

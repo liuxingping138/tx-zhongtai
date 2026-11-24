@@ -4,18 +4,17 @@ import { missingFieldsWarning } from '../shared/outputFields'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { CircleCheckFilled, Download, Upload } from '@element-plus/icons-vue'
 
-import { previewBatchInput, startBatchRun, type AiModel, type BatchInputSummary, type PromptTemplate, type RunVersion } from '@/api/ai'
-import { startBatchRunFromRows, type BatchRowsPayload } from '@/api/aiSamples'
-import { getTaggingContract, type ContractTask } from '@/api/aiTagging'
+import { previewBatchInput, startBatchRun, type AiModel, type PromptTemplate, type RunVersion } from '@/api/ai'
+import { startBatchRunFromRows, type BatchRowsPayload, type BatchRowsSummary } from '@/api/aiSamples'
 import { errorMessage } from '@/api/errors'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
-import { useAuthStore } from '@/stores/auth'
 import { estimateCost } from '../prompts/sampleView'
 import { formatYuan } from '../shared/aiText'
 import { downloadBatchInputTemplate } from '../shared/downloads'
-import BatchDbPicker from './BatchDbPicker.vue'
+import BatchDbPicker, { type DbLoaded } from './BatchDbPicker.vue'
 import BatchVersionPick from './BatchVersionPick.vue'
 import { confirmedLabel, defaultVersion, runSpec } from './batchVersion'
+import { useSampleTasks } from './useSampleTasks'
 
 /**
  * 新建批量任务：选模板和跑哪一版（线上版本或当前草稿），上传 Excel 或从政策库取数，选跑全部还是先跑几条。
@@ -24,7 +23,6 @@ import { confirmedLabel, defaultVersion, runSpec } from './batchVersion'
 const props = defineProps<{ templates: PromptTemplate[]; models: AiModel[] }>()
 const open = defineModel<boolean>({ required: true })
 const emit = defineEmits<{ created: [] }>()
-const auth = useAuthStore()
 const templateId = ref('')
 const version = ref<RunVersion>('release')
 const thinking = ref(false)
@@ -32,9 +30,8 @@ const inputMode = ref<'upload' | 'db'>('upload')
 const file = ref<File | null>(null)
 const dbPayload = ref<BatchRowsPayload | null>(null)
 const dbNote = ref('')
-const summary = ref<BatchInputSummary | null>(null)
-const sampleTasks = ref<ContractTask[]>([])
-let contractLoaded = false
+const summary = ref<BatchRowsSummary | null>(null)
+const { tasks: sampleTasks, ensure: ensureContract } = useSampleTasks()
 const testRowsMax = computed(() => (summary.value ? Math.max(summary.value.rows - 1, 1) : 100000)) // 输入框按它做 key：Element Plus 只在挂载时写 aria-valuemax
 const previewing = ref(false)
 const downloading = ref(false)
@@ -83,16 +80,6 @@ function clearData(): void {
   previewing.value = false
 }
 
-async function ensureContract(): Promise<void> {
-  if (contractLoaded || !auth.canRead('policy.base_tags')) return
-  contractLoaded = true
-  try {
-    sampleTasks.value = (await getTaggingContract()).tasks
-  } catch {
-    contractLoaded = false
-  }
-}
-
 watch(open, value => {
   clearData()
   if (!value) return
@@ -112,7 +99,9 @@ watch(templateId, () => {
 // 换了模板、版本或数据来源，要的列可能不同：已选的数据要重新检查。
 watch([templateId, version, inputMode], clearData)
 
-function onDbLoaded(result: { payload: BatchRowsPayload; summary: BatchInputSummary; note: string }): void {
+function onDbLoaded(result: DbLoaded): void {
+  // 慢的旧结果：检查它时的模板、版本已经换了，或者已经切回上传，丢掉（面板自己也会作废在途请求）。
+  if (inputMode.value !== 'db' || result.templateId !== templateId.value || result.version !== version.value) return
   file.value = null
   dbPayload.value = result.payload
   dbNote.value = result.note
@@ -223,7 +212,7 @@ function close(done: () => void): void {
         :templates="templates"
         :template="template"
         :spec="spec"
-        :disabled="starting"
+        :disabled="starting || previewing"
       />
       <!-- 没设输出字段只提醒、不拦：一选模板就写出来，不等上传完文件（底部那行会被「上传数据」挡住） -->
       <p
@@ -240,7 +229,7 @@ function close(done: () => void): void {
             v-if="canPickFromDb"
             v-model="inputMode"
             size="small"
-            :disabled="starting"
+            :disabled="starting || previewing"
           >
             <el-radio-button value="upload">
               上传 Excel
@@ -266,6 +255,7 @@ function close(done: () => void): void {
           <div>
             <strong>{{ summary.name }}</strong>
             <span>{{ dbNote || `${summary.rows.toLocaleString()} 行数据 · ${summary.headers.length} 列，模板要的列都有` }}</span>
+            <em v-if="summary.warning">{{ summary.warning }}</em>
           </div>
           <el-button
             size="small"

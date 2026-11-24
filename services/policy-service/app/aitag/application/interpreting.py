@@ -196,12 +196,54 @@ async def interpret_step(run_id: uuid.UUID, config: PolicyAiTask, spend: Spend) 
     return note
 
 
+# 一批最多问约「每批条数 × 它」组行业场景：每批条数按政策算，一条政策可能解读出十几组，不封顶的话一批的费用没法预估。
+# 一条政策的组不拆开（拆开的话，前几组老答不好的政策每批都重问那几组、永远轮不到后面）：到了上限就不再加新政策，
+# 第一条政策组再多也整条问。前端 OPPORTUNITY_GROUPS_PER_POLICY 同一个数。
+GROUPS_PER_POLICY = 4
+
+
+def _open_pairs(rows: list[Interpretation]) -> list[dict[str, str]]:
+    """还要问的组：AI 写的、没人改过、市场机会还空着、行业场景都有名称的行。
+    上一批写回了一半（另一半没轮到）的政策，下一批只问空着的组，已付费答好的不再重问。"""
+
+    return [
+        {"industry_l1": row.industry_l1, "scenario_l1_name": row.scenario_l1_name}
+        for row in rows
+        if untouched(row) and not row.market_opportunity and row.industry_l1.strip() and row.scenario_l1_name.strip()
+    ]
+
+
+def _fill_group(rows: list[Interpretation], industry: str, scene: str, result: dict[str, Any]) -> tuple[int, str]:
+    """把一组的回答写回它的解读行，返回（写了几行，失败原因）。"""
+
+    if result.get("error"):
+        return 0, f"{industry}/{scene}：{str(result['error'])[:120]}"
+    text = rules.extract_opportunity_text(result.get("items") or [], industry, scene)
+    if not text:
+        return 0, f"{industry}/{scene}：没有返回这一组的市场机会"
+    filled = 0
+    for row in rows:
+        if row.industry_l1.strip() == industry and row.scenario_l1_name.strip() == scene and untouched(row):
+            row.market_opportunity = text
+            row.updated_at = row.tagged_at = utcnow()
+            # 有人正在核对页编辑这行（那时市场机会还空着），不加版本号的话他一保存，空值就把这次结果冲掉，
+            # 这行从此算人工改过，也不会再补。
+            row.version += 1
+            filled += 1
+    if not filled:
+        # 钱花了一行也没写回（问的时候到现在，这组的行被人改过、核对过或重新解读删掉了）：记下来，不能悄悄当成补完了。
+        return 0, f"{industry}/{scene}：解读行已被人工修改或删除，回答没有写回"
+    return filled, ""
+
+
 async def _save_opportunities(
     run_id: uuid.UUID,
     tags: list[BaseTag],
     plans: list[tuple[BaseTag, str, str]],
     results: list[dict[str, Any]],
 ) -> dict[str, int]:
+    """答好的组马上写回（同一条政策别的组没轮到也写，已付费的答案不丢）；一条政策的组都问过了才记完成时间。"""
+
     filled = failed = 0
     by_tag: dict[uuid.UUID, list[tuple[str, str, dict[str, Any]]]] = {}
     for (snapshot, industry, scene), result in zip(plans, results, strict=True):
@@ -212,27 +254,21 @@ async def _save_opportunities(
         for snapshot in tags:
             tag = locked.get(snapshot.id)
             entries = by_tag.get(snapshot.id, [])
-            if tag is None or not entries or any(not_run(result) for _, _, result in entries):
+            if tag is None:
                 continue
-            tag.opportunity_at = utcnow()
             rows = grouped.get(str(tag.source_content_id), [])
             errors: list[str] = []
             for industry, scene, result in entries:
-                if result.get("error"):
-                    errors.append(f"{industry}/{scene}：{str(result['error'])[:120]}")
+                if not_run(result):
                     continue
-                text = rules.extract_opportunity_text(result.get("items") or [], industry, scene)
-                if not text:
-                    errors.append(f"{industry}/{scene}：没有返回市场机会")
-                    continue
-                for row in rows:
-                    if row.industry_l1 == industry and row.scenario_l1_name == scene and untouched(row):
-                        row.market_opportunity = text
-                        row.updated_at = row.tagged_at = utcnow()
-                        # 有人正在核对页编辑这行（那时市场机会还空着），不加版本号的话他一保存，空值就把这次结果冲掉，
-                        # 这行从此算人工改过，也不会再补。
-                        row.version += 1
-                        filled += 1
+                written, error = _fill_group(rows, industry, scene, result)
+                filled += written
+                if error:
+                    errors.append(error)
+            if any(not_run(result) for _, _, result in entries):
+                # 还有组没问：不记完成，下批只问空着的组。这次出错的组也还空着，下批一起重问，失败说明到那时再记。
+                continue
+            tag.opportunity_at = utcnow()
             if errors:
                 failed += 1
                 _append_remark(tag, f"{OPPORTUNITY_FAILED}：{'；'.join(errors)[:200]}")
@@ -247,33 +283,39 @@ async def _save_opportunities(
     return {"rows": filled, "failed": failed}
 
 
+def _within_cap(tags: list[BaseTag], pairs: dict[str, list[dict[str, str]]], cap: int) -> tuple[list[BaseTag], int]:
+    """按组数挑这批问哪些政策：整条政策进或不进，到上限就不再加；第一条总会进。返回（这批的政策，留到下批的条数）。"""
+
+    picked: list[BaseTag] = []
+    groups = 0
+    for tag in tags:
+        count = len(rules.opportunity_prompt_rows({}, pairs[str(tag.source_content_id)]))
+        if picked and groups + count > cap:
+            continue
+        picked.append(tag)
+        groups += count
+    return picked, len(tags) - len(picked)
+
+
 async def opportunity_step(run_id: uuid.UUID, config: PolicyAiTask, spend: Spend) -> str:
     async with SessionLocal() as session:
         tags = await repo.opportunity_backlog(session, config.batch_size)
         grouped = await repo.ai_interpretations(session, [str(tag.source_content_id) for tag in tags])
-        rows_by_source = {
-            source_id: [
-                {"industry_l1": row.industry_l1, "scenario_l1_name": row.scenario_l1_name}
-                for row in rows
-                if untouched(row)
-            ]
-            for source_id, rows in grouped.items()
-        }
-        # 解读失败、没有解读行的政策没东西可补，直接记完成，不去问模型。
-        empty = [tag for tag in tags if not rows_by_source.get(str(tag.source_content_id))]
-        for tag in empty:
-            tag.opportunity_at = utcnow()
+        pairs = {source_id: _open_pairs(rows) for source_id, rows in grouped.items()}
+        # 解读失败、没有解读行、组都补过了（或行业场景是空的）的政策没东西可问，直接记完成，不去问模型。
+        for tag in tags:
+            if not rules.opportunity_prompt_rows({}, pairs.get(str(tag.source_content_id), [])):
+                tag.opportunity_at = utcnow()
         await session.commit()
-    tags = [tag for tag in tags if rows_by_source.get(str(tag.source_content_id))]
+    tags = [tag for tag in tags if tag.opportunity_at is None]
     if not tags:
         return "没有待补市场机会的政策"
+    tags, deferred = _within_cap(tags, pairs, max(config.batch_size, 1) * GROUPS_PER_POLICY)
     base_rows = await _prompt_rows(tags, config.content_max_chars)
     plans: list[tuple[BaseTag, str, str]] = []
     rows: list[dict[str, str]] = []
     for tag, base_row in zip(tags, base_rows, strict=True):
-        for (industry, scene), prompt_row in rules.opportunity_prompt_rows(
-            base_row, rows_by_source[str(tag.source_content_id)]
-        ):
+        for (industry, scene), prompt_row in rules.opportunity_prompt_rows(base_row, pairs[str(tag.source_content_id)]):
             plans.append((tag, industry, scene))
             rows.append(prompt_row)
     await update_run(run_id, stage="opportunity", source_rows=len(rows))
@@ -294,4 +336,6 @@ async def opportunity_step(run_id: uuid.UUID, config: PolicyAiTask, spend: Spend
     )
     if unfinished:
         note += f"；{status.get('error_message') or '任务提前停止'}，{len(unfinished)} 条下批接着补"
+    if deferred:
+        note += f"；这批问到 {len(rows)} 组已到上限，另外 {deferred} 条政策下批再问"
     return note

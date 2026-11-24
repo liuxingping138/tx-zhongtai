@@ -9,7 +9,7 @@ import FilterSelect from '@/components/FilterSelect.vue'
 import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import { useAuthStore } from '@/stores/auth'
-import { TASK_INTRO, cursorToSend, formatYuan } from './aiTagging'
+import { OPPORTUNITY_GROUPS_PER_POLICY, TASK_INTRO, cursorToSend, formatYuan } from './aiTagging'
 
 /** 一个任务的设置：每日计划；打标任务再加模板、每批条数、正文长度、每日上限，类型判断还有起始采集日期和采集省份。 */
 const emit = defineEmits<{ saved: [] }>()
@@ -202,6 +202,10 @@ defineExpose({ open })
             v-if="task.code === 'type' && task.pending > 0"
             class="job-settings__hint"
           >提示：当前有 {{ task.pending }} 条排队等待「重新判断类型」，下一次执行会优先单独处理这 {{ task.pending }} 条重打记录，完成后再按每批条数读取新政策。</span>
+          <span
+            v-if="task.code === 'opportunity'"
+            class="job-settings__hint"
+          >按政策计数：每条政策解读出几组「一级行业 + 一级场景」就问模型几次。一批约问 {{ ai.batch_size * OPPORTUNITY_GROUPS_PER_POLICY }} 组（每批条数 × {{ OPPORTUNITY_GROUPS_PER_POLICY }}），一条政策的组不拆开，到了就不再加新政策，剩下的下批接着问。</span>
         </el-form-item>
         <el-form-item label="发给模型的正文">
           <el-radio-group

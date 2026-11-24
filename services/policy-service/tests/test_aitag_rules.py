@@ -208,17 +208,14 @@ def test_page_text_keeps_header_blocks_inside_the_article() -> None:
 
 
 def test_opportunities_match_whether_the_template_says_industry_or_first_level_industry() -> None:
-    from app.aitag.domain.interpret_rules import match_opportunities
+    from app.aitag.domain.interpret_rules import extract_opportunity_text
 
-    rows = [
-        {"industry_l1": "党政行业", "scenario_l1_name": "数字政府"},
-        {"industry_l1": "交通行业", "scenario_l1_name": "车路云"},
-    ]
     items = [
         {"一级行业": "交通行业", "一级场景": "车路云", "市场机会": "机会B"},
         {"一级行业": "党政行业", "一级场景": "数字政府", "市场机会": "机会A"},
     ]
-    assert match_opportunities(items, rows) == {0: "机会A", 1: "机会B"}
+    assert extract_opportunity_text(items, "党政行业", "数字政府") == "机会A"
+    assert extract_opportunity_text(items, "交通行业", "车路云") == "机会B"
 
 
 def test_dynamic_template_outputs_and_informatization_flag() -> None:

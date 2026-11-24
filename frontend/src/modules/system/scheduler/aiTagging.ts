@@ -13,12 +13,15 @@ export function taskOfJob(jobCode: string): AiTaskCode | null {
 
 /** 每个任务做什么，设置抽屉和立即执行的确认里用。 */
 export const TASK_INTRO: Record<AiTaskCode, string> = {
-  type: '从读取进度往后读一批源政策，按模板判断政策类型与信息化属性写入「政策基础标签」，属于信息化政策的自动标为需要解读。',
+  type: '从读取进度往后读一批源政策，按模板判断政策类型写入「政策基础标签」，类型含「信息化建设类」的自动标为需要解读。',
   interpret: '对基础标签里「是否解读 = 是」、还没解读的政策逐条解读，一条政策展开成多行写入「政策解读」。',
-  opportunity: '对解读过、还没补市场机会的政策写市场机会，按一级行业 + 一级场景回填到它的解读行。',
+  opportunity: '对解读过、还没补市场机会的政策，按解读出的每组「一级行业 + 一级场景」各问一次模型，回填到这一组的解读行。',
   scenario: '「新增场景审核」里待审、还没让 AI 看过的场景，对照码表里同一个一级行业下的全部场景找出最像的，说是不是同一个场景。一个场景只问一次。',
   enrich: '采纳进行业场景码表的新场景只有名称：照同级场景的写法让 AI 写描述，写回码表标「待确认」，在新增场景审核的「补充待确认」里核对。',
 }
+
+/** 市场机会一批约问「每批条数 × 它」组行业场景（一条政策的组不拆开），和政策服务 interpreting.GROUPS_PER_POLICY 一致。 */
+export const OPPORTUNITY_GROUPS_PER_POLICY = 4
 
 /** 费用账单里这个任务的「用途」：政策服务发起批量任务时报的发起方名字。 */
 export const TASK_PURPOSE: Record<AiTaskCode, string> = {

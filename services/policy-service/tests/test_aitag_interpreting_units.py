@@ -255,7 +255,9 @@ async def test_opportunities_fill_matching_untouched_rows(world: SimpleNamespace
     assert [(r["一级行业"], r["一级场景"]) for r in sent_rows] == [("党政行业", "数字政府"), ("党政行业", "城市大脑")]
     assert sent_rows[0]["行业场景"] == "党政行业/数字政府"
     assert (
-        world.tags[0].opportunity_at is not None and "回填 1 行" in note and "没有返回市场机会" in world.tags[0].remark
+        world.tags[0].opportunity_at is not None
+        and "回填 1 行" in note
+        and "没有返回这一组的市场机会" in world.tags[0].remark
     )
 
 
@@ -268,3 +270,125 @@ async def test_policies_without_interpretation_rows_skip_the_model(world: Simple
     assert await interpreting.interpret_step(uuid.uuid4(), CONFIG, Spend(limit=Decimal(1), before=Decimal(0))) == (  # type: ignore[arg-type]
         "没有待解读的政策"
     )
+
+
+def _scene_row(industry: str, scene: str, source_id: str = "c1", opportunity: str = "") -> Any:
+    now = pipeline.datetime.now(pipeline.UTC)
+    return SimpleNamespace(
+        industry_l1=industry,
+        scenario_l1_name=scene,
+        data_status="待验证",
+        tagged_at=now,
+        updated_at=now,
+        source_content_id=source_id,
+        market_opportunity=opportunity,
+        version=1,
+    )
+
+
+def _scripted_ask(monkeypatch: pytest.MonkeyPatch, answers: dict[str, dict[str, Any]]) -> list[list[str]]:
+    """按一级场景给回答；没写的场景当作没轮到（费用到上限）。返回每批问了哪些场景。"""
+
+    batches: list[list[str]] = []
+
+    async def ask(*_: Any, rows: list[dict[str, str]], **__: Any) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        batches.append([row["一级场景"] for row in rows])
+        skipped = {"items": [], "error": "未执行（任务停止或中断）"}
+        return {"error_message": "达到本批费用上限"}, [answers.get(row["一级场景"], skipped) for row in rows]
+
+    monkeypatch.setattr(interpreting, "ask", ask)
+    return batches
+
+
+async def test_answered_groups_are_kept_when_the_policy_is_cut_off_and_only_open_groups_are_asked_again(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """费用到上限把一条政策从中间截断：答好的组当场写回，政策不记完成；下批只问还空着的组，已付费的不重问。"""
+
+    done, broken, cut = (
+        _scene_row("党政行业", "数字政府"),
+        _scene_row("党政行业", "城市大脑"),
+        _scene_row("党政行业", "一网通办"),
+    )
+    world.tags, world.rows = [_tag("c1")], {"c1": [done, broken, cut]}
+    batches = _scripted_ask(
+        monkeypatch,
+        {"数字政府": {"items": [{"市场机会": "机会甲"}], "error": ""}, "城市大脑": {"items": [], "error": "限流"}},
+    )
+    spend = Spend(limit=Decimal(10), before=Decimal(0))
+    note = await interpreting.opportunity_step(uuid.uuid4(), CONFIG, spend)  # type: ignore[arg-type]
+    tag = world.tags[0]
+    assert (done.market_opportunity, broken.market_opportunity, cut.market_opportunity) == ("机会甲", "", "")
+    # 没问完：不记完成、不记失败（出错的组下批还会重问）
+    assert tag.opportunity_at is None and tag.remark == "" and "1 条下批接着补" in note
+
+    # 下一批：只问空着的两组，这次都答了（城市大脑仍然答不出），政策记完成，失败写进备注。
+    others = [
+        {"行业": "交通行业", "场景": "车路云", "市场机会": "x"},
+        {"行业": "教育行业", "场景": "校园", "市场机会": "y"},
+    ]
+    answers: dict[str, dict[str, Any]] = {"城市大脑": {"items": others, "error": ""}}
+    answers["一网通办"] = {"items": [{"市场机会": "机会丙"}], "error": ""}
+    batches_next = _scripted_ask(monkeypatch, answers)
+    await interpreting.opportunity_step(uuid.uuid4(), CONFIG, spend)  # type: ignore[arg-type]
+    assert batches == [["数字政府", "城市大脑", "一网通办"]] and batches_next == [["城市大脑", "一网通办"]]
+    assert (done.market_opportunity, cut.market_opportunity, done.version) == ("机会甲", "机会丙", 2)
+    assert tag.opportunity_at is not None and "城市大脑：没有返回这一组的市场机会" in tag.remark
+
+
+async def test_an_answer_whose_rows_were_edited_meanwhile_is_recorded_as_failed(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    row = _scene_row("党政行业", "数字政府")
+    world.tags, world.rows = [_tag("c1")], {"c1": [row]}
+
+    async def ask(*_: Any, rows: list[dict[str, str]], **__: Any) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        row.updated_at = row.tagged_at + timedelta(minutes=1)  # 问的这段时间里有人改了这行
+        return {}, [{"items": [{"市场机会": "机会"}], "error": ""}]
+
+    monkeypatch.setattr(interpreting, "ask", ask)
+    note = await interpreting.opportunity_step(uuid.uuid4(), CONFIG, Spend(limit=Decimal(10), before=Decimal(0)))  # type: ignore[arg-type]
+    assert row.market_opportunity == "" and "回填 0 行，失败 1 条" in note
+    assert "解读行已被人工修改或删除" in world.tags[0].remark
+
+
+async def test_policies_with_nothing_left_to_ask_are_closed_without_the_model(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """组都补过了、行业场景是空的政策不去问模型，直接记完成。"""
+
+    filled, blank = _scene_row("党政行业", "数字政府", "c1", "已有机会"), _scene_row("", "数字政府", "c2")
+    world.tags, world.rows = [_tag("c1"), _tag("c2")], {"c1": [filled], "c2": [blank]}
+    batches = _scripted_ask(monkeypatch, {})
+    note = await interpreting.opportunity_step(uuid.uuid4(), CONFIG, Spend(limit=Decimal(10), before=Decimal(0)))  # type: ignore[arg-type]
+    assert note == "没有待补市场机会的政策" and batches == []
+    assert all(tag.opportunity_at is not None for tag in world.tags)
+
+
+async def test_one_batch_asks_about_batch_size_times_groups_per_policy_without_splitting_a_policy(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """上限按整条政策算：第一条组再多也整条问，到上限后后面的政策留到下批，不读它们的正文、不记完成。"""
+
+    big = [f"场景{index}" for index in range(interpreting.GROUPS_PER_POLICY + 2)]
+    world.tags = [_tag("c1"), _tag("c2"), _tag("c3")]
+    world.rows = {
+        "c1": [_scene_row("党政行业", scene) for scene in big],
+        "c2": [_scene_row("教育行业", "智慧校园", "c2")],
+        "c3": [_scene_row("交通行业", "车路云", "c3")],
+    }
+    answers = {scene: {"items": [{"市场机会": scene}], "error": ""} for scene in [*big, "智慧校园", "车路云"]}
+    batches = _scripted_ask(monkeypatch, answers)
+    read: list[list[str]] = []
+    monkeypatch.setattr(source, "read_contents", lambda ids: read.append(ids) or dict.fromkeys(ids, "正文"))
+    config = SimpleNamespace(batch_size=1, content_max_chars=1000, prompt_id="p" * 32)
+    note = await interpreting.opportunity_step(uuid.uuid4(), config, Spend(limit=Decimal(10), before=Decimal(0)))  # type: ignore[arg-type]
+    assert batches == [big] and read == [["c1"]]
+    c1, c2, c3 = world.tags
+    assert c1.opportunity_at is not None and c2.opportunity_at is None and c3.opportunity_at is None
+    assert f"这批问到 {len(big)} 组已到上限，另外 2 条政策下批再问" in note
+
+    # 下一批：c1 补完了，c2、c3 各一组，加起来没到上限，一起问
+    config.batch_size = 2
+    await interpreting.opportunity_step(uuid.uuid4(), config, Spend(limit=Decimal(10), before=Decimal(0)))  # type: ignore[arg-type]
+    assert batches[-1] == ["智慧校园", "车路云"] and c2.opportunity_at and c3.opportunity_at

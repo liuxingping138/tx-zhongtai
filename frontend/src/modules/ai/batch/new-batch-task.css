@@ -13,6 +13,7 @@
 .new-task__file div { display: flex; flex: 1; flex-direction: column; min-width: 0; }
 .new-task__file strong { overflow: hidden; color: var(--zt-ink-900); text-overflow: ellipsis; white-space: nowrap; }
 .new-task__file span { color: var(--zt-ink-500); font-size: 12px; }
+.new-task__file em { color: var(--zt-warning-text); font-size: 12px; font-style: normal; line-height: 1.5; }
 .new-task__scope { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 8px; }
 .new-task__test-rows { display: flex; align-items: center; gap: 8px; margin: 0 0 12px 24px; color: var(--zt-ink-700); font-size: 13px; }
 .new-task__test-rows .el-input-number { width: 100px; }

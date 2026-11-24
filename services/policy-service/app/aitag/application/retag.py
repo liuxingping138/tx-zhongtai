@@ -5,7 +5,8 @@
 - 重新判断类型：记下请求时间，类型判断下一批先按源政策 ID 重读重打这些，覆盖原来的类型
   （人工改过也覆盖，是人点名要重打的）。已经在排队的再点一次不重记时间，不会挪到队尾。
 - 重新解读：清掉解读和市场机会的完成时间，回到解读待办；人工验证过的解读行照样不覆盖。
-- 重新补市场机会：清掉市场机会完成时间，回到市场机会待办。
+- 重新补市场机会：清掉市场机会完成时间，回到市场机会待办；没人改过的 AI 解读行上的市场机会一起清空，
+  不然市场机会那一步只问空着的组，会把这些政策全部跳过。
 旧的失败说明从备注里去掉：列表上马上显示「等待重新判断类型」而不是还挂着失败，重打成功了也不会留着上次的原因。
 """
 
@@ -21,6 +22,7 @@ from platform_common.clock import utcnow
 from platform_common.errors import ApiError, ErrorCode
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.aitag.application.interpreting import untouched
 from app.aitag.domain.rules import DUPLICATE_NOTE, INTERPRET_FAILED, MISSING_NOTE, OPPORTUNITY_FAILED, drop_notes
 from app.aitag.domain.tasks import TASKS
 from app.aitag.repositories import source
@@ -64,6 +66,18 @@ def _queue(tag: BaseTag, step: str) -> bool:
     return (tag.type_retag_at, tag.interpreted_at, tag.opportunity_at, tag.remark) != before
 
 
+async def _clear_opportunities(session: AsyncSession, tags: list[BaseTag]) -> None:
+    """清空 AI 写的、没人改过的解读行上的市场机会。不动更新时间（排队不算人工改，行还算没人改过），
+    版本号照常加：正开着这行编辑的人保存时提示「被改过」，不会把旧的机会写回去。"""
+
+    grouped = await repo.ai_interpretations(session, [str(tag.source_content_id) for tag in tags])
+    for rows in grouped.values():
+        for row in rows:
+            if untouched(row) and row.market_opportunity:
+                row.market_opportunity = ""
+                row.version += 1
+
+
 async def _resolve_tags(
     session: AsyncSession, item_ids: list[uuid.UUID], skipped: Counter[str]
 ) -> tuple[dict[uuid.UUID, BaseTag], int]:
@@ -104,6 +118,8 @@ async def request(session: AsyncSession, actor: Actor, item_ids: list[uuid.UUID]
         queued.append(tag)
     if missing:
         skipped["政策已被删除"] += missing
+    if queued and step == "opportunity":
+        await _clear_opportunities(session, queued)
     if queued:
         await enqueue_event(
             session,

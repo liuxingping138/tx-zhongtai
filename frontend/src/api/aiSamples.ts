@@ -71,8 +71,10 @@ export function stopSampleRun(promptId: string): Promise<SampleRunState> {
 
 /** 从政策库抽取的数据行，供批量任务预检与发起 */
 export interface BatchRowsPayload { file_name: string; headers: string[]; rows: string[][] }
+/** 预检结果；从政策库取数时多带超过 Excel 单元格上限、会被截断的格数和提醒。上传文件的预检没有这两项。 */
+export type BatchRowsSummary = BatchInputSummary & { truncated_cells?: number; warning?: string }
 
-export function previewBatchRows(promptId: string, version: RunVersion, data: BatchRowsPayload): Promise<BatchInputSummary> {
+export function previewBatchRows(promptId: string, version: RunVersion, data: BatchRowsPayload): Promise<BatchRowsSummary> {
   return request(http.post(`${BASE}/batch-runs/from-rows/preview`, { prompt_id: promptId, version, ...data }, { timeout: 300_000 }))
 }
 

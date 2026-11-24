@@ -350,18 +350,23 @@ worker 必须连接可出站的 gateway 网络以访问外部 MySQL，只有 int
 - 类型判断结果用系统政策类型码表核对（缺「类」字的旧写法补上能对上就算），写进基础标签：按 `source_content_id` 更新，
   人工在打标后改过的行不覆盖；失败和没对上码表的写进备注。含「信息化建设类」的标「是否解读 = 是」
 - 重新打标（`app/aitag/application/retag.py`，`POST /api/v1/policy/ai-tagging/retag`）：基础标签勾选后放回某个任务的待办，不当场调模型。
-  重新判断类型记 `type_retag_at`（已在队里的不重记，入队时去掉上次的类型失败说明；排着队的不算「类型判断失败」），类型判断下一批先按源政策 ID 重打这些、强制覆盖（人填的穿透三列和人写的备注保留，只换 AI 写的几段；重打后内容和另一条基础标签相同的不写、出队并在备注注明（带本条源政策ID，几条副本彼此不撞哈希），否则撞内容哈希整批回滚）、不动读取进度；类型和「是否解读」都没变就不重做解读（用户定的），改成非信息化的删掉没人核对过的 AI 解读行；重新解读 / 补机会清掉完成时间。失败说明前缀在 `policy.domain.fields.AI_NOTE_*`，列表「打标状态」按它筛；表格里的「打标状态」列由 `policy.domain.fields.ai_status` 按同一套条件算，改筛选条件要一起改。源库标题是 `document.write(...)` 脚本残留的，`rules.policy_title` 取出其中文字写进基础标签和提示词，备注注明
+  重新判断类型记 `type_retag_at`（已在队里的不重记，入队时去掉上次的类型失败说明；排着队的不算「类型判断失败」），类型判断下一批先按源政策 ID 重打这些、强制覆盖（人填的穿透三列和人写的备注保留，只换 AI 写的几段；重打后内容和另一条基础标签相同的不写、出队并在备注注明（带本条源政策ID，几条副本彼此不撞哈希），否则撞内容哈希整批回滚）、不动读取进度；类型和「是否解读」都没变就不重做解读（用户定的），改成非信息化的删掉没人核对过的 AI 解读行；重新解读 / 补机会清掉完成时间，补机会还清空没人改过的 AI 解读行上的市场机会（市场机会只问空着的组，不清会整条跳过）。失败说明前缀在 `policy.domain.fields.AI_NOTE_*`，列表「打标状态」按它筛；表格里的「打标状态」列由 `policy.domain.fields.ai_status` 按同一套条件算，改筛选条件要一起改。源库标题是 `document.write(...)` 脚本残留的，`rules.policy_title` 取出其中文字写进基础标签和提示词，备注注明
 - 模板和任务的约定在 `app/aitag/domain/contract.py`：每个任务给模板哪些列、要哪些输出字段，`check_template` 分必须改（errors）和提醒（warnings）。
   任务设置换模板时后端按它拦下；提示词模板编辑页按草稿实时提示（前端 `modules/ai/prompts/taskFit.ts` 同一套规则，两边改要一起改）
 - 「从数据库取测试数据」（`app/aitag/application/samples.py`，`GET /api/v1/policy/ai-tagging/samples`，权限 `policy.base_tags:list`）：按任务生成和正式打标一样的行，
-  前端再存成模板测试 Excel（ai-service `POST /api/v1/ai/prompts/{id}/test-data`）。接口只能挂本服务资源，所以不用 AI 模块的模板权限
+  前端再存成模板测试 Excel（ai-service `POST /api/v1/ai/prompts/{id}/test-data`），或在新建批量任务里直接发起（`POST /api/v1/ai/batch-runs/from-rows`，先 `/from-rows/preview` 预检）。接口只能挂本服务资源，所以不用 AI 模块的模板权限。
+  人在页面上等：读解读行用不加锁的 `interpretations_by_source_ids`（别换成打标写回用的 `ai_interpretations`，它 `FOR UPDATE`），查询 `SET LOCAL statement_timeout = '15s'`；
+  省份、一级行业精确比对（走各自的 B 树索引），关键词按字面包含；返回总字数上限 `CHARS_BUDGET`（500 万字），ai-service 按 `ROWS_CHARS_MAX` 同一个数在生成 Excel 前拦（413），
+  超过 Excel 单元格上限 32000 字的格子预检时回 `warning`（批量任务按 Excel 跑会截断，定时打标不截断）
 - 打标会花钱，单独授权：改任务设置（模板、条数、每日费用上限）挂 `policy.ai_tagging:update`；打标调度任务的 `Job.cost_resource` 都是它，
   任务调度改计划、立即执行除了 `system.scheduler` 还要它的完整档（`build_scheduler_router` 的 `check_permission`）。新增花钱的调度任务照此设 `cost_resource`
 - 政策正文不进平台库：基础标签、解读详情里的「政策正文」由 `policy/application/policy_content.py`（`GET /base-tags/{id}/content`、`/interpretations/{id}/content`，各挂自己的 `read`）按 `source_content_id` 现读源库，
   用 `rules.clean_content` 提取成和打标同一口径的文字；源库单条实测 0.2 秒。读源库用 `source.read_page`：一次连接、连接 5 秒读 20 秒超时、不重试，
   不沿用同步任务的 30 秒连接、20 分钟读取和重试（人在页面上等，卡住的请求还占着线程）。没有源政策 ID 的行回 404「没有正文」，源库连不上回 503
 - 解读、市场机会按待办做：基础标签「是否解读 = 是」且 `interpreted_at` 为空的政策做解读，一条展开成多行写解读表（「政策概览」写进「政策要文」，
-  非新增场景到码表查编码，名称对不上的写备注）；解读过、`opportunity_at` 为空的做市场机会，按一级行业 + 一级场景回填。
+  非新增场景到码表查编码，名称对不上的写备注）；解读过、`opportunity_at` 为空的做市场机会：每条政策按没人改过、市场机会还空着的解读行的（一级行业、一级场景）一组问一次（行业或场景空着的不问），答案写回这一组的行。
+  一批约问「每批条数 × `interpreting.GROUPS_PER_POLICY`（4）」组：一条政策的组不拆开（拆开的话前几组老答不好的政策每批重问那几组、永远轮不到后面），到了上限不再加新政策，第一条总会进。
+  答好的组当场写回，同一条政策还有组没轮到（费用到上限）就不记完成，下批只问空着的组，已付费的不重问。
   费用到上限没轮到的不记时间，下批接着做；AI 行只要人工验证过或改过就不再覆盖（`app/aitag/application/interpreting.py`）。
   待办（以及还没和码表比对的解读行）都有部分索引，查询条件写在 `policy.domain.models` 的 `awaiting_interpretation` 等函数里、和索引条件一字不差，
   常量用 `literal_execute` 直接写进 SQL：写成绑定参数的话通用执行计划用不上部分索引，几百万行时又是整表扫描（`tests/test_backlog_indexes.py` 会拦）

@@ -52,7 +52,11 @@ def config(monkeypatch: pytest.MonkeyPatch) -> None:
     async def task(*_: Any, **__: Any) -> Any:
         return SimpleNamespace(content_max_chars=0)
 
+    async def no_timeout(*_: Any) -> None:
+        return None
+
     monkeypatch.setattr(samples.repo, "task", task)
+    monkeypatch.setattr(samples.repo, "limit_sample_queries", no_timeout)
 
 
 async def test_type_samples_are_the_rows_the_type_task_would_send(
@@ -84,20 +88,21 @@ async def test_opportunity_samples_carry_the_interpreted_scenes(monkeypatch: pyt
         issuing_dept="", policy_level="",
     )  # fmt: skip
 
-    async def recent(*_: Any, interpreted: bool, limit: int) -> list[Any]:
+    async def recent(*_: Any, interpreted: bool, **__: Any) -> list[Any]:
         return [tag] if interpreted else []
 
+    def row(industry: str, scene: str) -> Any:
+        now = date(2026, 10, 18)
+        return SimpleNamespace(
+            industry_l1=industry, scenario_l1_name=scene, data_status="待验证", tagged_at=now, updated_at=now,
+            source_content_id="c9",
+        )  # fmt: skip
+
     async def interpretations(*_: Any) -> dict[str, list[Any]]:
-        return {
-            "c9": [
-                SimpleNamespace(industry_l1="党政行业", scenario_l1_name="数字政府"),
-                SimpleNamespace(industry_l1="党政行业", scenario_l1_name="数字政府"),
-                SimpleNamespace(industry_l1="教育行业", scenario_l1_name="智慧校园"),
-            ]
-        }
+        return {"c9": [row("党政行业", "数字政府"), row("党政行业", "数字政府"), row("教育行业", "智慧校园")]}
 
     monkeypatch.setattr(samples.repo, "recent_tags", recent)
-    monkeypatch.setattr(samples.repo, "ai_interpretations", interpretations)
+    monkeypatch.setattr(samples.repo, "interpretations_by_source_ids", interpretations)
     monkeypatch.setattr(samples.source, "read_contents_for_page", lambda ids: {"c9": "正文"})
     out = await samples.samples(None, "opportunity", None, 5)  # type: ignore[arg-type]
     assert len(out["rows"]) == 2
