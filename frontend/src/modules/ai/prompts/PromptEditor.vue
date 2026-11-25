@@ -45,6 +45,7 @@ const foldedCount = computed(() => (candidates.value.length > CANDIDATE_LIMIT ? 
 const visibleCandidates = computed(() => (showAllCandidates.value || !foldedCount.value ? candidates.value : candidates.value.slice(0, CANDIDATE_PREVIEW)))
 const missing = computed(() => used.value.filter(item => item.state === 'missing').length)
 const noCode = computed(() => used.value.some(item => item.state === 'nocode'))
+const showAddCode = computed(() => hasCode.value && !used.value.some(item => item.name === CODE_TABLE_FIELD))
 const titles = computed<Record<VariableState, string>>(() => ({
   column: 'Excel 列，逐行换成该行的值',
   code: `码表全文：${props.codeName}`,
@@ -217,6 +218,16 @@ defineExpose({ focus: () => area.value?.focus() })
         :title="titles[item.state]"
       >{{ item.name }}<small>{{ BADGES[item.state] ?? (item.count > 1 ? `×${item.count}` : '') }}</small></span>
       <button
+        v-if="showAddCode"
+        type="button"
+        class="prompt-editor__add prompt-editor__add--code"
+        :disabled="disabled"
+        :title="`插入 @【${CODE_TABLE_FIELD}】`"
+        @click="insertAtCursor(CODE_TABLE_FIELD)"
+      >
+        + {{ CODE_TABLE_FIELD }}
+      </button>
+      <button
         v-for="column in visibleCandidates"
         :key="column"
         type="button"
@@ -295,6 +306,7 @@ defineExpose({ focus: () => area.value?.focus() })
 .prompt-editor__var.is-pending { background: var(--zt-soft); color: var(--zt-ink-500); }
 .prompt-editor__vars .el-button { margin: 0; }
 .prompt-editor__add { padding: 1px 8px; border: 1px dashed var(--zt-border-strong); border-radius: 999px; background: transparent; color: var(--zt-ink-500); font: inherit; line-height: 18px; cursor: pointer; }
+.prompt-editor__add--code { border-color: var(--zt-teal-line); color: var(--zt-teal-text); }
 .prompt-editor__add:hover:not(:disabled), .prompt-editor__add:focus-visible { border-color: var(--zt-blue-600); color: var(--zt-blue-600); }
 .prompt-editor__add:disabled { cursor: not-allowed; opacity: 0.5; }
 .prompt-editor__more { padding: 1px 8px; border: 0; border-radius: 999px; background: transparent; color: var(--zt-blue-600); font: inherit; line-height: 18px; cursor: pointer; }

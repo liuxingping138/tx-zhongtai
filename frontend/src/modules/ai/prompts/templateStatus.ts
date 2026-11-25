@@ -5,36 +5,61 @@ import { isActive } from '../shared/aiText'
 export type ReleaseKind = 'offline' | 'changed' | 'online'
 export type SampleKind = 'nosample' | 'none' | 'running' | 'stale' | 'stopped' | 'failed' | 'passed'
 
-export interface StateText<K> { kind: K; text: string; detail: string }
+export interface StateText<K> { kind: K; text: string; compact: string; detail: string }
 
 export function releaseState(template: Pick<PromptTemplate, 'release'>): StateText<ReleaseKind> {
   const release = template.release
-  if (!release) return { kind: 'offline', text: '未上线', detail: '' }
+  if (!release) return { kind: 'offline', text: '未上线', compact: '未上线', detail: '' }
   const by = `${release.released_by_name} · ${release.released_at}`
   // 直接写出改了什么：列表和流程条一眼就知道是改了提示词还是换了码表，逐行对比在「看改动」里。
   if (release.unreleased_changes.length) {
-    return { kind: 'changed', text: `第 ${release.release_no} 版在线，草稿改了${release.unreleased_changes.join('、')}`, detail: by }
+    return {
+      kind: 'changed',
+      text: `第 ${release.release_no} 版在线，草稿改了${release.unreleased_changes.join('、')}`,
+      compact: `第 ${release.release_no} 版 · 有改动`,
+      detail: by,
+    }
   }
-  return { kind: 'online', text: `第 ${release.release_no} 版已上线`, detail: by }
+  return { kind: 'online', text: `第 ${release.release_no} 版已上线`, compact: `第 ${release.release_no} 版已上线`, detail: by }
 }
 
 export function sampleState(template: Pick<PromptTemplate, 'sample' | 'excel_name'>): StateText<SampleKind> {
   const sample = template.sample
   if (!sample) {
     return template.excel_name
-      ? { kind: 'none', text: '还没试跑', detail: '' }
-      : { kind: 'nosample', text: '还没有测试样本', detail: '' }
+      ? { kind: 'none', text: '还没试跑', compact: '未试跑', detail: '' }
+      : { kind: 'nosample', text: '还没有测试样本', compact: '无样本', detail: '' }
   }
   const when = `${sample.created_by_name} · ${sample.created_at}`
-  if (isActive(sample.status)) return { kind: 'running', text: `试跑中 ${sample.done_count}/${sample.total_count}`, detail: when }
-  if (!sample.current) return { kind: 'stale', text: '草稿改过，需要重新试跑', detail: when }
+  if (isActive(sample.status)) {
+    const label = `试跑中 ${sample.done_count}/${sample.total_count}`
+    return { kind: 'running', text: label, compact: label, detail: when }
+  }
+  if (!sample.current) return { kind: 'stale', text: '草稿改过，需要重新试跑', compact: '待重跑 · 草稿已改', detail: when }
   if (sample.failed_count) {
     const format = sample.format_failed_count ? `（格式不对 ${sample.format_failed_count}）` : ''
-    return { kind: 'failed', text: `${sample.total_count} 条里 ${sample.failed_count} 条失败${format}`, detail: when }
+    return {
+      kind: 'failed',
+      text: `${sample.total_count} 条里 ${sample.failed_count} 条失败${format}`,
+      compact: `${sample.total_count} 条 · ${sample.failed_count} 异常`,
+      detail: when,
+    }
   }
-  if (sample.status !== 'done') return { kind: 'stopped', text: `没跑完（${sample.done_count}/${sample.total_count}）`, detail: when }
+  if (sample.status !== 'done') {
+    return {
+      kind: 'stopped',
+      text: `没跑完（${sample.done_count}/${sample.total_count}）`,
+      compact: `已中断 ${sample.done_count}/${sample.total_count}`,
+      detail: when,
+    }
+  }
   // 只说明每条都解析出了字段，内容对不对还要人看。
-  return { kind: 'passed', text: `${sample.total_count} 条全部解析成功`, detail: when }
+  return {
+    kind: 'passed',
+    text: `${sample.total_count} 条全部解析成功`,
+    compact: `${sample.total_count}/${sample.total_count} 解析通过`,
+    detail: when,
+  }
 }
 
 export type StepKey = 'write' | 'test' | 'release'

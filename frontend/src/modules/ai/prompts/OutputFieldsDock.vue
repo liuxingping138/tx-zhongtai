@@ -14,7 +14,7 @@ const fields = computed({
   get: () => splitFields(outputFields.value),
   set: (value: string[] | undefined) => { outputFields.value = (value ?? []).join('|') },
 })
-const noFields = computed(() => missingFieldsWarning(content.value, fields.value))
+const noFields = computed(() => (content.value.trim() ? missingFieldsWarning(content.value, fields.value) : ''))
 const format = computed(() => formatState(content.value, fields.value))
 const writtenFields = computed(() => promptFields(content.value)?.join('、') ?? '')
 

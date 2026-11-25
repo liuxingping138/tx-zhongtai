@@ -6,7 +6,7 @@ import type { SampleOptions } from '@/api/aiTagging'
 import SampleDialog from './SampleDialog.vue'
 import type { TemplateFiles } from './useTemplateFiles'
 
-/** 模板的一个附件：测试样本（.xlsx）或上传的码表（.txt）。上传、删除、下载都交给编辑页的 files；新模板上传时顺便保存。
+/** 模板的一个附件：测试样本（.xlsx）或上传的码表（.txt）。上传、移除、下载都交给编辑页的 files；新模板上传时顺便保存。
  * sampleOptions：政策类模板能从数据库取测试样本（和正式打标的输入一致），tasks 为空就不显示这个入口。 */
 const props = defineProps<{
   template: PromptTemplate | null
@@ -19,12 +19,21 @@ const props = defineProps<{
 const emit = defineEmits<{ changed: [template: PromptTemplate] }>()
 const sampling = ref(false)
 
-const EMPTY: Record<PromptFileKind, string> = { excel: '未上传，.xlsx 第一行是表头', code: '还没上传码表（.txt、.csv 或 .xlsx）' }
+const EMPTY: Record<PromptFileKind, string> = {
+  excel: '未绑定测试样本（.xlsx 首行为表头列名，仅用于试发与样本试跑）',
+  code: '尚未上传码表文件（支持 .txt、.csv 或 .xlsx）',
+}
+const REMOVE_LABEL: Record<PromptFileKind, string> = {
+  excel: '移除样本',
+  code: '移除码表',
+}
 const name = computed(() => (props.kind === 'excel' ? props.template?.excel_name : props.template?.code_name) ?? '')
 
 async function openSampling(): Promise<void> {
   if (await props.files.ensure()) sampling.value = true
 }
+
+defineExpose({ openSampling })
 </script>
 
 <template>
@@ -35,12 +44,12 @@ async function openSampling(): Promise<void> {
         :class="{ 'is-empty': !name }"
       >
         {{ name || EMPTY[kind] }}
-        <template v-if="kind === 'excel' && name">（{{ template?.excel_rows }} 行数据）</template>
+        <template v-if="kind === 'excel' && name">（共 {{ template?.excel_rows }} 行）</template>
       </span>
       <el-button
         v-if="canEdit"
-        link
-        type="primary"
+        size="small"
+        plain
         :loading="files.busy.value === kind"
         @click="files.pick(kind)"
       >
@@ -71,7 +80,7 @@ async function openSampling(): Promise<void> {
         :disabled="files.busy.value !== null"
         @click="files.remove(kind)"
       >
-        删除
+        {{ REMOVE_LABEL[kind] }}
       </el-button>
     </div>
     <SampleDialog
@@ -89,10 +98,12 @@ async function openSampling(): Promise<void> {
 </template>
 
 <style scoped>
-.prompt-files { display: grid; gap: 4px; min-width: 0; }
-/* 栏窄时按钮整组换到下一行，不撑出横向滚动条。 */
-.prompt-files__row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; min-height: 26px; }
+.prompt-files { display: grid; gap: 4px; min-width: 0; width: 100%; }
+.prompt-files__row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; min-height: 28px; }
 .prompt-files__row .el-button { margin: 0; font-size: 12.5px; }
-.prompt-files__name { flex: 1 1 110px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
-.prompt-files__name.is-empty { color: var(--zt-ink-500); }
+.prompt-files__name {
+  flex: 1 1 160px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--zt-ink-900); font-size: 12.5px; font-weight: 500;
+}
+.prompt-files__name.is-empty { color: var(--zt-ink-500); font-weight: 400; }
 </style>

@@ -1,43 +1,29 @@
 /* 打开已有模板时，数据回来之前不露出新建模板的空样子，但允许展示骨架屏。 */
 .prompt-page.is-opening > :not(.el-loading-mask):not(.detail-skeleton) { visibility: hidden; }
-.prompt-page { display: flex; flex-direction: column; gap: 10px; height: calc(100dvh - var(--workspace-header-height) - 48px); min-height: 600px; }
-.prompt-page__head { flex: none; overflow: hidden; }
-.prompt-page__title-row { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 7px 14px; }
-.prompt-page__title-row .el-button { margin: 0; border-radius: 999px; }
-.prompt-page__back {
-  display: inline-flex; flex: none; align-items: center; gap: 5px;
-  height: 30px; padding: 0 11px; border: 1px solid var(--zt-border); border-radius: 999px;
-  background: var(--zt-surface-subtle); color: var(--zt-ink-700); font-size: 12.5px; font-weight: 500; text-decoration: none;
+.prompt-page {
+  display: flex; flex-direction: column; gap: 10px;
+  height: calc(100dvh - var(--workspace-header-height) - 48px); min-height: 600px; min-width: 0;
 }
-.prompt-page__back:hover { border-color: var(--zt-border-strong); color: var(--zt-blue-600); }
-.prompt-page__title {
-  flex: 1; min-width: 0; padding: 3px 8px; border: 1px solid transparent; border-radius: 8px;
-  background: transparent; color: var(--zt-ink-900); font: 600 18px/1.35 var(--zt-font); outline: none;
-}
-.prompt-page__title:hover:not([readonly]) { background: var(--zt-surface-subtle); }
-.prompt-page__title:focus:not([readonly]) { border-color: var(--el-color-primary-light-5); background: var(--zt-panel); }
-.prompt-page__title::placeholder { color: var(--zt-ink-400); font-weight: 500; }
-.prompt-page__spacer { flex: 1; }
-/* 自适应分栏：试发一条时左宽右窄（专注写提示词）；样本试跑时右侧自动加宽（方便浏览批量对比结果）；全宽模式隐藏左栏。 */
+
+/* 稳定黄金比例双栏（切 Tab 不跳宽），同时支持专注编辑与全屏看结果无缝伸缩 */
 .prompt-page__body {
   display: grid; flex: 1; min-height: 0; min-width: 0; gap: 12px;
-  grid-template-columns: minmax(0, 1.38fr) minmax(0, 1fr);
-  transition: grid-template-columns 0.18s ease;
+  grid-template-columns: minmax(0, 1.38fr) minmax(380px, 1fr);
 }
-.prompt-page__body.is-sample { grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr); }
 .prompt-page__body.is-sample-wide,
 .prompt-page__body.is-editor-wide { grid-template-columns: minmax(0, 1fr); }
 .prompt-page__body.is-sample-wide .prompt-page__main { display: none; }
 .prompt-page__body.is-editor-wide .prompt-page__test { display: none; }
+
 .prompt-page__main { display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
 .prompt-page__test { min-width: 0; }
 .prompt-page__main > .out-dock { flex: none; }
 .prompt-page__scroll { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow-y: auto; }
-.prompt-page__scroll > .config { flex: none; }
 .prompt-page__scroll > .prompt-editor { flex: 1 0 auto; min-height: 360px; }
-@media (max-width: 960px) {
+
+@media (max-width: 980px) {
   .prompt-page { height: auto; }
-  .prompt-page__body, .prompt-page__body.is-sample { grid-template-columns: minmax(0, 1fr); }
-  .prompt-page__main { min-height: 600px; }
-  .prompt-page__test { height: 580px; }
+  .prompt-page__body { grid-template-columns: minmax(0, 1fr); }
+  .prompt-page__main { min-height: 580px; }
+  .prompt-page__test { height: 560px; }
 }

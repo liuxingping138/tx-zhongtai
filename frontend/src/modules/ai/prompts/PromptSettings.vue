@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { ArrowDown } from '@element-plus/icons-vue'
 
 import type { AiModel, PromptTemplate, SystemCodeTable, TemplateCategory } from '@/api/ai'
 import type { SampleOptions } from '@/api/aiTagging'
@@ -11,7 +12,7 @@ import TaskFit from './TaskFit.vue'
 import type { TaskFitResult } from './taskFit'
 import type { TemplateFiles } from './useTemplateFiles'
 
-/** 提示词上方紧凑配置区：类型、模型、码表（含预览）、测试样本（上传/从库取）及政策任务适配，全部同页一眼可见。 */
+/** 40px 单行吸顶 Studio 配置丝带 + 按需滑出二级抽屉：释放首屏高度给提示词编辑画布，滚动正文时配置丝带常驻不丢。 */
 const props = defineProps<{
   template: PromptTemplate | null
   categories: TemplateCategory[]
@@ -30,20 +31,59 @@ const modelId = defineModel<string>('modelId', { required: true })
 const codeTable = defineModel<string>('codeTable', { required: true })
 
 type CodeMode = 'none' | 'system' | 'upload'
+type TrayKind = 'code' | 'excel' | 'fit' | null
+
+const openTray = ref<TrayKind>(null)
 const wantUpload = ref(false)
-watch(() => props.template?.id, () => { wantUpload.value = false })
+const previewing = ref(false)
+const excelFilesRef = ref<{ openSampling: () => Promise<void> } | null>(null)
+
+watch(() => props.template?.id, () => {
+  wantUpload.value = false
+  openTray.value = null
+})
+
 const codeMode = computed<CodeMode>(() => {
   if (codeTable.value) return 'system'
   return props.template?.code_name || wantUpload.value ? 'upload' : 'none'
 })
+
 const CODE_TIPS: Record<CodeMode, string> = {
-  none: '提示词里要用码表时，选系统码表或上传文件（.txt、.csv、.xlsx）',
-  system: `每次运行都从「码表管理」取最新的；提示词里写 @【${CODE_TABLE_FIELD}】插入码表全文`,
-  upload: `Excel 只读第一个工作表，每行各格用 Tab 连成一行；上线时冻结这一份。提示词里同样写 @【${CODE_TABLE_FIELD}】`,
+  none: '提示词里要用标准字典时，可选系统实时码表或上传静态文件（.txt、.csv、.xlsx）。',
+  system: `每次运行实时从「码表管理」拉取最新内容；在提示词里写 @【${CODE_TABLE_FIELD}】 即可注入全文。`,
+  upload: `Excel 只读首个工作表（Tab 分隔），模板上线时冻结当前版本；提示词里同样写 @【${CODE_TABLE_FIELD}】。`,
 }
 
-const previewing = ref(false)
-const previewable = computed(() => (codeMode.value === 'system' ? Boolean(codeTable.value) : codeMode.value === 'upload' && Boolean(props.template?.code_name)))
+const activeCodeChip = computed(() => {
+  if (codeMode.value === 'system') {
+    const label = props.codeTables.find(item => item.key === codeTable.value)?.name ?? codeTable.value
+    return `码表：${label}`
+  }
+  if (codeMode.value === 'upload') return `码表：${props.template?.code_name || '待上传'}`
+  return '码表：未启用'
+})
+
+const activeSampleChip = computed(() =>
+  props.template?.excel_name
+    ? `样本：${props.template.excel_name} (${props.template.excel_rows})`
+    : '样本：未绑定')
+
+const previewable = computed(() =>
+  (codeMode.value === 'system' ? Boolean(codeTable.value) : codeMode.value === 'upload' && Boolean(props.template?.code_name)))
+
+const fitBadge = computed(() => {
+  const relevant = props.fit.filter(item => !item.skip)
+  if (!relevant.length) return { tone: '', text: '任务适配' }
+  const errors = relevant.filter(item => item.check.errors.length > 0).length
+  if (errors) return { tone: 'is-error', text: `适配：${errors} 项需改` }
+  const warns = relevant.filter(item => item.check.warnings.length > 0).length
+  if (warns) return { tone: 'is-warn', text: `适配：可用·${warns}提醒` }
+  return { tone: 'is-ok', text: `已适配 ${relevant.length} 任务` }
+})
+
+function toggleTray(kind: Exclude<TrayKind, null>): void {
+  openTray.value = openTray.value === kind ? null : kind
+}
 
 function onCodeMode(value: string | number | boolean | undefined): void {
   void setCodeMode(value as CodeMode)
@@ -60,125 +100,174 @@ async function setCodeMode(next: CodeMode): Promise<void> {
   wantUpload.value = next === 'upload'
   const uploaded = props.template?.code_name
   if (next === 'none' && uploaded) {
-    await props.files.remove('code', `不用码表要删掉已上传的「${uploaded}」。已发起的任务和线上版本不受影响。`)
+    await props.files.remove('code', `不用码表要移除已上传的「${uploaded}」。已发起的任务和线上版本不受影响。`)
   }
 }
+
+defineExpose({
+  openSampleDb: () => excelFilesRef.value?.openSampling(),
+})
 </script>
 
 <template>
   <section
-    class="config"
+    class="studio-config"
     aria-label="模板设置"
   >
-    <div class="config__row config__row--inline">
-      <label class="config__item">
-        <span>类型</span>
-        <el-select
-          v-model="category"
-          class="config__category"
-          size="small"
-          aria-label="模板类型"
-          placeholder="选择类型"
-          :disabled="!canEdit"
-        >
-          <el-option
-            v-for="item in categories"
-            :key="item.code"
-            :label="`${item.name}类`"
-            :value="item.code"
-            :disabled="!item.editable"
-          />
-        </el-select>
-      </label>
-      <div class="config__item config__item--grow">
-        <span>模型</span>
+    <div class="studio-ribbon">
+      <el-select
+        v-model="category"
+        class="studio-ribbon__cat"
+        size="small"
+        aria-label="模板类型"
+        placeholder="类型"
+        :disabled="!canEdit"
+      >
+        <el-option
+          v-for="item in categories"
+          :key="item.code"
+          :label="`${item.name}类`"
+          :value="item.code"
+          :disabled="!item.editable"
+        />
+      </el-select>
+
+      <div class="studio-ribbon__model">
         <ModelPicker
           v-model="modelId"
           :models="models"
           :show-thinking="false"
+          size="small"
           :disabled="!canEdit"
           allow-empty
           label="模板使用的模型"
         />
       </div>
-    </div>
 
-    <div class="config__row">
       <span
-        class="config__label"
+        class="studio-ribbon__sep"
+        aria-hidden="true"
+      />
+
+      <button
+        type="button"
+        class="studio-chip"
+        :class="{ 'is-open': openTray === 'code', 'is-active': openTray !== 'code' && codeMode !== 'none' }"
+        :aria-expanded="openTray === 'code'"
         :title="CODE_TIPS[codeMode]"
-      >码表</span>
-      <div
-        class="config__code"
-        :title="CODE_TIPS[codeMode]"
+        @click="toggleTray('code')"
       >
-        <div class="config__code-line">
-          <el-radio-group
-            :model-value="codeMode"
-            size="small"
-            class="ai-seg"
-            aria-label="码表来源"
-            :disabled="!canEdit"
-            @change="onCodeMode"
-          >
-            <el-radio-button value="none">
-              不用码表
-            </el-radio-button>
-            <el-radio-button value="system">
-              系统码表
-            </el-radio-button>
-            <el-radio-button value="upload">
-              上传文件
-            </el-radio-button>
-          </el-radio-group>
-          <el-select
-            v-if="codeMode === 'system'"
-            v-model="codeTable"
-            class="config__code-select"
-            size="small"
-            aria-label="系统码表"
-            :disabled="!canEdit"
-          >
-            <el-option
-              v-for="item in codeTables"
-              :key="item.key"
-              :label="item.name"
-              :value="item.key"
-            />
-          </el-select>
-          <PromptFiles
-            v-else-if="codeMode === 'upload'"
-            kind="code"
-            class="config__code-file"
-            :template="template"
-            :files="files"
-            :can-edit="canEdit"
-            :can-export="canExport"
-          />
-          <el-button
-            v-if="previewable"
-            link
-            type="primary"
-            size="small"
-            @click="previewing = true"
-          >
-            预览码表
-          </el-button>
-        </div>
-        <CodePreviewDialog
-          v-model="previewing"
-          :system-key="codeMode === 'system' ? codeTable : ''"
-          :prompt-id="template?.id ?? ''"
-        />
-      </div>
+        <span>{{ activeCodeChip }}</span>
+        <el-icon class="studio-chip__caret">
+          <ArrowDown />
+        </el-icon>
+      </button>
+
+      <button
+        type="button"
+        class="studio-chip"
+        :class="{ 'is-open': openTray === 'excel', 'is-active': openTray !== 'excel' && Boolean(template?.excel_name) }"
+        :aria-expanded="openTray === 'excel'"
+        :title="template?.excel_name ? `${template.excel_name}（${template.excel_rows} 行）` : '上传测试样本或从政策库取数'"
+        @click="toggleTray('excel')"
+      >
+        <span>{{ activeSampleChip }}</span>
+        <el-icon class="studio-chip__caret">
+          <ArrowDown />
+        </el-icon>
+      </button>
+
+      <button
+        v-if="showFit"
+        type="button"
+        class="studio-chip studio-chip--right"
+        :class="[openTray === 'fit' ? 'is-open' : fitBadge.tone]"
+        :aria-expanded="openTray === 'fit'"
+        title="展开查看 5 个政策定时任务的输入变量与输出字段适配检查"
+        @click="toggleTray('fit')"
+      >
+        <span>{{ fitBadge.text }}</span>
+        <el-icon class="studio-chip__caret">
+          <ArrowDown />
+        </el-icon>
+      </button>
     </div>
 
-    <div class="config__row">
-      <span
-        class="config__label"
-        title="列名就是提示词里能插的变量；只给试发和样本试跑用"
-      >测试样本</span>
+    <div
+      v-if="openTray === 'code'"
+      class="studio-tray"
+      role="region"
+      aria-label="码表设置详情"
+    >
+      <div class="studio-tray__line">
+        <el-radio-group
+          :model-value="codeMode"
+          size="small"
+          class="ai-seg"
+          aria-label="码表来源"
+          :disabled="!canEdit"
+          @change="onCodeMode"
+        >
+          <el-radio-button value="none">
+            不用码表
+          </el-radio-button>
+          <el-radio-button value="system">
+            系统码表
+          </el-radio-button>
+          <el-radio-button value="upload">
+            上传文件
+          </el-radio-button>
+        </el-radio-group>
+
+        <el-select
+          v-if="codeMode === 'system'"
+          v-model="codeTable"
+          class="studio-tray__select"
+          size="small"
+          aria-label="系统码表"
+          :disabled="!canEdit"
+        >
+          <el-option
+            v-for="item in codeTables"
+            :key="item.key"
+            :label="item.name"
+            :value="item.key"
+          />
+        </el-select>
+
+        <PromptFiles
+          v-else-if="codeMode === 'upload'"
+          kind="code"
+          class="studio-tray__file"
+          :template="template"
+          :files="files"
+          :can-edit="canEdit"
+          :can-export="canExport"
+        />
+
+        <el-button
+          v-if="previewable"
+          size="small"
+          plain
+          @click="previewing = true"
+        >
+          预览码表
+        </el-button>
+      </div>
+      <p class="studio-tray__hint">
+        {{ CODE_TIPS[codeMode] }}
+      </p>
+    </div>
+
+    <!-- v-show 保持挂载：新建冷启动引导里的「从政策库取数」随时可直接拉起 SampleDialog -->
+    <div
+      v-show="openTray === 'excel'"
+      class="studio-tray"
+      role="region"
+      aria-label="测试样本设置详情"
+    >
       <PromptFiles
+        ref="excelFilesRef"
         kind="excel"
         :template="template"
         :files="files"
@@ -187,30 +276,72 @@ async function setCodeMode(next: CodeMode): Promise<void> {
         :sample-options="sampleOptions"
         @changed="item => emit('files-changed', item)"
       />
+      <p
+        v-if="template?.excel_headers.length"
+        class="studio-tray__hint"
+      >
+        已识别表头列：{{ template.excel_headers.map(col => `@【${col}】`).join('、') }}
+      </p>
     </div>
 
     <div
-      v-if="showFit"
-      class="config__row"
+      v-if="openTray === 'fit' && showFit"
+      class="studio-tray"
+      role="region"
+      aria-label="政策定时任务适配检查"
     >
-      <span class="config__label">定时任务</span>
       <TaskFit :results="fit" />
     </div>
+
+    <CodePreviewDialog
+      v-model="previewing"
+      :system-key="codeMode === 'system' ? codeTable : ''"
+      :prompt-id="template?.id ?? ''"
+    />
   </section>
 </template>
 
 <style scoped>
-.config { display: grid; gap: 5px; padding: 8px 16px; border-bottom: 1px solid var(--zt-border); background: var(--zt-surface-subtle); }
-.config__row { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: center; gap: 8px; min-height: 26px; }
-.config__row--inline { display: flex; flex-wrap: wrap; gap: 6px 14px; }
-.config__item { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.config__item > span, .config__label { flex: none; width: 56px; color: var(--zt-ink-500); font-size: 12px; font-weight: 600; }
-.config__item--grow { flex: 1 1 220px; }
-.config__item--grow > :last-child { flex: 1; min-width: 0; }
-.config__category { width: 96px; }
-.config__item--grow :deep(.model-picker__select) { width: 100%; }
-.config__code { min-width: 0; }
-.config__code-line { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
-.config__code-select { width: 184px; }
-.config__code-file { flex: 1; min-width: 160px; }
+.studio-config { flex: none; border-bottom: 1px solid var(--zt-border); background: var(--zt-surface-subtle); }
+
+.studio-ribbon {
+  display: flex; align-items: center; gap: 6px; min-height: 42px; padding: 6px 12px;
+  flex-wrap: wrap;
+}
+.studio-ribbon__cat { width: 88px; flex: none; }
+.studio-ribbon__model { flex: 0 1 236px; min-width: 150px; }
+.studio-ribbon__model :deep(.model-picker) { flex-wrap: nowrap; gap: 6px; }
+.studio-ribbon__model :deep(.model-picker__select--small) { width: 100%; }
+.studio-ribbon__model :deep(.model-picker__off) { display: none; }
+
+.studio-ribbon__sep { width: 1px; height: 16px; margin: 0 2px; background: var(--zt-border); flex: none; }
+
+.studio-chip {
+  display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 9px;
+  border: 1px solid var(--zt-border); border-radius: 6px;
+  background: var(--zt-panel); color: var(--zt-ink-700);
+  font: 500 12px/1 var(--zt-font); min-width: 0; max-width: 186px; cursor: pointer;
+  transition: border-color 0.14s ease, background-color 0.14s ease, color 0.14s ease;
+}
+.studio-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-chip__caret { flex: none; font-size: 11px; color: var(--zt-ink-400); transition: transform 0.15s ease; }
+.studio-chip.is-open .studio-chip__caret { transform: rotate(180deg); color: var(--zt-blue-600); }
+.studio-chip:hover { border-color: var(--zt-border-strong); color: var(--zt-ink-900); }
+.studio-chip.is-open {
+  border-color: var(--el-color-primary-light-5); background: var(--el-color-primary-light-9); color: var(--zt-blue-600);
+}
+.studio-chip.is-active { border-color: var(--el-color-primary-light-7); color: var(--zt-ink-900); }
+.studio-chip.is-ok { border-color: var(--zt-success-border); background: var(--zt-success-soft); color: var(--zt-success-text); }
+.studio-chip.is-warn { border-color: var(--zt-warning-border); background: var(--zt-warning-soft); color: var(--zt-warning-text); }
+.studio-chip.is-error { border-color: var(--zt-danger-border); background: var(--zt-danger-soft); color: var(--zt-danger-text); }
+.studio-chip--right { margin-left: auto; }
+
+.studio-tray {
+  padding: 10px 14px; border-top: 1px solid var(--zt-divider); background: var(--zt-panel);
+}
+.studio-tray__line { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.studio-tray__line .el-button { margin: 0; }
+.studio-tray__select { width: 196px; }
+.studio-tray__file { flex: 1 1 200px; min-width: 0; }
+.studio-tray__hint { margin: 6px 0 0; color: var(--zt-ink-500); font-size: 12px; line-height: 1.5; }
 </style>

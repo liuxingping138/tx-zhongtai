@@ -127,6 +127,47 @@ export function priceText(model: Pick<AiModel, 'input_price' | 'output_price' | 
   return parts.join(' · ')
 }
 
+/** 试发底栏等紧凑位置的单行价格摘要，完整分时计价说明由外层 title 悬停展示。 */
+export function compactPriceText(model: Pick<AiModel, 'input_price' | 'output_price' | 'web_search'>): string {
+  const perMillion = (value: string) => plain(Number(value) * 1000)
+  return `输入 ¥${perMillion(model.input_price)} · 输出 ¥${perMillion(model.output_price)} /百万 token${model.web_search ? ' · 含联网' : ''}`
+}
+
+export interface SmartModelParts {
+  family: string
+  tier: string
+  online: boolean
+}
+
+function splitOnlineSuffix(raw: string): { text: string; online: boolean } {
+  const online = /[（(]联网[）)]/.test(raw)
+  const text = raw
+    .replace(/[（(](?:不联网|联网)[）)]/g, '')
+    .replace(/版$/g, '')
+    .trim()
+  return { text, online }
+}
+
+/** 列表高辨识度模型拆解：去掉冗余厂商前缀，拆成「主家族版本 + 档位后缀 + 是否联网」，避免整列截成相同的 DeepSeek-V4... */
+export function smartModelParts(rawName: string): SmartModelParts {
+  if (!rawName) return { family: '未选', tier: '', online: false }
+  const stripped = rawName.replace(/^(字节|百度|阿里|腾讯|智谱)\s*[-－]\s*/, '').trim()
+  const { text, online } = splitOnlineSuffix(stripped)
+  const ds = /^(DeepSeek)[-－\s]*(V[\d.]+|R\d+)(?:[-－\s]*(.+))?$/i.exec(text)
+  if (ds) {
+    const ver = ds[2] ?? ''
+    const rest = (ds[3] ?? '').replace(/版$/g, '').trim()
+    return { family: `DeepSeek ${ver}`, tier: rest, online }
+  }
+  const doubao = /^(Doubao)[-－\s]*([\d.]+[-－]?(?:Pro|Lite|Seed)?)(?:[-－\s]*(.+))?$/i.exec(text)
+  if (doubao) {
+    const ver = (doubao[2] ?? '').replace(/[-－]/g, ' ')
+    const rest = (doubao[3] ?? '').replace(/版$/g, '').trim()
+    return { family: `Doubao ${ver}`, tier: rest, online }
+  }
+  return { family: text || stripped, tier: '', online }
+}
+
 export function formatYuan(value: number): string {
   return `¥${value.toFixed(4)}`
 }

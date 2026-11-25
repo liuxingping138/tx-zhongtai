@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, CircleCheckFilled, WarningFilled } from '@elemen
 
 import type { AiModel, PromptTemplate } from '@/api/ai'
 import { getTestRows, type TestRows } from '@/api/aiSamples'
-import { formatYuan, priceText } from '../shared/aiText'
+import { compactPriceText, formatYuan, priceText } from '../shared/aiText'
 import type { useAnswerStream } from '../shared/useAnswerStream'
 import { usedVariables } from './promptVariables'
 import SampleStrip from './SampleStrip.vue'
@@ -285,15 +285,16 @@ function move(step: number): void {
       </template>
     </div>
     <footer class="trial__run">
-      <div
-        class="trial__model"
+      <span
+        class="trial__price"
         :class="{ 'is-missing': !model?.available }"
+        :title="model ? `${model.name} · ${priceText(model)}` : '请先在左上方配置栏选择推理模型'"
       >
-        <b>{{ !model ? '没选模型，先在左边「模型」里选' : model.available ? model.name : `${model.name} 现在不可用` }}</b>
-        <span v-if="model?.available">{{ priceText(model) }}</span>
-      </div>
+        {{ !model ? '请先在左上方配置栏选择模型' : !model.available ? `${model.name} 暂不可用` : compactPriceText(model) }}
+      </span>
       <el-button
         v-if="running"
+        size="small"
         @click="answer.stop"
       >
         停止
@@ -301,6 +302,7 @@ function move(step: number): void {
       <el-button
         v-else-if="canRun"
         type="primary"
+        size="small"
         :disabled="!model?.available"
         @click="emit('run')"
       >
@@ -353,9 +355,8 @@ summary small { margin-left: 6px; color: var(--zt-ink-500); font-size: 12px; }
 details pre { max-height: 320px; margin: 0; padding: 0 12px 12px; overflow: auto; color: var(--zt-ink-700); font: 12px/1.7 var(--zt-font); white-space: pre-wrap; word-break: break-all; }
 .trial__next { display: flex; flex-wrap: wrap; gap: 8px; }
 .trial__next .el-button { margin: 0; }
-.trial__run { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--zt-border); background: var(--zt-surface-subtle); }
-.trial__model { display: flex; flex-direction: column; min-width: 0; color: var(--zt-ink-500); font-size: 12px; }
-.trial__model b { overflow: hidden; color: var(--zt-ink-900); font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.trial__model.is-missing b { color: var(--zt-warning-text); }
+.trial__run { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 14px; border-top: 1px solid var(--zt-border); background: var(--zt-surface-subtle); }
+.trial__price { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--zt-ink-500); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.trial__price.is-missing { color: var(--zt-warning-text); font-weight: 500; }
 .trial__run kbd { margin-left: 6px; padding: 0 4px; border-radius: 3px; background: color-mix(in srgb, var(--el-color-white) 22%, transparent); font: 11px/16px var(--zt-font); }
 </style>

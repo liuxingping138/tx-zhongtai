@@ -19,24 +19,32 @@ const template = (overrides: Partial<PromptTemplate> = {}): PromptTemplate => ({
 })
 
 describe('上线状态', () => {
-  it('分未上线、有改动未上线、已上线', () => {
-    expect(releaseState(template()).kind).toBe('offline')
+  it('分未上线、有改动未上线、已上线，并输出紧凑状态文案', () => {
+    expect(releaseState(template())).toMatchObject({ kind: 'offline', compact: '未上线' })
     expect(releaseState(template({ release: release(['提示词内容', '码表']) }))).toMatchObject({
-      kind: 'changed', text: '第 2 版在线，草稿改了提示词内容、码表',
+      kind: 'changed', text: '第 2 版在线，草稿改了提示词内容、码表', compact: '第 2 版 · 有改动',
     })
-    expect(releaseState(template({ release: release() }))).toMatchObject({ kind: 'online', text: '第 2 版已上线' })
+    expect(releaseState(template({ release: release() }))).toMatchObject({
+      kind: 'online', text: '第 2 版已上线', compact: '第 2 版已上线',
+    })
   })
 })
 
 describe('样本试跑状态', () => {
   it('没有样本、没试跑、试跑中、草稿改过、有失败、没跑完、全部成功', () => {
-    expect(sampleState(template({ excel_name: '' })).kind).toBe('nosample')
-    expect(sampleState(template()).kind).toBe('none')
+    expect(sampleState(template({ excel_name: '' }))).toMatchObject({ kind: 'nosample', compact: '无样本' })
+    expect(sampleState(template())).toMatchObject({ kind: 'none', compact: '未试跑' })
     expect(sampleState(template({ sample: sample({ status: 'running', done_count: 3 }) })).text).toBe('试跑中 3/10')
-    expect(sampleState(template({ sample: sample({ current: false }) })).kind).toBe('stale')
-    expect(sampleState(template({ sample: sample({ failed_count: 2, format_failed_count: 1 }) })).text).toBe('10 条里 2 条失败（格式不对 1）')
-    expect(sampleState(template({ sample: sample({ status: 'cancelled', done_count: 4 }) })).kind).toBe('stopped')
-    expect(sampleState(template({ sample: sample() })).text).toBe('10 条全部解析成功')
+    expect(sampleState(template({ sample: sample({ current: false }) }))).toMatchObject({ kind: 'stale', compact: '待重跑 · 草稿已改' })
+    expect(sampleState(template({ sample: sample({ failed_count: 2, format_failed_count: 1 }) }))).toMatchObject({
+      text: '10 条里 2 条失败（格式不对 1）', compact: '10 条 · 2 异常',
+    })
+    expect(sampleState(template({ sample: sample({ status: 'cancelled', done_count: 4 }) }))).toMatchObject({
+      kind: 'stopped', compact: '已中断 4/10',
+    })
+    expect(sampleState(template({ sample: sample() }))).toMatchObject({
+      text: '10 条全部解析成功', compact: '10/10 解析通过',
+    })
   })
 })
 
