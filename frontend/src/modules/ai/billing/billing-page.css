@@ -162,14 +162,14 @@
 .billing__row:hover td { background: var(--zt-row-hover); }
 .billing__row.is-pinned td { background: var(--el-color-primary-light-9); }
 
-/* 7 列按比例弹性展开：消除 1920/2560px 宽屏下首列独占千余像素空白，1440px 与宽屏均舒展均衡 */
+/* 7 列按比例弹性展开：1440px 首列 345px 完整容纳长模型名不截断，1920/2560px 宽屏均匀舒展不留空旷沙漠 */
 .billing__col-name { width: auto; }
-.billing__col-calls { width: 9%; }
-.billing__col-input { width: 12%; }
-.billing__col-cached { width: 17%; }
-.billing__col-output { width: 12%; }
-.billing__col-cost { width: 11%; }
-.billing__col-share { width: 13.5%; }
+.billing__col-calls { width: 8.5%; }
+.billing__col-input { width: 11.5%; }
+.billing__col-cached { width: 15.5%; }
+.billing__col-output { width: 11.5%; }
+.billing__col-cost { width: 10.5%; }
+.billing__col-share { width: 13%; }
 
 .billing__name-cell { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .billing__swatch { width: 9px; height: 9px; border-radius: 2.5px; flex: none; }
