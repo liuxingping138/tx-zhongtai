@@ -312,11 +312,11 @@ defineExpose({
 .studio-config { flex: none; border-bottom: 1px solid var(--zt-border); background: var(--zt-surface-subtle); }
 
 .studio-ribbon {
-  display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 7px 12px;
+  display: flex; align-items: center; gap: 5px; min-height: 44px; padding: 7px 10px;
   flex-wrap: wrap;
 }
-.studio-ribbon__cat { width: 90px; flex: none; }
-.studio-ribbon__model { flex: 0 1 200px; min-width: 152px; }
+.studio-ribbon__cat { width: 86px; flex: none; }
+.studio-ribbon__model { flex: 0 1 182px; min-width: 146px; }
 .studio-ribbon__model :deep(.model-picker) { flex-wrap: nowrap; gap: 6px; width: 100%; }
 .studio-ribbon__model :deep(.model-picker__select--small) { width: 100%; }
 .studio-ribbon__model :deep(.model-picker__off) { display: none; }

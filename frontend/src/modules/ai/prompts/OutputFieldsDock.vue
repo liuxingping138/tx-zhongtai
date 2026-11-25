@@ -76,9 +76,26 @@ function writeFormat(): void {
 .out-dock { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: start; gap: 8px; padding: 9px 16px 10px; border-top: 1px solid var(--zt-divider); background: var(--zt-surface-subtle); }
 .out-dock__label { color: var(--zt-ink-500); font-size: 12px; font-weight: 600; line-height: 28px; }
 .out-dock__main { display: grid; gap: 5px; min-width: 0; }
-.out-dock__main :deep(.el-input-tag) { min-height: 30px; border-radius: 7px; background-color: var(--zt-panel); box-shadow: 0 0 0 1px var(--zt-border) inset; }
-.out-dock__main :deep(.el-input-tag:hover) { box-shadow: 0 0 0 1px var(--zt-border-strong) inset; }
-.out-dock__main :deep(.el-input-tag.is-focus) { box-shadow: 0 0 0 1px var(--zt-blue-600) inset, 0 0 0 3px var(--zt-focus-ring); }
+.out-dock__main :deep(.el-input-tag) {
+  --el-fill-color-blank: var(--zt-panel);
+  --el-fill-color-light: var(--zt-surface-subtle);
+  --el-input-tag-placeholder-color: var(--zt-ink-400);
+  --el-input-tag-text-color: var(--zt-ink-900);
+  --el-input-tag-disabled-border: var(--zt-border);
+  min-height: 30px; border-radius: 7px;
+  background-color: var(--zt-panel);
+  box-shadow: 0 0 0 1px var(--zt-border) inset;
+}
+.out-dock__main :deep(.el-input-tag.is-disabled) {
+  background-color: var(--zt-surface-subtle);
+  box-shadow: 0 0 0 1px var(--zt-border) inset;
+}
+.out-dock__main :deep(.el-input-tag.is-hovering:not(.is-focused):not(.is-disabled)) {
+  box-shadow: 0 0 0 1px var(--zt-border-strong) inset;
+}
+.out-dock__main :deep(.el-input-tag.is-focused) {
+  box-shadow: 0 0 0 1px var(--zt-blue-600) inset, 0 0 0 3px var(--zt-focus-ring);
+}
 .out-dock__main :deep(.el-input-tag .el-tag) {
   border: 1px solid var(--zt-ai-line); border-radius: 5px;
   background: var(--zt-ai-soft); color: var(--zt-ai-text); font-weight: 550;

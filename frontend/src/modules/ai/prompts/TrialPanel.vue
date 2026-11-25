@@ -30,6 +30,7 @@ const emit = defineEmits<{ run: []; upload: []; sample: [] }>()
 const row = defineModel<number>('row', { required: true })
 
 const data = ref<TestRows>({ headers: [], total: 0, rows: [] })
+const loadingRows = ref(false)
 const expandInput = ref(false)
 /** 最近一次试发问的是哪一行：换了行就先看新一行的数据，不拿上一行的回答冒充 */
 const askedRow = ref<number | null>(null)
@@ -65,11 +66,17 @@ const label = (index: number) => {
 watch(() => [props.template?.id, props.template?.excel_name, props.template?.excel_rows], async () => {
   const template = props.template
   data.value = { headers: [], total: 0, rows: [] }
-  if (!template?.excel_name) return
+  if (!template?.excel_name) {
+    loadingRows.value = false
+    return
+  }
+  loadingRows.value = true
   try {
     data.value = await getTestRows(template.id)
   } catch {
     // 读不到样本时照样能试发，只是看不到这一行的数据。
+  } finally {
+    loadingRows.value = false
   }
   if (row.value >= data.value.rows.length) row.value = 0
 }, { immediate: true })
@@ -178,6 +185,11 @@ function move(step: number): void {
               >
                 {{ current?.values[item.name] || '（空）' }}
                 <small v-if="cut(item.name)">{{ cut(item.name) }}</small>
+              </dd>
+              <dd
+                v-else-if="loadingRows"
+              >
+                正在加载样本行…
               </dd>
               <dd
                 v-else
@@ -308,7 +320,7 @@ function move(step: number): void {
         :disabled="!model?.available"
         @click="emit('run')"
       >
-        {{ showResult ? '再试一次' : data.rows.length ? '试发这一行' : '试发' }} <kbd>Ctrl ↵</kbd>
+        {{ showResult ? '再试一次' : (data.rows.length || template?.excel_name) ? '试发这一行' : '试发' }} <kbd>Ctrl ↵</kbd>
       </el-button>
     </footer>
   </div>

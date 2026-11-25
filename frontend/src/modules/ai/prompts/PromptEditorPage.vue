@@ -67,7 +67,11 @@ const files = useTemplateFiles({ template: selected, canCreate: canCreateDraft, 
 const routeId = computed(() => (typeof route.params.id === 'string' && route.params.id !== 'new' ? route.params.id : ''))
 const opening = computed(() => Boolean(routeId.value) && !selected.value && !loadError.value)
 const editableCategories = computed(() => categories.value.filter(item => item.editable))
-const canEdit = computed(() => canEditPage.value && (selected.value ? selected.value.editable : editableCategories.value.length > 0))
+const canEdit = computed(() => canEditPage.value && (
+  selected.value
+    ? selected.value.editable
+    : (loading.value && !categories.value.length) || editableCategories.value.length > 0
+))
 const categoryOptions = computed(() => {
   const own = categories.value.find(item => item.code === selected.value?.category)
   return own && !own.editable ? [own, ...editableCategories.value] : editableCategories.value
