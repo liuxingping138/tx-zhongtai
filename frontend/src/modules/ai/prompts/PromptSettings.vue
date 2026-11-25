@@ -144,11 +144,6 @@ defineExpose({
         />
       </div>
 
-      <span
-        class="studio-ribbon__sep"
-        aria-hidden="true"
-      />
-
       <button
         type="button"
         class="studio-chip"
@@ -305,22 +300,20 @@ defineExpose({
 .studio-config { flex: none; border-bottom: 1px solid var(--zt-border); background: var(--zt-surface-subtle); }
 
 .studio-ribbon {
-  display: flex; align-items: center; gap: 6px; min-height: 42px; padding: 6px 12px;
+  display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 10px;
   flex-wrap: wrap;
 }
-.studio-ribbon__cat { width: 88px; flex: none; }
-.studio-ribbon__model { flex: 0 1 236px; min-width: 150px; }
-.studio-ribbon__model :deep(.model-picker) { flex-wrap: nowrap; gap: 6px; }
+.studio-ribbon__cat { width: 80px; flex: none; }
+.studio-ribbon__model { flex: 1 1 150px; max-width: 210px; min-width: 132px; }
+.studio-ribbon__model :deep(.model-picker) { flex-wrap: nowrap; gap: 6px; width: 100%; }
 .studio-ribbon__model :deep(.model-picker__select--small) { width: 100%; }
 .studio-ribbon__model :deep(.model-picker__off) { display: none; }
 
-.studio-ribbon__sep { width: 1px; height: 16px; margin: 0 2px; background: var(--zt-border); flex: none; }
-
 .studio-chip {
-  display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 9px;
+  display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 8px;
   border: 1px solid var(--zt-border); border-radius: 6px;
   background: var(--zt-panel); color: var(--zt-ink-700);
-  font: 500 12px/1 var(--zt-font); min-width: 0; max-width: 186px; cursor: pointer;
+  font: 500 12px/1 var(--zt-font); min-width: 0; max-width: 146px; cursor: pointer;
   transition: border-color 0.14s ease, background-color 0.14s ease, color 0.14s ease;
 }
 .studio-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

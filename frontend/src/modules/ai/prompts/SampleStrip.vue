@@ -61,7 +61,7 @@ function label(row: RunRow): string {
 .strip__legend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 14px; color: var(--zt-ink-700); font-size: 12px; }
 .strip__legend span { display: inline-flex; align-items: center; gap: 6px; }
 .strip__legend b { color: var(--zt-ink-900); font-weight: 600; font-variant-numeric: tabular-nums; }
-.strip__key { width: 12px; height: 12px; border: 1px solid var(--zt-success-border); border-radius: 2px; background: var(--zt-success-soft); }
+.strip__key { width: 12px; height: 12px; border: 1px solid var(--zt-success); border-radius: 2px; background: var(--zt-success-soft); }
 .strip__key.is-failed { border-color: var(--zt-danger-text); background: var(--zt-danger-text); }
 .strip__key.is-changed { height: 3px; border: 0; background: var(--zt-blue-600); }
 @media (prefers-reduced-motion: reduce) { .strip__cell { transition: none; } }

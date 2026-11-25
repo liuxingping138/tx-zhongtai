@@ -148,22 +148,24 @@ function splitOnlineSuffix(raw: string): { text: string; online: boolean } {
   return { text, online }
 }
 
+function formatDeepSeekParts(ver: string, rawRest: string, online: boolean): SmartModelParts {
+  const tier = rawRest.replace(/版$/g, '').trim()
+  const compact = tier.length > 5 || (online && tier.length > 0)
+  return { family: compact ? `DS ${ver}` : `DeepSeek ${ver}`, tier, online }
+}
+
 /** 列表高辨识度模型拆解：去掉冗余厂商前缀，拆成「主家族版本 + 档位后缀 + 是否联网」，避免整列截成相同的 DeepSeek-V4... */
 export function smartModelParts(rawName: string): SmartModelParts {
   if (!rawName) return { family: '未选', tier: '', online: false }
   const stripped = rawName.replace(/^(字节|百度|阿里|腾讯|智谱)\s*[-－]\s*/, '').trim()
   const { text, online } = splitOnlineSuffix(stripped)
   const ds = /^(DeepSeek)[-－\s]*(V[\d.]+|R\d+)(?:[-－\s]*(.+))?$/i.exec(text)
-  if (ds) {
-    const ver = ds[2] ?? ''
-    const rest = (ds[3] ?? '').replace(/版$/g, '').trim()
-    return { family: `DeepSeek ${ver}`, tier: rest, online }
-  }
+  if (ds) return formatDeepSeekParts(ds[2] ?? '', ds[3] ?? '', online)
   const doubao = /^(Doubao)[-－\s]*([\d.]+[-－]?(?:Pro|Lite|Seed)?)(?:[-－\s]*(.+))?$/i.exec(text)
   if (doubao) {
     const ver = (doubao[2] ?? '').replace(/[-－]/g, ' ')
-    const rest = (doubao[3] ?? '').replace(/版$/g, '').trim()
-    return { family: `Doubao ${ver}`, tier: rest, online }
+    const tier = (doubao[3] ?? '').replace(/版$/g, '').trim()
+    return { family: `Doubao ${ver}`, tier, online }
   }
   return { family: text || stripped, tier: '', online }
 }

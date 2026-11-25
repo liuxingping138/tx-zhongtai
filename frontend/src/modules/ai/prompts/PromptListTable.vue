@@ -198,7 +198,7 @@ function releaseHover(row: PromptTemplate): string {
               <span
                 class="prompt-list__state"
                 :class="`is-${releaseState(row).kind}`"
-              >{{ releaseState(row).compact }}</span>
+              ><span class="prompt-list__state-text">{{ releaseState(row).compact }}</span></span>
               <router-link
                 v-if="row.release?.unreleased_changes.length"
                 class="prompt-list__diff"

@@ -33,7 +33,7 @@ function writeFormat(): void {
       <el-input-tag
         v-model="fields"
         aria-label="输出字段"
-        placeholder="输入期望 AI 返回的字段名回车（如：是否政策），留空则输出自由文本"
+        placeholder="输入字段名回车添加（留空则输出自由文本）"
         size="small"
         :delimiter="FIELD_DELIMITER"
         :disabled="!canEdit"
@@ -53,11 +53,11 @@ function writeFormat(): void {
         >提示词里写的返回字段还是「{{ writtenFields }}」，和这里对不上，模型会按旧字段回</span>
         <span v-else>{{ fields.length ? `共 ${fields.length} 个字段，模型按 JSON 返回` : '未设固定字段，直接返回自由文本' }}{{ format === 'match' ? ' · 格式要求已对上' : '' }}</span>
         <el-button
-          v-if="format !== 'match'"
+          v-if="format !== 'match' && fields.length > 0"
           link
           size="small"
           :type="format === 'stale' ? 'warning' : 'primary'"
-          :disabled="!canEdit || !fields.length"
+          :disabled="!canEdit"
           @click="writeFormat"
         >
           {{ format === 'stale' ? '更新提示词里的格式要求' : '把格式要求追加到提示词' }}
@@ -71,6 +71,10 @@ function writeFormat(): void {
 .out-dock { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: start; gap: 8px; padding: 8px 16px 9px; border-top: 1px solid var(--zt-divider); background: var(--zt-surface-subtle); }
 .out-dock__label { color: var(--zt-ink-500); font-size: 12px; font-weight: 600; line-height: 26px; }
 .out-dock__main { display: grid; gap: 4px; min-width: 0; }
+.out-dock__main :deep(.el-input-tag) { background-color: var(--zt-panel); box-shadow: 0 0 0 1px var(--zt-border) inset; }
+.out-dock__main :deep(.el-input-tag:hover) { box-shadow: 0 0 0 1px var(--zt-border-strong) inset; }
+.out-dock__main :deep(.el-input-tag.is-focus) { box-shadow: 0 0 0 1px var(--zt-blue-600) inset; }
+.out-dock__main :deep(.el-input-tag__input) { background: transparent; color: var(--zt-ink-900); }
 .out-dock__foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; color: var(--zt-ink-500); font-size: 11.5px; }
 .out-dock__foot .is-warn { color: var(--zt-warning-text); }
 </style>

@@ -18,14 +18,19 @@ describe('新建冷启动骨架与模型智能拆解', () => {
 
   it('拆解长模型名为家族版本、档位后缀与是否联网，压缩单行计价文案', () => {
     expect(smartModelParts('字节-DeepSeek-V4.1-Flash经济版（不联网）')).toEqual({
-      family: 'DeepSeek V4.1',
+      family: 'DS V4.1',
       tier: 'Flash经济',
       online: false,
     })
     expect(smartModelParts('字节-DeepSeek-V4-Flash（联网）')).toEqual({
-      family: 'DeepSeek V4',
+      family: 'DS V4',
       tier: 'Flash',
       online: true,
+    })
+    expect(smartModelParts('字节-DeepSeek-V4-Flash（不联网）')).toEqual({
+      family: 'DeepSeek V4',
+      tier: 'Flash',
+      online: false,
     })
     expect(smartModelParts('')).toEqual({ family: '未选', tier: '', online: false })
     expect(compactPriceText({ input_price: '0.0016', output_price: '0.0064', web_search: true })).toBe(

@@ -1,4 +1,4 @@
-/* 提示词模板列表页：100% 保留全部 10 列，1440×900 零横向滚动、看改动不截断、模型分层高辨识度 */
+/* 提示词模板列表页：100% 保留全部 10 列，1440×900 零横向滚动，窄屏固定首列绝不压扁标题 */
 .prompt-list {
   display: flex; flex-direction: column;
   height: calc(100dvh - var(--workspace-header-height) - 48px); min-height: 480px; min-width: 0;
@@ -9,9 +9,9 @@
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
   gap: 8px 12px; padding: 12px 16px; border-bottom: 1px solid var(--zt-border);
 }
-.prompt-list__filters { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.prompt-list__filters { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; flex: 1 1 auto; }
 .prompt-list__actions { display: flex; align-items: center; gap: 8px; margin-left: auto; flex: none; }
-.prompt-list__search { width: 196px; }
+.prompt-list__search { width: 188px; }
 .prompt-list__search .el-input__wrapper { border-radius: 8px; }
 .prompt-list__sep { width: 1px; height: 16px; margin: 0 2px; background: var(--zt-border); flex: none; }
 
@@ -39,32 +39,33 @@
 }
 .prompt-list__empty p { margin: 0; }
 
-/* 10 列精密固定配比表格：1440×900 (1170px) 下 0px 横向滚动条，窄屏 (<1100px) 平滑降级横向滚动 */
+/* 10 列精密配比：固定 9 列合计 970px，1440×900 (1170px) 首列得 200px 且 0px 横向溢出；窄屏保底 1152px 锁定首列 182px */
 .prompt-list__table-wrap { flex: 1; min-height: 0; overflow-y: auto; overflow-x: auto; transition: opacity 0.18s ease; }
 .prompt-list__table-wrap.is-refreshing { opacity: 0.65; }
 
 .prompt-table {
-  width: 100%; border-collapse: collapse; table-layout: fixed; text-align: left;
+  width: 100%; min-width: 1152px; border-collapse: collapse; table-layout: fixed; text-align: left;
   font-variant-numeric: tabular-nums;
 }
 .prompt-table col.col-title { width: auto; }
-.prompt-table col.col-cat { width: 54px; }
-.prompt-table col.col-tasks { width: 116px; }
-.prompt-table col.col-release { width: 170px; }
-.prompt-table col.col-sample { width: 124px; }
-.prompt-table col.col-fields { width: 146px; }
-.prompt-table col.col-model { width: 174px; }
-.prompt-table col.col-creator { width: 78px; }
-.prompt-table col.col-updated { width: 92px; }
-.prompt-table col.col-open { width: 58px; }
+.prompt-table col.col-cat { width: 50px; }
+.prompt-table col.col-tasks { width: 110px; }
+.prompt-table col.col-release { width: 184px; }
+.prompt-table col.col-sample { width: 114px; }
+.prompt-table col.col-fields { width: 130px; }
+.prompt-table col.col-model { width: 160px; }
+.prompt-table col.col-creator { width: 86px; }
+.prompt-table col.col-updated { width: 86px; }
+.prompt-table col.col-open { width: 50px; }
 
 .prompt-table th {
-  position: sticky; top: 0; z-index: 2; height: 38px; padding: 0 8px;
+  position: sticky; top: 0; z-index: 2; height: 38px; padding: 0 7px;
   background: var(--zt-table-head); border-bottom: 1px solid var(--zt-border);
   color: var(--zt-ink-500); font-size: 12px; font-weight: 600; white-space: nowrap; user-select: none;
 }
-.prompt-table th:first-child, .prompt-table td:first-child { padding-left: 16px; }
-.prompt-table th:last-child, .prompt-table td:last-child { padding-left: 4px; padding-right: 14px; }
+.prompt-table th:first-child { position: sticky; left: 0; z-index: 4; padding-left: 16px; background: var(--zt-table-head); }
+.prompt-table td:first-child { position: sticky; left: 0; z-index: 1; padding-left: 16px; background: var(--zt-panel); }
+.prompt-table th:last-child, .prompt-table td:last-child { padding-left: 4px; padding-right: 12px; }
 .prompt-table th.is-right, .prompt-table td.is-right { text-align: right; }
 
 .prompt-sort-btn {
@@ -77,8 +78,9 @@
 
 .prompt-table tbody tr { cursor: pointer; transition: background-color 0.12s ease; }
 .prompt-table tbody tr:hover td { background: var(--zt-row-hover); }
+.prompt-table tbody tr:hover td:first-child { background: var(--zt-row-hover); }
 .prompt-table td {
-  height: 46px; padding: 0 8px; border-bottom: 1px solid var(--zt-divider);
+  height: 46px; padding: 0 7px; border-bottom: 1px solid var(--zt-divider);
   color: var(--zt-ink-700); font-size: 12.5px; vertical-align: middle;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
@@ -104,17 +106,15 @@
   padding: 2px 7px; border-radius: 5px; background: var(--el-color-primary-light-9);
   color: var(--zt-blue-600); font-size: 11.5px; font-weight: 500; line-height: 1.35;
 }
-.prompt-list__task-more {
-  flex: none; color: var(--zt-blue-600); font-size: 11px; font-weight: 600;
-}
+.prompt-list__task-more { flex: none; color: var(--zt-blue-600); font-size: 11px; font-weight: 600; }
 
-/* 第 4 列：上线状态圆点 + 独立不截断「看改动」胶囊 */
+/* 第 4 列：上线状态圆点 + 块级省略号文本 + 独立「看改动」胶囊（184px 永不叠字） */
 .prompt-cell-release { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .prompt-list__state {
   display: inline-flex; align-items: center; gap: 5px; min-width: 0;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: var(--zt-ink-500); font-size: 12.5px;
 }
+.prompt-list__state-text { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prompt-list__state::before {
   content: ""; flex: none; width: 6.5px; height: 6.5px; border-radius: 50%; background: var(--zt-muted-mark);
 }
@@ -132,7 +132,7 @@
 }
 .prompt-list__diff:hover { border-color: var(--el-color-primary-light-5); background: var(--el-color-primary-light-8); }
 
-/* 第 5 列：样本试跑（降噪非故障态「待重跑 · 草稿已改」，突出通过/异常） */
+/* 第 5 列：样本试跑 */
 .prompt-list__sample { font-size: 12.5px; color: var(--zt-ink-400); }
 .prompt-list__sample.is-passed { color: var(--zt-success-text); font-weight: 500; }
 .prompt-list__sample.is-failed { color: var(--zt-warning-text); font-weight: 600; }
@@ -161,6 +161,8 @@
 .prompt-list__open { opacity: 0; color: var(--zt-blue-600); font-size: 12px; font-weight: 600; transition: opacity 0.12s; }
 .prompt-table tbody tr:hover .prompt-list__open { opacity: 1; }
 
-@media (max-width: 1140px) {
-  .prompt-table { min-width: 1080px; }
+@media (max-width: 1260px) {
+  .prompt-list__sep { display: none; }
+  .prompt-table th:first-child,
+  .prompt-table td:first-child { box-shadow: 1px 0 0 var(--zt-divider); }
 }
