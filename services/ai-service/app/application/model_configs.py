@@ -15,7 +15,6 @@ from platform_common.errors import ApiError, ErrorCode, NotFoundError, VersionCo
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.audit_emit import enqueue_event
-from app.core.config import get_settings
 from app.domain.llm_models import (
     DEFAULT_PEAK_HOURS,
     PROVIDERS,
@@ -77,18 +76,12 @@ def _price_text(value: Decimal | None) -> str:
     return "" if value is None else format(value.normalize(), "f")
 
 
-def _provider_available(provider: str) -> bool:
-    settings = get_settings()
-    return bool(settings.ark_api_key if provider == "ark" else settings.baidu_api_key)
-
-
 def to_dict(row: AiModel) -> dict[str, Any]:
     return {
         "id": row.id,
         "name": row.name,
         "provider": row.provider,
         "provider_name": PROVIDERS.get(row.provider, row.provider),
-        "available": _provider_available(row.provider),
         "endpoint": row.endpoint,
         "web_search": row.web_search,
         "thinking": row.thinking,

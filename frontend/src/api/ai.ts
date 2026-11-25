@@ -353,13 +353,12 @@ export function deleteBatchRun(id: string): Promise<null> {
   return request(http.delete(`${BASE}/batch-runs/${id}`))
 }
 
-/** 「模型配置」页记录；枚举字段为代码值，单价为空串表示未配该档。 */
+/** 「模型配置」页的一行。单价是文本，没配的档位为空串；枚举字段是代码值，页面显示前换成中文。 */
 export interface ModelConfig {
   id: string
   name: string
   provider: string
   provider_name: string
-  available?: boolean
   endpoint: string
   web_search: boolean
   thinking: string
@@ -372,6 +371,7 @@ export interface ModelConfig {
   peak_input_price: string
   peak_output_price: string
   peak_hours: string
+  /** 命中上下文缓存的输入单价（不分低优、常规档）和工作日高峰时段的缓存单价；空串表示没配，缓存部分按输入单价算 */
   cache_price: string
   peak_cache_price: string
   search_price: string
@@ -385,7 +385,7 @@ export interface ModelConfig {
   updated_by_name: string
 }
 
-export type ModelConfigBody = Omit<ModelConfig, 'provider_name' | 'available' | 'version' | 'created_at' | 'created_by_name' | 'updated_at' | 'updated_by_name'>
+export type ModelConfigBody = Omit<ModelConfig, 'provider_name' | 'version' | 'created_at' | 'created_by_name' | 'updated_at' | 'updated_by_name'>
 
 export function listModelConfigs(): Promise<ModelConfig[]> {
   return request(http.get(`${BASE}/models`))
