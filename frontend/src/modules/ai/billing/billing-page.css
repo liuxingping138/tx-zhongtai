@@ -53,22 +53,41 @@
 }
 .billing__metric:first-child { border-left: 0; }
 .billing__metric--hero { background: var(--zt-hero-gradient); }
-.billing__metric-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.billing__metric-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 20px; }
 .billing__metric-label { color: var(--zt-ink-500); font-size: 12.5px; font-weight: 500; white-space: nowrap; }
-.billing__metric-rate { color: var(--zt-teal-text); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.billing__metric-rate {
+  display: inline-flex; align-items: center; justify-content: center; height: 19px; padding: 0 7px;
+  border: 1px solid var(--zt-teal-line); border-radius: 999px;
+  background: var(--zt-teal-soft); color: var(--zt-teal-text);
+  font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.billing__metric-rate.is-zero {
+  border-color: var(--zt-border); background: var(--zt-surface-subtle); color: var(--zt-ink-400); font-weight: 500;
+}
 .billing__metric-value {
   color: var(--zt-ink-900); font-size: clamp(20px, 1.8vw, 24px); font-weight: 650;
   line-height: 1.18; letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.billing__metric--hero .billing__metric-value { color: var(--zt-blue-600); font-size: clamp(24px, 2.1vw, 28px); font-weight: 700; }
+.billing__hero-money {
+  display: inline-flex; align-items: baseline; line-height: 1.14;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.billing__hero-sym { color: var(--zt-blue-600); font-size: 17px; font-weight: 600; margin-right: 2px; }
+.billing__hero-int { color: var(--zt-blue-600); font-size: clamp(25px, 2.2vw, 29px); font-weight: 700; letter-spacing: -0.03em; }
+.billing__hero-dec { color: var(--zt-ink-500); font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
 .billing__metric-foot { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .billing__metric-note {
   color: var(--zt-ink-500); font-size: 11.5px; line-height: 1.35; font-variant-numeric: tabular-nums;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.billing__micro-bar { width: 100%; height: 4px; border-radius: 999px; background: var(--zt-surface-subtle); overflow: hidden; }
+.billing__micro-bar {
+  display: flex; gap: 1.5px; width: 100%; height: 3px; border-radius: 999px;
+  background: var(--zt-surface-subtle); overflow: hidden;
+}
 .billing__micro-fill { display: block; height: 100%; border-radius: 999px; background: var(--zt-teal-text); transition: width 0.25s ease; }
+.billing__micro-fill--primary { background: var(--zt-blue-600); }
+.billing__micro-fill--ai { background: var(--zt-ai-text); }
 
 /* 3. 图表与明细面板 */
 .billing__panel {
@@ -95,7 +114,7 @@
 /* 4. 明细 Tab 与零溢出 7 列精密财务表 */
 .billing__tabs { display: inline-flex; align-items: center; gap: 20px; }
 .billing__tab {
-  position: relative; padding: 6px 0; border: 0; background: transparent;
+  position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 6px 0; border: 0; background: transparent;
   color: var(--zt-ink-500); font: 500 13.5px/1.4 var(--zt-font); white-space: nowrap;
   cursor: pointer; transition: color 0.15s ease;
 }
@@ -105,6 +124,12 @@
   content: ""; position: absolute; left: 0; right: 0; bottom: -11px;
   height: 2px; border-radius: 2px; background: var(--zt-blue-600);
 }
+.billing__tab-count {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 18px; padding: 0 6px;
+  border-radius: 999px; background: var(--zt-surface-subtle); color: var(--zt-ink-500);
+  font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.billing__tab.is-active .billing__tab-count { background: var(--el-color-primary-light-9); color: var(--zt-blue-600); }
 .billing__table-hint { color: var(--zt-ink-500); font-size: 12px; }
 
 .billing__table-wrap { width: 100%; overflow-x: hidden; }
@@ -149,10 +174,17 @@
 .billing__name-text { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .billing__pin-tag { color: var(--zt-blue-600); font-size: 11px; font-weight: 600; flex: none; }
 
-.billing__cached-cell { display: inline-flex; align-items: baseline; justify-content: flex-end; gap: 8px; width: 100%; }
+.billing__cached-cell { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; width: 100%; }
 .billing__cached-val { color: var(--zt-ink-700); }
-.billing__cached-rate { display: inline-block; min-width: 42px; text-align: right; color: var(--zt-teal-text); font-size: 11.5px; }
-.billing__cached-rate--zero { color: var(--zt-ink-400); }
+.billing__cached-rate {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 50px; height: 19px; padding: 0 6px;
+  border: 1px solid var(--zt-teal-line); border-radius: 999px;
+  background: var(--zt-teal-soft); color: var(--zt-teal-text);
+  font-size: 11px; font-weight: 600; line-height: 1;
+}
+.billing__cached-rate--zero {
+  border-color: transparent; background: transparent; color: var(--zt-ink-400); font-weight: 400; justify-content: flex-end; padding-right: 4px;
+}
 .billing__cost-val { color: var(--zt-ink-900); font-weight: 600; }
 
 .billing__share-cell { display: inline-flex; align-items: center; justify-content: flex-end; gap: 10px; width: 100%; }

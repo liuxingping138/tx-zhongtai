@@ -18,14 +18,22 @@ export interface BillingGroup {
   share: number
 }
 
+export interface MoneyParts {
+  symbol: string
+  integer: string
+  decimal: string
+}
+
 export interface LedgerCardItem {
   key: 'cost' | 'calls' | 'input' | 'output' | 'cached'
   label: string
   value: string
+  moneyParts?: MoneyParts
   badge?: string
   note: string
   main: boolean
   progress?: number
+  splitBar?: { primary: number; secondary: number }
 }
 
 /** 分类色板（已用色盲和对比度校验）：颜色跟着模型或用途走，筛掉别的系列也不变色。超过 8 个的并进「其他」。 */
@@ -127,6 +135,19 @@ function formatRatio(input: number, output: number): string {
   return output > 0 ? `${(input / output).toFixed(1)} : 1` : '—'
 }
 
+function callSplitBar(split: { schedule: number; test: number }, totalCalls: number): { primary: number; secondary: number } | undefined {
+  if (totalCalls <= 0) return undefined
+  return { primary: split.schedule / totalCalls, secondary: split.test / totalCalls }
+}
+
+/** 金额拆分为符号 + 整数位 + 小数位，供账本 Hero 格做金融级主次字号分层。 */
+export function splitMoneyParts(value: number): MoneyParts {
+  const formatted = money(value)
+  const dot = formatted.indexOf('.')
+  if (dot === -1) return { symbol: '¥', integer: formatted.replace(/^¥/, ''), decimal: '' }
+  return { symbol: '¥', integer: formatted.slice(1, dot), decimal: formatted.slice(dot) }
+}
+
 /** 一体化 5 格财务账本条：从现有明细直接算出日均/峰值、调度/测试拆分、均次消耗与输入输出比，不改后端接口。 */
 export function buildLedgerCards(shownRows: BillingRow[], daysCount: number): LedgerCardItem[] {
   const total = summarize(shownRows)
@@ -145,8 +166,8 @@ export function buildLedgerCards(shownRows: BillingRow[], daysCount: number): Le
     ? `调度 ${split.schedule.toLocaleString('zh-CN')} · 测试 ${split.test.toLocaleString('zh-CN')}`
     : '批量任务与单次请求累计'
   return [
-    { key: 'cost', label: '合计费用', value: money(total.cost), note: costNote, main: true },
-    { key: 'calls', label: '调用次数', value: total.calls.toLocaleString('zh-CN'), note: callsNote, main: false },
+    { key: 'cost', label: '合计费用', value: money(total.cost), moneyParts: splitMoneyParts(total.cost), note: costNote, main: true },
+    { key: 'calls', label: '调用次数', value: total.calls.toLocaleString('zh-CN'), note: callsNote, main: false, splitBar: callSplitBar(split, total.calls) },
     {
       key: 'input',
       label: '输入 token',

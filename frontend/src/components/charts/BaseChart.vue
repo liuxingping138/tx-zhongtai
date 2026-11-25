@@ -10,7 +10,9 @@ const props = withDefaults(defineProps<{
   height?: string
   /** 外部悬停联动高亮指定系列名（如明细表悬停高亮上方柱状图对应系列）。 */
   highlightedSeries?: string | null
-}>(), { height: '280px', highlightedSeries: null })
+  /** 外部悬停联动触发指定类目下标的提示框（如按日期明细表悬停定位上方趋势图当日）。 */
+  activeDataIndex?: number | null
+}>(), { height: '280px', highlightedSeries: null, activeDataIndex: null })
 
 const emit = defineEmits<{ select: [params: { name: string; seriesName?: string; dataIndex: number }] }>()
 
@@ -37,6 +39,15 @@ watch(() => props.highlightedSeries, (next, prev) => {
   if (!chart.value) return
   if (prev) chart.value.dispatchAction({ type: 'downplay', seriesName: prev })
   if (next) chart.value.dispatchAction({ type: 'highlight', seriesName: next })
+})
+
+watch(() => props.activeDataIndex, next => {
+  if (!chart.value) return
+  if (typeof next === 'number' && next >= 0) {
+    chart.value.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: next })
+  } else {
+    chart.value.dispatchAction({ type: 'hideTip' })
+  }
 })
 
 onBeforeUnmount(() => {

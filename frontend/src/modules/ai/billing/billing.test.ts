@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { BillingRow } from '@/api/aiBilling'
 import {
   buildLedgerCards, cachedText, colorMap, countActiveFilters, dailySeries, daysBetween, filterOptions,
-  filterRows, groupBy, money, presetRange, pruneFilters, pruneInPlace, sortGroups, summarize, tokens, totalCards,
+  filterRows, groupBy, money, presetRange, pruneFilters, pruneInPlace, sortGroups, splitMoneyParts, summarize, tokens, totalCards,
   type BillingFilters,
 } from './billing'
 
@@ -93,14 +93,22 @@ describe('费用账单', () => {
     expect([tokens(9876), tokens(123456), tokens(181_765_000)]).toEqual(['9,876', '12.3万', '1.82亿'])
   })
 
-  it('账本指标卡计算日均峰值、调度测试拆分与缓存命中率，支持按列排序与筛选计数', () => {
+  it('账本指标卡计算金额分层、日均峰值、调度测试微比例与缓存命中率', () => {
     const cards = buildLedgerCards(ROWS, 2)
     expect(cards.map(c => c.key)).toEqual(['cost', 'calls', 'input', 'output', 'cached'])
-    expect(cards[0]?.note).toContain('日均 ¥1.00')
-    expect(cards[0]?.note).toContain('峰值 10-20（¥1.50）')
-    expect(cards[1]?.note).toBe('调度 1 · 测试 5')
-    expect(cards[4]?.badge).toBe('40%')
-    expect(cards[4]?.progress).toBeCloseTo(0.4)
+    expect(splitMoneyParts(1234.5)).toEqual({ symbol: '¥', integer: '1,234', decimal: '.50' })
+    expect(splitMoneyParts(0.0208)).toEqual({ symbol: '¥', integer: '0', decimal: '.0208' })
+    expect(cards[0]).toMatchObject({
+      moneyParts: { symbol: '¥', integer: '2', decimal: '.00' },
+      note: '日均 ¥1.00 · 峰值 10-20（¥1.50）',
+    })
+    expect(cards[1]).toMatchObject({ note: '调度 1 · 测试 5' })
+    expect(cards[1]?.splitBar?.primary).toBeCloseTo(1 / 6)
+    expect(cards[1]?.splitBar?.secondary).toBeCloseTo(5 / 6)
+    expect(cards[4]).toMatchObject({ badge: '40%', progress: 0.4 })
+  })
+
+  it('支持筛选计数与明细按列升降序排序', () => {
     expect(countActiveFilters({ scenes: ['测试'], categories: [], purposes: ['批量任务'], models: [] })).toBe(2)
     const groups = groupBy(ROWS, 'model')
     expect(sortGroups(groups, 'calls', 'asc').map(g => g.name)).toEqual(['方舟Flash', '千帆V3.2'])

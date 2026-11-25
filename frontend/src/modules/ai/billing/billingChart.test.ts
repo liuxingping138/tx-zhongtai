@@ -47,7 +47,7 @@ describe('每日费用堆叠柱', () => {
     expect(day).toContain('2026-10-21 周三')
     expect(day).toContain('¥1.75')
     expect(day).toContain('较日均 +63%')
-    expect(day).toContain('display:block;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">方舟Flash</span>')
+    expect(day).toContain('display:block;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">方舟Flash</span>')
     expect(day).toContain('85.7%')
     expect(tooltip.formatter([{ dataIndex: 1, seriesName: '方舟Flash', value: 0 }])).toContain('这天没有花费')
   })

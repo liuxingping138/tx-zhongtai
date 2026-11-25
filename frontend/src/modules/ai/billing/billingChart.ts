@@ -63,7 +63,7 @@ function formatTooltip(
     return `<div style="display:flex;align-items:center;justify-content:space-between;gap:18px;line-height:1.85;">`
       + `<span style="display:inline-flex;align-items:center;gap:6px;min-width:0;color:${palette.ink};">`
       + `<i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${item.color};flex:none;"></i>`
-      + `<span style="display:block;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(item.name)}</span></span>`
+      + `<span style="display:block;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(item.name)}</span></span>`
       + `<span style="display:inline-flex;align-items:center;gap:8px;flex:none;white-space:nowrap;font-variant-numeric:tabular-nums;">`
       + `<span style="color:${palette.inkMuted};font-size:11px;">${pct}%</span>`
       + `<span style="font-weight:500;color:${palette.ink};min-width:62px;text-align:right;">${money(item.val)}</span></span></div>`

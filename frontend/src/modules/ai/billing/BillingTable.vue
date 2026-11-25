@@ -10,6 +10,7 @@ import {
 
 const props = defineProps<{
   tab: GroupKey
+  tabCounts: Record<GroupKey, number>
   colorBy: 'model' | 'purpose'
   groups: BillingGroup[]
   total: Omit<BillingGroup, 'name' | 'share'>
@@ -25,6 +26,7 @@ const emit = defineEmits<{
   'update:tab': [value: GroupKey]
   'row-click': [name: string]
   'hover-series': [seriesName: string | null]
+  'hover-day': [day: string | null]
   reset: []
 }>()
 
@@ -74,6 +76,26 @@ function hoverSeries(name: string): string | null {
   if (!showSwatch.value) return null
   return isFallbackColor(props.colors.get(name)) ? OTHER : name
 }
+function onRowEnter(name: string): void {
+  if (props.tab === 'day') {
+    emit('hover-day', name)
+  } else {
+    emit('hover-series', hoverSeries(name))
+  }
+}
+
+function onRowLeave(): void {
+  emit('hover-series', null)
+  emit('hover-day', null)
+}
+
+function onRowActivate(name: string): void {
+  if (props.tab === 'day') {
+    emit('hover-day', name)
+  } else {
+    emit('row-click', name)
+  }
+}
 </script>
 
 <template>
@@ -97,11 +119,12 @@ function hoverSeries(name: string): string | null {
           :class="{ 'is-active': tab === item.value }"
           @click="emit('update:tab', item.value)"
         >
-          {{ item.label }}
+          <span>{{ item.label }}</span>
+          <span class="billing__tab-count">{{ tabCounts[item.value] }}</span>
         </button>
       </div>
       <span class="billing__table-hint">
-        {{ tab !== 'day' ? '悬停行联动高亮上方图表 · 点击行快速聚焦筛选' : `共 ${groups.length} 个活跃记账日` }}
+        {{ tab !== 'day' ? '悬停行联动高亮上方图表 · 点击行快速聚焦筛选' : `共 ${groups.length} 个活跃记账日 · 悬停行联动定位上方趋势图` }}
       </span>
     </header>
 
@@ -181,11 +204,11 @@ function hoverSeries(name: string): string | null {
           <tr
             v-for="row in sortedGroups"
             :key="row.name"
-            class="billing__row"
-            :class="{ 'billing__row--interactive': tab !== 'day', 'is-pinned': isPinned(row.name) }"
-            @click="tab !== 'day' && emit('row-click', row.name)"
-            @mouseenter="emit('hover-series', hoverSeries(row.name))"
-            @mouseleave="emit('hover-series', null)"
+            class="billing__row billing__row--interactive"
+            :class="{ 'is-pinned': isPinned(row.name) }"
+            @click="onRowActivate(row.name)"
+            @mouseenter="onRowEnter(row.name)"
+            @mouseleave="onRowLeave()"
           >
             <td>
               <span class="billing__name-cell">

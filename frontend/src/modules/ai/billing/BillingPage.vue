@@ -40,6 +40,7 @@ const filters = reactive<BillingFilters>({
 const colorBy = ref<'model' | 'purpose'>(initialPurposes.length ? 'purpose' : 'model')
 const tab = ref<GroupKey>(initialPurposes.length ? 'purpose' : 'model')
 const hoveredSeries = ref<string | null>(null)
+const hoveredDay = ref<string | null>(null)
 const palette = useChartPalette()
 const { isDark } = useTheme()
 
@@ -53,6 +54,16 @@ const initialLoading = computed(() => loading.value && rows.value.length === 0)
 const colors = computed(() => colorMap(rows.value, colorBy.value, isDark.value))
 const chart = computed(() => dailySeries(shown.value, range.value[0], range.value[1], colorBy.value, colors.value, isDark.value))
 const option = computed(() => costOption(chart.value.days, chart.value.series, palette.value))
+const hoveredDayIndex = computed(() => {
+  if (!hoveredDay.value) return null
+  const idx = chart.value.days.indexOf(hoveredDay.value)
+  return idx >= 0 ? idx : null
+})
+const tabCounts = computed<Record<GroupKey, number>>(() => ({
+  model: new Set(shown.value.map(row => row.model)).size,
+  purpose: new Set(shown.value.map(row => row.purpose)).size,
+  day: new Set(shown.value.map(row => row.day)).size,
+}))
 const chartLabel = computed(() =>
   `每日费用：${range.value[0]} 至 ${range.value[1]} 合计 ${money(total.value.cost)}。${groupBy(shown.value, colorBy.value)
     .slice(0, 5).map(group => `${group.name} ${money(group.cost)}`).join('；')}`,
@@ -104,6 +115,8 @@ function resetAllFilters(): void {
 
 function onTabChange(next: GroupKey): void {
   tab.value = next
+  hoveredSeries.value = null
+  hoveredDay.value = null
   if (next === 'model' || next === 'purpose') colorBy.value = next
 }
 
@@ -189,15 +202,43 @@ onMounted(load)
           <span
             v-if="card.badge"
             class="billing__metric-rate"
+            :class="{ 'is-zero': !card.progress }"
           >{{ card.badge }}</span>
         </div>
         <strong
+          v-if="card.moneyParts"
+          class="billing__hero-money"
+          :title="card.value"
+          :aria-label="`${card.label} ${card.value}`"
+        >
+          <span class="billing__hero-sym">{{ card.moneyParts.symbol }}</span>
+          <span class="billing__hero-int">{{ card.moneyParts.integer }}</span>
+          <span class="billing__hero-dec">{{ card.moneyParts.decimal }}</span>
+        </strong>
+        <strong
+          v-else
           class="billing__metric-value"
           :title="card.value"
         >{{ card.value }}</strong>
         <div class="billing__metric-foot">
           <div
-            v-if="typeof card.progress === 'number'"
+            v-if="card.splitBar"
+            class="billing__micro-bar"
+            aria-hidden="true"
+          >
+            <span
+              v-if="card.splitBar.primary > 0"
+              class="billing__micro-fill billing__micro-fill--primary"
+              :style="{ width: `${Math.max(card.splitBar.primary * 100, 4)}%` }"
+            />
+            <span
+              v-if="card.splitBar.secondary > 0"
+              class="billing__micro-fill billing__micro-fill--ai"
+              :style="{ width: `${Math.max(card.splitBar.secondary * 100, 4)}%` }"
+            />
+          </div>
+          <div
+            v-else-if="typeof card.progress === 'number'"
             class="billing__micro-bar"
             aria-hidden="true"
           >
@@ -253,6 +294,7 @@ onMounted(load)
           :option="option"
           :label="chartLabel"
           :highlighted-series="hoveredSeries"
+          :active-data-index="hoveredDayIndex"
           height="296px"
           @select="onChartSelect"
         />
@@ -268,6 +310,7 @@ onMounted(load)
 
     <BillingTable
       :tab="tab"
+      :tab-counts="tabCounts"
       :color-by="colorBy"
       :groups="groups"
       :total="total"
@@ -280,6 +323,7 @@ onMounted(load)
       @update:tab="onTabChange"
       @row-click="onRowClick"
       @hover-series="name => hoveredSeries = name"
+      @hover-day="day => hoveredDay = day"
       @reset="resetAllFilters"
     />
   </div>
