@@ -51,30 +51,52 @@ function writeFormat(): void {
           class="is-warn"
           role="status"
         >提示词里写的返回字段还是「{{ writtenFields }}」，和这里对不上，模型会按旧字段回</span>
-        <span v-else>{{ fields.length ? `共 ${fields.length} 个字段，模型按 JSON 返回` : '未设固定字段，直接返回自由文本' }}{{ format === 'match' ? ' · 格式要求已对上' : '' }}</span>
-        <el-button
+        <span v-else>
+          {{ fields.length ? `共 ${fields.length} 个字段，模型按 JSON 返回` : '未设固定字段，直接返回自由文本' }}<span
+            v-if="format === 'match'"
+            class="is-ok"
+          > · 格式要求已对上</span>
+        </span>
+        <button
           v-if="format !== 'match' && fields.length > 0"
-          link
-          size="small"
-          :type="format === 'stale' ? 'warning' : 'primary'"
+          type="button"
+          class="out-dock__sync"
+          :class="{ 'is-stale': format === 'stale' }"
           :disabled="!canEdit"
           @click="writeFormat"
         >
           {{ format === 'stale' ? '更新提示词里的格式要求' : '把格式要求追加到提示词' }}
-        </el-button>
+        </button>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.out-dock { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: start; gap: 8px; padding: 8px 16px 9px; border-top: 1px solid var(--zt-divider); background: var(--zt-surface-subtle); }
-.out-dock__label { color: var(--zt-ink-500); font-size: 12px; font-weight: 600; line-height: 26px; }
-.out-dock__main { display: grid; gap: 4px; min-width: 0; }
-.out-dock__main :deep(.el-input-tag) { background-color: var(--zt-panel); box-shadow: 0 0 0 1px var(--zt-border) inset; }
+.out-dock { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: start; gap: 8px; padding: 9px 16px 10px; border-top: 1px solid var(--zt-divider); background: var(--zt-surface-subtle); }
+.out-dock__label { color: var(--zt-ink-500); font-size: 12px; font-weight: 600; line-height: 28px; }
+.out-dock__main { display: grid; gap: 5px; min-width: 0; }
+.out-dock__main :deep(.el-input-tag) { min-height: 30px; border-radius: 7px; background-color: var(--zt-panel); box-shadow: 0 0 0 1px var(--zt-border) inset; }
 .out-dock__main :deep(.el-input-tag:hover) { box-shadow: 0 0 0 1px var(--zt-border-strong) inset; }
-.out-dock__main :deep(.el-input-tag.is-focus) { box-shadow: 0 0 0 1px var(--zt-blue-600) inset; }
+.out-dock__main :deep(.el-input-tag.is-focus) { box-shadow: 0 0 0 1px var(--zt-blue-600) inset, 0 0 0 3px var(--zt-focus-ring); }
+.out-dock__main :deep(.el-input-tag .el-tag) {
+  border: 1px solid var(--zt-ai-line); border-radius: 5px;
+  background: var(--zt-ai-soft); color: var(--zt-ai-text); font-weight: 550;
+}
+.out-dock__main :deep(.el-input-tag .el-tag .el-tag__close) { color: var(--zt-ai-text); }
+.out-dock__main :deep(.el-input-tag .el-tag .el-tag__close:hover) { background: var(--zt-ai-line); color: var(--zt-ink-900); }
 .out-dock__main :deep(.el-input-tag__input) { background: transparent; color: var(--zt-ink-900); }
 .out-dock__foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; color: var(--zt-ink-500); font-size: 11.5px; }
-.out-dock__foot .is-warn { color: var(--zt-warning-text); }
+.out-dock__foot .is-warn { color: var(--zt-warning-text); font-weight: 500; }
+.out-dock__foot .is-ok { color: var(--zt-success-text); font-weight: 600; }
+.out-dock__sync {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 9px;
+  border: 1px solid var(--el-color-primary-light-5); border-radius: 999px;
+  background: var(--el-color-primary-light-9); color: var(--zt-blue-600);
+  font: 600 11.5px/1 var(--zt-font); cursor: pointer; transition: all 0.14s ease;
+}
+.out-dock__sync:hover:not(:disabled) { border-color: var(--zt-blue-600); background: var(--el-color-primary-light-8); }
+.out-dock__sync.is-stale { border-color: var(--zt-warning-border); background: var(--zt-warning-soft); color: var(--zt-warning-text); }
+.out-dock__sync.is-stale:hover:not(:disabled) { border-color: var(--zt-warning); }
+.out-dock__sync:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>

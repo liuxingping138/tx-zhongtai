@@ -181,7 +181,7 @@ function applyStarter(): void {
   if (!form.title.trim()) form.title = spec.defaultTitle
   form.content = spec.content
   form.output_fields = spec.outputFields
-  ElMessage({ type: 'success', message: '已填入标准结构化提示词骨架，可直接按 Ctrl+Enter 试发', placement: 'bottom-right', offset: 64 })
+  ElMessage({ type: 'success', message: '已填入标准结构化提示词骨架，可直接按 Ctrl+Enter 试发', offset: 72, duration: 2400 })
   editor.value?.focus()
 }
 </script>

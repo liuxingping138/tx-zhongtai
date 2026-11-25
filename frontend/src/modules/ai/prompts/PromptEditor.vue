@@ -295,19 +295,27 @@ defineExpose({ focus: () => area.value?.focus() })
 .prompt-editor__menu .prompt-editor__menu-hint:hover { background: none; color: var(--zt-ink-500); }
 .prompt-editor__menu .prompt-editor__menu-action { color: var(--zt-blue-600); }
 /* 提示词很长、往下滚时变量这一行贴在可见区域底部，随时能插；限制最大高度，展开几十列时内部滚动不遮编辑区。 */
-.prompt-editor__vars { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; max-height: 116px; overflow-y: auto; padding: 7px 16px; border-top: 1px solid var(--zt-border); background: var(--zt-surface-subtle); font-size: 12px; }
-.prompt-editor__vars-label { margin-right: 4px; color: var(--zt-ink-500); }
+.prompt-editor__vars { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; max-height: 116px; overflow-y: auto; padding: 8px 16px; border-top: 1px solid var(--zt-border); background: var(--zt-surface-subtle); font-size: 12px; }
+.prompt-editor__vars-label { margin-right: 4px; color: var(--zt-ink-500); font-weight: 600; }
 .prompt-editor__vars-hint { color: var(--zt-ink-400); }
-.prompt-editor__var { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; line-height: 18px; }
-.prompt-editor__var small { font-size: 11px; opacity: 0.8; }
-.prompt-editor__var.is-column { background: var(--el-color-primary-light-8); color: var(--zt-blue-700); }
-.prompt-editor__var.is-code { background: var(--zt-teal-soft); color: var(--zt-teal-text); }
-.prompt-editor__var.is-missing, .prompt-editor__var.is-nocode { background: var(--zt-warning-soft); color: var(--zt-warning-text); }
-.prompt-editor__var.is-pending { background: var(--zt-soft); color: var(--zt-ink-500); }
+.prompt-editor__var { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 9px; border: 1px solid transparent; border-radius: 999px; font-weight: 550; line-height: 1; }
+.prompt-editor__var small { font-size: 11px; opacity: 0.82; }
+.prompt-editor__var.is-column { border-color: var(--el-color-primary-light-7); background: var(--el-color-primary-light-9); color: var(--zt-blue-700); }
+.prompt-editor__var.is-code { border-color: var(--zt-teal-line); background: var(--zt-teal-soft); color: var(--zt-teal-text); }
+.prompt-editor__var.is-missing, .prompt-editor__var.is-nocode { border-color: var(--zt-warning-border); background: var(--zt-warning-soft); color: var(--zt-warning-text); }
+.prompt-editor__var.is-pending { border-color: var(--zt-border); background: var(--zt-panel); color: var(--zt-ink-500); }
 .prompt-editor__vars .el-button { margin: 0; }
-.prompt-editor__add { padding: 1px 8px; border: 1px dashed var(--zt-border-strong); border-radius: 999px; background: transparent; color: var(--zt-ink-500); font: inherit; line-height: 18px; cursor: pointer; }
+.prompt-editor__add {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 9px;
+  border: 1px solid var(--zt-border-strong); border-radius: 999px;
+  background: var(--zt-btn-sec-bg); box-shadow: var(--zt-btn-sec-shadow);
+  color: var(--zt-ink-700); font: 550 11.5px/1 var(--zt-font); cursor: pointer;
+  transition: all 0.14s ease;
+}
 .prompt-editor__add--code { border-color: var(--zt-teal-line); color: var(--zt-teal-text); }
-.prompt-editor__add:hover:not(:disabled), .prompt-editor__add:focus-visible { border-color: var(--zt-blue-600); color: var(--zt-blue-600); }
+.prompt-editor__add:hover:not(:disabled), .prompt-editor__add:focus-visible {
+  border-color: var(--zt-blue-600); color: var(--zt-blue-600); box-shadow: var(--zt-btn-sec-hover-shadow); transform: translateY(-0.5px);
+}
 .prompt-editor__add:disabled { cursor: not-allowed; opacity: 0.5; }
 .prompt-editor__more { padding: 1px 8px; border: 0; border-radius: 999px; background: transparent; color: var(--zt-blue-600); font: inherit; line-height: 18px; cursor: pointer; }
 .prompt-editor__more:hover { text-decoration: underline; }

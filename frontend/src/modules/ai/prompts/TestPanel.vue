@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, toRef } from 'vue'
+import { FolderOpened, FullScreen, MagicStick, ScaleToOriginal, Upload } from '@element-plus/icons-vue'
 
 import type { AiModel, BatchRun, PromptTemplate } from '@/api/ai'
 import type { useAnswerStream } from '../shared/useAnswerStream'
@@ -92,10 +93,11 @@ function trialRow(number: number): void {
         <button
           v-if="tab === 'sample'"
           type="button"
-          class="test-panel__wide"
+          class="row-action test-panel__wide"
           @click="wide = !wide"
         >
-          {{ wide ? '恢复分栏' : '全屏看结果' }}
+          <el-icon><ScaleToOriginal v-if="wide" /><FullScreen v-else /></el-icon>
+          <span>{{ wide ? '恢复分栏' : '全屏看结果' }}</span>
         </button>
       </div>
     </div>
@@ -126,13 +128,14 @@ function trialRow(number: number): void {
               size="small"
               type="primary"
               plain
+              :icon="FolderOpened"
               @click="emit('open-sample-db')"
             >
               从政策库取数
             </el-button>
             <el-button
               size="small"
-              plain
+              :icon="Upload"
               @click="emit('upload')"
             >
               上传本地 Excel
@@ -153,6 +156,7 @@ function trialRow(number: number): void {
             <el-button
               size="small"
               type="primary"
+              :icon="MagicStick"
               @click="emit('apply-starter')"
             >
               {{ starter.buttonLabel }}
@@ -213,15 +217,15 @@ function trialRow(number: number): void {
 .test-panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
 .test-panel__head {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  min-height: 42px; padding: 6px 12px; flex: none;
-  border-bottom: 1px solid var(--zt-border); background: var(--zt-surface-subtle);
+  min-height: 44px; padding: 7px 12px; flex: none;
+  border-bottom: 1px solid var(--zt-border); background: var(--zt-hero-gradient);
 }
 .test-panel__tabs {
   display: inline-flex; gap: 3px; padding: 3px;
   border: 1px solid var(--zt-border); border-radius: 999px; background: var(--zt-soft);
 }
 .test-panel__tabs button {
-  padding: 4px 12px; border: 0; border-radius: 999px; background: none;
+  padding: 4px 13px; border: 0; border-radius: 999px; background: none;
   color: var(--zt-ink-500); font: 600 12.5px/18px var(--zt-font); cursor: pointer; transition: all 0.15s;
 }
 .test-panel__tabs button[aria-selected="true"] {
@@ -229,11 +233,7 @@ function trialRow(number: number): void {
 }
 .test-panel__tabs button:focus-visible { outline: 2px solid var(--zt-blue-600); outline-offset: 2px; }
 .test-panel__right { display: flex; align-items: center; gap: 8px; }
-.test-panel__wide {
-  height: 26px; padding: 0 10px; border: 1px solid var(--zt-border); border-radius: 6px;
-  background: var(--zt-panel); color: var(--zt-ink-700); font: 500 12px/1 var(--zt-font); cursor: pointer;
-}
-.test-panel__wide:hover { border-color: var(--zt-blue-600); color: var(--zt-blue-600); }
+.test-panel__wide .el-icon { color: var(--zt-blue-600); font-size: 13px; }
 
 /* 新建模板 3 步冷启动引导卡 */
 .new-guide {
@@ -244,8 +244,8 @@ function trialRow(number: number): void {
 .new-guide__intro p { margin: 0; color: var(--zt-ink-500); font-size: 12.5px; line-height: 1.55; }
 .new-guide__steps { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
 .new-guide__step {
-  display: flex; flex-direction: column; gap: 6px; padding: 12px;
-  border: 1px solid var(--zt-border); border-radius: 8px; background: var(--zt-panel);
+  display: flex; flex-direction: column; gap: 6px; padding: 12px 14px;
+  border: 1px solid var(--zt-border); border-radius: 10px; background: var(--zt-panel); box-shadow: var(--zt-shadow);
 }
 .new-guide__step-head { display: flex; align-items: center; gap: 8px; color: var(--zt-ink-900); font-size: 13px; font-weight: 600; }
 .new-guide__num {

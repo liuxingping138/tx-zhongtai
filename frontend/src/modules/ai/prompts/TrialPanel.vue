@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ArrowLeft, ArrowRight, CircleCheckFilled, WarningFilled } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, CircleCheckFilled, Promotion, VideoPause, WarningFilled } from '@element-plus/icons-vue'
 
 import type { AiModel, PromptTemplate } from '@/api/ai'
 import { getTestRows, type TestRows } from '@/api/aiSamples'
@@ -294,7 +294,8 @@ function move(step: number): void {
       </span>
       <el-button
         v-if="running"
-        size="small"
+        class="trial__cta"
+        :icon="VideoPause"
         @click="answer.stop"
       >
         停止
@@ -302,7 +303,8 @@ function move(step: number): void {
       <el-button
         v-else-if="canRun"
         type="primary"
-        size="small"
+        class="trial__cta"
+        :icon="Promotion"
         :disabled="!model?.available"
         @click="emit('run')"
       >
@@ -323,8 +325,13 @@ function move(step: number): void {
 .trial__content { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px; }
 .trial__cap { margin: 0; color: var(--zt-ink-500); font-size: 12px; }
 .trial__cap-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.trial__cap-toggle { padding: 2px 6px; border: 0; border-radius: 6px; background: transparent; color: var(--zt-blue-600); font-size: 12px; cursor: pointer; }
-.trial__cap-toggle:hover { background: var(--el-color-primary-light-9); }
+.trial__cap-toggle {
+  display: inline-flex; align-items: center; height: 23px; padding: 0 9px;
+  border: 1px solid var(--el-color-primary-light-7); border-radius: 999px;
+  background: var(--el-color-primary-light-9); color: var(--zt-blue-600);
+  font: 550 11.5px/1 var(--zt-font); cursor: pointer; transition: all 0.14s ease;
+}
+.trial__cap-toggle:hover { border-color: var(--zt-blue-600); background: var(--el-color-primary-light-8); }
 .trial__data, .trial__fields { display: grid; grid-template-columns: 96px minmax(0, 1fr); margin: 0; font-size: 13px; line-height: 1.65; }
 .trial__data { overflow: hidden; border: 1px solid var(--zt-border); border-radius: 10px; }
 .trial__data.is-compact dd { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
@@ -355,8 +362,9 @@ summary small { margin-left: 6px; color: var(--zt-ink-500); font-size: 12px; }
 details pre { max-height: 320px; margin: 0; padding: 0 12px 12px; overflow: auto; color: var(--zt-ink-700); font: 12px/1.7 var(--zt-font); white-space: pre-wrap; word-break: break-all; }
 .trial__next { display: flex; flex-wrap: wrap; gap: 8px; }
 .trial__next .el-button { margin: 0; }
-.trial__run { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 14px; border-top: 1px solid var(--zt-border); background: var(--zt-surface-subtle); }
+.trial__run { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--zt-border); background: var(--zt-hero-gradient); }
+.trial__run :deep(.el-button.trial__cta) { min-height: 32px; height: 32px; margin: 0; padding: 0 14px; border-radius: 999px; font-size: 12.5px; }
 .trial__price { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--zt-ink-500); font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .trial__price.is-missing { color: var(--zt-warning-text); font-weight: 500; }
-.trial__run kbd { margin-left: 6px; padding: 0 4px; border-radius: 3px; background: color-mix(in srgb, var(--el-color-white) 22%, transparent); font: 11px/16px var(--zt-font); }
+.trial__run kbd { margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: color-mix(in srgb, var(--el-color-white) 24%, transparent); font: 600 10.5px/15px var(--zt-font); }
 </style>

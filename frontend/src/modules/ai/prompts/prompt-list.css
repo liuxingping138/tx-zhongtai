@@ -8,21 +8,24 @@
 .prompt-list__toolbar {
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
   gap: 8px 12px; padding: 12px 16px; border-bottom: 1px solid var(--zt-border);
+  background: var(--zt-hero-gradient);
 }
 .prompt-list__filters { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; flex: 1 1 auto; }
 .prompt-list__actions { display: flex; align-items: center; gap: 8px; margin-left: auto; flex: none; }
-.prompt-list__search { width: 188px; }
-.prompt-list__search .el-input__wrapper { border-radius: 8px; }
+.prompt-list__search { width: 196px; }
+.prompt-list__search .el-input__wrapper { border-radius: 8px; background: var(--zt-panel); }
 .prompt-list__sep { width: 1px; height: 16px; margin: 0 2px; background: var(--zt-border); flex: none; }
 
 .prompt-list__toggle .el-checkbox-button__inner {
-  display: inline-flex; align-items: center; height: 32px; padding: 0 12px;
-  border: 1px solid var(--zt-border) !important; outline: 0; border-radius: 999px !important;
-  background: transparent; color: var(--zt-ink-700); font-size: 12.5px; font-weight: 500;
-  box-shadow: none !important; transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+  display: inline-flex; align-items: center; height: 32px; padding: 0 13px;
+  border: 1px solid var(--zt-border-strong) !important; outline: 0; border-radius: 999px !important;
+  background: var(--zt-btn-sec-bg); color: var(--zt-ink-900); font-size: 12.5px; font-weight: 550;
+  box-shadow: var(--zt-btn-sec-shadow) !important;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease, transform 0.12s ease;
 }
 .prompt-list__toggle .el-checkbox-button:not(.is-checked) .el-checkbox-button__inner:hover {
-  border-color: var(--zt-border-strong) !important; background: var(--zt-surface-subtle); color: var(--zt-ink-900);
+  border-color: var(--zt-blue-600) !important; background: var(--zt-btn-sec-hover-bg);
+  color: var(--zt-blue-600); box-shadow: var(--zt-btn-sec-hover-shadow) !important; transform: translateY(-0.5px);
 }
 .prompt-list__toggle .el-checkbox-button.is-checked .el-checkbox-button__inner {
   border-color: var(--el-color-primary-light-5) !important; background: var(--el-color-primary-light-9) !important;
@@ -49,14 +52,14 @@
 }
 .prompt-table col.col-title { width: auto; }
 .prompt-table col.col-cat { width: 5.4%; }
-.prompt-table col.col-tasks { width: 9.2%; }
-.prompt-table col.col-release { width: 11.2%; }
-.prompt-table col.col-sample { width: 11.0%; }
-.prompt-table col.col-fields { width: 12.2%; }
-.prompt-table col.col-model { width: 12.6%; }
-.prompt-table col.col-creator { width: 7.2%; }
-.prompt-table col.col-updated { width: 7.4%; }
-.prompt-table col.col-open { width: 10.2%; }
+.prompt-table col.col-tasks { width: 8.6%; }
+.prompt-table col.col-release { width: 13.4%; }
+.prompt-table col.col-sample { width: 10.8%; }
+.prompt-table col.col-fields { width: 9.8%; }
+.prompt-table col.col-model { width: 12.0%; }
+.prompt-table col.col-creator { width: 7.0%; }
+.prompt-table col.col-updated { width: 7.2%; }
+.prompt-table col.col-open { width: 11.6%; }
 
 .prompt-table th {
   position: sticky; top: 0; z-index: 2; height: 38px; padding: 0 8px;
@@ -110,29 +113,35 @@
 }
 .prompt-list__task-more { flex: none; color: var(--zt-blue-600); font-size: 11px; font-weight: 600; }
 
-/* 第 4 列：上线状态圆点 + 块级省略号文本 + 独立「看改动」胶囊（184px 永不叠字） */
-.prompt-cell-release { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.prompt-list__state {
-  display: inline-flex; align-items: center; gap: 5px; min-width: 0;
-  color: var(--zt-ink-500); font-size: 12.5px;
+/* 第 4 列：纯粹二元「已上线 / 未上线」胶囊 + 版本微标 vN + 按需琥珀色「有改动」角标 */
+.prompt-cell-release { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.prompt-status-pill {
+  flex: none; display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px;
+  border-radius: 999px; font-size: 11.5px; font-weight: 600; line-height: 1; white-space: nowrap;
 }
-.prompt-list__state-text { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.prompt-list__state::before {
-  content: ""; flex: none; width: 6.5px; height: 6.5px; border-radius: 50%; background: var(--zt-muted-mark);
+.prompt-status-pill i { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+.prompt-status-pill.is-online {
+  border: 1px solid var(--zt-success-border); background: var(--zt-success-soft); color: var(--zt-success-text);
 }
-.prompt-list__state.is-online { color: var(--zt-success-text); font-weight: 500; }
-.prompt-list__state.is-online::before { background: var(--zt-success); }
-.prompt-list__state.is-changed { color: var(--zt-warning-text); font-weight: 500; }
-.prompt-list__state.is-changed::before { background: var(--zt-warning); }
+.prompt-status-pill.is-online i { background: var(--zt-success); }
+.prompt-status-pill.is-offline {
+  border: 1px solid var(--zt-border); background: var(--zt-surface-subtle); color: var(--zt-ink-500); font-weight: 500;
+}
+.prompt-status-pill.is-offline i { background: var(--zt-muted-mark); }
 
-.prompt-list__diff {
-  flex: none; display: inline-flex; align-items: center; height: 21px; padding: 0 6px;
-  border: 1px solid var(--el-color-primary-light-7); border-radius: 5px;
-  background: var(--el-color-primary-light-9); color: var(--zt-blue-600);
-  font-size: 11.5px; font-weight: 600; text-decoration: none; white-space: nowrap;
-  transition: background-color 0.14s ease, border-color 0.14s ease;
+.prompt-ver-badge {
+  flex: none; display: inline-flex; align-items: center; height: 20px; padding: 0 5px;
+  border-radius: 4px; background: var(--zt-surface-subtle); border: 1px solid var(--zt-divider);
+  color: var(--zt-ink-700); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
 }
-.prompt-list__diff:hover { border-color: var(--el-color-primary-light-5); background: var(--el-color-primary-light-8); }
+.prompt-diff-tag {
+  flex: none; display: inline-flex; align-items: center; height: 20px; padding: 0 6px;
+  border: 1px solid var(--zt-warning-border); border-radius: 999px;
+  background: var(--zt-warning-soft); color: var(--zt-warning-text);
+  font: 600 11px/1 var(--zt-font); white-space: nowrap; cursor: pointer;
+  transition: border-color 0.14s ease, transform 0.12s ease;
+}
+.prompt-diff-tag:hover { border-color: var(--zt-warning); transform: translateY(-0.5px); }
 
 /* 第 5 列：样本试跑 */
 .prompt-list__sample { font-size: 12.5px; color: var(--zt-ink-400); }
@@ -157,42 +166,22 @@
   background: var(--zt-teal-soft); color: var(--zt-teal-text); font-size: 10.5px; font-weight: 600; line-height: 1;
 }
 
-/* 第 8–10 列：创建人 / 最近更新 / 显式上线与编辑操作列 */
+/* 第 8–10 列：创建人 / 最近更新 / 全站统一的 Google 立体胶囊 .row-actions 操作列 */
 .prompt-list__creator { color: var(--zt-ink-700); font-size: 12.5px; }
 .prompt-list__time { color: var(--zt-ink-500); font-size: 12px; }
 
-.prompt-row-actions {
-  display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; white-space: nowrap;
+.prompt-row-actions { justify-content: flex-end; }
+.prompt-action--publish {
+  border-color: var(--zt-warning-border);
+  background: var(--zt-warning-soft);
+  color: var(--zt-warning-text);
+  font-weight: 600;
 }
-.prompt-act-btn {
-  display: inline-flex; align-items: center; height: 23px; padding: 0 8px;
-  border-radius: 5px; font: 600 11.5px/1 var(--zt-font); cursor: pointer;
-  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+.prompt-action--publish:hover {
+  border-color: var(--zt-warning);
+  background: var(--zt-warning-soft);
+  color: var(--zt-warning-text);
 }
-.prompt-act-btn.is-primary {
-  border: 1px solid var(--el-color-primary-light-5);
-  background: var(--el-color-primary-light-9); color: var(--zt-blue-600);
-}
-.prompt-act-btn.is-primary:hover {
-  border-color: var(--zt-blue-600); background: var(--el-color-primary-light-8);
-}
-.prompt-act-btn.is-plain {
-  border: 1px solid var(--zt-border-strong);
-  background: var(--zt-panel); color: var(--zt-ink-700);
-}
-.prompt-act-btn.is-plain:hover {
-  border-color: var(--el-color-primary-light-5); color: var(--zt-blue-600);
-}
-.prompt-act-btn.is-subtle {
-  padding: 0 4px; border: 1px solid transparent; background: transparent;
-  color: var(--zt-ink-500); font-weight: 500;
-}
-.prompt-act-btn.is-subtle:hover { color: var(--zt-blue-600); background: var(--el-color-primary-light-9); }
-
-.prompt-act-link {
-  color: var(--zt-blue-600); font-size: 12.5px; font-weight: 500; text-decoration: none;
-}
-.prompt-act-link:hover { text-decoration: underline; }
 
 @media (max-width: 1220px) {
   .prompt-list__sep { display: none; }

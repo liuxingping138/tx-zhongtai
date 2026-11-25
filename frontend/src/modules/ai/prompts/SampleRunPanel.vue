@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { Download, RefreshRight, VideoPause, VideoPlay, View } from '@element-plus/icons-vue'
 import { missingFieldsWarning } from '../shared/outputFields'
 
 import type { AiModel, PromptTemplate, RunRow } from '@/api/ai'
@@ -127,6 +128,8 @@ async function start(): Promise<void> {
         <el-button
           v-if="running"
           size="small"
+          class="sample__run-btn"
+          :icon="VideoPause"
           :loading="sample.busy.value"
           :disabled="run?.status === 'stopping'"
           @click="sample.stop"
@@ -136,7 +139,9 @@ async function start(): Promise<void> {
         <el-button
           v-else
           size="small"
+          class="sample__run-btn"
           :type="run ? undefined : 'primary'"
+          :icon="run ? RefreshRight : VideoPlay"
           :loading="sample.busy.value"
           :disabled="Boolean(blocker)"
           @click="start"
@@ -328,14 +333,16 @@ async function start(): Promise<void> {
     >
       <el-button
         type="primary"
-        size="small"
+        class="sample__foot-btn"
+        :icon="View"
         @click="open()"
       >
         逐行对比 ({{ items.length }})
       </el-button>
       <el-button
         v-if="canExport && run.files.result"
-        size="small"
+        class="sample__foot-btn"
+        :icon="Download"
         @click="sample.download"
       >
         下载 Excel
@@ -343,7 +350,8 @@ async function start(): Promise<void> {
       <span class="sample__spacer" />
       <el-button
         v-if="retryable"
-        size="small"
+        class="sample__foot-btn"
+        :icon="RefreshRight"
         title="用这次的提示词重问失败和没跑到的行"
         :loading="sample.busy.value"
         @click="sample.retry"

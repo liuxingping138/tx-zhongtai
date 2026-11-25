@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ArrowDown } from '@element-plus/icons-vue'
+import { ArrowDown, CircleCheckFilled, Collection, Files, WarningFilled } from '@element-plus/icons-vue'
 
 import type { AiModel, PromptTemplate, SystemCodeTable, TemplateCategory } from '@/api/ai'
 import type { SampleOptions } from '@/api/aiTagging'
@@ -154,6 +154,9 @@ defineExpose({
         :title="CODE_TIPS[codeMode]"
         @click="toggleTray('code')"
       >
+        <el-icon class="studio-chip__icon">
+          <Collection />
+        </el-icon>
         <span>{{ activeCodeChip }}</span>
         <el-icon class="studio-chip__caret">
           <ArrowDown />
@@ -168,6 +171,9 @@ defineExpose({
         :title="template?.excel_name ? `${template.excel_name}（${template.excel_rows} 行）` : '上传测试样本或从政策库取数'"
         @click="toggleTray('excel')"
       >
+        <el-icon class="studio-chip__icon">
+          <Files />
+        </el-icon>
         <span>{{ activeSampleChip }}</span>
         <el-icon class="studio-chip__caret">
           <ArrowDown />
@@ -183,6 +189,10 @@ defineExpose({
         title="展开查看 5 个政策定时任务的输入变量与输出字段适配检查"
         @click="toggleTray('fit')"
       >
+        <el-icon class="studio-chip__icon">
+          <WarningFilled v-if="fitBadge.tone === 'is-warn' || fitBadge.tone === 'is-error'" />
+          <CircleCheckFilled v-else />
+        </el-icon>
         <span>{{ fitBadge.text }}</span>
         <el-icon class="studio-chip__caret">
           <ArrowDown />
@@ -302,33 +312,49 @@ defineExpose({
 .studio-config { flex: none; border-bottom: 1px solid var(--zt-border); background: var(--zt-surface-subtle); }
 
 .studio-ribbon {
-  display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 10px;
+  display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 7px 12px;
   flex-wrap: wrap;
 }
-.studio-ribbon__cat { width: 76px; flex: none; }
-.studio-ribbon__model { flex: 0 1 196px; min-width: 148px; }
+.studio-ribbon__cat { width: 90px; flex: none; }
+.studio-ribbon__model { flex: 0 1 200px; min-width: 152px; }
 .studio-ribbon__model :deep(.model-picker) { flex-wrap: nowrap; gap: 6px; width: 100%; }
 .studio-ribbon__model :deep(.model-picker__select--small) { width: 100%; }
 .studio-ribbon__model :deep(.model-picker__off) { display: none; }
+.studio-ribbon :deep(.el-select__wrapper) {
+  min-height: 30px; border-radius: 8px;
+  background: var(--zt-btn-sec-bg);
+  box-shadow: 0 0 0 1px var(--zt-border-strong) inset, var(--zt-btn-sec-shadow);
+  font-size: 12.5px; font-weight: 550;
+}
+.studio-ribbon :deep(.el-select__wrapper:hover) {
+  box-shadow: 0 0 0 1px var(--zt-blue-600) inset, var(--zt-btn-sec-hover-shadow);
+}
 
 .studio-chip {
-  display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 8px;
-  border: 1px solid var(--zt-border); border-radius: 6px;
-  background: var(--zt-panel); color: var(--zt-ink-700);
-  font: 500 12px/1 var(--zt-font); min-width: 0; max-width: min(240px, 47%); cursor: pointer;
-  transition: border-color 0.14s ease, background-color 0.14s ease, color 0.14s ease;
+  display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px;
+  border: 1px solid var(--zt-border-strong); border-radius: 8px;
+  background: var(--zt-btn-sec-bg); box-shadow: var(--zt-btn-sec-shadow); color: var(--zt-ink-900);
+  font: 550 12px/1 var(--zt-font); min-width: 0; max-width: min(250px, 48%); cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
 }
+.studio-chip__icon { flex: none; font-size: 13px; color: var(--zt-blue-600); }
 .studio-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .studio-chip__caret { flex: none; font-size: 11px; color: var(--zt-ink-400); transition: transform 0.15s ease; }
 .studio-chip.is-open .studio-chip__caret { transform: rotate(180deg); color: var(--zt-blue-600); }
-.studio-chip:hover { border-color: var(--zt-border-strong); color: var(--zt-ink-900); }
+.studio-chip:hover {
+  border-color: var(--zt-blue-600); background: var(--zt-btn-sec-hover-bg);
+  color: var(--zt-blue-600); box-shadow: var(--zt-btn-sec-hover-shadow); transform: translateY(-0.5px);
+}
 .studio-chip.is-open {
   border-color: var(--el-color-primary-light-5); background: var(--el-color-primary-light-9); color: var(--zt-blue-600);
 }
-.studio-chip.is-active { border-color: var(--el-color-primary-light-7); color: var(--zt-ink-900); }
+.studio-chip.is-active { border-color: var(--el-color-primary-light-5); }
 .studio-chip.is-ok { border-color: var(--zt-success-border); background: var(--zt-success-soft); color: var(--zt-success-text); }
+.studio-chip.is-ok .studio-chip__icon { color: var(--zt-success); }
 .studio-chip.is-warn { border-color: var(--zt-warning-border); background: var(--zt-warning-soft); color: var(--zt-warning-text); }
+.studio-chip.is-warn .studio-chip__icon { color: var(--zt-warning); }
 .studio-chip.is-error { border-color: var(--zt-danger-border); background: var(--zt-danger-soft); color: var(--zt-danger-text); }
+.studio-chip.is-error .studio-chip__icon { color: var(--zt-danger-text); }
 .studio-chip--right { margin-left: auto; }
 
 .studio-tray {

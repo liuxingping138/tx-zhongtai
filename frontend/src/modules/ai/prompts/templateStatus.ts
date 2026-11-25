@@ -194,11 +194,11 @@ export interface ReleaseEntry {
 
 function adminReleaseEntry(release: PromptTemplate['release'], changed: boolean, header: boolean): ReleaseEntry {
   if (!release) return { label: header ? '发布上线' : '上线', emphasis: 'plain' }
-  if (changed) return { label: header ? `审核上线 · 第 ${release.release_no + 1} 版` : '审核上线', emphasis: 'primary' }
-  return { label: header ? '线上版本' : '线上版', emphasis: 'subtle' }
+  if (changed) return { label: `发布 v${release.release_no + 1}`, emphasis: 'primary' }
+  return { label: header ? '线上版本' : '版本', emphasis: 'subtle' }
 }
 
-/** 列表操作列与编辑页顶栏共用的上线抽屉入口：管理员始终可见明确的上线/审核按钮，不受试跑步骤遮蔽。 */
+/** 列表操作列与编辑页顶栏共用的上线抽屉入口：管理员始终可见明确的上线/发布按钮，不受试跑步骤遮蔽。 */
 export function releaseEntry(
   template: Pick<PromptTemplate, 'release'> | null,
   canRelease: boolean,
@@ -210,7 +210,7 @@ export function releaseEntry(
   const changed = Boolean(release?.unreleased_changes.length)
   if (canRelease) return adminReleaseEntry(release, changed, header)
   if (!release) return null
-  return { label: changed ? '看改动' : header ? '线上版本' : '线上版', emphasis: 'subtle' }
+  return { label: changed ? (header ? '查看改动' : '改动') : header ? '线上版本' : '版本', emphasis: 'subtle' }
 }
 
 /** 试跑开始、结束后把模板上的「最近一次试跑」换成这一次；没变化就原样返回，页面不用重画。 */

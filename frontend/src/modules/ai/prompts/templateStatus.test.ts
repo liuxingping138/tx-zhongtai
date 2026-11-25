@@ -157,18 +157,19 @@ describe('双入口上线审核按钮（列表页与编辑页共用）', () => {
     expect(releaseEntry(template(), true, 'list')).toEqual({ label: '上线', emphasis: 'plain' })
 
     const changed = template({ release: release(['提示词内容']), sample: null })
-    expect(releaseEntry(changed, true, 'header')).toEqual({ label: '审核上线 · 第 3 版', emphasis: 'primary' })
-    expect(releaseEntry(changed, true, 'list')).toEqual({ label: '审核上线', emphasis: 'primary' })
+    expect(releaseEntry(changed, true, 'header')).toEqual({ label: '发布 v3', emphasis: 'primary' })
+    expect(releaseEntry(changed, true, 'list')).toEqual({ label: '发布 v3', emphasis: 'primary' })
 
     const online = template({ release: release() })
     expect(releaseEntry(online, true, 'header')).toEqual({ label: '线上版本', emphasis: 'subtle' })
-    expect(releaseEntry(online, true, 'list')).toEqual({ label: '线上版', emphasis: 'subtle' })
+    expect(releaseEntry(online, true, 'list')).toEqual({ label: '版本', emphasis: 'subtle' })
   })
 
   it('无上线权限人员：未上线不展示抽屉入口，有改动看改动，已上线看线上版本', () => {
     expect(releaseEntry(template(), false, 'header')).toBeNull()
     expect(releaseEntry(template(), false, 'list')).toBeNull()
-    expect(releaseEntry(template({ release: release(['码表']) }), false, 'header')).toEqual({ label: '看改动', emphasis: 'subtle' })
-    expect(releaseEntry(template({ release: release() }), false, 'list')).toEqual({ label: '线上版', emphasis: 'subtle' })
+    expect(releaseEntry(template({ release: release(['码表']) }), false, 'header')).toEqual({ label: '查看改动', emphasis: 'subtle' })
+    expect(releaseEntry(template({ release: release(['码表']) }), false, 'list')).toEqual({ label: '改动', emphasis: 'subtle' })
+    expect(releaseEntry(template({ release: release() }), false, 'list')).toEqual({ label: '版本', emphasis: 'subtle' })
   })
 })

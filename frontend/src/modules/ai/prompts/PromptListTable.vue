@@ -193,10 +193,23 @@ function releaseHover(row: PromptTemplate): string {
               class="prompt-cell-release"
               :title="releaseHover(row)"
             >
+              <template v-if="row.release">
+                <span class="prompt-status-pill is-online"><i aria-hidden="true" />已上线</span>
+                <span class="prompt-ver-badge">v{{ row.release.release_no }}</span>
+                <button
+                  v-if="row.release.unreleased_changes.length"
+                  type="button"
+                  class="prompt-diff-tag"
+                  :title="`草稿改了${row.release.unreleased_changes.join('、')}，尚未发布上线`"
+                  @click.stop="emit('review', row)"
+                >
+                  有改动
+                </button>
+              </template>
               <span
-                class="prompt-list__state"
-                :class="`is-${releaseState(row).kind}`"
-              ><span class="prompt-list__state-text">{{ releaseState(row).compact }}</span></span>
+                v-else
+                class="prompt-status-pill is-offline"
+              ><i aria-hidden="true" />未上线</span>
             </div>
           </td>
 
@@ -258,18 +271,20 @@ function releaseHover(row: PromptTemplate): string {
             class="is-right"
             @click.stop
           >
-            <div class="prompt-row-actions">
+            <div class="row-actions prompt-row-actions">
               <button
                 v-if="releaseEntry(row, canRelease, 'list')"
                 type="button"
-                class="prompt-act-btn"
-                :class="`is-${releaseEntry(row, canRelease, 'list')!.emphasis}`"
+                class="row-action"
+                :class="{ 'prompt-action--publish': releaseEntry(row, canRelease, 'list')!.emphasis === 'primary' }"
+                :title="releaseHover(row)"
                 @click="emit('review', row)"
               >
                 {{ releaseEntry(row, canRelease, 'list')!.label }}
               </button>
               <router-link
-                class="prompt-act-link"
+                class="row-action"
+                :class="{ 'row-action--primary': row.editable }"
                 :to="{ name: 'ai-prompt-edit', params: { id: row.id } }"
               >
                 {{ row.editable ? '编辑' : '查看' }}

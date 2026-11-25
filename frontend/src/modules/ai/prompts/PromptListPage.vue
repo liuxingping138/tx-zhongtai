@@ -72,9 +72,9 @@ const reviewUsedBy = computed(() =>
 
 const STATUS_OPTIONS: { value: ReleaseKind | ''; label: string }[] = [
   { value: '', label: '全部' },
-  { value: 'changed', label: '有改动' },
   { value: 'online', label: '已上线' },
   { value: 'offline', label: '未上线' },
+  { value: 'changed', label: '草稿有改动' },
 ]
 
 const RELEASE_RANK: Record<ReleaseKind, number> = { changed: 3, online: 2, offline: 1 }
@@ -83,9 +83,23 @@ const inScope = computed(() => templates.value.filter(item => inCategory(item.ca
 const scheduled = computed(() => inScope.value.filter(item => tasksOf(item).length).length)
 const counts = computed(() => {
   const result: Record<ReleaseKind | '', number> = { '': inScope.value.length, changed: 0, online: 0, offline: 0 }
-  for (const item of inScope.value) result[releaseState(item).kind] += 1
+  for (const item of inScope.value) {
+    if (item.release) {
+      result.online += 1
+      if (item.release.unreleased_changes.length) result.changed += 1
+    } else {
+      result.offline += 1
+    }
+  }
   return result
 })
+
+function matchesStatus(item: PromptTemplate, wanted: ReleaseKind | ''): boolean {
+  if (!wanted) return true
+  if (wanted === 'online') return Boolean(item.release)
+  if (wanted === 'offline') return !item.release
+  return Boolean(item.release?.unreleased_changes.length)
+}
 
 function compareRows(a: PromptTemplate, b: PromptTemplate): number {
   const factor = sortAsc.value ? 1 : -1
@@ -101,7 +115,7 @@ function compareRows(a: PromptTemplate, b: PromptTemplate): number {
 const visible = computed(() => {
   const needle = keyword.value.trim().toLowerCase()
   const filtered = inScope.value.filter(item =>
-    (!status.value || releaseState(item).kind === status.value)
+    matchesStatus(item, status.value)
     && (!needle || item.title.toLowerCase().includes(needle))
     && (!onlyScheduled.value || tasksOf(item).length > 0))
   return [...filtered].sort(compareRows)
