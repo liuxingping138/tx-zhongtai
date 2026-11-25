@@ -44,9 +44,13 @@ def events(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     return seen
 
 
-async def test_create_validates_and_fills_default_peak_hours(events: list[dict[str, Any]]) -> None:
+async def test_create_validates_and_fills_default_peak_hours(
+    events: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(get_settings(), "ark_api_key", "ark-ready")
     out = await model_configs.create_model(FakeSession(), ACTOR, {**_FORM, "id": "deepseek-v41-flash"})  # type: ignore[arg-type]
     assert out["peak_hours"] == "09:00-12:00,14:00-18:00"
+    assert out["available"] is True
     assert (out["input_price"], out["peak_output_price"], out["flex_input_price"]) == ("0.0008", "0.0064", "")
     # 审计内容要能存 JSONB：价格是文本不是 Decimal。
     assert events[0]["event_type"] == "ai.model.created" and events[0]["changes"]["input_price"] == "0.0008"
