@@ -8,7 +8,9 @@ const props = withDefaults(defineProps<{
   /** 图形的中文文字说明，读屏软件读这一段；数值本身在提示框和下方表格里也能读到。 */
   label: string
   height?: string
-}>(), { height: '280px' })
+  /** 外部悬停联动高亮指定系列名（如明细表悬停高亮上方柱状图对应系列）。 */
+  highlightedSeries?: string | null
+}>(), { height: '280px', highlightedSeries: null })
 
 const emit = defineEmits<{ select: [params: { name: string; seriesName?: string; dataIndex: number }] }>()
 
@@ -30,6 +32,12 @@ onMounted(() => {
 })
 
 watch(() => props.option, option => chart.value?.setOption(option, { notMerge: true }))
+
+watch(() => props.highlightedSeries, (next, prev) => {
+  if (!chart.value) return
+  if (prev) chart.value.dispatchAction({ type: 'downplay', seriesName: prev })
+  if (next) chart.value.dispatchAction({ type: 'highlight', seriesName: next })
+})
 
 onBeforeUnmount(() => {
   observer?.disconnect()

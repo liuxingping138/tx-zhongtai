@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import type { BillingRow } from '@/api/aiBilling'
-import { cachedText, colorMap, dailySeries, daysBetween, filterOptions, filterRows, groupBy, money, presetRange, pruneFilters, pruneInPlace, summarize, tokens, totalCards, type BillingFilters } from './billing'
+import {
+  buildLedgerCards, cachedText, colorMap, countActiveFilters, dailySeries, daysBetween, filterOptions,
+  filterRows, groupBy, money, presetRange, pruneFilters, pruneInPlace, sortGroups, summarize, tokens, totalCards,
+  type BillingFilters,
+} from './billing'
 
 /** owner：业务分类 + 一级业务板块，默认「测试 / 政策」 */
 const row = (day: string, model: string, purpose: string, cost: string, calls = 1, owner: [string, string] = ['测试', '政策']): BillingRow =>
@@ -84,8 +88,22 @@ describe('费用账单', () => {
     expect(daysBetween('2026-10-31', '2026-11-01')).toEqual(['2026-10-31', '2026-11-01'])
   })
 
-  it('金额一元以上到分，不足一元留 4 位；token 上万用「万」', () => {
-    expect([money(12.345), money(0.0031), money(0)]).toEqual(['¥12.35', '¥0.0031', '¥0.00'])
-    expect([tokens(9876), tokens(123456)]).toEqual(['9,876', '12.3万'])
+  it('金额一元以上到分，不足一元留 4 位；token 上万用「万」、上亿用「亿」', () => {
+    expect([money(12.345), money(1234.5), money(0.0031), money(0)]).toEqual(['¥12.35', '¥1,234.50', '¥0.0031', '¥0.00'])
+    expect([tokens(9876), tokens(123456), tokens(181_765_000)]).toEqual(['9,876', '12.3万', '1.82亿'])
+  })
+
+  it('账本指标卡计算日均峰值、调度测试拆分与缓存命中率，支持按列排序与筛选计数', () => {
+    const cards = buildLedgerCards(ROWS, 2)
+    expect(cards.map(c => c.key)).toEqual(['cost', 'calls', 'input', 'output', 'cached'])
+    expect(cards[0]?.note).toContain('日均 ¥1.00')
+    expect(cards[0]?.note).toContain('峰值 10-20 (¥1.50)')
+    expect(cards[1]?.note).toBe('调度 1 · 测试 5')
+    expect(cards[4]?.badge).toBe('40%')
+    expect(cards[4]?.progress).toBeCloseTo(0.4)
+    expect(countActiveFilters({ scenes: ['测试'], categories: [], purposes: ['批量任务'], models: [] })).toBe(2)
+    const groups = groupBy(ROWS, 'model')
+    expect(sortGroups(groups, 'calls', 'asc').map(g => g.name)).toEqual(['方舟Flash', '千帆V3.2'])
+    expect(sortGroups(groups, 'cost', 'asc').map(g => g.name)).toEqual(['千帆V3.2', '方舟Flash'])
   })
 })
