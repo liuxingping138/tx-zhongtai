@@ -206,6 +206,7 @@ onMounted(() => { void load() })
 
 <style scoped>
 .status-line { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+:global(html[data-density="compact"]) .status-line :deep(.el-switch) { height: 22px; }
 .status-text { color: var(--zt-ink-500); font-size: 12px; }
 .price-num { font-variant-numeric: tabular-nums; color: var(--zt-ink-900); }
 .price-empty { color: var(--zt-ink-400); }
