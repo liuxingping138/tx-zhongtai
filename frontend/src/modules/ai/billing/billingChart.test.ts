@@ -19,9 +19,10 @@ interface BarDatum {
 }
 
 describe('每日费用堆叠柱', () => {
-  it('按天动态给最顶部非零段加圆角，并带日均虚线基准', () => {
+  it('按天动态给最顶部非零段加圆角，并把日均标签挂在右侧留白避免与柱子相撞', () => {
     const option = costOption(['2026-10-21', '2026-10-22'], SERIES, palette) as {
-      series: { name: string; stack: string; color: string; data: BarDatum[]; markLine?: { data: { yAxis: number }[] } }[]
+      grid: { right: number }
+      series: { name: string; stack: string; color: string; data: BarDatum[]; markLine?: { label: { position: string }; data: { yAxis: number }[] } }[]
       xAxis: { data: string[] }
     }
     expect(option.xAxis.data).toEqual(['10-21', '10-22'])
@@ -33,9 +34,11 @@ describe('每日费用堆叠柱', () => {
     expect(option.series[0]?.data.map(d => d.itemStyle.borderRadius)).toEqual([0, [3.5, 3.5, 0, 0]])
     expect(option.series[1]?.data.map(d => d.itemStyle.borderRadius)).toEqual([[3.5, 3.5, 0, 0], 0])
     expect(option.series[0]?.markLine?.data[0]?.yAxis).toBeCloseTo(1.075)
+    expect(option.series[0]?.markLine?.label.position).toBe('end')
+    expect(option.grid.right).toBeGreaterThanOrEqual(92)
   })
 
-  it('悬停写带星期的日期、当天合计、较日均偏离及分项；整天没花钱写明', () => {
+  it('悬停写带星期的日期、当天合计、较日均偏离及独立省略号分项；整天没花钱写明', () => {
     const { tooltip } = costOption(['2026-10-21', '2026-10-22'], SERIES, palette) as { tooltip: Tooltip }
     const day = tooltip.formatter([
       { dataIndex: 0, seriesName: '方舟Flash', value: { value: 1.5 }, color: '#2a78d6' },
@@ -44,7 +47,7 @@ describe('每日费用堆叠柱', () => {
     expect(day).toContain('2026-10-21 周三')
     expect(day).toContain('¥1.75')
     expect(day).toContain('较日均 +63%')
-    expect(day).toContain('方舟Flash')
+    expect(day).toContain('display:block;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">方舟Flash</span>')
     expect(day).toContain('85.7%')
     expect(tooltip.formatter([{ dataIndex: 1, seriesName: '方舟Flash', value: 0 }])).toContain('这天没有花费')
   })

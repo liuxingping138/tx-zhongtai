@@ -97,7 +97,7 @@ describe('费用账单', () => {
     const cards = buildLedgerCards(ROWS, 2)
     expect(cards.map(c => c.key)).toEqual(['cost', 'calls', 'input', 'output', 'cached'])
     expect(cards[0]?.note).toContain('日均 ¥1.00')
-    expect(cards[0]?.note).toContain('峰值 10-20 (¥1.50)')
+    expect(cards[0]?.note).toContain('峰值 10-20（¥1.50）')
     expect(cards[1]?.note).toBe('调度 1 · 测试 5')
     expect(cards[4]?.badge).toBe('40%')
     expect(cards[4]?.progress).toBeCloseTo(0.4)

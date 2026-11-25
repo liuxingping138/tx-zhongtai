@@ -18,22 +18,23 @@
 .billing__reset-btn:hover { background: var(--el-color-primary-light-8); border-color: var(--zt-blue-600); }
 
 .billing__filters {
-  display: grid; grid-template-columns: minmax(0, 2.9fr) 1px minmax(190px, 1fr);
+  display: grid; grid-template-columns: minmax(0, 1.95fr) 1px minmax(280px, 1.25fr);
   align-items: center; gap: 12px; padding: 8px 12px;
   border: 1px solid var(--zt-border); border-radius: 10px; background: var(--zt-panel);
   box-shadow: var(--zt-shadow);
 }
 .billing__cascade {
   display: grid;
-  grid-template-columns: auto minmax(116px, 0.85fr) auto minmax(134px, 0.95fr) auto minmax(168px, 1.35fr);
+  grid-template-columns: auto minmax(112px, 0.78fr) auto minmax(132px, 0.94fr) auto minmax(156px, 1.14fr);
   align-items: center; gap: 6px; min-width: 0;
 }
 .billing__model-slot { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; }
 .billing__filter-tag { color: var(--zt-ink-500); font-size: 12px; font-weight: 500; white-space: nowrap; padding: 0 2px; }
-.billing__cascade-arrow { color: var(--zt-ink-400); font-size: 13px; user-select: none; }
+.billing__cascade-arrow { color: var(--zt-ink-500); font-size: 13px; font-weight: 500; user-select: none; }
 .billing__v-divider { width: 1px; height: 20px; background: var(--zt-border); }
 .billing__select { width: 100%; min-width: 0; }
 .billing__select .el-select__wrapper { background: var(--zt-surface-subtle); box-shadow: 0 0 0 1px var(--zt-border) inset; border-radius: 7px; }
+.billing__select .el-select__placeholder.is-transparent { color: var(--zt-ink-500); }
 .billing__select .el-select__wrapper:hover { box-shadow: 0 0 0 1px var(--zt-border-strong) inset; }
 .billing__select.is-picked .el-select__wrapper {
   background: var(--el-color-primary-light-9);

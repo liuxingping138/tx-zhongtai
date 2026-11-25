@@ -60,19 +60,40 @@ function formatTooltip(
 
   const rowsHtml = parts.map(item => {
     const pct = total > 0 ? ((item.val / total) * 100).toFixed(1) : '0.0'
-    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;line-height:1.85;">`
-      + `<span style="display:inline-flex;align-items:center;gap:6px;color:${palette.ink};max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">`
-      + `<i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${item.color};flex:none;"></i>${escapeHtml(item.name)}</span>`
-      + `<span style="display:inline-flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums;">`
+    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:18px;line-height:1.85;">`
+      + `<span style="display:inline-flex;align-items:center;gap:6px;min-width:0;color:${palette.ink};">`
+      + `<i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${item.color};flex:none;"></i>`
+      + `<span style="display:block;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(item.name)}</span></span>`
+      + `<span style="display:inline-flex;align-items:center;gap:8px;flex:none;white-space:nowrap;font-variant-numeric:tabular-nums;">`
       + `<span style="color:${palette.inkMuted};font-size:11px;">${pct}%</span>`
       + `<span style="font-weight:500;color:${palette.ink};min-width:62px;text-align:right;">${money(item.val)}</span></span></div>`
   }).join('')
   return `${header}${rowsHtml}`
 }
 
+function avgMarkLine(dailyAvg: number, palette: ChartPalette) {
+  return {
+    symbol: ['none', 'none'],
+    silent: true,
+    lineStyle: { color: palette.inkMuted, type: [4, 4], width: 1, opacity: 0.65 },
+    label: {
+      show: true,
+      position: 'end',
+      distance: 8,
+      formatter: () => `日均 ${money(dailyAvg)}`,
+      color: palette.inkMuted,
+      fontSize: 11,
+      fontWeight: 500,
+    },
+    data: [{ yAxis: dailyAvg }],
+  }
+}
+
 export function costOption(days: string[], series: Series[], palette: ChartPalette): ChartOption {
   const grandTotal = days.reduce((sum, _, idx) => sum + series.reduce((s, item) => s + (item.data[idx] ?? 0), 0), 0)
   const dailyAvg = days.length > 0 ? grandTotal / days.length : 0
+  const showAvg = dailyAvg > 0 && days.length > 1
+  const rightPad = showAvg ? Math.max(92, (`日均 ${money(dailyAvg)}`).length * 8 + 18) : 12
   // 找出每一天堆叠在最上面的非零系列下标，保证每根柱子顶部都有细腻圆角。
   const topByDay = days.map((_, dayIdx) => {
     for (let sIdx = series.length - 1; sIdx >= 0; sIdx--) {
@@ -98,9 +119,11 @@ export function costOption(days: string[], series: Series[], palette: ChartPalet
       pageTextStyle: { color: palette.inkMuted },
       textStyle: { color: palette.inkMuted, fontSize: 12, padding: [0, 0, 0, 2] },
     },
-    grid: { left: 6, right: 12, top: 48, bottom: 4, containLabel: true },
+    grid: { left: 6, right: rightPad, top: 48, bottom: 4, containLabel: true },
     tooltip: {
       trigger: 'axis',
+      confine: true,
+      transitionDuration: 0.12,
       axisPointer: { type: 'shadow', shadowStyle: { color: palette.weekendBand } },
       ...tooltipStyle(palette),
       extraCssText: `border-radius: 10px; box-shadow: ${palette.tooltipShadow}; font-variant-numeric: tabular-nums;`,
@@ -130,26 +153,7 @@ export function costOption(days: string[], series: Series[], palette: ChartPalet
         value,
         itemStyle: { borderRadius: topByDay[dayIdx] === sIdx ? [3.5, 3.5, 0, 0] : 0 },
       })),
-      ...(sIdx === 0 && dailyAvg > 0 && days.length > 1
-        ? {
-            markLine: {
-              symbol: ['none', 'none'],
-              silent: true,
-              lineStyle: { color: palette.inkMuted, type: [4, 4], width: 1, opacity: 0.65 },
-              label: {
-                show: true,
-                position: 'insideEndTop',
-                formatter: () => `日均 ${money(dailyAvg)}`,
-                color: palette.inkMuted,
-                fontSize: 11,
-                backgroundColor: palette.surface,
-                padding: [2, 6],
-                borderRadius: 4,
-              },
-              data: [{ yAxis: dailyAvg }],
-            },
-          }
-        : {}),
+      ...(sIdx === 0 && showAvg ? { markLine: avgMarkLine(dailyAvg, palette) } : {}),
     })),
   }
 }

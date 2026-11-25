@@ -139,7 +139,7 @@ export function buildLedgerCards(shownRows: BillingRow[], daysCount: number): Le
   const hitRatio = cacheHitRatio(total.input_tokens, total.cached_tokens)
   const hitText = cacheHitText(total.input_tokens, total.cached_tokens)
   const costNote = total.cost > 0 && peak.day
-    ? `日均 ${money(dailyAvg)} · 峰值 ${peak.day.slice(5)} (${money(peak.cost)})`
+    ? `日均 ${money(dailyAvg)} · 峰值 ${peak.day.slice(5)}（${money(peak.cost)}）`
     : '所选周期暂无账单支出'
   const callsNote = total.calls > 0
     ? `调度 ${split.schedule.toLocaleString('zh-CN')} · 测试 ${split.test.toLocaleString('zh-CN')}`
