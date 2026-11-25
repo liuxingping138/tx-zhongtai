@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { compactPriceText, formatState, smartModelParts, splitFields } from '../shared/aiText'
+import { compactModelLabel, compactPriceText, formatState, smartModelParts, splitFields } from '../shared/aiText'
 import { starterPromptForCategory } from './promptStarter'
 
 describe('新建冷启动骨架与模型智能拆解', () => {
@@ -33,6 +33,8 @@ describe('新建冷启动骨架与模型智能拆解', () => {
       online: false,
     })
     expect(smartModelParts('')).toEqual({ family: '未选', tier: '', online: false })
+    expect(compactModelLabel('字节-DeepSeek-V4.1-Flash经济版（不联网）')).toBe('DeepSeek V4.1 Flash经济')
+    expect(compactModelLabel('字节-DeepSeek-V4-Flash（联网）')).toBe('DeepSeek V4 Flash（联网）')
     expect(compactPriceText({ input_price: '0.0016', output_price: '0.0064', web_search: true })).toBe(
       '输入 ¥1.6 · 输出 ¥6.4 /百万 token · 含联网',
     )

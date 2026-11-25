@@ -21,7 +21,7 @@ import { removeTemplate, trialRequest } from './promptActions'
 import { starterPromptForCategory } from './promptStarter'
 import TestPanel from './TestPanel.vue'
 import { fitSummary } from './taskFit'
-import { flowSteps, stepActions, withSample } from './templateStatus'
+import { withSample } from './templateStatus'
 import { useTaskFit } from './useTaskFit'
 import { useTemplateFiles } from './useTemplateFiles'
 import '../shared/ai.css'
@@ -73,14 +73,9 @@ const categoryOptions = computed(() => {
   return own && !own.editable ? [own, ...editableCategories.value] : editableCategories.value
 })
 const trialModel = computed(() => models.value.find(item => item.id === form.model_id))
-const dirty = computed(() => unsaved.dirty.value || !selected.value)
 const codeName = computed(() => (form.code_table
   ? codeTables.value.find(item => item.key === form.code_table)?.name ?? form.code_table
   : selected.value?.code_name ?? ''))
-
-const steps = computed(() => flowSteps(selected.value, dirty.value, canRelease.value))
-const releaseActionLabel = computed(() =>
-  stepActions(selected.value, steps.value, { canEdit: canEdit.value, canRelease: canRelease.value, sampleOpen: true }).release ?? '')
 
 let loadSeq = 0
 
@@ -104,7 +99,7 @@ onMounted(load)
 function openReviewFromLink(): void {
   if (route.query.review !== '1') return
   void router.replace({ query: { ...route.query, review: undefined } })
-  if (selected.value?.release) releasing.value = true
+  if (selected.value && (selected.value.release || canRelease.value)) releasing.value = true
 }
 watch(routeId, id => {
   if (id === (selected.value?.id ?? '')) return
@@ -186,7 +181,7 @@ function applyStarter(): void {
   if (!form.title.trim()) form.title = spec.defaultTitle
   form.content = spec.content
   form.output_fields = spec.outputFields
-  ElMessage({ type: 'success', message: '已填入标准结构化提示词骨架，可直接按 Ctrl+Enter 试发', offset: 68 })
+  ElMessage({ type: 'success', message: '已填入标准结构化提示词骨架，可直接按 Ctrl+Enter 试发', placement: 'bottom-right', offset: 64 })
   editor.value?.focus()
 }
 </script>
@@ -210,7 +205,6 @@ function applyStarter(): void {
       :can-release="canRelease"
       :editor-wide="editorWide"
       :hide-wide-toggle="testTab === 'sample' && sampleWide"
-      :release-action-label="releaseActionLabel"
       @save="persist()"
       @remove="remove"
       @open-release="releasing = true"

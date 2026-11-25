@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { BatchRun, PromptTemplate, SampleSummary, TemplateReleaseInfo } from '@/api/ai'
-import { flowSteps, releaseState, sampleCurrent, sampleFromRun, sampleState, stepActions } from './templateStatus'
+import { flowSteps, releaseEntry, releaseState, sampleCurrent, sampleFromRun, sampleState, stepActions } from './templateStatus'
 
 const release = (changes: string[] = []): TemplateReleaseInfo => ({
   id: 'r', release_no: 2, released_at: '2026-10-22 16:24', released_by_name: '管理员', unreleased_changes: changes,
@@ -147,5 +147,28 @@ describe('样本试跑是不是现在的草稿', () => {
     const old = { ...run, draft_saved_at: '' }
     expect(sampleCurrent(old, { ...template, updated_at: 'x' })).toBe(true)
     expect(sampleCurrent(old, { ...template, content: '改过' })).toBe(false)
+  })
+})
+
+describe('双入口上线审核按钮（列表页与编辑页共用）', () => {
+  it('管理员：未上线、有改动、已上线在顶栏与列表页均始终展示明确上线入口，不受未试跑遮蔽', () => {
+    expect(releaseEntry(null, true, 'header')).toBeNull()
+    expect(releaseEntry(template(), true, 'header')).toEqual({ label: '发布上线', emphasis: 'plain' })
+    expect(releaseEntry(template(), true, 'list')).toEqual({ label: '上线', emphasis: 'plain' })
+
+    const changed = template({ release: release(['提示词内容']), sample: null })
+    expect(releaseEntry(changed, true, 'header')).toEqual({ label: '审核上线 · 第 3 版', emphasis: 'primary' })
+    expect(releaseEntry(changed, true, 'list')).toEqual({ label: '审核上线', emphasis: 'primary' })
+
+    const online = template({ release: release() })
+    expect(releaseEntry(online, true, 'header')).toEqual({ label: '线上版本', emphasis: 'subtle' })
+    expect(releaseEntry(online, true, 'list')).toEqual({ label: '线上版', emphasis: 'subtle' })
+  })
+
+  it('无上线权限人员：未上线不展示抽屉入口，有改动看改动，已上线看线上版本', () => {
+    expect(releaseEntry(template(), false, 'header')).toBeNull()
+    expect(releaseEntry(template(), false, 'list')).toBeNull()
+    expect(releaseEntry(template({ release: release(['码表']) }), false, 'header')).toEqual({ label: '看改动', emphasis: 'subtle' })
+    expect(releaseEntry(template({ release: release() }), false, 'list')).toEqual({ label: '线上版', emphasis: 'subtle' })
   })
 })

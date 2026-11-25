@@ -3,9 +3,9 @@ import { computed, ref } from 'vue'
 import { ArrowLeft, MoreFilled } from '@element-plus/icons-vue'
 
 import type { PromptTemplate } from '@/api/ai'
-import { releaseState } from './templateStatus'
+import { releaseEntry, releaseState } from './templateStatus'
 
-/** 单行 48px 工作台顶栏：整合返回、标题、保存状态、内联上线生命周期、专注编辑与低频更多菜单。 */
+/** 单行 48px 工作台顶栏：面包屑返回 + 内联可编辑标题 + 常驻显式上线审核入口 + 专注编辑与更多菜单。 */
 const props = defineProps<{
   template: PromptTemplate | null
   dirty: boolean
@@ -14,7 +14,6 @@ const props = defineProps<{
   canRelease: boolean
   editorWide: boolean
   hideWideToggle: boolean
-  releaseActionLabel: string
 }>()
 
 const emit = defineEmits<{
@@ -28,11 +27,18 @@ const title = defineModel<string>('title', { required: true })
 const titleInput = ref<HTMLInputElement | null>(null)
 
 const rState = computed(() => (props.template ? releaseState(props.template) : null))
+const rEntry = computed(() => releaseEntry(props.template, props.canRelease, 'header'))
 const showMore = computed(() => Boolean(props.template && (props.canEdit || props.canRelease || props.template.release)))
 const releaseHover = computed(() => {
   if (!rState.value) return ''
+  if (rState.value.kind === 'offline') {
+    return props.canRelease ? '当前尚未上线，点击右侧「发布上线」审核后生效' : '当前尚未上线，确认无误后请联系管理员上线'
+  }
   return rState.value.detail ? `${rState.value.text}（线上：${rState.value.detail}）` : rState.value.text
 })
+
+const releaseBtnPrimary = computed(() =>
+  Boolean(rEntry.value && (rEntry.value.emphasis === 'primary' || rEntry.value.emphasis === 'plain')))
 
 function onMoreCommand(command: string): void {
   if (command === 'release') emit('open-release')
@@ -44,13 +50,24 @@ defineExpose({ focusTitle: () => titleInput.value?.focus() })
 
 <template>
   <header class="ai-panel prompt-head">
-    <router-link
-      class="prompt-head__back"
-      aria-label="返回模板列表"
-      :to="{ name: 'ai-prompts' }"
+    <nav
+      class="prompt-head__crumb"
+      aria-label="面包屑导航"
     >
-      <el-icon><ArrowLeft /></el-icon>列表
-    </router-link>
+      <router-link
+        class="prompt-head__back"
+        :to="{ name: 'ai-prompts' }"
+      >
+        <el-icon class="prompt-head__back-icon">
+          <ArrowLeft />
+        </el-icon>
+        <span>提示词模板</span>
+      </router-link>
+      <span
+        class="prompt-head__slash"
+        aria-hidden="true"
+      >/</span>
+    </nav>
 
     <div class="prompt-head__title-wrap">
       <input
@@ -91,13 +108,13 @@ defineExpose({ focusTitle: () => titleInput.value?.focus() })
         :title="releaseHover"
       >{{ rState.compact }}</span>
       <el-button
-        v-if="releaseActionLabel"
+        v-if="rEntry"
         size="small"
-        :type="rState.kind === 'changed' && canRelease ? 'primary' : undefined"
-        :plain="rState.kind === 'changed' && canRelease"
+        :type="releaseBtnPrimary ? 'primary' : undefined"
+        :plain="releaseBtnPrimary && (dirty || rEntry.emphasis === 'plain')"
         @click="emit('open-release')"
       >
-        {{ releaseActionLabel }}
+        {{ rEntry.label }}
       </el-button>
     </div>
 
@@ -127,7 +144,7 @@ defineExpose({ focusTitle: () => titleInput.value?.focus() })
               v-if="canRelease || template?.release"
               command="release"
             >
-              查看上线版本与记录
+              {{ canRelease ? '上线审核与历史记录' : '查看线上版本与记录' }}
             </el-dropdown-item>
             <el-dropdown-item
               v-if="canEdit"
@@ -160,18 +177,20 @@ defineExpose({ focusTitle: () => titleInput.value?.focus() })
 
 <style scoped>
 .prompt-head {
-  display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 14px; flex: none;
+  display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 6px 14px; flex: none;
 }
 .prompt-head :deep(.el-button) { margin: 0; border-radius: 8px; }
 
+.prompt-head__crumb { display: inline-flex; align-items: center; gap: 4px; flex: none; }
 .prompt-head__back {
-  display: inline-flex; flex: none; align-items: center; gap: 4px;
-  height: 28px; padding: 0 10px; border: 1px solid var(--zt-border); border-radius: 8px;
-  background: var(--zt-surface-subtle); color: var(--zt-ink-700);
-  font-size: 12.5px; font-weight: 500; text-decoration: none; white-space: nowrap;
-  transition: border-color 0.14s ease, color 0.14s ease;
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 28px; padding: 0 7px; margin-left: -4px; border-radius: 6px;
+  color: var(--zt-ink-500); font-size: 13px; font-weight: 500; text-decoration: none; white-space: nowrap;
+  transition: background-color 0.14s ease, color 0.14s ease;
 }
-.prompt-head__back:hover { border-color: var(--zt-border-strong); color: var(--zt-blue-600); }
+.prompt-head__back:hover { background: var(--el-color-primary-light-9); color: var(--zt-blue-600); }
+.prompt-head__back-icon { font-size: 13px; }
+.prompt-head__slash { color: var(--zt-ink-400); font-size: 14px; user-select: none; }
 
 .prompt-head__title-wrap {
   display: flex; align-items: center; gap: 8px; flex: 1; min-width: 140px;
@@ -180,7 +199,7 @@ defineExpose({ focusTitle: () => titleInput.value?.focus() })
   flex: 1; min-width: 110px; max-width: 460px; height: 32px; padding: 0 8px;
   border: 1px solid transparent; border-radius: 7px;
   background: transparent; color: var(--zt-ink-900);
-  font: 600 16px/1.35 var(--zt-font); outline: none;
+  font: 600 15.5px/1.35 var(--zt-font); outline: none;
   transition: background-color 0.14s ease, border-color 0.14s ease;
 }
 .prompt-head__title:hover:not([readonly]) { background: var(--zt-surface-subtle); }

@@ -2,13 +2,14 @@
 import type { PromptTemplate } from '@/api/ai'
 import { smartModelParts } from '../shared/aiText'
 import { shortTime } from './sampleView'
-import { releaseState, sampleState } from './templateStatus'
+import { releaseEntry, releaseState, sampleState } from './templateStatus'
 
 export type ListSortKey = 'updated_at' | 'title' | 'release' | 'fields'
 
 defineProps<{
   rows: PromptTemplate[]
   showTasks: boolean
+  canRelease: boolean
   loading: boolean
   sortKey: ListSortKey
   sortAsc: boolean
@@ -17,17 +18,13 @@ defineProps<{
 
 const emit = defineEmits<{
   open: [template: PromptTemplate]
+  review: [template: PromptTemplate]
   sort: [key: ListSortKey]
 }>()
 
 function sortArrow(activeKey: ListSortKey, asc: boolean, col: ListSortKey): string {
   if (activeKey !== col) return '↕'
   return asc ? '↑' : '↓'
-}
-
-function outputPreview(fields: string[]): string {
-  if (!fields.length) return ''
-  return fields.length <= 2 ? fields.join('、') : `${fields.slice(0, 2).join('、')}…`
 }
 
 function sampleHover(row: PromptTemplate): string {
@@ -141,8 +138,9 @@ function releaseHover(row: PromptTemplate): string {
           <th
             scope="col"
             class="is-right"
-            aria-label="操作"
-          />
+          >
+            操作
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -199,15 +197,6 @@ function releaseHover(row: PromptTemplate): string {
                 class="prompt-list__state"
                 :class="`is-${releaseState(row).kind}`"
               ><span class="prompt-list__state-text">{{ releaseState(row).compact }}</span></span>
-              <router-link
-                v-if="row.release?.unreleased_changes.length"
-                class="prompt-list__diff"
-                :to="{ name: 'ai-prompt-edit', params: { id: row.id }, query: { review: '1' } }"
-                :title="`草稿改了${row.release.unreleased_changes.join('、')}，尚未上线`"
-                @click.stop
-              >
-                看改动
-              </router-link>
             </div>
           </td>
 
@@ -226,7 +215,7 @@ function releaseHover(row: PromptTemplate): string {
               :title="row.fields.join('、')"
             >
               <strong>{{ row.fields.length }} 个</strong>
-              <span>{{ outputPreview(row.fields) }}</span>
+              <span>{{ row.fields.join('、') }}</span>
             </span>
             <span
               v-else
@@ -265,8 +254,27 @@ function releaseHover(row: PromptTemplate): string {
             >{{ shortTime(row.updated_at) }}</span>
           </td>
 
-          <td class="is-right">
-            <span class="prompt-list__open">打开 →</span>
+          <td
+            class="is-right"
+            @click.stop
+          >
+            <div class="prompt-row-actions">
+              <button
+                v-if="releaseEntry(row, canRelease, 'list')"
+                type="button"
+                class="prompt-act-btn"
+                :class="`is-${releaseEntry(row, canRelease, 'list')!.emphasis}`"
+                @click="emit('review', row)"
+              >
+                {{ releaseEntry(row, canRelease, 'list')!.label }}
+              </button>
+              <router-link
+                class="prompt-act-link"
+                :to="{ name: 'ai-prompt-edit', params: { id: row.id } }"
+              >
+                {{ row.editable ? '编辑' : '查看' }}
+              </router-link>
+            </div>
           </td>
         </tr>
       </tbody>

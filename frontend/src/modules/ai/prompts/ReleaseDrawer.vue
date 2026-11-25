@@ -16,8 +16,15 @@ import { sampleState } from './templateStatus'
  * 草稿和线上版本一样时没有要上线的东西：只看线上这一版的内容和上线记录，管理员可以下线。
  */
 /** usedBy：哪些定时任务正在用这个模板；null 是说不清（没权限看任务设置、或政策服务暂时取不到） */
-const props = defineProps<{ template: PromptTemplate; canRelease: boolean; dirty: boolean; fit?: FitSummary | null; usedBy: string[] | null }>()
-const emit = defineEmits<{ changed: [template: PromptTemplate] }>()
+const props = defineProps<{
+  template: PromptTemplate
+  canRelease: boolean
+  dirty: boolean
+  fit?: FitSummary | null
+  usedBy: string[] | null
+  fromList?: boolean
+}>()
+const emit = defineEmits<{ changed: [template: PromptTemplate]; edit: [] }>()
 const open = defineModel<boolean>({ required: true })
 const busy = ref(false)
 const history = ref<TemplateRelease[]>([])
@@ -267,6 +274,14 @@ async function takeOffline(): Promise<void> {
             @click="takeOffline"
           >
             下线
+          </el-button>
+          <el-button
+            v-if="fromList"
+            text
+            type="primary"
+            @click="emit('edit')"
+          >
+            进入编辑工作台 →
           </el-button>
           <span class="release__spacer" />
           <el-button @click="open = false">

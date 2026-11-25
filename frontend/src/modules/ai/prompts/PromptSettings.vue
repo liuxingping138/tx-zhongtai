@@ -63,10 +63,11 @@ const activeCodeChip = computed(() => {
   return '码表：未启用'
 })
 
-const activeSampleChip = computed(() =>
-  props.template?.excel_name
-    ? `样本：${props.template.excel_name} (${props.template.excel_rows})`
-    : '样本：未绑定')
+const activeSampleChip = computed(() => {
+  if (!props.template?.excel_name) return '样本：未绑定'
+  const baseName = props.template.excel_name.replace(/\.(xlsx|xls|csv|txt)$/i, '')
+  return `样本：${baseName} (${props.template.excel_rows})`
+})
 
 const previewable = computed(() =>
   (codeMode.value === 'system' ? Boolean(codeTable.value) : codeMode.value === 'upload' && Boolean(props.template?.code_name)))
@@ -137,6 +138,7 @@ defineExpose({
           v-model="modelId"
           :models="models"
           :show-thinking="false"
+          compact
           size="small"
           :disabled="!canEdit"
           allow-empty
@@ -303,8 +305,8 @@ defineExpose({
   display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 10px;
   flex-wrap: wrap;
 }
-.studio-ribbon__cat { width: 80px; flex: none; }
-.studio-ribbon__model { flex: 1 1 150px; max-width: 210px; min-width: 132px; }
+.studio-ribbon__cat { width: 76px; flex: none; }
+.studio-ribbon__model { flex: 0 1 196px; min-width: 148px; }
 .studio-ribbon__model :deep(.model-picker) { flex-wrap: nowrap; gap: 6px; width: 100%; }
 .studio-ribbon__model :deep(.model-picker__select--small) { width: 100%; }
 .studio-ribbon__model :deep(.model-picker__off) { display: none; }
@@ -313,7 +315,7 @@ defineExpose({
   display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 8px;
   border: 1px solid var(--zt-border); border-radius: 6px;
   background: var(--zt-panel); color: var(--zt-ink-700);
-  font: 500 12px/1 var(--zt-font); min-width: 0; max-width: 146px; cursor: pointer;
+  font: 500 12px/1 var(--zt-font); min-width: 0; max-width: min(240px, 47%); cursor: pointer;
   transition: border-color 0.14s ease, background-color 0.14s ease, color 0.14s ease;
 }
 .studio-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

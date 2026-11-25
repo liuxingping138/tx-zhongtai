@@ -9,6 +9,8 @@ import TableSkeleton from '@/components/TableSkeleton.vue'
 import { useAuthStore } from '@/stores/auth'
 import { ALL_CATEGORIES, defaultCategory, inCategory } from '../shared/categories'
 import PromptListTable, { type ListSortKey } from './PromptListTable.vue'
+import ReleaseDrawer from './ReleaseDrawer.vue'
+import { fitSummary } from './taskFit'
 import { releaseState, type ReleaseKind } from './templateStatus'
 import { useTaskFit } from './useTaskFit'
 import '../shared/ai.css'
@@ -50,10 +52,23 @@ const onlyScheduled = computed(() => scheduledFilter.value.length > 0)
 const hasActiveFilters = computed(() =>
   Boolean(keyword.value.trim() || status.value || category.value !== ALL_CATEGORIES || onlyScheduled.value))
 
-const taskFit = useTaskFit(reactive({ category: 'policy', content: '', output_fields: '', code_table: '' }))
+const fitDraft = reactive({ category: 'policy', content: '', output_fields: '', code_table: '' })
+const taskFit = useTaskFit(fitDraft)
 const showTasks = computed(() => taskFit.usedBy('') !== null)
 const tasksOf = (item: PromptTemplate) => (item.category === 'policy' ? taskFit.usedBy(item.id) ?? [] : [])
 const canCreate = computed(() => auth.canFull('ai.prompts') && categories.value.some(item => item.editable))
+const canRelease = computed(() => auth.canFull('ai.releases'))
+
+const reviewId = ref('')
+const reviewTarget = computed(() => templates.value.find(item => item.id === reviewId.value) ?? null)
+const reviewOpen = computed({
+  get: () => Boolean(reviewTarget.value),
+  set: (val: boolean) => { if (!val) reviewId.value = '' },
+})
+const reviewFit = computed(() =>
+  (reviewTarget.value?.category === 'policy' ? fitSummary(taskFit.results.value) : null))
+const reviewUsedBy = computed(() =>
+  (reviewTarget.value?.category === 'policy' ? taskFit.usedBy(reviewTarget.value.id) : []))
 
 const STATUS_OPTIONS: { value: ReleaseKind | ''; label: string }[] = [
   { value: '', label: '全部' },
@@ -131,6 +146,19 @@ function resetFilters(): void {
 
 function open(template: PromptTemplate): void {
   void router.push({ name: 'ai-prompt-edit', params: { id: template.id } })
+}
+
+function openReview(template: PromptTemplate): void {
+  Object.assign(fitDraft, {
+    content: template.content,
+    output_fields: template.output_fields,
+    code_table: template.code_table || template.code_name,
+  })
+  reviewId.value = template.id
+}
+
+function onReviewed(updated: PromptTemplate): void {
+  templates.value = templates.value.map(item => (item.id === updated.id ? updated : item))
 }
 
 function create(): void {
@@ -260,14 +288,29 @@ function create(): void {
         v-else
         :rows="visible"
         :show-tasks="showTasks"
+        :can-release="canRelease"
         :loading="loading"
         :sort-key="sortKey"
         :sort-asc="sortAsc"
         :tasks-of="tasksOf"
         @open="open"
+        @review="openReview"
         @sort="toggleSort"
       />
     </div>
+
+    <ReleaseDrawer
+      v-if="reviewTarget"
+      v-model="reviewOpen"
+      from-list
+      :template="reviewTarget"
+      :can-release="canRelease"
+      :dirty="false"
+      :fit="reviewFit"
+      :used-by="reviewUsedBy"
+      @changed="onReviewed"
+      @edit="open(reviewTarget)"
+    />
   </section>
 </template>
 

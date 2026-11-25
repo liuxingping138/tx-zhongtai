@@ -186,6 +186,33 @@ export function sampleFromRun(run: BatchRun, template: DraftStamp): SampleSummar
   }
 }
 
+export interface ReleaseEntry {
+  label: string
+  /** primary：待审核改动（醒目主入口）；plain：首次发布上线；subtle：查看线上版或只读看改动 */
+  emphasis: 'primary' | 'plain' | 'subtle'
+}
+
+function adminReleaseEntry(release: PromptTemplate['release'], changed: boolean, header: boolean): ReleaseEntry {
+  if (!release) return { label: header ? '发布上线' : '上线', emphasis: 'plain' }
+  if (changed) return { label: header ? `审核上线 · 第 ${release.release_no + 1} 版` : '审核上线', emphasis: 'primary' }
+  return { label: header ? '线上版本' : '线上版', emphasis: 'subtle' }
+}
+
+/** 列表操作列与编辑页顶栏共用的上线抽屉入口：管理员始终可见明确的上线/审核按钮，不受试跑步骤遮蔽。 */
+export function releaseEntry(
+  template: Pick<PromptTemplate, 'release'> | null,
+  canRelease: boolean,
+  scene: 'header' | 'list' = 'header',
+): ReleaseEntry | null {
+  if (!template) return null
+  const header = scene === 'header'
+  const release = template.release
+  const changed = Boolean(release?.unreleased_changes.length)
+  if (canRelease) return adminReleaseEntry(release, changed, header)
+  if (!release) return null
+  return { label: changed ? '看改动' : header ? '线上版本' : '线上版', emphasis: 'subtle' }
+}
+
 /** 试跑开始、结束后把模板上的「最近一次试跑」换成这一次；没变化就原样返回，页面不用重画。 */
 export function withSample(template: PromptTemplate, run: BatchRun): PromptTemplate {
   const sample = sampleFromRun(run, template)

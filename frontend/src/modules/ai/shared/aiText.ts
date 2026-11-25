@@ -148,6 +148,15 @@ function splitOnlineSuffix(raw: string): { text: string; online: boolean } {
   return { text, online }
 }
 
+/** 配置栏紧凑模型标签：去掉厂商前缀与「（不联网）」噪音，保留完整家族版本与联网标识；下拉项内仍展示全称与单价。 */
+export function compactModelLabel(rawName: string): string {
+  if (!rawName) return ''
+  const stripped = rawName.replace(/^(字节|百度|阿里|腾讯|智谱)\s*[-－]\s*/, '').trim()
+  const { text, online } = splitOnlineSuffix(stripped)
+  const clean = text.replace(/[-－]+/g, ' ').replace(/\s+/g, ' ').trim()
+  return online ? `${clean}（联网）` : clean
+}
+
 function formatDeepSeekParts(ver: string, rawRest: string, online: boolean): SmartModelParts {
   const tier = rawRest.replace(/版$/g, '').trim()
   const compact = tier.length > 5 || (online && tier.length > 0)

@@ -2,19 +2,21 @@
 import { computed } from 'vue'
 
 import type { AiModel } from '@/api/ai'
-import { priceText } from './aiText'
+import { compactModelLabel, priceText } from './aiText'
 
 const props = withDefaults(defineProps<{
   models: AiModel[]
   label?: string
   allowEmpty?: boolean
   showThinking?: boolean
+  compact?: boolean
   size?: 'default' | 'small'
   disabled?: boolean
 }>(), {
   label: '模型',
   allowEmpty: false,
   showThinking: true,
+  compact: false,
   size: 'default',
   disabled: false,
 })
@@ -24,7 +26,10 @@ const current = computed(() => props.models.find(item => item.id === model.value
 </script>
 
 <template>
-  <div class="model-picker">
+  <div
+    class="model-picker"
+    :title="compact && current ? `${current.name} · ${priceText(current)}` : undefined"
+  >
     <el-select
       v-model="model"
       :aria-label="label"
@@ -38,7 +43,7 @@ const current = computed(() => props.models.find(item => item.id === model.value
       <el-option
         v-for="item in models"
         :key="item.id"
-        :label="item.name"
+        :label="compact ? compactModelLabel(item.name) : item.name"
         :value="item.id"
         :disabled="!item.available"
       >
