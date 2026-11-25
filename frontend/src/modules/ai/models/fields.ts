@@ -152,32 +152,32 @@ export function checkModelForm(form: RecordForm): FieldError | undefined {
 }
 
 export const TABLE_COLUMNS: DataColumn[] = [
-  // 显示名称写全（2026-11-03 用户：最起码名称要显示全），最长的「字节-DeepSeek-V4.1-Flash经济版（不联网）」约 318px
-  { prop: 'name', label: '显示名称', minWidth: 318, grow: 2 },
+  // 全部列均用 minWidth + grow 均衡分摊宽屏余量，name 用较小 grow 紧贴第 2 列，避免宽屏下第 1、2 列间距过大
+  { prop: 'name', label: '显示名称', minWidth: 312, grow: 0.6 },
   // 状态是行内开关，和用户管理、任务调度同一种（ModelList 的 #cell-enabled）
-  { prop: 'enabled', label: '状态', width: 100 },
-  { prop: 'provider', label: '厂商', width: 92, tags: { 字节方舟: 'primary', 百度千帆: 'success' } },
-  { prop: 'web_search', label: '联网', width: 80, tags: { 联网: 'success', 不联网: 'info' } },
-  { prop: 'service_tier', label: '服务档位', width: 112, tags: { '低优（flex）': 'warning', '常规（auto）': 'primary', 按模型默认: 'info' } },
-  { prop: 'input_price', label: '常规输入', fullLabel: '常规输入单价', width: 92 },
-  { prop: 'output_price', label: '常规输出', fullLabel: '常规输出单价', width: 92 },
-  { prop: 'flex_input_price', label: '低优输入', fullLabel: '低优输入单价', width: 92 },
-  { prop: 'flex_output_price', label: '低优输出', fullLabel: '低优输出单价', width: 92 },
-  { prop: 'peak_input_price', label: '高峰输入', fullLabel: '高峰输入单价', width: 92 },
-  { prop: 'peak_output_price', label: '高峰输出', fullLabel: '高峰输出单价', width: 92 },
-  { prop: 'cache_price', label: '缓存单价', fullLabel: '缓存单价', width: 92 },
-  { prop: 'peak_cache_price', label: '高峰缓存', fullLabel: '高峰缓存单价', width: 92 },
-  { prop: 'peak_hours', label: '高峰时段', width: 180 },
-  { prop: 'search_price', label: '联网单价', fullLabel: '联网单价', width: 92 },
-  { prop: 'thinking', label: '深度思考', width: 100 },
-  { prop: 'reasoning_effort', label: '思考强度', width: 100 },
-  { prop: 'rate_limit', label: '限流', fullLabel: '限流说明', minWidth: 200, grow: 1 },
-  { prop: 'sort_order', label: '排序', width: 72 },
+  { prop: 'enabled', label: '状态', minWidth: 100, grow: 1 },
+  { prop: 'provider', label: '厂商', minWidth: 92, grow: 1, tags: { 字节方舟: 'primary', 百度千帆: 'success' } },
+  { prop: 'web_search', label: '联网', minWidth: 80, grow: 1, tags: { 联网: 'success', 不联网: 'info' } },
+  { prop: 'service_tier', label: '服务档位', minWidth: 112, grow: 1, tags: { '低优（flex）': 'warning', '常规（auto）': 'primary', 按模型默认: 'info' } },
+  { prop: 'input_price', label: '常规输入', fullLabel: '常规输入单价', minWidth: 92, grow: 1 },
+  { prop: 'output_price', label: '常规输出', fullLabel: '常规输出单价', minWidth: 92, grow: 1 },
+  { prop: 'flex_input_price', label: '低优输入', fullLabel: '低优输入单价', minWidth: 92, grow: 1 },
+  { prop: 'flex_output_price', label: '低优输出', fullLabel: '低优输出单价', minWidth: 92, grow: 1 },
+  { prop: 'peak_input_price', label: '高峰输入', fullLabel: '高峰输入单价', minWidth: 92, grow: 1 },
+  { prop: 'peak_output_price', label: '高峰输出', fullLabel: '高峰输出单价', minWidth: 92, grow: 1 },
+  { prop: 'cache_price', label: '缓存单价', fullLabel: '缓存单价', minWidth: 96, grow: 1 },
+  { prop: 'peak_cache_price', label: '高峰缓存', fullLabel: '高峰缓存单价', minWidth: 92, grow: 1 },
+  { prop: 'peak_hours', label: '高峰时段', minWidth: 180, grow: 1.2 },
+  { prop: 'search_price', label: '联网单价', fullLabel: '联网单价', minWidth: 92, grow: 1 },
+  { prop: 'thinking', label: '深度思考', minWidth: 100, grow: 1 },
+  { prop: 'reasoning_effort', label: '思考强度', minWidth: 100, grow: 1 },
+  { prop: 'rate_limit', label: '限流', fullLabel: '限流说明', minWidth: 200, grow: 1.5 },
+  { prop: 'sort_order', label: '排序', minWidth: 64, grow: 0.8 },
   // 模型ID、接入点这类技术标识按 DESIGN.md 放在最后、留痕列之前，首屏直接看到名称、状态、档位与价格。
-  { prop: 'id', label: '模型ID', width: 190 },
-  { prop: 'endpoint', label: '接入点', width: 210 },
-  { prop: 'updated_at', label: '更新时间', width: 180, time: true },
-  { prop: 'updated_by_name', label: '更新人', width: 100 },
+  { prop: 'id', label: '模型ID', minWidth: 190, grow: 1.2 },
+  { prop: 'endpoint', label: '接入点', minWidth: 210, grow: 1.3 },
+  { prop: 'updated_at', label: '更新时间', minWidth: 180, grow: 1.1, time: true },
+  { prop: 'updated_by_name', label: '更新人', minWidth: 100, grow: 1 },
 ]
 
 /** 首屏默认勾选的核心常用列（1440px 零横向滚动）；其余列随时可在「列设置」中勾选或一键「显示全部列」。 */
