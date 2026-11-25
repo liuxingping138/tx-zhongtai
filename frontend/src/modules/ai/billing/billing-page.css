@@ -9,13 +9,14 @@
 .billing__period-meta { color: var(--zt-ink-500); font-size: 12px; white-space: nowrap; }
 .billing__toolbar-actions { display: flex; align-items: center; gap: 8px; }
 .billing__reset-btn {
-  display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px;
-  border: 1px solid var(--el-color-primary-light-7); border-radius: 6px;
+  display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 12px;
+  border: 1px solid var(--el-color-primary-light-5); border-radius: 999px;
   background: var(--el-color-primary-light-9); color: var(--zt-blue-600);
-  font: 500 12px/1 var(--zt-font); white-space: nowrap; cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  font: 600 12px/1 var(--zt-font); white-space: nowrap; cursor: pointer;
+  box-shadow: var(--zt-btn-sec-shadow);
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
 }
-.billing__reset-btn:hover { background: var(--el-color-primary-light-8); border-color: var(--zt-blue-600); }
+.billing__reset-btn:hover { background: var(--el-color-primary-light-8); border-color: var(--zt-blue-600); transform: translateY(-0.5px); }
 
 .billing__filters {
   display: grid; grid-template-columns: minmax(0, 1.95fr) 1px minmax(280px, 1.25fr);
@@ -100,7 +101,7 @@
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
   gap: 12px; padding: 14px 20px 10px;
 }
-.billing__panel-head--bordered { padding: 10px 20px; border-bottom: 1px solid var(--zt-divider); }
+.billing__panel-head--bordered { padding: 10px 20px; border-bottom: 1px solid var(--zt-border); background: var(--zt-hero-gradient); border-radius: 12px 12px 0 0; }
 .billing__title-wrap { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; min-width: 0; }
 .billing__title { margin: 0; color: var(--zt-ink-900); font-size: 14.5px; font-weight: 650; white-space: nowrap; }
 .billing__subtitle { margin: 0; color: var(--zt-ink-500); font-size: 12px; line-height: 1.5; }
@@ -161,18 +162,24 @@
 .billing__row:hover td { background: var(--zt-row-hover); }
 .billing__row.is-pinned td { background: var(--el-color-primary-light-9); }
 
+/* 7 列按比例弹性展开：消除 1920/2560px 宽屏下首列独占千余像素空白，1440px 与宽屏均舒展均衡 */
 .billing__col-name { width: auto; }
-.billing__col-calls { width: 84px; }
-.billing__col-input { width: 106px; }
-.billing__col-cached { width: 164px; }
-.billing__col-output { width: 104px; }
-.billing__col-cost { width: 112px; }
-.billing__col-share { width: 156px; }
+.billing__col-calls { width: 9%; }
+.billing__col-input { width: 12%; }
+.billing__col-cached { width: 17%; }
+.billing__col-output { width: 12%; }
+.billing__col-cost { width: 11%; }
+.billing__col-share { width: 13.5%; }
 
 .billing__name-cell { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .billing__swatch { width: 9px; height: 9px; border-radius: 2.5px; flex: none; }
-.billing__name-text { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.billing__pin-tag { color: var(--zt-blue-600); font-size: 11px; font-weight: 600; flex: none; }
+.billing__name-text { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.billing__pin-tag {
+  flex: none; display: inline-flex; align-items: center; height: 19px; padding: 0 7px;
+  border: 1px solid var(--el-color-primary-light-5); border-radius: 999px;
+  background: var(--el-color-primary-light-9); color: var(--zt-blue-600);
+  font-size: 11px; font-weight: 600; line-height: 1;
+}
 
 .billing__cached-cell { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; width: 100%; }
 .billing__cached-val { color: var(--zt-ink-700); }
@@ -188,7 +195,7 @@
 .billing__cost-val { color: var(--zt-ink-900); font-weight: 600; }
 
 .billing__share-cell { display: inline-flex; align-items: center; justify-content: flex-end; gap: 10px; width: 100%; }
-.billing__share-track { width: 68px; height: 6px; border-radius: 999px; background: var(--zt-surface-subtle); overflow: hidden; flex: none; }
+.billing__share-track { width: clamp(56px, 5.2vw, 108px); height: 6px; border-radius: 999px; background: var(--zt-surface-subtle); overflow: hidden; flex: none; }
 .billing__share-bar { display: block; height: 100%; border-radius: 999px; background: var(--zt-blue-600); transition: width 0.22s ease; }
 .billing__share-pct { display: inline-block; min-width: 42px; text-align: right; color: var(--zt-ink-700); }
 
