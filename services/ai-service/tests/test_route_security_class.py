@@ -43,3 +43,20 @@ def test_stream_routes_live_under_the_unbuffered_prefix() -> None:
 
     streaming = {route.path for route in iter_api_routes(app) if route.path.endswith("/ask")}
     assert streaming == {"/api/v1/ai/stream/ask"}
+
+
+def test_category_access_always_runs_after_permission_dependency() -> None:
+    """require_ai_permission 必须排在 get_category_access 之前，才能复用单次 /authorize 返回的 ai.category.* scopes。"""
+
+    from app.api.security import get_category_access
+
+    bad: list[str] = []
+    for route in iter_api_routes(app):
+        deps = route.dependant.dependencies
+        cat_idx = next((idx for idx, dep in enumerate(deps) if dep.call is get_category_access), None)
+        if cat_idx is None:
+            continue
+        perm_idx = next((idx for idx, dep in enumerate(deps) if hasattr(dep.call, "__authz_permission__")), None)
+        if perm_idx is None or perm_idx > cat_idx:
+            bad.append(f"{sorted(route.methods or [])} {route.path}")
+    assert bad == [], f"以下路由把 get_category_access 排在了 require_ai_permission 之前: {bad}"

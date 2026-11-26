@@ -113,6 +113,39 @@ def test_failed_events_and_incomplete_status_report_errors_without_response_id()
     assert state.handle({"type": "response.web_search_call.weird"})[0]["tool_event"]["message"] == "联网搜索：weird"
 
 
+@pytest.mark.parametrize(
+    ("event", "retryable"),
+    [
+        ({"type": "error", "error": {"code": "rate_limit_exceeded", "message": "too fast"}}, True),
+        ({"type": "response.failed", "response": {"error": {"type": "server_error", "message": "503"}}}, True),
+        ({"type": "response.error", "error": {"code": "overloaded", "message": "busy"}}, True),
+        ({"type": "error", "error": {"code": "502", "message": "bad gateway"}}, True),
+        (
+            {
+                "type": "response.completed",
+                "response": {"id": "r", "status": "failed", "error": {"code": "429", "message": "rate limit"}},
+            },
+            True,
+        ),
+        (
+            {
+                "type": "response.incomplete",
+                "response": {"incomplete_details": {"reason": "max_output_tokens"}},
+            },
+            False,
+        ),
+        ({"type": "response.failed", "response": {"error": {"code": "content_filter", "message": "blocked"}}}, False),
+        ({"type": "error", "error": {"code": "invalid_api_key", "message": "bad key"}}, False),
+    ],
+)
+def test_sse_error_events_classify_transient_vs_deterministic_retryability(
+    event: dict[str, Any], retryable: bool
+) -> None:
+    items = _StreamState().handle(event)
+    assert len(items) == 1 and "error" in items[0]
+    assert bool(items[0].get("retryable")) is retryable
+
+
 def test_usage_and_sse_parsing_edge_cases() -> None:
     assert extract_usage({"usage": {"prompt_tokens": 3, "completion_tokens": 4}}) == {
         "input_tokens": 3,

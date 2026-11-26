@@ -24,6 +24,33 @@ _SERVER_ERROR = 500
 _COMPLETED = ("response.completed", "response.done")
 _FAILED = ("response.failed", "response.incomplete", "response.error", "error")
 _OK_STATUSES = ("completed", "succeeded", "success")
+_RETRYABLE_ERROR_MARKERS = (
+    "rate_limit",
+    "rate limit",
+    "too_many_requests",
+    "server_error",
+    "internal_error",
+    "overloaded",
+    "service_unavailable",
+    "bad_gateway",
+    "gateway_timeout",
+    "timeout",
+    "temporarily_unavailable",
+    "429",
+    "502",
+    "503",
+    "504",
+)
+_NON_RETRYABLE_ERROR_MARKERS = (
+    "max_output_tokens",
+    "max_tokens",
+    "content_filter",
+    "invalid_request",
+    "authentication",
+    "unauthorized",
+    "permission",
+    "invalid_api_key",
+)
 _SEARCH_TIPS = {
     "in_progress": "已发起联网搜索",
     "searching": "正在检索网络信息",
@@ -107,6 +134,29 @@ def _delta_text(event: dict[str, Any]) -> str:
     return text if isinstance(text, str) else ""
 
 
+def _is_retryable_event(event: dict[str, Any]) -> bool:
+    values: list[Any] = [event.get("code"), event.get("status")]
+    for container in (event.get("error"), _pick(event.get("response"), "error")):
+        if isinstance(container, dict):
+            values.extend(
+                (container.get("code"), container.get("type"), container.get("status"), container.get("message"))
+            )
+    incomplete = _pick(event.get("response"), "incomplete_details")
+    if isinstance(incomplete, dict):
+        values.append(incomplete.get("reason"))
+    joined = " ".join(str(val).lower() for val in values if val is not None and str(val).strip())
+    if any(marker in joined for marker in _NON_RETRYABLE_ERROR_MARKERS):
+        return False
+    return any(marker in joined for marker in _RETRYABLE_ERROR_MARKERS)
+
+
+def _error_event(event: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {"error": f"模型未正常完成：{error_message(event)}"}
+    if _is_retryable_event(event):
+        out["retryable"] = True
+    return out
+
+
 class _StreamState:
     def __init__(self) -> None:
         self.completed = False
@@ -129,7 +179,7 @@ class _StreamState:
             self.completed = True
             # 写到输出上限被截停、内容被过滤时厂商照样按 token 收钱，用量要记上，不然账单少算。
             usage = extract_usage(event.get("response"))
-            return [{"error": f"模型未正常完成：{error_message(event)}"}, *([{"usage": usage}] if usage else [])]
+            return [_error_event(event), *([{"usage": usage}] if usage else [])]
         if kind in _COMPLETED:
             self.completed = True
             return self._completed(event)
@@ -143,7 +193,7 @@ class _StreamState:
         status = response.get("status")
         failed = bool(status) and status not in _OK_STATUSES
         if failed:
-            out.append({"error": f"模型未正常完成：{error_message(event)}"})
+            out.append(_error_event(event))
         usage = extract_usage(response)
         if usage:
             out.append({"usage": usage})

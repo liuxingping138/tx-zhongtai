@@ -144,6 +144,7 @@ async def input_template(
         content, label = template.content, "草稿"
     else:
         release = await releases.current(session, template, "批量任务")
+        access.require_read(release.category)
         content, label = release.content, f"第{release.release_no}版"
     title = template.title.replace("/", "_")[:60]
     return await blank_input(content), f"{title}-{label}数据模板.xlsx"

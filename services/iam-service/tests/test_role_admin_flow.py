@@ -154,6 +154,56 @@ class TestUpdateRole:
         with pytest.raises(ApiError, match="无效的角色状态"):
             await role_admin.update_role(object(), ACTOR, env.role.id, RoleChanges(version=1, status="archived"))  # type: ignore[arg-type]
 
+    async def test_update_role_rejects_modifying_or_disabling_higher_privileged_custom_role(
+        self, env: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """只有 system.roles 权限的管理员不能停用或修改授权超出自身范围的自定义角色。"""
+
+        ai_res = _resource("ai.prompts")
+        env.grants = [(SimpleNamespace(level="FULL"), ai_res)]
+        monkeypatch.setattr(
+            role_admin.resource_repo,
+            "list_effective_levels",
+            AsyncMock(return_value={"system.roles": "FULL"}),
+        )
+        with pytest.raises(PermissionDeniedError, match="权限超出自身范围"):
+            await role_admin.update_role(
+                object(),
+                ACTOR,
+                env.role.id,
+                RoleChanges(version=1, status="disabled"),  # type: ignore[arg-type]
+            )
+        with pytest.raises(PermissionDeniedError, match="权限超出自身范围"):
+            await role_admin.update_role(
+                object(),
+                ACTOR,
+                env.role.id,
+                RoleChanges(version=1, name="改名"),  # type: ignore[arg-type]
+            )
+        assert env.denied == ["iam.role.protect_denied", "iam.role.protect_denied"]
+
+        # 自身权限覆盖角色全部授权时允许停用或改名；can_grant=True 时同样放行。
+        monkeypatch.setattr(
+            role_admin.resource_repo,
+            "list_effective_levels",
+            AsyncMock(return_value={"system.roles": "FULL", "ai.prompts": "FULL"}),
+        )
+        updated = await role_admin.update_role(
+            object(),
+            ACTOR,
+            env.role.id,
+            RoleChanges(version=1, status="disabled"),  # type: ignore[arg-type]
+        )
+        assert updated["status"] == "disabled"
+        reenabled = await role_admin.update_role(
+            object(),
+            ACTOR,
+            env.role.id,  # type: ignore[arg-type]
+            RoleChanges(version=2, status="active"),
+            can_grant=True,
+        )
+        assert reenabled["status"] == "active"
+
 
 class TestReplaceGrants:
     async def test_superadmin_role_grants_are_fixed(self, env: SimpleNamespace) -> None:

@@ -183,7 +183,7 @@ async def test_worker_consumes_until_stopped(monkeypatch: pytest.MonkeyPatch) ->
             stop.set()
         return value
 
-    async def execute(run_id: str) -> None:
+    async def execute(run_id: str, **_kwargs: Any) -> None:
         executed.append(run_id)
 
     async def recover() -> int:
@@ -470,3 +470,43 @@ def test_rows_left_to_rerun_use_the_count_written_by_the_worker() -> None:
     assert service.pending_rows(killed) == 3
     legacy = run(status="interrupted", total_count=10, done_count=7, failed_count=2)
     assert service.pending_rows(legacy) == 5
+
+
+async def test_retention_prunes_expired_pipeline_and_excess_sample_dirs_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """只删超期的已结束流水线目录和超 HISTORY_MAX 且超期的样本目录；运行中、排队中、未入库目录绝不碰。"""
+
+    from platform_common.clock import utcnow
+
+    from app.application import retention
+
+    now = utcnow()
+    old_pipe = run(id="1" * 32, source="pipeline", status="done", finished_at=now - timedelta(days=20))
+    fresh_pipe = run(id="2" * 32, source="pipeline", status="done", finished_at=now - timedelta(days=5))
+    running_pipe = run(id="3" * 32, source="pipeline", status="running", created_at=now - timedelta(days=30))
+    old_sample_kept = run(id="4" * 32, source="sample", status="done", finished_at=now - timedelta(days=10))
+    old_sample_excess = run(id="5" * 32, source="sample", status="done", finished_at=now - timedelta(days=10))
+    untracked_id = "6" * 32
+
+    for rid in (old_pipe.id, fresh_pipe.id, running_pipe.id, old_sample_kept.id, old_sample_excess.id, untracked_id):
+        storage.write_atomic(storage.run_file(rid, "log"), b"ok")
+
+    db_rows = {item.id: item for item in (old_pipe, fresh_pipe, running_pipe, old_sample_kept, old_sample_excess)}
+
+    async def by_ids(_session: Any, ids: list[str]) -> list[Any]:
+        return [db_rows[rid] for rid in ids if rid in db_rows]
+
+    async def sample_history(_session: Any, _prompt_id: str, *, limit: int) -> tuple[list[Any], int]:
+        return [old_sample_kept], 21
+
+    monkeypatch.setattr(retention, "SessionLocal", FakeSession)
+    monkeypatch.setattr(retention.repo, "by_ids", by_ids)
+    monkeypatch.setattr(retention.repo, "sample_history", sample_history)
+
+    pruned = await retention.prune_expired_runs()
+    assert pruned == 2
+    assert not storage.run_dir(old_pipe.id).exists()
+    assert not storage.run_dir(old_sample_excess.id).exists()
+    assert storage.run_dir(fresh_pipe.id).exists()
+    assert storage.run_dir(running_pipe.id).exists()
+    assert storage.run_dir(old_sample_kept.id).exists()
+    assert storage.run_dir(untracked_id).exists()

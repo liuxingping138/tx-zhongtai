@@ -37,7 +37,9 @@ def get_authz_client(settings: Annotated[Settings, Depends(get_settings)]) -> Au
     )
 
 
-require_ai_permission: Callable[[str, str], Callable[..., Any]] = build_permission_dependency(get_authz_client)
+require_ai_permission: Callable[[str, str], Callable[..., Any]] = build_permission_dependency(
+    get_authz_client, scope_prefixes=("ai.category.",)
+)
 
 
 async def get_category_access(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import timedelta
 from typing import Any
 
 from platform_common.filters import LIKE_ESCAPE, contains_ilike, escape_like, filter_values
@@ -17,7 +18,11 @@ def apply_filters[S: (Select[tuple[AuditEvent]], Select[tuple[int]])](stmt: S, f
     if filters.occurred_from is not None:
         stmt = stmt.where(AuditEvent.occurred_at >= filters.occurred_from)
     if filters.occurred_to is not None:
-        stmt = stmt.where(AuditEvent.occurred_at < filters.occurred_to)
+        # 前端日期时间选择器精度到秒（microsecond == 0）：选 23:59:59 时应包含该秒内的 .000-.999 事件。
+        upper = (
+            filters.occurred_to + timedelta(seconds=1) if filters.occurred_to.microsecond == 0 else filters.occurred_to
+        )
+        stmt = stmt.where(AuditEvent.occurred_at < upper)
     if filters.actor_id:
         stmt = stmt.where(AuditEvent.actor_id == filters.actor_id)
     names = filter_values(filters.actor_name)

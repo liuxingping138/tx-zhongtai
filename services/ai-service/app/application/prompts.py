@@ -44,7 +44,6 @@ async def _cleanup_path(path: Path, *, tree: bool = False) -> None:
 
 def sample_summary(template: PromptTemplate, run: BatchRun | None) -> dict[str, Any] | None:
     """最近一次样本试跑；current 表示它跑的就是现在保存的草稿（提示词、输出字段、模型都没再改过）。"""
-
     if run is None:
         return None
     return {
@@ -54,21 +53,16 @@ def sample_summary(template: PromptTemplate, run: BatchRun | None) -> dict[str, 
         "done_count": run.done_count,
         "failed_count": run.failed_count,
         "format_failed_count": run.format_failed_count,
-        # 新建批量任务按它估费用：这份样本每条大概花多少。
         "cost": float(run.inference_cost + run.search_cost),
         "created_at": format_beijing(run.created_at),
         "created_by_name": run.created_by_name,
         "current": sample_current(run, template),
-        # 深度思考开没开：开了的回答长得多，按没开的样本估开了的任务会低估。
         "thinking": run.thinking,
     }
 
 
 def sample_current(run: BatchRun, template: PromptTemplate) -> bool:
-    """这次试跑跑的是不是模板现在的草稿。按试跑时记下的草稿保存时间比：换了码表、重传码表文件、换了测试样本
-    也会改保存时间，只比提示词、字段、模型会漏掉这些（码表从无换成六级码表，每行多 3.8 万字，预计费用差几十倍）。
-    早期的试跑没记保存时间，退回按内容比。"""
-
+    """这次试跑跑的是不是模板现在的草稿（按草稿保存时间比，旧试跑退回按内容比）。"""
     if run.draft_saved_at is not None:
         return run.draft_saved_at == template.updated_at
     return (
@@ -233,13 +227,19 @@ async def delete_prompt(session: AsyncSession, actor: Actor, access: CategoryAcc
         )
     # 样本试跑只属于这个模板，记录和产物一起清掉，不留孤儿文件；试跑花的钱仍算在费用账单里。
     samples = await run_repo.sample_runs_for_prompt(session, prompt_id)
+    releases = await release_repo.list_for_prompt(session, prompt_id)
     now = utcnow()
     for sample in samples:
         run_repo.mark_deleted(sample, now)
     await repo.delete(session, template)
     await audit_template(session, "ai.prompt.deleted", actor, template)
     await session.commit()
-    for folder in (storage.prompt_dir(prompt_id), *(storage.run_dir(sample.id) for sample in samples)):
+    folders = (
+        storage.prompt_dir(prompt_id),
+        *(storage.run_dir(sample.id) for sample in samples),
+        *(storage.release_dir(item.id) for item in releases),
+    )
+    for folder in folders:
         await _cleanup_path(folder, tree=True)
 
 

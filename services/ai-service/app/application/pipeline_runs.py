@@ -248,7 +248,7 @@ async def create(session: AsyncSession, caller: Actor, values: dict[str, Any]) -
 
 
 async def _tombstone(session: AsyncSession, run_id: str, caller: Actor) -> BatchRun | None:
-    """调用方停止或查询一个还不存在的任务：插一行已取消的占位，抢不过（建任务刚好先插进去）返回 None。
+    """调用方停止一个还不存在的任务：插一行已取消的占位，抢不过（建任务刚好先插进去）返回 None。
 
     政策服务建任务超时就立刻叫停，可这边的建任务请求可能还在写快照、行还没插进去，叫停只得到 404；
     不占位的话迟到的建任务照样插入、worker 照样跑、照样花钱，政策服务却已经不管它，也不计入当日费用。
@@ -292,13 +292,10 @@ async def _tombstone(session: AsyncSession, run_id: str, caller: Actor) -> Batch
     return tombstone
 
 
-async def status(session: AsyncSession, run_id: str, caller: Actor) -> dict[str, Any]:
+async def status(session: AsyncSession, run_id: str) -> dict[str, Any]:
     # worker 被强杀又没拉起时，没心跳的任务要先纠正成「中断」，政策服务才不会一直轮询到自己超时。
+    # 只读查询绝不写 tombstone：建任务正在写快照时页面轮询查不到，应直接返回 404，只有 stop() 才能占位取消。
     await batch_runs.reconcile_stale(session)
-    if await run_repo.get(session, run_id, deleted=True) is None and (
-        tombstone := await _tombstone(session, run_id, caller)
-    ):
-        return run_to_dict(tombstone)
     return run_to_dict(await require_run(session, run_id))
 
 

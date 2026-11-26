@@ -22,8 +22,8 @@ router = APIRouter(prefix="/api/v1/ai", tags=["ai-stream"])
 async def ask(
     body: AskBody,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission("ai.prompts", "ask")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> StreamingResponse:
     """试发：@【列名】替换成测试样本所选那一行的值后提问。替换和校验都在推流前完成，出错照常返回 4xx。"""
 

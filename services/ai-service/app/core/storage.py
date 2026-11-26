@@ -55,8 +55,12 @@ def run_dir(run_id: str) -> Path:
     return data_dir() / "runs" / _checked(run_id)
 
 
+def release_dir(release_id: str) -> Path:
+    return data_dir() / "releases" / _checked(release_id)
+
+
 def release_code_file(release_id: str) -> Path:
-    return data_dir() / "releases" / _checked(release_id) / PROMPT_FILES["code"]
+    return release_dir(release_id) / PROMPT_FILES["code"]
 
 
 def run_file(run_id: str, kind: str) -> Path:

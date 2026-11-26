@@ -9,8 +9,10 @@ import contextlib
 import io
 import itertools
 import json
+import math
 from collections.abc import Collection
 from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -23,9 +25,19 @@ from app.core.storage import INPUT_LINES_FILE, PROMPT_FILES, ROWS_FILE, write_at
 CODE_ENCODINGS = ("utf-8-sig", "gbk")
 
 
+def _float_text(value: float) -> str:
+    if not math.isfinite(value):
+        return str(value)
+    if value.is_integer():
+        return "0" if value == 0 else f"{value:.0f}"
+    return format(Decimal(str(value)).normalize(), "f")
+
+
 def _text(value: Any) -> str:
     if value is None:
         return ""
+    if isinstance(value, float):
+        return _float_text(value)
     if isinstance(value, datetime):
         return value.isoformat(sep=" ")
     if isinstance(value, date):

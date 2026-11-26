@@ -195,12 +195,14 @@ async def stream_answer(
         if fields and not failed:
             yield _sse({"parsed": parse_fields("".join(parts), fields)})
         if on_done is not None:
+            if not tally.usage and tally.output_chars > 0:
+                tally.estimate(message)
             recorded = True
             await on_done(tally)
         yield _sse("[DONE]")
     finally:
-        # 报错的调用（密钥错、限流）厂商不收钱，断开也不估。
-        if on_done is not None and not recorded and not failed:
+        # 没吐出任何字的报错（密钥错、限流）厂商不收钱，断开也不估；已吐出部分内容（超时/截断）照样按字数估。
+        if on_done is not None and not recorded and (not failed or tally.output_chars > 0):
             tally.estimate(message)
             _background(on_done(tally))
 

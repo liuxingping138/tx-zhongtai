@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.application.batch_execute import execute
 from app.application.batch_queue import BULK_SOURCES, beat, bulk_limit, claim_next, recover_orphans
+from app.application.retention import prune_expired_runs
 from app.core.config import get_settings
 from app.core.database import engine
 
@@ -21,6 +22,8 @@ logger = logging.getLogger("ai.worker")
 LEADER_LOCK = 72120261015
 POLL_SECONDS = 2.0
 HEARTBEAT_SECONDS = 10.0
+PRUNE_INTERVAL_SECONDS = 3600.0
+SHUTDOWN_GRACE_SECONDS = 25.0
 
 
 async def heartbeat(lock_connection: AsyncConnection) -> None:
@@ -63,6 +66,20 @@ def _log_task_exception(run_id: str, task: asyncio.Task[None]) -> None:
         logger.error("batch_run_task_crashed run=%s", run_id, exc_info=exc)
 
 
+async def prune_loop(stop: asyncio.Event) -> None:
+    """按小时清理超期的流水线和样本试跑目录，失败不打断任务执行。"""
+
+    while not stop.is_set():
+        try:
+            pruned = await prune_expired_runs()
+            if pruned:
+                logger.info("disk_retention_pruned count=%s", pruned)
+        except Exception:  # 磁盘清理失败不影响任务执行
+            logger.warning("disk_retention_prune_failed", exc_info=True)
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(stop.wait(), timeout=PRUNE_INTERVAL_SECONDS)
+
+
 async def consume(stop: asyncio.Event) -> None:
     recovered = await recover_orphans()
     if recovered:
@@ -75,17 +92,24 @@ async def consume(stop: asyncio.Event) -> None:
             claimed = await _claim(running, limit)
             if claimed:
                 logger.info("batch_run_claimed run=%s source=%s", *claimed)
-                task = asyncio.create_task(execute(claimed[0]))
+                task = asyncio.create_task(execute(claimed[0], shutdown=stop))
                 task.add_done_callback(functools.partial(_log_task_exception, claimed[0]))
                 running[task] = claimed
                 continue
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=POLL_SECONDS)
     finally:
-        # 停止时取消在跑的任务：execute 会把已完成的部分收尾成「中断」再退出。
-        for task in running:
-            task.cancel()
-        await asyncio.gather(*running, return_exceptions=True)
+        # 优雅停机（SIGTERM）先给在途行留出落账收尾窗口；超时或失锁取消时再强制取消。
+        active = [task for task in running if not task.done()]
+        if active:
+            if stop.is_set():
+                _, still_running = await asyncio.wait(active, timeout=SHUTDOWN_GRACE_SECONDS)
+            else:
+                still_running = set(active)
+            for task in still_running:
+                task.cancel()
+            if still_running:
+                await asyncio.gather(*still_running, return_exceptions=True)
 
 
 async def lead(stop: asyncio.Event) -> None:
@@ -99,6 +123,7 @@ async def lead(stop: asyncio.Event) -> None:
         tasks = [
             asyncio.create_task(heartbeat(connection)),
             asyncio.create_task(consume(stop)),
+            asyncio.create_task(prune_loop(stop)),
         ]
         try:
             done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)

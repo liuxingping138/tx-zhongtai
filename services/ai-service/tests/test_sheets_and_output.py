@@ -125,6 +125,36 @@ def test_raw_file_is_resumed_and_read_back_with_last_attempt_winning(tmp_path: P
     assert read_raw(tmp_path / "missing.csv") == {}
 
 
+def test_temp_csv_stays_raw_and_download_stream_sanitizes_formula_injection(tmp_path: Path) -> None:
+    """盘上 temp.csv 保留模型原文（避免 Markdown `- ...` 被改写），下载流和 failed.csv 才做防公式注入转义。"""
+
+    from app.application.batch_output import iter_sanitized_csv, sanitize_csv_cell
+
+    raw = tmp_path / "temp.csv"
+    start_raw(raw)
+    markdown = "- 第一条\n- 第二条"
+    append_raw(raw, _result("a1", markdown).raw_row("模型A"))
+    append_raw(raw, _result("a2", "=SUM(A1:A2)").raw_row("模型A"))
+    # 机器读取不受污染
+    stored = read_raw(raw)
+    assert stored["a1"].text == markdown and stored["a2"].text == "=SUM(A1:A2)"
+    # sanitize_csv_cell 覆盖换行开头
+    assert sanitize_csv_cell("\n=1+1") == "'\n=1+1"
+    # 导出流转义公式触发字符
+    import io
+
+    exported = b"".join(iter_sanitized_csv(raw)).decode("utf-8-sig")
+    rows = list(csv.reader(io.StringIO(exported)))
+    assert rows[1][3] == "'" + markdown
+    assert rows[2][3] == "'=SUM(A1:A2)"
+
+
+def test_read_sheet_formats_integer_floats_without_trailing_dot_zero() -> None:
+    content = xlsx([["手机号", "区划", "大整数", "小数"], [13800138000.0, 110101.0, 1e16, 3.14]])
+    _, rows = read_sheet(content)
+    assert rows == [{"手机号": "13800138000", "区划": "110101", "大整数": "10000000000000000", "小数": "3.14"}]
+
+
 async def test_rows_from_the_database_become_a_normal_test_workbook(monkeypatch: pytest.MonkeyPatch) -> None:
     """从数据库取的测试数据存成和上传的一样的 Excel：表头一行，超长正文截断并标明，读回来列和行数不变。"""
 

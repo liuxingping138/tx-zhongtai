@@ -15,6 +15,7 @@ from app.api.schemas import (
     TestRowsBody,
     file_response,
     path_response,
+    sanitized_csv_response,
 )
 from app.api.security import CategoryAccess, SecurityClass, classified, get_category_access, require_ai_permission
 from app.application import prompts as service
@@ -33,8 +34,8 @@ RELEASE_RESOURCE = "ai.releases"
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def list_prompts(
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     _: Actor = Depends(require_ai_permission(RESOURCE, "list")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     return success_json(
         {
@@ -51,8 +52,8 @@ async def list_prompts(
 async def editor_data(
     prompt_id: str | None = Query(default=None, max_length=64),
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     _: Actor = Depends(require_ai_permission(RESOURCE, "list")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     """编辑页只要这一个模板和下拉选项；原来拉整张模板列表（每个都带提示词全文）再从里面找。新建时不带 prompt_id。"""
 
@@ -71,8 +72,8 @@ async def editor_data(
 async def create_prompt(
     body: PromptBody,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission(RESOURCE, "create")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     return success_json(await service.create_prompt(session, actor, access, body.model_dump()), status_code=201)
 
@@ -83,8 +84,8 @@ async def update_prompt(
     prompt_id: str,
     body: PromptBody,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission(RESOURCE, "update")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     return success_json(await service.update_prompt(session, actor, access, prompt_id, body.model_dump()))
 
@@ -94,8 +95,8 @@ async def update_prompt(
 async def delete_prompt(
     prompt_id: str,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission(RESOURCE, "delete")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     await service.delete_prompt(session, actor, access, prompt_id)
     return success_json(None)
@@ -108,8 +109,8 @@ async def upload_file(
     kind: FileKind,
     request: Request,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission(RESOURCE, "update")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     # 鉴权通过后才解析 multipart，并且边读边按上限中止。
     content, filename = await read_named_upload(request, get_settings().upload_max_bytes, missing="请选择要上传的文件")
@@ -122,8 +123,8 @@ async def save_test_rows(
     prompt_id: str,
     body: TestRowsBody,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission(RESOURCE, "update")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     """从数据库取来的测试数据（前端从政策服务取）存成模板的测试 Excel，替换原来的。"""
 
@@ -136,8 +137,8 @@ async def delete_file(
     prompt_id: str,
     kind: FileKind,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission(RESOURCE, "update")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     return success_json(await service.delete_file(session, actor, access, prompt_id, kind))
 
@@ -148,8 +149,8 @@ async def download_file(
     prompt_id: str,
     kind: FileKind,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission(RESOURCE, "export")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> Response:
     content, filename = await service.download_file(session, actor, access, prompt_id, kind)
     return file_response(content, filename)
@@ -171,8 +172,8 @@ async def preview_system_code(
 async def preview_uploaded_code(
     prompt_id: str,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     _: Actor = Depends(require_ai_permission(RESOURCE, "list")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     """上传的码表文件的字数和前几行；看内容不算导出，下载整份才要导出权限。"""
 
@@ -184,8 +185,8 @@ async def preview_uploaded_code(
 async def test_rows_preview(
     prompt_id: str,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     _: Actor = Depends(require_ai_permission(RESOURCE, "list")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     """测试样本前几行，每格只给开头一段和总字数：试发选第几行、发之前先看这一行的数据。"""
 
@@ -199,8 +200,8 @@ async def view_sample_run(
     run_id: str | None = Query(default=None, max_length=32, description="看哪一次，默认最近一次"),
     compare_id: str | None = Query(default=None, max_length=32, description="和哪一次比，默认前一次；none 不比"),
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     _: Actor = Depends(require_ai_permission(RESOURCE, "list")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     return success_json(await sample_runs.view(session, access, prompt_id, run_id=run_id, compare_id=compare_id))
 
@@ -211,8 +212,8 @@ async def start_sample_run(
     prompt_id: str,
     body: SampleRunBody,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission(RESOURCE, "ask")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     """和试发一样会花钱，要试发的权限。"""
 
@@ -224,8 +225,8 @@ async def start_sample_run(
 async def stop_sample_run(
     prompt_id: str,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission(RESOURCE, "ask")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     return success_json(await sample_runs.stop(session, actor, access, prompt_id))
 
@@ -236,8 +237,8 @@ async def retry_sample_run(
     prompt_id: str,
     run_id: str,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission(RESOURCE, "ask")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     """只重问失败和没跑到的行，会花钱，和试跑同一个权限。"""
 
@@ -251,13 +252,13 @@ async def download_sample_run(
     run_id: str,
     kind: RunFileKind,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission(RESOURCE, "export")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> Response:
     """和模板附件一样要模板的导出档：在模板页试跑的人不用另有批量任务的权限。"""
 
     path, filename = await sample_runs.download(session, actor, access, prompt_id, run_id, kind)
-    return path_response(path, filename)
+    return sanitized_csv_response(path, filename) if kind == "raw" else path_response(path, filename)
 
 
 @router.get("/{prompt_id}/releases")
@@ -265,8 +266,8 @@ async def download_sample_run(
 async def list_releases(
     prompt_id: str,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     _: Actor = Depends(require_ai_permission(RESOURCE, "list")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     return success_json(await releases.list_releases(session, access, prompt_id))
 
@@ -277,8 +278,8 @@ async def publish(
     prompt_id: str,
     body: ReleaseBody | None = None,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission(RELEASE_RESOURCE, "publish")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     """上线是管理员的事：业务人员能改模板，但不能让改动直接进定时任务。"""
 
@@ -291,7 +292,7 @@ async def publish(
 async def take_offline(
     prompt_id: str,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission(RELEASE_RESOURCE, "publish")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     return success_json(await releases.take_offline(session, actor, access, prompt_id))

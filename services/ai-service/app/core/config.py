@@ -51,6 +51,9 @@ class Settings(BaseServiceSettings):
     batch_max_running: int = 3
     # 运行中的任务超过这么久没有心跳，判定执行进程已经不在（重启、崩溃），标记为中断。
     batch_stale_seconds: int = 90
+    # 磁盘留存：已结束的定时打标目录保留天数、超出历史上限的样本试跑目录保留天数。
+    pipeline_retention_days: int = 14
+    sample_retention_days: int = 7
 
     @model_validator(mode="after")
     def _reject_service_demo_secrets_in_production(self) -> Settings:

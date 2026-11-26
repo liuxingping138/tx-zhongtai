@@ -36,13 +36,50 @@ FORMAT_ERROR_PREFIX = "返回格式不对"
 def sanitize_csv_cell(value: Any) -> str:
     """防止 CSV 公式注入 (DDE)，开头的公式触发字符追加单引号转义。"""
     text = str(value) if value is not None else ""
-    if text and text[0] in ("=", "+", "-", "@", "\t", "\r"):
+    if text and text[0] in ("=", "+", "-", "@", "\t", "\r", "\n"):
         return "'" + text
     return text
 
 
 def sanitize_csv_row(row: Sequence[Any]) -> list[str]:
     return [sanitize_csv_cell(val) for val in row]
+
+
+class _BoundedBinaryReader(io.RawIOBase):
+    def __init__(self, handle: io.BufferedReader, limit: int) -> None:
+        self._handle = handle
+        self._left = limit
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, buffer: Any) -> int:
+        if self._left <= 0:
+            return 0
+        chunk = self._handle.read(min(len(buffer), self._left))
+        if not chunk:
+            return 0
+        self._left -= len(chunk)
+        buffer[: len(chunk)] = chunk
+        return len(chunk)
+
+
+def iter_sanitized_csv(path: Path, max_bytes: int | None = None) -> Iterator[bytes]:
+    """流式导出 CSV 并在导出时做公式转义：盘上 temp.csv 保持原文供机器解析，下载时再防 DDE 注入。"""
+
+    limit = path.stat().st_size if max_bytes is None else max_bytes
+    with path.open("rb") as raw_handle:
+        bom = raw_handle.read(min(3, limit)) == b"\xef\xbb\xbf"
+        raw_handle.seek(0)
+        bounded = io.BufferedReader(_BoundedBinaryReader(raw_handle, limit))
+        with io.TextIOWrapper(bounded, encoding="utf-8-sig", newline="") as handle:
+            first = True
+            for row in csv.reader(handle):
+                buf = io.StringIO()
+                csv.writer(buf).writerow(sanitize_csv_row(row))
+                chunk = buf.getvalue().encode("utf-8")
+                yield (b"\xef\xbb\xbf" + chunk) if (first and bom) else chunk
+                first = False
 
 
 # 每写一行原始返回，同时在这里记一行「这一行成没成、错在哪」，不带提问原文。详情「只看失败」读它：
@@ -236,11 +273,11 @@ def _int(value: str | None) -> int:
 def append_raw(path: Path, row: list[str]) -> None:
     """同一任务同时只能有一个写入方（batch_execute 用 Job.write_lock 排队），记下的字节位置才准。"""
 
-    safe_row = sanitize_csv_row(_fit(row, raw_columns(path)))
+    raw_row = _fit(row, raw_columns(path))
     offset = path.stat().st_size if path.is_file() else 0
     with path.open("a", newline="", encoding="utf-8-sig") as handle:
-        csv.writer(handle).writerow(safe_row)
-    _append_outcome(path, safe_row, offset)
+        csv.writer(handle).writerow(raw_row)
+    _append_outcome(path, raw_row, offset)
 
 
 def append_log(path: Path, line: str) -> None:

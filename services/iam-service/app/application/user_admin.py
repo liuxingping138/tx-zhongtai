@@ -14,6 +14,8 @@ from app.application.user_fields import (
     NewUser,
     UserChanges,
     generate_temporary_password,
+    mask_email,
+    mask_phone,
     normalize_email,
     normalize_phone,
     user_public,
@@ -164,10 +166,33 @@ async def create_user(session: AsyncSession, actor: User, data: NewUser) -> tupl
     return payload, temporary
 
 
+def _audit_diff(before: dict[str, str], after: dict[str, str]) -> dict[str, dict[str, str]]:
+    maskers = {"phone": mask_phone, "email": mask_email}
+    return {
+        k: {
+            "before": maskers[k](before[k]) if k in maskers else before[k],
+            "after": maskers[k](after[k]) if k in maskers else after[k],
+        }
+        for k in before
+        if before[k] != after[k]
+    }
+
+
+def _apply_profile_changes(user: User, changes: UserChanges) -> None:
+    if changes.display_name is not None:
+        user.display_name = validate_display_name(changes.display_name)
+    if changes.phone is not None:
+        user.phone = normalize_phone(changes.phone)
+    if changes.email is not None:
+        user.email = normalize_email(changes.email)
+
+
 async def update_user(
     session: AsyncSession, actor: User, user_id: uuid.UUID, changes: UserChanges
 ) -> dict[str, object]:
     status = changes.status
+    if status == UserStatus.DISABLED and actor.id == user_id:
+        raise PermissionDeniedError("不能停用当前登录的账号")
     locked_superadmins: list[User] | None = None
     if status is not None and status != UserStatus.ACTIVE:
         if status not in {UserStatus.ACTIVE, UserStatus.DISABLED}:
@@ -181,17 +206,11 @@ async def update_user(
     if status is not None and status != user.status:
         if status != UserStatus.ACTIVE:
             await _guard_last_superadmin(session, user, new_status=status, locked=locked_superadmins)
-        user.status = status
-        if status != UserStatus.ACTIVE:
             await session_repo.revoke_user_sessions(session, user.id)
-    if changes.display_name is not None:
-        user.display_name = validate_display_name(changes.display_name)
-    if changes.phone is not None:
-        user.phone = normalize_phone(changes.phone)
-    if changes.email is not None:
-        user.email = normalize_email(changes.email)
+        user.status = status
+    _apply_profile_changes(user, changes)
     after = {"status": user.status, "display_name": user.display_name, "phone": user.phone, "email": user.email}
-    diff = {k: {"before": before[k], "after": after[k]} for k in before if before[k] != after[k]}
+    diff = _audit_diff(before, after)
     user.updated_at = utcnow()
     user.version += 1
     await outbox_repo.enqueue(

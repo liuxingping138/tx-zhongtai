@@ -170,9 +170,14 @@ class TestUpdateUser:
         assert env.events[0][0] == "iam.user.updated"
         assert env.events[0][1]["changes"] == {
             "display_name": {"before": "张三", "after": "张小三"},
-            "phone": {"before": "", "after": "13822004411"},
-            "email": {"before": "", "after": "a@b.com"},
+            "phone": {"before": "", "after": "138****4411"},
+            "email": {"before": "", "after": "a***@b.com"},
         }
+
+    async def test_self_disable_is_rejected(self, env: SimpleNamespace) -> None:
+        env.user.id = ACTOR.id
+        with pytest.raises(PermissionDeniedError, match="不能停用当前登录的账号"):
+            await user_admin.update_user(object(), ACTOR, ACTOR.id, UserChanges(version=1, status="disabled"))  # type: ignore[arg-type]
 
     async def test_empty_phone_clears_it(self, env: SimpleNamespace) -> None:
         env.user.phone = "13822004411"

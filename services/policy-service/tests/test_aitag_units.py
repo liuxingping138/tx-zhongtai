@@ -511,6 +511,13 @@ async def test_running_batch_shows_how_far_the_ai_run_has_got(monkeypatch: pytes
     assert data is not None and (data["stage_name"], data["done"], data["total"]) == ("模型判断中", 40, 100)
     assert await settings._current(None) is None
 
+    async def missing(*_: Any, **__: Any) -> Any:
+        raise ApiError("任务不存在或已删除", http_status=404)
+
+    monkeypatch.setattr(internal_clients, "ai", missing)
+    initializing = await settings._current(running)  # type: ignore[arg-type]
+    assert initializing is not None and (initializing["done"], initializing["total"]) == (None, None)
+
 
 async def test_each_stage_records_its_own_cost(monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]) -> None:
     run_id = uuid.uuid4()
@@ -825,8 +832,8 @@ async def test_the_next_batch_reuses_answers_from_the_failed_one(
     run_store[str(run_id)] = _run_row()
     old = "o" * 32
 
-    async def failed_ai_run(*_: Any, **__: Any) -> str:
-        return old
+    async def failed_ai_runs(*_: Any, **__: Any) -> list[str]:
+        return [old]
 
     states = iter(["stopping", "cancelled"])
     sent: list[dict[str, Any]] = []
@@ -835,7 +842,7 @@ async def test_the_next_batch_reuses_answers_from_the_failed_one(
     async def ai(method: str, path: str, **kwargs: Any) -> Any:
         calls.append((method, path))
         if path == f"/internal/v1/pipeline-runs/{old}":
-            return {"status": next(states)}
+            return {"status": next(states), "prompt_id": "p", "done_count": 7}
         if path.endswith("/stop"):
             return {}
         if method == "POST":
@@ -845,7 +852,7 @@ async def test_the_next_batch_reuses_answers_from_the_failed_one(
             return {"items": []}
         return {"status": "done", "done_count": 9}
 
-    monkeypatch.setattr(repo, "failed_ai_run", failed_ai_run)
+    monkeypatch.setattr(repo, "failed_ai_runs", failed_ai_runs)
     monkeypatch.setattr(internal_clients, "ai", ai)
     monkeypatch.setattr(pipeline, "POLL_SECONDS", 0)
     spend = pipeline.Spend(limit=Decimal(10), before=Decimal(0))
@@ -854,35 +861,143 @@ async def test_the_next_batch_reuses_answers_from_the_failed_one(
     assert ("POST", f"/internal/v1/pipeline-runs/{old}/stop") in calls
 
 
+async def test_reusable_skips_404_tombstones_and_zero_done_runs_to_reuse_paid_batch(
+    monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]
+) -> None:
+    """重试建任务失败留下的 404 / 空墓碑 / 0 条任务不能遮蔽更早已经付费答好 800 条的批次。"""
+
+    run_id = uuid.uuid4()
+    run_store[str(run_id)] = _run_row()
+    missing_run, tombstone_run, zero_run, paid_run = "1" * 32, "2" * 32, "3" * 32, "4" * 32
+
+    async def failed_ai_runs(*_: Any, **__: Any) -> list[str]:
+        return [missing_run, tombstone_run, zero_run, paid_run]
+
+    sent: list[dict[str, Any]] = []
+
+    async def ai(method: str, path: str, **kwargs: Any) -> Any:
+        if path.endswith(missing_run):
+            raise ApiError("任务不存在或已删除", http_status=404)
+        if path.endswith(tombstone_run):
+            return {"status": "cancelled", "prompt_id": "", "done_count": 0}
+        if path.endswith(zero_run):
+            return {"status": "failed", "prompt_id": "p", "done_count": 0}
+        if path.endswith(paid_run):
+            return {"status": "cancelled", "prompt_id": "p", "done_count": 800, "inference_cost": "40"}
+        if method == "POST":
+            sent.append(kwargs["json"])
+            return {"id": "r" * 32, "reused": 800}
+        if path.endswith("/results"):
+            return {"items": []}
+        return {"status": "done", "done_count": 1000}
+
+    monkeypatch.setattr(repo, "failed_ai_runs", failed_ai_runs)
+    monkeypatch.setattr(internal_clients, "ai", ai)
+    monkeypatch.setattr(pipeline, "POLL_SECONDS", 0)
+    spend = pipeline.Spend(limit=Decimal(100), before=Decimal(0))
+    status, _ = await pipeline.ask(run_id, spend, prompt_id="p", rows=[], caller="c", run_field="type_run_id")
+    assert sent[0]["reuse_run_id"] == paid_run and status["reused"] == 800
+
+
 async def test_the_failed_batch_gets_its_final_cost_once_the_ai_run_settles(
     monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]
 ) -> None:
-    """上一批失败时只补记到最后一次轮询到的花费，之后那边又花的钱今日已花里没有：停稳后按最终花费补上差额。"""
+    """上一批失败时只补记到最后一次轮询到的花费，之后那边又花的钱今日已花里没有：停稳后按最终花费补上差额并更新当日额度。"""
 
     old = "o" * 32
-    failed = _run_row(interpret_run_id=old, interpret_cost=Decimal("0.4"), cost=Decimal("0.4"))
+    failed = _run_row(
+        interpret_run_id=old,
+        interpret_cost=Decimal("0.4"),
+        cost=Decimal("0.4"),
+        started_at=datetime.now(UTC),
+    )
     run_store["previous"] = failed
     current = uuid.uuid4()
     run_store[str(current)] = _run_row()
 
-    async def failed_ai_run(*_: Any, **__: Any) -> str:
-        return old
+    async def failed_ai_runs(*_: Any, **__: Any) -> list[str]:
+        return [old]
+
+    sent: list[dict[str, Any]] = []
 
     async def ai(method: str, path: str, **kwargs: Any) -> Any:
         if path == f"/internal/v1/pipeline-runs/{old}":
-            return {"status": "cancelled", "inference_cost": "0.9", "search_cost": "0.1"}
+            return {
+                "status": "cancelled",
+                "prompt_id": "p",
+                "done_count": 5,
+                "inference_cost": "0.9",
+                "search_cost": "0.1",
+            }
         if method == "POST":
+            sent.append(kwargs["json"])
             return {"id": "r" * 32, "reused": 0}
         if path.endswith("/results"):
             return {"items": []}
         return {"status": "done", "done_count": 1}
 
-    monkeypatch.setattr(repo, "failed_ai_run", failed_ai_run)
+    monkeypatch.setattr(repo, "failed_ai_runs", failed_ai_runs)
     monkeypatch.setattr(internal_clients, "ai", ai)
     monkeypatch.setattr(pipeline, "POLL_SECONDS", 0)
-    spend = pipeline.Spend(limit=Decimal(10), before=Decimal(0))
+    spend = pipeline.Spend(limit=Decimal(10), before=Decimal("0.4"))
     await pipeline.ask(current, spend, prompt_id="p", rows=[], caller="c", run_field="interpret_run_id")
     assert (failed.interpret_cost, failed.cost) == (Decimal("1.0"), Decimal("1.0"))
+    # 差额 0.6 加回 spend.before 后，本次剩余额度从 9.6 降至 9.0。
+    assert spend.before == Decimal("1.0") and sent[0]["cost_limit"] == "9.0"
+
+
+async def test_budget_exhausted_after_booking_final_cost_stops_without_creating_new_ai_run(
+    monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]
+) -> None:
+    """补记上一批失败任务的最终花费后如果已达当日上限，本批立即收尾，不再新建 AI 任务。"""
+
+    old = "o" * 32
+    failed = _run_row(
+        type_run_id=old,
+        type_cost=Decimal("25"),
+        cost=Decimal("25"),
+        started_at=datetime.now(UTC),
+    )
+    run_store["previous"] = failed
+    _use_config(monkeypatch, _config(daily_cost_limit=Decimal("50")), spent=Decimal("25"))
+    monkeypatch.setattr(source, "read_batch", lambda *_: [{"content_id": "c1", "collect_date": DAY}])
+    monkeypatch.setattr(source, "read_contents", lambda _ids: {})
+
+    async def failed_ai_runs(*_: Any, **__: Any) -> list[str]:
+        return [old]
+
+    async def names(*_: Any, **__: Any) -> dict[str, str]:
+        return {"text": "政策类型名称\n信息化建设类"}
+
+    posted: list[str] = []
+
+    async def ai(method: str, path: str, **_: Any) -> Any:
+        if method == "POST":
+            posted.append(path)
+        return {"status": "cancelled", "prompt_id": "p", "done_count": 10, "inference_cost": "52"}
+
+    monkeypatch.setattr(repo, "failed_ai_runs", failed_ai_runs)
+    monkeypatch.setattr(internal_clients, "codebook", names)
+    monkeypatch.setattr(internal_clients, "ai", ai)
+    run_id = uuid.uuid4()
+    await tagging.run_batch(run_id, "type")
+    assert posted == []
+    stored = run_store[str(run_id)]
+    assert stored.status == "success" and "达到每日上限 50.00 元" in stored.note
+    assert failed.type_cost == Decimal("52")
+
+
+async def test_yesterday_failed_run_cost_delta_does_not_reduce_todays_budget(
+    monkeypatch: pytest.MonkeyPatch, run_store: dict[str, Any]
+) -> None:
+    """跨天补记昨天失败任务的尾款，只补到那条旧记录上，不扣减今天的预算。"""
+
+    old = "o" * 32
+    yesterday = pipeline.day_start(pipeline.today()) - timedelta(hours=1)
+    failed = _run_row(type_run_id=old, type_cost=Decimal("10"), cost=Decimal("10"), started_at=yesterday)
+    run_store["previous"] = failed
+    delta = await pipeline._book_final_cost("type_run_id", old, Decimal("30"))
+    assert failed.type_cost == Decimal("30") and delta == Decimal(0)
 
 
 async def test_an_ai_run_that_never_started_fails_the_batch(

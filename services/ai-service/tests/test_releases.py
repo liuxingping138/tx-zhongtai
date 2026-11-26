@@ -181,3 +181,21 @@ def test_reuploading_a_code_table_with_the_same_name_counts_as_a_change() -> Non
     # 摘要功能上线前的版本没有摘要：重传一次就算改动，多提示一次重新上线，不悄悄沿用旧码表。
     release.code_digest = ""
     assert unreleased_changes(template, release) == ["码表"]
+
+
+async def test_publish_and_take_offline_require_category_edit_permission(monkeypatch: pytest.MonkeyPatch) -> None:
+    """模板类型为只读时，即便拥有 ai.releases 权限也不能上线或下线该类型模板。"""
+
+    from platform_common.errors import PermissionDeniedError
+
+    from app.domain.categories import CategoryAccess
+
+    item = template(category="tender", release_id="c" * 32, **READY)
+    saved: list[TemplateRelease] = []
+    _tables(monkeypatch, item, saved)
+    read_only = CategoryAccess(readable=frozenset({"policy", "tender"}), editable=frozenset({"policy"}))
+    with pytest.raises(PermissionDeniedError):
+        await releases.publish(FakeSession(), ACTOR, read_only, PROMPT_ID)  # type: ignore[arg-type]
+    with pytest.raises(PermissionDeniedError):
+        await releases.take_offline(FakeSession(), ACTOR, read_only, PROMPT_ID)  # type: ignore[arg-type]
+    assert saved == [] and item.release_id == "c" * 32

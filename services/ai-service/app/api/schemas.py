@@ -8,6 +8,8 @@ from urllib.parse import quote
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.application.batch_output import iter_sanitized_csv
+
 FileKind = Literal["excel", "code"]
 RunFileKind = Literal["result", "raw", "log", "failed"]
 
@@ -153,6 +155,17 @@ def _read_upto(path: Path, size: int) -> Iterator[bytes]:
         while left > 0 and (chunk := handle.read(min(_CHUNK_BYTES, left))):
             left -= len(chunk)
             yield chunk
+
+
+def sanitized_csv_response(path: Path, filename: str) -> StreamingResponse:
+    """流式导出 CSV 并在导出时转义公式注入字符，盘上原始文件保持不改写。"""
+
+    size = path.stat().st_size
+    return StreamingResponse(
+        iter_sanitized_csv(path, max_bytes=size),
+        media_type=_MEDIA_TYPES[".csv"],
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+    )
 
 
 def sse_response(stream: AsyncIterator[str]) -> StreamingResponse:

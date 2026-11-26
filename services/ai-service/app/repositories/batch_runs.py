@@ -95,6 +95,14 @@ async def get(session: AsyncSession, run_id: str, *, lock: bool = False, deleted
     return (await session.scalars(statement)).first()
 
 
+async def by_ids(session: AsyncSession, run_ids: Collection[str]) -> list[BatchRun]:
+    """按 ID 批量读取任务（含已逻辑删除的），供磁盘留存清理核对状态与时间。"""
+
+    if not run_ids:
+        return []
+    return list(await session.scalars(select(BatchRun).where(BatchRun.id.in_(list(run_ids)))))
+
+
 async def active_for_prompt(
     session: AsyncSession, prompt_id: str, sources: Collection[str] = TASK_SOURCES
 ) -> BatchRun | None:

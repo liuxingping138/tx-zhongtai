@@ -13,6 +13,7 @@ from app.domain.categories import FULL_ACCESS, CategoryAccess
 from app.domain.models import RUN_SOURCE_SAMPLE
 from app.repositories import batch_runs as run_repo
 from app.repositories import prompts as repo
+from app.repositories import releases as release_repo
 from tests.helpers import ACTOR, PROMPT_ID, FakeSession, fake_stream, noop, run, template, xlsx
 
 
@@ -153,22 +154,29 @@ async def test_code_table_can_be_an_excel_or_csv(monkeypatch: pytest.MonkeyPatch
 
 
 async def test_delete_removes_template_files_and_its_sample_runs(monkeypatch: pytest.MonkeyPatch) -> None:
-    """样本试跑只属于这个模板：记录和产物一起删，不留孤儿文件；还在跑的先拦下。"""
+    """样本试跑和历史上线版本的冻结码表目录只属于这个模板：删除模板时一起清理，不留孤儿文件；还在跑的先拦下。"""
+
+    from types import SimpleNamespace
 
     _use(monkeypatch, template())
     sample = run(id="e" * 32, source=RUN_SOURCE_SAMPLE, status="done")
+    rel = SimpleNamespace(id="d" * 32)
     monkeypatch.setattr(repo, "delete", noop)
     monkeypatch.setattr(run_repo, "sample_runs_for_prompt", lambda _session, _prompt_id: _async([sample]))
     monkeypatch.setattr(run_repo, "active_for_prompt", lambda _session, _prompt_id, sources=(): _async(sample))
+    monkeypatch.setattr(release_repo, "list_for_prompt", lambda _session, _prompt_id: _async([rel]))
     storage.write_atomic(storage.prompt_file(PROMPT_ID, "code"), b"x")
     storage.write_atomic(storage.run_file(sample.id, "raw"), b"x")
+    storage.write_atomic(storage.release_code_file(rel.id), b"rel-code")
     with pytest.raises(ApiError, match="样本试跑还没结束"):
         await service.delete_prompt(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID)  # type: ignore[arg-type]
-    assert storage.prompt_dir(PROMPT_ID).exists()
+    assert storage.prompt_dir(PROMPT_ID).exists() and storage.release_dir(rel.id).exists()
 
     monkeypatch.setattr(run_repo, "active_for_prompt", lambda _session, _prompt_id, sources=(): _async(None))
     await service.delete_prompt(FakeSession(), ACTOR, FULL_ACCESS, PROMPT_ID)  # type: ignore[arg-type]
-    assert not storage.prompt_dir(PROMPT_ID).exists() and not storage.run_dir(sample.id).exists()
+    assert not storage.prompt_dir(PROMPT_ID).exists()
+    assert not storage.run_dir(sample.id).exists()
+    assert not storage.release_dir(rel.id).exists()
     # 试跑记录只打删除标记，花的钱仍算在费用账单里。
     assert sample.deleted_at is not None
 
@@ -305,7 +313,7 @@ async def test_cut_off_answers_are_billed_by_estimate_in_the_background(monkeypa
     assert len(recorded) == 1 and recorded[0].estimated
     assert recorded[0].usage == {"input_tokens": 60, "output_tokens": 18}
 
-    # 报错的调用不收钱，断开也不估。
+    # 报错的调用（没吐出任何字）不收钱，断开也不估。
     monkeypatch.setattr(asking, "stream_responses", fake_stream([{"error": "密钥错误"}, {"text": "x"}]))
     stream = asking.stream_answer(model, message, thinking=False, on_done=record)
     async for chunk in stream:
@@ -314,6 +322,14 @@ async def test_cut_off_answers_are_billed_by_estimate_in_the_background(monkeypa
     await stream.aclose()
     await asyncio.sleep(0)
     assert len(recorded) == 1
+
+    # 吐出部分回答后上游超时/截断（无 usage）：必须按字数估算计费，不能记成 0 元。
+    monkeypatch.setattr(
+        asking, "stream_responses", fake_stream([{"text": "答" * 20}, {"error": "模型接口响应超时", "retryable": True}])
+    )
+    _ = [chunk async for chunk in asking.stream_answer(model, message, thinking=False, on_done=record)]
+    assert len(recorded) == 2 and recorded[1].estimated
+    assert recorded[1].usage == {"input_tokens": 60, "output_tokens": 12}
 
 
 async def test_trial_can_pick_any_row_of_the_sample(monkeypatch: pytest.MonkeyPatch) -> None:

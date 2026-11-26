@@ -19,7 +19,7 @@ from app.application.run_costs import Ledger, Spend
 from app.core import storage
 from app.domain.models import RUN_SOURCE_PIPELINE, PromptTemplate
 from app.repositories import batch_runs as run_repo
-from tests.helpers import ACTOR, RUN_ID, FakeSession, run, xlsx
+from tests.helpers import RUN_ID, FakeSession, run, xlsx
 
 
 def test_pipeline_batches_cannot_be_retried_from_the_page() -> None:
@@ -123,7 +123,7 @@ async def test_internal_status_corrects_stale_runs_first(monkeypatch: pytest.Mon
         return run()
 
     monkeypatch.setattr(run_repo, "get", found)
-    await pipeline_runs.status(FakeSession(), RUN_ID, ACTOR)  # type: ignore[arg-type]
+    await pipeline_runs.status(FakeSession(), RUN_ID)  # type: ignore[arg-type]
     assert calls == ["reconcile", "require"]
 
 
@@ -150,3 +150,85 @@ async def test_a_run_marked_interrupted_stops_asking_and_does_not_overwrite_a_re
     await batch_execute.execute(RUN_ID)
     assert len(asked) < 3
     assert not any("status" in update for update in recorder.updates)
+
+
+async def test_watcher_stops_via_event_without_double_booking_on_commit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """收尾通过事件通知 _watch 退出，等待在途提交完成，避免取消打断提交后把已提交的花费放回账本重复记账。"""
+
+    commit_started = asyncio.Event()
+    allow_commit = asyncio.Event()
+
+    class _SlowCommitSession:
+        async def __aenter__(self) -> _SlowCommitSession:
+            return self
+
+        async def __aexit__(self, *_: object) -> None:
+            return None
+
+        async def commit(self) -> None:
+            commit_started.set()
+            await allow_commit.wait()
+
+    booked: list[Decimal] = []
+
+    async def book(_session: Any, _run_id: str, taken: dict[Any, Any]) -> None:
+        booked.append(sum((s.inference_cost for s in taken.values()), Decimal(0)))
+
+    async def alive(*_: Any, **__: Any) -> bool:
+        return True
+
+    async def not_cancelled(*_: Any, **__: Any) -> bool:
+        return False
+
+    monkeypatch.setattr(batch_execute, "SessionLocal", _SlowCommitSession)
+    monkeypatch.setattr(batch_execute, "PROGRESS_SECONDS", 0)
+    monkeypatch.setattr(batch_execute, "_progress", lambda _job: {})
+    monkeypatch.setattr(batch_execute.repo, "update_if_running", alive)
+    monkeypatch.setattr(batch_execute.repo, "cancel_flag", not_cancelled)
+    monkeypatch.setattr(batch_execute, "book", book)
+
+    ledger = Ledger()
+    ledger.add(utcnow(), Spend(10, 5, 0, Decimal("1.25"), Decimal(0)))
+    job = SimpleNamespace(run=SimpleNamespace(id="r1"), stop=asyncio.Event(), ledger=ledger)
+    done = asyncio.Event()
+    watcher = asyncio.create_task(batch_execute._watch(job, done))  # type: ignore[arg-type]
+    await asyncio.wait_for(commit_started.wait(), timeout=2)
+    done.set()
+    allow_commit.set()
+    await asyncio.wait_for(watcher, timeout=2)
+    assert booked == [Decimal("1.25")]
+    # 已提交的账单不会被 restore 放回账本，_finish 再次 take() 为空，不会重复计费。
+    assert ledger.take() == {}
+
+
+async def test_graceful_shutdown_flushes_inflight_spent_tokens_and_marks_interrupted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SIGTERM 置位 shutdown 事件时，在途行正常收尾落账，任务收尾为 interrupted，不丢已花 token。"""
+
+    from tests.test_batch import _prepare_execution, _Recorder
+
+    recorder = _Recorder()
+    _prepare_execution(monkeypatch, recorder, run(output_fields="行业"))
+    monkeypatch.setattr(batch_execute.get_settings(), "batch_concurrency", 1)
+    shutdown = asyncio.Event()
+    calls = 0
+
+    async def stream(*_: Any, **__: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        shutdown.set()  # 第一行还在途时收到 SIGTERM
+        await asyncio.sleep(0.01)
+        yield {"text": '[{"行业":"制造"}]'}
+        yield {"usage": {"input_tokens": 500, "output_tokens": 200}}
+
+    monkeypatch.setattr(row_asking, "stream_responses", stream)
+    await batch_execute.execute(RUN_ID, shutdown=shutdown)
+    final = recorder.updates[-1]
+    assert calls == 1
+    assert (final["status"], final["done_count"], final["input_tokens"], final["output_tokens"]) == (
+        "interrupted",
+        1,
+        500,
+        200,
+    )

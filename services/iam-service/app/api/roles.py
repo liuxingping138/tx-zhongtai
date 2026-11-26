@@ -73,8 +73,7 @@ async def update_role(
     principal: CurrentPrincipal = Depends(require_permission("system.roles", "update")),
     session: AsyncSession = Depends(get_db_session, scope="function"),
 ) -> JSONResponse:
-    enabling = body.status == "active"
-    can_grant = enabling and await is_allowed(session, principal.user, "system.permissions", "grant")
+    can_grant = await is_allowed(session, principal.user, "system.permissions", "grant")
     return success_json(
         await role_admin.update_role(
             session,

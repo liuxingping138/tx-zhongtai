@@ -49,23 +49,28 @@ async def get_run(session: AsyncSession, run_id: uuid.UUID) -> PolicyAiRun | Non
     return await session.get(PolicyAiRun, run_id)
 
 
-async def failed_ai_run(session: AsyncSession, run_field: str, *, current: uuid.UUID, since: datetime) -> str:
-    """这一步最近一次失败的批次（中断、超时、轮询连不上、写库出错）发起的 AI 任务：它已经答好的行还没写进业务表，
-    这一批读到同样的数据时可以沿用。
-
-    不要求它是最近一批：按天读的一批失败后、重试前插进来一批「重新判断类型」并成功了，原来只看最近一批就找不到它，
-    那批已付费的答案全部重问。沿用是 ai-service 按上线版本、模型、码表和整行内容逐行核对的，
-    找到更早的失败批次也不会抄错。
+async def failed_ai_runs(
+    session: AsyncSession, run_field: str, *, current: uuid.UUID, since: datetime, limit: int = 5
+) -> list[str]:
+    """这一步最近几次失败批次发起的 AI 任务（新到旧）：若紧邻的上一次在建任务阶段就失败（404 / 0 条 / 墓碑），
+    调用方可继续往更早的失败批次找，沿用前面已经付费答好的行，避免 100% 重复计费。
     """
 
     column: InstrumentedAttribute[str] = getattr(PolicyAiRun, run_field)
-    value = await session.scalar(
+    values = await session.scalars(
         select(column)
         .where(PolicyAiRun.id != current, column != "", PolicyAiRun.status == "failed", PolicyAiRun.started_at >= since)
         .order_by(PolicyAiRun.started_at.desc())
-        .limit(1)
+        .limit(limit)
     )
-    return str(value or "")
+    return list(dict.fromkeys(str(value) for value in values if value))
+
+
+async def failed_ai_run(session: AsyncSession, run_field: str, *, current: uuid.UUID, since: datetime) -> str:
+    """兼容接口：返回最近一次失败批次发起的 AI 任务ID。"""
+
+    found = await failed_ai_runs(session, run_field, current=current, since=since, limit=1)
+    return found[0] if found else ""
 
 
 async def run_of_ai_task(session: AsyncSession, run_field: str, ai_run_id: str) -> PolicyAiRun | None:

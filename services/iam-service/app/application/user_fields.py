@@ -89,6 +89,27 @@ def generate_temporary_password() -> str:
             return candidate
 
 
+def mask_phone(phone: str) -> str:
+    """审计日志脱敏手机号：13800138000 -> 138****8000。"""
+
+    if not phone:
+        return ""
+    if len(phone) >= 7:  # noqa: PLR2004  手机号脱敏至少保留前3后4位
+        return f"{phone[:3]}****{phone[-4:]}"
+    return "****"
+
+
+def mask_email(email: str) -> str:
+    """审计日志脱敏邮箱：alice@example.com -> a***@example.com。"""
+
+    if not email:
+        return ""
+    if "@" not in email:
+        return "***"
+    local, domain = email.split("@", 1)
+    return f"{local[:1]}***@{domain}"
+
+
 def user_public(user: User) -> dict[str, object]:
     return {
         "id": str(user.id),

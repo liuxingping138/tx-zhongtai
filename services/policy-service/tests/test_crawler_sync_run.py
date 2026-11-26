@@ -93,6 +93,28 @@ class TestSync:
         env.refresh_history.assert_awaited_once()
         assert env.refresh_history.await_args.args[1] == datetime.now(sync.BEIJING).date()
 
+    async def test_midnight_crossing_binds_same_snapshot_day_to_rebuild_and_history(
+        self, env: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """同步跨北京零点时，rebuild_sites 与 refresh_history 必须共用同一 snapshot_day（D+1），避免错位落库。"""
+
+        day_before = datetime(2026, 10, 10, 23, 55, tzinfo=sync.BEIJING)
+        day_after = datetime(2026, 10, 11, 0, 5, tzinfo=sync.BEIJING)
+        times = iter([day_before, day_after])
+
+        class _Clock:
+            @staticmethod
+            def now(tz: Any = None) -> datetime:
+                if tz == sync.BEIJING:
+                    return next(times)
+                return datetime(2026, 10, 10, 16, 5, tzinfo=UTC)
+
+        monkeypatch.setattr(sync, "datetime", _Clock)
+        session = _Session()
+        await sync._sync(session, sync.SyncWindow(mode=sync.MODE_INCREMENTAL))  # type: ignore[arg-type]
+        assert sync.rebuild_sites.await_args.args[1] == date(2026, 10, 11)  # type: ignore[attr-defined]
+        assert env.refresh_history.await_args.args[1] == date(2026, 10, 11)
+
 
 class TestReplaceDay:
     async def test_empty_day_only_clears_the_old_rows(self) -> None:
@@ -122,9 +144,9 @@ class TestRebuild:
     async def test_thresholds_come_from_settings_and_count_is_returned(self) -> None:
         session = _Session()
         session.execute.side_effect = [None, SimpleNamespace(rowcount=7)]
-        assert await sync.rebuild_sites(session) == 7  # type: ignore[arg-type]
+        assert await sync.rebuild_sites(session, TODAY) == 7  # type: ignore[arg-type]
         params = session.execute.await_args.args[1]
-        assert params == {"normal_days": 7, "watch_days": 30}
+        assert params == {"today": TODAY, "normal_days": 7, "watch_days": 30}
 
 
 class TestRun:

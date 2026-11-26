@@ -50,6 +50,17 @@ class TestApplyFilters:
         assert "occurred_at >= '2026-10-01" in text
         assert "occurred_at < '2026-10-02" in text
 
+    def test_second_precision_upper_bound_includes_whole_second(self) -> None:
+        """选到 23:59:59（microsecond==0）时上界加 1 秒，包含 23:59:59.000-.999 全部事件；带微秒时保持原样。"""
+
+        end_sec = datetime(2026, 10, 1, 23, 59, 59, tzinfo=UTC)
+        text = sql(event_repo.apply_filters(select(AuditEvent), EventFilters(occurred_to=end_sec)))
+        assert "occurred_at < '2026-10-02 00:00:00" in text
+
+        end_us = datetime(2026, 10, 1, 23, 59, 59, 500_000, tzinfo=UTC)
+        text_us = sql(event_repo.apply_filters(select(AuditEvent), EventFilters(occurred_to=end_us)))
+        assert "occurred_at < '2026-10-01 23:59:59.500000" in text_us
+
     def test_multi_select_uses_in_and_fields_are_anded(self) -> None:
         text = sql(event_repo.apply_filters(select(AuditEvent), EventFilters(module_code=["a", "b"], outcome="failed")))
         assert "module_code IN ('a', 'b')" in text

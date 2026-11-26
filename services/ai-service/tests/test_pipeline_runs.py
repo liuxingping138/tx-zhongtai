@@ -335,19 +335,28 @@ async def test_create_commits_the_template_lock_before_slow_io(
     assert len(online) == 1
 
 
-@pytest.mark.parametrize("action", ["stop", "status"])
-async def test_unknown_run_gets_a_cancelled_tombstone(monkeypatch: pytest.MonkeyPatch, action: str) -> None:
-    # 政策服务建任务超时后叫停：这边行还没插进去。占位成已取消，迟到的建任务撞主键、按幂等返回已取消，不再执行。
+async def test_unknown_run_status_raises_404_without_creating_tombstone(monkeypatch: pytest.MonkeyPatch) -> None:
+    """只读状态查询绝不创建已取消墓碑：建任务正在写快照时页面轮询查不到应返回 404，不能误杀在途批次。"""
+
     async def missing(*_args: Any, **_kwargs: Any) -> None:
         return None
 
     monkeypatch.setattr(run_repo, "get", missing)
     monkeypatch.setattr(batch_runs, "reconcile_stale", noop)
     session = _NestedSession()
-    if action == "stop":
-        data = await pipeline_runs.stop(session, ACTOR, RUN_ID)  # type: ignore[arg-type]
-    else:
-        data = await pipeline_runs.status(session, RUN_ID, ACTOR)  # type: ignore[arg-type]
+    with pytest.raises(NotFoundError):
+        await pipeline_runs.status(session, RUN_ID)  # type: ignore[arg-type]
+    assert session.added == []
+
+
+async def test_unknown_run_stop_creates_a_cancelled_tombstone(monkeypatch: pytest.MonkeyPatch) -> None:
+    # 政策服务建任务超时后叫停：这边行还没插进去。只有 stop() 占位成已取消，迟到的建任务撞主键、按幂等返回已取消。
+    async def missing(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    monkeypatch.setattr(run_repo, "get", missing)
+    session = _NestedSession()
+    data = await pipeline_runs.stop(session, ACTOR, RUN_ID)  # type: ignore[arg-type]
     assert data["id"] == RUN_ID and data["status"] == "cancelled"
     [tombstone] = session.added
     assert (tombstone.source, tombstone.status, tombstone.error_message) == (
@@ -357,19 +366,21 @@ async def test_unknown_run_gets_a_cancelled_tombstone(monkeypatch: pytest.Monkey
     )
 
 
-async def test_tombstone_losing_the_race_reads_the_real_run(monkeypatch: pytest.MonkeyPatch) -> None:
-    # 建任务刚好先插进去：占位撞主键作罢，照常返回那条真任务。
+async def test_tombstone_losing_the_race_stops_the_real_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    # 建任务刚好先插进去：stop() 占位撞主键作罢，转而照常停止那条真任务。
     async def missing(*_args: Any, **_kwargs: Any) -> None:
         return None
 
-    async def require(_session: Any, run_id: str) -> Any:
-        return run(id=run_id, source="pipeline")
+    stopped: list[str] = []
+
+    async def fake_stop(_session: Any, _caller: Any, _access: Any, run_id: str) -> dict[str, Any]:
+        stopped.append(run_id)
+        return {"id": run_id, "status": "cancelled"}
 
     monkeypatch.setattr(run_repo, "get", missing)
-    monkeypatch.setattr(batch_runs, "reconcile_stale", noop)
-    monkeypatch.setattr(pipeline_runs, "require_run", require)
-    data = await pipeline_runs.status(_NestedSession(conflict=True), RUN_ID, ACTOR)  # type: ignore[arg-type]
-    assert data["status"] == "queued"
+    monkeypatch.setattr(batch_runs, "stop_run", fake_stop)
+    data = await pipeline_runs.stop(_NestedSession(conflict=True), ACTOR, RUN_ID)  # type: ignore[arg-type]
+    assert data["status"] == "cancelled" and stopped == [RUN_ID]
 
 
 async def test_tombstone_rejects_malformed_ids() -> None:

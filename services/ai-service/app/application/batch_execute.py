@@ -1,15 +1,4 @@
-"""执行一个批量任务，由 worker 调用。
-
-N 个协程从同一个队列取行并发提问；每完成一行立即追加到原始返回 CSV，进程中途被杀也保留已跑结果。
-另一个协程定时写进度和心跳，并检查停止标志：置位后不再取新行，等在途请求返回后收尾。
-
-每行当场补救：限流、超时这类可重试的错误退避后重发。
-批量任务和定时任务一次执行最多跑三轮：一轮跑完，隔一会儿只重问网络失败（超时、断连、限流、空返回）和
-格式不对（解析不出输出字段）的行，哪一轮全部成功就提前结束，三轮后仍失败的留着失败原因。
-样本试跑不分轮：格式不对当场再问一次，结果原样给人看，好知道提示词哪里要改。
-任务目录里已有原始返回时是续跑：已成功的行直接沿用，只问失败和没跑到的行，结果合并回同一个任务。
-费用每行完成时按当时的单价累加：分时计价的模型跨高峰、空闲时段跑，也按各行实际时段算。
-"""
+"""执行一个批量任务，由 worker 调用：并发提问、逐行写原始返回、定时心跳与按天记账，支持三轮重跑与续跑。"""
 
 from __future__ import annotations
 
@@ -45,14 +34,7 @@ from app.core import storage
 from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.domain.llm_models import LlmModel, calc_costs, with_service_tier
-from app.domain.models import (
-    RUN_CANCELLED,
-    RUN_DONE,
-    RUN_FAILED,
-    RUN_INTERRUPTED,
-    RUN_SOURCE_SAMPLE,
-    BatchRun,
-)
+from app.domain.models import RUN_CANCELLED, RUN_DONE, RUN_FAILED, RUN_INTERRUPTED, RUN_SOURCE_SAMPLE, BatchRun
 from app.domain.templating import build_myid, fill_template, split_fields
 from app.repositories import batch_runs as repo
 
@@ -217,11 +199,17 @@ def _progress(job: Job, *, final: bool = False) -> dict[str, Any]:
     }
 
 
-async def _watch(job: Job) -> None:
-    """写进度和心跳；发现停止标志就让取行协程停手。"""
+async def _watch(job: Job, done: asyncio.Event | None = None) -> None:
+    """写进度和心跳；发现停止标志就让取行协程停手。通过 done 事件优雅退出，避免打断已提交的记账事务造成重复计费。"""
 
-    while True:
-        await asyncio.sleep(PROGRESS_SECONDS)
+    while done is None or not done.is_set():
+        if done is None:
+            await asyncio.sleep(PROGRESS_SECONDS)
+        else:
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(done.wait(), timeout=PROGRESS_SECONDS)
+            if done.is_set():
+                break
         # 库连接抖一下不能让它死掉：它一死心跳就停，任务被误判中断、停止按钮失效、跑完还被记成失败。
         taken, booked = job.ledger.take(), False
         try:
@@ -230,17 +218,14 @@ async def _watch(job: Job) -> None:
                 cancelled = await repo.cancel_flag(session, job.run.id)
                 await book(session, job.run.id, taken)
                 await session.commit()
-                # 提交了就算记上：在退出会话（关连接）时被取消的话，放回去会让收尾再记一遍，同一笔钱记两次。
                 booked = True
         except Exception:
             logger.exception("batch_run_watch_failed run=%s", job.run.id)
             continue
         finally:
-            # 没记上（写库失败，或者收尾时被取消在半路）就放回去，由下一次或收尾时再记。
             if not booked:
                 job.ledger.restore(taken)
         if not alive and not job.stop.is_set():
-            # 心跳断过一阵、任务已被纠正成「中断」：页面上停止按钮已经没了，这里不停就会一直花钱。
             logger.warning("batch_run_no_longer_running run=%s", job.run.id)
             job.stop_reason = "任务已被判定中断（有一阵子没写上心跳），不再提交新的提问"
             job.stop.set()
@@ -339,7 +324,12 @@ async def _fail(run_id: str, message: str) -> None:
         await session.commit()
 
 
-async def _run_job(job: Job) -> None:
+async def _forward_shutdown(shutdown: asyncio.Event, target: asyncio.Event) -> None:
+    await shutdown.wait()
+    target.set()
+
+
+async def _run_job(job: Job, shutdown: asyncio.Event | None = None) -> None:
     settings = get_settings()
     first = {"total_count": len(job.rows), "retry_round": 1, "round_rows": len(job.pending), "round_starts_at": None}
     await _save(job, {**first, **_progress(job)})
@@ -351,13 +341,13 @@ async def _run_job(job: Job) -> None:
         _log, job, f"开始：模型={job.model.name}｜{scope}｜并发={settings.batch_concurrency}"
     )
     limits = httpx.Limits(max_connections=settings.batch_concurrency)
-    # 心跳要盖住轮与轮之间的等待：等 5 分钟不写心跳，就会被当成执行进程不在了、纠正成「中断」。
-    watcher = asyncio.create_task(_watch(job))
+    watch_done = asyncio.Event()
+    watcher = asyncio.create_task(_watch(job, watch_done))
+    forwarder = asyncio.create_task(_forward_shutdown(shutdown, job.stop)) if shutdown is not None else None
     try:
         async with httpx.AsyncClient(limits=limits) as client:
             while True:
                 await asyncio.gather(*(_consume(job, client) for _ in range(settings.batch_concurrency)))
-                # 停止（含到了费用上限）就不再开下一轮；全部成功或跑满三轮也结束。
                 if job.stop.is_set():
                     if job.round < job.rounds and any(round_retry(item) for item in job.results.values()):
                         job.rounds_cut = True
@@ -365,13 +355,17 @@ async def _run_job(job: Job) -> None:
                 if job.round >= job.rounds or not await _next_round(job):
                     break
     finally:
-        watcher.cancel()
+        if forwarder is not None:
+            forwarder.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await forwarder
+        watch_done.set()
         with contextlib.suppress(asyncio.CancelledError):
             await watcher
 
 
-async def execute(run_id: str) -> None:
-    """任何异常都落到任务状态上，worker 不退出。进程被停止（取消）时把已跑部分收尾成「中断」。"""
+async def execute(run_id: str, *, shutdown: asyncio.Event | None = None) -> None:
+    """任何异常都落到任务状态上，worker 不退出。进程停止时把在途行落账后收尾成「中断」。"""
 
     async with SessionLocal() as session:
         run = await repo.get(session, run_id)
@@ -383,15 +377,18 @@ async def execute(run_id: str) -> None:
     except Exception as exc:  # noqa: BLE001  读 Excel 失败要落到任务上让用户看到原因
         await _fail(run_id, str(exc))
         return
+    interrupted_msg = "执行进程停止（服务重启），已跑完的部分已生成结果"
     try:
-        await _run_job(job)
+        await _run_job(job, shutdown=shutdown)
     except asyncio.CancelledError:
-        await asyncio.shield(_finish(job, RUN_INTERRUPTED, "执行进程停止（服务重启），已跑完的部分已生成结果"))
+        await asyncio.shield(_finish(job, RUN_INTERRUPTED, interrupted_msg))
         raise
     except Exception as exc:
-        # 单个任务异常不能拖垮 worker，落到任务状态上让用户看到原因。
         logger.exception("batch_run_failed run=%s", run_id)
         await _finish(job, RUN_FAILED, f"执行失败：{exc}"[:ERROR_MAX])
         return
     stopped_early = job.stop.is_set() and (len(job.results) < len(job.rows) or job.rounds_cut)
+    if stopped_early and shutdown is not None and shutdown.is_set():
+        await _finish(job, RUN_INTERRUPTED, interrupted_msg)
+        return
     await _finish(job, RUN_CANCELLED if stopped_early else RUN_DONE, job.stop_reason if stopped_early else "")

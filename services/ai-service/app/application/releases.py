@@ -72,7 +72,7 @@ async def publish(
     session: AsyncSession, actor: Actor, access: CategoryAccess, prompt_id: str, *, version: int | None = None
 ) -> dict[str, Any]:
     template = await prompts.require(session, prompt_id, lock=True)
-    access.require_read(template.category)
+    access.require_edit(template.category)
     if version is not None and version != template.version:
         raise ApiError(
             "草稿在你核对之后又被修改过（提示词、字段或文件），请刷新看清改动再上线",
@@ -116,7 +116,7 @@ async def take_offline(session: AsyncSession, actor: Actor, access: CategoryAcce
     """下线只是不再有生效版本；历史版本保留，可随时重新上线。"""
 
     template = await prompts.require(session, prompt_id, lock=True)
-    access.require_read(template.category)
+    access.require_edit(template.category)
     if not template.release_id:
         raise _invalid("模板还没有上线")
     template.release_id = None

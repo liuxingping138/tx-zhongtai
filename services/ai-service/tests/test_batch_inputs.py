@@ -235,6 +235,12 @@ async def test_running_a_release_needs_edit_rights_on_the_releases_own_category(
     customer_only = CategoryAccess(readable=frozenset({"customer"}), editable=frozenset({"customer"}))
     with pytest.raises(PermissionDeniedError):
         await batch_start.preview_input(FakeSession(), customer_only, PROMPT_ID, ("a.xlsx", xlsx([["名称"], ["甲"]])))  # type: ignore[arg-type]
+    # 下载上线版空白数据模板同样需要上线版本所属类型的读权限，不能跨类型下载。
+    with pytest.raises(PermissionDeniedError):
+        await batch_start.input_template(FakeSession(), customer_only, PROMPT_ID)  # type: ignore[arg-type]
+    can_read_release = CategoryAccess(readable=frozenset({"customer", "policy"}), editable=frozenset({"customer"}))
+    data, _ = await batch_start.input_template(FakeSession(), can_read_release, PROMPT_ID)  # type: ignore[arg-type]
+    assert read_sheet(data)[0] == ["名称"]
 
 
 async def test_preview_and_start_run_from_db_rows(monkeypatch: pytest.MonkeyPatch) -> None:

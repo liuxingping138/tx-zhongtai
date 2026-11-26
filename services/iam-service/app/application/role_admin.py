@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.audit_outbox import enqueue_independent
-from app.domain.authorization import SYSTEM_PERMISSIONS_CODE
+from app.domain.authorization import SYSTEM_PERMISSIONS_CODE, levels_dominated
 from app.domain.catalog import SUPERADMIN_ROLE_CODE
 from app.domain.enums import GrantLevel, NodeType, RoleStatus
 from app.domain.models import Role, User
@@ -148,6 +148,34 @@ class RoleChanges:
     status: str | None = None
 
 
+async def _assert_can_modify_role(session: AsyncSession, actor: User, role: Role, *, can_grant: bool) -> None:
+    """没有权限分配权限时，不能停用或修改授权超出自身范围的角色。"""
+
+    if can_grant:
+        return
+    pairs = await role_repo.list_role_grants(session, role.id)
+    role_levels = {
+        resource.code: str(grant.level)
+        for grant, resource in pairs
+        if resource.published and resource.node_type == NodeType.RESOURCE
+    }
+    if not role_levels:
+        return
+    actor_levels = await resource_repo.list_effective_levels(session, actor.id)
+    if actor_levels.get(SYSTEM_PERMISSIONS_CODE) == "FULL" or levels_dominated(actor_levels, role_levels):
+        return
+    await enqueue_independent(
+        event_type="iam.role.protect_denied",
+        payload={
+            "actor_id": str(actor.id),
+            "role_id": str(role.id),
+            "outcome": "denied",
+            "reason": "privilege_exceeds_actor",
+        },
+    )
+    raise PermissionDeniedError("不能修改权限超出自身范围的角色")
+
+
 async def update_role(
     session: AsyncSession, actor: User, role_id: uuid.UUID, changes: RoleChanges, *, can_grant: bool = False
 ) -> dict[str, object]:
@@ -162,6 +190,7 @@ async def update_role(
     status = changes.status
     if role.is_builtin and status is not None and status != role.status:
         raise PermissionDeniedError("不能停用或修改内置角色状态")
+    await _assert_can_modify_role(session, actor, role, can_grant=can_grant)
     if status is not None:
         if status not in {RoleStatus.ACTIVE, RoleStatus.DISABLED}:
             raise ApiError("无效的角色状态")

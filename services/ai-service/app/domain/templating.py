@@ -12,6 +12,7 @@ import re
 CODE_TABLE_FIELD = "上传码表"
 _VAR_RE = re.compile(r"@【([^】]+)】")
 _JSON_START = re.compile(r"[\[{]")
+_OBJECT_ARRAY_START = re.compile(r"\[\s*\{")
 _THINK_RE = re.compile(r"<think>[\s\S]*?</think>", re.IGNORECASE)
 _FENCED_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.IGNORECASE)
 _MYID_BASE = 1_000_000
@@ -52,23 +53,30 @@ def _clean_json(group: str) -> str:
 
 
 def _json_candidates(text: str) -> list[object]:
-    """从任意位置起逐段尝试解码 JSON，模型在前后加说明、代码块围栏或思考过程都不影响。"""
+    """从任意位置起逐段尝试解码 JSON，模型在前后加说明、代码块围栏或思考过程都不影响。
+
+    遇到损坏或截断的 JSON 对象数组（`[{...`）时不再步入内部捡出第一条 `{...}`，避免静默丢弃第 2..N 条。
+    """
 
     decoder = json.JSONDecoder()
-    found: list[object] = []
     for source in (text, _clean_json(text)):
+        found: list[object] = []
+        broken_array = False
         position = 0
         while match := _JSON_START.search(source, position):
             try:
                 value, end = decoder.raw_decode(source, match.start())
             except json.JSONDecodeError:
+                if _OBJECT_ARRAY_START.match(source, match.start()):
+                    broken_array = True
+                    break
                 position = match.start() + 1
                 continue
             found.append(value)
             position = end
-        if found:
-            break
-    return found
+        if found and not broken_array:
+            return found
+    return []
 
 
 def _entries(value: object) -> list[dict[str, object]]:

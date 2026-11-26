@@ -177,7 +177,7 @@ async def replace_day(session: AsyncSession, day: date, rows: list[dict[str, Any
 
 _REBUILD_SITES = text(
     """
-    WITH today AS (SELECT CAST(now() AT TIME ZONE 'Asia/Shanghai' AS date) AS d),
+    WITH today AS (SELECT CAST(:today AS date) AS d),
     agg AS (
         SELECT site_name, province_name, city_name,
                SUM(row_count) AS total_rows,
@@ -205,14 +205,19 @@ _REBUILD_SITES = text(
 )
 
 
-async def rebuild_sites(session: AsyncSession) -> int:
+async def rebuild_sites(session: AsyncSession, today: date | None = None) -> int:
     settings = get_settings()
+    snapshot_day = today or datetime.now(BEIJING).date()
     await session.execute(text("DELETE FROM policy_crawler_sites"))
     result = cast(
         CursorResult[Any],
         await session.execute(
             _REBUILD_SITES,
-            {"normal_days": settings.crawler_health_normal_days, "watch_days": settings.crawler_health_watch_days},
+            {
+                "today": snapshot_day,
+                "normal_days": settings.crawler_health_normal_days,
+                "watch_days": settings.crawler_health_watch_days,
+            },
         ),
     )
     return int(result.rowcount or 0)
@@ -343,8 +348,9 @@ async def _sync(session: AsyncSession, window: SyncWindow, *, run_id: uuid.UUID 
             await session.commit()
             logger.info("day_synced date=%s sites=%s progress=%s/%s", day, len(rows), index, len(targets))
 
-        run_row.site_rows = await rebuild_sites(session)
-        await status_history.refresh_history(session, today)
+        snapshot_day = datetime.now(BEIJING).date()
+        run_row.site_rows = await rebuild_sites(session, snapshot_day)
+        await status_history.refresh_history(session, snapshot_day)
         run_row.watermark = mark if mode != MODE_REPAIR else None
         run_row.status = "success"
         run_row.finished_at = datetime.now(UTC)

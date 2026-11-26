@@ -19,6 +19,7 @@ from app.domain.categories import FULL_ACCESS
 from app.main import app
 from app.repositories import batch_runs as run_repo
 from app.repositories import prompts as prompt_repo
+from app.repositories import releases as release_repo
 from tests.helpers import ACTOR, PROMPT_ID, RUN_ID, FakeSession, fake_stream, noop, template, xlsx
 
 
@@ -67,7 +68,7 @@ def test_upload_parses_multipart_after_auth(client: TestClient, monkeypatch: pyt
 
 def test_download_sets_utf8_filename(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     raw = storage.run_file(RUN_ID, "raw")
-    storage.write_atomic(raw, b"a,b")
+    storage.write_atomic(raw, "a,b\r\n=1+1,-md\r\n".encode("utf-8-sig"))
 
     async def download(*_: Any) -> tuple[Any, str]:
         return raw, "企业-原始返回.csv"
@@ -77,7 +78,7 @@ def test_download_sets_utf8_filename(client: TestClient, monkeypatch: pytest.Mon
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/csv")
     assert "filename*=UTF-8''" in response.headers["content-disposition"]
-    assert response.content == b"a,b"
+    assert response.content.decode("utf-8-sig") == "a,b\r\n'=1+1,'-md\r\n"
     assert client.get(f"/api/v1/ai/batch-runs/{RUN_ID}/files/other").status_code == 422
 
 
@@ -153,6 +154,7 @@ def test_prompt_write_routes(client: TestClient, monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(prompt_repo, "delete", noop)
     _returns(run_repo, "active_for_prompt", None, monkeypatch)
     _returns(run_repo, "sample_runs_for_prompt", [], monkeypatch)
+    _returns(release_repo, "list_for_prompt", [], monkeypatch)
     created = client.post("/api/v1/ai/prompts", json={"title": "t", "category": "policy", "content": "c"})
     assert created.status_code == 201
     updated = client.put(

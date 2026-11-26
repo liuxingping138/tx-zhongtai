@@ -153,3 +153,28 @@ def test_parse_fields_tolerates_wrapping_nesting_and_single_objects() -> None:
         '<think>比如正文写了 [{"行业": "假"}]</think>\n前缀 {"行业": " prose"}\n```json\n[{"行业": "真"}]\n```'
     )
     assert parse_fields(thinking_hijack, fields) == [{"行业": "真", "客群": ""}]
+
+
+def test_parse_fields_rejects_truncated_or_broken_multi_item_json_arrays() -> None:
+    """截断或第 2..N 项语法损坏的 JSON 数组绝不能退化为只返回第 1 项，必须返回 None 触发格式重试。"""
+
+    from app.domain.templating import parse_fields
+
+    fields = ["行业", "客群"]
+    truncated = '[{"行业": "政务", "客群": "政府"}, {"行业": "医疗", "客群": "医院"}, {"行业": "教育", "客群": '
+    assert parse_fields(truncated, fields) is None
+
+    broken_second = '[{"行业": "政务", "客群": "政府"}, {"行业": "医"疗", "客群": "医院"}]'
+    assert parse_fields(broken_second, fields) is None
+
+    fenced_truncated = '```json\n[\n  {"行业": "政务", "客群": "政府"},\n  {"行业": "医疗"\n```'
+    assert parse_fields(fenced_truncated, fields) is None
+
+    # 正文里普通的非 JSON 方括号提示不影响后面的合法单对象。
+    assert parse_fields('[提示] {"行业": "能源", "客群": "国企"}', fields) == [{"行业": "能源", "客群": "国企"}]
+    # 第 2 项带非法反斜杠时，不会提前截胡第 1 项，而是走 _clean_json 完整救回两项。
+    stray_bs = r'[{"行业": "政务", "客群": "政府"}, {"行业": "C:\alpha", "客群": "医疗"}]'
+    assert parse_fields(stray_bs, fields) == [
+        {"行业": "政务", "客群": "政府"},
+        {"行业": r"C:\alpha", "客群": "医疗"},
+    ]

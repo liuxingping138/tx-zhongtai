@@ -23,6 +23,7 @@ from app.aitag.application.interpreting import untouched
 from app.aitag.application.pipeline import (
     NOT_RUN,
     ROBOT,
+    BudgetExhaustedError,
     Spend,
     ask,
     day_start,
@@ -325,7 +326,10 @@ async def _run(run_id: uuid.UUID, task: str, config: PolicyAiTask, spend: Spend)
     if spend.remaining() <= 0:
         return f"今日已花 {spend.before:.2f} 元，达到每日上限 {spend.limit:.2f} 元，留到明天"
     await check_template_now(task, config.prompt_id)
-    return await STEPS[task](run_id, config, spend)
+    try:
+        return await STEPS[task](run_id, config, spend)
+    except BudgetExhaustedError as exc:
+        return str(exc)
 
 
 async def abandon(run_id: uuid.UUID, message: str) -> None:

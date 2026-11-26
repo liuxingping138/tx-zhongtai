@@ -29,6 +29,7 @@ POLL_MISSES = 30
 SETTLE_SECONDS = 300
 # 只沿用最近几天内失败的那批：再早的数据多半已经被后来的批次重新跑过了。
 REUSE_DAYS = 3
+REUSE_CANDIDATES = 5
 PIPELINE_IO_TIMEOUT = 180.0
 FINISHED = {"done", "cancelled", "failed", "interrupted"}
 # ai-service 对没轮到的行写「未执行（任务停止或中断）」：费用到上限或任务被停。这些行下批重做。
@@ -128,33 +129,47 @@ async def _settled(ai_run_id: str) -> dict[str, Any] | None:
         await asyncio.sleep(POLL_SECONDS)
 
 
-async def _book_final_cost(run_field: str, ai_run_id: str, final: Decimal) -> None:
+class BudgetExhaustedError(Exception):
+    """补记上一批失败任务的最终花费后当日额度已用尽，本批不再创建新的 AI 任务。"""
+
+
+async def _book_final_cost(run_field: str, ai_run_id: str, final: Decimal) -> Decimal:
     """上一批失败收尾时只补记到最后一次轮询到的花费：之后问不到 ai-service 的那段、叫停前在途几行的钱没记上，
-    今日已花偏少、当天上限会被超过。那边停稳后按最终花费把差额补进那一批的步骤费用列。"""
+    今日已花偏少、当天上限会被超过。那边停稳后按最终花费把差额补进那一批的步骤费用列，并返回落入今天的差额。"""
 
     column = STAGE_COST[run_field]
     async with SessionLocal() as session:
         run = await repo.run_of_ai_task(session, run_field, ai_run_id)
         booked = Decimal(0) if run is None else getattr(run, column) or Decimal(0)
         if run is None or final <= booked:
-            return
+            return Decimal(0)
+        delta = final - booked
         setattr(run, column, final)
-        run.cost = (run.cost or Decimal(0)) + (final - booked)
+        run.cost = (run.cost or Decimal(0)) + delta
+        started_at = getattr(run, "started_at", None)
         await session.commit()
+        if started_at is not None and started_at < day_start(today()):
+            return Decimal(0)
+        return delta
 
 
-async def _reusable(run_id: uuid.UUID, run_field: str) -> str:
-    """上一批失败了（中断、超时、轮询连不上、写库出错），它在 ai-service 那边已经答好的行这一批直接沿用，
-    不再花钱重问：这一批读到的还是那些数据（读取进度没前移、待办还在）。"""
+async def _reusable(run_id: uuid.UUID, run_field: str) -> tuple[str, Decimal]:
+    """从新到旧查最近几次失败批次：跳过 404、空 prompt_id 墓碑和 done_count==0 的批次，找到前面已付费答好的那批。
+    同时把已停稳批次尚未入账的差额补记，返回 (可沿用的 ai_run_id, 今日新增费用差额)。"""
 
     async with SessionLocal() as session:
         since = utcnow() - timedelta(days=REUSE_DAYS)
-        previous = await repo.failed_ai_run(session, run_field, current=run_id, since=since)
-    status = await _settled(previous) if previous else None
-    if status is None:
-        return ""
-    await _book_final_cost(run_field, previous, cost_of(status))
-    return previous
+        candidates = await repo.failed_ai_runs(session, run_field, current=run_id, since=since, limit=REUSE_CANDIDATES)
+    today_delta = Decimal(0)
+    for previous in candidates:
+        status = await _settled(previous)
+        if status is None:
+            continue
+        today_delta += await _book_final_cost(run_field, previous, cost_of(status))
+        if not status.get("prompt_id") or int(status.get("done_count") or 0) <= 0:
+            continue
+        return previous, today_delta
+    return "", today_delta
 
 
 async def ask(
@@ -165,7 +180,11 @@ async def ask(
     ai-service 那边一行最多跑三轮：网络失败、格式不对的隔一会儿重问，这里拿到的已经是三轮之后的结果。
     """
 
-    previous = await _reusable(run_id, run_field)
+    previous, delta = await _reusable(run_id, run_field)
+    spend.before += delta
+    if spend.remaining() <= 0:
+        spent_today = spend.before + spend.run
+        raise BudgetExhaustedError(f"今日已花 {spent_today:.2f} 元，达到每日上限 {spend.limit:.2f} 元，留到明天")
     sent = fitting_rows(rows)
     client_run_id = uuid.uuid4().hex
     await update_run(run_id, **{run_field: client_run_id})

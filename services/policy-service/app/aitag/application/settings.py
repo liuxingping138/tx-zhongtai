@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from http import HTTPStatus
 from typing import Any
 
 from platform_common.actors import Actor
@@ -216,6 +217,10 @@ async def _current(run: PolicyAiRun | None) -> dict[str, Any] | None:
         try:
             status = await internal_clients.ai("GET", f"/internal/v1/pipeline-runs/{ai_run_id}")
             current.update(done=status.get("done_count"), total=status.get("total_count"))
+        except ApiError as exc:
+            # 建任务正在写快照时 ai-service 尚未落库，404 视为初始化中，不打扰页面。
+            if exc.http_status != HTTPStatus.NOT_FOUND:
+                return current
         except Exception:  # noqa: BLE001, S110  进度是锦上添花，ai-service 暂时不可用时页面照常显示其余信息
             pass
     return current

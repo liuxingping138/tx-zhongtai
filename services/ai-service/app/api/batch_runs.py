@@ -15,6 +15,7 @@ from app.api.schemas import (
     RunFileKind,
     file_response,
     path_response,
+    sanitized_csv_response,
 )
 from app.api.security import CategoryAccess, SecurityClass, classified, get_category_access, require_ai_permission
 from app.application import batch_run_all, batch_start, prompts
@@ -58,8 +59,8 @@ async def list_runs(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=15, ge=1, le=100),
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     _: Actor = Depends(require_ai_permission(RESOURCE, "list")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     return success_json(await service.list_runs(session, access, page=page, page_size=page_size, filters=filters))
 
@@ -68,8 +69,8 @@ async def list_runs(
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def filter_options(
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     _: Actor = Depends(require_ai_permission(RESOURCE, "list")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     return success_json(await service.filter_options(session, access))
 
@@ -78,8 +79,8 @@ async def filter_options(
 @classified(SecurityClass.RESOURCE_AUTHORIZED)
 async def options(
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     _: Actor = Depends(require_ai_permission(RESOURCE, "list")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     """新建任务选模板用：只有批量权限、没有模板权限的人也要能选上线的模板运行。"""
 
@@ -99,8 +100,8 @@ async def preview_input(
     prompt_id: str = Query(max_length=32),
     version: RunVersion = Query(default="release", description="跑上线版本还是已保存的草稿"),
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     _: Actor = Depends(require_ai_permission(RESOURCE, "run")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     """选好文件先检查：不调用模型、不建任务。文件在权限依赖通过之后才读，边读边限流。"""
 
@@ -116,8 +117,8 @@ async def input_template(
     prompt_id: str = Query(max_length=32),
     version: RunVersion = Query(default="release", description="跑上线版本还是已保存的草稿"),
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     _: Actor = Depends(require_ai_permission(RESOURCE, "run")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> Response:
     """要跑任务的人才需要：和发起同一个权限。必须在 /{run_id} 之前声明，否则会被当成任务 ID。"""
 
@@ -134,8 +135,8 @@ async def start_run(
     limit: int = Query(default=0, ge=0, le=100_000),
     version: RunVersion = Query(default="release", description="跑上线版本还是已保存的草稿"),
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission(RESOURCE, "run")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     """带文件的 multipart，其余参数在 query 里。0 条表示跑全部。"""
 
@@ -151,8 +152,8 @@ async def start_run(
 async def preview_rows(
     body: BatchRowsPreviewBody,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     _: Actor = Depends(require_ai_permission(RESOURCE, "run")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     """从政策库取数后预检：不调用模型、不建任务。"""
 
@@ -172,8 +173,8 @@ async def preview_rows(
 async def start_run_from_rows(
     body: BatchRowsStartBody,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission(RESOURCE, "run")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     """从政策库取数直接发起离线批量验证任务。"""
 
@@ -192,8 +193,8 @@ async def start_run_from_rows(
 async def get_run(
     run_id: str,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     _: Actor = Depends(require_ai_permission(RESOURCE, "list")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     return success_json(await service.get_run(session, access, run_id))
 
@@ -204,8 +205,8 @@ async def run_rows(
     run_id: str,
     failed_only: bool = Query(default=False),
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     _: Actor = Depends(require_ai_permission(RESOURCE, "list")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     return success_json(await service.run_rows(session, access, run_id, failed_only=failed_only))
 
@@ -215,8 +216,8 @@ async def run_rows(
 async def retry_run(
     run_id: str,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission(RESOURCE, "run")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     return success_json(await service.retry_run(session, actor, access, run_id))
 
@@ -226,8 +227,8 @@ async def retry_run(
 async def run_all(
     run_id: str,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission(RESOURCE, "run")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     """只跑了前几行的任务，用同一份数据和同一版提示词跑全部；前面答好的行沿用。"""
 
@@ -239,8 +240,8 @@ async def run_all(
 async def stop_run(
     run_id: str,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission(RESOURCE, "stop")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     return success_json(await service.stop_run(session, actor, access, run_id))
 
@@ -250,8 +251,8 @@ async def stop_run(
 async def delete_run(
     run_id: str,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission(RESOURCE, "delete")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> JSONResponse:
     await service.delete_run(session, actor, access, run_id)
     return success_json(None)
@@ -263,8 +264,8 @@ async def download(
     run_id: str,
     kind: RunFileKind,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    access: CategoryAccess = Depends(get_category_access),
     actor: Actor = Depends(require_ai_permission(RESOURCE, "export")),
+    access: CategoryAccess = Depends(get_category_access),
 ) -> Response:
     path, filename = await service.download(session, actor, access, run_id, kind)
-    return path_response(path, filename)
+    return sanitized_csv_response(path, filename) if kind == "raw" else path_response(path, filename)
