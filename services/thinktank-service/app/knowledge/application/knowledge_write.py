@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from pathlib import PureWindowsPath
 from typing import Any
 
 from platform_common.actors import Actor
@@ -91,6 +92,16 @@ def validate_metadata_values(data: dict[str, str]) -> list[str]:
     return reasons
 
 
+def sanitize_filename(raw: str) -> str:
+    """剥离上传或改名时夹带的目录路径（含 Windows 盘符与反斜杠），只留纯文件名。"""
+
+    stripped = raw.strip()
+    if not stripped or stripped.endswith(("/", "\\")):
+        return ""
+    name = PureWindowsPath(stripped.replace("/", "\\")).name.strip()
+    return "" if name in {"", ".", ".."} else name
+
+
 def _raise_if_invalid(data: dict[str, str]) -> None:
     reasons = validate_metadata_values(data)
     if reasons:
@@ -110,9 +121,11 @@ async def update_metadata(
     if data.get("version") != row.version:
         raise VersionConflictError("该资料已被他人更新，请刷新后重试")
     cleaned = normalize_tag_values({k: str(v or "").strip() for k, v in data.items() if k in EDITABLE_FIELDS})
+    if "file_name" in cleaned:
+        cleaned["file_name"] = sanitize_filename(cleaned["file_name"])
+        if not cleaned["file_name"]:
+            raise ApiError("资料名称不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     _raise_if_invalid(cleaned)
-    if "file_name" in cleaned and not cleaned["file_name"]:
-        raise ApiError("资料名称不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     next_ft = cleaned.get("file_type", row.file_type)
     next_ind = cleaned.get("industry_type", row.industry_type)
     await _assert_edit(session, actor, access, row, action="update_target_scope", target_scope=(next_ft, next_ind))
@@ -159,7 +172,7 @@ async def upload_knowledge_file(
     content: bytes,
     metadata: dict[str, str],
 ) -> dict[str, Any]:
-    clean_name = filename.strip()
+    clean_name = sanitize_filename(filename)
     if not clean_name:
         raise ApiError("请提供有效的文件名", code=ErrorCode.VALIDATION_ERROR, http_status=422)
     ext = storage.raw_extension(clean_name)

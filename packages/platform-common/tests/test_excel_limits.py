@@ -123,3 +123,30 @@ def test_entity_definitions_in_uploaded_xml_are_rejected() -> None:
     with pytest.raises(ApiError, match="无法读取 Excel 文件") as caught:
         parse_sheet(_with_entity_bomb(_sheet(1)), _COLUMNS)
     assert isinstance(caught.value.__cause__, EntitiesForbidden)
+
+
+def test_preamble_prefixed_zip_bomb_cannot_bypass_uncompressed_limit() -> None:
+    prefixed = b"X" + _sheet(1)
+    with pytest.raises(ApiError, match="解压后过大"):
+        parse_sheet(prefixed, _COLUMNS, max_uncompressed_bytes=32)
+
+
+def test_non_zip_payload_returns_clean_422() -> None:
+    with pytest.raises(ApiError, match="无法读取 Excel 文件") as caught:
+        parse_sheet(b"not-an-excel-file", _COLUMNS)
+    assert caught.value.http_status == 422
+
+
+def test_full_sheet_dimension_tag_on_small_workbook_is_not_rejected() -> None:
+    import re
+
+    raw = _sheet(2)
+    patched = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(raw)) as src, zipfile.ZipFile(patched, "w", zipfile.ZIP_DEFLATED) as dst:
+        for name in src.namelist():
+            data = src.read(name)
+            if name == "xl/worksheets/sheet1.xml":
+                data = re.sub(rb"<dimension[^>]*/>", b'<dimension ref="A1:XFD1048576"/>', data)
+            dst.writestr(name, data)
+    rows = parse_sheet(patched.getvalue(), _COLUMNS)
+    assert [row["site_name"] for row in rows] == ["站点0", "站点1"]

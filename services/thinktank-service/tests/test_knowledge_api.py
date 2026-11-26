@@ -358,13 +358,26 @@ async def test_export_undefined_and_upload_tags(monkeypatch: pytest.MonkeyPatch)
     with pytest.raises(ApiError, match="超过上限"):
         await export_import.export_undefined_excel(session, actor=ACTOR, access=FULL_ACCESS)  # type: ignore[arg-type]
 
-    # 原范围与目标范围无权时的区分提示
+    # 原范围无权时返回通用提示（不泄露文件存在性或所属范围），目标范围无权仍提示目标范围
     only_edu = KnowledgeAccess.from_levels(
         {"thinktank.file_type.product": "FULL", "thinktank.industry_type.edu": "FULL"}
     )
     fin_row = _sample_file(file_type="产品", industry_type="金融")
-    assert "原范围" in (export_import._check_tag_row_permission(only_edu, fin_row, "产品", "教育") or "")
+    denied_orig = export_import._check_tag_row_permission(only_edu, fin_row, "产品", "教育") or ""
+    assert denied_orig == "文件不存在或无编辑权限"
+    assert "金融" not in denied_orig and "产品" not in denied_orig
     assert "目标范围" in (export_import._check_tag_row_permission(only_edu, undef_row, "产品", "金融") or "")
+
+    # 对越权文件即便传入非法枚举值，也直接回通用提示，避免通过校验差异探测越权文件存在性
+    monkeypatch.setattr(export_import.repo, "get_for_update", AsyncMock(return_value=fin_row))
+    status, reason = await export_import._process_tag_row(
+        session,  # type: ignore[arg-type]
+        row_dict={"id": str(fin_row.id), "file_name": fin_row.file_name, "operator_type": "非法"},
+        actor=ACTOR,
+        access=only_edu,
+        now=NOW,
+    )
+    assert (status, reason) == ("skipped", "文件不存在或无编辑权限")
 
 
 async def test_storage_unavailable_and_upload_rollback_cleanup(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -539,3 +552,70 @@ async def test_stream_file_content_and_commit_orphan_cleanup(monkeypatch: pytest
             metadata={"file_type": "产品", "industry_type": "教育"},
         )
     assert cleanup_mock.await_count == 1
+
+
+async def test_filename_strips_path_components_and_rename_preserves_preview_routing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(knowledge_write, "get_settings", lambda: preview_settings(tmp_path))
+    monkeypatch.setattr(knowledge, "get_settings", lambda: preview_settings(tmp_path))
+    no_pdf_tools(monkeypatch)
+    _hook_events(monkeypatch, knowledge_write, knowledge)
+    monkeypatch.setattr(knowledge_write.repo, "add_op_log", AsyncMock())
+    monkeypatch.setattr(knowledge_write.repo, "is_favorited", AsyncMock(return_value=False))
+    monkeypatch.setattr(knowledge.repo, "add_op_log", AsyncMock())
+    monkeypatch.setattr(knowledge.repo, "is_favorited", AsyncMock(return_value=False))
+
+    session = _Session()
+    created = await knowledge_write.upload_knowledge_file(
+        session,  # type: ignore[arg-type]
+        actor=ACTOR,
+        access=FULL_ACCESS,
+        filename=r"C:\Users\demo\..\..\行业方案.pdf",
+        content=b"%PDF-1.7 body",
+        metadata={"file_type": "产品", "industry_type": "教育"},
+    )
+    assert created["file_name"] == "行业方案.pdf"
+
+    row: KnowledgeFile = session.added[0]
+    monkeypatch.setattr(knowledge_write.repo, "get_for_update", AsyncMock(return_value=row))
+    monkeypatch.setattr(knowledge.repo, "get_by_id", AsyncMock(return_value=row))
+
+    # 改名携带路径分隔符时只保留纯文件名，并拒绝纯目录/点号
+    renamed = await knowledge_write.update_metadata(
+        session,  # type: ignore[arg-type]
+        actor=ACTOR,
+        access=FULL_ACCESS,
+        file_id=row.id,
+        data={"version": 1, "file_name": "../../secret/伪装名称.docx"},
+    )
+    assert renamed["file_name"] == "伪装名称.docx"
+
+    for bad_name in ("folder/", r"folder\\", "..", "."):
+        with pytest.raises(ApiError, match="不能为空"):
+            await knowledge_write.update_metadata(
+                session,  # type: ignore[arg-type]
+                actor=ACTOR,
+                access=FULL_ACCESS,
+                file_id=row.id,
+                data={"version": 2, "file_name": bad_name},
+            )
+
+    # PDF 改名为 .docx 或 .txt 后，仍按不可变 storage_path 识别为 PDF，既不送 LibreOffice 也不当 text/plain
+    preview_res = await knowledge.preview_knowledge(session, actor=ACTOR, access=FULL_ACCESS, file_id=row.id)  # type: ignore[arg-type]
+    assert preview_res["preview"]["mode"] == "pdf"
+    assert knowledge_preview.is_pdf_file(row) is True
+    assert knowledge.office_preview.office_extension(row.file_name, row.file_suffix, row.storage_path) is None
+
+    await knowledge_write.update_metadata(
+        session,  # type: ignore[arg-type]
+        actor=ACTOR,
+        access=FULL_ACCESS,
+        file_id=row.id,
+        data={"version": 2, "file_name": "伪装文本.txt"},
+    )
+    preview_txt_name = await knowledge.preview_knowledge(session, actor=ACTOR, access=FULL_ACCESS, file_id=row.id)  # type: ignore[arg-type]
+    assert preview_txt_name["preview"]["mode"] == "pdf"
+    dl = await knowledge.read_file_content(session, actor=ACTOR, access=FULL_ACCESS, file_id=row.id, for_download=True)  # type: ignore[arg-type]
+    assert dl.media_type == "application/pdf"
+    assert dl.content == b"%PDF-1.7 body"

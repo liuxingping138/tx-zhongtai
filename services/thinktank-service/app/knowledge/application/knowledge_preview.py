@@ -118,7 +118,7 @@ def _optimize_options(settings: Any) -> pdf_optimize.OptimizeOptions:
 
 
 def is_pdf_file(row: KnowledgeFile) -> bool:
-    return storage.media_type_for_file(row.file_name, row.file_suffix) == PDF_MEDIA_TYPE
+    return storage.media_type_for_file(row.file_name, row.file_suffix, row.storage_path) == PDF_MEDIA_TYPE
 
 
 async def _prepare(settings: Any, row: KnowledgeFile, office_ext: str | None, *, wait: bool) -> Path | None:
@@ -209,7 +209,7 @@ def expected_preview_etag(row: KnowledgeFile) -> str | None:
 
     if not row.storage_path or is_pdf_file(row):
         return None
-    if office_preview.office_extension(row.file_name, row.file_suffix) is not None:
+    if office_preview.office_extension(row.file_name, row.file_suffix, row.storage_path) is not None:
         return None
     return preview_etag(row, kind="raw")
 
@@ -227,7 +227,7 @@ async def open_storage_or_summary(
         raise _storage_unavailable(exc) from exc
     if opened is not None:
         stream, size = opened
-        media_type = storage.media_type_for_file(row.file_name, row.file_suffix)
+        media_type = storage.media_type_for_file(row.file_name, row.file_suffix, row.storage_path)
         etag = None if for_download else preview_etag(row, kind="raw")
         return stream, row.file_name, media_type, size, etag
     raw = fallback_summary_bytes(row)

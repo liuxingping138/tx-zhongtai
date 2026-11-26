@@ -267,6 +267,14 @@ def test_content_disposition_sanitizes_header_chars() -> None:
     assert "\r" not in header and "\n" not in header
     assert 'filename="bad___name.pdf"' in header
 
+    chinese = content_response.content_disposition("inline", "工作报告.pdf")
+    chinese.encode("latin-1")
+    assert 'filename="knowledge-file.pdf"' in chinese
+    assert "filename*=UTF-8''%E5%B7%A5%E4%BD%9C%E6%8A%A5%E5%91%8A.pdf" in chinese
+
+    slashed = content_response.content_disposition("attachment", "a/b.pdf")
+    assert "filename*=UTF-8''a%2Fb.pdf" in slashed
+
 
 def test_upload_without_bearer_is_rejected_before_reading() -> None:
     unauth = TestClient(app)
@@ -417,5 +425,50 @@ def test_remaining_http_routes(monkeypatch: pytest.MonkeyPatch) -> None:
             client.patch(f"/api/v1/thinktank/knowledge/{fid}", json={"version": 1, "remark": "ok"}).status_code == 200
         )
         assert client.delete(f"/api/v1/thinktank/knowledge/{fid}").json()["data"]["deleted"] is True
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_upload_tags_with_skipped_file_returns_latin1_safe_header(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _db():  # type: ignore[no-untyped-def]
+        yield None
+
+    app.dependency_overrides[get_db_session] = _db
+    app.dependency_overrides[knowledge_routes.get_knowledge_access] = lambda: FULL_ACCESS
+    for route in iter_api_routes(app):
+        for dep in route.dependant.dependencies:
+            if dep.name in {"actor", "_"}:
+                app.dependency_overrides[dep.call] = lambda: ACTOR
+
+    monkeypatch.setattr(
+        knowledge_routes.export_import,
+        "upload_knowledge_tags",
+        AsyncMock(
+            return_value={
+                "total": 2,
+                "inserted": 0,
+                "updated": 1,
+                "skipped": 1,
+                "rejected": False,
+                "skipped_file": b"xlsx-skipped",
+            }
+        ),
+    )
+    try:
+        client = TestClient(app, headers={"Authorization": "Bearer test"})
+        skipped_res = client.post(
+            "/api/v1/thinktank/knowledge/upload-tags",
+            files={
+                "file": (
+                    "tags.xlsx",
+                    b"PK\x03\x04",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+        )
+        assert skipped_res.status_code == 200
+        assert skipped_res.content == b"xlsx-skipped"
+        assert 'filename="import-result.xlsx"' in skipped_res.headers["content-disposition"]
+        assert "filename*=UTF-8''" in skipped_res.headers["content-disposition"]
     finally:
         app.dependency_overrides.clear()

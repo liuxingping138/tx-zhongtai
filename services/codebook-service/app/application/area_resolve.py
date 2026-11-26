@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from io import BytesIO
-
-from openpyxl import Workbook
 from platform_common.errors import ApiError, ErrorCode
-from platform_common.excel import active_worksheet, append_text_row, iter_workbook_rows
+from platform_common.excel import cell_to_str, iter_workbook_rows
+from platform_common.xlsx_writer import write_text_xlsx
 
 from app.application.area_match import AreaSnap, build_area_index, match_area_indexed
 
@@ -42,9 +40,7 @@ def _header_role(header: str) -> str | None:
 
 
 def _cell(value: object) -> str:
-    if value is None:
-        return ""
-    return str(value).strip()
+    return cell_to_str(value)
 
 
 def read_raw_sheet(content: bytes) -> tuple[list[str], list[list[str]]]:
@@ -177,12 +173,5 @@ def build_resolve_workbook(content: bytes, catalog: list[AreaSnap]) -> tuple[byt
             unmatched += 1
         annotated.append(filled)
 
-    book = Workbook()
-    sheet = active_worksheet(book)
-    sheet.title = "全部数据"
-    append_text_row(sheet, headers)
-    for row in annotated:
-        append_text_row(sheet, row)
-    buffer = BytesIO()
-    book.save(buffer)
-    return buffer.getvalue(), matched, unmatched
+    payload = write_text_xlsx("全部数据", [headers, *annotated], column_count=len(headers))
+    return payload, matched, unmatched

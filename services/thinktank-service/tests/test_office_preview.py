@@ -67,6 +67,10 @@ def test_office_extension_and_cache_key() -> None:
     assert office_preview.office_extension("无后缀文件名", "EXCEL") == "XLSX"
     assert office_preview.office_extension("报告.pdf", "PDF") is None
     assert office_preview.office_extension("说明.txt", "TXT") is None
+    # 改名篡改扩展名时仍以不可变 storage_path / file_suffix 为准
+    assert office_preview.office_extension("伪装.docx", "PDF", "knowledgeBase/a.pdf") is None
+    assert office_preview.office_extension("伪装.docx", "PDF") is None
+    assert office_preview.office_extension("伪装.pdf", "PPT", "knowledgeBase/a.pptx") == "PPTX"
 
     k1 = preview_cache.cache_key_for("id-1", "knowledgeBase/a.pptx", 100)
     k2 = preview_cache.cache_key_for("id-1", "knowledgeBase/a.pptx", 100)

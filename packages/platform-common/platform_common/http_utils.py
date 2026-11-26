@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import base64
+import re
 from collections.abc import AsyncGenerator
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import Request
 from fastapi.responses import JSONResponse, Response
@@ -16,6 +18,7 @@ from platform_common.responses import ApiResponse
 _UPLOAD_CHUNK_BYTES = 1024 * 1024
 # multipart 边界和字段头。网关与应用的总字节上限都要留出这段，20MB 的 Excel 才能通过。
 MULTIPART_OVERHEAD_BYTES = 256 * 1024
+_UNSAFE_HEADER_CHARS = re.compile(r'[\x00-\x1f\x7f"\\]')
 
 IMPORT_FILE_OPENAPI: dict[str, Any] = {
     "requestBody": {
@@ -38,6 +41,29 @@ def success_json(data: Any = None, *, status_code: int = 200, message: str = "su
     return JSONResponse(status_code=status_code, content=body.model_dump())
 
 
+def _ascii_filename(safe_name: str, fallback: str) -> str:
+    dot = safe_name.rfind(".")
+    raw_stem, raw_ext = (safe_name[:dot], safe_name[dot:]) if dot > 0 else (safe_name, "")
+    ascii_stem = raw_stem.replace("/", "_").encode("ascii", "ignore").decode("ascii").strip()
+    ascii_ext = raw_ext.replace("/", "").encode("ascii", "ignore").decode("ascii").strip()
+    if not ascii_ext.lstrip("."):
+        ascii_ext = ""
+    if not ascii_stem.strip(".-_ "):
+        fb_dot = fallback.rfind(".")
+        fb_stem, fb_ext = (fallback[:fb_dot], fallback[fb_dot:]) if fb_dot > 0 else (fallback, "")
+        return f"{fb_stem}{ascii_ext or fb_ext}"
+    return f"{ascii_stem}{ascii_ext}"
+
+
+def content_disposition(disposition: str, filename: str, *, fallback: str = "download") -> str:
+    """拼装兼容 latin-1 响应头的 Content-Disposition（ASCII 回退 + RFC 5987 UTF-8）。"""
+
+    safe_name = _UNSAFE_HEADER_CHARS.sub("_", filename).strip() or fallback
+    ascii_fallback = _ascii_filename(safe_name, fallback)
+    encoded = quote(safe_name, safe="")
+    return f"{disposition}; filename=\"{ascii_fallback}\"; filename*=UTF-8''{encoded}"
+
+
 def import_result_response(result: dict[str, Any], filename: str) -> Response:
     raw = result.get("skipped_file")
     if not raw:
@@ -48,7 +74,7 @@ def import_result_response(result: dict[str, Any], filename: str) -> Response:
         content=payload,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Disposition": content_disposition("attachment", filename, fallback="import-result.xlsx"),
             "X-Import-Rejected": "1" if result.get("rejected") else "0",
             "X-Import-Inserted": str(result.get("inserted", 0)),
             "X-Import-Updated": str(result.get("updated", 0)),

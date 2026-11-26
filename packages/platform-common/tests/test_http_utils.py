@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import base64
 import io
+from urllib.parse import quote
 
 import pytest
 from fastapi import FastAPI, Request
+from fastapi.responses import Response
 from fastapi.testclient import TestClient
 from starlette.datastructures import UploadFile
 
 from platform_common.errors import ApiError, register_exception_handlers
 from platform_common.http_utils import (
+    content_disposition,
     import_result_response,
     read_import_upload,
     read_upload_within_limit,
@@ -50,6 +53,35 @@ class TestImportResponse:
     def test_raw_bytes_are_accepted_too(self) -> None:
         response = import_result_response({"skipped_file": b"raw", "total": 1}, "x.xlsx")
         assert response.body == b"raw" and response.headers["X-Import-Rejected"] == "0"
+
+    def test_chinese_filename_is_latin1_safe_with_rfc5987_utf8(self) -> None:
+        filename = "知识标签-跳过明细.xlsx"
+        response = import_result_response({"skipped_file": b"xlsx", "skipped": 1, "total": 1}, filename)
+        header = response.headers["Content-Disposition"]
+        header.encode("latin-1")
+        assert 'filename="import-result.xlsx"' in header
+        assert f"filename*=UTF-8''{quote(filename, safe='')}" in header
+
+        app = FastAPI()
+
+        @app.post("/upload-tags")
+        def _upload() -> Response:
+            return import_result_response({"skipped_file": b"xlsx", "skipped": 1, "total": 1}, filename)
+
+        res = TestClient(app).post("/upload-tags")
+        assert res.status_code == 200
+        assert res.content == b"xlsx"
+        assert f"filename*=UTF-8''{quote(filename, safe='')}" in res.headers["content-disposition"]
+
+    def test_content_disposition_encodes_slash_and_keeps_extension_on_non_ascii(self) -> None:
+        header = content_disposition("inline", "工作报告.pdf", fallback="knowledge-file")
+        header.encode("latin-1")
+        assert 'filename="knowledge-file.pdf"' in header
+        assert f"filename*=UTF-8''{quote('工作报告.pdf', safe='')}" in header
+
+        slashed = content_disposition("attachment", "dir/report.pdf", fallback="knowledge-file")
+        assert "%2F" in slashed
+        assert "/" not in slashed.split("filename*=UTF-8''", 1)[1]
 
 
 class TestReadUploadWithinLimit:

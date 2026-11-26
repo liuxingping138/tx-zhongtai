@@ -219,3 +219,20 @@ def test_resolve_writes_into_the_exact_code_column_when_two_columns_match() -> N
     )
     values = dict(zip(header, row, strict=False))
     assert (values["区县编码"], values["区县编码（旧）"]) == ("110105", "999999")
+
+
+def test_resolve_workbook_handles_float_codes_and_formulas_via_write_text_xlsx() -> None:
+    from platform_common.excel import append_text_row
+
+    book = Workbook()
+    sheet = book.active
+    sheet.append(["网站编码", "省份", "地市", "区县", "备注"])
+    append_text_row(sheet, [11010500001.0, "北京市", "北京市", "朝阳区", "=1+1"])
+    raw = BytesIO()
+    book.save(raw)
+    payload, matched, unmatched = build_resolve_workbook(raw.getvalue(), _CATALOG)
+    assert (matched, unmatched) == (1, 0)
+    out = load_workbook(BytesIO(payload))["全部数据"]
+    assert out["A2"].value == "11010500001"
+    assert out["E2"].value == "=1+1"
+    assert out["E2"].data_type == "s"

@@ -59,8 +59,23 @@ def raw_extension(filename: str) -> str:
     return Path(filename).suffix.lstrip(".").upper()
 
 
-def media_type_for_file(filename: str, suffix: str) -> str:
-    ext = raw_extension(filename) or suffix.upper()
+def effective_extension(filename: str, suffix: str, storage_path: str = "") -> str:
+    """解析文件真实扩展名：优先取不可变 storage_path，其次取 file_suffix，避免改名串改预览或 MIME 路由。"""
+
+    stored_ext = raw_extension(storage_path) if storage_path else ""
+    if stored_ext:
+        return stored_ext
+    upper_suffix = (suffix or "").strip().upper()
+    name_ext = raw_extension(filename)
+    if upper_suffix:
+        if name_ext and normalize_suffix(filename) == upper_suffix:
+            return name_ext
+        return upper_suffix
+    return name_ext
+
+
+def media_type_for_file(filename: str, suffix: str, storage_path: str = "") -> str:
+    ext = effective_extension(filename, suffix, storage_path)
     if ext == "EXCEL":
         ext = "XLSX"
     elif ext == "WORD":

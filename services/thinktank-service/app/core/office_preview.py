@@ -51,16 +51,13 @@ SourceWriter = pdf_optimize.SourceWriter
 _KEY_LOCKS = preview_cache.KeyLocks()
 
 
-def office_extension(filename: str, suffix: str) -> str | None:
+def office_extension(filename: str, suffix: str, storage_path: str = "") -> str | None:
     """识别可转为 PDF 预览的 Office 扩展名；非 Office 文档返回 None。"""
 
-    raw_ext = storage.raw_extension(filename)
-    if raw_ext in OFFICE_EXTENSIONS:
-        return raw_ext
-    upper_suffix = (suffix or "").upper()
-    if upper_suffix in OFFICE_EXTENSIONS:
-        return upper_suffix
-    return _FALLBACK_EXT_BY_SUFFIX.get(upper_suffix)
+    ext = storage.effective_extension(filename, suffix, storage_path)
+    if ext in OFFICE_EXTENSIONS:
+        return ext
+    return _FALLBACK_EXT_BY_SUFFIX.get(ext)
 
 
 def _soffice_binary() -> str | None:

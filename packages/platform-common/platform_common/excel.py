@@ -8,8 +8,10 @@
 from __future__ import annotations
 
 import base64
+import math
 import zipfile
 from collections.abc import Callable, Generator, Iterator
+from decimal import Decimal
 from functools import partial
 from io import BytesIO
 from typing import IO, TYPE_CHECKING, Any
@@ -18,13 +20,13 @@ from anyio import CapacityLimiter, to_thread
 from defusedxml.ElementTree import iterparse as safe_iterparse
 from openpyxl import Workbook, load_workbook
 from openpyxl.cell.cell import Cell
-from openpyxl.utils.cell import coordinate_to_tuple, range_boundaries
+from openpyxl.utils.cell import coordinate_to_tuple
 from openpyxl.worksheet.worksheet import Worksheet
 
 from platform_common.clock import format_beijing
 from platform_common.columns import AUDIT_EXPORT_COLUMNS, ColumnSpec, header_is_exact, header_to_field
 from platform_common.errors import ApiError, ErrorCode
-from platform_common.xlsx_writer import write_text_xlsx
+from platform_common.xlsx_writer import sanitize_cell_text, write_text_xlsx
 
 if TYPE_CHECKING:
     from xml.etree.ElementTree import Element
@@ -65,11 +67,26 @@ def map_headers(columns: tuple[ColumnSpec, ...], headers: list[str]) -> list[str
     return [field if field is not None and chosen.get(field) == index else None for index, field in enumerate(mapping)]
 
 
-def _reject_oversized_workbook(content: bytes, *, max_uncompressed_bytes: int) -> None:
-    """按声明大小和实际解压字节拒绝压缩炸弹。表头撒谎时以读到的字节为准。"""
+def cell_to_str(value: object) -> str:
+    """把 Excel 单元格值转为去空白字符串，避免浮点整数带出 .0 或科学计数法。"""
 
-    if not content.startswith(b"PK"):
-        return
+    if value is None:
+        return ""
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            return str(value)
+        if value == 0:
+            return "0"
+        text = format(Decimal(str(value)), "f")
+        if "." in text:
+            text = text.rstrip("0").rstrip(".")
+        return text
+    return str(value).strip()
+
+
+def _reject_oversized_workbook(content: bytes, *, max_uncompressed_bytes: int) -> None:
+    """按声明大小和实际解压字节拒绝压缩炸弹。表头撒谎或带前导字节时一律按真实 ZIP 结构校验。"""
+
     try:
         archive = zipfile.ZipFile(BytesIO(content))
     except zipfile.BadZipFile:
@@ -97,13 +114,10 @@ def _reject_oversized_workbook(content: bytes, *, max_uncompressed_bytes: int) -
 
 
 def _element_extent(element: Element, tag: str, row_count: int, cell_count: int) -> tuple[int, int, int, int]:
-    """返回该元素声明或实际占用的 (行, 列)，以及更新后的行计数、本行单元格计数。0 表示不涉及。"""
+    """返回该元素实际占用的 (行, 列)，以及更新后的行计数、本行单元格计数。0 表示不涉及。"""
 
     row = col = 0
-    if tag == "dimension" and element.get("ref"):
-        _, _, max_col, max_row = range_boundaries(element.attrib["ref"])
-        col, row = max_col or 0, max_row or 0
-    elif tag == "row":
+    if tag == "row":
         cell_count = 0
         row_count += 1
         row = max(row_count, int(element.get("r", row_count)))
@@ -187,7 +201,7 @@ def parse_sheet(
                 continue
             if len(header_row) > max_columns:
                 raise ApiError("Excel 列数超过上限", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-            mapping = map_headers(columns, [str(cell or "") for cell in header_row])
+            mapping = map_headers(columns, [cell_to_str(cell) for cell in header_row])
             if any(mapping):
                 break
             raise ApiError(f"Excel 表头与{subject}字段不匹配", code=ErrorCode.VALIDATION_ERROR, http_status=422)
@@ -203,8 +217,7 @@ def parse_sheet(
             for idx, field in enumerate(mapping):
                 if not field or idx >= len(raw):
                     continue
-                value = raw[idx]
-                item[field] = "" if value is None else str(value).strip()
+                item[field] = cell_to_str(raw[idx])
             items.append(item)
         return items
     finally:
@@ -228,11 +241,14 @@ _FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r", "\n")
 def _as_text_cell(sheet: Worksheet, value: Any) -> Any:
     # 公式前缀在 append 时就定成文本。不能 append 后再用 sheet.max_row 回头改类型——
     # max_row 每次扫全表，大表导出会退化成平方复杂度。
-    if isinstance(value, str) and value.startswith(_FORMULA_PREFIXES):
-        # 行列号只是占位：append 会按单元格实际所在位置改写。
-        cell = Cell(sheet, row=1, column=1, value=value)
-        cell.data_type = "s"
-        return cell
+    if isinstance(value, str):
+        cleaned = sanitize_cell_text(value)
+        if cleaned.startswith(_FORMULA_PREFIXES):
+            # 行列号只是占位：append 会按单元格实际所在位置改写。
+            cell = Cell(sheet, row=1, column=1, value=cleaned)
+            cell.data_type = "s"
+            return cell
+        return cleaned
     return value
 
 

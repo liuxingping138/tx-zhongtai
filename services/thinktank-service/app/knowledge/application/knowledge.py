@@ -216,9 +216,10 @@ async def preview_knowledge(
             "industry_type": row.industry_type or "无",
         },
     )
-    ext = storage.raw_extension(row.file_name) or row.file_suffix.upper()
+    ext = storage.effective_extension(row.file_name, row.file_suffix, row.storage_path)
     is_office_pdf = (
-        office_preview.office_extension(row.file_name, row.file_suffix) is not None and office_preview.has_libreoffice()
+        office_preview.office_extension(row.file_name, row.file_suffix, row.storage_path) is not None
+        and office_preview.has_libreoffice()
     )
     if row.storage_path and (ext == "PDF" or is_office_pdf):
         mode = "pdf"
@@ -294,7 +295,7 @@ async def stream_file_content(
 
     settings = get_settings()
     if not for_download and row.storage_path:
-        office_ext = office_preview.office_extension(row.file_name, row.file_suffix)
+        office_ext = office_preview.office_extension(row.file_name, row.file_suffix, row.storage_path)
         if office_ext is not None or is_pdf_file(row):
             # 拉源文件、转码、压缩可能排队一两分钟：先交还数据库连接，否则几个人同时预览就占满连接池，全服务 503。
             await session.commit()

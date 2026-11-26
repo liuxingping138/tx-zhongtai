@@ -10,16 +10,15 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from urllib.parse import quote
 
 from fastapi.responses import Response, StreamingResponse
+from platform_common.http_utils import content_disposition as build_content_disposition
 from starlette.background import BackgroundTask
 
 from app.core import preview_cache
 from app.knowledge.application import knowledge as service
 from app.knowledge.application.knowledge_preview import FileStreamResult
 
-_UNSAFE_HEADER_CHARS = re.compile(r'[\x00-\x1f\x7f"\\]')
 _RANGE_SPEC = re.compile(r"^(\d*)-(\d*)$")
 _HTTP_PARTIAL = 206
 _HTTP_NOT_MODIFIED = 304
@@ -41,10 +40,7 @@ class ByteRange:
 
 
 def content_disposition(disposition: str, filename: str) -> str:
-    safe_name = _UNSAFE_HEADER_CHARS.sub("_", filename).strip() or "knowledge-file"
-    ascii_fallback = safe_name.encode("ascii", "ignore").decode("ascii").strip() or "knowledge-file"
-    encoded = quote(safe_name)
-    return f"{disposition}; filename=\"{ascii_fallback}\"; filename*=UTF-8''{encoded}"
+    return build_content_disposition(disposition, filename, fallback="knowledge-file")
 
 
 def _bounds(first: str, last: str, total: int) -> ByteRange:

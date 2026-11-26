@@ -20,6 +20,9 @@ from openpyxl.utils.cell import get_column_letter
 _ILLEGAL_XML = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f￾￿]")
 # \r 不转义的话 XML 解析时会被规范成 \n，导出再导回来就变了。
 _ENTITIES = {"\r": "&#13;"}
+# Excel 单元格硬上限 32,767 字符，超出会被 Microsoft Excel 判定文件损坏。
+EXCEL_MAX_CELL_CHARS = 32_767
+_TRUNCATE_SUFFIX = "…（内容过长已截断）"
 # Excel 工作表名不能有这些字符，最长 31 个字。
 _BAD_SHEET_CHARS = re.compile(r"[\[\]:*?/\\]")
 # 每攒这么多行往压缩流里写一次，大表导出不用把整张表的 XML 先拼在内存里。
@@ -79,10 +82,19 @@ def _workbook(title: str) -> str:
     )
 
 
+def sanitize_cell_text(value: str) -> str:
+    """去掉 XML 1.0 禁止的控制字符，并按 Excel 32,767 字符硬上限截断。"""
+
+    cleaned = _ILLEGAL_XML.sub("", value)
+    if len(cleaned) > EXCEL_MAX_CELL_CHARS:
+        return cleaned[: EXCEL_MAX_CELL_CHARS - len(_TRUNCATE_SUFFIX)] + _TRUNCATE_SUFFIX
+    return cleaned
+
+
 def _row_xml(number: int, letters: Sequence[str], values: Sequence[str]) -> str:
     cells = [
         f'<c r="{letter}{number}" t="inlineStr"><is><t xml:space="preserve">'
-        f"{escape(_ILLEGAL_XML.sub('', value), _ENTITIES)}</t></is></c>"
+        f"{escape(sanitize_cell_text(value), _ENTITIES)}</t></is></c>"
         for letter, value in zip(letters, values, strict=False)
         if value
     ]

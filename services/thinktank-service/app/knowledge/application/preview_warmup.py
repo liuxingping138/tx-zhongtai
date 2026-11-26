@@ -62,7 +62,9 @@ async def _warm(settings: Any, file_id: uuid.UUID, session_factory: SessionFacto
     """做一次预热，返回结果：done，或跳过的原因。"""
 
     row = await _load(session_factory, file_id)
-    office_ext = office_preview.office_extension(row.file_name, row.file_suffix) if row is not None else None
+    office_ext = (
+        office_preview.office_extension(row.file_name, row.file_suffix, row.storage_path) if row is not None else None
+    )
     reason = _skip_reason(row, office_ext)
     if reason is not None or row is None:
         return reason or "deleted"

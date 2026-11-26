@@ -153,11 +153,14 @@ async def _find_target_file(session: AsyncSession, raw_id: str, file_name: str) 
     return None
 
 
+_NO_ACCESS_OR_MISSING = "文件不存在或无编辑权限"
+
+
 def _check_tag_row_permission(
     access: KnowledgeAccess, target: KnowledgeFile, next_ft: str, next_ind: str
 ) -> str | None:
     if not access.can_edit_record(target.file_type, target.industry_type):
-        return f"没有原范围「{target.file_type or '未定义'} / {target.industry_type or '无'}」的管理编辑权限"
+        return _NO_ACCESS_OR_MISSING
     if not access.can_edit_record(next_ft, next_ind):
         return f"没有目标范围「{next_ft or '未定义'} / {next_ind or '无'}」的管理编辑权限"
     return None
@@ -176,8 +179,8 @@ async def _process_tag_row(
     if not raw_id and not file_name:
         return "skipped", "缺少文件ID和资料名称"
     target = await _find_target_file(session, raw_id, file_name)
-    if target is None:
-        return "skipped", "未找到对应的知识文件"
+    if target is None or not access.can_edit_record(target.file_type, target.industry_type):
+        return "skipped", _NO_ACCESS_OR_MISSING
 
     cleaned = normalize_tag_values({f: row_dict.get(f, "").strip() for f in TAG_WRITABLE_FIELDS if f in row_dict})
     reasons = validate_metadata_values(cleaned)
