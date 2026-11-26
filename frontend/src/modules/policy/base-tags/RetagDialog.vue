@@ -2,13 +2,24 @@
 import { computed } from 'vue'
 import type { BaseTagItem } from '@/api/policy'
 import BatchChoiceDialog, { type BatchChoice } from '@/components/BatchChoiceDialog.vue'
+import { useAuthStore } from '@/stores/auth'
 import { RETAG_CHOICES } from './fields'
-import { submitRetag } from './retag'
+import { submitRetag, type RetagSubmitOutcome } from './retag'
 
 /** 重新打标的对话框：选放回哪个任务的待办、看清会发生什么。列表页和核对页共用；核对页传入当前行时按行状态置灰不可选的步骤。 */
 const props = defineProps<{ ids: string[]; target?: string; row?: BaseTagItem | null; defaultStep?: string }>()
-const emit = defineEmits<{ done: [] }>()
+const emit = defineEmits<{ done: [result: RetagSubmitOutcome] }>()
 const open = defineModel<boolean>({ required: true })
+
+const auth = useAuthStore()
+const canTrigger = computed(() => auth.canFull('system.scheduler') && auth.canFull('policy.ai_tagging'))
+let lastOutcome: RetagSubmitOutcome = { queued: 0, triggered: false }
+
+async function handleSubmit(step: string) {
+  const outcome = await submitRetag(props.ids, step, canTrigger.value)
+  lastOutcome = { queued: outcome.queued, triggered: outcome.triggered }
+  return outcome
+}
 
 const choices = computed<BatchChoice[]>(() => {
   const row = props.row
@@ -39,7 +50,7 @@ const choices = computed<BatchChoice[]>(() => {
     :default-value="props.defaultStep"
     prompt="重新打标的是："
     :choices="choices"
-    :submit="(step) => submitRetag(props.ids, step)"
-    @done="emit('done')"
+    :submit="handleSubmit"
+    @done="emit('done', lastOutcome)"
   />
 </template>

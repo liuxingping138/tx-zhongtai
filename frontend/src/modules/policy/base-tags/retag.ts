@@ -4,20 +4,36 @@ import { requestRetag, type PolicyRetagStep } from '@/api/aiTagging'
 import { ApiRequestError } from '@/api/errors'
 import { triggerJob } from '@/api/scheduler'
 
+export interface RetagSubmitOutcome {
+  queued: number
+  triggered: boolean
+}
+
+export interface RetagSubmitResult extends RetagSubmitOutcome {
+  message: string
+  skipped: { reason: string; count: number }[]
+}
+
 /**
- * 重新打标：把这些政策放回某个打标任务的待办，并自动触发该任务的后台执行（若未在跑）。
+ * 重新打标：把这些政策放回某个打标任务的待办，并在当前账号有调度+打标执行权限时自动触发该任务的后台执行（若未在跑）。
  * 列表页勾选多条、核对页对当前这条都走这里，结果交给 BatchChoiceDialog 显示（有跳过的逐条说原因）。
  */
-export async function submitRetag(ids: string[], step: string): Promise<{ message: string; skipped: { reason: string; count: number }[] }> {
+export async function submitRetag(
+  ids: string[],
+  step: string,
+  canTrigger = true,
+): Promise<RetagSubmitResult> {
   const result = await requestRetag(ids, step as PolicyRetagStep)
   if (!result.queued) {
-    return { message: '没有可以重新打标的政策', skipped: result.skipped }
+    return { message: '没有可以重新打标的政策', skipped: result.skipped, queued: 0, triggered: false }
   }
-  const triggered = await triggerJob(`policy_ai_${step}`).then(() => true, () => false)
+  const triggered = canTrigger
+    ? await triggerJob(`policy_ai_${step}`).then(() => true, () => false)
+    : false
   const message = triggered
     ? `已将 ${result.queued} 条加入「${result.task}」并立即启动后台重打，稍候自动更新结果`
     : `已把 ${result.queued} 条放回「${result.task}」的待办，到任务调度执行它或等每日计划`
-  return { message, skipped: result.skipped }
+  return { message, skipped: result.skipped, queued: result.queued, triggered }
 }
 
 /** 约 15 分钟：前 10 次 3 秒、再 10 次 5 秒，之后每 10 秒一次。AI 一批常要好几分钟，3 分钟就放弃太早。 */

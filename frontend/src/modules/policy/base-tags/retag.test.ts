@@ -22,9 +22,11 @@ describe('retag', () => {
     const skipped = [{ reason: '手工录入或导入的政策没有源政策，不能重新打标', count: 1 }]
     api.requestRetag.mockResolvedValueOnce({ step: 'type', task: '政策类型判断', queued: 2, skipped })
     sched.triggerJob.mockRejectedValueOnce(new Error('offline'))
-    expect(await submitRetag(['a', 'b', 'c'], 'type')).toEqual({
+    expect(await submitRetag(['a', 'b', 'c'], 'type', true)).toEqual({
       message: '已把 2 条放回「政策类型判断」的待办，到任务调度执行它或等每日计划',
       skipped,
+      queued: 2,
+      triggered: false,
     })
     expect(api.requestRetag).toHaveBeenCalledWith(['a', 'b', 'c'], 'type')
   })
@@ -32,13 +34,34 @@ describe('retag', () => {
   it('auto triggers job and reports immediate background retag', async () => {
     api.requestRetag.mockResolvedValueOnce({ step: 'interpret', task: '政策解读', queued: 1, skipped: [] })
     sched.triggerJob.mockResolvedValueOnce({})
-    expect((await submitRetag(['a'], 'interpret')).message).toContain('立即启动后台重打')
+    const outcome = await submitRetag(['a'], 'interpret')
+    expect(outcome.message).toContain('立即启动后台重打')
+    expect(outcome.queued).toBe(1)
+    expect(outcome.triggered).toBe(true)
     expect(sched.triggerJob).toHaveBeenCalledWith('policy_ai_interpret')
+  })
+
+  it('does not call triggerJob when canTrigger is false', async () => {
+    api.requestRetag.mockResolvedValueOnce({ step: 'interpret', task: '政策解读', queued: 3, skipped: [] })
+    const outcome = await submitRetag(['a', 'b', 'c'], 'interpret', false)
+    expect(outcome).toEqual({
+      message: '已把 3 条放回「政策解读」的待办，到任务调度执行它或等每日计划',
+      skipped: [],
+      queued: 3,
+      triggered: false,
+    })
+    expect(sched.triggerJob).not.toHaveBeenCalled()
   })
 
   it('says nothing was queued when every policy was skipped', async () => {
     api.requestRetag.mockResolvedValueOnce({ step: 'interpret', task: '政策解读', queued: 0, skipped: [] })
-    expect((await submitRetag(['a'], 'interpret')).message).toBe('没有可以重新打标的政策')
+    expect(await submitRetag(['a'], 'interpret', true)).toEqual({
+      message: '没有可以重新打标的政策',
+      skipped: [],
+      queued: 0,
+      triggered: false,
+    })
+    expect(sched.triggerJob).not.toHaveBeenCalled()
   })
 
   it('tracks the chosen rows by ID, wherever they are, and reports once every row is done', async () => {

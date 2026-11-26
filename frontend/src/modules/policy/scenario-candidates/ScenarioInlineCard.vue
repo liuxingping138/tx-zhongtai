@@ -28,6 +28,8 @@ const props = defineProps<{ row: InterpretationItem }>()
 const emit = defineEmits<{ changed: [] }>()
 
 const auth = useAuthStore()
+const canReadCandidate = computed(() => auth.canRead('policy.scenario_candidates'))
+const canReadCodebook = computed(() => auth.canRead('codebook.scenarios'))
 const canDecide = computed(() => auth.canFull(RESOURCE))
 const canWriteCodebook = computed(() => canDecide.value && auth.canFull('codebook.scenarios'))
 const canEditRow = computed(() => auth.canFull('policy.interpretations'))
@@ -39,11 +41,11 @@ const FIX_HINTS: Record<string, string> = {
 
 const candidate = ref<CandidateDetail | null>(null)
 const context = ref<CandidateContext | null>(null)
-watch(() => [props.row.candidate_id, props.row.version], async () => {
+watch(() => [props.row.candidate_id, props.row.version, canReadCandidate.value], async () => {
   candidate.value = null
   context.value = null
   const id = props.row.candidate_id
-  if (!id) return
+  if (!id || !canReadCandidate.value) return
   try {
     const found = await getCandidate(id)
     if (props.row.candidate_id === id) candidate.value = found
@@ -153,7 +155,7 @@ async function fix() {
     <span class="scenario-line__tag scenario-line__tag--fix">{{ row.scenario_state }}</span>
     <span class="scenario-line__muted">{{ FIX_HINTS[row.scenario_state] }}</span>
     <span class="scenario-line__space" />
-    <template v-if="canEditRow">
+    <template v-if="canEditRow && canReadCodebook">
       <template v-if="fixing">
         <ScenarioPicker
           v-model="picked"

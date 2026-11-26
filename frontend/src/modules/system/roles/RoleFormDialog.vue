@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import type { FormInstance } from 'element-plus'
 
 import { copyRole, createRole, updateRole } from '@/api/system'
-import { errorMessage, isApiError } from '@/api/errors'
+import { errorMessage, isStaleConflict, markShown } from '@/api/errors'
 import type { RoleItem } from '@/api/types'
 import { useFieldValidation } from '@/composables/useFieldValidation'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
@@ -52,7 +52,8 @@ function submitRole(name: string, description: string): Promise<RoleItem> {
 }
 
 function saveErrorText(error: unknown): string {
-  if (isApiError(error) && error.status === 409 && props.mode === 'edit') {
+  if (isStaleConflict(error) && props.mode === 'edit') {
+    markShown(error)
     return '角色已被他人修改，请关闭后重新打开最新内容再编辑。'
   }
   return errorMessage(error, '保存失败，请检查后重试')

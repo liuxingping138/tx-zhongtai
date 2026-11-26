@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import { getBaseTag, getBaseTagContent, listBaseTags, updateBaseTag, type BaseTagItem } from '@/api/policy'
@@ -8,7 +8,9 @@ import { useDetailColumns } from '@/composables/useDetailColumns'
 import { useAuthStore } from '@/stores/auth'
 import PolicyReviewPage from '../shared/PolicyReviewPage.vue'
 import { useReviewRecord } from '../shared/useReviewRecord'
+import { useReviewRetagPoll } from '../shared/useReviewRetagPoll'
 import { EDITOR_GROUPS, FILTER_KEYS, TABLE_COLUMNS, packBaseTagPatch } from './fields'
+import type { RetagSubmitOutcome } from './retag'
 import RetagDialog from './RetagDialog.vue'
 
 const RESOURCE = 'policy.base_tags'
@@ -33,24 +35,10 @@ const review = useReviewRecord<BaseTagItem>({
 const retagOpen = ref(false)
 const retagIds = ref<string[]>([])
 const retagRow = ref<BaseTagItem | null>(null)
-const retagging = ref(false)
 function openRetag(row: BaseTagItem) {
   retagIds.value = [row.id]
   retagRow.value = row
   retagOpen.value = true
-}
-
-let pollTimer: ReturnType<typeof setInterval> | undefined
-let pollRemaining = 0
-let pollInFlight = false
-function stopPoll() {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = undefined
-  }
-  pollRemaining = 0
-  pollInFlight = false
-  retagging.value = false
 }
 
 function notifyOutcome(aiStatus: string) {
@@ -62,52 +50,23 @@ function notifyOutcome(aiStatus: string) {
   ElMessage.success(`重新打标已完成，已刷新最新结果${suffix}`)
 }
 
-async function onRetagDone() {
-  stopPoll()
-  await review.load()
-  const baseline = review.record.value
-  if (!baseline) return
-  const baseId = baseline.id
-  const baseVersion = baseline.version
-  const baseStatus = baseline.ai_status
-  retagging.value = true
-  pollRemaining = 30
-  pollTimer = setInterval(() => {
-    pollRemaining -= 1
-    if (pollRemaining <= 0) {
-      stopPoll()
-      return
-    }
-    void checkFresh(baseId, baseVersion, baseStatus)
-  }, 3000)
-}
+const { retagging, start: startRetagPoll } = useReviewRetagPoll<BaseTagItem>({
+  record: () => review.record.value,
+  editing: () => review.editing.value,
+  fetchRecord: getBaseTag,
+  reload: () => review.load(),
+  reloadBeforeStart: true,
+  hasChanged: (fresh, base) => fresh.version !== base.version || fresh.ai_status !== base.ai_status,
+  onUpdated: (fresh) => notifyOutcome(fresh.ai_status),
+})
 
-async function checkFresh(baseId: string, baseVersion: number, baseStatus: string) {
-  if (review.editing.value || pollInFlight) return
-  if (review.record.value?.id !== baseId) {
-    stopPoll()
-    return
-  }
-  pollInFlight = true
-  try {
-    const fresh = await getBaseTag(baseId)
-    if (review.record.value?.id !== baseId) {
-      stopPoll()
-      return
-    }
-    if (fresh.version !== baseVersion || fresh.ai_status !== baseStatus) {
-      stopPoll()
-      await review.load()
-      notifyOutcome(fresh.ai_status)
-    }
-  } catch {
-    /* 轮询网络波动忽略 */
-  } finally {
-    pollInFlight = false
+async function onRetagDone(result: RetagSubmitOutcome) {
+  if (result.queued > 0 && result.triggered) {
+    await startRetagPoll()
+  } else if (result.queued > 0) {
+    await review.load()
   }
 }
-
-onBeforeUnmount(stopPoll)
 
 // 打标状态：失败的标红，还在排队的标黄，做完的标绿；手工录入的没有状态。
 const status = computed(() => {

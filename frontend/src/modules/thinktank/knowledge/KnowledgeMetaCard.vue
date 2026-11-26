@@ -3,7 +3,7 @@ import { EditPen } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, reactive, ref, watch } from 'vue'
 
-import { ApiRequestError, errorMessage } from '@/api/errors'
+import { errorMessage, isStaleConflict, markShown } from '@/api/errors'
 import { updateKnowledge, type KnowledgeItem } from '@/api/thinktank'
 import DetailFieldTable from '@/components/DetailFieldTable.vue'
 import { buildDetailSections } from '@/components/detailSections'
@@ -157,9 +157,12 @@ async function onSave() {
     emit('updated', updated)
     ElMessage.success('标签保存成功')
   } catch (error) {
-    saveError.value = error instanceof ApiRequestError && error.status === 409
-      ? '该记录已被其他人修改，请先刷新核对最新内容后再保存。'
-      : errorMessage(error, '保存标签失败')
+    if (isStaleConflict(error)) {
+      markShown(error)
+      saveError.value = '该记录已被其他人修改，请先刷新核对最新内容后再保存。'
+    } else {
+      saveError.value = errorMessage(error, '保存标签失败')
+    }
   } finally {
     saving.value = false
   }

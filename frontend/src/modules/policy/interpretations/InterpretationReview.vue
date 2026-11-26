@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
-import { errorMessage, isApiError } from '@/api/errors'
+import { errorMessage } from '@/api/errors'
 import {
   getInterpretation,
   getInterpretationContent,
@@ -15,9 +15,11 @@ import AuditLogButton from '@/components/AuditLogButton.vue'
 import { useDetailColumns } from '@/composables/useDetailColumns'
 import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useAuthStore } from '@/stores/auth'
+import type { RetagSubmitOutcome } from '../base-tags/retag'
 import RetagDialog from '../base-tags/RetagDialog.vue'
 import PolicyReviewPage from '../shared/PolicyReviewPage.vue'
 import { useReviewRecord } from '../shared/useReviewRecord'
+import { useReviewRetagPoll } from '../shared/useReviewRetagPoll'
 import { EDITOR_GROUPS, FILTER_KEYS, mergeInterpretAiColumns, packInterpretationPatch, TABLE_COLUMNS } from './fields'
 import { useVerify } from './useVerify'
 import ScenarioInlineCard from '../scenario-candidates/ScenarioInlineCard.vue'
@@ -28,26 +30,23 @@ const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 const canWrite = computed(() => auth.canFull(RESOURCE))
+const canRetag = computed(() => auth.canFull('policy.base_tags'))
 const filters = useFilterOptions('/policy/interpretations')
 const { columns: baseColumns } = useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)
 const columns = computed(() => mergeInterpretAiColumns(baseColumns, filters.aiFields.value))
 const retagOpen = ref(false)
-const retagging = ref(false)
-let pollTimer: ReturnType<typeof setInterval> | null = null
-let pollRemaining = 0
-let pollBaseId = ''
-let pollInFlight = false
 
-function stopPolling() {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
-  pollRemaining = 0
-  pollBaseId = ''
-  pollInFlight = false
-  retagging.value = false
-}
+const review = useReviewRecord<InterpretationItem>({
+  routeName: 'policy-interpretation-review',
+  listName: 'policy-interpretations',
+  filterKeys: FILTER_KEYS,
+  groups: EDITOR_GROUPS,
+  get: getInterpretation,
+  list: listInterpretations,
+  // 政策唯一标识不在表单里，按原值提交；同时合并模板新增动态列。
+  update: (row, form) => updateInterpretation(row.id, packInterpretationPatch(form, row)),
+  canEdit: () => canWrite.value,
+})
 
 async function switchToReplacedRow(baseId: string, policyTitle: string, sourceId: string) {
   try {
@@ -66,66 +65,25 @@ async function switchToReplacedRow(baseId: string, policyTitle: string, sourceId
   }
 }
 
-function syncCurrentRecord(baseId: string): boolean {
-  if (review.record.value?.id === baseId) return true
-  stopPolling()
-  return false
-}
-
-async function pollOnce(baseId: string, baseVersion: number, policyTitle: string, sourceId: string) {
-  if (review.editing.value || pollInFlight || !syncCurrentRecord(baseId)) return
-  pollInFlight = true
-  try {
-    const fresh = await getInterpretation(baseId)
-    if (!syncCurrentRecord(baseId) || fresh.version === baseVersion) return
-    stopPolling()
-    await review.load()
+const { retagging, start: startRetagPoll } = useReviewRetagPoll<InterpretationItem>({
+  record: () => review.record.value,
+  editing: () => review.editing.value,
+  fetchRecord: getInterpretation,
+  reload: () => review.load(),
+  hasChanged: (fresh, base) => fresh.version !== base.version,
+  onUpdated: () => {
     ElMessage.success('重新打标已完成，已刷新最新结果')
-  } catch (cause) {
-    // 只有旧行因重新打标被替换（404）才去查找新生成行；临时 5xx/超时继续按剩余次数重试。
-    if (!isApiError(cause) || cause.status !== 404) return
-    stopPolling()
-    await switchToReplacedRow(baseId, policyTitle, sourceId)
-  } finally {
-    pollInFlight = false
+  },
+  onNotFound: (baseline) => switchToReplacedRow(baseline.id, baseline.policy_title, baseline.source_content_id),
+})
+
+async function onRetagDone(result: RetagSubmitOutcome) {
+  if (result.queued > 0 && result.triggered) {
+    await startRetagPoll()
   }
 }
 
-function onRetagDone() {
-  stopPolling()
-  const current = review.record.value
-  if (!current) return
-  const { id, version, policy_title, source_content_id } = current
-  retagging.value = true
-  pollBaseId = id
-  pollRemaining = 30
-  pollTimer = setInterval(() => {
-    pollRemaining -= 1
-    if (pollRemaining <= 0) {
-      stopPolling()
-      return
-    }
-    void pollOnce(id, version, policy_title, source_content_id)
-  }, 3000)
-}
-
 onMounted(() => void filters.load())
-onUnmounted(stopPolling)
-
-const review = useReviewRecord<InterpretationItem>({
-  routeName: 'policy-interpretation-review',
-  listName: 'policy-interpretations',
-  filterKeys: FILTER_KEYS,
-  groups: EDITOR_GROUPS,
-  get: getInterpretation,
-  list: listInterpretations,
-  // 政策唯一标识不在表单里，按原值提交；同时合并模板新增动态列。
-  update: (row, form) => updateInterpretation(row.id, packInterpretationPatch(form, row)),
-  canEdit: () => canWrite.value,
-})
-watch(() => review.record.value?.id, id => {
-  if (pollBaseId && id !== pollBaseId) stopPolling()
-})
 
 const status = computed(() => {
   const value = review.record.value?.data_status
@@ -172,7 +130,7 @@ const { verifying, verify } = useVerify(review)
       </template>
       <template #actions="{ row, editing, ready }">
         <el-button
-          v-if="canWrite && row.source_content_id"
+          v-if="canRetag && row.source_content_id"
           :loading="retagging"
           :disabled="editing || !ready"
           @click="retagOpen = true"

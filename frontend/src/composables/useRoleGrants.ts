@@ -1,7 +1,7 @@
 import { computed, ref, type Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
-import { errorMessage, isApiError } from '@/api/errors'
+import { errorMessage, isStaleConflict, markShown } from '@/api/errors'
 import { getRole, listResourceTree, listRoleGrants, replaceRoleGrants } from '@/api/system'
 import type { ResourceNode, RoleItem } from '@/api/types'
 import { LEVEL_TEXT, capabilityModules, moduleGroups, moduleNames } from '@/permissions/catalog'
@@ -162,7 +162,8 @@ export function useRoleGrants(options: RoleGrantsOptions) {
       )
       void refreshRole()
     } catch (error) {
-      if (isApiError(error) && error.status === 409) {
+      if (isStaleConflict(error)) {
+        markShown(error)
         await ElMessageBox.alert('这个角色的权限刚被其他人修改过，将为你加载最新内容，请重新调整后再保存。', '权限已被修改')
         await load()
       } else {

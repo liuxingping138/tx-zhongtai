@@ -27,6 +27,7 @@ const userId = computed(() => String(route.params.id ?? ''))
 const canGrant = computed(() => auth.canFull('system.permissions'))
 const canAudit = computed(() => auth.canRead('system.audit'))
 const canEditUsers = computed(() => auth.canFull('system.users'))
+const canReadRoles = computed(() => auth.canRead('system.roles'))
 
 const user = ref<ManagedUser | null>(null)
 const roles = ref<RoleItem[]>([])
@@ -86,7 +87,7 @@ async function load() {
   try {
     const [detail, allRoles, permsResult] = await Promise.all([
       getUser(id),
-      listAllRoles().catch(() => []),
+      canReadRoles.value ? listAllRoles().catch(() => []) : Promise.resolve<RoleItem[]>([]),
       getUserPermissions(id).catch(err => {
         if (seq === loadSeq) permissionError.value = errorMessage(err, '无法加载实际权限')
         return { account_active: true, items: [] }

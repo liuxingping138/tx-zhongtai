@@ -18,6 +18,7 @@ vi.mock('element-plus', () => ({
   ElMessageBox: { confirm: ui.confirm, alert: ui.alert },
 }))
 
+import { wasShown } from '@/api/errors'
 import type { ResourceNode } from '@/api/types'
 import { collectGrants, useRoleGrants } from './useRoleGrants'
 
@@ -158,14 +159,26 @@ describe('save', () => {
     expect(ui.success.mock.calls[0]?.[0]).toContain('成员')
   })
 
-  it('版本冲突时提示并重新加载最新授权，不覆盖对方的修改', async () => {
-    api.replaceRoleGrants.mockRejectedValue({ status: 409, code: 'VERSION_CONFLICT', message: '冲突' })
+  it('版本冲突时提示并重新加载最新授权，不覆盖对方的修改，并标记为已展示', async () => {
+    const conflict = { status: 409, code: 'VERSION_CONFLICT', message: '冲突' }
+    api.replaceRoleGrants.mockRejectedValue(conflict)
     const { grants } = await edited()
     api.listRoleGrants.mockResolvedValue({ role: ROLE, grants: [{ resource_code: 'policy.sources', level: 'EXPORT' }] })
     await grants.save()
+    expect(wasShown(conflict)).toBe(true)
     expect(ui.alert).toHaveBeenCalledOnce()
     expect(grants.selected.value).toEqual({ 'policy.sources': 'EXPORT' })
     expect(grants.saving.value).toBe(false)
+  })
+
+  it('409 重复错误（DUPLICATE）走普通错误提示而非版本冲突弹窗', async () => {
+    const duplicate = { status: 409, code: 'DUPLICATE', message: '授权重复' }
+    api.replaceRoleGrants.mockRejectedValue(duplicate)
+    const { grants } = await edited()
+    await grants.save()
+    expect(wasShown(duplicate)).toBe(true)
+    expect(ui.alert).not.toHaveBeenCalled()
+    expect(ui.error).toHaveBeenCalledWith('授权重复')
   })
 
   it('其他错误只提示', async () => {

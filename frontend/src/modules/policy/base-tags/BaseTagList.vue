@@ -24,7 +24,7 @@ import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import { useTableSelection } from '@/composables/useTableSelection'
 import { useAuthStore } from '@/stores/auth'
 import { AI_STATUS_CHOICES, EDITOR_GROUPS, SUMMARY_KEYS, TABLE_COLUMNS, mergeAiColumns } from './fields'
-import { useListRetagPoll } from './retag'
+import { useListRetagPoll, type RetagSubmitOutcome } from './retag'
 import RetagDialog from './RetagDialog.vue'
 
 const RESOURCE = 'policy.base_tags'
@@ -71,10 +71,14 @@ const selection = useTableSelection<BaseTagItem>()
 const checked = selection.checked
 const retagOpen = ref(false)
 const { retagging, progress: retagProgress, startAfterRetag } = useListRetagPoll(load, getBaseTag)
-async function afterRetag() {
+async function afterRetag(result: RetagSubmitOutcome) {
   const ids = [...selection.ids.value]
   selection.clear()
-  await startAfterRetag(ids)
+  if (result.queued > 0 && result.triggered) {
+    await startAfterRetag(ids)
+  } else if (result.queued > 0) {
+    await load()
+  }
 }
 
 async function onImport(file: File) {

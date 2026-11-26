@@ -29,13 +29,14 @@ import { useListLoader } from '@/composables/useListLoader'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import { useTableSelection } from '@/composables/useTableSelection'
 import { useAuthStore } from '@/stores/auth'
-import { useListRetagPoll } from '../base-tags/retag'
+import { useListRetagPoll, type RetagSubmitOutcome } from '../base-tags/retag'
 import RetagDialog from '../base-tags/RetagDialog.vue'
 import { EDITOR_GROUPS, mergeInterpretAiColumns, SUMMARY_KEYS, TABLE_COLUMNS } from './fields'
 
 const RESOURCE = 'policy.interpretations'
 const auth = useAuthStore()
 const canWrite = computed(() => auth.canFull(RESOURCE))
+const canRetag = computed(() => auth.canFull('policy.base_tags'))
 
 const query = reactive({
   policy_title: [] as string[],
@@ -83,10 +84,14 @@ async function afterStatus() {
   selection.clear()
   await refresh()
 }
-async function afterRetag() {
+async function afterRetag(result: RetagSubmitOutcome) {
   const ids = [...selection.ids.value]
   selection.clear()
-  await startAfterRetag(ids)
+  if (result.queued > 0 && result.triggered) {
+    await startAfterRetag(ids)
+  } else if (result.queued > 0) {
+    await load()
+  }
 }
 // 标题和「查看」进核对页：带上已生效的筛选和这条的位置，那边能翻上一条、下一条，读完就标人工验证。
 function detailRoute(row: InterpretationItem, index: number) {
@@ -145,7 +150,7 @@ onMounted(() => {
         />
         <!-- 勾选了才出现，平时不摆灰按钮（后端要求 policy.base_tags:update） -->
         <el-button
-          v-if="auth.canFull('policy.base_tags') && (checked.length || retagging)"
+          v-if="canRetag && (checked.length || retagging)"
           :loading="retagging"
           @click="retagOpen = true"
         >
@@ -244,7 +249,7 @@ onMounted(() => {
       <BusinessTable
         :ref="selection.bindTable"
         :items="items"
-        :selectable="canWrite"
+        :selectable="canWrite || canRetag"
         :columns="columns"
         :groups="EDITOR_GROUPS"
         :selected="selected"
