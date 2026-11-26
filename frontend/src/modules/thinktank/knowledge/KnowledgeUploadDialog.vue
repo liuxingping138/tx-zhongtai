@@ -50,6 +50,7 @@ const canLeaveUndefined = computed(() => props.editableFileTypes.includes('未�
 const industryChoices = computed(() =>
   INDUSTRY_OPTIONS.filter(i => props.editableIndustries.includes(i)),
 )
+const canLeaveNoIndustry = computed(() => props.editableIndustries.includes('无'))
 
 watch(() => props.modelValue, open => {
   if (!open) return
@@ -81,6 +82,10 @@ async function onSubmit() {
   }
   if (!form.file_type && !canLeaveUndefined.value) {
     ElMessage.warning('当前账号无「未定义」文件类型管理权限，请选择具体文件类型')
+    return
+  }
+  if (!form.industry_types.length && !canLeaveNoIndustry.value) {
+    ElMessage.warning('当前账号无「无」行业类型管理权限，请选择具体行业类型')
     return
   }
   uploading.value = true
@@ -161,8 +166,8 @@ async function onSubmit() {
               v-model="form.industry_types"
               multiple
               collapse-tags
-              clearable
-              placeholder="留空视为「无」"
+              :clearable="canLeaveNoIndustry"
+              :placeholder="canLeaveNoIndustry ? '留空视为「无」' : '请选择行业类型'"
               class="w-full"
             >
               <el-option

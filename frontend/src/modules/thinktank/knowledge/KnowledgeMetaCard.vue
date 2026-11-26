@@ -42,6 +42,7 @@ const industryChoices = computed(() =>
     ? INDUSTRY_OPTIONS.filter(i => props.editableIndustries?.includes(i))
     : [...INDUSTRY_OPTIONS],
 )
+const canClearIndustry = computed(() => !props.editableIndustries || props.editableIndustries.includes('无'))
 
 const editing = ref(false)
 const saving = ref(false)
@@ -142,10 +143,10 @@ function buildPayload() {
 
 async function onSave() {
   clearErrors()
-  if (!form.file_name.trim()) {
-    errors.file_name = '请填写资料名称'
-    return
-  }
+  if (!form.file_name.trim()) errors.file_name = '请填写资料名称'
+  if (!form.file_type && !canClearFileType.value) errors.file_type = '当前账号无「未定义」文件类型管理权限，请选择具体文件类型'
+  if (!form.industry_types.length && !canClearIndustry.value) errors.industry_types = '当前账号无「无」行业类型管理权限，请至少选择一个行业类型'
+  if (Object.keys(errors).length) return
   saving.value = true
   saveError.value = ''
   const snapshot = { ...form, industry_types: [...form.industry_types], product_types: [...form.product_types] }

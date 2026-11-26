@@ -50,11 +50,11 @@ import { useKnowledgeBatch } from './useKnowledgeBatch'
 const RESOURCE = 'thinktank.knowledge'
 const ACTION_WIDTH = 132
 const auth = useAuthStore()
-const canCreate = computed(() => auth.canFull(RESOURCE))
-const canExportUndefined = computed(
-  () => auth.canExport(RESOURCE) && (accessScope.value?.exportable_file_types.includes('未定义') ?? true),
-)
-const canUploadTags = computed(() => auth.canFull(RESOURCE))
+const hasEditableScope = computed(() => !accessScope.value || (accessScope.value.editable_file_types.length > 0 && accessScope.value.editable_industries.length > 0))
+const hasExportableScope = computed(() => !accessScope.value || (accessScope.value.exportable_file_types.length > 0 && accessScope.value.exportable_industries.length > 0))
+const canCreate = computed(() => auth.canFull(RESOURCE) && hasEditableScope.value)
+const canExportUndefined = computed(() => auth.canExport(RESOURCE) && hasExportableScope.value && (accessScope.value?.exportable_file_types.includes('未定义') ?? true))
+const canUploadTags = computed(() => auth.canFull(RESOURCE) && hasEditableScope.value)
 
 const query = reactive({
   file_name: [] as string[], file_type: [] as string[], operator_type: [] as string[],
