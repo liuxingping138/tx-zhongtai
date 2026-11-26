@@ -25,7 +25,8 @@ test('码表两级目录与智库知识库主流程', async ({ page }) => {
   await expect(firstRow).toBeVisible()
 
   // 打开单文件操作日志抽屉（包含历史迁移的 7,648 条日志）
-  await firstRow.getByRole('button', { name: '日志', exact: true }).click()
+  await firstRow.getByRole('button', { name: /更多/ }).click()
+  await page.getByRole('menuitem', { name: '操作日志' }).click()
   const logsDialog = page.getByRole('dialog', { name: /操作日志/ })
   await expect(logsDialog).toBeVisible()
   await logsDialog.locator('.el-drawer__close-btn').click()

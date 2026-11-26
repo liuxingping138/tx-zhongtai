@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { Download, Star, StarFilled, Upload } from '@element-plus/icons-vue'
+import { Download, Upload } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
-import { RouterLink, type RouteLocationRaw } from 'vue-router'
+import type { RouteLocationRaw } from 'vue-router'
 
 import { downloadBlob } from '@/api/download'
 import { errorMessage } from '@/api/errors'
@@ -35,6 +35,7 @@ import { reviewQuery } from '@/modules/policy/shared/reviewQuery'
 import { useAuthStore } from '@/stores/auth'
 import KnowledgeFilters, { type KnowledgeFilterQuery } from './KnowledgeFilters.vue'
 import KnowledgeLogsDrawer from './KnowledgeLogsDrawer.vue'
+import KnowledgeRowActions from './KnowledgeRowActions.vue'
 import KnowledgeUploadDialog from './KnowledgeUploadDialog.vue'
 import {
   displayFileType,
@@ -51,6 +52,7 @@ const canExportUndefined = computed(
   () => auth.canExport(RESOURCE) && (accessScope.value?.exportable_file_types.includes('未定义') ?? true),
 )
 const canUploadTags = computed(() => auth.canFull(RESOURCE))
+const actionWidth = computed(() => (canCreate.value ? 200 : 148))
 
 const query = reactive({
   file_name: [] as string[],
@@ -246,9 +248,9 @@ onMounted(async () => {
 
       <template #filters>
         <FilterBar
+          class="knowledge-filters"
           :query="query"
           :applied="listQuery.applied"
-          :collapsible="false"
           label-position="left"
           @search="listQuery.search"
           @reset="listQuery.resetFilters"
@@ -278,7 +280,7 @@ onMounted(async () => {
         :groups="EDITOR_GROUPS"
         :detail-route="detailRoute"
         :can-write="canCreate"
-        :action-width="340"
+        :action-width="actionWidth"
         :loading="loading"
         :filtered="resultFiltered"
         detail-title="知识资料详情"
@@ -294,57 +296,18 @@ onMounted(async () => {
         </template>
 
         <template #row-actions="{ row, index }">
-          <div
+          <KnowledgeRowActions
             v-if="row?.id"
-            class="row-actions"
-          >
-            <RouterLink
-              class="row-action"
-              :to="detailRoute(row, index)"
-            >
-              预览
-            </RouterLink>
-            <RouterLink
-              v-if="row.can_edit"
-              class="row-action row-action--primary"
-              :to="editRoute(row, index)"
-            >
-              编辑
-            </RouterLink>
-            <button
-              type="button"
-              class="row-action"
-              :disabled="busyRowIds.has(row.id)"
-              @click="onToggleFavorite(row)"
-            >
-              <el-icon><StarFilled v-if="row.is_favorited" /><Star v-else /></el-icon>
-              {{ row.is_favorited ? '已收藏' : '收藏' }}
-            </button>
-            <button
-              v-if="row.can_export"
-              type="button"
-              class="row-action"
-              :disabled="downloadingRowIds.has(row.id)"
-              @click="onDownload(row)"
-            >
-              {{ downloadingRowIds.has(row.id) ? '下载中…' : '下载' }}
-            </button>
-            <button
-              type="button"
-              class="row-action"
-              @click="onOpenLogs(row)"
-            >
-              日志
-            </button>
-            <button
-              v-if="row.can_edit"
-              type="button"
-              class="row-action row-action--danger"
-              @click="onDeleteRow(row)"
-            >
-              删除
-            </button>
-          </div>
+            :row="row"
+            :detail-to="detailRoute(row, index)"
+            :edit-to="editRoute(row, index)"
+            :busy="busyRowIds.has(row.id)"
+            :downloading="downloadingRowIds.has(row.id)"
+            @download="onDownload(row)"
+            @favorite="onToggleFavorite(row)"
+            @logs="onOpenLogs(row)"
+            @delete="onDeleteRow(row)"
+          />
         </template>
       </BusinessTable>
     </ListPage>
@@ -365,8 +328,33 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.row-actions { display: inline-flex; align-items: center; gap: 4px; }
-.row-action { display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; text-decoration: none; }
-.row-action--primary { color: var(--zt-blue-600); }
-.row-action--danger { color: var(--zt-danger-text); }
+/* 智库 13 项筛选：默认折叠 1 行核心条件，展开后严格按 4 列固定标签栅格对齐，告别参差不齐 */
+.knowledge-filters { align-items: flex-start; }
+.knowledge-filters :deep(.filter-bar__fields) {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 16px;
+  align-items: center;
+}
+.knowledge-filters :deep(.filter-bar__fields > .el-form-item),
+.knowledge-filters :deep(.filter-bar__fields > .el-form-item:first-child) {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+}
+.knowledge-filters :deep(.el-form-item__label) {
+  width: 72px;
+  justify-content: flex-end;
+  text-align: right;
+  margin: 0 8px 0 0;
+}
+@media (max-width: 1279px) {
+  .knowledge-filters :deep(.filter-bar__fields) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 959px) {
+  .knowledge-filters :deep(.filter-bar__fields) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 767px) {
+  .knowledge-filters :deep(.filter-bar__fields) { grid-template-columns: 1fr; }
+}
 </style>

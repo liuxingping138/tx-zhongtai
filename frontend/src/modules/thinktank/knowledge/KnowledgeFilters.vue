@@ -36,19 +36,20 @@ interface FilterDef {
   size?: 'short' | 'medium'
 }
 
+/** 前 4 项为核心高频筛选（默认首行直接露出），其余 9 项收进「展开」按 4 列栅格整齐排列。 */
 const FILTER_DEFS: readonly FilterDef[] = [
   { field: 'file_name', label: '资料名称', placeholder: '输入关键词', kind: 'keyword' },
   { field: 'file_type', label: '文件类型', placeholder: '全部', kind: 'select', size: 'medium' },
-  { field: 'operator_type', label: '运营商类型', placeholder: '全部', kind: 'select', size: 'short' },
-  { field: 'product_type', label: '产品类型', placeholder: '全部', kind: 'select', size: 'short' },
   { field: 'industry_type', label: '行业类型', placeholder: '全部', kind: 'select', size: 'short' },
-  { field: 'prov_name', label: '省份', placeholder: '全部', kind: 'select', size: 'short' },
+  { field: 'tag_status', label: '定义状态', placeholder: '全部', kind: 'select', size: 'short' },
+  { field: 'operator_type', label: '运营商类型', placeholder: '全部', kind: 'select', size: 'short' },
   { field: 'market_category', label: '市场类别', placeholder: '全部', kind: 'select', size: 'short' },
+  { field: 'product_type', label: '产品类型', placeholder: '全部', kind: 'select', size: 'short' },
+  { field: 'product_sub_type', label: '产品子类型', placeholder: '输入关键词', kind: 'keyword' },
+  { field: 'prov_name', label: '省份', placeholder: '全部', kind: 'select', size: 'short' },
   { field: 'depart_affiliation', label: '部门归属', placeholder: '全部', kind: 'select', size: 'medium' },
   { field: 'app_scenario', label: '应用场景', placeholder: '全部', kind: 'select', size: 'medium' },
-  { field: 'product_sub_type', label: '产品子类型', placeholder: '输入关键词', kind: 'keyword' },
   { field: 'data_time', label: '资料时间', placeholder: '全部', kind: 'select', size: 'short' },
-  { field: 'tag_status', label: '定义状态', placeholder: '全部', kind: 'select', size: 'short' },
   { field: 'favorite_only', label: '我的收藏', placeholder: '全部', kind: 'select', size: 'short' },
 ]
 </script>
