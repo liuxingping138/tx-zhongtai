@@ -48,7 +48,7 @@ import {
 import { useKnowledgeBatch } from './useKnowledgeBatch'
 
 const RESOURCE = 'thinktank.knowledge'
-const ACTION_WIDTH = 148
+const ACTION_WIDTH = 132
 const auth = useAuthStore()
 const canCreate = computed(() => auth.canFull(RESOURCE))
 const canExportUndefined = computed(
