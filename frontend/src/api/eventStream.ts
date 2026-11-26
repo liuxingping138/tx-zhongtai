@@ -1,5 +1,5 @@
 import { ApiRequestError } from './errors'
-import { afterRefreshFailure } from './http'
+import { afterRefreshFailure, notifyForbidden, notifyUnauthorized } from './http'
 import { getAccessToken, getCsrfToken, refreshSession } from './session'
 
 /**
@@ -23,6 +23,12 @@ export async function postEventStream(
       throw afterRefreshFailure(error)
     }
     response = await send(path, body, signal)
+    if (response.status === 401) {
+      notifyUnauthorized()
+    }
+  }
+  if (response.status === 403) {
+    notifyForbidden()
   }
   if (!response.ok || !response.body) {
     throw await toError(response)

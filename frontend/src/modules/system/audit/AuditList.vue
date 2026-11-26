@@ -16,7 +16,7 @@ import {
   ACTION_LABELS, DIRECTORIES, LINES, LINE_LABELS, MODULE_LABELS,
   actionLabel, businessLineLabel, directoryLabel, moduleLabel, modulesInDirectories,
 } from '@/utils/auditLabels'
-import { formatTime } from '@/utils/time'
+import { DEFAULT_RANGE_TIME, formatTime } from '@/utils/time'
 import { emptyAuditQuery, hasFilters, toRequestParams } from './auditQuery'
 
 const loading = ref(false)
@@ -151,6 +151,7 @@ onMounted(() => {
               start-placeholder="开始"
               end-placeholder="结束"
               value-format="YYYY-MM-DDTHH:mm:ss"
+              :default-time="DEFAULT_RANGE_TIME"
             />
           </el-form-item>
           <el-form-item label="人员">

@@ -30,9 +30,11 @@ const canSeeGrants = computed(() => auth.canRead('system.permissions'))
 const canGrant = computed(() => auth.canFull('system.permissions'))
 
 const roleId = computed(() => String(route.params.roleId ?? ''))
-const tab = ref<'grants' | 'data-scopes' | 'members'>(
-  route.query.tab === 'members' ? 'members' : route.query.tab === 'data-scopes' ? 'data-scopes' : 'grants',
-)
+function initialTab(): 'grants' | 'data-scopes' | 'members' {
+  if (!canSeeGrants.value || route.query.tab === 'members') return 'members'
+  return route.query.tab === 'data-scopes' ? 'data-scopes' : 'grants'
+}
+const tab = ref<'grants' | 'data-scopes' | 'members'>(initialTab())
 const justCreated = ref(typeof route.query.created === 'string' ? route.query.created : '')
 
 const isSuperRole = computed(() => role.value?.code === SUPERADMIN_ROLE_CODE && role.value.is_builtin)
@@ -119,7 +121,7 @@ watch(tab, (value) => {
 watch(roleId, (value, previous) => {
   if (value && value !== previous) {
     justCreated.value = typeof route.query.created === 'string' ? route.query.created : ''
-    tab.value = route.query.tab === 'members' ? 'members' : route.query.tab === 'data-scopes' ? 'data-scopes' : 'grants'
+    tab.value = initialTab()
     void load()
   }
 })
@@ -136,10 +138,7 @@ onBeforeRouteUpdate(async (to, from) => {
   return confirmDiscard('这个角色有未保存的权限修改，切换后将丢弃。')
 })
 
-onMounted(() => {
-  if (!canSeeGrants.value) tab.value = 'members'
-  void load()
-})
+onMounted(() => { void load() })
 </script>
 
 <template>

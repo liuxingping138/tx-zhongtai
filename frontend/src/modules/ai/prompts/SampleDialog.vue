@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 import { savePromptTestRows, type PromptTemplate } from '@/api/ai'
 import { getTaggingSamples, type AiTaskCode, type ContractTask } from '@/api/aiTagging'
 import { errorMessage } from '@/api/errors'
+import { beijingDate, isFutureBeijingDate } from '@/utils/time'
 import CodebookFilterSelect from '../shared/CodebookFilterSelect.vue'
 import { guessTask } from './taskFit'
 
@@ -27,7 +28,7 @@ const HINTS: Record<AiTaskCode, string> = {
   scenario: '取「新增场景审核」里待审的场景，带上 @【同行业已有场景】：码表里同一个一级行业下的全部场景。',
   enrich: '取码表里待补描述的新增场景，带上 @【上级场景描述】 @【同级场景示例】当范文。',
 }
-const yesterday = () => new Date(Date.now() - 86_400_000).toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' })
+const yesterday = () => beijingDate(new Date(Date.now() - 86_400_000))
 const task = ref<AiTaskCode>('type')
 const day = ref(yesterday())
 const limit = ref(10)
@@ -111,7 +112,7 @@ async function confirm(): Promise<void> {
             type="date"
             value-format="YYYY-MM-DD"
             :clearable="false"
-            :disabled-date="(value: Date) => value.getTime() > Date.now()"
+            :disabled-date="isFutureBeijingDate"
           />
         </el-form-item>
         <el-form-item label="条数">

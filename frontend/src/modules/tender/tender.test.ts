@@ -122,6 +122,8 @@ describe('招中标页面规则', () => {
   it('方案A默认注入近7天发布时间，支持清空兜底且不覆盖已有日期', () => {
     const testDate = new Date(2026, 10, 13) // 2026-11-13
     expect(recentDaysRange(7, testDate)).toEqual(['2026-11-07', '2026-11-13'])
+    // 跨零点（UTC 18:00 = 北京次日 02:00）也按北京日期计算
+    expect(recentDaysRange(7, new Date('2026-11-11T18:00:00Z'))).toEqual(['2026-11-06', '2026-11-12'])
 
     // initialQuery 默认带入近 7 天发布时间
     const defaultQuery = initialQuery()

@@ -318,7 +318,7 @@ function create(): void {
       v-model="reviewOpen"
       from-list
       :template="reviewTarget"
-      :can-release="canRelease"
+      :can-release="canRelease && Boolean(reviewTarget.editable)"
       :dirty="false"
       :fit="reviewFit"
       :used-by="reviewUsedBy"

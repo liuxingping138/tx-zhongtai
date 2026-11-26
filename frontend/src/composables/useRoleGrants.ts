@@ -64,10 +64,13 @@ export function useRoleGrants(options: RoleGrantsOptions) {
       grantDiff(grantsFromTree(tree.value, original.value), grantsFromTree(tree.value, selected.value)),
     ),
   )
-  const openedCount = computed(
-    () =>
-      Object.entries(selected.value).filter(([code, level]) => level !== 'NONE' && !isThinktankScopeCode(code)).length,
-  )
+  const openedCount = computed(() => {
+    if (!options.canSeeGrants()) {
+      const counts = role.value?.grant_counts
+      return counts ? counts.read + counts.export + counts.full : 0
+    }
+    return Object.entries(selected.value).filter(([code, level]) => level !== 'NONE' && !isThinktankScopeCode(code)).length
+  })
 
   function updateSelected(next: Grants): void {
     selected.value = syncThinktankScopesWithMenu(thinktankLibs.value, selected.value, next)

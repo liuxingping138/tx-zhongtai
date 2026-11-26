@@ -6,6 +6,7 @@ import { type PromptTemplate, type RunVersion } from '@/api/ai'
 import { previewBatchRows, type BatchRowsPayload, type BatchRowsSummary } from '@/api/aiSamples'
 import { getTaggingSamples, type AiTaskCode, type ContractTask } from '@/api/aiTagging'
 import { errorMessage } from '@/api/errors'
+import { beijingDate, isFutureBeijingDate } from '@/utils/time'
 import CodebookFilterSelect from '../shared/CodebookFilterSelect.vue'
 import { guessTask } from '../prompts/taskFit'
 
@@ -34,7 +35,7 @@ const HINTS: Record<AiTaskCode, string> = {
   scenario: '从「新增场景审核」拉取待审场景与同行业已有场景。',
   enrich: '从码表拉取待补描述的新增场景。',
 }
-const yesterday = () => new Date(Date.now() - 86_400_000).toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' })
+const yesterday = () => beijingDate(new Date(Date.now() - 86_400_000))
 const task = ref<AiTaskCode>('type')
 const day = ref(yesterday())
 const limit = ref(20)
@@ -130,7 +131,7 @@ async function fetchAndPreview(): Promise<void> {
           value-format="YYYY-MM-DD"
           :clearable="false"
           :disabled="disabled || busy"
-          :disabled-date="(value: Date) => value.getTime() > Date.now()"
+          :disabled-date="isFutureBeijingDate"
         />
       </label>
       <label>

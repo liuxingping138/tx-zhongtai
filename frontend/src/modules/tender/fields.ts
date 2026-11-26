@@ -1,6 +1,7 @@
 import type { TenderKind } from '@/api/tender'
 import type { DataColumn } from '@/components/dataColumns'
 import type { EditorGroup } from '@/components/editorGroups'
+import { recentRange } from './statistics'
 
 export function tenderColumns(kind: TenderKind): DataColumn[] {
   const coreSpecific: DataColumn[] = kind === 'winbid'
@@ -104,16 +105,7 @@ export const DATES = [
   { key: 'create_time', label: '入库时间' },
 ] as const
 export function recentDaysRange(days = 7, refDate: Date = new Date()): [string, string] {
-  const to = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate())
-  const from = new Date(to)
-  from.setDate(from.getDate() - (days - 1))
-  const format = (d: Date) => {
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    return `${y}-${m}-${day}`
-  }
-  return [format(from), format(to)]
+  return recentRange(refDate, days)
 }
 
 export function initialQuery() {

@@ -212,6 +212,7 @@ function move(step: number): void {
         >
           没有测试样本，变量会原样发出。
           <el-button
+            v-if="canRun"
             link
             type="primary"
             size="small"

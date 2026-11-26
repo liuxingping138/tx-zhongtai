@@ -4,11 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { errorMessage } from './errors'
 
+const listeners = vi.hoisted(() => ({ onToken: null as ((token: string) => void) | null }))
 const session = vi.hoisted(() => ({
   getAccessToken: vi.fn(() => ''),
   getCsrfToken: vi.fn(() => ''),
   isAuthPublicPath: vi.fn((url?: string) => !!url && url.includes('/auth/')),
-  onAccessTokenChange: vi.fn(),
+  onAccessTokenChange: vi.fn((cb: (token: string) => void) => { listeners.onToken = cb }),
   onRemoteLogout: vi.fn(),
   refreshSession: vi.fn<() => Promise<unknown>>(),
   refreshRejected: vi.fn((error: unknown) => [401, 403].includes((error as { response?: { status?: number } })?.response?.status ?? 0)),
@@ -18,7 +19,7 @@ const message = vi.hoisted(() => ({ warning: vi.fn(), error: vi.fn() }))
 vi.mock('./session', () => session)
 vi.mock('element-plus', () => ({ ElMessage: message }))
 
-import { http, request, setForbiddenHandler, setUnauthorizedHandler } from './http'
+import { http, notifyForbidden, notifyUnauthorized, request, setForbiddenHandler, setUnauthorizedHandler } from './http'
 
 type Responder = (config: InternalAxiosRequestConfig) => { status: number; data?: unknown; headers?: Record<string, string> }
 
@@ -41,6 +42,7 @@ const fail = (status: number, code: string, text: string, headers: Record<string
 })
 
 beforeEach(() => {
+  listeners.onToken?.('fresh')
   session.getAccessToken.mockReset().mockReturnValue('')
   session.getCsrfToken.mockReset().mockReturnValue('')
   session.refreshSession.mockReset()
@@ -164,12 +166,29 @@ describe('401 自动续期', () => {
     expect(session.refreshSession).toHaveBeenCalledOnce()
   })
 
-  it('重放后仍然 401 不会死循环', async () => {
+  it('重放后仍然 401 不会死循环，并触发退出登录清理会话', async () => {
+    const unauthorized = vi.fn()
+    setUnauthorizedHandler(unauthorized)
     session.refreshSession.mockResolvedValue({})
     const calls = respondWith(() => fail(401, 'UNAUTHENTICATED', '未登录'))
     await expect(http.get('/users')).rejects.toMatchObject({ status: 401 })
     expect(calls).toHaveLength(2)
     expect(session.refreshSession).toHaveBeenCalledOnce()
+    expect(session.setAccessToken).toHaveBeenCalledWith('')
+    expect(unauthorized).toHaveBeenCalledOnce()
+  })
+
+  it('暴露共享的 401/403 通知钩子供流式请求复用', () => {
+    const unauthorized = vi.fn()
+    const forbidden = vi.fn()
+    setUnauthorizedHandler(unauthorized)
+    setForbiddenHandler(forbidden)
+    notifyUnauthorized()
+    notifyUnauthorized()
+    notifyForbidden()
+    expect(session.setAccessToken).toHaveBeenCalledWith('')
+    expect(unauthorized).toHaveBeenCalledOnce()
+    expect(forbidden).toHaveBeenCalledOnce()
   })
 
   it('续期失败时清令牌、只回调一次未登录处理，并仍然拒绝', async () => {

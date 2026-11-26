@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { RefreshLeft } from '@element-plus/icons-vue'
 
+import { isFutureBeijingDate } from '@/utils/time'
 import { SCENES, type BillingFilters, type RangePreset } from './billing'
 
 defineProps<{
@@ -25,10 +26,6 @@ const PRESETS: { value: RangePreset; label: string }[] = [
   { value: '90', label: '近 90 天' },
   { value: 'month', label: '本月' },
 ]
-
-function isFutureDate(day: Date): boolean {
-  return day.getTime() > Date.now()
-}
 
 function onPreset(value: string | number | boolean | undefined): void {
   emit('pick-preset', value)
@@ -70,7 +67,7 @@ function onFilter(key: keyof BillingFilters, value: string[]): void {
           value-format="YYYY-MM-DD"
           range-separator="至"
           :clearable="false"
-          :disabled-date="isFutureDate"
+          :disabled-date="isFutureBeijingDate"
           aria-label="日期范围"
           class="billing__date-picker"
           @update:model-value="onRange"

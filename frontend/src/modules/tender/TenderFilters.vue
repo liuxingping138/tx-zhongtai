@@ -4,7 +4,9 @@ import FilterBar from '@/components/FilterBar.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
 import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useAuthStore } from '@/stores/auth'
+import { localCalendarDate } from '@/utils/time'
 import { applyDefaultDateRange, DATES, type TenderQuery } from './fields'
+import { recentRange } from './statistics'
 
 const query = defineModel<TenderQuery>({ required: true })
 defineProps<{ applied: Record<string, unknown> }>()
@@ -56,34 +58,15 @@ const SECONDARY_REGIONS = [
   { key: 'purchaser_countyname', optionField: 'county_name', label: '区县', placeholder: '选择或搜索区县' },
 ] as const
 
+function shortcutRange(days: number): [Date, Date] {
+  const [from, to] = recentRange(new Date(), days)
+  return [localCalendarDate(from), localCalendarDate(to)]
+}
+
 const dateShortcuts = [
-  {
-    text: '近 7 天',
-    value: () => {
-      const end = new Date()
-      const start = new Date()
-      start.setDate(start.getDate() - 6)
-      return [start, end]
-    },
-  },
-  {
-    text: '近 30 天',
-    value: () => {
-      const end = new Date()
-      const start = new Date()
-      start.setDate(start.getDate() - 29)
-      return [start, end]
-    },
-  },
-  {
-    text: '近 90 天',
-    value: () => {
-      const end = new Date()
-      const start = new Date()
-      start.setDate(start.getDate() - 89)
-      return [start, end]
-    },
-  },
+  { text: '近 7 天', value: () => shortcutRange(7) },
+  { text: '近 30 天', value: () => shortcutRange(30) },
+  { text: '近 90 天', value: () => shortcutRange(90) },
 ]
 
 function range(key: typeof DATES[number]['key']): [string, string] | null {

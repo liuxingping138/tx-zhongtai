@@ -1,18 +1,22 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const session = vi.hoisted(() => ({ token: 'old', refreshes: 0 }))
+const session = vi.hoisted(() => ({ token: 'old', refreshes: 0, failRefresh: false }))
+const httpHooks = vi.hoisted(() => ({
+  afterRefreshFailure: vi.fn(() => ({ status: 401, code: 'AUTH_UNAUTHENTICATED', message: '登录已失效，请重新登录' })),
+  notifyUnauthorized: vi.fn(),
+  notifyForbidden: vi.fn(),
+}))
 vi.mock('./session', () => ({
   getAccessToken: () => session.token,
   getCsrfToken: () => 'csrf-1',
   refreshSession: () => {
     session.refreshes += 1
+    if (session.failRefresh) return Promise.reject(new Error('expired'))
     session.token = 'new'
     return Promise.resolve({})
   },
 }))
-vi.mock('./http', () => ({
-  afterRefreshFailure: () => ({ status: 401, code: 'AUTH_UNAUTHENTICATED', message: '登录已失效，请重新登录' }),
-}))
+vi.mock('./http', () => httpHooks)
 
 import { postEventStream, readEvents } from './eventStream'
 
@@ -30,6 +34,10 @@ afterEach(() => {
   vi.unstubAllGlobals()
   session.token = 'old'
   session.refreshes = 0
+  session.failRefresh = false
+  httpHooks.afterRefreshFailure.mockClear()
+  httpHooks.notifyUnauthorized.mockClear()
+  httpHooks.notifyForbidden.mockClear()
 })
 
 describe('SSE 解析', () => {
@@ -75,5 +83,20 @@ describe('postEventStream', () => {
     await expect(postEventStream('/ai/stream/ask', {}, () => undefined)).rejects.toMatchObject({ message: '回答中途断了，请重试' })
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))))
     await expect(postEventStream('/ai/stream/ask', {}, () => undefined)).rejects.toMatchObject({ message: '网络连接中断，请检查网络后重试' })
+  })
+
+  it('续期后仍然 401 触发统一登出，403 触发无权限刷新，续期失败走共享失败处理', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify({ code: 'AUTH_UNAUTHENTICATED', message: '会话已失效' }), { status: 401 }))))
+    await expect(postEventStream('/ai/stream/ask', {}, () => undefined)).rejects.toMatchObject({ status: 401 })
+    expect(httpHooks.notifyUnauthorized).toHaveBeenCalledOnce()
+
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(JSON.stringify({ code: 'PERMISSION_DENIED', message: '无权限' }), { status: 403 }))))
+    await expect(postEventStream('/ai/stream/ask', {}, () => undefined)).rejects.toMatchObject({ status: 403 })
+    expect(httpHooks.notifyForbidden).toHaveBeenCalledOnce()
+
+    session.failRefresh = true
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response('', { status: 401 }))))
+    await expect(postEventStream('/ai/stream/ask', {}, () => undefined)).rejects.toMatchObject({ status: 401, code: 'AUTH_UNAUTHENTICATED' })
+    expect(httpHooks.afterRefreshFailure).toHaveBeenCalledOnce()
   })
 })

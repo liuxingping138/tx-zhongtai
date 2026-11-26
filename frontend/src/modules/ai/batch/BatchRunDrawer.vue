@@ -4,6 +4,7 @@ import { ArrowDown } from '@element-plus/icons-vue'
 
 import { getBatchRunRows, type BatchRun, type RunFileKind, type RunRows as Rows } from '@/api/ai'
 import { errorMessage } from '@/api/errors'
+import { useAuthStore } from '@/stores/auth'
 import { RUN_SOURCE_TEXT, RUN_STATUS_TEXT, cacheHitText, formatYuan, isActive, roundText, runModeText, runStatusType } from '../shared/aiText'
 import RunRows from '../shared/RunRows.vue'
 import { RUN_FILES, deleteRun, downloadRunFile, retryRun, runAllRun, stopRun } from './runActions'
@@ -11,6 +12,8 @@ import { RUN_FILES, deleteRun, downloadRunFile, retryRun, runAllRun, stopRun } f
 /** 一个批量任务的详情：进度和费用、按哪一版跑的、逐行结果（前 50 行），以及发起时冻结的提示词。 */
 const props = defineProps<{ run: BatchRun | null; canManage: boolean; canExport: boolean }>()
 const emit = defineEmits<{ changed: []; close: [] }>()
+const auth = useAuthStore()
+const canReadPrompts = computed(() => auth.canRead('ai.prompts'))
 const rows = ref<Rows | null>(null)
 const rowsError = ref('')
 const loadingRows = ref(false)
@@ -176,7 +179,7 @@ async function act(action: (current: BatchRun) => Promise<boolean>, close = fals
         <dd>
           {{ run.release_no !== null ? `第 ${run.release_no} 版` : run.draft_saved_at ? `${run.draft_saved_at.slice(0, 16)} 保存的草稿` : '发起时的草稿' }}
           <router-link
-            v-if="run.prompt_id"
+            v-if="run.prompt_id && canReadPrompts"
             class="run-detail__link"
             :to="{ name: 'ai-prompt-edit', params: { id: run.prompt_id } }"
             @click="emit('close')"

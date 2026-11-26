@@ -6,7 +6,7 @@ import { releaseEntry, releaseState, sampleState } from './templateStatus'
 
 export type ListSortKey = 'updated_at' | 'title' | 'release' | 'fields'
 
-defineProps<{
+const props = defineProps<{
   rows: PromptTemplate[]
   showTasks: boolean
   canRelease: boolean
@@ -35,6 +35,10 @@ function sampleHover(row: PromptTemplate): string {
 function releaseHover(row: PromptTemplate): string {
   const state = releaseState(row)
   return state.detail ? `${state.text}（线上：${state.detail}）` : state.text
+}
+
+function rowReleaseEntry(row: PromptTemplate) {
+  return releaseEntry(row, props.canRelease && Boolean(row.editable), 'list')
 }
 </script>
 
@@ -273,14 +277,14 @@ function releaseHover(row: PromptTemplate): string {
           >
             <div class="row-actions prompt-row-actions">
               <button
-                v-if="releaseEntry(row, canRelease, 'list')"
+                v-if="rowReleaseEntry(row)"
                 type="button"
                 class="row-action"
-                :class="{ 'prompt-action--publish': releaseEntry(row, canRelease, 'list')!.emphasis === 'primary' }"
+                :class="{ 'prompt-action--publish': rowReleaseEntry(row)!.emphasis === 'primary' }"
                 :title="releaseHover(row)"
                 @click="emit('review', row)"
               >
-                {{ releaseEntry(row, canRelease, 'list')!.label }}
+                {{ rowReleaseEntry(row)!.label }}
               </button>
               <router-link
                 class="row-action"

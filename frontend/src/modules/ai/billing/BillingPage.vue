@@ -9,6 +9,7 @@ import { useChartPalette } from '@/components/charts/echarts'
 import CardSkeleton from '@/components/CardSkeleton.vue'
 import ChartSkeleton from '@/components/ChartSkeleton.vue'
 import { useTheme } from '@/composables/useTheme'
+import { beijingDate } from '@/utils/time'
 import {
   buildLedgerCards, colorMap, countActiveFilters, dailySeries, daysBetween,
   filterOptions, filterRows, groupBy, money, OTHER, presetRange, pruneInPlace, summarize,
@@ -22,10 +23,9 @@ import '../shared/ai.css'
 /** 所有模型调用的花费：批量任务、定时打标、样本试跑、试发，以及已下线的多轮对话留下的记录。改日期重新取数，
  * 业务分类 → 一级业务板块 → 二级业务板块三级联动、模型独立，都在页面上直接筛，账本指标、图表和明细跟着变。 */
 const route = useRoute()
-const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' })
 
 const preset = ref<RangePreset | ''>('30')
-const range = ref<[string, string]>(presetRange('30', today))
+const range = ref<[string, string]>(presetRange('30', beijingDate()))
 const rows = ref<BillingRow[]>([])
 const loading = ref(false)
 const error = ref('')
@@ -93,7 +93,7 @@ function pruneBelow(): void {
 
 function pickPreset(value: string | number | boolean | undefined): void {
   preset.value = value as RangePreset
-  range.value = presetRange(preset.value, today)
+  range.value = presetRange(preset.value, beijingDate())
 }
 
 function pickRange(value: [string, string] | null): void {

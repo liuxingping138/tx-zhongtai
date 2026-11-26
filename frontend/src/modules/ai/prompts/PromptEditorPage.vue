@@ -35,12 +35,12 @@ const router = useRouter()
 const auth = useAuthStore()
 const canEditPage = computed(() => auth.canFull('ai.prompts'))
 const canExport = computed(() => auth.canExport('ai.prompts'))
-const canRelease = computed(() => auth.canFull('ai.releases'))
 const models = ref<AiModel[]>([])
 const categories = ref<TemplateCategory[]>([])
 const codeTables = ref<SystemCodeTable[]>([])
 const selected = ref<PromptTemplate | null>(null)
 const loading = ref(false)
+const loaded = ref(false)
 const loadError = ref('')
 const saving = ref(false)
 const thinking = ref(false)
@@ -72,6 +72,7 @@ const canEdit = computed(() => canEditPage.value && (
     ? selected.value.editable
     : (loading.value && !categories.value.length) || editableCategories.value.length > 0
 ))
+const canRelease = computed(() => auth.canFull('ai.releases') && Boolean(selected.value?.editable))
 const categoryOptions = computed(() => {
   const own = categories.value.find(item => item.code === selected.value?.category)
   return own && !own.editable ? [own, ...editableCategories.value] : editableCategories.value
@@ -83,7 +84,15 @@ const codeName = computed(() => (form.code_table
 
 let loadSeq = 0
 
+function needsCreateForbidden(): boolean {
+  return !routeId.value && !loadError.value && (!canEditPage.value || (loaded.value && !loading.value && !canEdit.value))
+}
+
 async function load(): Promise<void> {
+  if (!routeId.value && !canEditPage.value) {
+    void router.replace({ name: 'forbidden' })
+    return
+  }
   const seq = ++loadSeq
   loading.value = true
   try {
@@ -93,6 +102,11 @@ async function load(): Promise<void> {
     categories.value = data.categories
     codeTables.value = data.code_tables
     loadError.value = ''
+    loaded.value = true
+    if (!routeId.value && !editableCategories.value.length) {
+      void router.replace({ name: 'forbidden' })
+      return
+    }
     fill(data.item)
     openReviewFromLink()
   } catch (error) { if (seq === loadSeq) loadError.value = errorMessage(error, '模板加载失败，请刷新重试') }
@@ -107,7 +121,11 @@ function openReviewFromLink(): void {
 }
 watch(routeId, id => {
   if (id === (selected.value?.id ?? '')) return
+  loaded.value = false
   answer.stop(); void load()
+})
+watch([routeId, loading, canEdit], () => {
+  if (needsCreateForbidden()) void router.replace({ name: 'forbidden' })
 })
 onBeforeUnmount(answer.stop)
 
@@ -177,6 +195,11 @@ async function trial(): Promise<void> {
   const context = { template: selected.value, model: trialModel.value, row: trialRow.value, thinking: thinking.value }
   const request = trialRequest(form, context)
   await answer.send('/ai/stream/ask', request.body, request.shown, request.thinking)
+}
+
+function pickExcel(): void {
+  if (!canEdit.value) return
+  files.pick('excel')
 }
 
 function applyStarter(): void {
@@ -274,7 +297,7 @@ function applyStarter(): void {
             :disabled="!canEdit"
             @run="trial"
             @save="persist()"
-            @upload="files.pick('excel')"
+            @upload="pickExcel"
           />
         </div>
 
@@ -303,7 +326,7 @@ function applyStarter(): void {
         :can-export="canExport"
         :dirty="unsaved.dirty.value"
         @run="trial"
-        @upload="files.pick('excel')"
+        @upload="pickExcel"
         @open-sample-db="settingsRef?.openSampleDb()"
         @apply-starter="applyStarter"
         @edit="sampleWide = false; editorWide = false; editor?.focus()"

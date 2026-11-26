@@ -17,7 +17,8 @@ import { pathText } from './candidates'
 const props = defineProps<{ candidate: CandidateItem | null; industries?: CandidateDetail['industries'] }>()
 const emit = defineEmits<{ close: []; changed: [] }>()
 const auth = useAuthStore()
-const canEditRows = computed(() => auth.canFull('policy.interpretations'))
+const canReadInterpretations = computed(() => auth.canRead('policy.interpretations'))
+const canEditRows = computed(() => auth.canFull('policy.interpretations') && auth.canRead('codebook.scenarios'))
 
 const PAGE_SIZE = 20
 const rows = ref<CandidateRow[]>([])
@@ -171,12 +172,16 @@ async function save(row: CandidateRow) {
       >
         <template #default="{ row }">
           <div class="rows__title">
-            <RouterLink :to="{ name: 'policy-interpretation-review', params: { id: row.id } }">
+            <RouterLink
+              v-if="canReadInterpretations"
+              :to="{ name: 'policy-interpretation-review', params: { id: row.id } }"
+            >
               {{ row.policy_title }}
             </RouterLink>
+            <span v-else>{{ row.policy_title }}</span>
             <span class="rows__sub">入库 {{ row.created_at.slice(0, 10) }}<template v-if="row.opportunity_type"> · {{ row.opportunity_type }}</template></span>
             <div
-              v-if="editing === row.id"
+              v-if="canEditRows && editing === row.id"
               class="rows__edit"
             >
               <ScenarioPicker

@@ -78,12 +78,18 @@ describe('load', () => {
     expect(api.listResourceTree).toHaveBeenCalledOnce()
   })
 
-  it('没有查看授权的权限时只加载角色', async () => {
+  it('没有查看授权的权限时只加载角色，已开通模块数回退到 role.grant_counts', async () => {
     const { grants } = setup({ see: false })
+    api.getRole.mockResolvedValueOnce({ ...ROLE, grant_counts: { read: 2, export: 1, full: 3 } })
     await grants.load()
     expect(api.listRoleGrants).not.toHaveBeenCalled()
     expect(grants.role.value?.code).toBe('editor')
     expect(grants.selected.value).toEqual({})
+    expect(grants.openedCount.value).toBe(6)
+
+    api.getRole.mockResolvedValueOnce(ROLE)
+    await grants.load()
+    expect(grants.openedCount.value).toBe(0)
   })
 
   it('快速切换角色时先发的请求后回来，不盖掉后一个角色', async () => {

@@ -90,9 +90,13 @@ http.interceptors.response.use(
     await parseBlobErrorBody(error)
     const config = error.config as RetryConfig | undefined
     const status = error.response?.status
-    if (status === 401 && config && !config._retried && !isAuthPublicPath(config.url)) {
-      const retried = await retryAfterRefresh(config)
-      if (retried) return retried.value
+    if (status === 401 && config && !isAuthPublicPath(config.url)) {
+      if (!config._retried) {
+        const retried = await retryAfterRefresh(config)
+        if (retried) return retried.value
+      } else {
+        signOutOnce()
+      }
     }
     const apiError = toApiError(error)
     if (status === 403) {
@@ -163,6 +167,14 @@ onAccessTokenChange((token) => {
 onRemoteLogout(() => {
   signingOut = true
 })
+
+export function notifyUnauthorized(): void {
+  signOutOnce()
+}
+
+export function notifyForbidden(): void {
+  forbiddenHandler?.()
+}
 
 export function setUnauthorizedHandler(handler: () => void): void {
   unauthorizedHandler = handler

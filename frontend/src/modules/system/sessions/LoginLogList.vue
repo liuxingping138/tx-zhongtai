@@ -14,7 +14,7 @@ import TableSkeleton from '@/components/TableSkeleton.vue'
 import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useListQuery } from '@/composables/useListQuery'
 import { useAuthStore } from '@/stores/auth'
-import { formatTime, toBeijingIso } from '@/utils/time'
+import { DEFAULT_RANGE_TIME, formatTime, toBeijingIso } from '@/utils/time'
 import { browserOf, ipLimited, loginResult, normalizeIp } from './loginText'
 
 /**
@@ -187,6 +187,7 @@ onMounted(() => {
             start-placeholder="开始"
             end-placeholder="结束"
             value-format="YYYY-MM-DDTHH:mm:ss"
+            :default-time="DEFAULT_RANGE_TIME"
           />
         </el-form-item>
         <el-form-item label="账号">

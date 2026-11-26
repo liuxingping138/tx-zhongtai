@@ -47,17 +47,29 @@ const query = reactive({
   page: 1,
   page_size: 20,
 })
+// 「补充待确认」页签：采纳进码表的新场景，AI 补好描述等人确认（码表的数据，要能看码表）
+const ENRICH_TAB = '补充待确认'
 const auth = useAuthStore()
+const canReadCodebook = computed(() => auth.canRead('codebook.scenarios'))
 const route = useRoute()
 const filters = useFilterOptions('/policy/scenario-candidates')
 const summary = ref<CandidateSummary | null>(null)
 const listQuery = useListQuery(query, (): Promise<void> => load())
+if (listQuery.applied.status === ENRICH_TAB && !canReadCodebook.value) {
+  listQuery.replaceApplied('status', PENDING)
+}
 
 async function fetchPage(params: Record<string, unknown>) {
   if (params.status === ENRICH_TAB) {
-    // 补充待确认是码表里的数据，不查候选列表；只取一下各页签的数
-    summary.value = (await listCandidates({ status: PENDING, page_size: 1 })).summary
-    return { items: [], total: 0 }
+    if (!canReadCodebook.value) {
+      listQuery.replaceApplied('status', PENDING)
+      void listQuery.commitPage()
+      params = { ...params, status: PENDING }
+    } else {
+      // 补充待确认是码表里的数据，不查候选列表；只取一下各页签的数
+      summary.value = (await listCandidates({ status: PENDING, page_size: 1 })).summary
+      return { items: [], total: 0 }
+    }
   }
   const cleaned = Object.fromEntries(Object.entries(params).filter(([, value]) => value !== '')) as CandidateQuery
   const page = await listCandidates(cleaned)
@@ -72,13 +84,11 @@ const { items, total, loading, loadError, load } = useListLoader({
   errorText: '加载新增场景失败',
 })
 
-// 「补充待确认」页签：采纳进码表的新场景，AI 补好描述等人确认（码表的数据，要能看码表）
-const ENRICH_TAB = '补充待确认'
 const pending = computed(() => listQuery.applied.status === PENDING)
-const enriching = computed(() => listQuery.applied.status === ENRICH_TAB)
+const enriching = computed(() => canReadCodebook.value && listQuery.applied.status === ENRICH_TAB)
 const enrichCount = ref(0)
 async function loadEnrichCount() {
-  if (!auth.canRead('codebook.scenarios')) return
+  if (!canReadCodebook.value) return
   try {
     enrichCount.value = (await listEnrichPending()).items.length
   } catch {
@@ -92,7 +102,8 @@ const filtered = computed(() => hasActiveFilters(appliedFilters.value))
 const counts = computed(() => summary.value?.by_status ?? {})
 
 function switchStatus(value: string | number | boolean | undefined) {
-  listQuery.replaceApplied('status', String(value))
+  const next = String(value)
+  listQuery.replaceApplied('status', next === ENRICH_TAB && !canReadCodebook.value ? PENDING : next)
   void load()
 }
 
@@ -188,7 +199,7 @@ onMounted(() => {
         <StatusTabs
           :value="String(listQuery.applied.status)"
           :counts="counts"
-          :enrich-tab="auth.canRead('codebook.scenarios') ? ENRICH_TAB : ''"
+          :enrich-tab="canReadCodebook ? ENRICH_TAB : ''"
           :enrich-count="enrichCount"
           @change="switchStatus"
         />
