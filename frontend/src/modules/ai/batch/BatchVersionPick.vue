@@ -128,7 +128,7 @@ function optionNote(item: PromptTemplate): string {
 /* 和新建任务的其余步骤同一个样子（父组件的 scoped 样式进不到这里的多根节点）。 */
 .new-task__step { padding: 4px 0 22px; margin-bottom: 20px; border-bottom: 1px solid var(--zt-border); }
 .new-task__step h3 { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; color: var(--zt-ink-900); font-size: 15px; font-weight: 650; }
-.new-task__step h3 span { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--zt-blue-600); color: var(--el-color-white); font-size: 12px; }
+.new-task__step h3 span { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--zt-blue-600); color: var(--zt-on-primary); font-size: 12px; }
 .new-task__step .el-select { width: 100%; }
 .new-task__hint { margin: 8px 0 0; color: var(--zt-ink-500); font-size: 12px; line-height: 1.6; }
 .new-task__problem { margin: 10px 0 0; color: var(--zt-danger-text); font-size: 13px; }

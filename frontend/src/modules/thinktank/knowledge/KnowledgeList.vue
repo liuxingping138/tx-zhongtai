@@ -248,7 +248,7 @@ onMounted(async () => {
             导出未定义数据
           </el-button>
           <ExportButton
-            :allowed="auth.canExport(RESOURCE)"
+            :allowed="auth.canExport(RESOURCE) && hasExportableScope"
             :loading="exporting"
             @click="onExport"
           />

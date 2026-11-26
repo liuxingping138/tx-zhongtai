@@ -25,15 +25,20 @@ export function useMenuBadges() {
   const route = useRoute()
   const counts = ref<Record<string, number>>({})
   const fetchedAt: Record<string, number> = {}
+  const seqByPath: Record<string, number> = {}
 
   async function refresh(force = false): Promise<void> {
     const now = Date.now()
     await Promise.all(Object.entries(SOURCES).map(async ([path, source]) => {
       if (!auth.canRead(source.resource)) return
       if (!force && now - (fetchedAt[path] ?? 0) < REFRESH_MS) return
-      fetchedAt[path] = now
+      const seq = (seqByPath[path] ?? 0) + 1
+      seqByPath[path] = seq
       try {
-        counts.value = { ...counts.value, [path]: await source.fetch() }
+        const value = await source.fetch()
+        if (seq !== seqByPath[path]) return
+        fetchedAt[path] = Date.now()
+        counts.value = { ...counts.value, [path]: value }
       } catch {
         /* 数取不到不影响菜单本身 */
       }

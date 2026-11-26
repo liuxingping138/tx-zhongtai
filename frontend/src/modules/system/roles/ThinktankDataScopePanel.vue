@@ -241,7 +241,7 @@ function onDimensionGrantsUpdate(next: Grants) {
 .tt-lib-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--zt-border); border-radius: 6px; background: var(--zt-panel); color: var(--zt-ink-700); font-size: 13px; cursor: pointer; transition: border-color 0.15s, background-color 0.15s; }
 .tt-lib-pill.is-active { border-color: var(--zt-blue-600); background: var(--el-color-primary-light-9); color: var(--zt-ink-900); font-weight: 600; }
 .tt-lib-pill__badge { padding: 2px 6px; border-radius: 4px; font-size: 11.5px; font-weight: 500; background: var(--zt-soft); color: var(--zt-ink-500); }
-.tt-lib-pill__badge.is-read, .tt-lib-pill__badge.is-export, .tt-lib-pill__badge.is-full { background: var(--zt-blue-600); color: var(--el-color-white); }
+.tt-lib-pill__badge.is-read, .tt-lib-pill__badge.is-export, .tt-lib-pill__badge.is-full { background: var(--zt-blue-600); color: var(--zt-on-primary); }
 .tt-scope__closed { padding: 28px 24px; border: 1px dashed var(--zt-border); border-radius: var(--zt-radius); background: var(--zt-surface-subtle); }
 .tt-scope__closed-title { margin: 0 0 6px; font-size: 15px; font-weight: 600; color: var(--zt-ink-900); }
 .tt-scope__closed-desc { margin: 0 0 14px; font-size: 13px; line-height: 1.6; color: var(--zt-ink-700); }
@@ -254,7 +254,7 @@ function onDimensionGrantsUpdate(next: Grants) {
 .tt-dim-card__meta { font-size: 12px; color: var(--zt-ink-500); font-variant-numeric: tabular-nums; }
 .tt-dim-card__switch { display: inline-flex; padding: 2px; border: 1px solid var(--zt-border); border-radius: 6px; background: var(--zt-panel); }
 .tt-mode-btn { padding: 4px 10px; border: 0; border-radius: 4px; background: transparent; font-size: 12px; color: var(--zt-ink-700); cursor: pointer; }
-.tt-mode-btn.is-active { background: var(--zt-blue-600); color: var(--el-color-white); font-weight: 600; }
+.tt-mode-btn.is-active { background: var(--zt-blue-600); color: var(--zt-on-primary); font-weight: 600; }
 .tt-mode-btn:disabled { cursor: not-allowed; opacity: 0.6; }
 .tt-dim-card__all-body { padding: 14px 16px; }
 .tt-dim-card__all-hint { margin: 0 0 10px; font-size: 12.5px; color: var(--zt-ink-700); line-height: 1.6; }

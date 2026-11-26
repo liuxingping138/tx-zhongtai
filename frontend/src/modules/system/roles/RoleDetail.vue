@@ -252,7 +252,10 @@ onMounted(() => {
       />
 
       <section class="role-body">
-        <el-tabs v-model="tab">
+        <el-tabs
+          v-model="tab"
+          class="role-tabs"
+        >
           <el-tab-pane
             name="grants"
             label="菜单权限"
@@ -344,8 +347,6 @@ onMounted(() => {
         </div>
       </section>
     </template>
-
-
     <RoleFormDialog
       v-model="formVisible"
       :mode="formMode"

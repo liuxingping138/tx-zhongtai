@@ -179,7 +179,7 @@ function submit() {
 .filter-bar__buttons { display: flex; align-items: center; gap: 8px; }
 .filter-bar__buttons :deep(.el-button + .el-button) { margin-left: 0; }
 .filter-bar__toggle { padding: 0 2px; }
-.filter-bar__badge { min-width: 18px; margin-left: 4px; padding: 0 5px; border-radius: 9px; background: var(--zt-blue-600); color: var(--el-color-white); font-size: 12px; line-height: 18px; text-align: center; }
+.filter-bar__badge { min-width: 18px; margin-left: 4px; padding: 0 5px; border-radius: 9px; background: var(--zt-blue-600); color: var(--zt-on-primary); font-size: 12px; line-height: 18px; text-align: center; }
 .filter-bar :deep(.el-form-item__label) { color: var(--zt-ink-700); margin: 0 0 6px; padding: 0; line-height: 20px; font-size: 13px; }
 .filter-bar--left { align-items: center; }
 .filter-bar--left .filter-bar__fields { align-items: center; gap: 12px 16px; }

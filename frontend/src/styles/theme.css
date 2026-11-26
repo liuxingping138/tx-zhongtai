@@ -4,10 +4,11 @@
  * 登录页沿用原独立视觉，见文件末尾的 .login。页面和组件只引用这里的变量，不写色值。
  */
 :root {
-  --zt-blue-900: #172b4d;
   --zt-blue-800: #1e429f;
   --zt-blue-700: #2547c7;
   --zt-blue-600: #3355dd;
+  --zt-on-primary: #ffffff;
+  --zt-on-danger: #ffffff;
   --zt-ink-900: #0f172a;
   --zt-ink-700: #334155;
   --zt-ink-500: #64748b;
@@ -94,9 +95,6 @@
   --zt-space-4: 16px;
   --zt-space-6: 24px;
   --zt-space-8: 32px;
-  --zt-nav: #172b4d;
-  --zt-nav-active: #284475;
-  --zt-nav-text: #c1d0e2;
   --zt-scroll-thumb: #94a3b8;
   --zt-scroll-track: #edf2f7;
   --zt-scroll-hover: #64748b;
@@ -163,10 +161,11 @@
 
 /* Google Cloud Console Dark 风格深色主题标准规范 */
 html.dark {
-  --zt-blue-900: #8ab4f8;
   --zt-blue-800: #669df6;
   --zt-blue-700: #4285f4;
   --zt-blue-600: #8ab4f8;
+  --zt-on-primary: #121316;
+  --zt-on-danger: #121316;
   --zt-ink-900: #e8eaed;
   --zt-ink-700: #bdc1c6;
   --zt-ink-500: #9aa0a6;
@@ -232,9 +231,6 @@ html.dark {
 
   --zt-loading-mask: rgba(18, 19, 22, 0.82);
 
-  --zt-nav: #1e1f23;
-  --zt-nav-active: #2b3348;
-  --zt-nav-text: #bdc1c6;
   --zt-scroll-thumb: #5f6368;
   --zt-scroll-track: #1e1f23;
   --zt-scroll-hover: #80868b;
@@ -541,6 +537,18 @@ body {
 }
 
 .el-table.data-table .cell { line-height: 1.55; padding: 0 14px; }
+
+.el-table.data-table .table-action {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: var(--zt-panel);
+  box-shadow: -8px 0 10px -8px var(--zt-shadow-edge);
+}
+
+.el-table.data-table th.table-action {
+  background: var(--el-table-header-bg-color);
+}
 
 .pagination-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px 2px; min-height: 52px; }
 .pagination-range { color: var(--zt-ink-500); font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -932,7 +940,6 @@ button:disabled { cursor: not-allowed; }
  .el-button:not(.is-link), .el-input__wrapper, .el-select__wrapper { min-height: 44px; }
  .el-button.is-link { min-height: 36px; }
  .el-drawer, .editor-overlay.el-drawer { width: 100% !important; }
- .admin-navigation-drawer.el-drawer { width: min(280px, 86vw) !important; }
  .pagination-row { align-items: flex-start; flex-direction: column; }
  .pagination-row .el-pagination { flex-wrap: wrap; justify-content: flex-start; width: 100%; }
  .pagination-row .el-pagination__sizes { margin-right: 0; }

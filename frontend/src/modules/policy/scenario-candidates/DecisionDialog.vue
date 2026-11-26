@@ -39,14 +39,34 @@ const submitting = ref(false)
 /** 合并后叫什么：沿用原名称，或原场景改用这个新说法（编码不变，码表和解读里用它的行一起改名） */
 const rename = ref(false)
 const impact = ref<{ codebook_rows: number; interpretation_rows: number } | null>(null)
+const impactLoading = ref(false)
+const impactFailed = ref(false)
+const impactText = computed(() => {
+  if (impact.value) {
+    return `码表 ${impact.value.codebook_rows.toLocaleString()} 行、政策解读 ${impact.value.interpretation_rows.toLocaleString()} 行的名称一起改`
+  }
+  if (impactLoading.value) return '正在数会改多少行…'
+  if (impactFailed.value) return '影响行数暂无法统计，提交后码表与政策解读会一起改名'
+  return ''
+})
+let impactSeq = 0
 const canRename = computed(() => Boolean(target.value?.length) && target.value?.[target.value.length - 1] !== props.candidate.name)
-watch([rename, target], async ([on, path]) => {
+watch([rename, target, () => props.mode], async ([on, path, mode]) => {
+  const seq = ++impactSeq
   impact.value = null
-  if (!on || !path?.length || props.mode !== 'merge') return
+  impactFailed.value = false
+  if (!on || !path?.length || mode !== 'merge') {
+    impactLoading.value = false
+    return
+  }
+  impactLoading.value = true
   try {
-    impact.value = await candidateRenameImpact(props.candidate.id, path)
+    const result = await candidateRenameImpact(props.candidate.id, path)
+    if (seq === impactSeq) impact.value = result
   } catch {
-    impact.value = null
+    if (seq === impactSeq) impactFailed.value = true
+  } finally {
+    if (seq === impactSeq) impactLoading.value = false
   }
 })
 const error = ref('')
@@ -214,7 +234,7 @@ async function submit() {
             v-if="rename"
             class="decision__hint"
           >
-            编码不变；{{ impact ? `码表 ${impact.codebook_rows.toLocaleString()} 行、政策解读 ${impact.interpretation_rows.toLocaleString()} 行的名称一起改` : '正在数会改多少行…' }}
+            编码不变；{{ impactText }}
           </p>
         </template>
       </template>

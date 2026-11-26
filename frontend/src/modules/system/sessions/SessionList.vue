@@ -195,13 +195,13 @@ onMounted(load)
         v-if="canRevoke"
         label="操作"
         width="110"
-        fixed="right"
+        class-name="table-action"
       >
         <template #default="{ row }">
           <span
             v-if="deviceAction(row, canRevoke) === 'current'"
             class="online-muted"
-            title="这是你正在用的设备，要退出请点左下角账号里的「退出登录」"
+            title="这是你正在用的设备，要退出请点右上角账号菜单里的「退出登录」"
           >正在使用</span>
           <button
             v-else-if="deviceAction(row, canRevoke) === 'revoke'"

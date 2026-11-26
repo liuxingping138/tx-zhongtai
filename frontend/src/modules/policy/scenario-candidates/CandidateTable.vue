@@ -189,8 +189,7 @@ defineExpose({ clearSelection: () => table.value?.clearSelection() })
       v-if="pending && canDecide"
       label="决定"
       width="256"
-      fixed="right"
-      class-name="candidates-table__decide"
+      class-name="candidates-table__decide table-action"
     >
       <template #default="{ row }">
         <DecisionButtons

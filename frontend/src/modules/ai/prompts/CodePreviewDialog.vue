@@ -22,17 +22,24 @@ const size = computed(() => {
   return chars >= 10000 ? `约 ${(chars / 10000).toFixed(1)} 万字` : `${chars} 字`
 })
 
+let seq = 0
+
 watch(open, async visible => {
-  if (!visible) return
+  const ticket = ++seq
+  if (!visible) {
+    loading.value = false
+    return
+  }
   preview.value = null
   failure.value = ''
   loading.value = true
   try {
-    preview.value = await (props.systemKey ? previewSystemCode(props.systemKey) : previewUploadedCode(props.promptId))
+    const result = await (props.systemKey ? previewSystemCode(props.systemKey) : previewUploadedCode(props.promptId))
+    if (ticket === seq) preview.value = result
   } catch (error) {
-    failure.value = errorMessage(error, '码表暂时取不到，请稍后再试')
+    if (ticket === seq) failure.value = errorMessage(error, '码表暂时取不到，请稍后再试')
   } finally {
-    loading.value = false
+    if (ticket === seq) loading.value = false
   }
 })
 </script>

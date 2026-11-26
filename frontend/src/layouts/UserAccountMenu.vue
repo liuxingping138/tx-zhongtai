@@ -1,16 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { ArrowDown, ArrowRight, ArrowUp, SwitchButton, User } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowRight, SwitchButton, User } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 import { useAuthStore } from '@/stores/auth'
 import { errorMessage } from '@/api/errors'
 
-const props = withDefaults(defineProps<{ compact?: boolean; tone?: 'nav' | 'header' }>(), {
-  compact: false,
-  tone: 'nav',
-})
+// 仅保留顶栏外观；兼容调用方传入 tone="header"。
+defineProps<{ tone?: 'header' }>()
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -23,10 +21,6 @@ const roleLine = computed(() => {
   if (roles.length === 1) return roles[0]!
   if (roles.length === 2) return `${roles[0]} · ${roles[1]}`
   return `${roles[0]} 等 ${roles.length} 个角色`
-})
-const placement = computed(() => {
-  if (props.tone === 'header') return 'bottom-end'
-  return props.compact ? 'top' : 'top-start'
 })
 
 async function onLogout() {
@@ -43,18 +37,15 @@ async function onLogout() {
 <template>
   <el-dropdown
     class="user-account-dropdown"
-    :class="{ 'is-header': tone === 'header' }"
     trigger="click"
-    :placement="placement"
+    placement="bottom-end"
     :show-arrow="false"
     popper-class="user-account-popper"
   >
     <button
       type="button"
       class="user-account"
-      :class="[`is-${tone}`, { 'is-compact': compact }]"
       :aria-label="`${name}，打开账号菜单`"
-      :title="compact ? `${name}（${roleLine}）` : undefined"
     >
       <span
         class="user-account__avatar"
@@ -63,18 +54,11 @@ async function onLogout() {
         {{ initial }}
         <span class="user-account__status-dot" />
       </span>
-      <span
-        v-if="!compact"
-        class="user-account__meta"
-      >
+      <span class="user-account__meta">
         <strong>{{ name }}</strong>
-        <small v-if="tone !== 'header'">{{ roleLine }}</small>
       </span>
-      <el-icon
-        v-if="!compact"
-        class="user-account__caret"
-      >
-        <component :is="tone === 'header' ? ArrowDown : ArrowUp" />
+      <el-icon class="user-account__caret">
+        <ArrowDown />
       </el-icon>
     </button>
     <template #dropdown>
@@ -138,64 +122,38 @@ async function onLogout() {
 
 <style scoped>
 .user-account {
-  display: flex; align-items: center; width: 100%; min-width: 0; gap: 10px;
-  padding: 8px; border: 0; border-radius: 8px; background: transparent;
-  color: inherit; font: inherit; text-align: left; cursor: pointer;
-}
-.user-account__avatar {
-  position: relative; display: grid; place-items: center;
-  flex: 0 0 32px; width: 32px; height: 32px; border-radius: 50%;
-  background: var(--zt-avatar-gradient); color: var(--el-color-white);
-  font-size: 13px; font-weight: 650; box-shadow: var(--zt-avatar-ring);
-}
-.user-account__status-dot {
-  position: absolute; right: -1px; bottom: -1px; width: 9px; height: 9px;
-  border-radius: 50%; background: var(--zt-success); border: 2px solid var(--zt-panel);
-}
-.user-account__meta { min-width: 0; flex: 1; }
-.user-account__meta strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
-.user-account__meta small { display: block; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 400; }
-.user-account__caret { flex-shrink: 0; font-size: 12px; }
-.user-account.is-nav { color: var(--zt-ink-900); }
-.user-account.is-nav .user-account__meta small,
-.user-account.is-nav .user-account__caret { color: var(--zt-ink-500); }
-.user-account.is-nav:hover { background: var(--zt-soft); }
-
-.user-account.is-header {
-  display: inline-flex; align-items: center; gap: 9px;
+  display: inline-flex; align-items: center; gap: 9px; min-width: 0;
   height: 36px; padding: 0 12px 0 4px; border-radius: 999px;
   border: 1px solid var(--zt-border-strong);
   background: var(--zt-btn-sec-bg); box-shadow: var(--zt-btn-sec-shadow);
-  color: var(--zt-ink-900); width: auto;
+  color: var(--zt-ink-900); font: inherit; text-align: left; cursor: pointer;
   transition: all 0.18s cubic-bezier(0.2, 0, 0, 1);
 }
-.user-account.is-header:hover {
+.user-account:hover {
   background: var(--zt-btn-sec-hover-bg);
   border-color: var(--zt-blue-600);
   box-shadow: var(--zt-btn-sec-hover-shadow);
   transform: translateY(-0.5px);
 }
-.user-account.is-header .user-account__avatar {
-  flex: 0 0 28px; width: 28px; height: 28px; font-size: 12.5px;
+.user-account__avatar {
+  position: relative; display: grid; place-items: center;
+  flex: 0 0 28px; width: 28px; height: 28px; border-radius: 50%;
+  background: var(--zt-avatar-gradient); color: var(--el-color-white);
+  font-size: 12.5px; font-weight: 650; box-shadow: var(--zt-avatar-ring);
 }
-.user-account.is-header .user-account__meta {
-  display: flex; align-items: center; max-width: 120px;
+.user-account__status-dot {
+  position: absolute; right: -1px; bottom: -1px; width: 9px; height: 9px;
+  border-radius: 50%; background: var(--zt-success); border: 2px solid var(--zt-panel);
 }
-.user-account.is-header .user-account__meta strong {
-  font-size: 13px; font-weight: 600; color: var(--zt-ink-900);
-}
-.user-account.is-header .user-account__caret {
-  color: var(--zt-ink-500); font-size: 12px; transition: transform 0.18s ease, color 0.18s ease;
-}
-.user-account.is-header:hover .user-account__caret { color: var(--zt-blue-600); }
-.user-account.is-compact { justify-content: center; padding: 6px; }
-.user-account.is-header.is-compact { padding: 3px; border-radius: 50%; }
+.user-account__meta { display: flex; align-items: center; min-width: 0; max-width: 120px; flex: 1; }
+.user-account__meta strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; color: var(--zt-ink-900); }
+.user-account__caret { flex-shrink: 0; color: var(--zt-ink-500); font-size: 12px; transition: transform 0.18s ease, color 0.18s ease; }
+.user-account:hover .user-account__caret { color: var(--zt-blue-600); }
 .user-account:focus-visible { outline: 2px solid var(--zt-blue-600); outline-offset: 2px; }
 </style>
 
 <style>
-.user-account-dropdown { display: block; width: 100%; }
-.user-account-dropdown.is-header { width: auto; }
+.user-account-dropdown { display: block; width: auto; }
 .user-account-popper.el-popper {
   border-radius: 16px !important;
   border: 1px solid var(--zt-border) !important;

@@ -54,7 +54,7 @@ function label(row: RunRow): string {
 .strip__cell:hover { filter: brightness(0.97); }
 .strip__cell:focus-visible { outline: 2px solid var(--zt-blue-600); outline-offset: 2px; }
 .strip__cell.is-active { outline: 2px solid var(--zt-blue-600); outline-offset: 1px; box-shadow: 0 2px 6px var(--zt-focus-ring); }
-.strip__cell.is-failed { border-color: var(--zt-danger-text); background: var(--zt-danger-text); color: var(--el-color-white); }
+.strip__cell.is-failed { border-color: var(--zt-danger-text); background: var(--zt-danger-text); color: var(--zt-on-danger); }
 .strip__cell.is-format, .strip__key.is-format { border-color: var(--zt-warning); background: repeating-linear-gradient(135deg, var(--zt-warning-soft) 0 5px, var(--zt-warning-border) 5px 10px); color: var(--zt-warning-text); }
 .strip__cell.is-pending { border-style: dashed; border-color: var(--zt-border-strong); background: var(--zt-panel); color: var(--zt-ink-400); }
 .strip__cell.is-changed::after { content: ""; position: absolute; left: 5px; right: 5px; bottom: -6px; height: 3px; border-radius: 2px; background: var(--zt-blue-600); }

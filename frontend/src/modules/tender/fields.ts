@@ -5,7 +5,7 @@ import type { EditorGroup } from '@/components/editorGroups'
 export function tenderColumns(kind: TenderKind): DataColumn[] {
   const coreSpecific: DataColumn[] = kind === 'winbid'
     ? [
-        { prop: 'winbid', label: '中标单位名称', minWidth: 220 },
+        { prop: 'winbid', label: '中标单位名称', minWidth: 220, grow: 1 },
         { prop: 'accepted_amount', label: '中标金额（万元）', width: 150 },
         { prop: 'bid_type', label: '招标方式', width: 140 },
       ]
@@ -26,8 +26,8 @@ export function tenderColumns(kind: TenderKind): DataColumn[] {
     { prop: 'purchaser_cityname', label: '招标单位市', width: 130 },
     { prop: 'purchaser_countyname', label: '招标单位区县', width: 140 },
     ...coreSpecific,
-    { prop: 'purchaser', label: '招标单位名称', minWidth: 220 },
-    { prop: 'agency', label: '代理机构', minWidth: 220 },
+    { prop: 'purchaser', label: '招标单位名称', minWidth: 220, grow: 1 },
+    { prop: 'agency', label: '代理机构', minWidth: 220, grow: 1 },
     ...timeSpecific,
     { prop: 'first_indty_name', label: '一级行业名称', width: 180 },
     { prop: 'second_indty_name', label: '二级行业名称', width: 180 },
@@ -36,8 +36,8 @@ export function tenderColumns(kind: TenderKind): DataColumn[] {
     { prop: 'second_scene_name', label: '二级场景', width: 180 },
     { prop: 'third_scene_name', label: '三级场景', width: 180 },
     { prop: 'is_supp_scene', label: '是否补充场景', width: 130 },
-    { prop: 'purchaser_address', label: '招标公司地址', minWidth: 240 },
-    { prop: 'from_url', label: '发布链接', minWidth: 220, link: true },
+    { prop: 'purchaser_address', label: '招标公司地址', minWidth: 240, grow: 1 },
+    { prop: 'from_url', label: '发布链接', minWidth: 220, grow: 1, link: true },
     { prop: 'project_code', label: '项目编号', width: 180 },
     { prop: 'project_content_id', label: '项目ID', width: 280 },
     { prop: 'collect_date', label: '采集时间', width: 140 },
@@ -98,11 +98,6 @@ export function tenderDetailGroups(kind: TenderKind): EditorGroup[] {
     },
   ]
 }
-export const REGIONS = [
-  { key: 'purchaser_provname', label: '省份' },
-  { key: 'purchaser_cityname', label: '地市' },
-  { key: 'purchaser_countyname', label: '区县' },
-] as const
 export const DATES = [
   { key: 'collect_date', label: '采集时间' },
   { key: 'public_date', label: '发布时间' },

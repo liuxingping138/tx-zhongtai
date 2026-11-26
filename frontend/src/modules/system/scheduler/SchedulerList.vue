@@ -46,11 +46,11 @@ const loadError = ref('')
 const pending = ref('')
 // 计划和下次时间、状态和结束时间各并成一列，六列在常见宽度下一屏放下。
 const columns: DataColumn[] = [
-  { prop: 'name', label: '任务名称', minWidth: 160 },
-  { prop: 'plan', label: '每日计划', width: 230 },
-  { prop: 'status', label: '最近执行', width: 190 },
+  { prop: 'name', label: '任务名称', minWidth: 180 },
+  { prop: 'plan', label: '每日计划', minWidth: 230 },
+  { prop: 'status', label: '最近执行', minWidth: 200 },
   { prop: 'cost', label: '今日费用 / 上限', width: 150 },
-  { prop: 'watermark', label: '数据进度', fullLabel: '数据进度：爬虫是源数据的入库时间，类型判断是读到的采集日，其余打标任务是还有多少待办，清理类是上次处理了多少', width: 170 },
+  { prop: 'watermark', label: '数据进度', fullLabel: '数据进度：爬虫是源数据的入库时间，类型判断是读到的采集日，其余打标任务是还有多少待办，清理类是上次处理了多少', minWidth: 190 },
 ]
 const defaults = columns.map(col => col.prop)
 const selected = ref([...defaults])
@@ -322,7 +322,7 @@ onBeforeUnmount(() => { disposed = true; history.stop(); clearTimeout(timer) })
         <el-table-column
           label="操作"
           width="236"
-          fixed="right"
+          class-name="table-action"
         >
           <template #default="{ row }">
             <div class="row-actions">

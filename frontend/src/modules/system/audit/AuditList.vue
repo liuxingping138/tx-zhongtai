@@ -298,7 +298,7 @@ onMounted(() => {
         <el-table-column
           label="操作"
           width="90"
-          fixed="right"
+          class-name="table-action"
         >
           <template #default="{ row }">
             <button

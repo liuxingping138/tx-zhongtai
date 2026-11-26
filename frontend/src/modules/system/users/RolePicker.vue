@@ -126,7 +126,7 @@ function summary(role: RoleItem): string {
 }
 .role-option.is-on .role-option__box { border-color: var(--zt-blue-600); background: var(--zt-blue-600); }
 .role-option.is-on .role-option__box::after {
-  content: ''; width: 8px; height: 4px; margin-top: -2px; border-left: 2px solid var(--el-color-white); border-bottom: 2px solid var(--el-color-white); transform: rotate(-45deg);
+  content: ''; width: 8px; height: 4px; margin-top: -2px; border-left: 2px solid var(--zt-on-primary); border-bottom: 2px solid var(--zt-on-primary); transform: rotate(-45deg);
 }
 .role-option__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .role-option__title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }

@@ -31,7 +31,9 @@ const runs = ref<BatchRun[]>([])
 const total = ref(0)
 const page = ref(1)
 const loadingRuns = ref(false)
-const loadError = ref('')
+const optionsError = ref('')
+const runsError = ref('')
+const loadError = computed(() => runsError.value || optionsError.value)
 const workerOnline = ref(true)
 let timer: number | undefined
 let sequence = 0
@@ -68,8 +70,9 @@ async function loadOptions(): Promise<void> {
     templates.value = data.templates
     models.value = data.models
     categories.value = data.categories
+    optionsError.value = ''
   } catch (error) {
-    loadError.value = errorMessage(error, '模板加载失败，请刷新重试')
+    optionsError.value = errorMessage(error, '模板加载失败，请刷新重试')
   }
 }
 
@@ -107,15 +110,25 @@ async function loadRuns(quiet = false): Promise<void> {
     runs.value = data.items
     total.value = data.total
     workerOnline.value = data.worker_online
+    runsError.value = ''
     await refreshViewing()
   } catch (error) {
-    if (ticket === sequence && !quiet) ElMessage.error(errorMessage(error, '任务加载失败，请重试'))
+    if (ticket === sequence && !quiet) {
+      const message = errorMessage(error, '任务加载失败，请重试')
+      runsError.value = message
+      ElMessage.error(message)
+    }
   } finally {
     if (ticket === sequence) {
       loadingRuns.value = false
       schedule()
     }
   }
+}
+
+function retryLoad(): void {
+  if (optionsError.value) void loadOptions()
+  if (runsError.value) void loadRuns()
 }
 
 /** 抽屉里的任务跟着刷新：在这一页就用列表里的，不在就单独取一次；取不到（被删了）才关抽屉。 */
@@ -178,7 +191,7 @@ async function created(): Promise<void> {
           size="small"
           type="danger"
           plain
-          @click="loadRuns()"
+          @click="retryLoad()"
         >
           重试
         </el-button>

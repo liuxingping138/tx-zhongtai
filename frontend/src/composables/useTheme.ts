@@ -29,27 +29,27 @@ function handleMediaChange(e: MediaQueryListEvent | MediaQueryList) {
   }
 }
 
+function bindMediaQuery() {
+  if (typeof window.matchMedia !== 'function') {
+    return
+  }
+  if (mediaQueryList && typeof mediaQueryList.removeEventListener === 'function') {
+    mediaQueryList.removeEventListener('change', handleMediaChange)
+  }
+  mediaQueryList = window.matchMedia('(prefers-color-scheme: dark)')
+  prefersDark.value = mediaQueryList.matches
+  if (typeof mediaQueryList.addEventListener === 'function') {
+    mediaQueryList.addEventListener('change', handleMediaChange)
+  }
+}
+
 export function initTheme() {
   if (typeof window === 'undefined') {
     return
   }
   const stored = localStorage.getItem(STORAGE_KEY) as ThemeMode | null
-  if (stored === 'light' || stored === 'dark' || stored === 'auto') {
-    currentTheme.value = stored
-  } else {
-    currentTheme.value = 'auto'
-  }
-
-  if (typeof window.matchMedia === 'function') {
-    mediaQueryList = window.matchMedia('(prefers-color-scheme: dark)')
-    prefersDark.value = mediaQueryList.matches
-    if (typeof mediaQueryList.addEventListener === 'function') {
-      mediaQueryList.addEventListener('change', handleMediaChange)
-    } else if (typeof (mediaQueryList as unknown as { addListener?: (cb: typeof handleMediaChange) => void }).addListener === 'function') {
-      (mediaQueryList as unknown as { addListener: (cb: typeof handleMediaChange) => void }).addListener(handleMediaChange)
-    }
-  }
-
+  currentTheme.value = stored === 'light' || stored === 'dark' || stored === 'auto' ? stored : 'auto'
+  bindMediaQuery()
   const isDarkActive = currentTheme.value === 'dark' || (currentTheme.value === 'auto' && prefersDark.value)
   updateHtmlElement(isDarkActive)
 }

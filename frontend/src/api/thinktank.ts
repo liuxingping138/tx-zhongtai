@@ -103,10 +103,6 @@ export function listKnowledge(params: KnowledgeQuery): Promise<Page<KnowledgeIte
   return request(http.get('/thinktank/knowledge', { params }))
 }
 
-export function getKnowledge(id: string): Promise<KnowledgeItem> {
-  return request(http.get(`/thinktank/knowledge/${id}`))
-}
-
 export function previewKnowledge(id: string): Promise<KnowledgePreviewPayload> {
   return request(http.get(`/thinktank/knowledge/${id}/preview`))
 }

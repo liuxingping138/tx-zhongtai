@@ -200,6 +200,8 @@ onMounted(() => {
           <el-select
             v-model="query.outcome"
             multiple
+            collapse-tags
+            collapse-tags-tooltip
             clearable
             placeholder="全部"
           >
@@ -280,7 +282,7 @@ onMounted(() => {
         v-if="canUnlockIp"
         label="操作"
         width="110"
-        fixed="right"
+        class-name="table-action"
       >
         <template #default="{ row }">
           <el-button

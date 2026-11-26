@@ -13,24 +13,70 @@ const storageSuffix = `${auth.user?.id || 'anonymous'}:${route.path}`
 const storageKey = `zt:columns:v2:${storageSuffix}`
 // 保存时页面上有哪些列，用来认出之后新加的列（见 restoreColumns）。
 const knownKey = `zt:columns:known:${storageSuffix}`
-const columnKeys = props.columns.map(col => col.prop)
-const known = new Set(columnKeys)
-function remember(value: string[]): void {
-  localStorage.setItem(storageKey, JSON.stringify(value))
-  localStorage.setItem(knownKey, JSON.stringify(columnKeys))
+const columnKeys = computed(() => props.columns.map(col => col.prop))
+const known = computed(() => new Set(columnKeys.value))
+
+function readStoredList(key: string): string[] | null {
+  const raw: unknown = JSON.parse(localStorage.getItem(key) || 'null')
+  return Array.isArray(raw) ? raw.filter((item): item is string => typeof item === 'string') : null
 }
-try {
+
+function isLegacyCompact(current: string | null, restored: string[] | null): boolean {
+  if (current || !props.legacyDefaults || !restored) return false
+  return restored.length === props.legacyDefaults.length && props.legacyDefaults.every(key => restored.includes(key))
+}
+
+function collectPending(saved: unknown, keys: readonly string[]): Set<string> {
+  if (!Array.isArray(saved)) return new Set()
+  const present = new Set(keys)
+  return new Set(saved.filter((key): key is string => typeof key === 'string' && !present.has(key)))
+}
+
+// 记住首次加载时本地保存的已知列与选中列，防止异步追加 AI 列到达前被首屏静态列覆盖。
+let knownHistory = new Set<string>(columnKeys.value)
+let pendingSaved = new Set<string>()
+
+function remember(value: string[]): void {
+  const savedKeys = [...new Set([...value, ...pendingSaved])]
+  const knownKeys = [...new Set([...knownHistory, ...columnKeys.value])]
+  localStorage.setItem(storageKey, JSON.stringify(savedKeys))
+  localStorage.setItem(knownKey, JSON.stringify(knownKeys))
+}
+
+function initSelection(): void {
   const current = localStorage.getItem(storageKey)
   const saved: unknown = JSON.parse(current || localStorage.getItem(`zt:columns:v1:${storageSuffix}`) || 'null')
-  const restored = restoreColumns(saved, JSON.parse(localStorage.getItem(knownKey) || 'null'), columnKeys)
-  const wasCompactDefault = !current && props.legacyDefaults && restored?.length === props.legacyDefaults.length && props.legacyDefaults.every(key => restored.includes(key))
+  const storedKnown = readStoredList(knownKey)
+  const keys = columnKeys.value
+  const restored = restoreColumns(saved, storedKnown, keys)
+  const wasCompactDefault = isLegacyCompact(current, restored)
+  knownHistory = new Set([...(storedKnown ?? []), ...keys])
+  if (!wasCompactDefault) pendingSaved = collectPending(saved, keys)
   if (restored && !wasCompactDefault) selected.value = restored
   remember(selected.value)
+}
+
+try {
+  initSelection()
 } catch { /* Storage restrictions must not prevent using the table. */ }
+
+watch(columnKeys, keys => {
+  const toShow = keys.filter(key => pendingSaved.delete(key) || !knownHistory.has(key))
+  const hasNewKnown = keys.some(key => !knownHistory.has(key))
+  keys.forEach(key => knownHistory.add(key))
+  if (toShow.length) {
+    const next = new Set([...selected.value, ...toShow])
+    selected.value = keys.filter(key => next.has(key))
+  }
+  if (toShow.length || hasNewKnown) {
+    try { remember(selected.value) } catch { /* In-memory selection still works. */ }
+  }
+})
+
 watch(selected, value => {
   try { remember(value) } catch { /* In-memory selection still works. */ }
 }, { deep: true })
-const count = computed(() => selected.value.filter(key => known.has(key)).length)
+const count = computed(() => selected.value.filter(key => known.value.has(key)).length)
 
 </script>
 <template>

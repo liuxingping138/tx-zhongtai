@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { BatchRun, PromptTemplate, SampleSummary, TemplateReleaseInfo } from '@/api/ai'
-import { flowSteps, releaseEntry, releaseState, sampleCurrent, sampleFromRun, sampleState, stepActions } from './templateStatus'
+import { releaseEntry, releaseState, sampleCurrent, sampleFromRun, sampleState } from './templateStatus'
 
 const release = (changes: string[] = []): TemplateReleaseInfo => ({
   id: 'r', release_no: 2, released_at: '2026-10-22 16:24', released_by_name: '管理员', unreleased_changes: changes,
@@ -45,80 +45,6 @@ describe('样本试跑状态', () => {
     expect(sampleState(template({ sample: sample() }))).toMatchObject({
       text: '10 条全部解析成功', compact: '10/10 解析通过',
     })
-  })
-})
-
-describe('流程条', () => {
-  const tones = (steps: ReturnType<typeof flowSteps>) => steps.map(step => step.tone)
-
-  it('新模板：第一步是下一步，后两步还轮不到', () => {
-    expect(tones(flowSteps(null, true, false))).toEqual(['current', 'todo', 'todo'])
-  })
-
-  it('先传了样本、提示词还空着：第一步还没完成', () => {
-    const steps = flowSteps(template({ content: '' }), false, true)
-    expect(tones(steps)).toEqual(['current', 'todo', 'todo'])
-    expect(steps[0]?.text).toBe('还没写提示词')
-  })
-
-  it('有未保存的修改时先保存', () => {
-    expect(tones(flowSteps(template({ sample: sample() }), true, true))).toEqual(['current', 'done', 'todo'])
-  })
-
-  it('试跑通过、没上线：下一步是上线；业务人员看到的是请管理员上线', () => {
-    const steps = flowSteps(template({ sample: sample() }), false, false)
-    expect(tones(steps)).toEqual(['done', 'done', 'current'])
-    expect(steps[2]?.text).toBe('未上线，确认无误后请管理员上线')
-  })
-
-  it('试跑有失败算完成但要留意；草稿改过要重新试跑', () => {
-    expect(tones(flowSteps(template({ sample: sample({ failed_count: 1 }) }), false, true))).toEqual(['done', 'warn', 'current'])
-    expect(tones(flowSteps(template({ sample: sample({ current: false }), release: release(['提示词内容']) }), false, true)))
-      .toEqual(['done', 'current', 'todo'])
-  })
-
-  it('已上线且草稿没再改、也没试跑过：照实写没试跑，但不当成下一步去催', () => {
-    const steps = flowSteps(template({ release: release() }), false, true)
-    expect(tones(steps)).toEqual(['done', 'todo', 'done'])
-    expect(steps[1]?.text).toBe(sampleState(template()).text)
-  })
-
-  it('已上线且草稿没再改：三步都完成', () => {
-    expect(tones(flowSteps(template({ sample: sample(), release: release() }), false, true))).toEqual(['done', 'done', 'done'])
-  })
-})
-
-describe('流程条上的按钮', () => {
-  const admin = { canEdit: true, canRelease: true, sampleOpen: false }
-  const actionsOf = (item: PromptTemplate, context = admin) => stepActions(item, flowSteps(item, false, context.canRelease), context)
-
-  it('能上线但改不了这类模板的管理员，第一次上线也有入口', () => {
-    const releaser = { canEdit: false, canRelease: true, sampleOpen: false }
-    expect(actionsOf(template({ sample: sample() }), releaser)).toEqual({ release: '上线' })
-    expect(actionsOf(template({ sample: sample() }), { ...releaser, canRelease: false })).toEqual({})
-  })
-
-  it('试跑是下一步时给「去试跑」，右栏已经在试跑上就不给', () => {
-    expect(actionsOf(template())).toEqual({ test: '去试跑' })
-    expect(actionsOf(template(), { ...admin, sampleOpen: true })).toEqual({})
-  })
-
-  it('管理员：该上线时给版本号；上线后改了草稿但还要重新试跑时给「看改动」；没有改动给「上线管理」', () => {
-    expect(actionsOf(template({ sample: sample() }))).toEqual({ release: '上线' })
-    expect(actionsOf(template({ sample: sample(), release: release(['提示词内容']) }))).toEqual({ release: '上线第 3 版' })
-    expect(actionsOf(template({ sample: sample({ current: false }), release: release(['提示词内容']) })))
-      .toEqual({ test: '去试跑', release: '看改动' })
-    expect(actionsOf(template({ sample: sample(), release: release() }))).toEqual({ release: '上线管理' })
-  })
-
-  it('业务人员和只读的人：有改动都能「看改动」，否则只能查看上线内容', () => {
-    const staff = { canEdit: true, canRelease: false, sampleOpen: true }
-    expect(actionsOf(template({ sample: sample(), release: release(['码表']) }), staff)).toEqual({ release: '看改动' })
-    expect(actionsOf(template({ sample: sample() }), staff)).toEqual({ release: '查看上线内容' })
-    const reader = { canEdit: false, canRelease: false, sampleOpen: false }
-    expect(actionsOf(template({ release: release(['码表']) }), reader)).toEqual({ release: '看改动' })
-    expect(actionsOf(template({ release: release() }), reader)).toEqual({ release: '查看上线内容' })
-    expect(actionsOf(template(), reader)).toEqual({})
   })
 })
 

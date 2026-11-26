@@ -258,7 +258,7 @@ function roleNames(user: ManagedUser): string {
     <el-table-column
       label="操作"
       width="156"
-      fixed="right"
+      class-name="table-action"
     >
       <template #default="{ row }">
         <div class="row-actions">

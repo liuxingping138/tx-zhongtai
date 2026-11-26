@@ -7,12 +7,20 @@ describe('auditLabels', () => {
     expect(moduleLabel('policy.sources')).toBe('信源管理')
     expect(moduleLabel('codebook.area_codes')).toBe('省市区编码表')
     expect(moduleLabel('auth')).toBe('登录认证')
+    expect([
+      moduleLabel('tender.bidding'),
+      moduleLabel('tender.winning'),
+      moduleLabel('tender.purchaser'),
+      moduleLabel('tender.winbid'),
+      moduleLabel('tender.statistics'),
+    ]).toEqual(['招标信息', '中标信息', '招标基础数据', '中标基础数据', '招标统计分析'])
   })
 
   it('动作编码转中文', () => {
     expect(actionLabel('import')).toBe('导入')
     expect(actionLabel('login')).toBe('登录')
     expect(actionLabel('catalog_sync')).toBe('同步清单')
+    expect(actionLabel('unlock_ip')).toBe('解除 IP 限制')
     // 后端真会发的动作码都要有中文，不然日志里直接露出 ask、publish。
     expect([actionLabel('ask'), actionLabel('publish'), actionLabel('sync_scenarios')]).toEqual(['试发 / 样本试跑', '上线 / 下线', '同步新增场景'])
     expect(moduleLabel('ai.releases')).toBe('模板上线')

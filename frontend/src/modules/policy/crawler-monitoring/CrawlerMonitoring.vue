@@ -52,11 +52,11 @@ const { exporting, onExport } = useExcelExport({
 
 const tableColumns = [
   { prop: 'site_name', label: '网站名称', minWidth: 220, grow: 2 },
-  { prop: 'province_name', label: '省份', width: 120 },
-  { prop: 'city_name', label: '地市', width: 120 },
+  { prop: 'province_name', label: '省份', minWidth: 120, grow: 1 },
+  { prop: 'city_name', label: '地市', minWidth: 120, grow: 1 },
   { prop: 'total_rows', label: '数据总量', width: 110 },
-  { prop: 'last_created_at', label: '最新入库时间', width: 170 },
-  { prop: 'last_published_date', label: '最近发布时间', width: 120 },
+  { prop: 'last_created_at', label: '最新入库时间', minWidth: 170, grow: 1 },
+  { prop: 'last_published_date', label: '最近发布时间', minWidth: 120, grow: 0.8 },
   { prop: 'stale_days', label: '停更天数', width: 100 },
   { prop: 'status_label', label: '状态', width: 90 },
 ] as const

@@ -52,7 +52,7 @@
   background: var(--zt-success-soft); color: var(--zt-success-text);
   font: 600 11.5px/1 var(--zt-font); font-variant-numeric: tabular-nums; cursor: pointer;
 }
-.sample__no.is-failed { border-color: var(--zt-danger-text); background: var(--zt-danger-text); color: var(--el-color-white); }
+.sample__no.is-failed { border-color: var(--zt-danger-text); background: var(--zt-danger-text); color: var(--zt-on-danger); }
 .sample__no.is-format {
   border-color: var(--zt-warning);
   background: repeating-linear-gradient(135deg, var(--zt-warning-soft) 0 4px, var(--zt-warning-border) 4px 8px);
