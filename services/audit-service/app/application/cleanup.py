@@ -6,7 +6,7 @@ import uuid
 from datetime import timedelta
 
 from platform_common.clock import utcnow
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.ingest import ingest_event
@@ -28,10 +28,6 @@ async def delete_expired(cleanup_session: AsyncSession, *, retention_days: int) 
         total += deleted
         if deleted < DELETE_BATCH:
             return total
-
-
-async def remaining_count(session: AsyncSession) -> int:
-    return int((await session.execute(select(func.count()).select_from(AuditEvent))).scalar_one())
 
 
 async def record_cleanup(

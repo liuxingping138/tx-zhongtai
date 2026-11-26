@@ -17,11 +17,6 @@ async def get_role_by_id(session: AsyncSession, role_id: uuid.UUID) -> Role | No
     return result.scalar_one_or_none()
 
 
-async def get_role_by_code(session: AsyncSession, code: str) -> Role | None:
-    result = await session.execute(select(Role).where(Role.code == code))
-    return result.scalar_one_or_none()
-
-
 async def get_role_for_update(session: AsyncSession, role_id: uuid.UUID) -> Role | None:
     result = await session.execute(select(Role).where(Role.id == role_id).with_for_update())
     return result.scalar_one_or_none()

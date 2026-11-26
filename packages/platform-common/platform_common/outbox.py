@@ -17,7 +17,6 @@ from collections.abc import Sequence
 from datetime import datetime, timedelta
 from typing import Any, cast
 
-from pydantic import BaseModel, Field
 from sqlalchemy import CursorResult, and_, delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -27,12 +26,6 @@ from platform_common.enums import OutboxStatus
 # 一批最多 20 条、每条投递超时 5 秒，最坏 100 秒投完；租约留足余量。
 DEFAULT_LEASE = timedelta(minutes=5)
 REPLAYABLE_STATUSES = (OutboxStatus.DEAD, OutboxStatus.FAILED, OutboxStatus.PENDING, OutboxStatus.DELIVERING)
-
-
-class OutboxEventDraft(BaseModel):
-    event_type: str
-    payload: dict[str, Any]
-    schema_version: int = Field(default=1, ge=1)
 
 
 # 退避最长 15 分钟。配合各服务 worker_max_attempts=100，审计服务连不上、密钥对不上能容忍约一天才置 dead；

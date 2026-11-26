@@ -219,3 +219,84 @@ def test_body_limit_preserves_request_id_and_allows_excel_upload() -> None:
         headers={"authorization": "Bearer test-token"},
     )
     assert res_upload.status_code == 200
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/v1/thinktank/knowledge/upload",
+        "/api/v1/thinktank/knowledge/upload-tags",
+        "/api/v1/ai/batch-runs/input-preview",
+        "/api/v1/ai/batch-runs",
+    ],
+)
+async def test_new_upload_paths_require_bearer_before_reading(path: str) -> None:
+    async def app(scope, receive, send):  # type: ignore[no-untyped-def]
+        raise AssertionError("未认证上传不应进入应用")
+
+    middleware = RequestBodyLimitMiddleware(app, max_bytes=1024, upload_paths=("/api/v1/ai/batch-runs",))
+    sent: list[dict[str, object]] = []
+
+    async def send(message):  # type: ignore[no-untyped-def]
+        sent.append(message)
+
+    async def receive():  # type: ignore[no-untyped-def]
+        raise AssertionError("不应读取正文")
+
+    scope = {"type": "http", "method": "POST", "path": path, "headers": []}
+    await middleware(scope, receive, send)
+    assert sent[0]["status"] == 401
+
+
+def test_longest_prefix_exact_and_suffix_limits_with_small_default() -> None:
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    app = FastAPI()
+
+    @app.post("/api/v1/thinktank/knowledge/upload")
+    async def upload() -> dict[str, bool]:
+        return {"ok": True}
+
+    @app.post("/api/v1/thinktank/knowledge/upload-tags")
+    async def upload_tags() -> dict[str, bool]:
+        return {"ok": True}
+
+    @app.post("/api/v1/ai/batch-runs")
+    async def start_run() -> dict[str, bool]:
+        return {"ok": True}
+
+    @app.post("/api/v1/ai/batch-runs/from-rows")
+    async def from_rows() -> dict[str, bool]:
+        return {"ok": True}
+
+    @app.post("/api/v1/ai/prompts/p1/files/excel")
+    async def prompt_excel() -> dict[str, bool]:
+        return {"ok": True}
+
+    @app.post("/api/v1/ai/prompts/p1/test-data")
+    async def prompt_test_data() -> dict[str, bool]:
+        return {"ok": True}
+
+    # 故意把短前缀 /upload 放在长前缀 /upload-tags 前面，验证仍按最长路径前缀和段边界匹配。
+    app.add_middleware(
+        RequestBodyLimitMiddleware,
+        max_bytes=100,
+        path_limits={
+            "/api/v1/thinktank/knowledge/upload": 1000,
+            "/api/v1/thinktank/knowledge/upload-tags": 300,
+        },
+        exact_limits={"/api/v1/ai/batch-runs": 1000},
+        suffix_limits={"/files/excel": 1000},
+        upload_paths=("/api/v1/ai/batch-runs",),
+    )
+    client = TestClient(app, headers={"authorization": "Bearer ok"})
+
+    assert client.post("/api/v1/thinktank/knowledge/upload", content=b"a" * 500).status_code == 200
+    assert client.post("/api/v1/thinktank/knowledge/upload-tags", content=b"a" * 200).status_code == 200
+    assert client.post("/api/v1/thinktank/knowledge/upload-tags", content=b"a" * 500).status_code == 413
+    assert client.post("/api/v1/ai/batch-runs", content=b"a" * 500).status_code == 200
+    assert client.post("/api/v1/ai/batch-runs/from-rows", content=b"a" * 200).status_code == 413
+    assert client.post("/api/v1/ai/prompts/p1/files/excel", content=b"a" * 500).status_code == 200
+    assert client.post("/api/v1/ai/prompts/p1/test-data", content=b"a" * 200).status_code == 413

@@ -62,13 +62,6 @@ def ensure_jwt_keys(directory: Path, *, allow_generate: bool) -> JwtKeyMeta:
     return meta
 
 
-def load_private_pem(directory: Path, kid: str) -> bytes:
-    path = directory / f"{kid}{_PRIVATE_SUFFIX}"
-    if not path.exists():
-        raise JwtKeyError(f"缺少私钥 kid={kid}")
-    return path.read_bytes()
-
-
 # 私钥文件 -> （修改时间, 解析好的私钥）。
 _PRIVATE_KEYS: dict[Path, tuple[int, Any]] = {}
 

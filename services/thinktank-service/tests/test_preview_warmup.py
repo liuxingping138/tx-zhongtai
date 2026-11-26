@@ -164,7 +164,7 @@ def _client_with_upload(monkeypatch: pytest.MonkeyPatch, enabled: bool) -> tuple
         "upload_knowledge_file",
         AsyncMock(return_value={"id": file_id, "file_name": "方案.pdf"}),
     )
-    return TestClient(app), file_id
+    return TestClient(app, headers={"Authorization": "Bearer test"}), file_id
 
 
 @pytest.mark.parametrize("enabled", [True, False])

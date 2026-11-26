@@ -301,4 +301,6 @@ async def export_base_tags(session: AsyncSession, actor: Actor, filters: Filters
         actor=actor,
         extra={"count": len(rows)},
     )
+    # 大表构建 Excel 耗时较长：先提交释放数据库事务，避免持连接超时。
+    await session.commit()
     return await build_workbook_async(export_cols, rows, sheet_name="政策基础标签表")

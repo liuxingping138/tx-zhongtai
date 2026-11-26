@@ -110,10 +110,6 @@ async def mark_skipped(session: AsyncSession, source_ids: list[str], reason: str
     await session.execute(insert(SkippedSource).values(rows).on_conflict_do_nothing())
 
 
-async def base_tag_by_hash(session: AsyncSession, digest: str) -> BaseTag | None:
-    return (await session.scalars(select(BaseTag).where(BaseTag.content_hash == digest))).first()
-
-
 async def base_tags_by_hashes(session: AsyncSession, digests: Collection[str]) -> dict[str, BaseTag]:
     chunk_size = 1000
     wanted = list(dict.fromkeys(digests))

@@ -226,6 +226,27 @@ def test_ingest_keeps_extra_next_to_changes_and_stays_under_the_size_limit() -> 
     )
 
 
+def test_fit_truncates_oversized_strings_nested_dicts_and_many_keys() -> None:
+    """顶层没有大列表，而是超长字符串、嵌套字典或大量键时，也必须压回 24KB 以内避免进审计死信。"""
+
+    from platform_common.audit_emit import ingest_changes
+
+    big_str = {"changes": {"file_name": "测" * 20_000, "remark": "长" * 20_000}}
+    fitted_str = ingest_changes(big_str)
+    assert len(json.dumps(fitted_str, ensure_ascii=False).encode()) <= 24_000
+    assert "…(共20000字)" in fitted_str["file_name"]
+
+    nested = {"changes": {"diff": {"from": "a" * 30_000, "to": "b" * 30_000}, "items": [{"body": "c" * 30_000}]}}
+    fitted_nested = ingest_changes(nested)
+    assert len(json.dumps(fitted_nested, ensure_ascii=False).encode()) <= 24_000
+    assert fitted_nested["diff"]["from"].startswith("a")
+
+    many_keys = {"changes": {f"field_{idx:04d}": "v" * 200 for idx in range(500)}}
+    fitted_many = ingest_changes(many_keys)
+    assert len(json.dumps(fitted_many, ensure_ascii=False).encode()) <= 24_000
+    assert fitted_many["_已截断"] is True
+
+
 @pytest.mark.asyncio
 async def test_delivered_events_older_than_retention_are_purged_in_batches(monkeypatch: pytest.MonkeyPatch) -> None:
     """已投递的出站记录保留 30 天：审计服务早已入库，这里永不删除只会越积越多。分批删、每批一个事务。"""

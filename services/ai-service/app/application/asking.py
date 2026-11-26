@@ -108,6 +108,8 @@ async def _row_values(session: AsyncSession, prompt_id: str, row: int, code_tabl
     """测试样本第 row 条数据（从 0 数）+ 码表全文（上传的或系统码表），用来把 @【列名】@【上传码表】替换成真实值。"""
 
     template = await require(session, prompt_id)
+    # 读 Excel 和拉取系统码表可能较慢：先提交释放只读事务，避免外部 I/O 期间占着数据库连接。
+    await session.commit()
     values = dict(await test_rows.row_values(template, row))
     code = await code_text(template, code_table=code_table)
     if code is not None:

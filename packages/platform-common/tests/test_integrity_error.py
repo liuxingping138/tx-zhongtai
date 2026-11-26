@@ -50,12 +50,13 @@ def _app() -> FastAPI:
 def test_unique_violation_during_flush_is_409() -> None:
     response = TestClient(_app()).post("/flush-unique")
     assert response.status_code == 409
-    assert response.json()["code"] == "VERSION_CONFLICT"
+    assert response.json()["code"] == "DUPLICATE"
 
 
 def test_unique_violation_during_commit_is_409() -> None:
     response = TestClient(_app(), raise_server_exceptions=False).post("/commit-unique")
     assert response.status_code == 409
+    assert response.json()["code"] == "DUPLICATE"
 
 
 def test_other_integrity_errors_stay_500() -> None:

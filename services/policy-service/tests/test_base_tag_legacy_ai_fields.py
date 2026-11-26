@@ -64,8 +64,17 @@ async def test_export_and_dynamic_columns_leave_out_the_removed_fields(monkeypat
     monkeypatch.setattr(base_tags, "attach_policy_contents", nothing)
     monkeypatch.setattr(base_tags, "enqueue_event", nothing)
     monkeypatch.setattr(base_tags.internal_clients, "ai", templates)
+
+    class _Session:
+        committed = 0
+
+        async def commit(self) -> None:
+            self.committed += 1
+
     actor: Any = type("Actor", (), {"id": "u1", "name": "管理员"})()
-    book = load_workbook(BytesIO(await base_tags.export_base_tags(object(), actor, {})))  # type: ignore[arg-type]
+    session = _Session()
+    book = load_workbook(BytesIO(await base_tags.export_base_tags(session, actor, {})))  # type: ignore[arg-type]
+    assert session.committed == 1
     headers = [cell.value for cell in next(book.active.iter_rows(max_row=1))]  # type: ignore[union-attr]
     assert "是否政策" in headers and "判定简因" in headers and not set(LEGACY) & set(headers)
     assert await base_tags._active_ai_fields() == ["是否政策", "判定简因", "依据"]

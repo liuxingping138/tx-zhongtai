@@ -15,7 +15,7 @@
 - `platform_common.excel` / `platform_common.columns`：Excel 读写、表头匹配。解析有解压大小、行列数和并发上限。
 - `platform_common.http_utils` / `platform_common.body_limit`：统一响应、上传大小限制。上传在鉴权通过之后才解析。
 - `platform_common.xlsx_writer`：不经 openpyxl、直接写只含文本的 xlsx，业务导出走它。
-- `platform_common.config` / `platform_common.public_config`：服务配置基类（生产环境拒绝示例密钥）、容器里只打印白名单参数。
+- `platform_common.config`：服务配置基类（生产环境拒绝示例密钥）。
 - `platform_common.database`：`create_service_engine`，全部服务的连接池与 PostgreSQL 超时只在这里设（见 `docs/design/实现决策.md`「连接预算与超时」）。
 - `platform_common.audit_emit`：`AuditEmitter`，审计入队与后台投递。
 - `platform_common.internal_calls`：服务间 `/internal/*` 调用的请求头。

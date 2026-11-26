@@ -25,7 +25,6 @@ _NAME_PARTS = re.compile(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])|\d+")
 
 _SCRIPT_TITLE = re.compile(r"^document\.write\s*\(")
 _STRING_LITERAL = re.compile(r"\"((?:[^\"\\]|\\.)*)\"|'((?:[^'\\]|\\.)*)'")
-_TAG = re.compile(r"<[^>]*>")
 TITLE_SCRIPT_NOTE = "标题原文是网页脚本，已取出其中的文字"
 
 
@@ -139,6 +138,6 @@ def policy_title(raw: Any) -> tuple[str, bool]:
     title = _text(raw)
     if not _SCRIPT_TITLE.match(title):
         return title, False
-    texts = (_TAG.sub("", first or second).strip() for first, second in _STRING_LITERAL.findall(title))
+    texts = (_TAGS.sub("", first or second).strip() for first, second in _STRING_LITERAL.findall(title))
     best = max(texts, key=len, default="")
     return (best, True) if best else (title, False)

@@ -97,16 +97,15 @@ async def ensure_idle(session: AsyncSession, template: PromptTemplate) -> None:
         )
 
 
-async def _plan(
+async def _check_ready(
     session: AsyncSession,
     access: CategoryAccess,
     prompt_id: str,
-    upload: tuple[str, bytes] | None,
     *,
     version: str,
     lock: bool,
-) -> tuple[PromptTemplate, _Spec, dict[str, Any]]:
-    """发起前的全部检查，预检和发起共用：先查不用读文件的（版本、模型、是否在跑），再解析 Excel。"""
+) -> tuple[PromptTemplate, _Spec]:
+    """发起前的库内检查：版本、模型、类型编辑权与是否空闲。lock=False 无锁预检，lock=True 写库前加行锁防并发。"""
 
     template = await require_editable_prompt(session, access, prompt_id, lock=lock)
     spec = await _spec(session, template, version)
@@ -114,9 +113,7 @@ async def _plan(
     # 这一类也得能编辑，不然发起人看不到、停不了自己刚发起的任务，钱也记到别的类型名下。
     access.require_edit(spec.category)
     await ensure_idle(session, template)
-    if upload is None:
-        raise invalid("请选择本次任务的数据文件")
-    return template, spec, await inspect_upload(spec.content, upload)
+    return template, spec
 
 
 async def preview_input(
@@ -129,7 +126,10 @@ async def preview_input(
 ) -> dict[str, Any]:
     """只检查不发起：不调用模型、不建任务、不动模板的测试样本。"""
 
-    _, spec, summary = await _plan(session, access, prompt_id, upload, version=version, lock=False)
+    _, spec = await _check_ready(session, access, prompt_id, version=version, lock=False)
+    # 先释放只读事务再解析 Excel，避免大表格解析期间占着数据库连接。
+    await session.commit()
+    summary = await inspect_upload(spec.content, upload)
     release_no = spec.release.release_no if spec.release else None
     return {**summary, "version": version, "release_no": release_no, "model_name": spec.model.name}
 
@@ -158,11 +158,23 @@ async def start_run(
     upload: tuple[str, bytes] | None = None,
 ) -> dict[str, Any]:
     version = str(values.get("version") or VERSION_RELEASE)
-    template, spec, summary = await _plan(
-        session, access, str(values.get("prompt_id") or ""), upload, version=version, lock=True
-    )
+    prompt_id = str(values.get("prompt_id") or "")
+    template, spec = await _check_ready(session, access, prompt_id, version=version, lock=False)
+    if upload is None:
+        raise invalid("请选择本次任务的数据文件")
+    # 放掉只读事务后再解析 Excel 与请求码表服务（对齐 pipeline_runs），不在 FOR UPDATE 锁内做长耗时外部 I/O。
+    await session.commit()
+    summary = await inspect_upload(spec.content, upload)
     # 先取码表：码表服务不可用就不建任务，免得排进队列才发现没有码表。
     code = await _code(template, spec)
+    template, locked_spec = await _check_ready(session, access, prompt_id, version=version, lock=True)
+    if locked_spec.content != spec.content or (
+        locked_spec.release is not None and spec.release is not None and locked_spec.release.id != spec.release.id
+    ):
+        raise ApiError(
+            "模板内容或上线版本刚刚被修改，请刷新后重新发起", code=ErrorCode.VERSION_CONFLICT, http_status=409
+        )
+    spec = locked_spec
     limit = max(int(values.get("limit") or 0), 0)
     model = spec.model
     run = BatchRun(

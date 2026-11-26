@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -36,6 +37,7 @@ from app.domain.models import (
 from app.repositories import batch_runs as repo
 from app.repositories import prompts as prompt_repo
 
+logger = logging.getLogger("ai.batch_runs")
 PAGE_SIZE_MAX = 100
 STALE_MESSAGE = "执行进程重启或中断，任务未完成；已跑完的部分可下载原始返回"
 _KILO = Decimal(1000)
@@ -254,7 +256,16 @@ async def stop_run(
         run.status, run.finished_at = RUN_CANCELLED, utcnow()
     else:
         run.status, run.cancel_requested = RUN_STOPPING, True
-    await enqueue_event(session, event_type=event_type, actor=actor, category=run.prompt_category, target_id=run.id)
+    target = str(run.prompt_id) if sample else run.id
+    changes = {"run_id": run.id} if sample else None
+    await enqueue_event(
+        session,
+        event_type=event_type,
+        actor=actor,
+        category=run.prompt_category,
+        target_id=target,
+        changes=changes,
+    )
     return to_dict(run)
 
 
@@ -279,8 +290,11 @@ async def delete_run(session: AsyncSession, actor: Actor, access: CategoryAccess
     await enqueue_event(
         session, event_type="ai.batch_run.deleted", actor=actor, category=run.prompt_category, target_id=run_id
     )
-    await session.flush()
-    await anyio.to_thread.run_sync(storage.remove_tree, storage.run_dir(run_id))
+    await session.commit()
+    try:
+        await anyio.to_thread.run_sync(storage.remove_tree, storage.run_dir(run_id))
+    except OSError:
+        logger.warning("batch_run_delete_cleanup_failed run_id=%s", run_id, exc_info=True)
 
 
 async def download(

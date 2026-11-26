@@ -23,8 +23,8 @@ JWT_P6_DIR := deploy/secrets/jwt-p6
 
 .PHONY: p6-logs help bootstrap jwt-keys jwt-keys-p6 dev-up dev-down migrate migrate-check seed admin-create check \
         test-unit test-integration test-e2e smoke migrate-audit provision-audit-cleanup provision-codebook-db \
-        seed-area-codes crawler-sync crawler-backfill \
-        provision-policy-db provision-ai-db \
+        seed-area-codes seed-knowledge crawler-sync crawler-backfill \
+        provision-policy-db provision-ai-db provision-thinktank-db \
         outbox-replay audit-cleanup iam-session-cleanup p6-env p6-up p6-down p6-migrate p6-seed p6-admin \
         p6-backup p6-restore p6-fixtures export-openapi scan-scope hooks audit-deps
 
@@ -223,6 +223,7 @@ check:
 	@python3 scripts/check_code_rules.py
 	@python3 scripts/test_check_code_rules.py
 	@bash scripts/test_migrate_check.sh
+	@if docker info >/dev/null 2>&1; then bash scripts/test_restore_owner.sh; else echo "跳过 test_restore_owner.sh（Docker 未运行）"; fi
 	@echo "== OpenAPI 与应用对象一致 =="
 	@bash scripts/check_openapi.sh
 
@@ -243,6 +244,7 @@ p6-env:
 	@# 新增服务的库配置：已有的 .p6.env 不会重新从样例生成，缺什么补什么。
 	@grep -q '^AI_DB_NAME=' $(P6_ENV) || printf 'AI_DB_NAME=ai_p6_db\nAI_DB_USER=ai_p6\nAI_DB_PASSWORD=p6-only-change-me-ai\n' >> $(P6_ENV)
 	@grep -q '^THINKTANK_DB_NAME=' $(P6_ENV) || printf 'THINKTANK_DB_NAME=thinktank_p6_db\nTHINKTANK_DB_USER=thinktank_p6\nTHINKTANK_DB_PASSWORD=p6-only-change-me-thinktank\n' >> $(P6_ENV)
+	@grep -q ^REDIS_PASSWORD= $(P6_ENV) || echo REDIS_PASSWORD=p6-only-change-me-redis >> $(P6_ENV)
 
 jwt-keys-p6:
 	@bash scripts/gen-jwt-keys.sh $(JWT_P6_DIR)
@@ -328,6 +330,7 @@ test-integration: p6-up
 	  && python3 tests/p6/business_patch.py'
 	@P6_COMPOSE="$(P6_COMPOSE)" DOCKER="$(P6_DOCKER)" P6_SERVER="$(P6_SERVER)" bash scripts/scheduler-integration.sh
 	@P6_COMPOSE="$(P6_COMPOSE)" DOCKER="$(P6_DOCKER)" P6_SERVER="$(P6_SERVER)" bash scripts/ai-integration.sh
+	@bash scripts/test_restore_owner.sh
 
 p6-fixtures:
 	$(P6_COMPOSE) exec -T policy-service .venv/bin/python < tests/p6/seed_crawler.py

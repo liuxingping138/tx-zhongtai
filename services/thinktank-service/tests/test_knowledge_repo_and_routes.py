@@ -268,6 +268,17 @@ def test_content_disposition_sanitizes_header_chars() -> None:
     assert 'filename="bad___name.pdf"' in header
 
 
+def test_upload_without_bearer_is_rejected_before_reading() -> None:
+    unauth = TestClient(app)
+    res = unauth.post("/api/v1/thinktank/knowledge/upload", files={"file": ("demo.pdf", b"%PDF", "application/pdf")})
+    assert res.status_code == 401
+    res_tags = unauth.post(
+        "/api/v1/thinktank/knowledge/upload-tags",
+        files={"file": ("tags.xlsx", b"PK\x03\x04", "application/octet-stream")},
+    )
+    assert res_tags.status_code == 401
+
+
 def test_remaining_http_routes(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _db():  # type: ignore[no-untyped-def]
         yield None
@@ -334,7 +345,7 @@ def test_remaining_http_routes(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     try:
-        client = TestClient(app)
+        client = TestClient(app, headers={"Authorization": "Bearer test"})
         assert client.get("/api/v1/thinktank/knowledge/export").status_code == 200
         assert client.get("/api/v1/thinktank/knowledge/export-undefined").status_code == 200
         assert (

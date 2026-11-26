@@ -103,6 +103,7 @@ async def import_users(
         content=payload,
         media_type=XLSX,
         headers={
+            "Cache-Control": "no-store",
             "Content-Disposition": 'attachment; filename="users-import.xlsx"',
             "X-Import-Rejected": "0",
             "X-Import-Inserted": str(len(outcome.created)),
@@ -163,7 +164,7 @@ async def create_user(
     payload: dict[str, object] = {"user": user}
     if temporary is not None:
         payload["temporary_password"] = temporary
-    return success_json(payload, status_code=201)
+    return success_json(payload, status_code=201, headers={"Cache-Control": "no-store"})
 
 
 @router.patch("/users/{user_id}")
@@ -209,7 +210,7 @@ async def reset_password(
     session: AsyncSession = Depends(get_db_session, scope="function"),
 ) -> JSONResponse:
     temporary = await user_admin.reset_password(session, principal.user, user_id)
-    return success_json({"temporary_password": temporary})
+    return success_json({"temporary_password": temporary}, headers={"Cache-Control": "no-store"})
 
 
 @router.post("/users/{user_id}/revoke-sessions")

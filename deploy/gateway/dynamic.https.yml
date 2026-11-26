@@ -82,7 +82,7 @@ http:
       priority: 110
       tls: {}
     ai-download:
-      rule: "PathRegexp(`^/api/v1/ai/batch-runs/[^/]+/files/[^/]+$`)"
+      rule: "PathRegexp(`^/api/v1/ai/batch-runs/[^/]+/files/[^/]+$`) || PathRegexp(`^/api/v1/ai/prompts/[^/]+/sample-run/[^/]+/files/[^/]+$`)"
       entryPoints: ["websecure"]
       service: ai-service
       middlewares: ["secure-headers"]

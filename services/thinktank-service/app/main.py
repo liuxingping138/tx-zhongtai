@@ -26,6 +26,8 @@ settings = get_settings()
 setup_logging(settings.service_name, level=settings.log_level, json_output=settings.environment != "development")
 logger = get_logger(__name__)
 
+DEFAULT_MAX_BYTES = 2 * 1024 * 1024
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -51,8 +53,16 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json" if settings.environment != "production" else None,
         lifespan=lifespan,
     )
-    max_body = max(settings.upload_max_bytes, settings.import_max_bytes) + MULTIPART_OVERHEAD_BYTES
-    app.add_middleware(RequestBodyLimitMiddleware, max_bytes=max_body)
+    upload_limit = settings.upload_max_bytes + MULTIPART_OVERHEAD_BYTES
+    import_limit = settings.import_max_bytes + MULTIPART_OVERHEAD_BYTES
+    app.add_middleware(
+        RequestBodyLimitMiddleware,
+        max_bytes=DEFAULT_MAX_BYTES,
+        path_limits={
+            "/api/v1/thinktank/knowledge/upload": upload_limit,
+            "/api/v1/thinktank/knowledge/upload-tags": import_limit,
+        },
+    )
     app.add_middleware(RequestIdMiddleware)
     if settings.cors_allow_origins:
         app.add_middleware(

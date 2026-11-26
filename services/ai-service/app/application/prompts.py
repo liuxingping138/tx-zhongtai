@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import PureWindowsPath
+import logging
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 import anyio
@@ -26,10 +27,19 @@ from app.repositories import batch_runs as run_repo
 from app.repositories import prompts as repo
 from app.repositories import releases as release_repo
 
+logger = logging.getLogger("ai.prompts")
 EXCEL_SUFFIX = ".xlsx"
 # 码表：文本直接用；Excel 转成一行一条、Tab 分隔的文字再存，运行时和 .txt 一样整份放进 @【上传码表】。
 CODE_TEXT_SUFFIXES = (".txt", ".csv")
 TITLE_MAX = 255
+
+
+async def _cleanup_path(path: Path, *, tree: bool = False) -> None:
+    try:
+        work = anyio.to_thread.run_sync(storage.remove_tree, path) if tree else anyio.Path(path).unlink(missing_ok=True)
+        await work
+    except OSError:
+        logger.warning("prompt_disk_cleanup_failed path=%s", path, exc_info=True)
 
 
 def sample_summary(template: PromptTemplate, run: BatchRun | None) -> dict[str, Any] | None:
@@ -228,9 +238,9 @@ async def delete_prompt(session: AsyncSession, actor: Actor, access: CategoryAcc
         run_repo.mark_deleted(sample, now)
     await repo.delete(session, template)
     await audit_template(session, "ai.prompt.deleted", actor, template)
-    await session.flush()
+    await session.commit()
     for folder in (storage.prompt_dir(prompt_id), *(storage.run_dir(sample.id) for sample in samples)):
-        await anyio.to_thread.run_sync(storage.remove_tree, folder)
+        await _cleanup_path(folder, tree=True)
 
 
 def _check_suffix(filename: str, suffix: str, label: str) -> None:
@@ -275,24 +285,26 @@ async def upload_file(
     else:
         payload = (await _code_table_text(name, content)).encode("utf-8")
         template.code_name, template.code_digest = name, code_digest(payload)
+    target = storage.prompt_file(prompt_id, kind)
+    had_file = await anyio.Path(target).is_file()
     _touch(template, actor)
     await audit_template(session, "ai.prompt.file_uploaded", actor, template, {"kind": kind})
     await session.flush()
-    await anyio.to_thread.run_sync(storage.write_atomic, storage.prompt_file(prompt_id, kind), payload)
-    return await to_out(session, template, access)
+    await anyio.to_thread.run_sync(storage.write_atomic, target, payload)
+    try:
+        out = await to_out(session, template, access)
+        await session.commit()
+    except Exception:
+        if not had_file:
+            await _cleanup_path(target)
+        raise
+    return out
 
 
 async def save_test_rows(
-    session: AsyncSession,
-    actor: Actor,
-    access: CategoryAccess,
-    prompt_id: str,
-    data: dict[str, Any],
+    session: AsyncSession, actor: Actor, access: CategoryAccess, prompt_id: str, data: dict[str, Any]
 ) -> dict[str, Any]:
-    """从数据库取来的测试数据（file_name、headers、rows）存成模板的测试 Excel。
-
-    之后和上传的测试样本一样用：试发选其中一行，样本试跑取前几行；正式的批量任务另外上传数据。
-    """
+    """从数据库取来的测试数据存成模板的测试 Excel，供试发与样本试跑复用。"""
 
     content = await run_excel_parse(rows_workbook, list(data["headers"]), list(data["rows"]))
     return await upload_file(session, actor, access, prompt_id, "excel", (str(data["file_name"]), content))
@@ -308,9 +320,10 @@ async def delete_file(
         template.code_name, template.code_digest = "", ""
     _touch(template, actor)
     await audit_template(session, "ai.prompt.file_deleted", actor, template, {"kind": kind})
-    await session.flush()
-    await anyio.Path(storage.prompt_file(prompt_id, kind)).unlink(missing_ok=True)
-    return await to_out(session, template, access)
+    out = await to_out(session, template, access)
+    await session.commit()
+    await _cleanup_path(storage.prompt_file(prompt_id, kind))
+    return out
 
 
 async def download_file(
@@ -374,11 +387,7 @@ def require_code(content: str, code: str | None) -> None:
 
 
 async def code_text(template: PromptTemplate, *, code_table: str | None = None) -> str | None:
-    """模板实际用的码表全文：选了系统码表就实时取，否则读上传的码表文件；都没有时为 None。
-
-    code_table 不为 None 时按它选（编辑页上还没保存的选择）：试发要用页面上看到的码表，不能悄悄换成库里存的。
-    上传的码表文件是传完就存的，不存在「没保存」。
-    """
+    """模板实际用的码表全文：系统码表实时取，否则读上传文件；code_table 非空时优先按页面当前选择。"""
 
     key = template.code_table if code_table is None else checked_code_table(code_table)
     if key:

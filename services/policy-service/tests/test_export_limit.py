@@ -28,6 +28,14 @@ class _FakeActor:
     name = "测试"
 
 
+class _FakeSession:
+    def __init__(self) -> None:
+        self.committed = 0
+
+    async def commit(self) -> None:
+        self.committed += 1
+
+
 @pytest.mark.parametrize(("module", "export_fn", "filters"), MODULES)
 def test_export_rejects_when_over_limit(
     monkeypatch: pytest.MonkeyPatch, module, export_fn: str, filters: dict[str, str]
@@ -73,10 +81,13 @@ def test_export_passes_filters_to_repository(
     monkeypatch.setattr(module.repo, "list_filtered", fake_list)
     monkeypatch.setattr(module, "enqueue_event", fake_enqueue)
 
-    payload = asyncio.run(getattr(module, export_fn)(object(), _FakeActor(), dict(filters)))
+    session = _FakeSession()
+    payload = asyncio.run(getattr(module, export_fn)(session, _FakeActor(), dict(filters)))
     assert payload[:2] == b"PK"  # 正常生成了 xlsx
     assert seen["count"] == filters
     assert seen["list"] == filters
+    if module is not sources:
+        assert session.committed == 1
 
 
 def test_over_limit_message_distinguishes_filtered_scope(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -231,7 +242,9 @@ def test_export_base_tags_and_interpretations_include_policy_content(monkeypatch
     monkeypatch.setattr(interpretations, "enqueue_event", fake_enqueue)
 
     # 1. 验证基础标签表
-    payload_base = asyncio.run(base_tags.export_base_tags(object(), _FakeActor(), {}))
+    base_session = _FakeSession()
+    payload_base = asyncio.run(base_tags.export_base_tags(base_session, _FakeActor(), {}))
+    assert base_session.committed == 1
     wb_base = load_workbook(BytesIO(payload_base))
     headers_base = [cell.value for cell in wb_base.active[1]]
     assert "政策正文" in headers_base
@@ -239,7 +252,9 @@ def test_export_base_tags_and_interpretations_include_policy_content(monkeypatch
     assert wb_base.active.cell(row=2, column=base_idx).value == "这是政策正文测试内容"
 
     # 2. 验证政策解读表
-    payload_interp = asyncio.run(interpretations.export_interpretations(object(), _FakeActor(), {}))
+    interp_session = _FakeSession()
+    payload_interp = asyncio.run(interpretations.export_interpretations(interp_session, _FakeActor(), {}))
+    assert interp_session.committed == 1
     wb_interp = load_workbook(BytesIO(payload_interp))
     headers_interp = [cell.value for cell in wb_interp.active[1]]
     assert "政策正文" in headers_interp

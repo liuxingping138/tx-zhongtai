@@ -320,9 +320,16 @@ async def stream_file_content(
                 content_length=len(raw),
             )
 
+    # 打开对象存储流（MinIO 网络 I/O）前先交还数据库连接，避免慢下载或存储抖动占住连接池。
+    await session.commit()
     stream, filename, media_type, size, etag = await open_storage_or_summary(settings, row, for_download=for_download)
     if for_download:
-        await _record_download_audit(session, actor, row)
+        try:
+            await _record_download_audit(session, actor, row)
+            await session.commit()
+        except Exception:
+            await storage.close_stream(stream)
+            raise
     return FileStreamResult(stream=stream, filename=filename, media_type=media_type, content_length=size, etag=etag)
 
 

@@ -49,8 +49,32 @@ def _size(value: Any) -> int:
     return len(json.dumps(value, ensure_ascii=False, default=str).encode())
 
 
+def _truncate_value(value: Any, *, max_str: int, max_list: int, max_keys: int) -> Any:
+    if isinstance(value, str):
+        if len(value) <= max_str:
+            return value
+        return f"{value[:max_str]}…(共{len(value)}字)" if max_str >= 32 else f"{value[:max_str]}…"  # noqa: PLR2004  预算极小时省去字数后缀避免反超上限
+    if isinstance(value, list):
+        items = [
+            _truncate_value(item, max_str=max_str, max_list=max_list, max_keys=max_keys) for item in value[:max_list]
+        ]
+        if len(value) > max_list:
+            items.append(f"…(共{len(value)}项)")
+        return items
+    if isinstance(value, dict):
+        result: dict[str, Any] = {}
+        for idx, (k, v) in enumerate(value.items()):
+            if idx >= max_keys:
+                result["_已截断"] = True
+                result["_原字段数"] = len(value)
+                break
+            result[str(k)] = _truncate_value(v, max_str=max_str, max_list=max_list, max_keys=max_keys)
+        return result
+    return value
+
+
 def _fit(changes: dict[str, Any]) -> dict[str, Any]:
-    """变更内容太大时，把最长的清单一半一半地截短，记下原来有几项，宁可少列几个 ID 也不能整条审计丢掉。"""
+    """变更内容太大时，先截短顶层清单，仍超限时递归截短超长字符串/嵌套结构，宁可少留细节也不能整条审计丢掉。"""
 
     fitted = dict(changes)
     while _size(fitted) > _CHANGES_MAX_BYTES:
@@ -60,7 +84,30 @@ def _fit(changes: dict[str, Any]) -> dict[str, Any]:
         _, key = max(lists)
         fitted.setdefault(f"{key}_总数", len(changes[key]))
         fitted[key] = fitted[key][: len(fitted[key]) // 2]
-    return fitted
+    if _size(fitted) <= _CHANGES_MAX_BYTES:
+        return fitted
+
+    for max_str, max_list, max_keys in (
+        (4096, 64, 256),
+        (1024, 32, 128),
+        (256, 16, 64),
+        (64, 8, 32),
+        (16, 4, 16),
+    ):
+        candidate = _truncate_value(fitted, max_str=max_str, max_list=max_list, max_keys=max_keys)
+        if isinstance(candidate, dict) and _size(candidate) <= _CHANGES_MAX_BYTES:
+            return candidate
+
+    # 极端兜底：单个键名过长或嵌套极深时，只保留前若干可装下的顶层字段。
+    trimmed: dict[str, Any] = {"_已截断": True, "_原字段数": len(changes)}
+    for key, value in fitted.items():
+        short_key = str(key)[:64]
+        short_val = _truncate_value(value, max_str=32, max_list=2, max_keys=4)
+        trial = {**trimmed, short_key: short_val}
+        if _size(trial) > _CHANGES_MAX_BYTES:
+            break
+        trimmed = trial
+    return trimmed
 
 
 def ingest_changes(payload: dict[str, Any]) -> Any:

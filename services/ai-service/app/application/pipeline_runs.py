@@ -164,11 +164,19 @@ async def _idempotent_replay(session: AsyncSession, client_run_id: str) -> dict[
     return None
 
 
+async def _cleanup_run_dir(run_id: str) -> None:
+    try:
+        await anyio.to_thread.run_sync(storage.remove_tree, storage.run_dir(run_id))
+    except OSError:
+        logger.warning("pipeline_run_cleanup_failed run=%s", run_id, exc_info=True)
+
+
 async def create(session: AsyncSession, caller: Actor, values: dict[str, Any]) -> dict[str, Any]:
     client_run_id = str(values.get("client_run_id") or "").strip()
     if replay := await _idempotent_replay(session, client_run_id):
         return replay
     headers, rows = _checked_rows(values.get("rows"))
+    cost_limit = _cost_limit(values.get("cost_limit"))
     release = await _release(session, str(values.get("prompt_id") or ""))
     model = await resolve_model(session, release.model_id, frozen=RELEASE_MODEL_DISABLED)
     previous = await _reusable(session, str(values.get("reuse_run_id") or ""), release, model.id)
@@ -207,18 +215,23 @@ async def create(session: AsyncSession, caller: Actor, values: dict[str, Any]) -
         source=RUN_SOURCE_PIPELINE,
         release_no=release.release_no,
         service_tier=PIPELINE_TIER,
-        cost_limit=_cost_limit(values.get("cost_limit")),
+        cost_limit=cost_limit,
     )
     run_repo.add(session, run)
     try:
         await session.flush()
     except IntegrityError:
         if not client_run_id:
+            await _cleanup_run_dir(run_id)
             raise
         await session.rollback()
         existing = await run_repo.get(session, client_run_id, deleted=True)
         if existing is not None and existing.source == RUN_SOURCE_PIPELINE:
+            # 若抢输给已取消占位（tombstone，prompt_id 为空），不会再有执行进程使用该目录，直接清理。
+            if not existing.prompt_id:
+                await _cleanup_run_dir(run_id)
             return {**run_to_dict(existing), "reused": 0}
+        await _cleanup_run_dir(run_id)
         raise
     changes: dict[str, Any] = {"prompt_id": release.prompt_id, "release_no": release.release_no, "rows": len(rows)}
     if reused:

@@ -7,7 +7,6 @@ from platform_common.clock import utcnow
 from platform_common.filters import contains_ilike, filter_values
 from sqlalchemy import delete, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.domain.catalog import SUPERADMIN_ROLE_CODE
 from app.domain.enums import NodeType, RoleStatus, UserStatus
@@ -157,18 +156,6 @@ async def replace_user_roles(
     now = utcnow()
     for role_id in role_ids:
         session.add(UserRole(user_id=user_id, role_id=role_id, granted_by=granted_by, created_at=now))
-
-
-async def list_superadmin_users(session: AsyncSession) -> list[User]:
-    stmt = (
-        select(User)
-        .options(selectinload(User.user_roles))
-        .join(UserRole, UserRole.user_id == User.id)
-        .join(Role, Role.id == UserRole.role_id)
-        .where(Role.code == SUPERADMIN_ROLE_CODE, Role.is_builtin.is_(True))
-    )
-    result = await session.execute(stmt)
-    return list(result.unique().scalars().all())
 
 
 def _uuid_or_none(value: str) -> uuid.UUID | None:

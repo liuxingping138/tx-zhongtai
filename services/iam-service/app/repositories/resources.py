@@ -15,16 +15,6 @@ async def get_resource_by_code(session: AsyncSession, code: str) -> Resource | N
     return result.scalar_one_or_none()
 
 
-async def get_action(session: AsyncSession, resource_id: uuid.UUID, action_code: str) -> ResourceAction | None:
-    result = await session.execute(
-        select(ResourceAction).where(
-            ResourceAction.resource_id == resource_id,
-            ResourceAction.action_code == action_code,
-        )
-    )
-    return result.scalar_one_or_none()
-
-
 async def list_all_resources(session: AsyncSession) -> list[Resource]:
     result = await session.execute(select(Resource).order_by(Resource.sort_order, Resource.code))
     return list(result.scalars().all())

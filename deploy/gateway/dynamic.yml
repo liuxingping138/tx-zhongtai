@@ -62,7 +62,7 @@ http:
       service: ai-service
       priority: 110
     ai-download:
-      rule: "PathRegexp(`^/api/v1/ai/batch-runs/[^/]+/files/[^/]+$`)"
+      rule: "PathRegexp(`^/api/v1/ai/batch-runs/[^/]+/files/[^/]+$`) || PathRegexp(`^/api/v1/ai/prompts/[^/]+/sample-run/[^/]+/files/[^/]+$`)"
       entryPoints: ["web"]
       service: ai-service
       priority: 110

@@ -17,7 +17,15 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from platform_common.errors import ErrorCode
 from platform_common.request_context import REQUEST_ID_HEADER, REQUEST_ID_PATTERN, get_request_id
 
-_UPLOAD_SUFFIXES = ("/import", "/resolve", "/files/excel", "/files/code")
+_UPLOAD_SUFFIXES = (
+    "/import",
+    "/resolve",
+    "/files/excel",
+    "/files/code",
+    "/upload",
+    "/upload-tags",
+    "/input-preview",
+)
 
 
 def _headers(scope: Scope) -> dict[str, str]:
@@ -27,9 +35,9 @@ def _headers(scope: Scope) -> dict[str, str]:
     return found
 
 
-def _is_upload(scope: Scope) -> bool:
+def _is_upload(scope: Scope, upload_paths: frozenset[str] = frozenset()) -> bool:
     path = (scope.get("path") or "").rstrip("/")
-    return scope.get("method") == "POST" and path.endswith(_UPLOAD_SUFFIXES)
+    return scope.get("method") == "POST" and (path.endswith(_UPLOAD_SUFFIXES) or path in upload_paths)
 
 
 def _resolve_request_id(headers: dict[str, str]) -> str | None:
@@ -68,18 +76,45 @@ _TOO_LARGE = "请求体过大"
 class RequestBodyLimitMiddleware:
     """按字节拒绝过大的请求。上传路径在缺少 Bearer 时直接 401，不读取正文。
 
-    path_limits 给某些路径前缀更小的上限，比如流式提问只收一段 JSON，用不着上传文件那么大的额度。
+    默认 ``max_bytes`` 按普通 JSON 请求收窄；需要更大额度的上传或内部接口通过
+    ``exact_limits`` / ``path_limits``（按最长路径前缀匹配）/ ``suffix_limits`` 单独放宽。
     """
 
-    def __init__(self, app: ASGIApp, max_bytes: int, path_limits: dict[str, int] | None = None) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        max_bytes: int,
+        path_limits: dict[str, int] | None = None,
+        *,
+        exact_limits: dict[str, int] | None = None,
+        suffix_limits: dict[str, int] | None = None,
+        upload_paths: tuple[str, ...] = (),
+    ) -> None:
         self.app = app
         self.max_bytes = max_bytes
-        self.path_limits = path_limits or {}
+        self.exact_limits = {path.rstrip("/"): limit for path, limit in (exact_limits or {}).items()}
+        # 按前缀长度降序匹配，避免 /upload 抢先命中 /upload-tags 等更长路径。
+        self.path_limits = sorted(
+            ((prefix.rstrip("/"), limit) for prefix, limit in (path_limits or {}).items()),
+            key=lambda item: len(item[0]),
+            reverse=True,
+        )
+        self.suffix_limits = sorted(
+            ((suffix.rstrip("/"), limit) for suffix, limit in (suffix_limits or {}).items()),
+            key=lambda item: len(item[0]),
+            reverse=True,
+        )
+        self.upload_paths = frozenset(path.rstrip("/") for path in upload_paths)
 
     def _limit(self, scope: Scope) -> int:
-        path = scope.get("path") or ""
-        for prefix, limit in self.path_limits.items():
-            if path.startswith(prefix):
+        path = (scope.get("path") or "").rstrip("/")
+        if path in self.exact_limits:
+            return self.exact_limits[path]
+        for prefix, limit in self.path_limits:
+            if path == prefix or path.startswith(f"{prefix}/"):
+                return limit
+        for suffix, limit in self.suffix_limits:
+            if path.endswith(suffix):
                 return limit
         return self.max_bytes
 
@@ -89,7 +124,7 @@ class RequestBodyLimitMiddleware:
             return
         headers = _headers(scope)
         rid = _resolve_request_id(headers)
-        if _is_upload(scope) and not headers.get("authorization", "").lower().startswith("bearer "):
+        if _is_upload(scope, self.upload_paths) and not headers.get("authorization", "").lower().startswith("bearer "):
             await _json_response(send, 401, ErrorCode.AUTH_UNAUTHENTICATED, "未认证或凭据已失效", request_id=rid)
             return
         limit = self._limit(scope)

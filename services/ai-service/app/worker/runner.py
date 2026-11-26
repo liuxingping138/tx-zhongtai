@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import logging
 import signal
 
@@ -54,6 +55,14 @@ async def _claim(running: dict[asyncio.Task[None], tuple[str, str]], limit: int)
         return None
 
 
+def _log_task_exception(run_id: str, task: asyncio.Task[None]) -> None:
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        logger.error("batch_run_task_crashed run=%s", run_id, exc_info=exc)
+
+
 async def consume(stop: asyncio.Event) -> None:
     recovered = await recover_orphans()
     if recovered:
@@ -66,7 +75,9 @@ async def consume(stop: asyncio.Event) -> None:
             claimed = await _claim(running, limit)
             if claimed:
                 logger.info("batch_run_claimed run=%s source=%s", *claimed)
-                running[asyncio.create_task(execute(claimed[0]))] = claimed
+                task = asyncio.create_task(execute(claimed[0]))
+                task.add_done_callback(functools.partial(_log_task_exception, claimed[0]))
+                running[task] = claimed
                 continue
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=POLL_SECONDS)

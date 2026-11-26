@@ -60,7 +60,6 @@ services:
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
     networks:
       - data
-      - gateway
     # 默认只绑本机。当前开发机需要 Navicat 从公网连接时，在 .env 设 POSTGRES_BIND_ADDR=0.0.0.0。
     # 宿主机端口可通过 .env 的 POSTGRES_HOST_PORT 调整，避免与本机已运行的 PostgreSQL 冲突。
     ports:
@@ -74,14 +73,21 @@ services:
   redis:
     image: redis:7.4.11-alpine3.21
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD 未设置}
+    command:
+      [
+        "sh",
+        "-c",
+        'exec redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass "$$REDIS_PASSWORD"',
+      ]
     volumes:
       - redis-data:/data
     networks:
       - data
     # 不映射宿主机端口。登录限流只走 Docker 网络，映射出去只会扩大暴露面。
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", 'REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli ping | grep -q PONG']
       interval: 5s
       timeout: 5s
       retries: 10
@@ -97,7 +103,7 @@ services:
       IAM_SERVICE_NAME: iam-service
       IAM_LOG_LEVEL: ${IAM_LOG_LEVEL:-INFO}
       IAM_DATABASE_URL: postgresql+asyncpg://${IAM_DB_USER}:${IAM_DB_PASSWORD}@postgres:5432/${IAM_DB_NAME}
-      IAM_REDIS_URL: redis://redis:${REDIS_PORT:-6379}/${REDIS_DB:-0}
+      IAM_REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD 未设置}@redis:${REDIS_PORT:-6379}/${REDIS_DB:-0}
       IAM_CORS_ALLOW_ORIGINS: ${IAM_CORS_ALLOW_ORIGINS:-[]}
       IAM_JWT_KEYS_DIR: /secrets/jwt
       IAM_COOKIE_SECURE: ${IAM_COOKIE_SECURE:-false}
@@ -413,7 +419,7 @@ services:
       IAM_SESSION_RETENTION_DAYS: ${IAM_SESSION_RETENTION_DAYS:-30}
       IAM_LOG_LEVEL: ${IAM_LOG_LEVEL:-INFO}
       IAM_DATABASE_URL: postgresql+asyncpg://${IAM_DB_USER}:${IAM_DB_PASSWORD}@postgres:5432/${IAM_DB_NAME}
-      IAM_REDIS_URL: redis://redis:${REDIS_PORT:-6379}/${REDIS_DB:-0}
+      IAM_REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD 未设置}@redis:${REDIS_PORT:-6379}/${REDIS_DB:-0}
       IAM_JWT_KEYS_DIR: /secrets/jwt
       IAM_INTERNAL_CALLER_SECRETS: ${IAM_INTERNAL_CALLER_SECRETS}
       IAM_AUDIT_INGEST_URL: http://audit-service:8002
@@ -422,6 +428,8 @@ services:
       - ../../deploy/secrets/jwt:/secrets/jwt
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       audit-service:
         condition: service_healthy

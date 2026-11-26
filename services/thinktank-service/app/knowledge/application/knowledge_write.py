@@ -181,7 +181,7 @@ async def upload_knowledge_file(
             session,
             event_type="thinktank.knowledge.access_denied",
             actor=actor,
-            target_id=clean_name,
+            target_id="upload",
             changes={
                 "file_name": clean_name,
                 "file_type": file_type or "未定义",

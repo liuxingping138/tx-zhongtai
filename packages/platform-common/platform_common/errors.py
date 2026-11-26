@@ -199,9 +199,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         logger.info("唯一约束冲突 request_id=%s", request_id)
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content=_error_body(
-                ErrorCode.VERSION_CONFLICT, "与已有记录重复，可能刚被他人新增，请刷新后重试", request_id
-            ),
+            content=_error_body(ErrorCode.DUPLICATE, "与已有记录重复，可能刚被他人新增，请刷新后重试", request_id),
         )
 
     @app.exception_handler(Exception)

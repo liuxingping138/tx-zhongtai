@@ -55,7 +55,13 @@ if [ -f "$BACKUP_PATH/SHA256SUMS" ]; then
 fi
 
 COMPOSE="${BACKUP_COMPOSE:?请设置 BACKUP_COMPOSE}"
+APP_SERVICES="iam-service iam-worker audit-service audit-worker codebook-service policy-service policy-worker ai-service ai-worker thinktank-service"
 echo "恢复 $BACKUP_PATH -> $IAM_DB_NAME / $AUDIT_DB_NAME / $POLICY_DB_NAME / $CODEBOOK_DB_NAME / $AI_DB_NAME / $THINKTANK_DB_NAME"
+
+# 先停掉全部应用服务与后台 worker，保留 postgres 运行：
+# 避免 pg_restore --clean 与活跃连接/锁冲突，也防止附件解包期间有写入并发。
+echo "停止应用与后台 worker..."
+$COMPOSE stop $APP_SERVICES
 
 # pg_restore --no-owner 后对象属主是超级用户。GRANT 不含 ALTER/DROP，
 # 随后只把当前库 public 里的表、序列、函数改回应用账号。
@@ -82,20 +88,19 @@ $COMPOSE exec -T postgres sh < "$ROOT/deploy/compose/scripts/secure-audit-db.sh"
 
 # 附件卷和库要回到同一备份点：备份目录里有附件包（backup_business.sh 产出；backup.sh 只备库，没有）就一起灌回。
 # 只解包覆盖同名文件，备份之后新建的文件留着：库里已经没有引用它们，不影响页面。
+# 此时应用和 worker 均已停止，用一次性容器直接挂载卷解包，确保零并发写入。
 restore_files() {
   archive="$BACKUP_PATH/$1"
   service="$2"
   target="$3"
   [ -f "$archive" ] || return 0
   tar -tzf "$archive" > /dev/null
-  $COMPOSE exec -T "$service" tar -C "$target" -xzf - < "$archive"
+  $COMPOSE run --rm --no-deps -T "$service" tar -C "$target" -xzf - < "$archive"
   echo "  $1 -> $service:$target"
 }
-if [ -f "$BACKUP_PATH/ai-files.tar.gz" ]; then
-  # 批量任务边跑边写产物，灌回期间先停 ai-worker；服务本身要留着执行解包。
-  $COMPOSE stop ai-worker
-  restore_files ai-files.tar.gz ai-service /data/ai
-  $COMPOSE start ai-worker
-fi
+restore_files ai-files.tar.gz ai-service /data/ai
 restore_files thinktank-files.tar.gz thinktank-service /data/thinktank
+
+echo "重新启动应用与后台 worker..."
+$COMPOSE start $APP_SERVICES
 echo "恢复完成"
