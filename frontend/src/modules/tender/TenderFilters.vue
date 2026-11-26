@@ -58,6 +58,12 @@ const SECONDARY_REGIONS = [
   { key: 'purchaser_countyname', optionField: 'county_name', label: '区县', placeholder: '选择或搜索区县' },
 ] as const
 
+function regionBinding(optionField: 'city_name' | 'county_name') {
+  return optionField === 'city_name'
+    ? areaFilters.bindCity('city_name', query.value.purchaser_provname)
+    : areaFilters.bind(optionField)
+}
+
 function shortcutRange(days: number): [Date, Date] {
   const [from, to] = recentRange(new Date(), days)
   return [localCalendarDate(from), localCalendarDate(to)]
@@ -150,7 +156,7 @@ function setRange(key: typeof DATES[number]['key'], value: [string, string] | nu
         >
           <FilterSelect
             v-model="query[region.key]"
-            v-bind="areaFilters.bind(region.optionField)"
+            v-bind="regionBinding(region.optionField)"
             :placeholder="region.placeholder"
             size="short"
           />

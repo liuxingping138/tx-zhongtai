@@ -57,7 +57,6 @@ const columns = computed(() => {
         </div>
         <el-radio-group
           v-model="mode"
-          size="small"
           aria-label="省份展示方式"
         >
           <el-radio-button value="rank">
@@ -187,7 +186,7 @@ const columns = computed(() => {
         stripe
         max-height="420"
         empty-text="所选日期暂无数据"
-        class="google-data-table"
+        class="data-table google-data-table"
       >
         <el-table-column
           prop="rank"
@@ -309,7 +308,7 @@ const columns = computed(() => {
         </el-table-column>
         <el-table-column
           prop="share"
-          label="全库占比"
+          label="区间占比"
           width="88"
           align="right"
         >

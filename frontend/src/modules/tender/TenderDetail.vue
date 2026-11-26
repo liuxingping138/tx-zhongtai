@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ArrowLeft, Document, Link, Refresh, Warning } from '@element-plus/icons-vue'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { errorMessage } from '@/api/errors'
 import { getTenderRecord, getTenderContent, type TenderKind, type TenderRecord } from '@/api/tender'
@@ -24,6 +24,10 @@ const html = computed(() => (rawHtml.value === null ? null : isolatedHtml(rawHtm
 const contentError = ref('')
 const contentLoading = ref(false)
 const status = computed<'0' | '1'>(() => ((route.query.row_status ?? route.query.project_status) === '0' ? '0' : '1'))
+const effectiveStatus = computed<'0' | '1'>(() => {
+  const actual = String(record.value?.project_status ?? '').trim()
+  return actual === '0' || actual === '1' ? actual : status.value
+})
 const sections = computed(() => buildDetailSections(tenderColumns(props.kind), tenderDetailGroups(props.kind)))
 const back = computed(() => {
   const rest = { ...route.query }
@@ -35,7 +39,7 @@ const displayRecord = computed(() => {
   if (!record.value) return null
   return {
     ...record.value,
-    project_status: status.value === '1' ? '通过' : '未通过',
+    project_status: effectiveStatus.value === '1' ? '通过' : '未通过',
     is_supp_scene: Number(record.value.is_supp_scene) === 1 ? '已补充' : '未补充',
   }
 })
@@ -47,6 +51,7 @@ const sourceUrl = computed(() => {
 
 let loadSeq = 0
 let contentSeq = 0
+onBeforeUnmount(() => { loadSeq++; contentSeq++ })
 
 async function load() {
   const seq = ++loadSeq
@@ -79,6 +84,10 @@ async function loadContent() {
 watch(
   () => [props.kind, String(route.params.id), status.value] as const,
   () => {
+    record.value = null
+    error.value = ''
+    rawHtml.value = null
+    contentError.value = ''
     void load()
     void loadContent()
   },
@@ -105,10 +114,10 @@ watch(
       >
         <el-tag
           size="small"
-          :type="status === '1' ? 'success' : 'info'"
+          :type="effectiveStatus === '1' ? 'success' : 'info'"
           effect="light"
         >
-          {{ status === '1' ? '通过' : '未通过' }}
+          {{ effectiveStatus === '1' ? '通过' : '未通过' }}
         </el-tag>
         <span
           v-if="record.public_date"
@@ -176,13 +185,13 @@ watch(
             </p>
           </div>
           <el-button
-            v-if="contentError || html !== null"
+            v-if="!contentError && rawHtml !== null"
             size="small"
             :icon="Refresh"
             :loading="contentLoading"
             @click="loadContent"
           >
-            {{ contentError ? '重新加载' : '刷新正文' }}
+            刷新正文
           </el-button>
         </header>
 
@@ -227,12 +236,12 @@ watch(
         </div>
 
         <ParagraphSkeleton
-          v-else-if="html === null"
+          v-else-if="rawHtml === null"
           :lines="8"
         />
 
         <div
-          v-else-if="!html.trim()"
+          v-else-if="!rawHtml.trim()"
           class="content-state"
           role="status"
         >
@@ -263,7 +272,7 @@ watch(
 
         <iframe
           v-else
-          :srcdoc="html"
+          :srcdoc="html ?? ''"
           sandbox=""
           referrerpolicy="no-referrer"
           title="项目原始HTML正文"

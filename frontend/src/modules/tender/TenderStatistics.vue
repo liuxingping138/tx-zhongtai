@@ -24,12 +24,12 @@ const error = ref('')
 const totalError = ref('')
 const loading = ref(false)
 const totalsLoading = ref(false)
+const MAX_TOTALS_POLLS = 40
 let totalTimer: ReturnType<typeof setTimeout> | undefined
 let disposed = false
-onBeforeUnmount(() => { disposed = true; clearTimeout(totalTimer) })
-
 const palette = useChartPalette()
 let sequence = 0
+onBeforeUnmount(() => { disposed = true; sequence++; clearTimeout(totalTimer) })
 
 const intakeChart = computed(() => statisticsChart(report.value?.daily ?? [], palette.value, 'intake', intakeMode.value))
 const workChart = computed(() => statisticsChart(report.value?.daily ?? [], palette.value, 'work', 'bar'))
@@ -55,9 +55,12 @@ const rangeTotals = computed(() => {
 
 const sharePct = (part?: number, whole?: number) => (!part || !whole ? '0.0%' : `${((part * 100) / whole).toFixed(1)}%`)
 const count = (value?: number) => (value === undefined ? '—' : value.toLocaleString('zh-CN'))
+const unpassedCount = (total?: number, passed?: number) => (total === undefined ? undefined : Math.max(0, total - (passed ?? 0)))
 const formatTime = (iso?: string) => (iso ? iso.replace('T', ' ').slice(0, 19) : '—')
 
 const topProvince = computed(() => report.value?.provinces?.[0] ?? null)
+
+const isActiveLoad = (current: number) => !disposed && current === sequence
 
 async function load() {
   const current = ++sequence
@@ -69,15 +72,15 @@ async function load() {
   loading.value = true
   try {
     const result = await getTenderStatistics(...range.value)
-    if (current === sequence) report.value = result
+    if (isActiveLoad(current)) report.value = result
   } catch (cause) {
-    if (current === sequence) error.value = errorMessage(cause, '统计加载失败')
+    if (isActiveLoad(current)) error.value = errorMessage(cause, '统计加载失败')
   } finally {
-    if (current === sequence) loading.value = false
+    if (isActiveLoad(current)) loading.value = false
   }
 }
 
-async function loadTotals() {
+async function loadTotals(attempt = 0) {
   clearTimeout(totalTimer)
   totalsLoading.value = true
   totalError.value = ''
@@ -86,13 +89,19 @@ async function loadTotals() {
     if (disposed) return
     if (result.data) totals.value = result.data
     if (result.state === 'pending') {
-      totalTimer = setTimeout(() => { void loadTotals() }, 3000)
+      if (attempt + 1 >= MAX_TOTALS_POLLS) {
+        totalsLoading.value = false
+        totalError.value = '全库总量统计超时，请稍后点击“刷新总量”重试'
+        return
+      }
+      totalTimer = setTimeout(() => { void loadTotals(attempt + 1) }, 3000)
       return
     }
     totalsLoading.value = false
     if (result.state === 'error') totalError.value = result.message
     else totals.value = result.data
   } catch (cause) {
+    if (disposed) return
     totalError.value = errorMessage(cause, '总量加载失败')
     totalsLoading.value = false
   }
@@ -118,7 +127,7 @@ onMounted(() => { void load(); void loadTotals() })
           <span class="status-dot" />
           <template v-if="totalsLoading && !totals">后台统计中…</template>
           <template v-else-if="totalsLoading">正在后台更新 · 上次 {{ formatTime(totals?.as_of).slice(11) }}</template>
-          <template v-else-if="totals">后台每 30 秒自动保鲜 · 更新于 {{ formatTime(totals.as_of).slice(11) }}</template>
+          <template v-else-if="totals">后台 5 分钟缓存保鲜 · 更新于 {{ formatTime(totals.as_of).slice(11) }}</template>
           <template v-else>等待数据源就绪</template>
         </span>
       </div>
@@ -128,7 +137,6 @@ onMounted(() => { void load(); void loadTotals() })
       >
         <el-radio-group
           :model-value="preset"
-          size="small"
           aria-label="快捷时间范围"
           @change="(value: string | number | boolean | undefined) => pickPreset(Number(value))"
         >
@@ -143,7 +151,6 @@ onMounted(() => { void load(); void loadTotals() })
         <el-date-picker
           v-model="range"
           type="daterange"
-          size="small"
           value-format="YYYY-MM-DD"
           range-separator="至"
           start-placeholder="开始日期"
@@ -155,17 +162,15 @@ onMounted(() => { void load(); void loadTotals() })
         />
         <el-button
           type="primary"
-          size="small"
           native-type="submit"
           :loading="loading"
         >
           查询
         </el-button>
         <el-button
-          size="small"
           :icon="Refresh"
           :loading="totalsLoading"
-          @click="loadTotals"
+          @click="() => loadTotals()"
         >
           刷新总量
         </el-button>
@@ -225,7 +230,7 @@ onMounted(() => { void load(); void loadTotals() })
     <TenderKpiGrid
       :totals="totals"
       :totals-loading="totalsLoading"
-      :has-report="Boolean(report)"
+      :has-report="Boolean(report && !error)"
       :range-totals="rangeTotals"
       :workload="workload"
     />
@@ -272,7 +277,10 @@ onMounted(() => { void load(); void loadTotals() })
               </p>
             </div>
           </header>
-          <div class="donut-wrap">
+          <div
+            v-if="totals"
+            class="donut-wrap"
+          >
             <BaseChart
               :option="donutOption"
               label="招标与中标全库占比结构"
@@ -282,9 +290,22 @@ onMounted(() => { void load(); void loadTotals() })
               class="donut-center"
               aria-hidden="true"
             >
-              <strong>{{ totals ? compactCount(totals.total) : '—' }}</strong>
+              <strong>{{ compactCount(totals.total) }}</strong>
               <span>累计总规模</span>
             </div>
+          </div>
+          <div
+            v-else
+            class="donut-placeholder"
+            role="status"
+          >
+            <span
+              v-if="totalsLoading"
+              class="skeleton-shimmer donut-placeholder__ring"
+            />
+            <p class="loading-note">
+              {{ totalsLoading ? '正在统计全库总量结构…' : (totalError || '暂无全库总量数据，可点击上方“刷新总量”重试') }}
+            </p>
           </div>
           <div class="donut-legend">
             <div class="legend-card">
@@ -299,7 +320,7 @@ onMounted(() => { void load(); void loadTotals() })
                 </span>
                 <span class="pill-item pill-p-unpass">
                   <span class="pill-label"><span class="pill-dot pill-dot--p-unpass" />待审未通过</span>
-                  <span class="tabular"><strong>{{ count(totals ? totals.purchaser - (totals.purchaser_passed ?? 0) : undefined) }}</strong> ({{ sharePct(totals ? totals.purchaser - (totals.purchaser_passed ?? 0) : 0, totals?.purchaser) }})</span>
+                  <span class="tabular"><strong>{{ count(unpassedCount(totals?.purchaser, totals?.purchaser_passed)) }}</strong> ({{ sharePct(unpassedCount(totals?.purchaser, totals?.purchaser_passed), totals?.purchaser) }})</span>
                 </span>
               </div>
             </div>
@@ -315,7 +336,7 @@ onMounted(() => { void load(); void loadTotals() })
                 </span>
                 <span class="pill-item pill-w-unpass">
                   <span class="pill-label"><span class="pill-dot pill-dot--w-unpass" />待审未通过</span>
-                  <span class="tabular"><strong>{{ count(totals ? totals.winbid - (totals.winbid_passed ?? 0) : undefined) }}</strong> ({{ sharePct(totals ? totals.winbid - (totals.winbid_passed ?? 0) : 0, totals?.winbid) }})</span>
+                  <span class="tabular"><strong>{{ count(unpassedCount(totals?.winbid, totals?.winbid_passed)) }}</strong> ({{ sharePct(unpassedCount(totals?.winbid, totals?.winbid_passed), totals?.winbid) }})</span>
                 </span>
               </div>
             </div>

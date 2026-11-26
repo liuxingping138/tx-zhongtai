@@ -110,10 +110,13 @@ def get_record(reader: Reader, kind: Kind, status: Status, record_id: int) -> Ro
 
 
 def original_reference(reader: Reader, kind: Kind, row: Row) -> Row | None:
+    content_id = str(row.get("project_content_id") or "").strip()
+    if not content_id:
+        return None
     rows = reader.select(
         f"SELECT project_content_id, collect_date FROM {TABLES[kind, '0']} "  # noqa: S608  表名和列名来自固定白名单，筛选值全部绑定参数
         "WHERE project_content_id = %s ORDER BY collect_date DESC, id DESC LIMIT 1",
-        (row["project_content_id"],),
+        (content_id,),
     )
     return rows[0] if rows else None
 

@@ -543,8 +543,15 @@ async def test_export_records_writes_xlsx_without_content_and_enforces_limit(mon
     assert "预算金额（万元）" in rows[0]
     assert "正文" not in rows[0]
     assert rows[1][0] == "测试招标项目"
-    assert "人工已处理（信息化）" in rows[1]
+    assert "通过" in rows[1]
     assert "已补充" in rows[1]
+
+    raw_sample = {**sample, "project_status": "0", "is_supp_scene": 0}
+    bind_reader(monkeypatch, service, Reader([[raw_sample]]))
+    raw_payload = await service.export_records("purchaser", ListQuery(project_status="0"))
+    raw_rows = list(load_workbook(BytesIO(raw_payload)).active.iter_rows(values_only=True))  # type: ignore[union-attr]
+    assert "未通过" in raw_rows[1]
+    assert "未补充" in raw_rows[1]
 
     monkeypatch.setattr(service.get_settings(), "export_max_rows", 1)
     too_many = Reader([[sample, {**sample, "id": 1002}]])
@@ -639,8 +646,13 @@ async def test_forbidden_sql_and_source_pool(monkeypatch) -> None:
     dead_conn.close.assert_called_once()
     # 换上的新连接重新设成只读，不靠驱动重连（重连的会话丢了只读设置）
     fresh_cur.execute.assert_any_call("SET SESSION TRANSACTION READ ONLY")
-    with pytest.raises(RuntimeError, match="query_err"), source.source_reader():
-        raise RuntimeError("query_err")
+    # 业务异常（如 NotFoundError）不污染健康连接，连接归还池中
+    with pytest.raises(NotFoundError, match="missing"), source.source_reader():
+        raise NotFoundError("missing")
+    fresh_conn.close.assert_not_called()
+    # 网络/驱动异常（OSError / MySQLError）才会标记连接损坏并关闭
+    with pytest.raises(OSError, match="socket reset"), source.source_reader():
+        raise OSError("socket reset")
     fresh_conn.close.assert_called_once()
     source.clear_pool()
 
@@ -650,6 +662,7 @@ async def test_export_audit_reporting(monkeypatch) -> None:
     from platform_common.actors import Actor
     from platform_common.config import Environment
 
+    await audit.close_audit_client()
     monkeypatch.setattr(
         audit,
         "get_settings",
@@ -661,20 +674,24 @@ async def test_export_audit_reporting(monkeypatch) -> None:
         await audit.emit_export_audit(actor=Actor(id="u1", name="张"), kind="purchaser", exported_rows=1, filters={})
 
     sent: list[dict[str, object]] = []
+    created = 0
+    closed = 0
 
     class _Client:
+        is_closed = False
+
         def __init__(self, **_kw):
-            pass
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *_a):
-            return False
+            nonlocal created
+            created += 1
 
         async def post(self, url: str, json: dict[str, object], headers: dict[str, str]):
             sent.append({"url": url, "json": json, "headers": headers})
             return httpx.Response(200)
+
+        async def aclose(self) -> None:
+            nonlocal closed
+            self.is_closed = True
+            closed += 1
 
     monkeypatch.setattr(audit.httpx, "AsyncClient", _Client)
     monkeypatch.setattr(
@@ -687,7 +704,11 @@ async def test_export_audit_reporting(monkeypatch) -> None:
         ),
     )
     await audit.emit_export_audit(actor=Actor(id="u1", name="张"), kind="winbid", exported_rows=3, filters={"page": 1})
-    assert sent and sent[0]["json"]["module_code"] == "tender.winbid"  # type: ignore[index]
+    await audit.emit_export_audit(actor=Actor(id="u1", name="张"), kind="winbid", exported_rows=2, filters={"page": 2})
+    assert created == 1
+    assert len(sent) == 2 and sent[0]["json"]["module_code"] == "tender.winbid"  # type: ignore[index]
+    await audit.close_audit_client()
+    assert closed == 1
 
     class _BadClient(_Client):
         async def post(self, url: str, json: dict[str, object], headers: dict[str, str]):
@@ -696,6 +717,7 @@ async def test_export_audit_reporting(monkeypatch) -> None:
     monkeypatch.setattr(audit.httpx, "AsyncClient", _BadClient)
     with pytest.raises(DependencyUnavailableError, match="审计服务暂不可用"):
         await audit.emit_export_audit(actor=Actor(id="u1", name="张"), kind="winbid", exported_rows=3, filters={})
+    await audit.close_audit_client()
 
     class _ErrClient(_Client):
         async def post(self, url: str, json: dict[str, object], headers: dict[str, str]):
@@ -704,6 +726,7 @@ async def test_export_audit_reporting(monkeypatch) -> None:
     monkeypatch.setattr(audit.httpx, "AsyncClient", _ErrClient)
     with pytest.raises(DependencyUnavailableError, match="审计服务暂不可用"):
         await audit.emit_export_audit(actor=Actor(id="u1", name="张"), kind="winbid", exported_rows=3, filters={})
+    await audit.close_audit_client()
 
 
 def test_content_is_withheld_when_the_audit_cannot_be_written(monkeypatch):
@@ -731,24 +754,25 @@ async def test_content_audit_names_the_record(monkeypatch):
     sent = {}
 
     class Client:
+        is_closed = False
+
         def __init__(self, **_kwargs):
             pass
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *_args):
-            return None
 
         async def post(self, url, json, headers):
             sent.update(json)
             return MagicMock(is_success=True)
 
+        async def aclose(self) -> None:
+            self.is_closed = True
+
     from app.core import audit
 
+    await audit.close_audit_client()
     monkeypatch.setattr(audit, "get_settings", lambda: Settings(audit_ingest_secret="s" * 32))
     monkeypatch.setattr(audit.httpx, "AsyncClient", Client)
     await audit.emit_content_audit(actor=Actor(id="u1", name="测试"), kind="winbid", record_id=42, project_status="0")
+    await audit.close_audit_client()
     assert sent["module_code"] == "tender.winbid"
     assert sent["action_code"] == "read"
     assert sent["target_id"] == "42"
@@ -786,3 +810,152 @@ async def test_view_content_records_resolved_project_status_on_fallback_and_all(
     body_all = await service.view_content("winbid", "all", 21, actor=Actor(id="u1", name="测试"))
     assert body_all == {"html": "<p>总表交付正文</p>"}
     assert recorded == ["1", "1"]
+
+
+def test_poll_measures_error_and_ready_ttl_from_completion_time(monkeypatch):
+    from concurrent.futures import Future
+
+    now = [0.0]
+    monkeypatch.setattr(counts, "monotonic", lambda: now[0])
+    counts._jobs.clear()
+    futures = [Future(), Future()]
+    submits = iter(futures)
+    executor = MagicMock()
+    executor.submit.side_effect = lambda *_args: next(submits)
+    monkeypatch.setattr(counts, "_executor", executor)
+
+    # t=0 提交，t=10 才失败：错误 TTL 3s 必须从完成时间 t=10 起算，而非提交时间 t=0
+    assert counts.poll("err-key", lambda: {"total": 1})["state"] == "pending"
+    now[0] = 10.0
+    futures[0].set_result({"state": "error", "data": None, "message": "超时"})
+    now[0] = 11.5
+    res = counts.poll("err-key", lambda: {"total": 1})
+    assert res["state"] == "error"
+    assert executor.submit.call_count == 1
+    # 超过完成时间 3s（t=13.5）后才允许重试
+    now[0] = 13.5
+    assert counts.poll("err-key", lambda: {"total": 1})["state"] == "pending"
+    assert executor.submit.call_count == 2
+    counts._jobs.clear()
+
+
+def test_baseline_jobs_do_not_starve_user_counts_and_normalize_all_status(monkeypatch):
+    from concurrent.futures import Future
+
+    counts._jobs.clear()
+    counts._baseline_counts.clear()
+    monkeypatch.setattr(counts, "_last_totals", None)
+
+    submitted_executors: list[str] = []
+
+    def make_exec(name: str) -> MagicMock:
+        ex = MagicMock()
+
+        def _submit(*_args):
+            submitted_executors.append(name)
+            return Future()
+
+        ex.submit.side_effect = _submit
+        return ex
+
+    monkeypatch.setattr(counts, "_totals_executor", make_exec("totals"))
+    monkeypatch.setattr(counts, "_baseline_executor", make_exec("baseline"))
+    monkeypatch.setattr(counts, "_executor", make_exec("user"))
+
+    # 提交 7 个基准任务 + 2 个无条件 "" / "all" 归一化命中同一 key
+    assert counts.get_totals()["state"] == "pending"
+    for kind in ("purchaser", "winbid"):
+        for status in ("", "all", "1", "0"):
+            assert counts.get_count(kind, ListQuery(project_status=status))["state"] == "pending"
+    assert submitted_executors.count("totals") == 1
+    # "" 与 "all" 归一化到同一个 baseline:{kind}:all，只提交 6 个 baseline 任务
+    assert submitted_executors.count("baseline") == 6
+
+    # 基准任务不占用户配额：用户仍可提交满 _MAX_PENDING 个筛选计数任务
+    for idx in range(counts._MAX_PENDING):
+        res = counts.get_count("purchaser", ListQuery(project_status="1", purchaser_provname=[f"省{idx}"]))
+        assert res["state"] == "pending"
+    overflow = counts.get_count("purchaser", ListQuery(project_status="1", purchaser_provname=["超出"]))
+    assert overflow["state"] == "error"
+    assert "统计任务较多" in overflow["message"]
+    counts._jobs.clear()
+
+
+def test_totals_populates_last_totals_and_empty_content_id_skips_original_scan(monkeypatch):
+    counts._baseline_counts.clear()
+    monkeypatch.setattr(counts, "_last_totals", None)
+    reader = Reader([[{"total": 15}], [{"total": 5}], [{"total": 25}], [{"total": 7}]])
+    bind_reader(monkeypatch, counts, reader)
+    snapshot = counts._totals()
+    assert counts._last_totals == snapshot
+
+    # status="1" 但 project_content_id 为空时，绝不扫描 2400 万原始表
+    empty_id_reader = Reader([[{"id": 99, "project_status": "1", "project_content_id": ""}]])
+    bind_reader(monkeypatch, service, empty_id_reader)
+    with pytest.raises(NotFoundError, match="未在指定正文表中找到"):
+        service.get_content("purchaser", "1", 99)
+    assert len(empty_id_reader.calls) == 1
+    assert records.original_reference(Reader([]), "purchaser", {"project_content_id": ""}) is None
+
+
+async def test_warm_totals_survives_errors_and_lifespan_cleans_resources(monkeypatch):
+    import asyncio
+
+    from app import main
+
+    attempts = 0
+    warmed: list[tuple[str, str]] = []
+
+    def flaky_totals():
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise RuntimeError("transient")
+
+    monkeypatch.setattr(main, "get_totals", flaky_totals)
+    monkeypatch.setattr(main, "get_count", lambda kind, q: warmed.append((kind, q.project_status)))
+
+    sleeps = 0
+
+    async def fake_sleep(interval):
+        nonlocal sleeps
+        assert interval == 60
+        sleeps += 1
+        if sleeps >= 2:
+            raise asyncio.CancelledError()
+
+    monkeypatch.setattr(main.asyncio, "sleep", fake_sleep)
+    with pytest.raises(asyncio.CancelledError):
+        await main.warm_totals()
+    assert attempts == 2
+    assert ("purchaser", "all") in warmed
+    assert ("winbid", "all") in warmed
+
+    # lifespan 关闭时必须清理连接池、线程池和审计客户端
+    cleared = []
+    shut_down = []
+    audit_closed = []
+    monkeypatch.setattr(main, "clear_pool", lambda: cleared.append(True))
+    monkeypatch.setattr(main, "shutdown_executors", lambda: shut_down.append(True))
+
+    async def fake_close_audit():
+        audit_closed.append(True)
+
+    monkeypatch.setattr(main, "close_audit_client", fake_close_audit)
+    with TestClient(app):
+        pass
+    assert cleared == [True]
+    assert shut_down == [True]
+    assert audit_closed == [True]
+
+
+def test_source_reader_bounded_semaphore_rejects_when_saturated(monkeypatch):
+    source.clear_pool()
+    settings = Settings(mysql_host="127.0.0.1", mysql_connect_timeout=1)
+    monkeypatch.setattr(source, "get_settings", lambda: settings)
+    fake_sem = MagicMock()
+    fake_sem.acquire.return_value = False
+    monkeypatch.setattr(source, "_semaphore", lambda _key: fake_sem)
+    with pytest.raises(DependencyUnavailableError, match="连接繁忙"), source.source_reader():
+        pass
+    fake_sem.release.assert_not_called()

@@ -15,6 +15,26 @@ from platform_common.request_context import get_request_id
 
 from app.core.config import get_settings
 
+_audit_client: httpx.AsyncClient | None = None
+
+
+def _get_audit_client() -> httpx.AsyncClient:
+    global _audit_client  # noqa: PLW0603  进程内复用 HTTP 连接池，避免每次审计新建 TCP 连接
+    if _audit_client is None or getattr(_audit_client, "is_closed", False):
+        _audit_client = httpx.AsyncClient(
+            timeout=5.0,
+            limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+        )
+    return _audit_client
+
+
+async def close_audit_client() -> None:
+    global _audit_client  # noqa: PLW0603  服务关闭时释放进程级审计客户端连接池
+    client = _audit_client
+    _audit_client = None
+    if client is not None:
+        await client.aclose()
+
 
 async def _report(  # noqa: PLR0913  审计事件的几个字段都按关键字传
     actor: Actor,
@@ -49,8 +69,8 @@ async def _report(  # noqa: PLR0913  审计事件的几个字段都按关键字�
     url = f"{settings.audit_ingest_url.rstrip('/')}/internal/v1/audit/events"
     headers = internal_headers("tender-service", settings.audit_ingest_secret)
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.post(url, json=payload, headers=headers)
+        client = _get_audit_client()
+        response = await client.post(url, json=payload, headers=headers)
         if not response.is_success:
             raise DependencyUnavailableError(f"审计服务暂不可用，{refused}")
     except httpx.HTTPError as exc:

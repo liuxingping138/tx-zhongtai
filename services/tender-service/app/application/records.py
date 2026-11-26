@@ -66,7 +66,7 @@ def _resolve_content_and_status(kind: Kind, status: Status, record_id: int) -> t
         reference = None
         if effective_status == "1":
             # 交付数据若本身有符合 QLM 规范的 content_id，可直接取用；否则反查原始表
-            content_id = str(row.get("project_content_id") or "")
+            content_id = str(row.get("project_content_id") or "").strip()
             if (
                 content_id
                 and len(content_id) <= records.QLM_ID_MAX_LENGTH
@@ -74,8 +74,10 @@ def _resolve_content_and_status(kind: Kind, status: Status, record_id: int) -> t
                 and content_id.isdecimal()
             ):
                 reference = row
-            else:
+            elif content_id:
                 reference = records.original_reference(reader, kind, row) or row
+            else:
+                reference = row
         else:
             reference = row
         content = records.read_content(reader, reference) if reference else None
@@ -113,7 +115,7 @@ def _read_export_rows(kind: Kind, query: ListQuery, limit: int) -> list[Row]:
 
 def _format_export_row(row: Row) -> Row:
     formatted = serialize(row)
-    formatted["project_status"] = "人工已处理（信息化）" if str(row.get("project_status")) == "1" else "原始数据"
+    formatted["project_status"] = "通过" if str(row.get("project_status")) == "1" else "未通过"
     formatted["is_supp_scene"] = "已补充" if str(row.get("is_supp_scene")) == "1" else "未补充"
     return formatted
 

@@ -47,7 +47,7 @@ const totalIntake = computed(() =>
         stripe
         max-height="295"
         empty-text="所选日期暂无每日数据"
-        class="google-data-table"
+        class="data-table google-data-table"
       >
         <el-table-column
           prop="date"
@@ -147,7 +147,7 @@ const totalIntake = computed(() =>
 
 <style scoped>
 .panel {
-  padding: 18px 22px;
+  padding: var(--zt-space-4) var(--zt-space-6);
   background: var(--zt-panel);
   border: 1px solid var(--zt-border);
   border-radius: 12px;
@@ -158,14 +158,22 @@ const totalIntake = computed(() =>
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
+  gap: var(--zt-space-3);
+  flex-wrap: nowrap;
+  margin-bottom: var(--zt-space-3);
+}
+.panel-head > :first-child {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.panel-head > :last-child:not(:first-child) {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .title-wrap {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--zt-space-2);
 }
 .google-badge-dot {
   width: 8px;
@@ -180,7 +188,7 @@ const totalIntake = computed(() =>
   color: var(--zt-ink-900);
 }
 .panel-note {
-  margin: 4px 0 0;
+  margin: var(--zt-space-1) 0 0;
   font-size: 12px;
   color: var(--zt-ink-500);
   line-height: 1.5;
@@ -188,11 +196,11 @@ const totalIntake = computed(() =>
 .head-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  gap: var(--zt-space-2);
+  flex-wrap: nowrap;
 }
 .meta-pill {
-  padding: 2px 8px;
+  padding: 2px var(--zt-space-2);
   border-radius: 999px;
   font-size: 12px;
   background: var(--zt-surface-subtle);
@@ -201,7 +209,7 @@ const totalIntake = computed(() =>
 }
 .meta-pill--highlight {
   background: var(--zt-soft);
-  color: var(--zt-blue-700);
+  color: var(--zt-blue-600);
   font-weight: 600;
   border-color: var(--zt-border-strong);
 }
@@ -216,7 +224,7 @@ const totalIntake = computed(() =>
   font-size: 12.5px;
 }
 .num-cell--primary {
-  color: var(--zt-blue-700);
+  color: var(--zt-blue-600);
   font-weight: 550;
 }
 .num-cell--success {
@@ -231,7 +239,7 @@ const totalIntake = computed(() =>
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 1px 7px;
+  padding: 2px var(--zt-space-2);
   border-radius: 999px;
   font-size: 11.5px;
   font-weight: 600;
@@ -253,11 +261,11 @@ const totalIntake = computed(() =>
 }
 .work-pill--zero {
   background: var(--zt-surface-subtle);
-  color: var(--zt-ink-400);
+  color: var(--zt-ink-500);
   border: 1px solid var(--zt-divider);
 }
 .work-pill--muted {
-  color: var(--zt-ink-400);
+  color: var(--zt-ink-500);
   font-weight: 400;
 }
 .tabular {
@@ -276,6 +284,6 @@ const totalIntake = computed(() =>
   font-size: 12px;
 }
 :deep(.google-data-table td.el-table__cell) {
-  padding: 7px 0;
+  padding: var(--zt-space-2) 0;
 }
 </style>

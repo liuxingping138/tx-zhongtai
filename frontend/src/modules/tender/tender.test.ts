@@ -15,11 +15,29 @@ describe('招中标页面规则', () => {
   it('默认日期按北京时间跨日计算', () => {
     expect(recentRange(new Date('2026-11-11T18:00:00Z'))).toEqual(['2026-11-06', '2026-11-12'])
   })
-  it('原文保留排版并禁止脚本及外部网络', () => {
-    const html = isolatedHtml('<table><tr><td>正文</td></tr></table>')
+  it('原文保留排版、剥离危险标签并动态读取主题令牌', () => {
+    const tokens: Record<string, string> = {
+      '--zt-panel': '#1e1f23',
+      '--zt-ink-900': '#e8eaed',
+      '--zt-blue-600': '#8ab4f8',
+      '--zt-border-strong': '#5f6368',
+      '--zt-table-head': '#23252a',
+    }
+    const style = { getPropertyValue: (name: string) => tokens[name] ?? '' }
+    const html = isolatedHtml(
+      '<meta http-equiv="refresh" content="0"><base href="https://evil.test"><script>alert(1)</script><table><tr><td>正文</td></tr></table>',
+      true,
+      style,
+    )
     expect(html).toContain('<table>')
     expect(html).toContain("default-src 'none'")
     expect(html).toContain("form-action 'none'")
+    expect(html).not.toContain('alert(1)')
+    expect(html).not.toContain('<script')
+    expect(html).not.toContain('<base')
+    expect(html).not.toContain('http-equiv="refresh"')
+    expect(html).toContain('#1e1f23')
+    expect(html).toContain('#8ab4f8')
     expect(html.indexOf('Content-Security-Policy')).toBeLessThan(html.indexOf('<table>'))
   })
   it('相同工作量用并列柱展示避免折线重叠', () => {

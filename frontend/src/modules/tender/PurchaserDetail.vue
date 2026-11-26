@@ -5,7 +5,7 @@ const route = useRoute()
 </script>
 <template>
   <TenderDetail
-    :key="String(route.params.id) + String(route.query.project_status)"
+    :key="`${String(route.params.id)}:${String(route.query.row_status ?? '')}:${String(route.query.project_status ?? '')}`"
     kind="purchaser"
   />
 </template>
