@@ -127,23 +127,29 @@ function editRoute(row: T, index: number): RouteLocationRaw {
           <template #default="{ row, $index }">
             <template v-if="col.prop === titleKey">
               <!-- Element Plus 注册列时会拿空行（没有 id）试渲染一次插槽，不判断就会按空 id 生成地址、控制台报错 -->
-              <RouterLink
-                v-if="detailRoute && row.id"
-                class="record-title"
-                :to="detailRoute(row, $index)"
-                :title="text(row, col)"
-              >
-                {{ text(row, col) }}
-              </RouterLink>
-              <button
-                v-else
-                type="button"
-                class="record-title"
-                :title="text(row, col)"
-                @click="open(row)"
-              >
-                {{ text(row, col) }}
-              </button>
+              <span class="record-title-wrap">
+                <slot
+                  name="title-prefix"
+                  :row="row"
+                />
+                <RouterLink
+                  v-if="detailRoute && row.id"
+                  class="record-title"
+                  :to="detailRoute(row, $index)"
+                  :title="text(row, col)"
+                >
+                  {{ text(row, col) }}
+                </RouterLink>
+                <button
+                  v-else
+                  type="button"
+                  class="record-title"
+                  :title="text(row, col)"
+                  @click="open(row)"
+                >
+                  {{ text(row, col) }}
+                </button>
+              </span>
             </template>
             <!-- 模块自己画这一格（如行内启停开关）：插槽名 cell-列名 -->
             <slot
@@ -229,21 +235,27 @@ function editRoute(row: T, index: number): RouteLocationRaw {
           :key="row.id"
           class="mobile-record"
         >
-          <RouterLink
-            v-if="detailRoute"
-            class="record-title"
-            :to="detailRoute(row, index)"
-          >
-            {{ value(row, titleKey) || '未命名记录' }}
-          </RouterLink>
-          <button
-            v-else
-            type="button"
-            class="record-title"
-            @click="open(row)"
-          >
-            {{ value(row, titleKey) || '未命名记录' }}
-          </button>
+          <span class="record-title-wrap">
+            <slot
+              name="title-prefix"
+              :row="row"
+            />
+            <RouterLink
+              v-if="detailRoute"
+              class="record-title"
+              :to="detailRoute(row, index)"
+            >
+              {{ value(row, titleKey) || '未命名记录' }}
+            </RouterLink>
+            <button
+              v-else
+              type="button"
+              class="record-title"
+              @click="open(row)"
+            >
+              {{ value(row, titleKey) || '未命名记录' }}
+            </button>
+          </span>
           <dl>
             <template
               v-for="col in summaryColumns"
@@ -342,6 +354,8 @@ function editRoute(row: T, index: number): RouteLocationRaw {
 .business-table__desktop :deep(.table-action) { position: sticky; right: 0; z-index: 2; background: var(--zt-panel); box-shadow: -8px 0 10px -8px var(--zt-shadow-edge); }
 .business-table__desktop :deep(th.table-action) { background: var(--el-table-header-bg-color); }
 
+.record-title-wrap { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; vertical-align: middle; }
+.record-title-wrap > .record-title { min-width: 0; flex: 0 1 auto; }
 .record-title { padding: 0; border: 0; font: inherit; font-weight: 500; line-height: 22px; background: none; color: var(--zt-ink-900); text-align: left; cursor: pointer; display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .record-title:hover { color: var(--zt-blue-600); text-decoration: underline; }
 a.record-title { text-decoration: none; }
@@ -370,6 +384,7 @@ a { color: var(--zt-blue-600); }
  .business-table__mobile { display: block; }
  .mobile-record { padding: 16px; border-bottom: 1px solid var(--zt-border); }
  .mobile-record:last-child { border-bottom: 0; }
+ .mobile-record .record-title-wrap { display: flex; align-items: flex-start; }
  .mobile-record .record-title { display: block; font-size: 15px; white-space: normal; font-weight: 600; }
  .mobile-record dl { display: grid; grid-template-columns: 85px minmax(0, 1fr); gap: 7px 12px; font-size: 13px; margin: 14px 0 4px; }
  .mobile-record dt { color: var(--zt-ink-500); }

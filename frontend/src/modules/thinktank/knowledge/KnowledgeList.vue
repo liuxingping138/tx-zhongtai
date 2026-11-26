@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Download, Upload } from '@element-plus/icons-vue'
+import { Delete, Download, Star, StarFilled, Upload } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
 import type { RouteLocationRaw } from 'vue-router'
@@ -31,6 +31,7 @@ import { useExcelExport } from '@/composables/useExcelExport'
 import { useFilterOptions } from '@/composables/useFilterOptions'
 import { useListLoader } from '@/composables/useListLoader'
 import { filtersForExport, useListQuery } from '@/composables/useListQuery'
+import { useTableSelection } from '@/composables/useTableSelection'
 import { reviewQuery } from '@/modules/policy/shared/reviewQuery'
 import { useAuthStore } from '@/stores/auth'
 import KnowledgeFilters, { type KnowledgeFilterQuery } from './KnowledgeFilters.vue'
@@ -44,15 +45,16 @@ import {
   SUMMARY_KEYS,
   TABLE_COLUMNS,
 } from './fields'
+import { useKnowledgeBatch } from './useKnowledgeBatch'
 
 const RESOURCE = 'thinktank.knowledge'
+const ACTION_WIDTH = 148
 const auth = useAuthStore()
 const canCreate = computed(() => auth.canFull(RESOURCE))
 const canExportUndefined = computed(
   () => auth.canExport(RESOURCE) && (accessScope.value?.exportable_file_types.includes('未定义') ?? true),
 )
 const canUploadTags = computed(() => auth.canFull(RESOURCE))
-const actionWidth = computed(() => (canCreate.value ? 200 : 148))
 
 const query = reactive({
   file_name: [] as string[],
@@ -88,18 +90,18 @@ const exportingUndefined = ref(false)
 const busyRowIds = reactive(new Set<string>())
 const downloadingRowIds = reactive(new Set<string>())
 const logTarget = ref<{ visible: boolean; id: string; name: string }>({ visible: false, id: '', name: '' })
+const selection = useTableSelection<KnowledgeItem>()
+const checked = selection.checked
 
 async function refresh() {
   await Promise.all([load(), filters.load()])
 }
 
+const batch = useKnowledgeBatch({ checked, clearSelection: selection.clear, refresh })
+
 function detailRoute(row: KnowledgeItem, index: number): RouteLocationRaw {
   const position = (query.page - 1) * query.page_size + index
-  return {
-    name: 'thinktank-knowledge-preview',
-    params: { id: row.id },
-    query: reviewQuery(listQuery.applied, position, query.page_size),
-  }
+  return { name: 'thinktank-knowledge-preview', params: { id: row.id }, query: reviewQuery(listQuery.applied, position, query.page_size) }
 }
 
 function editRoute(row: KnowledgeItem, index: number): RouteLocationRaw {
@@ -243,6 +245,33 @@ onMounted(async () => {
           :loading="exporting"
           @click="onExport"
         />
+        <!-- 勾选当前页记录后才出现批量按钮，未勾选时不摆置灰按钮 -->
+        <el-button
+          v-if="batch.unfavorited.value.length"
+          :icon="Star"
+          :loading="batch.batchBusy.value"
+          @click="batch.onBatchFavorite"
+        >
+          批量收藏（{{ batch.unfavorited.value.length }}）
+        </el-button>
+        <el-button
+          v-if="batch.favorited.value.length"
+          :icon="StarFilled"
+          :loading="batch.batchBusy.value"
+          @click="batch.onBatchUnfavorite(listQuery.applied.favorite_only.length > 0)"
+        >
+          批量取消收藏（{{ batch.favorited.value.length }}）
+        </el-button>
+        <el-button
+          v-if="canCreate && batch.deletable.value.length"
+          type="danger"
+          plain
+          :icon="Delete"
+          :loading="batch.batchBusy.value"
+          @click="batch.onBatchDelete"
+        >
+          批量删除（{{ batch.deletable.value.length }}）
+        </el-button>
         <AuditLogButton module="thinktank.knowledge" />
       </template>
 
@@ -272,20 +301,34 @@ onMounted(async () => {
       </template>
 
       <BusinessTable
+        :ref="selection.bindTable"
         :items="items"
         :columns="columns"
         :selected="selected"
+        selectable
         title-key="file_name"
         :summary-keys="SUMMARY_KEYS"
         :groups="EDITOR_GROUPS"
         :detail-route="detailRoute"
         :can-write="canCreate"
-        :action-width="actionWidth"
+        :action-width="ACTION_WIDTH"
         :loading="loading"
         :filtered="resultFiltered"
         detail-title="知识资料详情"
         @reset="listQuery.resetFilters"
+        @selection-change="checked = $event"
       >
+        <template #title-prefix="{ row }">
+          <el-icon
+            v-if="row?.is_favorited"
+            class="fav-star"
+            title="已收藏"
+            aria-label="已收藏"
+          >
+            <StarFilled />
+          </el-icon>
+        </template>
+
         <template #cell-file_type="{ row }">
           <el-tag
             size="small"
@@ -329,32 +372,13 @@ onMounted(async () => {
 
 <style scoped>
 /* 智库 13 项筛选：默认折叠 1 行核心条件，展开后严格按 4 列固定标签栅格对齐，告别参差不齐 */
+.fav-star { color: var(--zt-warning); font-size: 14px; flex-shrink: 0; }
 .knowledge-filters { align-items: flex-start; }
-.knowledge-filters :deep(.filter-bar__fields) {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px 16px;
-  align-items: center;
-}
+.knowledge-filters :deep(.filter-bar__fields) { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 16px; align-items: center; }
 .knowledge-filters :deep(.filter-bar__fields > .el-form-item),
-.knowledge-filters :deep(.filter-bar__fields > .el-form-item:first-child) {
-  max-width: none;
-  width: 100%;
-  margin: 0;
-}
-.knowledge-filters :deep(.el-form-item__label) {
-  width: 72px;
-  justify-content: flex-end;
-  text-align: right;
-  margin: 0 8px 0 0;
-}
-@media (max-width: 1279px) {
-  .knowledge-filters :deep(.filter-bar__fields) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-@media (max-width: 959px) {
-  .knowledge-filters :deep(.filter-bar__fields) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 767px) {
-  .knowledge-filters :deep(.filter-bar__fields) { grid-template-columns: 1fr; }
-}
+.knowledge-filters :deep(.filter-bar__fields > .el-form-item:first-child) { max-width: none; width: 100%; margin: 0; }
+.knowledge-filters :deep(.el-form-item__label) { width: 72px; justify-content: flex-end; text-align: right; margin: 0 8px 0 0; }
+@media (max-width: 1279px) { .knowledge-filters :deep(.filter-bar__fields) { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 959px) { .knowledge-filters :deep(.filter-bar__fields) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 767px) { .knowledge-filters :deep(.filter-bar__fields) { grid-template-columns: 1fr; } }
 </style>

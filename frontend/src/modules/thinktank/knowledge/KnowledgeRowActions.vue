@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ArrowDown, Delete, Download, Star, StarFilled, Tickets } from '@element-plus/icons-vue'
-import { RouterLink, type RouteLocationRaw } from 'vue-router'
+import { ArrowDown, Delete, Download, Edit, Star, StarFilled, Tickets } from '@element-plus/icons-vue'
+import { RouterLink, useRouter, type RouteLocationRaw } from 'vue-router'
 
 import type { KnowledgeItem } from '@/api/thinktank'
 
-defineProps<{
+const props = defineProps<{
   row: KnowledgeItem
   detailTo: RouteLocationRaw
   editTo: RouteLocationRaw
@@ -19,11 +19,18 @@ const emit = defineEmits<{
   delete: []
 }>()
 
+const router = useRouter()
+
+const handlers: Record<string, () => void> = {
+  edit: () => void router.push(props.editTo),
+  download: () => emit('download'),
+  favorite: () => emit('favorite'),
+  logs: () => emit('logs'),
+  delete: () => emit('delete'),
+}
+
 function onCommand(command: string) {
-  if (command === 'download') emit('download')
-  else if (command === 'favorite') emit('favorite')
-  else if (command === 'logs') emit('logs')
-  else if (command === 'delete') emit('delete')
+  handlers[command]?.()
 }
 </script>
 
@@ -34,13 +41,6 @@ function onCommand(command: string) {
       :to="detailTo"
     >
       预览
-    </RouterLink>
-    <RouterLink
-      v-if="row.can_edit"
-      class="row-action row-action--primary"
-      :to="editTo"
-    >
-      编辑
     </RouterLink>
     <el-dropdown
       trigger="click"
@@ -59,6 +59,13 @@ function onCommand(command: string) {
       </button>
       <template #dropdown>
         <el-dropdown-menu>
+          <el-dropdown-item
+            v-if="row.can_edit"
+            command="edit"
+            :icon="Edit"
+          >
+            编辑标签
+          </el-dropdown-item>
           <el-dropdown-item
             v-if="row.can_export"
             command="download"
