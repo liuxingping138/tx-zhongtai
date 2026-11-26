@@ -75,22 +75,48 @@ function measure() {
 
 let resizeObserver: ResizeObserver | undefined
 let mutationObserver: MutationObserver | undefined
+let rafId: number | null = null
+let lastMeasuredWidth = -1
+
+function scheduleMeasure() {
+  if (rafId !== null) return
+  rafId = requestAnimationFrame(() => {
+    rafId = null
+    measure()
+  })
+}
+
 onMounted(() => {
   measure()
   if (!fields.value) return
+  lastMeasuredWidth = Math.round(fields.value.clientWidth)
   if (typeof ResizeObserver !== 'undefined') {
-    resizeObserver = new ResizeObserver(() => measure())
+    resizeObserver = new ResizeObserver(() => {
+      const box = fields.value
+      if (!box) return
+      const width = Math.round(box.clientWidth)
+      if (width === lastMeasuredWidth) return
+      lastMeasuredWidth = width
+      scheduleMeasure()
+    })
     resizeObserver.observe(fields.value)
   }
   // 有的页面按权限或类型增减筛选框，框的个数变了要重新量。
-  mutationObserver = new MutationObserver(() => measure())
+  mutationObserver = new MutationObserver(() => scheduleMeasure())
   mutationObserver.observe(fields.value, { childList: true })
 })
 onBeforeUnmount(() => {
+  if (rafId !== null) {
+    cancelAnimationFrame(rafId)
+    rafId = null
+  }
   resizeObserver?.disconnect()
   mutationObserver?.disconnect()
 })
-watch([() => JSON.stringify(props.query), expanded], measure, { flush: 'post' })
+watch([() => JSON.stringify(props.query), expanded], () => {
+  if (fields.value) lastMeasuredWidth = Math.round(fields.value.clientWidth)
+  measure()
+}, { flush: 'post' })
 
 function submit() {
   if (!composing.value) emit('search')
@@ -165,15 +191,15 @@ function submit() {
   </el-form>
 </template>
 <style scoped>
-.filter-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; }
-.filter-bar__fields { position: relative; display: flex; flex-wrap: wrap; flex: 1 1 640px; align-items: flex-end; gap: 12px; min-width: 0; }
-.filter-bar__fields.is-folded { overflow: hidden; padding: 0 4px 4px; margin: 0 -4px -4px; }
+.filter-bar { display: flex; flex-wrap: nowrap; align-items: flex-end; gap: 12px 16px; }
+.filter-bar__fields { position: relative; display: flex; flex-wrap: wrap; flex: 1 1 0; align-items: flex-end; gap: 12px; min-width: 0; padding: 0 4px 4px; margin: 0 -4px -4px; }
+.filter-bar__fields.is-folded { overflow: hidden; }
 .filter-bar__fields :deep(> [data-folded]) { visibility: hidden; }
 .filter-bar__fields :deep(> .el-form-item) { flex: 1 1 160px; max-width: 240px; margin: 0; min-width: 0; }
 .filter-bar__fields :deep(> .el-form-item:first-child) { flex: 1.5 1 220px; max-width: 360px; }
 .filter-bar__fields :deep(> .el-form-item:only-child) { flex: 0 1 360px; max-width: 360px; }
 .filter-bar__fields :deep(> .filter-form__item--wide) { flex: 2 1 360px; max-width: 560px; }
-.filter-bar__actions { display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-end; gap: 6px; margin-left: auto; }
+.filter-bar__actions { display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-end; flex-shrink: 0; gap: 6px; margin-left: auto; }
 .filter-bar__hint { margin: 0; color: var(--zt-ink-500); font-size: 12px; line-height: 1.4; white-space: nowrap; }
 .filter-bar__hint.is-pending { color: var(--zt-blue-600); }
 .filter-bar__buttons { display: flex; align-items: center; gap: 8px; }
@@ -202,6 +228,7 @@ function submit() {
   box-shadow: 0 0 0 1px var(--zt-blue-600) inset, 0 0 0 3px var(--zt-focus-ring);
 }
 @media (max-width: 900px) {
+  .filter-bar { flex-wrap: wrap; }
   .filter-bar__fields { flex-basis: 100%; }
   .filter-bar__actions { width: 100%; align-items: stretch; margin-left: 0; }
   .filter-bar__hint { white-space: normal; }
