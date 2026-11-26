@@ -71,9 +71,13 @@ async function draw() {
   if (!pending || !canvas.value) return
   state.value = 'rendering'
   try {
-    page = await pending
-    if (mine !== seq || !canvas.value) return
-    await paint(page, canvas.value, mine)
+    const resolved = await pending
+    if (mine !== seq || !canvas.value) {
+      resolved.cleanup()
+      return
+    }
+    page = resolved
+    await paint(resolved, canvas.value, mine)
   } catch (err) {
     if (mine !== seq || isCancelled(err)) return
     state.value = 'error'

@@ -122,12 +122,17 @@ export function usePdfStream(deps: PdfStreamDeps) {
     return doc.value ? doc.value.getPage(pageNumber) : null
   }
 
-  /** 某页的文字块和每块后面是否换行（和文字层同一份 getTextContent，下标一一对应）：只在查找时才调，按需取那一页的数据。 */
-  async function getPageText(pageNumber: number): Promise<PageTextSource | null> {
+  /** 某页的文字块和每块后面是否换行（和文字层同一份 getTextContent，下标一一对应）：只在查找时才调，按需取那一页的数据。非渲染页读完即 cleanup 释放内存。 */
+  async function getPageText(pageNumber: number, keep = false): Promise<PageTextSource | null> {
     const pdf = doc.value
     if (!pdf) return null
-    const content = await (await pdf.getPage(pageNumber)).getTextContent()
-    return textSource(content.items)
+    const page = await pdf.getPage(pageNumber)
+    try {
+      const content = await page.getTextContent()
+      return textSource(content.items)
+    } finally {
+      if (!keep) page.cleanup()
+    }
   }
 
   /** 某页取数或渲染失败：401 说明令牌在看的过程中过期了，续期后重开；其他错误留给那一页自己显示。 */

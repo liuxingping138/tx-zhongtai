@@ -286,16 +286,16 @@ onMounted(() => {
         class-name="table-action"
       >
         <template #default="{ row }">
-          <el-button
+          <button
             v-if="ipLimited(row)"
-            link
-            type="primary"
-            :loading="Boolean(row.client_ip) && unlockingIp === row.client_ip"
+            type="button"
+            class="row-action row-action--primary"
             :disabled="Boolean(unlockingIp)"
+            :aria-busy="Boolean(row.client_ip) && unlockingIp === row.client_ip"
             @click="unlockRow(row)"
           >
-            解除限制
-          </el-button>
+            {{ Boolean(row.client_ip) && unlockingIp === row.client_ip ? '解除中…' : '解除限制' }}
+          </button>
         </template>
       </el-table-column>
     </el-table>

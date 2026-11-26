@@ -101,4 +101,16 @@ describe('PdfPageCanvas', () => {
     expect(page.render.mock.calls[0]![0]).toMatchObject({ transform: [1.5, 0, 0, 1.5, 0, 0] })
     vi.unstubAllGlobals()
   })
+
+  it('在途 getPage 晚于移出可见范围返回时立即 cleanup，不残留页面代理', async () => {
+    const page = fakePage()
+    let resolvePage!: (value: ReturnType<typeof asPage>) => void
+    const pending = new Promise<ReturnType<typeof asPage>>(r => { resolvePage = r })
+    const wrapper = mountPage(page, { getPage: () => pending })
+    await wrapper.setProps({ active: false })
+    resolvePage(asPage(page))
+    await flush()
+    expect(page.cleanup).toHaveBeenCalledOnce()
+    expect(page.render).not.toHaveBeenCalled()
+  })
 })

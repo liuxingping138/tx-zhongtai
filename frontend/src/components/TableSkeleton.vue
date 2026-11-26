@@ -116,15 +116,15 @@ const colList = computed(() => Array.from({ length: props.columns }, (_, i) => i
 .table-skeleton__row {
   display: flex;
   align-items: center;
-  height: 48px;
+  height: 44px;
   background: var(--zt-panel);
   border-bottom: 1px solid var(--zt-divider);
   padding: 0 16px;
   transition: height 0.16s ease;
 }
 
-.table-skeleton__row:nth-child(even) {
-  background: var(--zt-soft);
+:global(html[data-density="compact"]) .table-skeleton__header {
+  height: 32px;
 }
 
 :global(html[data-density="compact"]) .table-skeleton__row {

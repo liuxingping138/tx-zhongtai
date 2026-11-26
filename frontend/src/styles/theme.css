@@ -284,13 +284,32 @@ html.dark .workspace-brand img {
 /* 紧凑视图（Dense Mode）：提高数据密度，适合审核与排查大批量数据 */
 html[data-density="compact"] .el-table.data-table th.el-table__cell,
 html[data-density="compact"] .el-table.data-table td.el-table__cell {
-  padding: 5px 0 !important;
+  height: 32px;
+  padding: 4px 0 !important;
   font-size: 13px !important;
 }
 
 html[data-density="compact"] .el-table.data-table .cell {
   line-height: 1.4 !important;
   padding: 0 10px !important;
+}
+
+html[data-density="compact"] .prompt-table th,
+html[data-density="compact"] .prompt-table td,
+html[data-density="compact"] .billing__table th,
+html[data-density="compact"] .billing__table td {
+  height: 32px;
+  font-size: 12px;
+}
+
+html[data-density="compact"] .perm-matrix th,
+html[data-density="compact"] .perm-matrix td,
+html[data-density="compact"] .perm-table thead th,
+html[data-density="compact"] .perm-table .group-row td,
+html[data-density="compact"] .perm-table .data-row td {
+  padding-top: 5px;
+  padding-bottom: 5px;
+  font-size: 12.5px;
 }
 
 html[data-density="compact"] .row-actions {
@@ -321,7 +340,7 @@ html[data-density="compact"] .workspace-main .list-page__toolbar {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 34px;
+  height: 36px;
   padding: 0 12px;
   border: 1px solid var(--zt-border-strong);
   border-radius: 8px;
@@ -387,7 +406,7 @@ body {
 
 /* Google Material Design 3 现代立体按钮规范：微渐变、顶部高光、主题色图标与按压回弹 */
 .el-button {
-  min-height: 34px;
+  min-height: 36px;
   padding: 0 14px;
   font-size: 13px;
   font-weight: 550;
@@ -399,6 +418,12 @@ body {
     color 0.18s cubic-bezier(0.4, 0, 0.2, 1),
     box-shadow 0.18s cubic-bezier(0.4, 0, 0.2, 1),
     transform 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.el-button--small {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
 }
 
 .el-button:not(.is-disabled):not(.is-loading):active {
@@ -548,6 +573,11 @@ body {
 
 .el-table.data-table th.table-action {
   background: var(--el-table-header-bg-color);
+}
+
+.el-table.data-table tr:hover > td.table-action,
+.el-table.data-table tr.hover-row > td.table-action {
+  background: var(--zt-row-hover);
 }
 
 .pagination-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px 2px; min-height: 52px; }
@@ -1000,6 +1030,36 @@ button:disabled { cursor: not-allowed; }
 @keyframes m3-linear-flow {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+/* 全局柔和 Shimmer 骨架屏流光动效，供各模块与组件复用 */
+.skeleton-shimmer {
+  display: inline-block;
+  background: linear-gradient(
+    90deg,
+    var(--zt-soft) 25%,
+    var(--zt-divider) 37%,
+    var(--zt-soft) 63%
+  );
+  background-size: 400% 100%;
+  animation: shimmer-flow 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  border-radius: 4px;
+}
+
+@keyframes shimmer-flow {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer {
+    animation: none !important;
+    background: var(--zt-divider) !important;
+  }
 }
 
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }

@@ -227,14 +227,14 @@ async function save(row: CandidateRow) {
         width="100"
       >
         <template #default="{ row }">
-          <el-button
-            link
-            type="primary"
+          <button
+            type="button"
+            class="row-action row-action--primary"
             :aria-label="`修改《${row.policy_title}》的场景`"
             @click="startEdit(row)"
           >
             改场景
-          </el-button>
+          </button>
         </template>
       </el-table-column>
     </el-table>

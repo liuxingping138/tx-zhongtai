@@ -80,6 +80,9 @@ async function confirm(): Promise<void> {
     v-model="open"
     title="从数据库取测试数据"
     width="min(560px, calc(100vw - 32px))"
+    :close-on-click-modal="!busy"
+    :close-on-press-escape="!busy"
+    :show-close="!busy"
   >
     <!-- novalidate：条数框按「最小值 + 步长倍数」校验会静默拦下提交，范围由后端校验。 -->
     <el-form
@@ -162,7 +165,10 @@ async function confirm(): Promise<void> {
       </p>
     </el-form>
     <template #footer>
-      <el-button @click="open = false">
+      <el-button
+        :disabled="busy"
+        @click="open = false"
+      >
         取消
       </el-button>
       <el-button

@@ -172,7 +172,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div>
+  <div class="candidates-page">
     <ListPage
       title="新增场景审核"
       :total="total"
@@ -321,5 +321,14 @@ onMounted(() => {
 
 .candidates__min {
   width: 120px;
+}
+
+.candidates-page :deep(.list-page__toolbar) {
+  gap: 12px;
+  padding: 10px 16px;
+}
+
+.candidates-page :deep(.list-page__actions) {
+  gap: 6px;
 }
 </style>

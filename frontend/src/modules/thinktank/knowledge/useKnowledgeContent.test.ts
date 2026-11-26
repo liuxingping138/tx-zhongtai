@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+
+import { setAccessToken } from '@/api/session'
 import {
   clearKnowledgeContentCache,
   CONTENT_CACHE_SIZE,
@@ -168,6 +170,24 @@ describe('useKnowledgeContent', () => {
     owner = ''
     await secondPage.show('doc1', 'text', '', true, 'v2')
     expect(fetchBlob).toHaveBeenCalledTimes(5) // 没登录身份时不复用任何缓存
+    clearKnowledgeContentCache()
+  })
+
+  it('登录令牌清空（退出/远端登出）时自动清空会话级缓存，非空令牌刷新不清缓存', async () => {
+    clearKnowledgeContentCache()
+    setAccessToken('tok-1')
+    const fetchBlob = vi.fn(() => Promise.resolve(textResp('正文')))
+    const page = useKnowledgeContent(fetchBlob, vi.fn(), { persistent: true, getOwner: () => 'u1' })
+    await page.show('doc1', 'text', '', true, 'v1')
+    expect(fetchBlob).toHaveBeenCalledTimes(1)
+
+    setAccessToken('tok-2')
+    await page.show('doc1', 'text', '', true, 'v1')
+    expect(fetchBlob).toHaveBeenCalledTimes(1)
+
+    setAccessToken('')
+    await page.show('doc1', 'text', '', true, 'v1')
+    expect(fetchBlob).toHaveBeenCalledTimes(2)
     clearKnowledgeContentCache()
   })
 })

@@ -157,7 +157,7 @@ defineExpose({ reload: load })
     <el-table
       v-else
       :data="members"
-      class="members__table"
+      class="data-table members__table"
       :class="{ 'is-refreshing': loading }"
     >
       <template #empty>
@@ -195,15 +195,15 @@ defineExpose({ reload: load })
         width="100"
       >
         <template #default="{ row }">
-          <el-button
-            link
-            type="danger"
-            :loading="removing === row.id"
-            :disabled="!!removing"
+          <button
+            type="button"
+            class="row-action row-action--danger"
+            :disabled="Boolean(removing)"
+            :aria-busy="removing === row.id"
             @click="onRemove(row)"
           >
-            移出
-          </el-button>
+            {{ removing === row.id ? '移出中…' : '移出' }}
+          </button>
         </template>
       </el-table-column>
     </el-table>
@@ -214,6 +214,8 @@ defineExpose({ reload: load })
       title="添加成员"
       width="480px"
       :close-on-click-modal="!adding"
+      :close-on-press-escape="!adding"
+      :show-close="!adding"
     >
       <p class="editor-help">
         选择要加入「{{ role.name }}」的用户，可多选；已在该角色中的用户不会出现在候选里。

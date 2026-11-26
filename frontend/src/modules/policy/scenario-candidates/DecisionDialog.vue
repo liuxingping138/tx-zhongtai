@@ -162,6 +162,9 @@ async function submit() {
     :model-value="Boolean(mode)"
     :title="mode ? TITLES[mode] : ''"
     width="min(560px, 94vw)"
+    :close-on-click-modal="!submitting"
+    :close-on-press-escape="!submitting"
+    :show-close="!submitting"
     @close="emit('close')"
   >
     <div class="decision">
@@ -284,7 +287,10 @@ async function submit() {
       />
     </div>
     <template #footer>
-      <el-button @click="emit('close')">
+      <el-button
+        :disabled="submitting"
+        @click="emit('close')"
+      >
         取消
       </el-button>
       <el-button

@@ -57,7 +57,7 @@ let pendingFocus = false
 
 const search = usePdfSearch({
   numPages,
-  pageText: n => (pdf.doc.value ? pdf.getPageText(n).then(source => source ?? { items: [], eol: [] }) : null),
+  pageText: n => (pdf.doc.value ? pdf.getPageText(n, rendered.value.has(n)).then(source => source ?? { items: [], eol: [] }) : null),
   onJump,
   // 查找途中令牌过期：和某页取数 401 一样续期后重开，重开后按原词重找
   onAuthError: (err) => { void pdf.onPageError(err) },

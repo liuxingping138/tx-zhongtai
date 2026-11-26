@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, Delete, Document, Key, Lock, SwitchButton, Unlock } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -73,6 +73,15 @@ onBeforeRouteUpdate(async (to, from) => {
   if (infoSaving.value || roleSaving.value) return false
   return confirmDiscard()
 })
+
+function onBeforeUnload(event: BeforeUnloadEvent) {
+  if (pendingInfoChange.value || pendingRoleChange.value || infoSaving.value || roleSaving.value) {
+    event.preventDefault()
+    event.returnValue = ''
+  }
+}
+onMounted(() => window.addEventListener('beforeunload', onBeforeUnload))
+onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload))
 
 async function load() {
   const id = userId.value

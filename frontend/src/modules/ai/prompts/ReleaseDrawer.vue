@@ -151,6 +151,9 @@ async function takeOffline(): Promise<void> {
     :title="upToDate ? `「${template.title}」线上版本` : `上线「${template.title}」`"
     size="min(760px, 100vw)"
     class="editor-overlay release"
+    :close-on-click-modal="!busy"
+    :close-on-press-escape="!busy"
+    :show-close="!busy"
   >
     <p class="release__intro">
       {{ upToDate
@@ -279,12 +282,16 @@ async function takeOffline(): Promise<void> {
             v-if="fromList"
             text
             type="primary"
+            :disabled="busy"
             @click="emit('edit')"
           >
             进入编辑工作台 →
           </el-button>
           <span class="release__spacer" />
-          <el-button @click="open = false">
+          <el-button
+            :disabled="busy"
+            @click="open = false"
+          >
             {{ upToDate ? '关闭' : '取消' }}
           </el-button>
           <el-button

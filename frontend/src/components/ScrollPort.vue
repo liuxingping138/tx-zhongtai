@@ -67,28 +67,41 @@ function onWheel(event: WheelEvent) {
   event.stopPropagation()
 }
 
+let stopDrag: (() => void) | null = null
+
+function clearDrag() {
+  stopDrag?.()
+  stopDrag = null
+}
+
 function bindDrag(axis: 'x' | 'y', event: PointerEvent) {
   const el = view.value
   if (!el) return
   event.preventDefault()
-  const start = axis === 'x' ? event.clientX : event.clientY
-  const startScroll = axis === 'x' ? el.scrollLeft : el.scrollTop
-  const max = axis === 'x' ? el.scrollWidth - el.clientWidth : el.scrollHeight - el.clientHeight
-  const track = axis === 'x'
+  clearDrag()
+  const horizontal = axis === 'x'
+  const start = horizontal ? event.clientX : event.clientY
+  const startScroll = horizontal ? el.scrollLeft : el.scrollTop
+  const max = horizontal ? el.scrollWidth - el.clientWidth : el.scrollHeight - el.clientHeight
+  const track = horizontal
     ? el.clientWidth - (state.needY ? TRACK : 0) - state.xThumb
     : el.clientHeight - (state.needX ? TRACK : 0) - state.yThumb
   const move = (next: PointerEvent) => {
-    const delta = (axis === 'x' ? next.clientX : next.clientY) - start
+    const delta = (horizontal ? next.clientX : next.clientY) - start
     const value = startScroll + (track > 0 ? (delta / track) * max : 0)
-    if (axis === 'x') el.scrollLeft = clamp(value, 0, Math.max(0, max))
+    if (horizontal) el.scrollLeft = clamp(value, 0, Math.max(0, max))
     else el.scrollTop = clamp(value, 0, Math.max(0, max))
   }
   const up = () => {
     window.removeEventListener('pointermove', move)
     window.removeEventListener('pointerup', up)
+    window.removeEventListener('pointercancel', up)
+    if (stopDrag === up) stopDrag = null
   }
+  stopDrag = up
   window.addEventListener('pointermove', move)
   window.addEventListener('pointerup', up)
+  window.addEventListener('pointercancel', up)
 }
 
 let resizeObserver: ResizeObserver | undefined
@@ -127,6 +140,7 @@ onMounted(() => {
   scheduleMeasure()
 })
 onBeforeUnmount(() => {
+  clearDrag()
   view.value?.removeEventListener('wheel', onWheel, true)
   if (rafId !== null) {
     cancelAnimationFrame(rafId)

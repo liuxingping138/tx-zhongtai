@@ -91,7 +91,7 @@ watch(open, value => {
   void ensureContract()
 }, { flush: 'sync' })
 // 只选了模板不算没保存的工作；选好的数据丢了要重新找，离开前提醒。
-useUnsavedForm(open, () => file.value?.name ?? dbPayload.value?.file_name ?? '', starting)
+const { beforeClose, markSaved } = useUnsavedForm(open, () => file.value?.name ?? dbPayload.value?.file_name ?? '', starting)
 watch(templateId, () => {
   version.value = defaultVersion(template.value)
   if (template.value?.category !== 'policy') inputMode.value = 'upload'
@@ -174,6 +174,7 @@ async function start(): Promise<void> {
     if (dbPayload.value) await startBatchRunFromRows(req, dbPayload.value)
     else await startBatchRun(req, file.value!)
     ElMessage.success(`已加入队列，共 ${rows} 条`)
+    markSaved('')
     open.value = false
     emit('created')
   } catch (error) {
@@ -184,10 +185,10 @@ async function start(): Promise<void> {
 }
 
 function close(done: () => void): void {
-  if (starting.value) return
-  if (!file.value && !dbPayload.value) { done(); return }
-  void ElMessageBox.confirm('选好的数据还没提交，关闭后要重新选。', '关闭新建任务？', { confirmButtonText: '关闭', cancelButtonText: '继续填写' })
-    .then(() => { sequence++; done() }, () => {})
+  void beforeClose(() => {
+    sequence++
+    done()
+  })
 }
 </script>
 
@@ -198,8 +199,9 @@ function close(done: () => void): void {
     size="min(680px, 100vw)"
     class="editor-overlay new-task"
     :before-close="close"
-    :close-on-click-modal="false"
+    :close-on-click-modal="!starting"
     :close-on-press-escape="!starting"
+    :show-close="!starting"
   >
     <fieldset
       class="new-task__steps"

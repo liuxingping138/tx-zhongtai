@@ -61,7 +61,7 @@ test('候选完整的字段本地过滤，不发服务端搜索请求', async ({
   await expect(page.getByRole('option', { name: '江苏省', exact: true })).toBeVisible()
   await expect(page.getByRole('option', { name: '北京市', exact: true })).toHaveCount(0)
 
-  await page.waitForTimeout(600)
+  await page.waitForLoadState('networkidle')
   expect(searches).toHaveLength(0) // 全程没有发过搜索请求
 })
 
@@ -75,10 +75,12 @@ test('候选被截断的字段走服务端搜索，且输入防抖只发一次',
   await expect(page.getByRole('option', { name: '打底站点A', exact: true })).toBeVisible()
 
   const input = item.locator('input').first()
+  const searchResponse = page.waitForResponse(res => res.url().includes('/options/search'))
   await input.pressSequentially('北京市', { delay: 40 })
+  await searchResponse
 
   await expect(page.getByRole('option', { name: '搜索命中:北京市', exact: true })).toBeVisible()
-  await page.waitForTimeout(400)
+  await page.waitForLoadState('networkidle')
   expect(searches).toHaveLength(1) // 三次按键被防抖合并成一次
   expect(searches[0]).toEqual({ field: 'site_name', q: '北京市' })
 })
@@ -99,8 +101,9 @@ test('先发出的搜索响应晚到时不覆盖后一次的结果', async ({ pa
   await expect(page.getByRole('option', { name: '搜索命中:新', exact: true })).toBeVisible()
 
   // 让第一次请求此刻才返回
+  const staleResponse = page.waitForResponse(res => res.url().includes('/options/search') && res.url().includes(encodeURIComponent('旧')))
   await respond(hold.route!, { items: ['搜索命中:旧'] })
-  await page.waitForTimeout(300)
+  await staleResponse
 
   await expect(page.getByRole('option', { name: '搜索命中:新', exact: true })).toBeVisible()
   await expect(page.getByRole('option', { name: '搜索命中:旧', exact: true })).toHaveCount(0)
@@ -145,7 +148,7 @@ test('选了省份后地市用该省列表，不走服务端搜索', async ({ pa
   await expect(page.getByRole('option', { name: '苏州市', exact: true })).toBeVisible()
   await expect(page.getByRole('option', { name: '打底地市', exact: true })).toHaveCount(0)
 
-  await page.waitForTimeout(400)
+  await page.waitForLoadState('networkidle')
   expect(searches.filter(s => s.field === 'city_name')).toHaveLength(0)
   await expect(province).toBeVisible()
 })

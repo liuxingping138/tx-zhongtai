@@ -5,6 +5,7 @@ import { computed, reactive, ref, watch } from 'vue'
 
 import { errorMessage } from '@/api/errors'
 import { uploadKnowledgeFile } from '@/api/thinktank'
+import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import {
   EDITABLE_FILE_TYPE_OPTIONS,
   INDUSTRY_OPTIONS,
@@ -52,6 +53,11 @@ const industryChoices = computed(() =>
 )
 const canLeaveNoIndustry = computed(() => props.editableIndustries.includes('无'))
 
+const visible = computed({
+  get: () => props.modelValue,
+  set: (value: boolean) => emit('update:modelValue', value),
+})
+
 watch(() => props.modelValue, open => {
   if (!open) return
   selectedFile.value = null
@@ -68,7 +74,13 @@ watch(() => props.modelValue, open => {
     data_time: '',
     remark: '',
   })
-})
+}, { flush: 'sync' })
+
+const { markSaved, close: closeDialog, beforeClose } = useUnsavedForm(
+  visible,
+  () => ({ file: selectedFile.value?.name ?? '', ...form }),
+  uploading,
+)
 
 function onPickFile(uploadFile: UploadFile) {
   selectedFile.value = uploadFile.raw ?? null
@@ -104,6 +116,7 @@ async function onSubmit() {
       remark: form.remark.trim(),
     })
     ElMessage.success('上传成功')
+    markSaved()
     emit('update:modelValue', false)
     emit('uploaded')
   } catch (error) {
@@ -120,6 +133,10 @@ async function onSubmit() {
     title="上传知识库文件"
     width="640px"
     destroy-on-close
+    :close-on-click-modal="!uploading"
+    :close-on-press-escape="!uploading"
+    :show-close="!uploading"
+    :before-close="beforeClose"
     @update:model-value="$emit('update:modelValue', $event)"
   >
     <el-upload
@@ -300,7 +317,7 @@ async function onSubmit() {
     <template #footer>
       <el-button
         :disabled="uploading"
-        @click="$emit('update:modelValue', false)"
+        @click="closeDialog"
       >
         取消
       </el-button>

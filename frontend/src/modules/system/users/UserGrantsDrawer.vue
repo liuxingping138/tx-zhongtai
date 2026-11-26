@@ -6,6 +6,7 @@ import { errorMessage } from '@/api/errors'
 import { getUserGrants, listResourceTree, replaceUserGrants } from '@/api/system'
 import type { ResourceNode } from '@/api/types'
 import { collectGrants } from '@/composables/useRoleGrants'
+import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import { LEVEL_TEXT, moduleGroups, moduleNames } from '@/permissions/catalog'
 import { grantDiff, grantsFromTree, type GrantLevel } from '@/permissions/levels'
 import {
@@ -60,7 +61,7 @@ function updateSelected(next: Grants): void {
 }
 
 let loadSeq = 0
-let closing = false
+const { markSaved, close: closeDrawer, beforeClose } = useUnsavedForm(visible, () => selected.value, saving)
 
 async function load(): Promise<void> {
   const target = props.user
@@ -80,6 +81,7 @@ async function load(): Promise<void> {
     selected.value = collectGrants(tree.value, saved)
     original.value = { ...selected.value }
     version.value = current.version
+    markSaved()
   } catch (error) {
     if (seq === loadSeq) loadError.value = errorMessage(error, '单独授权加载失败')
   } finally {
@@ -88,24 +90,6 @@ async function load(): Promise<void> {
 }
 
 watch(visible, open => { if (open) void load() })
-
-async function close(): Promise<void> {
-  if (closing) return
-  if (changes.value.length) {
-    closing = true
-    try {
-      const discard = await ElMessageBox.confirm('改了还没保存，关掉就不保存了。', '放弃修改？', {
-        type: 'warning',
-        confirmButtonText: '放弃修改',
-        cancelButtonText: '继续编辑',
-      }).then(() => true, () => false)
-      if (!discard) return
-    } finally {
-      closing = false
-    }
-  }
-  visible.value = false
-}
 
 async function save(): Promise<void> {
   const user = props.user
@@ -125,6 +109,7 @@ async function save(): Promise<void> {
     const result = await replaceUserGrants(user.id, grantsFromTree(tree.value, selected.value), version.value)
     original.value = { ...selected.value }
     version.value = result.version
+    markSaved()
     ElMessage.success('单独授权已保存，对方下次操作时即生效')
     emit('saved', { count: opened.value, version: result.version })
     visible.value = false
@@ -138,11 +123,14 @@ async function save(): Promise<void> {
 
 <template>
   <el-drawer
-    :model-value="visible"
+    v-model="visible"
     :title="user ? `单独授权：${user.display_name}（${user.username}）` : '单独授权'"
     size="min(980px, 100vw)"
     append-to-body
-    :before-close="close"
+    :close-on-click-modal="!saving"
+    :close-on-press-escape="!saving"
+    :show-close="!saving"
+    :before-close="beforeClose"
     class="editor-overlay grants-drawer"
   >
     <p class="grants__hint">
@@ -204,7 +192,7 @@ async function save(): Promise<void> {
       >改了 {{ changes.length }} 处未保存</span>
       <el-button
         :disabled="saving"
-        @click="close"
+        @click="closeDrawer"
       >
         取消
       </el-button>

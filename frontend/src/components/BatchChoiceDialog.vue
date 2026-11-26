@@ -73,6 +73,9 @@ async function confirm(): Promise<void> {
     v-model="open"
     :title="title"
     width="min(480px, calc(100vw - 32px))"
+    :close-on-click-modal="!saving"
+    :close-on-press-escape="!saving"
+    :show-close="!saving"
   >
     <p class="batch-choice__count">
       {{ target ?? `已勾选 ${count} 条` }}，{{ prompt }}
@@ -99,7 +102,10 @@ async function confirm(): Promise<void> {
       {{ hint }}
     </p>
     <template #footer>
-      <el-button @click="open = false">
+      <el-button
+        :disabled="saving"
+        @click="open = false"
+      >
         取消
       </el-button>
       <el-button

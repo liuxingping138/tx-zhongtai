@@ -204,19 +204,19 @@ defineExpose({ clearSelection: () => table.value?.clearSelection() })
     <el-table-column
       v-else-if="status === '已驳回' && canDecide"
       label="操作"
-      width="110"
+      width="120"
       class-name="table-action"
     >
       <template #default="{ row }">
-        <el-button
-          link
-          type="primary"
-          :loading="reopeningId === row.id"
+        <button
+          type="button"
+          class="row-action row-action--primary"
           :disabled="Boolean(reopeningId)"
+          :aria-busy="reopeningId === row.id"
           @click="emit('reopen', row)"
         >
-          改判回待审
-        </el-button>
+          {{ reopeningId === row.id ? '改判中…' : '改判回待审' }}
+        </button>
       </template>
     </el-table-column>
   </el-table>

@@ -102,10 +102,10 @@ async function merge() {
     </el-button>
     <el-button
       :disabled="!canWriteCodebook"
-      :title="canWriteCodebook ? '' : '合并要写行业场景码表，需要码表的管理权限'"
+      :title="canWriteCodebook ? '合并到同一个已有场景' : '合并要写行业场景码表，需要码表的管理权限'"
       @click="openMerge"
     >
-      合并到同一个已有场景
+      批量合并
     </el-button>
     <el-button @click="rejectOpen = true">
       批量驳回
@@ -124,6 +124,9 @@ async function merge() {
     v-model="adoptOpen"
     title="批量采纳为新场景"
     width="min(600px, 94vw)"
+    :close-on-click-modal="!adopting"
+    :close-on-press-escape="!adopting"
+    :show-close="!adopting"
   >
     <div class="batch-merge">
       <p>这 {{ checked.length }} 个场景写进行业场景码表（{{ rows.toLocaleString() }} 行解读回填编码）：</p>
@@ -142,7 +145,10 @@ async function merge() {
       </ul>
     </div>
     <template #footer>
-      <el-button @click="adoptOpen = false">
+      <el-button
+        :disabled="adopting"
+        @click="adoptOpen = false"
+      >
         取消
       </el-button>
       <el-button
@@ -158,6 +164,9 @@ async function merge() {
     v-model="mergeOpen"
     title="合并到同一个已有场景"
     width="min(560px, 94vw)"
+    :close-on-click-modal="!merging"
+    :close-on-press-escape="!merging"
+    :show-close="!merging"
   >
     <div class="batch-merge">
       <p>已勾选 {{ checked.length }} 个场景（{{ rows.toLocaleString() }} 行解读），都合并到：</p>
@@ -169,7 +178,10 @@ async function merge() {
       </ul>
     </div>
     <template #footer>
-      <el-button @click="mergeOpen = false">
+      <el-button
+        :disabled="merging"
+        @click="mergeOpen = false"
+      >
         取消
       </el-button>
       <el-button
@@ -188,8 +200,12 @@ async function merge() {
 .batch__picked {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: var(--zt-space-2);
+  gap: 6px;
   align-items: center;
+}
+
+.batch__picked .el-button {
+  padding: 0 10px;
 }
 
 .batch__picked .el-button + .el-button {
@@ -199,6 +215,7 @@ async function merge() {
 .batch__count {
   color: var(--zt-ink-700);
   font-size: 13px;
+  white-space: nowrap;
 }
 
 .batch-merge {

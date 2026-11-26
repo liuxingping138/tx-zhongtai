@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { CopyDocument, EditPen } from '@element-plus/icons-vue'
@@ -126,19 +126,17 @@ watch(roleId, (value, previous) => {
   }
 })
 
-onBeforeRouteLeave(async () => {
-  if (saving.value) return false
-  return confirmDiscard('这个角色有未保存的权限修改，离开后将丢弃。')
-})
-
+onBeforeRouteLeave(async () => (saving.value ? false : confirmDiscard('这个角色有未保存的权限修改，离开后将丢弃。')))
 // 同一页面切到另一个角色（如「复制为新角色」）也要拦，只切页签不拦。
 onBeforeRouteUpdate(async (to, from) => {
   if (to.params.roleId === from.params.roleId) return true
-  if (saving.value) return false
-  return confirmDiscard('这个角色有未保存的权限修改，切换后将丢弃。')
+  return saving.value ? false : confirmDiscard('这个角色有未保存的权限修改，切换后将丢弃。')
 })
-
-onMounted(() => { void load() })
+function onBeforeUnload(event: BeforeUnloadEvent) {
+  if (changes.value.length || saving.value) { event.preventDefault(); event.returnValue = '' }
+}
+onMounted(() => { window.addEventListener('beforeunload', onBeforeUnload); void load() })
+onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload))
 </script>
 
 <template>

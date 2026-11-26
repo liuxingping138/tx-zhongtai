@@ -93,9 +93,15 @@ const actions = computed(() => {
 
 .decide .el-button {
   height: 28px;
+  min-height: 28px;
   margin: 0;
   padding: 0 9px;
   font-size: 13px;
+}
+
+:global(html[data-density="compact"]) .decide .el-button {
+  height: 24px;
+  min-height: 24px;
 }
 
 .decide__btn:not(.decide__btn--main) {

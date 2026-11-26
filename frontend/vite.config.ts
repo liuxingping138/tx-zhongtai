@@ -39,6 +39,8 @@ function pdfjsAssets(): Plugin {
 
 // 第三方库按变更频率分块，按顺序取第一个命中的。
 const VENDOR_CHUNKS: [string, string[]][] = [
+  // 图标单独拆块，避免新增/删减图标时让 1MB 的 element-plus 主包缓存失效。
+  ['element-icons', ['@element-plus/icons-vue']],
   ['element-plus', ['element-plus', '@element-plus']],
   // 只有图表页用，单独成块才能跟着页面懒加载；并进 vendor 会让每个页面都多下 500KB。
   ['echarts', ['/echarts/', '/zrender/']],

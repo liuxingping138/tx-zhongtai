@@ -36,6 +36,9 @@ async function submit(): Promise<void> {
     v-model="open"
     title="批量改爬虫状态"
     width="min(440px, calc(100vw - 32px))"
+    :close-on-click-modal="!saving"
+    :close-on-press-escape="!saving"
+    :show-close="!saving"
   >
     <p class="batch-status__count">
       已勾选 {{ ids.length }} 个信源，爬虫状态改为：
@@ -56,7 +59,10 @@ async function submit(): Promise<void> {
       {{ status === '已爬' ? '原来不是已爬的，上线时间记为今天。' : '上线时间保持不变。' }}
     </p>
     <template #footer>
-      <el-button @click="open = false">
+      <el-button
+        :disabled="saving"
+        @click="open = false"
+      >
         取消
       </el-button>
       <el-button

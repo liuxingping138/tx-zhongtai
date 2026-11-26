@@ -1,5 +1,7 @@
 import { ref } from 'vue'
 
+import { onAccessTokenChange } from '@/api/session'
+
 export type PreviewMode = 'pdf' | 'text' | 'summary'
 
 export interface BlobResponse {
@@ -22,6 +24,10 @@ export function clearKnowledgeContentCache() {
   sessionCache.clear()
   sessionOwner = ''
 }
+
+onAccessTokenChange((token) => {
+  if (!token) clearKnowledgeContentCache()
+})
 
 /** 和服务端 office_preview.office_extension 同一口径：要经 LibreOffice 转 PDF 的，首次打开要等几秒。 */
 export function isOfficeFile(fileName: string, suffix: string): boolean {
