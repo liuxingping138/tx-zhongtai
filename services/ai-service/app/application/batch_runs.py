@@ -59,6 +59,12 @@ def _files(run: BatchRun) -> dict[str, bool]:
     return {kind: storage.run_file(run.id, kind).is_file() for kind in storage.RUN_FILES}
 
 
+def _runs_fs_state(runs: list[BatchRun]) -> dict[str, tuple[dict[str, bool], bool]]:
+    """在工作线程中一次性检查整页任务的文件存在性，避免事件循环上产生数百次同步 stat 系统调用。"""
+
+    return {run.id: (_files(run), has_run_input(storage.run_dir(run.id))) for run in runs}
+
+
 def pending_rows(run: BatchRun) -> int:
     """重跑要问的行：失败的 + 没跑到的（停止、中断时剩下的）。执行进程记了「还没答好的行数」就用它。"""
 
@@ -70,22 +76,26 @@ def pending_rows(run: BatchRun) -> int:
 _PIPELINE_NO_RETRY = "定时任务的批次由政策服务取结果，重跑没人消费、只会再花钱；要补跑的政策在基础标签里「重新打标」"
 
 
-def _can_retry(run: BatchRun) -> bool:
+def _can_retry(run: BatchRun, *, has_input: bool | None = None) -> bool:
     if run.source == RUN_SOURCE_PIPELINE:
         return False
     # 旧系统迁来的任务没有输入快照，无法重跑。
     ready = run.status not in ACTIVE_STATUSES and run.total_count > 0 and pending_rows(run) > 0
-    return ready and has_run_input(storage.run_dir(run.id))
+    if not ready:
+        return False
+    return has_run_input(storage.run_dir(run.id)) if has_input is None else has_input
 
 
-def _can_run_all(run: BatchRun) -> bool:
+def _can_run_all(run: BatchRun, *, has_input: bool | None = None) -> bool:
     """页面发起、只跑了前几行、已经结束的任务，可以用同一份数据跑全部（见 batch_run_all）。"""
 
     ready = run.source == RUN_SOURCE_MANUAL and run.row_limit > 0 and run.status not in ACTIVE_STATUSES
-    return ready and has_run_input(storage.run_dir(run.id))
+    if not ready:
+        return False
+    return has_run_input(storage.run_dir(run.id)) if has_input is None else has_input
 
 
-def to_dict(run: BatchRun) -> dict[str, Any]:
+def to_dict(run: BatchRun, *, files: dict[str, bool] | None = None, has_input: bool | None = None) -> dict[str, Any]:
     active = run.status in ACTIVE_STATUSES
     return {
         "id": run.id,
@@ -114,8 +124,8 @@ def to_dict(run: BatchRun) -> dict[str, Any]:
         "retry_round": run.retry_round,
         "round_rows": run.round_rows,
         "round_starts_at": format_beijing(run.round_starts_at) if run.round_starts_at else "",
-        "can_retry": _can_retry(run),
-        "can_run_all": _can_run_all(run),
+        "can_retry": _can_retry(run, has_input=has_input),
+        "can_run_all": _can_run_all(run, has_input=has_input),
         "percent": _percent(run),
         "total_tokens_kilo": _kilo_tokens(run),
         # 命中上下文缓存的输入 token（包含在 input_tokens 里），页面据此显示命中率。
@@ -128,12 +138,17 @@ def to_dict(run: BatchRun) -> dict[str, Any]:
         "cancel_requested": run.cancel_requested,
         "can_stop": active,
         "can_delete": not active,
-        "files": _files(run),
+        "files": files if files is not None else _files(run),
         "created_at": format_beijing(run.created_at),
         "created_by_name": run.created_by_name,
         "started_at": format_beijing(run.started_at),
         "finished_at": format_beijing(run.finished_at),
     }
+
+
+async def _to_dict_async(run: BatchRun) -> dict[str, Any]:
+    files, has_input = (await anyio.to_thread.run_sync(_runs_fs_state, [run]))[run.id]
+    return to_dict(run, files=files, has_input=has_input)
 
 
 async def reconcile_stale(session: AsyncSession) -> None:
@@ -151,8 +166,9 @@ async def list_runs(
     rows, total = await repo.page(
         session, offset=(max(page, 1) - 1) * size, limit=size, filters=filters, categories=access.readable
     )
+    fs_state = await anyio.to_thread.run_sync(_runs_fs_state, rows) if rows else {}
     return {
-        "items": [to_dict(run) for run in rows],
+        "items": [to_dict(run, files=fs_state[run.id][0], has_input=fs_state[run.id][1]) for run in rows],
         "total": total,
         "page": max(page, 1),
         "page_size": size,
@@ -192,7 +208,7 @@ async def get_run(session: AsyncSession, access: CategoryAccess, run_id: str) ->
     await reconcile_stale(session)
     run = await require(session, run_id)
     access.require_read(run.prompt_category)
-    return to_dict(run)
+    return await _to_dict_async(run)
 
 
 async def retry_run(
@@ -235,7 +251,7 @@ async def retry_run(
     await enqueue_event(
         session, event_type=event_type, actor=actor, category=run.prompt_category, target_id=target, changes=changes
     )
-    return to_dict(run)
+    return await _to_dict_async(run)
 
 
 async def stop_run(
@@ -266,7 +282,7 @@ async def stop_run(
         target_id=target,
         changes=changes,
     )
-    return to_dict(run)
+    return await _to_dict_async(run)
 
 
 async def run_rows(

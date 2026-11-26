@@ -342,9 +342,12 @@ async def stop(session: AsyncSession, caller: Actor, run_id: str) -> dict[str, A
 async def online_templates(session: AsyncSession, category: str) -> list[dict[str, Any]]:
     """可以给定时任务用的模板：已上线的，按类型筛。"""
 
+    templates = await prompts.online(session, category)
+    release_ids = [t.release_id for t in templates if t.release_id]
+    releases_by_id = await release_repo.by_ids(session, release_ids) if release_ids else {}
     items = []
-    for template in await prompts.online(session, category):
-        release = (await release_repo.by_ids(session, [template.release_id or ""])).get(template.release_id or "")
+    for template in templates:
+        release = releases_by_id.get(template.release_id or "")
         if release is None:
             continue
         items.append(

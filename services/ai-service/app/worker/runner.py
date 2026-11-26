@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from app.application.batch_execute import execute
 from app.application.batch_queue import BULK_SOURCES, beat, bulk_limit, claim_next, recover_orphans
 from app.application.retention import prune_expired_runs
+from app.core.codebook import close_codebook_client
 from app.core.config import get_settings
 from app.core.database import engine
 
@@ -144,11 +145,14 @@ async def main() -> None:
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, stop.set)
-    while not stop.is_set():
-        try:
-            await lead(stop)
-        except Exception as exc:  # noqa: BLE001  数据库暂时不可用时等待后重试，执行进程常驻不退出
-            logger.warning("worker_unavailable reason=%s", type(exc).__name__)
-            with contextlib.suppress(TimeoutError):
-                await asyncio.wait_for(stop.wait(), timeout=POLL_SECONDS)
-    await engine.dispose()
+    try:
+        while not stop.is_set():
+            try:
+                await lead(stop)
+            except Exception as exc:  # noqa: BLE001  数据库暂时不可用时等待后重试，执行进程常驻不退出
+                logger.warning("worker_unavailable reason=%s", type(exc).__name__)
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(stop.wait(), timeout=POLL_SECONDS)
+    finally:
+        await close_codebook_client()
+        await engine.dispose()

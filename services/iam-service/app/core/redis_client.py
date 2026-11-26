@@ -16,3 +16,7 @@ async def check_redis_ready() -> bool:
         return bool(await redis_client.ping())
     except Exception:  # noqa: BLE001  就绪检查只需要布尔结果
         return False
+
+
+async def close_redis() -> None:
+    await redis_client.aclose()

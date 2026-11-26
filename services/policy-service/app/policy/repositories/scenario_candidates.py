@@ -97,6 +97,16 @@ async def get_for_update(session: AsyncSession, candidate_id: uuid.UUID) -> Scen
     return await session.get(C, candidate_id, with_for_update=True)
 
 
+async def get_many_for_update(session: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, ScenarioCandidate]:
+    """按主键升序批量加行锁，保持全局锁序一致并消除循环逐条 FOR UPDATE。"""
+
+    wanted = sorted(set(ids))
+    if not wanted:
+        return {}
+    rows = await session.scalars(select(C).where(C.id.in_(wanted)).order_by(C.id).with_for_update())
+    return {row.id: row for row in rows}
+
+
 async def by_ids(session: AsyncSession, ids: list[uuid.UUID]) -> list[ScenarioCandidate]:
     if not ids:
         return []
@@ -218,6 +228,28 @@ async def breakdown(session: AsyncSession, candidate_id: uuid.UUID, *columns: An
         .limit(50)
     )
     return [tuple(row) for row in rows]
+
+
+async def breakdown_many(
+    session: AsyncSession, candidate_ids: list[uuid.UUID], column: Any, *, limit_per_candidate: int = 50
+) -> dict[uuid.UUID, list[tuple[Any, int]]]:
+    """批量按候选与指定列分组计数，多的在前，消除逐候选 GROUP BY 的 N+1 查询。"""
+
+    wanted = list(dict.fromkeys(candidate_ids))
+    if not wanted:
+        return {}
+    rows = await session.execute(
+        select(Interpretation.candidate_id, column, func.count().label("n"))
+        .where(Interpretation.candidate_id.in_(wanted))
+        .group_by(Interpretation.candidate_id, column)
+        .order_by(Interpretation.candidate_id, func.count().desc(), column)
+    )
+    grouped: dict[uuid.UUID, list[tuple[Any, int]]] = {}
+    for candidate_id, value, count in rows:
+        bucket = grouped.setdefault(candidate_id, [])
+        if len(bucket) < limit_per_candidate:
+            bucket.append((value, int(count)))
+    return grouped
 
 
 def _rows_query(

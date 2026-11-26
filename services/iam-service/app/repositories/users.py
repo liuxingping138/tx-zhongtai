@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Collection
 from typing import Any
 
 from platform_common.clock import utcnow
@@ -20,6 +21,18 @@ NO_ROLE = "none"
 async def get_user_by_username(session: AsyncSession, username: str) -> User | None:
     result = await session.execute(select(User).where(User.username == username, User.status != UserStatus.DELETED))
     return result.scalar_one_or_none()
+
+
+async def existing_usernames(session: AsyncSession, usernames: Collection[str]) -> set[str]:
+    """批量检查哪些用户名已被未删除账号占用，避免批量导入逐行 SELECT。"""
+
+    wanted = list(dict.fromkeys(usernames))
+    if not wanted:
+        return set()
+    result = await session.execute(
+        select(User.username).where(User.username.in_(wanted), User.status != UserStatus.DELETED)
+    )
+    return set(result.scalars().all())
 
 
 async def get_user_by_id(session: AsyncSession, user_id: uuid.UUID) -> User | None:

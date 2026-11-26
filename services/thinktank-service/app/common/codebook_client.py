@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Protocol
+from typing import Any, Protocol
 
 import httpx
 from platform_common.internal_calls import internal_headers
@@ -14,6 +14,25 @@ logger = get_logger(__name__)
 _CACHE_TTL_SECONDS = 300.0
 _FAIL_CACHE_TTL_SECONDS = 30.0
 _cache: dict[str, tuple[float, list[str]]] = {}
+_HTTP_LIMITS = httpx.Limits(max_keepalive_connections=10, max_connections=20)
+_client: httpx.AsyncClient | None = None
+_client_factory: Any = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    global _client, _client_factory  # noqa: PLW0603  进程级连接池复用，lifespan 关闭时释放
+    if _client is None or _client.is_closed or _client_factory is not httpx.AsyncClient:
+        _client = httpx.AsyncClient(limits=_HTTP_LIMITS)
+        _client_factory = httpx.AsyncClient
+    return _client
+
+
+async def close_codebook_client() -> None:
+    global _client, _client_factory  # noqa: PLW0603  lifespan 关闭时释放进程级 HTTP 连接池
+    if _client is not None and not _client.is_closed:
+        await _client.aclose()
+    _client = None
+    _client_factory = None
 
 
 class CodebookSettings(Protocol):
@@ -50,13 +69,13 @@ async def get_provinces(settings: CodebookSettings, fallback: tuple[str, ...]) -
         return list(cached[1])
 
     try:
-        async with httpx.AsyncClient(timeout=settings.codebook_timeout_seconds) as client:
-            resp = await client.get(
-                f"{base_url}/internal/v1/provinces",
-                headers=internal_headers("thinktank-service", secret),
-            )
-            resp.raise_for_status()
-            payload = resp.json()
+        resp = await _get_client().get(
+            f"{base_url}/internal/v1/provinces",
+            headers=internal_headers("thinktank-service", secret),
+            timeout=settings.codebook_timeout_seconds,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
         items = (payload.get("data") or {}).get("items") or []
         merged = _merge_provinces(items, fallback)
         _cache[base_url] = (now + _CACHE_TTL_SECONDS, merged)

@@ -117,6 +117,14 @@ async def summary(session: AsyncSession, sync_id: uuid.UUID | None) -> dict[str,
     return _summary(row) if row else None
 
 
+async def summaries(session: AsyncSession, sync_ids: list[uuid.UUID]) -> dict[uuid.UUID, dict[str, Any]]:
+    wanted = list(dict.fromkeys(sync_ids))
+    if not wanted:
+        return {}
+    rows = await session.scalars(select(ConfigSyncRun).where(ConfigSyncRun.id.in_(wanted)))
+    return {row.id: _summary(row) for row in rows}
+
+
 async def latest(session: AsyncSession) -> dict[str, Any] | None:
     """最近一次成功的同步：统计页顶部显示「数据截至」。"""
 

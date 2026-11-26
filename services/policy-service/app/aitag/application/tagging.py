@@ -17,6 +17,7 @@ from typing import Any
 import anyio
 from platform_common.clock import utcnow
 from platform_common.errors import ApiError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.aitag.application import base_tag_rows, interpreting, retag, scenario_describing, scenario_similar
 from app.aitag.application.interpreting import untouched
@@ -346,6 +347,11 @@ async def summary(run_id: uuid.UUID | None) -> dict[str, Any] | None:
     async with SessionLocal() as session:
         run = await repo.get_run(session, run_id)
         return None if run is None else run_summary(run)
+
+
+async def summaries(session: AsyncSession, run_ids: list[uuid.UUID]) -> dict[uuid.UUID, dict[str, Any]]:
+    runs = await repo.runs_by_ids(session, run_ids)
+    return {run_id: run_summary(run) for run_id, run in runs.items()}
 
 
 def run_summary(run: PolicyAiRun) -> dict[str, Any]:

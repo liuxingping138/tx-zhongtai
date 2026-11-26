@@ -17,7 +17,7 @@ from app.api.internal import router as internal_router
 from app.api.scheduled_jobs import router as scheduled_jobs_router
 from app.api.security import get_authz_client
 from app.core.config import get_settings
-from app.core.database import check_database_ready
+from app.core.database import check_database_ready, engine
 
 settings = get_settings()
 setup_logging(settings.service_name, level=settings.log_level, json_output=settings.environment != "development")
@@ -27,9 +27,12 @@ logger = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("audit_service_started", environment=settings.environment)
-    yield
-    client = get_authz_client(settings)
-    await client.aclose()
+    try:
+        yield
+    finally:
+        client = get_authz_client(settings)
+        await client.aclose()
+        await engine.dispose()
 
 
 def create_app() -> FastAPI:

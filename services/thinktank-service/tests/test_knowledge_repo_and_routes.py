@@ -144,10 +144,16 @@ async def test_repo_crud_and_options_queries(monkeypatch: pytest.MonkeyPatch) ->
 
     items, total = await repo.list_items(sess, filters={}, access=FULL_ACCESS, user_id="u1", page=1, page_size=20)  # type: ignore[arg-type]
     assert len(items) == 1 and total == 1
+    list_items_sql = _sql_text(sess.stmts[1])
+    assert "content_text" not in list_items_sql and "remark" in list_items_sql
     assert await repo.count_filtered(sess, {}, access=FULL_ACCESS, user_id="u1") == 1  # type: ignore[arg-type]
     assert len(await repo.list_filtered(sess, {}, access=FULL_ACCESS, user_id="u1")) == 1  # type: ignore[arg-type]
+    list_filtered_sql = _sql_text(sess.stmts[3])
+    assert "content_text" not in list_filtered_sql and "remark" not in list_filtered_sql
     assert await repo.count_undefined(sess, access=FULL_ACCESS) == 1  # type: ignore[arg-type]
     assert len(await repo.list_undefined(sess, access=FULL_ACCESS)) == 1  # type: ignore[arg-type]
+    list_undefined_sql = _sql_text(sess.stmts[5])
+    assert "content_text" not in list_undefined_sql and "remark" in list_undefined_sql
     assert await repo.get_by_id(sess, fid) is row  # type: ignore[arg-type]
     assert await repo.get_for_update(sess, fid) is row  # type: ignore[arg-type]
     assert await repo.get_by_file_name(sess, "测试.pdf") is row  # type: ignore[arg-type]
@@ -246,6 +252,7 @@ async def test_minio_http_and_codebook_client_http(monkeypatch: pytest.MonkeyPat
     await storage.close_storage_client()
     assert [m for m, _ in _FakeHttpClient.calls] == ["PUT", "GET", "GET", "GET", "DELETE"]
 
+    await codebook_client.close_codebook_client()
     monkeypatch.setattr(codebook_client.httpx, "AsyncClient", _FakeHttpClient)
     codebook_client.clear_province_cache()
     cb_cfg = SimpleNamespace(
@@ -254,12 +261,16 @@ async def test_minio_http_and_codebook_client_http(monkeypatch: pytest.MonkeyPat
     assert await codebook_client.get_provinces(cb_cfg, ("集团",)) == ["集团", "上海市", "浙江省"]
     # 命中缓存
     assert await codebook_client.get_provinces(cb_cfg, ("集团",)) == ["集团", "上海市", "浙江省"]
-    # 连接失败回退兜底
+    # 连接失败回退兜底（复用进程级连接池）
+    first_client = codebook_client._client
     codebook_client.clear_province_cache()
     bad_cfg = SimpleNamespace(
         codebook_base_url="http://boom:8004", codebook_service_secret="sec", codebook_timeout_seconds=1.0
     )
     assert await codebook_client.get_provinces(bad_cfg, ("集团", "北京市")) == ["集团", "北京市"]
+    assert codebook_client._client is first_client
+    await codebook_client.close_codebook_client()
+    assert codebook_client._client is None
 
 
 def test_content_disposition_sanitizes_header_chars() -> None:

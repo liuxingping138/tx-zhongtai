@@ -266,3 +266,32 @@ async def test_delivered_events_older_than_retention_are_purged_in_batches(monke
     emitter._repo = _PurgingRepo([])
     assert await emitter.purge_delivered(now=OCCURRED) == audit_emit.PURGE_BATCH + 12
     assert calls == [OCCURRED - audit_emit.OUTBOX_RETENTION] * 2
+
+
+@pytest.mark.asyncio
+async def test_emitter_reuses_pooled_http_client_and_closes_on_loop_exit(monkeypatch: pytest.MonkeyPatch) -> None:
+    import asyncio
+
+    created_clients: list[httpx.AsyncClient] = []
+    transport = httpx.MockTransport(lambda _request: httpx.Response(201, json={"code": "OK"}))
+    real_client = httpx.AsyncClient
+
+    def _client(**kwargs: Any) -> httpx.AsyncClient:
+        client = real_client(transport=transport, **kwargs)
+        created_clients.append(client)
+        return client
+
+    monkeypatch.setattr(httpx, "AsyncClient", _client)
+    emitter = _emitter()
+    emitter._sessions = _Session  # type: ignore[assignment]
+    emitter._repo = _Repo([_leased("policy.source.created", {})])
+
+    assert await emitter.deliver_pending(_Settings()) == 1
+    assert await emitter.deliver_pending(_Settings()) == 1
+    assert len(created_clients) == 1 and not created_clients[0].is_closed
+
+    stop = asyncio.Event()
+    stop.set()
+    await emitter.outbox_loop(stop, _Settings())
+    assert created_clients[0].is_closed
+    assert emitter._client is None

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid
-from dataclasses import asdict
 from io import BytesIO
 from types import SimpleNamespace
 from typing import Any
@@ -12,13 +11,14 @@ import pytest
 from openpyxl import Workbook, load_workbook
 
 from app.application import user_excel
-from app.application.user_fields import NewUser
 from app.domain.enums import RoleStatus
+from app.domain.models import User, UserRole
 
 HEADERS = ["用户名", "显示名", "电话", "邮箱", "角色"]
 EDITOR = SimpleNamespace(id=uuid.uuid4(), name="政策编辑", status=RoleStatus.ACTIVE)
 VIEWER = SimpleNamespace(id=uuid.uuid4(), name="数据查看", status=RoleStatus.ACTIVE)
 OLD = SimpleNamespace(id=uuid.uuid4(), name="旧角色", status=RoleStatus.DISABLED)
+ACTOR = SimpleNamespace(id=uuid.uuid4(), display_name="超管")
 
 
 def _xlsx(*rows: list[str]) -> bytes:
@@ -32,34 +32,72 @@ def _xlsx(*rows: list[str]) -> bytes:
     return buffer.getvalue()
 
 
-@pytest.fixture
-def created(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
-    calls: list[dict[str, Any]] = []
-    existing = {"zhangmin"}
+class _FakeSession:
+    def __init__(self) -> None:
+        self.users: list[User] = []
+        self.user_roles: list[UserRole] = []
+        self.outbox: list[Any] = []
+        self.new: set[Any] = set()
+        self.dirty: set[Any] = set()
+        self.deleted: set[Any] = set()
+        self._in_txn = True
+        self.commits = 0
+        self.flushes = 0
 
-    async def get_by_username(_session: object, username: str) -> object | None:
-        return SimpleNamespace(username=username) if username in existing else None
+    def in_transaction(self) -> bool:
+        return self._in_txn
+
+    async def commit(self) -> None:
+        self.commits += 1
+        self._in_txn = False
+
+    def add(self, obj: Any) -> None:
+        self.outbox.append(obj)
+
+    def add_all(self, objs: list[Any]) -> None:
+        for obj in objs:
+            if isinstance(obj, User):
+                self.users.append(obj)
+            elif isinstance(obj, UserRole):
+                self.user_roles.append(obj)
+            else:
+                self.outbox.append(obj)
+
+    async def flush(self) -> None:
+        self.flushes += 1
+
+
+@pytest.fixture
+def env(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
+    session = _FakeSession()
+    existing = {"zhangmin"}
+    state = SimpleNamespace(
+        session=session,
+        existing_calls=0,
+        role_list_calls=0,
+        hash_in_txn=[],
+    )
+
+    async def existing_usernames(_session: object, usernames: Any) -> set[str]:
+        state.existing_calls += 1
+        return {name for name in usernames if name in existing}
 
     async def list_all_roles(_session: object) -> list[object]:
+        state.role_list_calls += 1
         return [EDITOR, VIEWER, OLD]
 
-    async def create_user(_session: object, _actor: object, data: NewUser) -> tuple[dict[str, object], None]:
-        calls.append(asdict(data))
-        roles = [{"name": role.name} for role in (EDITOR, VIEWER) if role.id in data.role_ids]
-        return {"roles": roles}, None
-
     async def fake_hash(password: str) -> str:
+        state.hash_in_txn.append(session.in_transaction())
         return f"hashed:{password}"
 
-    monkeypatch.setattr(user_excel.user_repo, "get_user_by_username", get_by_username)
+    monkeypatch.setattr(user_excel.user_repo, "existing_usernames", existing_usernames)
     monkeypatch.setattr(user_excel.role_repo, "list_all_roles", list_all_roles)
-    monkeypatch.setattr(user_excel.user_admin, "create_user", create_user)
     monkeypatch.setattr(user_excel, "hash_password_async", fake_hash)
-    return calls
+    return state
 
 
 @pytest.mark.asyncio
-async def test_creates_new_users_and_skips_the_rest(created: list[dict[str, Any]]) -> None:
+async def test_creates_new_users_and_skips_the_rest(env: SimpleNamespace) -> None:
     content = _xlsx(
         ["liuyang", "刘洋", "138 2200 4411", "liuyang@example.com", "政策编辑、数据查看"],
         ["zhangmin", "张敏", "", "", ""],
@@ -69,13 +107,21 @@ async def test_creates_new_users_and_skips_the_rest(created: list[dict[str, Any]
         ["heyu", "何宇", "", "", "旧角色"],
         ["", "无名", "", "", ""],
     )
-    outcome = await user_excel.import_users(SimpleNamespace(), SimpleNamespace(), content, can_grant=True)
+    outcome = await user_excel.import_users(env.session, ACTOR, content, can_grant=True)
 
     assert [item["username"] for item in outcome.created] == ["liuyang"]
-    assert created[0]["role_ids"] == [EDITOR.id, VIEWER.id]
-    assert created[0]["phone"] == "13822004411"
+    assert env.existing_calls == 1
+    assert env.role_list_calls == 1
+    # 密码哈希前已释放只读事务，不占用连接池事务。
+    assert env.hash_in_txn == [False]
+    assert env.session.commits == 1
+    assert env.session.flushes == 1
+    [user] = env.session.users
+    assert user.phone == "13822004411"
     # 哈希是外部先算好传进去的，库里不会存明文。
-    assert created[0]["password_hash"] == f"hashed:{outcome.created[0]['password']}"
+    assert user.password_hash == f"hashed:{outcome.created[0]['password']}"
+    assert [ur.role_id for ur in env.session.user_roles] == [EDITOR.id, VIEWER.id]
+    assert [ev.event_type for ev in env.session.outbox] == ["iam.user.created", "iam.user.roles_replaced"]
     reasons = {row["username"]: row["skip_reason"] for row in outcome.skipped}
     assert reasons["zhangmin"] == "用户名已存在，未改动原账号"
     assert reasons["liuyang"] == "文件里有重复的用户名，只建第一行"
@@ -87,19 +133,22 @@ async def test_creates_new_users_and_skips_the_rest(created: list[dict[str, Any]
 
 
 @pytest.mark.asyncio
-async def test_without_grant_the_role_column_is_ignored(created: list[dict[str, Any]]) -> None:
+async def test_without_grant_the_role_column_is_ignored(env: SimpleNamespace) -> None:
     content = _xlsx(["liuyang", "刘洋", "", "", "政策编辑"], ["xuming", "徐明", "", "", ""])
-    outcome = await user_excel.import_users(SimpleNamespace(), SimpleNamespace(), content, can_grant=False)
+    outcome = await user_excel.import_users(env.session, ACTOR, content, can_grant=False)
 
-    assert [call["role_ids"] for call in created] == [[], []]
+    assert env.role_list_calls == 0
+    assert env.existing_calls == 1
+    assert env.session.user_roles == []
+    assert [u.username for u in env.session.users] == ["liuyang", "xuming"]
     assert outcome.created[0]["note"] == user_excel.ROLES_IGNORED_NOTE
     assert "待分配角色" in outcome.created[1]["note"]
 
 
 @pytest.mark.asyncio
-async def test_result_file_carries_passwords_and_skipped_rows(created: list[dict[str, Any]]) -> None:
+async def test_result_file_carries_passwords_and_skipped_rows(env: SimpleNamespace) -> None:
     content = _xlsx(["liuyang", "刘洋", "", "", "政策编辑"], ["zhangmin", "张敏", "", "", ""])
-    outcome = await user_excel.import_users(SimpleNamespace(), SimpleNamespace(), content, can_grant=True)
+    outcome = await user_excel.import_users(env.session, ACTOR, content, can_grant=True)
     book = load_workbook(BytesIO(await user_excel.build_import_result(outcome)))
 
     passwords = list(book["初始密码"].iter_rows(values_only=True))
@@ -111,18 +160,18 @@ async def test_result_file_carries_passwords_and_skipped_rows(created: list[dict
 
 
 @pytest.mark.asyncio
-async def test_empty_sheet_is_rejected(created: list[dict[str, Any]]) -> None:
+async def test_empty_sheet_is_rejected(env: SimpleNamespace) -> None:
     with pytest.raises(user_excel.ApiError, match="没有数据"):
-        await user_excel.import_users(SimpleNamespace(), SimpleNamespace(), _xlsx(), can_grant=True)
+        await user_excel.import_users(env.session, ACTOR, _xlsx(), can_grant=True)
 
 
 @pytest.mark.asyncio
 async def test_overlong_names_and_emails_are_skipped_instead_of_failing_the_whole_file(
-    created: list[dict[str, Any]],
+    env: SimpleNamespace,
 ) -> None:
     """页面建人有长度限制、导入没有：超长的撞库报错，整份文件一个账号都建不成。"""
 
     content = _xlsx(["longname", "长" * 200, "", "", ""], ["zhaoliu", "赵六", "", "", ""])
-    outcome = await user_excel.import_users(SimpleNamespace(), SimpleNamespace(), content, can_grant=False)
+    outcome = await user_excel.import_users(env.session, ACTOR, content, can_grant=False)
     assert [item["username"] for item in outcome.created] == ["zhaoliu"]
     assert "超过" in outcome.skipped[0]["skip_reason"]

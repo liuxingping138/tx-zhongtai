@@ -37,6 +37,7 @@ class Job:
     - abandon：超时或进程中断时把还停在 running 的批次收成失败，和执行记录同一事务提交
     - summary：批次的结果摘要。给了它，执行记录只在摘要的 status 是 success 时才算成功；
       没给就以 execute 不抛异常为成功
+    - summaries：可选的批量摘要查询钩子（用于 history 列表页一次查完当前页，避免 N+1 查询）
     - watermark：页面「数据进度」显示的水位
     - public_errors：RuntimeError 的信息以这些前缀开头时原样显示（例如「已有同步正在运行」）
     - cost_resource：会花钱的任务（如调大模型）。改计划、手动执行除了 system.scheduler 的完整档，
@@ -54,6 +55,7 @@ class Job:
     public_errors: tuple[str, ...] = ()
     cost_resource: str | None = None
     lane: str = SHORT_LANE
+    summaries: Callable[[AsyncSession, list[uuid.UUID]], Awaitable[dict[uuid.UUID, dict[str, Any]]]] | None = None
 
 
 def next_daily(now: datetime, daily_time: str) -> datetime:

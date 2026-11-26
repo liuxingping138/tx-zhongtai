@@ -152,6 +152,33 @@ class AuditEmitter:
         self._log_name = service_name.removesuffix("-service")
         self._default_module = self._log_name
         self._logger = get_logger(f"{self._log_name}.audit")
+        self._client: httpx.AsyncClient | None = None
+        self._client_base_url: str = ""
+        self._client_factory: Any = None
+
+    def _get_client(self, settings: _AuditSettings) -> httpx.AsyncClient:
+        base_url = settings.audit_ingest_url.rstrip("/")
+        if (
+            self._client is None
+            or self._client.is_closed
+            or self._client_base_url != base_url
+            or self._client_factory is not httpx.AsyncClient
+        ):
+            self._client = httpx.AsyncClient(
+                base_url=base_url,
+                timeout=5.0,
+                limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
+            )
+            self._client_base_url = base_url
+            self._client_factory = httpx.AsyncClient
+        return self._client
+
+    async def aclose(self) -> None:
+        if self._client is not None and not self._client.is_closed:
+            await self._client.aclose()
+        self._client = None
+        self._client_base_url = ""
+        self._client_factory = None
 
     async def enqueue_event(
         self,
@@ -209,7 +236,9 @@ class AuditEmitter:
             "summary": " / ".join(str(item) for item in summary if item),
         }
 
-    async def deliver_pending(self, settings: _AuditSettings | None = None) -> int:
+    async def deliver_pending(
+        self, settings: _AuditSettings | None = None, *, client: httpx.AsyncClient | None = None
+    ) -> int:
         settings = settings or self._get_settings()
         async with self._sessions() as session:
             events = await self._repo.claim_pending(session)
@@ -217,10 +246,10 @@ class AuditEmitter:
         if not events:
             return 0
         delivered = 0
-        async with httpx.AsyncClient(base_url=settings.audit_ingest_url.rstrip("/"), timeout=5.0) as client:
-            for event in events:
-                if await self._deliver_one(client, settings, event):
-                    delivered += 1
+        http = client or self._get_client(settings)
+        for event in events:
+            if await self._deliver_one(http, settings, event):
+                delivered += 1
         return delivered
 
     async def _deliver_one(self, client: httpx.AsyncClient, settings: _AuditSettings, event: Any) -> bool:
@@ -289,18 +318,21 @@ class AuditEmitter:
 
     async def outbox_loop(self, stop: asyncio.Event, settings: _AuditSettings) -> None:
         next_purge = 0.0
-        while not stop.is_set():
-            delivered = 0
-            try:
-                delivered = await self.deliver_pending(settings)
-                if time.monotonic() >= next_purge:
-                    next_purge = time.monotonic() + PURGE_EVERY_SECONDS
-                    await self.purge_delivered()
-            except Exception:
-                self._logger.exception(f"{self._log_name}_outbox_loop_failed")
-            if delivered >= 20:  # noqa: PLR2004  满批时立即继续排空积压，不等轮询间隔
-                continue
-            try:
-                await asyncio.wait_for(stop.wait(), timeout=settings.worker_poll_interval_seconds)
-            except TimeoutError:
-                continue
+        try:
+            while not stop.is_set():
+                delivered = 0
+                try:
+                    delivered = await self.deliver_pending(settings)
+                    if time.monotonic() >= next_purge:
+                        next_purge = time.monotonic() + PURGE_EVERY_SECONDS
+                        await self.purge_delivered()
+                except Exception:
+                    self._logger.exception(f"{self._log_name}_outbox_loop_failed")
+                if delivered >= 20:  # noqa: PLR2004  满批时立即继续排空积压，不等轮询间隔
+                    continue
+                try:
+                    await asyncio.wait_for(stop.wait(), timeout=settings.worker_poll_interval_seconds)
+                except TimeoutError:
+                    continue
+        finally:
+            await self.aclose()

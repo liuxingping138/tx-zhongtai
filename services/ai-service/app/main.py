@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from platform_common.body_limit import RequestBodyLimitMiddleware
@@ -23,8 +23,9 @@ from app.api.prompts import router as prompts_router
 from app.api.security import get_authz_client
 from app.api.stream import router as stream_router
 from app.application.audit_emit import outbox_loop
+from app.core.codebook import close_codebook_client
 from app.core.config import get_settings
-from app.core.database import check_database_ready
+from app.core.database import check_database_ready, engine
 
 settings = get_settings()
 setup_logging(settings.service_name, level=settings.log_level, json_output=settings.environment != "development")
@@ -42,11 +43,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     stop = asyncio.Event()
     task = asyncio.create_task(outbox_loop(stop, settings))
     logger.info("ai_service_started", environment=settings.environment)
-    yield
-    stop.set()
-    task.cancel()
-    client = get_authz_client(settings)
-    await client.aclose()
+    try:
+        yield
+    finally:
+        stop.set()
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+        await close_codebook_client()
+        client = get_authz_client(settings)
+        await client.aclose()
+        await engine.dispose()
 
 
 def create_app() -> FastAPI:

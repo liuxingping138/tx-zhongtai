@@ -386,3 +386,56 @@ async def test_tombstone_losing_the_race_stops_the_real_run(monkeypatch: pytest.
 async def test_tombstone_rejects_malformed_ids() -> None:
     with pytest.raises(NotFoundError):
         await pipeline_runs._tombstone(_NestedSession(), "../x", ACTOR)  # type: ignore[arg-type]
+
+
+async def test_online_templates_batches_release_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
+    r1_id, r2_id = "1" * 32, "2" * 32
+    t1 = template(id="a" * 32, release_id=r1_id)
+    t2 = template(id="b" * 32, release_id=r2_id)
+    calls: list[list[str]] = []
+
+    async def fake_online(_session: Any, _category: str) -> list[Any]:
+        return [t1, t2]
+
+    async def fake_by_ids(_session: Any, ids: list[str]) -> dict[str, TemplateRelease]:
+        calls.append(list(ids))
+        return {
+            r1_id: _release(id=r1_id, prompt_id=t1.id, title="模板一"),
+            r2_id: _release(id=r2_id, prompt_id=t2.id, title="模板二"),
+        }
+
+    monkeypatch.setattr(prompts, "online", fake_online)
+    monkeypatch.setattr(release_repo, "by_ids", fake_by_ids)
+    items = await pipeline_runs.online_templates(FakeSession(), "policy")  # type: ignore[arg-type]
+    assert [item["title"] for item in items] == ["模板一", "模板二"]
+    assert calls == [[r1_id, r2_id]]
+
+
+async def test_list_runs_offloads_page_fs_checks_in_single_thread_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    import anyio
+
+    from app.domain.categories import FULL_ACCESS
+
+    rows = [run(id="1" * 32, status="done"), run(id="2" * 32, status="done")]
+
+    async def fake_page(*_args: Any, **_kwargs: Any) -> tuple[list[Any], int]:
+        return rows, 2
+
+    async def fake_worker_status(_session: Any) -> dict[str, bool]:
+        return {"online": True}
+
+    thread_calls: list[Any] = []
+    real_run_sync = anyio.to_thread.run_sync
+
+    async def tracked_run_sync(func: Any, *args: Any, **kwargs: Any) -> Any:
+        thread_calls.append(func)
+        return await real_run_sync(func, *args, **kwargs)
+
+    monkeypatch.setattr(batch_runs, "reconcile_stale", noop)
+    monkeypatch.setattr(batch_runs.repo, "page", fake_page)
+    monkeypatch.setattr(batch_runs, "worker_status", fake_worker_status)
+    monkeypatch.setattr(batch_runs.anyio.to_thread, "run_sync", tracked_run_sync)
+
+    result = await batch_runs.list_runs(FakeSession(), FULL_ACCESS, page=1, page_size=20)  # type: ignore[arg-type]
+    assert len(result["items"]) == 2
+    assert thread_calls == [batch_runs._runs_fs_state]

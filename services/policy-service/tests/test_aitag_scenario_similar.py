@@ -121,15 +121,19 @@ async def test_a_batch_asks_once_per_scenario_and_writes_back(monkeypatch: pytes
             {"error": "未执行（费用到上限）", "items": []},
         ]
 
-    async def locked(_session: Any, candidate_id: Any) -> Any:
-        return first if candidate_id == first.id else second
+    locked_batches: list[list[uuid.UUID]] = []
+
+    async def locked_many(_session: Any, candidate_ids: list[uuid.UUID]) -> dict[uuid.UUID, Any]:
+        locked_batches.append(list(candidate_ids))
+        by_id = {first.id: first, second.id: second}
+        return {cid: by_id[cid] for cid in candidate_ids if cid in by_id}
 
     async def nothing(*_: Any, **__: Any) -> None:
         return None
 
     monkeypatch.setattr(scenario_similar.repo, "scenario_backlog", backlog)
     monkeypatch.setattr(scenario_similar.scenario_candidates, "ai_inputs", inputs)
-    monkeypatch.setattr(scenario_similar.scenario_candidates, "locked", locked)
+    monkeypatch.setattr(scenario_similar.scenario_candidates, "locked_many", locked_many)
     monkeypatch.setattr(internal_clients, "codebook", codebook)
     monkeypatch.setattr(scenario_similar, "ask", ask)
     monkeypatch.setattr(scenario_similar, "SessionLocal", lambda: session)
@@ -144,4 +148,27 @@ async def test_a_batch_asks_once_per_scenario_and_writes_back(monkeypatch: pytes
     assert rows[0]["同行业已有场景"] == "智慧航空\n智慧航空 > 智慧航站楼" and rows[0]["AI理由"] == "码表无对应场景"
     assert (first.ai_verdict, first.ai_target) == ("同一个场景", "智慧航空 > 智慧航站楼")
     assert first.ai_checked_at is not None and second.ai_checked_at is None  # 没轮到的下批再问
+    assert locked_batches == [[first.id]]
     assert session.committed and "AI 判断了 1 个" in note and "1 个下批接着判断" in note
+
+
+async def test_ai_inputs_uses_two_batched_breakdown_queries(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.policy.application import scenario_candidates as sc_app
+
+    first, second = _candidate("航站楼智能化"), _candidate("低空飞行服务保障")
+    calls: list[Any] = []
+
+    async def fake_breakdown_many(
+        _session: Any, ids: list[uuid.UUID], column: Any, **_kwargs: Any
+    ) -> dict[uuid.UUID, list[tuple[Any, int]]]:
+        calls.append((list(ids), column.key))
+        if column.key == "industry_l1":
+            return {first.id: [("交通行业", 5)], second.id: [("航空行业", 2)]}
+        return {first.id: [("说法更贴合", 4), ("AI 标为已有场景", 9)], second.id: []}
+
+    monkeypatch.setattr(sc_app.repo, "breakdown_many", fake_breakdown_many)
+    out = await sc_app.ai_inputs(Session(), [first, second])  # type: ignore[arg-type]
+    assert len(calls) == 2
+    assert calls[0][1] == "industry_l1" and calls[1][1] == "remark"
+    assert out[str(first.id)] == {"industries": ["交通行业"], "reasons": ["说法更贴合"]}
+    assert out[str(second.id)] == {"industries": ["航空行业"], "reasons": []}

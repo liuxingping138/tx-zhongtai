@@ -70,21 +70,25 @@ async def run() -> None:
     timeout = httpx.Timeout(5.0)
     cycles = 0
     next_purge = 0.0
-    async with httpx.AsyncClient(base_url=settings.audit_ingest_url.rstrip("/"), timeout=timeout) as client:
-        logger.info("iam_worker_started", ingest_url=settings.audit_ingest_url)
-        while not stop.is_set():
-            try:
-                claimed = await claim_and_deliver(settings, client)
-                cycles += 1
-                next_purge = await _housekeeping(cycles, next_purge)
-                if claimed == 0:
-                    await asyncio.wait_for(stop.wait(), timeout=settings.worker_poll_interval_seconds)
-            except TimeoutError:
-                continue
-            except Exception:
-                logger.exception("iam_worker_loop_error")
-                await asyncio.sleep(settings.worker_poll_interval_seconds)
-    await scheduling
+    try:
+        async with httpx.AsyncClient(base_url=settings.audit_ingest_url.rstrip("/"), timeout=timeout) as client:
+            logger.info("iam_worker_started", ingest_url=settings.audit_ingest_url)
+            while not stop.is_set():
+                try:
+                    claimed = await claim_and_deliver(settings, client)
+                    cycles += 1
+                    next_purge = await _housekeeping(cycles, next_purge)
+                    if claimed == 0:
+                        await asyncio.wait_for(stop.wait(), timeout=settings.worker_poll_interval_seconds)
+                except TimeoutError:
+                    continue
+                except Exception:
+                    logger.exception("iam_worker_loop_error")
+                    await asyncio.sleep(settings.worker_poll_interval_seconds)
+    finally:
+        stop.set()
+        await scheduling
+        await engine.dispose()
     logger.info("iam_worker_stopped")
 
 

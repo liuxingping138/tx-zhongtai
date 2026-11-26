@@ -28,6 +28,7 @@ services:
   postgres:
     image: postgres:17.2-alpine3.21
     restart: unless-stopped
+    mem_limit: ${POSTGRES_MEM_LIMIT:-2g}
     # 默认 64MB 的共享内存，并行查询、大排序时会报 could not resize shared memory。
     # 默认 max_connections=100 不够多服务连接池峰值，显式提升到 200。
     shm_size: 256m
@@ -73,6 +74,7 @@ services:
   redis:
     image: redis:7.4.11-alpine3.21
     restart: unless-stopped
+    mem_limit: ${REDIS_MEM_LIMIT:-512m}
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD 未设置}
     command:
@@ -129,10 +131,11 @@ services:
       - data
       - gateway
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8001/health/live')"]
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8001/health/ready')"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 15s
 
   audit-service:
     build:
@@ -158,10 +161,11 @@ services:
       - data
       - gateway
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8002/health/live')"]
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8002/health/ready')"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 15s
 
   codebook-service:
     build:
@@ -190,10 +194,11 @@ services:
       - data
       - gateway
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8003/health/live')"]
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8003/health/ready')"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 15s
 
   policy-service:
     build:
@@ -233,10 +238,11 @@ services:
       - data
       - gateway
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8004/health/live')"]
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8004/health/ready')"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 15s
 
   policy-worker:
     build:
@@ -309,16 +315,18 @@ services:
     networks:
       - gateway
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8006/health/live')"]
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8006/health/ready')"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 15s
 
   ai-service:
     build:
       context: ../..
       dockerfile: services/ai-service/Dockerfile
     restart: unless-stopped
+    stop_grace_period: 30s
     mem_limit: ${AI_MEM_LIMIT:-2g}
     environment:
       AI_ENVIRONMENT: ${AI_ENVIRONMENT:-${ENVIRONMENT:-development}}
@@ -349,10 +357,11 @@ services:
       - data
       - gateway  # 调用字节方舟、百度千帆需要出站网络
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8005/health/live')"]
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8005/health/ready')"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 15s
 
   ai-worker:
     build:
@@ -407,6 +416,7 @@ services:
       dockerfile: services/iam-service/Dockerfile
     command: [".venv/bin/python", "-m", "app.worker"]
     init: true
+    stop_grace_period: 30s
     restart: unless-stopped
     mem_limit: ${IAM_WORKER_MEM_LIMIT:-512m}
     environment:
@@ -420,12 +430,9 @@ services:
       IAM_LOG_LEVEL: ${IAM_LOG_LEVEL:-INFO}
       IAM_DATABASE_URL: postgresql+asyncpg://${IAM_DB_USER}:${IAM_DB_PASSWORD}@postgres:5432/${IAM_DB_NAME}
       IAM_REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD 未设置}@redis:${REDIS_PORT:-6379}/${REDIS_DB:-0}
-      IAM_JWT_KEYS_DIR: /secrets/jwt
       IAM_INTERNAL_CALLER_SECRETS: ${IAM_INTERNAL_CALLER_SECRETS}
       IAM_AUDIT_INGEST_URL: http://audit-service:8002
       IAM_AUDIT_INGEST_SECRET: ${IAM_AUDIT_INGEST_SECRET:-dev-only-change-me-ingest}
-    volumes:
-      - ../../deploy/secrets/jwt:/secrets/jwt
     depends_on:
       postgres:
         condition: service_healthy
@@ -444,6 +451,7 @@ services:
       dockerfile: services/audit-service/Dockerfile
     command: [".venv/bin/python", "-m", "app.worker"]
     init: true
+    stop_grace_period: 30s
     restart: unless-stopped
     mem_limit: ${AUDIT_WORKER_MEM_LIMIT:-256m}
     environment:
@@ -472,6 +480,7 @@ services:
     restart: unless-stopped
     # 预览转码起 LibreOffice 子进程：没有 init 时 uvicorn 当 1 号进程，被杀掉的 soffice.bin 没人回收成僵尸。
     init: true
+    stop_grace_period: 30s
     mem_limit: ${THINKTANK_MEM_LIMIT:-1536m}
     environment:
       THINKTANK_ENVIRONMENT: ${THINKTANK_ENVIRONMENT:-${ENVIRONMENT:-development}}
@@ -507,14 +516,16 @@ services:
       - data
       - gateway
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8007/health/live')"]
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8007/health/ready')"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 15s
 
   api-fallback:
     image: nginx:1.27-alpine3.20
     restart: unless-stopped
+    mem_limit: ${API_FALLBACK_MEM_LIMIT:-128m}
     volumes:
       - ../gateway/api-fallback.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
@@ -525,13 +536,21 @@ services:
       context: ../..
       dockerfile: frontend/Dockerfile
     restart: unless-stopped
+    mem_limit: ${FRONTEND_MEM_LIMIT:-128m}
     networks:
       - gateway
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   gateway:
     # 不要退回 3.2：之后修过路径匹配绕过中间件一类漏洞（CVE-2025-32431 等）。升级时先在服务器上拿生产配置空跑一次看有没有报错。
     image: traefik:v3.7.14
     restart: unless-stopped
+    mem_limit: ${GATEWAY_MEM_LIMIT:-256m}
     command:
       - "--configFile=/etc/traefik/traefik.yml"
     volumes:

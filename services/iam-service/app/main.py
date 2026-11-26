@@ -19,9 +19,9 @@ from app.api.internal import router as internal_router
 from app.api.scheduled_jobs import router as scheduled_jobs_router
 from app.api.system import router as system_router
 from app.core.config import get_settings
-from app.core.database import check_database_ready
+from app.core.database import check_database_ready, engine
 from app.core.jwt_keys import ensure_jwt_keys
-from app.core.redis_client import check_redis_ready
+from app.core.redis_client import check_redis_ready, close_redis
 
 settings = get_settings()
 setup_logging(settings.service_name, level=settings.log_level, json_output=settings.environment != "development")
@@ -32,7 +32,11 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     ensure_jwt_keys(settings.jwt_keys_path, allow_generate=settings.allow_generate_jwt_keys)
     logger.info("iam_service_started", environment=settings.environment)
-    yield
+    try:
+        yield
+    finally:
+        await close_redis()
+        await engine.dispose()
 
 
 def create_app() -> FastAPI:

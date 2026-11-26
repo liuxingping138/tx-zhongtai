@@ -16,9 +16,10 @@ from platform_common.request_context import RequestIdMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
 from app.common.audit_emit import outbox_loop
+from app.common.codebook_client import close_codebook_client
 from app.common.security import get_authz_client
 from app.core.config import get_settings
-from app.core.database import check_database_ready
+from app.core.database import check_database_ready, engine
 from app.core.storage import close_storage_client
 from app.knowledge.api.routes import router as knowledge_router
 
@@ -34,14 +35,18 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     stop = asyncio.Event()
     task = asyncio.create_task(outbox_loop(stop, settings))
     logger.info("thinktank_service_started", environment=settings.environment)
-    yield
-    stop.set()
-    task.cancel()
-    with suppress(asyncio.CancelledError):
-        await task
-    await close_storage_client()
-    client = get_authz_client(settings)
-    await client.aclose()
+    try:
+        yield
+    finally:
+        stop.set()
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+        await close_storage_client()
+        await close_codebook_client()
+        client = get_authz_client(settings)
+        await client.aclose()
+        await engine.dispose()
 
 
 def create_app() -> FastAPI:

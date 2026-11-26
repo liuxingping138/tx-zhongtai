@@ -245,7 +245,19 @@ class Scheduler:
                 .limit(page_size)
             )
         ).all()
-        items = [{**self.run_data(row), "result": await self.result_of(session, row)} for row in rows]
+        job = self.jobs.get(code)
+        if job is not None and job.summaries is not None:
+            sync_ids = [row.sync_run_id for row in rows if row.sync_run_id is not None]
+            by_id = await job.summaries(session, sync_ids) if sync_ids else {}
+            items = [
+                {
+                    **self.run_data(row),
+                    "result": (by_id.get(row.sync_run_id) if row.sync_run_id is not None else None) or row.result,
+                }
+                for row in rows
+            ]
+        else:
+            items = [{**self.run_data(row), "result": await self.result_of(session, row)} for row in rows]
         return {"items": items, "total": total, "page": page, "page_size": page_size}
 
     async def claim_next_run(

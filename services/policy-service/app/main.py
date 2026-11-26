@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from platform_common.body_limit import RequestBodyLimitMiddleware
@@ -17,9 +17,10 @@ from starlette.middleware.cors import CORSMiddleware
 
 from app.aitag.api.ai_tagging import router as ai_tagging_router
 from app.common.audit_emit import outbox_loop
+from app.common.internal_clients import close_internal_clients
 from app.common.security import get_authz_client
 from app.core.config import get_settings
-from app.core.database import check_database_ready
+from app.core.database import check_database_ready, engine
 from app.crawlconfig.api.report import router as crawler_config_router
 from app.crawler.api.crawler_monitoring import router as crawler_monitoring_router
 from app.policy.api.base_tags import router as base_tags_router
@@ -39,11 +40,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     stop = asyncio.Event()
     task = asyncio.create_task(outbox_loop(stop, settings))
     logger.info("policy_service_started", environment=settings.environment)
-    yield
-    stop.set()
-    task.cancel()
-    client = get_authz_client(settings)
-    await client.aclose()
+    try:
+        yield
+    finally:
+        stop.set()
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+        await close_internal_clients()
+        client = get_authz_client(settings)
+        await client.aclose()
+        await engine.dispose()
 
 
 def create_app() -> FastAPI:

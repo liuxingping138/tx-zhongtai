@@ -6,21 +6,22 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 import uuid
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from io import BytesIO
 
 from anyio import to_thread
 from openpyxl import Workbook
-from platform_common.clock import format_beijing
+from platform_common.clock import format_beijing, utcnow
 from platform_common.columns import overlong_reasons, string_lengths
 from platform_common.errors import ApiError, ErrorCode
 from platform_common.excel import SKIP_REASON_COLUMN, active_worksheet, append_text_row, parse_sheet_async
 from platform_common.request_context import get_request_id
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application import user_admin
 from app.application.user_fields import (
     NewUser,
     generate_temporary_password,
@@ -30,10 +31,10 @@ from app.application.user_fields import (
     validate_username,
 )
 from app.core.config import get_settings
-from app.domain.enums import RoleStatus
+from app.domain.enums import RoleStatus, UserStatus
 from app.domain.fields import STATUS_TEXT, USER_EXPORT_COLUMNS, USER_IMPORT_COLUMNS
 from app.domain.filters import UserFilters
-from app.domain.models import Role, User
+from app.domain.models import Role, User, UserRole
 from app.domain.password import hash_password_async
 from app.repositories import outbox as outbox_repo
 from app.repositories import roles as role_repo
@@ -136,9 +137,26 @@ def _resolve_roles(raw: str, index: dict[str, list[Role]]) -> tuple[list[uuid.UU
 
 
 @dataclass(frozen=True, slots=True)
+class _ValidatedRow:
+    username: str
+    display_name: str
+    phone: str
+    email: str
+    raw_roles: str
+
+
+@dataclass(frozen=True, slots=True)
 class _ImportRow:
     user: NewUser
     note: str
+
+
+async def _release_read_txn(session: AsyncSession) -> None:
+    """密码哈希耗 CPU（百行需数十秒），释放只读事务归还连接池，避免触发 idle_in_transaction 超时。"""
+
+    in_txn = getattr(session, "in_transaction", None)
+    if callable(in_txn) and in_txn() and not (session.new or session.dirty or session.deleted):
+        await session.commit()
 
 
 async def import_users(session: AsyncSession, actor: User, content: bytes, *, can_grant: bool) -> ImportOutcome:
@@ -146,30 +164,49 @@ async def import_users(session: AsyncSession, actor: User, content: bytes, *, ca
     rows = await parse_sheet_async(content, USER_IMPORT_COLUMNS, subject="用户", max_rows=settings.user_import_max_rows)
     if not rows:
         raise ApiError("Excel 里没有数据", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    # 不能分配角色时不查角色表：角色列整列忽略，按名称匹配不到也不算错。
-    index = _role_index(await role_repo.list_all_roles(session)) if can_grant else None
-    outcome = ImportOutcome()
+    # 1. 纯内存字段校验与表内去重。
     seen: set[str] = set()
-    for row in rows:
-        prepared = await _prepare_row(session, row, seen, index)
+    validated = [(row, _validate_row(row, seen)) for row in rows]
+    candidate_usernames = [item.username for _, item in validated if isinstance(item, _ValidatedRow)]
+
+    # 2. 批量查重用户名 + 一次拉取启用角色（不能分配角色时不查角色表）。
+    all_roles = await role_repo.list_all_roles(session) if can_grant else []
+    index = _role_index(all_roles) if can_grant else None
+    roles_by_id = {role.id: role for role in all_roles if role.status == RoleStatus.ACTIVE}
+    taken = await user_repo.existing_usernames(session, candidate_usernames) if candidate_usernames else set()
+
+    outcome = ImportOutcome()
+    ready: list[_ImportRow] = []
+    for row, item in validated:
+        if isinstance(item, str):
+            outcome.skipped.append({**row, SKIP_REASON_COLUMN.field: item})
+            continue
+        prepared = _resolve_row(item, taken=taken, index=index)
         if isinstance(prepared, str):
             outcome.skipped.append({**row, SKIP_REASON_COLUMN.field: prepared})
         else:
-            outcome.created.append(await _create_imported(session, actor, prepared))
+            ready.append(prepared)
+
+    if not ready:
+        return outcome
+
+    # 3. 先释放只读事务，再在受限线程池中并发预计算 Argon2id 哈希，写事务只做极短批量入库。
+    await _release_read_txn(session)
+    temporaries = [generate_temporary_password() for _ in ready]
+    hashes = await asyncio.gather(*(hash_password_async(pwd) for pwd in temporaries))
+    outcome.created = await _persist_imported(session, actor, ready, temporaries, hashes, roles_by_id)
     return outcome
 
 
 USER_LENGTHS = string_lengths(User)
 
 
-async def _prepare_row(
-    session: AsyncSession, row: dict[str, str], seen: set[str], index: dict[str, list[Role]] | None
-) -> _ImportRow | str:
-    """校验一行并解析角色。可以建账号时返回入参，否则返回跳过原因。"""
+def _validate_row(row: dict[str, str], seen: set[str]) -> _ValidatedRow | str:
+    """纯内存校验一行字段格式、长度与表内重复用户名。"""
 
     try:
         username = validate_username(row["username"])
-        validate_display_name(row["display_name"])
+        display_name = validate_display_name(row["display_name"])
         phone = normalize_phone(row["phone"])
         email = normalize_email(row["email"])
     except ApiError as exc:
@@ -184,34 +221,118 @@ async def _prepare_row(
     if username in seen:
         return "文件里有重复的用户名，只建第一行"
     seen.add(username)
-    if await user_repo.get_user_by_username(session, username) is not None:
+    return _ValidatedRow(
+        username=username,
+        display_name=display_name,
+        phone=phone,
+        email=email,
+        raw_roles=row["roles"],
+    )
+
+
+def _resolve_row(item: _ValidatedRow, *, taken: set[str], index: dict[str, list[Role]] | None) -> _ImportRow | str:
+    if item.username in taken:
         return "用户名已存在，未改动原账号"
     role_ids: list[uuid.UUID] = []
     note = ""
-    if row["roles"].strip():
+    if item.raw_roles.strip():
         if index is None:
             note = ROLES_IGNORED_NOTE
         else:
-            role_ids, error = _resolve_roles(row["roles"], index)
+            role_ids, error = _resolve_roles(item.raw_roles, index)
             if error:
                 return error
-    user = NewUser(username=username, display_name=row["display_name"], phone=phone, email=email, role_ids=role_ids)
+    user = NewUser(
+        username=item.username,
+        display_name=item.display_name,
+        phone=item.phone,
+        email=item.email,
+        role_ids=role_ids,
+    )
     return _ImportRow(user=user, note=note or ("" if role_ids else "还没有角色，已放进「待分配角色」"))
 
 
-async def _create_imported(session: AsyncSession, actor: User, item: _ImportRow) -> dict[str, str]:
-    temporary = generate_temporary_password()
-    # Argon2 一次几十毫秒，走域名受限线程池（CapacityLimiter）防百行导入瞬时打满内存与 CPU。
-    hashed = await hash_password_async(temporary)
-    payload, _ = await user_admin.create_user(session, actor, replace(item.user, password_hash=hashed))
-    roles = payload.get("roles") or []
-    return {
-        "username": item.user.username,
-        "display_name": item.user.display_name.strip(),
-        "roles": "、".join(str(role["name"]) for role in roles) if isinstance(roles, list) else "",
-        "password": temporary,
-        "note": item.note,
-    }
+async def _persist_imported(
+    session: AsyncSession,
+    actor: User,
+    ready: list[_ImportRow],
+    temporaries: list[str],
+    hashes: list[str],
+    roles_by_id: dict[uuid.UUID, Role],
+) -> list[dict[str, str]]:
+    """一次短事务批量写入用户、用户角色与审计出站事件，避免逐行 flush 与 N×6 角色重复查询。"""
+
+    now = utcnow()
+    users: list[User] = []
+    user_roles: list[UserRole] = []
+    created: list[dict[str, str]] = []
+    role_events: list[tuple[User, list[uuid.UUID], list[str]]] = []
+
+    for item, temporary, hashed in zip(ready, temporaries, hashes, strict=True):
+        unique_ids = list(dict.fromkeys(item.user.role_ids))
+        role_names = [roles_by_id[role_id].name for role_id in unique_ids if role_id in roles_by_id]
+        user = User(
+            id=uuid.uuid4(),
+            username=item.user.username,
+            display_name=item.user.display_name,
+            phone=item.user.phone,
+            email=item.user.email,
+            password_hash=hashed,
+            status=UserStatus.ACTIVE,
+            must_change_password=True,
+            version=2 if unique_ids else 1,
+            created_at=now,
+            updated_at=now,
+        )
+        users.append(user)
+        user_roles.extend(
+            UserRole(user_id=user.id, role_id=role_id, granted_by=actor.id, created_at=now) for role_id in unique_ids
+        )
+        if unique_ids:
+            role_events.append((user, unique_ids, role_names))
+        created.append(
+            {
+                "username": user.username,
+                "display_name": user.display_name,
+                "roles": "、".join(role_names),
+                "password": temporary,
+                "note": item.note,
+            }
+        )
+
+    session.add_all(users)
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        raise ApiError("用户名已存在", code=ErrorCode.DUPLICATE, http_status=409) from exc
+    if user_roles:
+        session.add_all(user_roles)
+    for user in users:
+        await outbox_repo.enqueue(
+            session,
+            event_type="iam.user.created",
+            payload={
+                "actor_id": str(actor.id),
+                "target_id": str(user.id),
+                "username": user.username,
+                "outcome": "success",
+            },
+        )
+    for user, unique_ids, role_names in role_events:
+        await outbox_repo.enqueue(
+            session,
+            event_type="iam.user.roles_replaced",
+            payload={
+                "actor_id": str(actor.id),
+                "target_id": str(user.id),
+                "username": user.username,
+                "role_ids": [str(item) for item in unique_ids],
+                "roles_added": role_names,
+                "roles_removed": [],
+                "outcome": "success",
+            },
+        )
+    return created
 
 
 RESULT_CREATED_HEADERS = ("用户名", "显示名", "角色", "初始密码", "备注")

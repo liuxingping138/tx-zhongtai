@@ -47,23 +47,34 @@ def _write_keypair(directory: Path, kid: str) -> None:
     (directory / f"{kid}{_PRIVATE_SUFFIX}").chmod(0o600)
 
 
+# 密钥元数据与解析好的密钥对象，按文件修改时间（st_mtime_ns）缓存。
+_KEY_META: dict[Path, tuple[int, JwtKeyMeta]] = {}
+_PRIVATE_KEYS: dict[Path, tuple[int, Any]] = {}
+_PUBLIC_KEYS: dict[Path, tuple[int, RSAPublicKey]] = {}
+
+
 def ensure_jwt_keys(directory: Path, *, allow_generate: bool) -> JwtKeyMeta:
-    directory.mkdir(parents=True, exist_ok=True)
     current_path = directory / _CURRENT_NAME
-    if current_path.exists():
+    try:
+        stamp = current_path.stat().st_mtime_ns
+    except FileNotFoundError:
+        stamp = None
+    if stamp is not None:
+        cached = _KEY_META.get(current_path)
+        if cached is not None and cached[0] == stamp:
+            return cached[1]
         meta: JwtKeyMeta = json.loads(current_path.read_text(encoding="utf-8"))
+        _KEY_META[current_path] = (stamp, meta)
         return meta
+    directory.mkdir(parents=True, exist_ok=True)
     if not allow_generate:
         raise JwtKeyError(f"JWT 密钥目录为空且不允许自动生成: {directory}")
     kid = "k1"
     _write_keypair(directory, kid)
     meta = {"current_kid": kid, "previous_kid": None}
     current_path.write_text(json.dumps(meta), encoding="utf-8")
+    _KEY_META[current_path] = (current_path.stat().st_mtime_ns, meta)
     return meta
-
-
-# 私钥文件 -> （修改时间, 解析好的私钥）。
-_PRIVATE_KEYS: dict[Path, tuple[int, Any]] = {}
 
 
 def load_private_key(directory: Path, kid: str) -> Any:
@@ -74,9 +85,10 @@ def load_private_key(directory: Path, kid: str) -> Any:
     """
 
     path = directory / f"{kid}{_PRIVATE_SUFFIX}"
-    if not path.exists():
-        raise JwtKeyError(f"缺少私钥 kid={kid}")
-    stamp = path.stat().st_mtime_ns
+    try:
+        stamp = path.stat().st_mtime_ns
+    except FileNotFoundError as exc:
+        raise JwtKeyError(f"缺少私钥 kid={kid}") from exc
     cached = _PRIVATE_KEYS.get(path)
     if cached is not None and cached[0] == stamp:
         return cached[1]
@@ -92,16 +104,35 @@ def load_public_pem(directory: Path, kid: str) -> bytes:
     return path.read_bytes()
 
 
+def load_public_key(directory: Path, kid: str) -> RSAPublicKey:
+    """解析好的 RSA 公钥对象，按文件修改时间缓存。
+
+    全平台每个鉴权请求都要验签，缓存解析后的 RSAPublicKey 避免每次同步读盘与 PEM 解析；
+    轮换密钥替换公钥文件后，修改时间变化即自动重载。
+    """
+
+    path = directory / f"{kid}{_PUBLIC_SUFFIX}"
+    try:
+        stamp = path.stat().st_mtime_ns
+    except FileNotFoundError as exc:
+        raise JwtKeyError(f"缺少公钥 kid={kid}") from exc
+    cached = _PUBLIC_KEYS.get(path)
+    if cached is not None and cached[0] == stamp:
+        return cached[1]
+    public_key = serialization.load_pem_public_key(path.read_bytes())
+    if not isinstance(public_key, RSAPublicKey):
+        raise JwtKeyError(f"公钥不是 RSA kid={kid}")
+    _PUBLIC_KEYS[path] = (stamp, public_key)
+    return public_key
+
+
 def build_jwks(directory: Path, meta: JwtKeyMeta) -> dict[str, list[dict[str, Any]]]:
     kids = [meta["current_kid"]]
     if previous := meta.get("previous_kid"):
         kids.append(previous)
     keys = []
     for kid in kids:
-        public_pem = load_public_pem(directory, kid)
-        public_key = serialization.load_pem_public_key(public_pem)
-        if not isinstance(public_key, RSAPublicKey):
-            raise JwtKeyError(f"公钥不是 RSA kid={kid}")
+        public_key = load_public_key(directory, kid)
         jwk = json.loads(RSAAlgorithm.to_jwk(public_key))
         jwk["kid"] = kid
         jwk["use"] = "sig"

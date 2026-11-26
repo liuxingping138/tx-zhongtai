@@ -56,16 +56,30 @@ async def abandon_crawler(session: AsyncSession, sync_id: uuid.UUID, message: st
     sync.finished_at = datetime.now(UTC)
 
 
+_CRAWLER_SUMMARY_FIELDS = ("date_from", "date_to", "watermark", "status", "days_synced", "site_rows")
+
+
+def _format_crawler_summary(sync: CrawlerSyncRun) -> dict[str, Any]:
+    return {
+        key: (value.isoformat() if hasattr(value, "isoformat") else value)
+        for key in _CRAWLER_SUMMARY_FIELDS
+        if (value := getattr(sync, key)) is not None
+    }
+
+
 async def crawler_summary(session: AsyncSession, sync_id: uuid.UUID) -> dict[str, Any] | None:
     sync = await session.get(CrawlerSyncRun, sync_id)
     if sync is None:
         return None
-    fields = ["date_from", "date_to", "watermark", "status", "days_synced", "site_rows"]
-    return {
-        key: (value.isoformat() if hasattr(value, "isoformat") else value)
-        for key in fields
-        if (value := getattr(sync, key)) is not None
-    }
+    return _format_crawler_summary(sync)
+
+
+async def crawler_summaries(session: AsyncSession, sync_ids: list[uuid.UUID]) -> dict[uuid.UUID, dict[str, Any]]:
+    wanted = list(dict.fromkeys(sync_ids))
+    if not wanted:
+        return {}
+    rows = await session.scalars(select(CrawlerSyncRun).where(CrawlerSyncRun.id.in_(wanted)))
+    return {row.id: _format_crawler_summary(row) for row in rows}
 
 
 def tagging_job(task: str, name: str) -> Job:
@@ -90,6 +104,7 @@ def tagging_job(task: str, name: str) -> Job:
         summary,
         cost_resource=AI_TAGGING_RESOURCE,
         lane=LONG_LANE,
+        summaries=tagging.summaries,
     )
 
 
@@ -103,9 +118,18 @@ JOBS: list[Job] = [
         summary=crawler_summary,
         watermark=crawler_watermark,
         public_errors=("尚未建立同步水位", "已有爬虫"),
+        summaries=crawler_summaries,
     ),
     # 配置同步只读规则表一列，几秒。
-    Job(CRAWLER_CONFIG, "爬虫配置同步", rules_sync.run, 600, rules_sync.abandon, rules_sync.summary),
+    Job(
+        CRAWLER_CONFIG,
+        "爬虫配置同步",
+        rules_sync.run,
+        600,
+        rules_sync.abandon,
+        rules_sync.summary,
+        summaries=rules_sync.summaries,
+    ),
     *(tagging_job(task, name) for task, name in TASKS.items()),
 ]
 

@@ -49,6 +49,14 @@ async def get_run(session: AsyncSession, run_id: uuid.UUID) -> PolicyAiRun | Non
     return await session.get(PolicyAiRun, run_id)
 
 
+async def runs_by_ids(session: AsyncSession, run_ids: list[uuid.UUID]) -> dict[uuid.UUID, PolicyAiRun]:
+    wanted = list(dict.fromkeys(run_ids))
+    if not wanted:
+        return {}
+    rows = await session.scalars(select(PolicyAiRun).where(PolicyAiRun.id.in_(wanted)))
+    return {row.id: row for row in rows}
+
+
 async def failed_ai_runs(
     session: AsyncSession, run_field: str, *, current: uuid.UUID, since: datetime, limit: int = 5
 ) -> list[str]:

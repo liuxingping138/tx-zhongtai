@@ -12,7 +12,7 @@ from platform_common.clock import utcnow
 from platform_common.errors import UnauthenticatedError
 
 from app.core.config import Settings
-from app.core.jwt_keys import ensure_jwt_keys, load_private_key, load_public_pem
+from app.core.jwt_keys import ensure_jwt_keys, load_private_key, load_public_key
 
 
 def issue_access_token(*, user_id: uuid.UUID, session_id: uuid.UUID, settings: Settings) -> str:
@@ -55,7 +55,7 @@ def decode_access_token(token: str, settings: Settings) -> dict[str, Any]:
     try:
         return jwt.decode(
             token,
-            load_public_pem(settings.jwt_keys_path, kid),
+            load_public_key(settings.jwt_keys_path, kid),
             algorithms=[settings.jwt_algorithm],
             issuer=settings.jwt_issuer,
             audience=settings.jwt_audience,

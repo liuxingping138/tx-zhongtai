@@ -31,7 +31,10 @@ async def run() -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, stop.set)
     logger.info("audit_worker_started")
-    await runner.run(stop)
+    try:
+        await runner.run(stop)
+    finally:
+        await engine.dispose()
     logger.info("audit_worker_stopped")
 
 

@@ -17,6 +17,25 @@ from app.core.config import get_settings
 # 对方按服务名核对密钥。policy-worker 和 policy-service 是同一个服务的两个进程（worker 的 service_name 是
 # policy-worker），打标在 worker 里跑，所以这里固定报 policy-service，不跟进程名走。
 CALLER = "policy-service"
+_HTTP_LIMITS = httpx.Limits(max_keepalive_connections=10, max_connections=20)
+_client: httpx.AsyncClient | None = None
+_client_factory: Any = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    global _client, _client_factory  # noqa: PLW0603  进程级连接池复用，停服时通过 close_internal_clients 释放
+    if _client is None or _client.is_closed or _client_factory is not httpx.AsyncClient:
+        _client = httpx.AsyncClient(limits=_HTTP_LIMITS)
+        _client_factory = httpx.AsyncClient
+    return _client
+
+
+async def close_internal_clients() -> None:
+    global _client, _client_factory  # noqa: PLW0603  停服时释放进程级 HTTP 连接池
+    if _client is not None and not _client.is_closed:
+        await _client.aclose()
+    _client = None
+    _client_factory = None
 
 
 async def _call(
@@ -30,11 +49,10 @@ async def _call(
         # 汉字按 UTF-8 原样发：httpx 默认转义成 \uXXXX，一个字 6 字节，一批政策正文就会超过对方的请求体上限。
         kwargs["content"] = json.dumps(kwargs.pop("json"), ensure_ascii=False).encode()
         headers = {**headers, "content-type": "application/json"}
+    url = f"{base_url.rstrip('/')}{path}"
+    timeout = request_timeout or settings.internal_timeout_seconds
     try:
-        async with httpx.AsyncClient(
-            base_url=base_url, timeout=request_timeout or settings.internal_timeout_seconds
-        ) as client:
-            response = await client.request(method, path, headers=headers, **kwargs)
+        response = await _get_client().request(method, url, headers=headers, timeout=timeout, **kwargs)
     except httpx.HTTPError as exc:
         raise DependencyUnavailableError(f"{base_url} 暂时不可用") from exc
     body = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}

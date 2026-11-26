@@ -121,13 +121,22 @@ async def locked(session: AsyncSession, candidate_id: uuid.UUID) -> ScenarioCand
     return await repo.get_for_update(session, candidate_id)
 
 
+async def locked_many(session: AsyncSession, candidate_ids: list[uuid.UUID]) -> dict[uuid.UUID, ScenarioCandidate]:
+    return await repo.get_many_for_update(session, candidate_ids)
+
+
 async def ai_inputs(session: AsyncSession, candidates: list[ScenarioCandidate]) -> dict[str, dict[str, list[str]]]:
     """交给 AI 找相似场景的材料：每个场景出现在哪些一级行业、AI 解读时给的理由（最常见的几条）。"""
 
+    ids = [candidate.id for candidate in candidates]
+    if not ids:
+        return {}
+    industries_by_id = await repo.breakdown_many(session, ids, Interpretation.industry_l1)
+    remarks_by_id = await repo.breakdown_many(session, ids, Interpretation.remark)
     out: dict[str, dict[str, list[str]]] = {}
     for candidate in candidates:
-        industries = [str(row[0]) for row in await repo.breakdown(session, candidate.id, Interpretation.industry_l1)]
-        top = reasons(await repo.breakdown(session, candidate.id, Interpretation.remark))
+        industries = [str(row[0]) for row in industries_by_id.get(candidate.id, [])]
+        top = reasons(remarks_by_id.get(candidate.id, []))
         out[str(candidate.id)] = {"industries": industries, "reasons": [item["text"] for item in top]}
     return out
 

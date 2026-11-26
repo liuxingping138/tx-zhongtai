@@ -104,12 +104,15 @@ def _judge(candidate: ScenarioCandidate, result: dict[str, Any], known: set[str]
 async def _save(ids: list[uuid.UUID], results: list[dict[str, Any]], known: dict[str, set[str]]) -> dict[str, int]:
     done = failed = 0
     now = utcnow()
+    pairs = sorted(
+        ((candidate_id, result) for candidate_id, result in zip(ids, results, strict=True) if not not_run(result)),
+        key=lambda pair: pair[0],
+    )
     async with SessionLocal() as session:
-        # 按候选 ID 升序获取行锁，与其他场景处理接口锁序一致，防止死锁。
-        for candidate_id, result in sorted(zip(ids, results, strict=True), key=lambda pair: pair[0]):
-            if not_run(result):
-                continue  # 费用到上限没轮到：下批再问
-            candidate = await scenario_candidates.locked(session, candidate_id)
+        # 按候选 ID 升序批量获取行锁，与其他场景处理接口锁序一致，防止死锁并消除逐行 FOR UPDATE。
+        locked_map = await scenario_candidates.locked_many(session, [candidate_id for candidate_id, _ in pairs])
+        for candidate_id, result in pairs:
+            candidate = locked_map.get(candidate_id)
             if candidate is None or candidate.status != STATUS_PENDING:
                 continue  # 问的时候有人已经做了决定
             if _judge(candidate, result, known.get(str(candidate_id), set())):

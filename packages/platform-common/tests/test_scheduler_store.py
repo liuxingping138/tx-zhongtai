@@ -176,6 +176,38 @@ class TestQueue:
         result = await s.history(session, "crawler", 1, 20)  # type: ignore[arg-type]
         assert result["total"] == 7 and result["items"][0]["result"] == {"status": "success"}
 
+    async def test_history_uses_batched_summaries_hook_once_per_page(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        batch_calls: list[list[uuid.UUID]] = []
+        single_calls = 0
+
+        async def single_summary(_s: Any, _id: uuid.UUID) -> dict[str, Any]:
+            nonlocal single_calls
+            single_calls += 1
+            return {"status": "single"}
+
+        async def batch_summaries(_s: Any, ids: list[uuid.UUID]) -> dict[uuid.UUID, dict[str, Any]]:
+            batch_calls.append(list(ids))
+            return {ids[0]: {"status": "success", "rows": 10}}
+
+        s = _scheduler(crawler=Job("crawler", "爬虫", _noop, summary=single_summary, summaries=batch_summaries))
+        monkeypatch.setattr(s, "get_job", AsyncMock())
+        monkeypatch.setattr(s, "run_data", lambda row: {"id": row.id})
+        id1, id2 = uuid.uuid4(), uuid.uuid4()
+        rows = [
+            _run(sync_run_id=id1, result={"fallback": 1}),
+            _run(sync_run_id=id2, result={"fallback": 2}),
+            _run(sync_run_id=None, result={"fallback": 3}),
+        ]
+        session = _Session(scalar_values=[3], scalars=[rows])
+        result = await s.history(session, "crawler", 1, 20)  # type: ignore[arg-type]
+        assert single_calls == 0
+        assert batch_calls == [[id1, id2]]
+        assert [item["result"] for item in result["items"]] == [
+            {"status": "success", "rows": 10},
+            {"fallback": 2},
+            {"fallback": 3},
+        ]
+
 
 class TestUpdateJob:
     @pytest.fixture

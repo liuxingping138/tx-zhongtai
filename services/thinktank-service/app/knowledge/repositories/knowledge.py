@@ -11,6 +11,7 @@ from platform_common.options import SEARCH_LIMIT, OptionColumns, preview_options
 from sqlalchemy import ColumnElement, delete, exists, false, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 from app.knowledge.domain.models import KnowledgeFavorite, KnowledgeFile, KnowledgeOpLog
 from app.knowledge.domain.scopes import (
@@ -163,6 +164,7 @@ async def list_items(
     total = int(await session.scalar(select(func.count()).select_from(KnowledgeFile).where(*conds)) or 0)
     stmt = (
         select(KnowledgeFile)
+        .options(defer(KnowledgeFile.content_text))
         .where(*conds)
         .order_by(KnowledgeFile.uploaded_at.desc(), KnowledgeFile.id.desc())
         .offset((page - 1) * page_size)
@@ -191,7 +193,12 @@ async def list_filtered(
     user_id: str,
 ) -> list[KnowledgeFile]:
     conds = [*_scope_conditions(access, export_mode=True), *_conditions(filters, user_id=user_id)]
-    stmt = select(KnowledgeFile).where(*conds).order_by(KnowledgeFile.uploaded_at.desc(), KnowledgeFile.id.desc())
+    stmt = (
+        select(KnowledgeFile)
+        .options(defer(KnowledgeFile.content_text), defer(KnowledgeFile.remark))
+        .where(*conds)
+        .order_by(KnowledgeFile.uploaded_at.desc(), KnowledgeFile.id.desc())
+    )
     return list((await session.execute(stmt)).scalars())
 
 
@@ -216,7 +223,12 @@ async def list_undefined(
         *_scope_conditions(access, export_mode=True),
         KnowledgeFile.is_defined.is_(False),
     ]
-    stmt = select(KnowledgeFile).where(*conds).order_by(KnowledgeFile.uploaded_at.desc(), KnowledgeFile.id.desc())
+    stmt = (
+        select(KnowledgeFile)
+        .options(defer(KnowledgeFile.content_text))
+        .where(*conds)
+        .order_by(KnowledgeFile.uploaded_at.desc(), KnowledgeFile.id.desc())
+    )
     return list((await session.execute(stmt)).scalars())
 
 
