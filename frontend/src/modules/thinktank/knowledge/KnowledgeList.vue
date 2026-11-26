@@ -57,21 +57,11 @@ const canExportUndefined = computed(
 const canUploadTags = computed(() => auth.canFull(RESOURCE))
 
 const query = reactive({
-  file_name: [] as string[],
-  file_type: [] as string[],
-  operator_type: [] as string[],
-  product_type: [] as string[],
-  product_sub_type: [] as string[],
-  industry_type: [] as string[],
-  prov_name: [] as string[],
-  app_scenario: [] as string[],
-  depart_affiliation: [] as string[],
-  market_category: [] as string[],
-  data_time: [] as string[],
-  tag_status: [] as string[],
-  favorite_only: [] as string[],
-  page: 1,
-  page_size: 20,
+  file_name: [] as string[], file_type: [] as string[], operator_type: [] as string[],
+  product_type: [] as string[], product_sub_type: [] as string[], industry_type: [] as string[],
+  prov_name: [] as string[], app_scenario: [] as string[], depart_affiliation: [] as string[],
+  market_category: [] as string[], data_time: [] as string[], tag_status: [] as string[],
+  favorite_only: [] as string[], page: 1, page_size: 20,
 })
 
 const filters = useFilterOptions('/thinktank/knowledge')
@@ -217,62 +207,82 @@ onMounted(async () => {
       @update:page-size="query.page_size = $event"
       @change="load"
     >
+      <template #total>
+        <template v-if="checked.length">
+          已选 <strong>{{ checked.length }}</strong> 项
+          <button
+            type="button"
+            class="selection-clear"
+            @click="selection.clear"
+          >
+            取消选择
+          </button>
+        </template>
+        <template v-else>
+          共 <strong>{{ total.toLocaleString('zh-CN') }}</strong> 条记录
+        </template>
+      </template>
+
       <template #actions>
-        <el-button
-          v-if="canCreate"
-          type="primary"
-          :icon="Upload"
-          @click="uploadVisible = true"
-        >
-          上传文件
-        </el-button>
-        <ImportButton
-          v-if="canUploadTags"
-          label="上传知识标签"
-          hint="上传导出的未定义标签 Excel 模板，批量完善标签并记录操作审计。"
-          :upload="onUploadTags"
-        />
-        <el-button
-          v-if="canExportUndefined"
-          :icon="Download"
-          :loading="exportingUndefined"
-          @click="onExportUndefined"
-        >
-          导出未定义数据
-        </el-button>
-        <ExportButton
-          :allowed="auth.canExport(RESOURCE)"
-          :loading="exporting"
-          @click="onExport"
-        />
-        <!-- 勾选当前页记录后才出现批量按钮，未勾选时不摆置灰按钮 -->
-        <el-button
-          v-if="batch.unfavorited.value.length"
-          :icon="Star"
-          :loading="batch.batchBusy.value"
-          @click="batch.onBatchFavorite"
-        >
-          批量收藏（{{ batch.unfavorited.value.length }}）
-        </el-button>
-        <el-button
-          v-if="batch.favorited.value.length"
-          :icon="StarFilled"
-          :loading="batch.batchBusy.value"
-          @click="batch.onBatchUnfavorite(listQuery.applied.favorite_only.length > 0)"
-        >
-          批量取消收藏（{{ batch.favorited.value.length }}）
-        </el-button>
-        <el-button
-          v-if="canCreate && batch.deletable.value.length"
-          type="danger"
-          plain
-          :icon="Delete"
-          :loading="batch.batchBusy.value"
-          @click="batch.onBatchDelete"
-        >
-          批量删除（{{ batch.deletable.value.length }}）
-        </el-button>
-        <AuditLogButton module="thinktank.knowledge" />
+        <template v-if="!checked.length">
+          <el-button
+            v-if="canCreate"
+            type="primary"
+            :icon="Upload"
+            @click="uploadVisible = true"
+          >
+            上传文件
+          </el-button>
+          <ImportButton
+            v-if="canUploadTags"
+            label="上传知识标签"
+            hint="上传导出的未定义标签 Excel 模板，批量完善标签并记录操作审计。"
+            :upload="onUploadTags"
+          />
+          <el-button
+            v-if="canExportUndefined"
+            :icon="Download"
+            :loading="exportingUndefined"
+            @click="onExportUndefined"
+          >
+            导出未定义数据
+          </el-button>
+          <ExportButton
+            :allowed="auth.canExport(RESOURCE)"
+            :loading="exporting"
+            @click="onExport"
+          />
+          <AuditLogButton module="thinktank.knowledge" />
+        </template>
+        <!-- 勾选当前页记录后切换为上下文批量工具栏，避免 1440px 折行且未勾选时不摆置灰按钮 -->
+        <template v-else>
+          <el-button
+            v-if="batch.unfavorited.value.length"
+            :icon="Star"
+            :loading="batch.batchBusy.value"
+            @click="batch.onBatchFavorite"
+          >
+            批量收藏（{{ batch.unfavorited.value.length }}）
+          </el-button>
+          <el-button
+            v-if="batch.favorited.value.length"
+            :icon="StarFilled"
+            :loading="batch.batchBusy.value"
+            @click="batch.onBatchUnfavorite(listQuery.applied.favorite_only.length > 0)"
+          >
+            批量取消收藏（{{ batch.favorited.value.length }}）
+          </el-button>
+          <el-button
+            v-if="canCreate && batch.deletable.value.length"
+            type="danger"
+            plain
+            :icon="Delete"
+            :loading="batch.batchBusy.value"
+            @click="batch.onBatchDelete"
+          >
+            批量删除（{{ batch.deletable.value.length }}）
+          </el-button>
+        </template>
       </template>
 
       <template #filters>
@@ -373,6 +383,8 @@ onMounted(async () => {
 <style scoped>
 /* 智库 13 项筛选：默认折叠 1 行核心条件，展开后严格按 4 列固定标签栅格对齐，告别参差不齐 */
 .fav-star { color: var(--zt-warning); font-size: 14px; flex-shrink: 0; }
+.selection-clear { padding: 0 4px; border: 0; background: none; color: var(--zt-blue-600); font: inherit; cursor: pointer; }
+.selection-clear:hover { text-decoration: underline; }
 .knowledge-filters { align-items: flex-start; }
 .knowledge-filters :deep(.filter-bar__fields) { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 16px; align-items: center; }
 .knowledge-filters :deep(.filter-bar__fields > .el-form-item),

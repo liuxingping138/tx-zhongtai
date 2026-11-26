@@ -162,7 +162,7 @@ async function onSize(value: number) {
   gap: 16px; padding: 10px 20px; border-bottom: 1px solid var(--zt-border); background: var(--zt-panel);
 }
 .list-page__total {
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; flex-shrink: 0;
   color: var(--zt-ink-500); font-size: 13px; font-variant-numeric: tabular-nums;
 }
 .list-page__total strong {
