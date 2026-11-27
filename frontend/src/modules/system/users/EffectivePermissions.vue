@@ -261,9 +261,9 @@ const effectiveCount = computed(
 .perm-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
 .perm-table thead th { background: var(--zt-surface-subtle); color: var(--zt-ink-700); font-weight: 650; font-size: 12px; padding: 10px 16px; border-bottom: 1px solid var(--zt-border); white-space: nowrap; letter-spacing: 0.2px; }
 .col-module { width: 220px; }
-.col-level { width: 110px; }
+.col-level { width: 112px; white-space: nowrap; }
 .col-source { min-width: 220px; }
-.col-mech { width: 120px; }
+.col-mech { min-width: 112px; white-space: nowrap; }
 
 .group-row td { background: var(--zt-surface-subtle); padding: 8px 16px; border-top: 1px solid var(--zt-border); border-bottom: 1px solid var(--zt-divider); }
 .group-label { display: flex; align-items: center; gap: 8px; }
@@ -279,7 +279,7 @@ const effectiveCount = computed(
 .module-title { font-weight: 550; color: var(--zt-ink-900); line-height: 1.3; }
 .module-code { font-family: var(--zt-font-mono, monospace); font-size: 11.5px; color: var(--zt-ink-400); margin-top: 2px; }
 
-.perm-pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+.perm-pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; white-space: nowrap; }
 .perm-pill--full { background: var(--zt-success-soft); color: var(--zt-success-text); border: 1px solid var(--zt-success-border); }
 .perm-pill--read { background: var(--el-color-primary-light-9); color: var(--zt-blue-600); border: 1px solid var(--el-color-primary-light-7); }
 .perm-pill--none { background: var(--zt-surface-subtle); color: var(--zt-ink-400); border: 1px solid var(--zt-border); }
@@ -295,7 +295,7 @@ const effectiveCount = computed(
 .source-badge__level { color: var(--zt-ink-500); font-size: 11.5px; }
 .source-empty { color: var(--zt-ink-400); font-size: 12px; }
 
-.mech-item { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+.mech-item { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; white-space: nowrap; }
 .mech-dot { width: 6px; height: 6px; border-radius: 50%; }
 .mech-warn { color: var(--zt-warning-text); }
 .mech-warn .mech-dot { background: var(--zt-warning-text); }

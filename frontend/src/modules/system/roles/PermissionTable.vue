@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ArrowDown, ArrowRight, Lock } from '@element-plus/icons-vue'
 
-import { LEVEL_TEXT, lockReason, writesHint, type ModuleEntry, type ModuleGroup } from '@/permissions/catalog'
+import { lockReason, writesHint, type ModuleEntry, type ModuleGroup } from '@/permissions/catalog'
 import type { GrantLevel } from '@/permissions/levels'
 import {
   COLUMNS,
@@ -24,9 +24,15 @@ import {
 import PermissionCells from './PermissionCells.vue'
 import PermissionTableHeader from './PermissionTableHeader.vue'
 
+const SHORT_LEVEL_TEXT: Record<GrantLevel, string> = {
+  NONE: '',
+  READ: '仅查看',
+  EXPORT: '可导出',
+  FULL: '可管理',
+}
+
 /**
- * 角色权限矩阵：零漏缝吸顶表头 + 十字列高亮 + 分组折叠 + 快捷状态筛选 + 整格热区勾选。
- * 勾「管理」自动带上前两列，取消「查看」整行清空。纯规则在 permissions/matrix.ts。
+ * 角色权限矩阵：极薄 46px 毛玻璃吸顶表头 + 十字列高亮 + Material 3 矢量复选框 + 整齐 46px 行节奏。
  */
 const props = defineProps<{
   groups: ModuleGroup[]
@@ -47,6 +53,7 @@ const statusFilter = ref<PermissionStatusFilter>('ALL')
 const hoveredCol = ref<Column | null>(null)
 const collapsed = reactive<Record<string, boolean>>({})
 const isStuck = ref(false)
+const menuRef = ref<HTMLElement | null>(null)
 const sentinelRef = ref<HTMLElement | null>(null)
 
 const visibleGroups = computed(() =>
@@ -106,6 +113,10 @@ async function jumpToGroup(code: string) {
   document.getElementById(`perm-group-${code}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
+function scrollBackTop() {
+  menuRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
 let observer: IntersectionObserver | null = null
 onMounted(() => {
   if (typeof IntersectionObserver === 'undefined' || !sentinelRef.value) return
@@ -125,12 +136,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="perm-menu">
-    <div
-      ref="sentinelRef"
-      class="perm-sticky-sentinel"
-      aria-hidden="true"
-    />
+  <div
+    ref="menuRef"
+    class="perm-menu"
+  >
     <PermissionTableHeader
       v-model:keyword="keyword"
       v-model:status-filter="statusFilter"
@@ -144,7 +153,16 @@ onBeforeUnmount(() => {
       :is-stuck="isStuck"
       @toggle-all="toggleAllGroups"
       @jump-group="jumpToGroup"
-    />
+      @back-top="scrollBackTop"
+    >
+      <template #sentinel>
+        <div
+          ref="sentinelRef"
+          class="perm-sticky-sentinel"
+          aria-hidden="true"
+        />
+      </template>
+    </PermissionTableHeader>
 
     <p
       v-if="!visibleGroups.length && !visibleCapabilities.length"
@@ -184,7 +202,7 @@ onBeforeUnmount(() => {
               class="perm-group__count"
               :class="{ 'is-some': openedCount(group) > 0 }"
             >
-              已开通 {{ openedCount(group) }} / {{ group.modules.length }}
+              {{ openedCount(group) }} / {{ group.modules.length }}
             </span>
           </button>
 
@@ -200,14 +218,17 @@ onBeforeUnmount(() => {
               @mouseenter="hoveredCol = column.level"
               @mouseleave="hoveredCol = null"
             >
-              <input
-                type="checkbox"
-                :aria-label="`${group.name}整组${column.label}`"
-                :checked="columnState(group, column.level).checked"
-                :indeterminate="columnState(group, column.level).indeterminate"
-                :disabled="disabled"
-                @change="onColumn(group, column.level)"
-              >
+              <span class="m3-check-wrap">
+                <input
+                  type="checkbox"
+                  class="m3-check"
+                  :aria-label="`${group.name}整组${column.label}`"
+                  :checked="columnState(group, column.level).checked"
+                  :indeterminate="columnState(group, column.level).indeterminate"
+                  :disabled="disabled"
+                  @change="onColumn(group, column.level)"
+                >
+              </span>
             </label>
             <div
               v-else
@@ -220,7 +241,7 @@ onBeforeUnmount(() => {
           </template>
 
           <div class="perm-group__note">
-            {{ isGroupCollapsed(group.code) ? '点击左侧展开该分组' : '勾本行复选框可一次全选整列' }}
+            {{ isGroupCollapsed(group.code) ? '点击左侧展开' : '勾本行可一次全选整列' }}
           </div>
         </div>
 
@@ -239,7 +260,7 @@ onBeforeUnmount(() => {
                 class="perm-level-pill"
                 :class="`is-${levelOf(module.code).toLowerCase()}`"
               >
-                {{ LEVEL_TEXT[levelOf(module.code)] }}
+                {{ SHORT_LEVEL_TEXT[levelOf(module.code)] }}
               </span>
               <el-tooltip
                 v-if="locked(module)"
@@ -277,7 +298,10 @@ onBeforeUnmount(() => {
               @toggle="onCell(module, $event)"
               @hover-col="hoveredCol = $event"
             />
-            <div class="perm-row__hint">
+            <div
+              class="perm-row__hint"
+              :title="writesHint(module)"
+            >
               {{ writesHint(module) }}
             </div>
           </div>
@@ -295,7 +319,7 @@ onBeforeUnmount(() => {
           </div>
           <div /><div /><div />
           <div class="perm-group__note">
-            不是菜单。只属于超级管理员，防止有人给自己加权限。
+            不是菜单，仅属于超级管理员。
           </div>
         </div>
         <div
@@ -319,7 +343,7 @@ onBeforeUnmount(() => {
               class="perm-level-pill"
               :class="`is-${levelOf(module.code).toLowerCase()}`"
             >
-              {{ LEVEL_TEXT[levelOf(module.code)] }}
+              {{ SHORT_LEVEL_TEXT[levelOf(module.code)] }}
             </span>
           </div>
           <PermissionCells
@@ -329,7 +353,10 @@ onBeforeUnmount(() => {
             @toggle="onCell(module, $event)"
             @hover-col="hoveredCol = $event"
           />
-          <div class="perm-row__hint">
+          <div
+            class="perm-row__hint"
+            :title="capabilityHint(module)"
+          >
             {{ capabilityHint(module) }}
           </div>
         </div>

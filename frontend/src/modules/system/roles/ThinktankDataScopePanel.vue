@@ -97,7 +97,6 @@ function onBatchSet(dim: ModuleGroup, level: GrantLevel) {
     <template v-else>
       <div class="tt-overview">
         <div class="tt-overview__left">
-          <span class="tt-overview__label">智库子库：</span>
           <div
             class="tt-overview__pills"
             role="tablist"
@@ -138,15 +137,20 @@ function onBatchSet(dim: ModuleGroup, level: GrantLevel) {
             </template>
           </span>
         </div>
-        <div class="tt-overview__rule">
-          <el-icon
-            class="tt-overview__rule-icon"
-            aria-hidden="true"
-          >
-            <InfoFilled />
-          </el-icon>
-          <span><strong>文件类型 × 行业类型取交集生效</strong>；报告库、方案库当前直接跟随菜单档位生效。</span>
-        </div>
+        <el-tooltip
+          content="文档需同时满足所选文件类型与行业类型权限才可见；报告库、方案库当前直接跟随菜单档位生效"
+          placement="top-end"
+        >
+          <span class="tt-overview__rule">
+            <el-icon
+              class="tt-overview__rule-icon"
+              aria-hidden="true"
+            >
+              <InfoFilled />
+            </el-icon>
+            <span><strong>文件 × 行业取交集生效</strong></span>
+          </span>
+        </el-tooltip>
       </div>
 
       <div

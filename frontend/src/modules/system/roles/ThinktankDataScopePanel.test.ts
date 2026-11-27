@@ -24,6 +24,7 @@ const LIBRARIES: ThinktankLibraryScope[] = [
 
 const STUBS = {
   ElIcon: { template: '<span class="el-icon"><slot /></span>' },
+  ElTooltip: { template: '<span><slot /></span>' },
   ElButton: {
     props: ['disabled'],
     template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
@@ -96,7 +97,7 @@ describe('ThinktankDataScopePanel', () => {
     expect(wrapper.find('.tt-item-card').text()).toContain('通知')
 
     // 批量清空按钮
-    const clearAllBtn = wrapper.findAll('.tt-batch-btn').find(b => b.text() === '全部清空')!
+    const clearAllBtn = wrapper.findAll('.tt-batch-btn').find(b => b.text() === '清空')!
     await clearAllBtn.trigger('click')
     const lastPayload = wrapper.emitted('update:modelValue')?.at(-1)?.[0]
     expect(lastPayload).toMatchObject({

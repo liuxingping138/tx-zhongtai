@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Search } from '@element-plus/icons-vue'
+import { Search, Top } from '@element-plus/icons-vue'
 
 import type { ModuleGroup } from '@/permissions/catalog'
 import { COLUMNS, openedCount, type Column, type Grants, type PermissionStatusFilter } from '@/permissions/matrix'
@@ -22,20 +22,18 @@ defineEmits<{
   'update:statusFilter': [value: PermissionStatusFilter]
   toggleAll: []
   jumpGroup: [code: string]
+  backTop: []
 }>()
 </script>
 
 <template>
-  <div
-    class="perm-sticky-top"
-    :class="{ 'is-stuck': isStuck }"
-  >
+  <div class="perm-controls">
     <div class="perm-toolbar">
       <div class="perm-toolbar__left">
         <el-input
           :model-value="keyword"
           clearable
-          size="default"
+          size="small"
           placeholder="搜索菜单或分组"
           aria-label="搜索菜单"
           class="perm-search"
@@ -95,7 +93,7 @@ defineEmits<{
       class="perm-jump-bar"
       aria-label="快速定位分组"
     >
-      <span class="perm-jump-bar__label">快速定位：</span>
+      <span class="perm-jump-bar__label">定位：</span>
       <button
         v-for="group in groups"
         :key="group.code"
@@ -108,34 +106,49 @@ defineEmits<{
         <span class="perm-jump-pill__count">{{ openedCount(group, grants) }}/{{ group.modules.length }}</span>
       </button>
     </div>
+  </div>
 
+  <slot name="sentinel" />
+
+  <div
+    class="perm-thead perm-grid-cols"
+    :class="{ 'is-stuck': isStuck }"
+    role="row"
+  >
     <div
-      class="perm-thead perm-grid-cols"
-      role="row"
+      class="perm-th perm-th--lead"
+      role="columnheader"
     >
-      <div
-        class="perm-th"
-        role="columnheader"
+      <span>菜单 / 功能模块</span>
+      <button
+        v-if="isStuck"
+        type="button"
+        class="perm-back-top"
+        title="回到搜索和筛选栏"
+        @click="$emit('backTop')"
       >
-        菜单 / 功能模块
-      </div>
-      <div
-        v-for="column in COLUMNS"
-        :key="column.level"
-        class="perm-th perm-th--col"
-        :class="{ 'is-col-hover': hoveredCol === column.level }"
-        role="columnheader"
-        :title="column.what"
-      >
-        <strong>{{ column.label }}</strong>
-        <small>{{ column.sub }}</small>
-      </div>
-      <div
-        class="perm-th"
-        role="columnheader"
-      >
-        「管理」包含
-      </div>
+        <el-icon :size="11">
+          <Top />
+        </el-icon>
+        <span>搜索</span>
+      </button>
+    </div>
+    <div
+      v-for="column in COLUMNS"
+      :key="column.level"
+      class="perm-th perm-th--col"
+      :class="{ 'is-col-hover': hoveredCol === column.level }"
+      role="columnheader"
+      :title="column.what"
+    >
+      <strong>{{ column.label }}</strong>
+      <small>{{ column.sub }}</small>
+    </div>
+    <div
+      class="perm-th"
+      role="columnheader"
+    >
+      「管理」包含
     </div>
   </div>
 </template>

@@ -7,11 +7,11 @@ import type { GrantLevel } from '@/permissions/levels'
 import { isChanged, levelOf, openedCount, type Grants } from '@/permissions/matrix'
 import { countDimensionChanges } from '@/permissions/thinktankScopes'
 
-const LEVEL_OPTIONS: { level: GrantLevel; short: string; label: string }[] = [
-  { level: 'NONE', short: '无', label: '无权限' },
-  { level: 'READ', short: '查', label: '仅查看' },
-  { level: 'EXPORT', short: '导', label: '查看和导出' },
-  { level: 'FULL', short: '管', label: '可管理' },
+const LEVEL_OPTIONS: { level: GrantLevel; short: string; batch: string; label: string }[] = [
+  { level: 'NONE', short: '无', batch: '清空', label: '无权限' },
+  { level: 'READ', short: '查', batch: '查看', label: '仅查看' },
+  { level: 'EXPORT', short: '导', batch: '导出', label: '查看和导出' },
+  { level: 'FULL', short: '管', batch: '管理', label: '可管理' },
 ]
 
 const props = defineProps<{
@@ -71,17 +71,17 @@ function levelTitle(item: ModuleEntry, option: { level: GrantLevel; label: strin
         </h3>
         <span class="tt-dim-card__meta">
           <template v-if="mode === 'ALL'">
-            全部 {{ dimension.modules.length }} 项均已开通（{{ LEVEL_TEXT[menuLevel] }}）
+            全部 {{ dimension.modules.length }} 项（跟随{{ LEVEL_TEXT[menuLevel] }}）
           </template>
           <template v-else>
-            已开通 {{ opened }} / {{ dimension.modules.length }} 项
+            {{ opened }} / {{ dimension.modules.length }} 项
           </template>
-          <span
-            v-if="changesCount > 0"
-            class="tt-dim-card__meta-dirty"
-          >
-            · 本维度修改 {{ changesCount }} 项
-          </span>
+        </span>
+        <span
+          v-if="changesCount > 0"
+          class="tt-dim-card__dirty-pill"
+        >
+          已改 {{ changesCount }}
         </span>
       </div>
 
@@ -95,18 +95,20 @@ function levelTitle(item: ModuleEntry, option: { level: GrantLevel; label: strin
           class="tt-mode-btn"
           :class="{ 'is-active': mode === 'ALL' }"
           :disabled="disabled"
+          title="跟随子库菜单档位放行全部项"
           @click="emit('setMode', 'ALL')"
         >
-          全部范围（跟随菜单）
+          全部范围
         </button>
         <button
           type="button"
           class="tt-mode-btn"
           :class="{ 'is-active': mode === 'CUSTOM' }"
           :disabled="disabled"
+          title="按分类单独设置档位"
           @click="emit('setMode', 'CUSTOM')"
         >
-          指定范围（分级勾选）
+          指定范围
         </button>
       </div>
     </header>
@@ -116,7 +118,7 @@ function levelTitle(item: ModuleEntry, option: { level: GrantLevel; label: strin
       class="tt-dim-card__all-body"
     >
       <p class="tt-dim-card__all-hint">
-        当前不限制此维度，全部 {{ dimension.modules.length }} 个分类均按「{{ libraryName }}」菜单档位（<b>{{ LEVEL_TEXT[menuLevel] }}</b>）放行。如需仅开放部分分类或设置不同档位，请切换至「指定范围」。
+        当前不限制此维度，全部 {{ dimension.modules.length }} 个分类统一按「{{ libraryName }}」菜单档位（<b>{{ LEVEL_TEXT[menuLevel] }}</b>）放行；需要按分类限权时点右侧「指定范围」。
       </p>
       <div class="tt-dim-card__tags">
         <span
@@ -158,11 +160,11 @@ function levelTitle(item: ModuleEntry, option: { level: GrantLevel; label: strin
             :class="{ 'is-active': onlyChanged }"
             @click="onlyChanged = !onlyChanged"
           >
-            仅看已修改 ({{ changesCount }})
+            仅看已改 ({{ changesCount }})
           </button>
         </div>
         <div class="tt-batch-bar">
-          <span>批量设为：</span>
+          <span>批量：</span>
           <button
             v-for="opt in LEVEL_OPTIONS"
             :key="opt.level"
@@ -172,7 +174,7 @@ function levelTitle(item: ModuleEntry, option: { level: GrantLevel; label: strin
             :title="rank(opt.level) > rank(menuLevel) ? `不可高于子库菜单档位（${LEVEL_TEXT[menuLevel]}）` : `将${dimension.name}全部项设为${opt.label}`"
             @click="emit('batchSet', opt.level)"
           >
-            {{ opt.level === 'NONE' ? '全部清空' : opt.label }}
+            {{ opt.batch }}
           </button>
         </div>
       </div>
