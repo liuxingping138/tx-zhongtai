@@ -11,13 +11,13 @@ import { ROUTE_BY_NAME, pathForRouteName } from './menu'
  *
  * 这里不导入 router 实例：createWebHistory() 需要 window，单测跑在 node 环境。
  */
-function flatten(records: RouteRecordRaw[], parent = ''): { name: string; path: string }[] {
-  const out: { name: string; path: string }[] = []
+function flatten(records: RouteRecordRaw[], parent = ''): { name: string; path: string; meta?: RouteRecordRaw['meta'] }[] {
+  const out: { name: string; path: string; meta?: RouteRecordRaw['meta'] }[] = []
   for (const record of records) {
     const path = record.path.startsWith('/')
       ? record.path
       : `${parent.replace(/\/$/, '')}/${record.path}`.replace(/\/$/, '') || '/'
-    if (record.name) out.push({ name: String(record.name), path })
+    if (record.name) out.push({ name: String(record.name), path, meta: record.meta })
     if (record.children) out.push(...flatten(record.children, path))
   }
   return out
@@ -47,5 +47,43 @@ describe('ROUTE_BY_NAME 与路由表', () => {
     const known = new Set(all.map((route) => route.name))
     const stale = Object.keys(ROUTE_BY_NAME).filter((name) => !known.has(name))
     expect(stale, `这些映射指向已不存在的路由：${stale.join(', ')}`).toEqual([])
+  })
+
+  it('智库 6 张码表路由元信息完整', () => {
+    const byName = new Map(all.map((route) => [route.name, route]))
+    const dictSpecs = [
+      ['codebook-thinktank-file-types', 'file-types', 'codebook.thinktank_file_types'],
+      ['codebook-thinktank-departments', 'departments', 'codebook.thinktank_departments'],
+      ['codebook-thinktank-industries', 'industries', 'codebook.thinktank_industries'],
+      ['codebook-thinktank-product-types', 'product-types', 'codebook.thinktank_product_types'],
+      ['codebook-thinktank-provinces', 'provinces', 'codebook.thinktank_provinces'],
+      ['codebook-thinktank-market-categories', 'market-categories', 'codebook.thinktank_market_categories'],
+    ] as const
+    for (const [name, slug, resource] of dictSpecs) {
+      expect(byName.get(name)!.meta).toMatchObject({ dictSlug: slug, resource })
+    }
+  })
+
+  it('智库资料库、报告库、方案库与我的收藏路由元信息完整', () => {
+    const byName = new Map(all.map((route) => [route.name, route]))
+    expect(byName.get('thinktank-knowledge')!.meta).toMatchObject({ title: '资料库', resource: 'thinktank.knowledge' })
+    expect(byName.get('thinktank-knowledge-preview')!.meta).toMatchObject({
+      title: '资料库文件预览',
+      menuPath: '/thinktank/knowledge',
+    })
+    expect(byName.get('thinktank-report-preview')!.meta).toMatchObject({
+      title: '报告库文件预览',
+      resource: 'thinktank.reports',
+      menuPath: '/thinktank/reports',
+    })
+    expect(byName.get('thinktank-proposal-preview')!.meta).toMatchObject({
+      title: '方案库文件预览',
+      resource: 'thinktank.proposals',
+      menuPath: '/thinktank/proposals',
+    })
+    expect(byName.get('thinktank-favorites')!.meta).toMatchObject({
+      title: '我的收藏',
+      resource: 'thinktank.favorites',
+    })
   })
 })

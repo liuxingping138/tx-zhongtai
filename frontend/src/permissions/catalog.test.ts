@@ -132,4 +132,29 @@ describe('moduleNames', () => {
   it('确认弹窗用「分组 / 模块」的中文名，不显示资源编码', () => {
     expect(moduleNames(moduleGroups(tree))['policy.sources']).toBe('政策 / 信源管理')
   })
+
+  it('智库资料库、报告库与方案库的写操作统一展示上传文件与上传标签', () => {
+    const ttTree = [
+      node({
+        code: 'thinktank',
+        name: '智库',
+        node_type: 'directory',
+        children: [
+          node({
+            code: 'thinktank.reports',
+            name: '报告库',
+            actions: [action('list', 'READ'), action('export', 'EXPORT'), action('create', 'FULL'), action('upload_tags', 'FULL')],
+          }),
+          node({
+            code: 'thinktank.proposals',
+            name: '方案库',
+            actions: [action('list', 'READ'), action('create', 'FULL'), action('upload_tags', 'FULL')],
+          }),
+        ],
+      }),
+    ]
+    const ttMods = moduleGroups(ttTree)[0]!.modules
+    expect(writesHint(ttMods[0]!)).toBe('管理包含：上传文件、上传标签')
+    expect(writesHint(ttMods[1]!)).toBe('管理包含：上传文件、上传标签')
+  })
 })

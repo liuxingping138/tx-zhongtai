@@ -28,7 +28,7 @@ const SAMPLE_TREE: ResourceNode[] = [
       {
         id: '2',
         code: 'thinktank.knowledge',
-        name: '知识库',
+        name: '资料库',
         service_code: 'thinktank-service',
         node_type: 'resource',
         published: true,
@@ -139,7 +139,7 @@ describe('thinktankScopes', () => {
     expect(isThinktankScopeCode('thinktank.knowledge')).toBe(false)
 
     const names = thinktankScopeNames(libs)
-    expect(names['thinktank.file_type.product']).toBe('智库·知识库 / 文件类型范围：产品')
+    expect(names['thinktank.file_type.product']).toBe('智库·资料库 / 文件类型范围：产品')
   })
 
   it('auto-syncs scope dimensions when menu permission is opened, lowered, or closed', () => {
@@ -198,7 +198,7 @@ describe('thinktankScopes', () => {
       { code: 'thinktank.industry_type.sme', from: 'NONE', to: 'FULL' },
     ])
     expect(collapsed).toHaveLength(3)
-    expect(collapsed[1]?.label).toBe('智库·知识库 / 文件类型范围（全部 2 项）')
-    expect(collapsed[2]?.label).toBe('智库·知识库 / 行业类型范围（全部 1 项）')
+    expect(collapsed[1]?.label).toBe('智库·资料库 / 文件类型范围（全部 2 项）')
+    expect(collapsed[2]?.label).toBe('智库·资料库 / 行业类型范围（全部 1 项）')
   })
 })

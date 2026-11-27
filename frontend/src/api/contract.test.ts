@@ -84,11 +84,53 @@ describe('前端接口封装与后端 OpenAPI 一致', () => {
     if (label.startsWith('tender.list') || label === 'tender.getTenderCount') await fn('purchaser', {})
     else if (label === 'tender.getTenderRecord' || label === 'tender.getTenderContent') await fn('winbid', '123', '0')
     else if (label.startsWith('filterOptions.')) await fn('/policy/sources', 'province_name', '京')
+    else if (/^codebook\.(list|create|update|delete|import)ThinktankDicts?$/.test(label)) await fn('file-types', 'id-1', {})
+    else if (label === 'thinktank.unfavoriteThinktankItem' || label === 'thinktank.downloadThinktankItemBlob') await fn('reports', 'id-1')
     else await fn('id-1', () => Promise.resolve({}))
     expect(calls.length).toBeGreaterThan(0)
     for (const { method, url } of calls) {
       const path = `/api/v1${url}`
       expect(operations.some((op) => op.method === method && op.pattern.test(path)), `${method.toUpperCase()} ${path}`).toBe(true)
+    }
+  })
+
+  it('智库 6 张码表的增删改查导入路径与后端 OpenAPI 完全一致', async () => {
+    const slugs: codebook.ThinktankDictSlug[] = [
+      'file-types',
+      'departments',
+      'industries',
+      'product-types',
+      'provinces',
+      'market-categories',
+    ]
+    for (const slug of slugs) {
+      calls.length = 0
+      await codebook.listThinktankDicts(slug, {})
+      await codebook.createThinktankDict(slug, { name: '测试' })
+      await codebook.updateThinktankDict(slug, 'id-1', { name: '测试', version: 1 })
+      await codebook.deleteThinktankDict(slug, 'id-1')
+      await codebook.importThinktankDicts(slug, new File([''], 'a.xlsx'))
+      await filterOptions.fetchFilterOptions(`/codebook/thinktank/${slug}`)
+      await filterOptions.searchFilterOptions(`/codebook/thinktank/${slug}`, 'name', 'a')
+      for (const { method, url } of calls) {
+        const path = `/api/v1${url}`
+        expect(operations.some((op) => op.method === method && op.pattern.test(path)), `${method.toUpperCase()} ${path}`).toBe(true)
+      }
+    }
+  })
+
+  it('智库 3 大子库的收藏联动与筛选项路径与后端 OpenAPI 完全一致', async () => {
+    const libs: thinktank.ThinktankLibraryKey[] = ['knowledge', 'reports', 'proposals']
+    for (const lib of libs) {
+      calls.length = 0
+      await thinktank.unfavoriteThinktankItem(lib, 'id-1')
+      await thinktank.downloadThinktankItemBlob(lib, 'id-1')
+      await filterOptions.fetchFilterOptions(`/thinktank/${lib}`)
+      await filterOptions.searchFilterOptions(`/thinktank/${lib}`, 'region_tag', '北京')
+      for (const { method, url } of calls) {
+        const path = `/api/v1${url}`
+        expect(operations.some((op) => op.method === method && op.pattern.test(path)), `${method.toUpperCase()} ${path}`).toBe(true)
+      }
     }
   })
 
@@ -99,12 +141,20 @@ describe('前端接口封装与后端 OpenAPI 一致', () => {
     '/codebook/area-codes/export',
     '/codebook/policy-types/export',
     '/codebook/scenarios/export',
+    '/codebook/thinktank/file-types/export',
+    '/codebook/thinktank/departments/export',
+    '/codebook/thinktank/industries/export',
+    '/codebook/thinktank/product-types/export',
+    '/codebook/thinktank/provinces/export',
+    '/codebook/thinktank/market-categories/export',
     '/policy/interpretations/export',
     '/policy/crawler-monitoring/sites/export',
     '/policy/crawler-config/report/export',
     '/policy/sources/export',
     '/policy/base-tags/export',
     '/thinktank/knowledge/export',
+    '/thinktank/reports/export',
+    '/thinktank/proposals/export',
   ]
 
   it.each(EXPORT_PATHS)('导出接口 GET /api/v1%s 在后端 OpenAPI 中存在', path => {

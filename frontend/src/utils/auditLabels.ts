@@ -18,6 +18,12 @@ export const MODULE_LABELS: Record<string, string> = {
   'codebook.policy_types': '政策类型码表',
   'codebook.scenarios': '行业场景码表',
   'codebook.area_codes': '省市区编码表',
+  'codebook.thinktank_file_types': '文件类别码表',
+  'codebook.thinktank_departments': '客户部门归属码表',
+  'codebook.thinktank_industries': '行业类别码表',
+  'codebook.thinktank_product_types': '产品类别码表',
+  'codebook.thinktank_provinces': '省份码表',
+  'codebook.thinktank_market_categories': '市场类别码表',
   customer: '客户',
   tender: '招投标',
   'tender.bidding': '招标信息',
@@ -32,7 +38,10 @@ export const MODULE_LABELS: Record<string, string> = {
   'ai.billing': '费用账单',
   'ai.releases': '模板上线',
   thinktank: '智库',
-  'thinktank.knowledge': '知识库',
+  'thinktank.knowledge': '资料库',
+  'thinktank.reports': '报告库',
+  'thinktank.proposals': '方案库',
+  'thinktank.favorites': '我的收藏',
 }
 
 export const ACTION_LABELS: Record<string, string> = {
@@ -75,7 +84,7 @@ export const ACTION_LABELS: Record<string, string> = {
   unfavorite: '取消收藏',
   download: '下载',
   export_undefined: '导出未定义数据',
-  upload_tags: '上传知识标签',
+  upload_tags: '上传标签',
   access_denied: '越权访问被拒',
 }
 

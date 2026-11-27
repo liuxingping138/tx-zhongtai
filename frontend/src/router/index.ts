@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, type RouteLocationNormalized, type RouteLocationRaw } from 'vue-router'
 
+import type { ThinktankDictSlug } from '@/api/codebook'
 import { useAuthStore } from '@/stores/auth'
 import { clearReloadMark, isChunkLoadError, reloadForNewVersion } from './chunkReload'
 import { routes } from './routes'
@@ -80,6 +81,8 @@ declare module 'vue-router' {
     restricted?: boolean
     title?: string
     resource?: string
+    menuPath?: string
+    dictSlug?: ThinktankDictSlug
   }
 }
 

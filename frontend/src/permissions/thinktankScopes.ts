@@ -57,7 +57,7 @@ function buildLibraryScope(libNode: ResourceNode): ThinktankLibraryScope | null 
 }
 
 /**
- * 提取「智库」下各子库（知识库，及未来报告库、方案库等 6~7 个子库）的数据范围维度。
+ * 提取「智库」下各子库（资料库，及报告库、方案库等子库）的数据范围维度。
  * 结构：thinktank(directory) -> 子库(resource) -> 维度(directory) -> 范围项(resource)。
  */
 export function thinktankLibraries(tree: ResourceNode[]): ThinktankLibraryScope[] {
@@ -136,7 +136,7 @@ function tryCollapseDimension(
 }
 
 /**
- * 将整组同步变化的智库数据维度折叠为 1 条修改摘要，避免勾选 1 个「知识库」时弹窗和底部栏显示 29 项修改。
+ * 将整组同步变化的智库数据维度折叠为 1 条修改摘要，避免勾选 1 个「资料库」时弹窗和底部栏显示 29 项修改。
  */
 export function collapseScopeDiffs(libraries: ThinktankLibraryScope[], diffs: DiffEntry[]): DiffEntry[] {
   if (!diffs.length || !libraries.length) return diffs
@@ -185,7 +185,7 @@ function syncDimensionOnMenuChange(
 }
 
 /**
- * 当管理员在「菜单权限」修改了智库某个子库（如知识库）的档位时，联动同步其数据维度：
+ * 当管理员在「菜单权限」修改了智库某个子库（如资料库）的档位时，联动同步其数据维度：
  * 1. 子库关闭（NONE）-> 清空该子库下全部数据范围；
  * 2. 子库开通或调档 -> 若某维度原本全空或处于「全部跟随」状态，自动同步为新档位；
  *    若某维度处于「指定范围」且新菜单档位降低，则将超出菜单档位的项收敛到新菜单档位。
