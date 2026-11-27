@@ -34,6 +34,7 @@ import * as scheduler from './scheduler'
 import * as system from './system'
 import * as tender from './tender'
 import * as thinktank from './thinktank'
+import * as thinktankAccess from './thinktankAccess'
 
 type Spec = { paths: Record<string, Record<string, unknown>> }
 
@@ -66,6 +67,7 @@ const modules = {
   system,
   tender,
   thinktank,
+  thinktankAccess,
 }
 
 const wrappers = Object.entries(modules).flatMap(([module, exports]) =>

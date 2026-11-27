@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, Response
 from platform_common.errors import UnauthenticatedError
+from platform_common.http_utils import client_ip
 from platform_common.logging_setup import get_logger
 from platform_common.request_context import get_request_id
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,7 +26,7 @@ from app.application.auth_service import AuthService
 from app.application.authorization import visible_permissions
 from app.core.config import Settings, get_settings
 from app.core.database import SideSessionLocal, get_db_session
-from app.core.http_utils import client_ip, client_user_agent, success_json
+from app.core.http_utils import client_user_agent, success_json
 from app.core.rate_limit import LoginLockedError, LoginRateLimiter
 from app.core.redis_client import redis_client
 from app.domain.enums import SecurityClass

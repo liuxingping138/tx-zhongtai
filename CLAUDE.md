@@ -175,6 +175,13 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
   LibreOffice、Ghostscript 让镜像变大，转码、压缩时占内存，默认 `THINKTANK_MEM_LIMIT` 是 1536m
 - 预览、下载、编辑等写知识库自己的操作记录（`/{id}/logs`），同时经 Outbox 上报审计（投递循环在服务 lifespan 里，没有单独 worker）。
   省份候选值经 codebook `/internal/v1/provinces` 取，取不到用内置列表（密钥 `CODEBOOK_THINKTANK_CALLER_SECRET`，compose 传给两边）
+- **网络准入（用户要求）**：智库只在公司网络里能用。`app/access/`：`main.py` 给资料库、报告库、方案库、我的收藏的路由挂 `require_trusted_network`，
+  来源 IP（`platform_common.http_utils.client_ip`，信任网关重写的 X-Forwarded-For 首段）在 `THINKTANK_OFFICE_NETWORKS`（公司出口 1.119.196.74）里直接放行、不查库；
+  其余查 `thinktank_ip_whitelist` 里没到期的（单个 IP 或不宽于 /24 的网段，每个请求现查、不缓存，删了或到期下一个请求就拦），都不中回 403 `THINKTANK_NETWORK_DENIED`，
+  提示里带当前 IP，前端（`api/networkDenied.ts` + `main.ts` 的 403 回调）跳 `/network-denied` 说明页。白名单由管理员在「智库 → 访问白名单」`/thinktank/ip-whitelist`
+  （资源 `thinktank.ip_whitelist`：查看档看，完整档开通、修改 / 续期、删除，写操作进审计）维护，一次最长 `THINKTANK_WHITELIST_MAX_DAYS`（365）天；
+  这组接口本身**不挂**网络准入，管理员在外面、或公司换了出口 IP 时还能进来处理。P6 关掉准入（`THINKTANK_NETWORK_GUARD_ENABLED=false`），单测在 conftest 里也关、`test_network_guard.py` 单独开着测。
+  新加智库业务路由放进已挂准入的 router，另起 router 要在 `main.py` 一样挂上（`test_guard_covers_every_business_route_but_not_whitelist_admin` 会拦）
 - 历史资料、操作记录和收藏用 `python -m app.cli.seed_knowledge`（`make seed-knowledge`）从 `services/thinktank-service/data` 导入
 
 ### 爬虫监测是只读统计，数据靠同步进来
@@ -502,7 +509,7 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
 ## 已知限制
 
 - 本期不执行生产部署；`deploy/gateway/traefik.prod.yml.example` 只是 HTTPS 模板
-- `client_ip` 无条件信任 `X-Forwarded-For` 首段，成立前提是服务只能经网关访问
+- `client_ip`（`platform_common.http_utils`）无条件信任 `X-Forwarded-For` 首段，成立前提是服务只能经网关访问；智库按 IP 放行也靠它
   （Traefik 会清洗客户端自带的该头）。服务端口 8001–8007 不得直接对外暴露，
   也不要在 Traefik 前再加一层不做同样清洗的代理
 - 导出不分页，整个结果集读进内存再生成 Excel，靠 `export_max_rows` 兜底

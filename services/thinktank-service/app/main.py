@@ -6,7 +6,7 @@ import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from platform_common.body_limit import RequestBodyLimitMiddleware
 from platform_common.errors import register_exception_handlers
 from platform_common.health import build_health_router
@@ -15,6 +15,8 @@ from platform_common.logging_setup import get_logger, setup_logging
 from platform_common.request_context import RequestIdMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
+from app.access.api.guard import require_trusted_network
+from app.access.api.routes import router as whitelist_router
 from app.common.audit_emit import outbox_loop
 from app.common.codebook_client import close_codebook_client
 from app.common.security import get_authz_client
@@ -85,10 +87,13 @@ def create_app() -> FastAPI:
         )
     register_exception_handlers(app)
     app.include_router(build_health_router({"database": check_database_ready}))
-    app.include_router(knowledge_router)
-    app.include_router(reports_router)
-    app.include_router(proposals_router)
-    app.include_router(favorites_router)
+    # 资料库、报告库、方案库、我的收藏只在公司网络或有效白名单下可用；白名单维护接口不挂（见 access/api/routes.py）。
+    network_guard = [Depends(require_trusted_network)]
+    app.include_router(knowledge_router, dependencies=network_guard)
+    app.include_router(reports_router, dependencies=network_guard)
+    app.include_router(proposals_router, dependencies=network_guard)
+    app.include_router(favorites_router, dependencies=network_guard)
+    app.include_router(whitelist_router)
     return app
 
 

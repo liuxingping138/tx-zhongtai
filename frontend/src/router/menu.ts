@@ -28,6 +28,7 @@ export const ROUTE_BY_NAME: Record<string, string> = {
   'thinktank-reports': '/thinktank/reports',
   'thinktank-proposals': '/thinktank/proposals',
   'thinktank-favorites': '/thinktank/favorites',
+  'thinktank-ip-whitelist': '/thinktank/ip-whitelist',
   'ai-prompts': '/ai/prompts',
   'ai-batch-runs': '/ai/batch-runs',
   'ai-models': '/ai/models',

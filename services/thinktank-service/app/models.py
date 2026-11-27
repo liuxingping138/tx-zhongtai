@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.access.domain.models import IpWhitelistEntry
 from app.common.models import OutboxEvent
 from app.knowledge.domain.models import KnowledgeFavorite, KnowledgeFile, KnowledgeOpLog
 from app.library.domain.models import (
@@ -14,6 +15,7 @@ from app.library.domain.models import (
 )
 
 __all__ = [
+    "IpWhitelistEntry",
     "KnowledgeFavorite",
     "KnowledgeFile",
     "KnowledgeOpLog",

@@ -100,7 +100,7 @@ http.interceptors.response.use(
     }
     const apiError = toApiError(error)
     if (status === 403) {
-      forbiddenHandler?.()
+      forbiddenHandler?.(apiError)
     }
     if (status !== 401) {
       notifyByStatus(apiError)
@@ -158,7 +158,8 @@ function signOutOnce(): void {
 }
 
 let unauthorizedHandler: (() => void) | null = null
-let forbiddenHandler: (() => void) | null = null
+/** 403 回调带上错误：同是 403，智库网络准入（THINKTANK_NETWORK_DENIED）要跳说明页，不是权限变了。 */
+let forbiddenHandler: ((error?: ApiError) => void) | null = null
 let signingOut = false
 
 onAccessTokenChange((token) => {
@@ -180,7 +181,7 @@ export function setUnauthorizedHandler(handler: () => void): void {
   unauthorizedHandler = handler
 }
 
-export function setForbiddenHandler(handler: () => void): void {
+export function setForbiddenHandler(handler: (error?: ApiError) => void): void {
   forbiddenHandler = handler
 }
 

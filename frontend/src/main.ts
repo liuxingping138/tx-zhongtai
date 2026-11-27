@@ -8,6 +8,7 @@ import { createApp } from 'vue'
 import '@/styles/theme.css'
 
 import { setForbiddenHandler, setUnauthorizedHandler } from '@/api/http'
+import { noteNetworkDenied } from '@/api/networkDenied'
 import { onRemoteLogout } from '@/api/session'
 import { initDensity } from '@/composables/useTableDensity'
 import { initTheme } from '@/composables/useTheme'
@@ -46,7 +47,15 @@ onRemoteLogout(() => {
   }
 })
 let forbiddenReload: Promise<void> | null = null
-setForbiddenHandler(() => {
+setForbiddenHandler((error) => {
+  // 智库网络准入：权限没变，是网络不对。跳说明页（带着原地址，开通白名单后点「重新打开」回去）。
+  if (noteNetworkDenied(error)) {
+    const currentRoute = router.currentRoute.value
+    if (currentRoute.name !== 'network-denied') {
+      void router.replace({ name: 'network-denied', query: { from: currentRoute.fullPath } })
+    }
+    return
+  }
   if (!auth.isAuthenticated || auth.mustChangePassword || forbiddenReload) return
   forbiddenReload = auth
     .loadProfile()

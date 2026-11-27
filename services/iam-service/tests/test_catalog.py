@@ -171,4 +171,22 @@ def test_thinktank_catalog_has_knowledge_reports_proposals_favorites_and_scopes(
         ("menu.thinktank.reports", "报告库", "thinktank-reports", "thinktank.reports", 452),
         ("menu.thinktank.proposals", "方案库", "thinktank-proposals", "thinktank.proposals", 453),
         ("menu.thinktank.favorites", "我的收藏", "thinktank-favorites", "thinktank.favorites", 454),
+        ("menu.thinktank.ip_whitelist", "访问白名单", "thinktank-ip-whitelist", "thinktank.ip_whitelist", 455),
     ]
+
+
+def test_thinktank_ip_whitelist_is_read_to_view_and_full_to_change() -> None:
+    by_code = {spec.code: spec for spec in RESOURCE_SPECS}
+    assert (by_code["thinktank.ip_whitelist"].name, by_code["thinktank.ip_whitelist"].parent_code) == (
+        "访问白名单",
+        "thinktank",
+    )
+    levels = {
+        spec.action_code: spec.required_level for spec in ACTION_SPECS if spec.resource_code == "thinktank.ip_whitelist"
+    }
+    assert levels == {
+        "list": GrantLevel.READ,
+        "create": GrantLevel.FULL,
+        "update": GrantLevel.FULL,
+        "delete": GrantLevel.FULL,
+    }

@@ -1,7 +1,7 @@
 import { computed, type Component } from 'vue'
 import {
   Box, Briefcase, Collection, Connection, Cpu, DataAnalysis, Document, EditPen, Files, Finished,
-  Folder, Grid, Key, Link, MapLocation, Menu, Money, Monitor, OfficeBuilding, PriceTag, Reading,
+  Folder, Grid, Key, Link, Lock, MapLocation, Menu, Money, Monitor, OfficeBuilding, PriceTag, Reading,
   Setting, Star, Tickets, Timer, User, UserFilled, Unlock,
 } from '@element-plus/icons-vue'
 import type { MenuItem } from '@/api/types'
@@ -49,6 +49,7 @@ export const ENTRY_DESCRIPTIONS: Record<string, string> = {
   '/thinktank/reports': '报告库文档查询、预览、打标与操作审计',
   '/thinktank/proposals': '方案库文档查询、预览、打标与操作审计',
   '/thinktank/favorites': '集中查看、预览与管理资料库、报告库与方案库的个人收藏',
+  '/thinktank/ip-whitelist': '智库只在公司网络可用，在这里给其他地方的 IP 开通有时效的白名单',
   '/system/users': '管理账号与角色分配',
   '/system/roles': '配置模块和操作权限',
   '/system/sessions': '看谁在线，按设备下线',
@@ -85,6 +86,7 @@ const entryIcons: Record<string, Component> = {
   '/thinktank/reports': Document,
   '/thinktank/proposals': Briefcase,
   '/thinktank/favorites': Star,
+  '/thinktank/ip-whitelist': Lock,
   '/system/users': User,
   '/system/roles': Key,
   '/system/sessions': UserFilled,

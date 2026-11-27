@@ -103,6 +103,8 @@ services:
       THINKTANK_AUDIT_INGEST_SECRET: p6-only-change-me-ingest
       THINKTANK_CODEBOOK_SERVICE_SECRET: p6-only-change-me-internal
       THINKTANK_MINIO_ENDPOINT: ""
+      # e2e 从服务器本机经 127.0.0.1:8090 进来，来源是容器网关地址，不是公司出口 IP；P6 不测网络准入（单测覆盖）。
+      THINKTANK_NETWORK_GUARD_ENABLED: "false"
   llm-mock:
     build:
       context: ../..

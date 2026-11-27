@@ -286,6 +286,12 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '我的收藏', resource: 'thinktank.favorites' },
       },
       {
+        path: 'thinktank/ip-whitelist',
+        name: 'thinktank-ip-whitelist',
+        component: () => import('@/modules/thinktank/whitelist/IpWhitelistList.vue'),
+        meta: { title: '访问白名单', resource: 'thinktank.ip_whitelist' },
+      },
+      {
         path: 'ai/prompts',
         name: 'ai-prompts',
         component: () => import('@/modules/ai/prompts/PromptListPage.vue'),
@@ -321,6 +327,13 @@ export const routes: RouteRecordRaw[] = [
         name: 'forbidden',
         component: () => import('@/views/ForbiddenView.vue'),
         meta: { title: '无权访问' },
+      },
+      {
+        // 智库被网络准入拦下（不在公司网络、也没有有效白名单）。不挂 resource：谁被拦都能看到说明。
+        path: 'network-denied',
+        name: 'network-denied',
+        component: () => import('@/views/NetworkDeniedView.vue'),
+        meta: { title: '当前网络不能访问智库' },
       },
       {
         path: 'unavailable',

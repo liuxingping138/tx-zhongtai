@@ -42,6 +42,7 @@ export const MODULE_LABELS: Record<string, string> = {
   'thinktank.reports': '报告库',
   'thinktank.proposals': '方案库',
   'thinktank.favorites': '我的收藏',
+  'thinktank.ip_whitelist': '访问白名单',
 }
 
 export const ACTION_LABELS: Record<string, string> = {
