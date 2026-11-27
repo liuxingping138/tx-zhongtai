@@ -163,7 +163,10 @@ onMounted(load)
           @click="select(role)"
         >
           <span class="role-item__name">
-            {{ role.name }}
+            <span
+              class="role-item__title"
+              :title="role.name"
+            >{{ role.name }}</span>
             <el-tag
               v-if="role.is_builtin"
               size="small"

@@ -59,7 +59,7 @@ function roleNames(user: ManagedUser): string {
     </template>
     <el-table-column
       label="用户名"
-      min-width="230"
+      min-width="206"
       show-overflow-tooltip
     >
       <template #default="{ row }">
@@ -79,12 +79,12 @@ function roleNames(user: ManagedUser): string {
     <el-table-column
       prop="display_name"
       label="显示名"
-      min-width="140"
+      min-width="88"
       show-overflow-tooltip
     />
     <el-table-column
       label="角色"
-      min-width="200"
+      min-width="180"
     >
       <template #default="{ row }">
         <div class="role-cell">
@@ -144,120 +144,124 @@ function roleNames(user: ManagedUser): string {
       </template>
     </el-table-column>
     <el-table-column
-      label="启用"
-      width="160"
+      label="状态"
+      width="116"
     >
       <template #default="{ row }">
-        <span class="status-line">
-          <el-switch
-            v-if="manageable(row) && row.id !== auth.user?.id"
-            :model-value="row.status === 'active'"
-            :loading="busyUserId === row.id"
-            :disabled="Boolean(busyUserId)"
-            :aria-label="`${row.username} 的账号启用`"
-            @change="$emit('toggle', row)"
-          />
-          <el-tag
-            v-else
-            :type="row.status === 'active' ? 'success' : 'warning'"
-            size="small"
-          >
-            {{ row.status === 'active' ? '启用' : '停用' }}
-          </el-tag>
-          <!-- 密码连续输错被锁：账号仍是启用，但这几分钟登不进来，直接给「解锁」。只占一行，行高不变。 -->
-          <template v-if="row.locked_seconds">
-            <span
-              class="status-locked"
-              :title="lockText(row.locked_seconds)"
-            >已锁定</span>
-            <el-button
-              v-if="manageable(row)"
-              link
-              type="primary"
+        <div class="status-cell">
+          <span class="status-line">
+            <el-switch
+              v-if="manageable(row) && row.id !== auth.user?.id"
+              :model-value="row.status === 'active'"
               :loading="busyUserId === row.id"
               :disabled="Boolean(busyUserId)"
-              @click="$emit('unlock', row)"
+              :aria-label="`${row.username} 的账号启用`"
+              @change="$emit('toggle', row)"
+            />
+            <el-tag
+              v-else
+              :type="row.status === 'active' ? 'success' : 'warning'"
+              size="small"
             >
-              解锁
-            </el-button>
-          </template>
-          <span
-            v-else-if="manageable(row) && row.id !== auth.user?.id"
-            class="status-text"
-          >{{ row.status === 'active' ? '启用' : '停用' }}</span>
-        </span>
+              {{ row.status === 'active' ? '启用' : '停用' }}
+            </el-tag>
+            <span
+              v-if="manageable(row) && row.id !== auth.user?.id && !row.locked_seconds"
+              class="status-text"
+            >{{ row.status === 'active' ? '启用' : '停用' }}</span>
+          </span>
+          <!-- 密码连续输错被锁或须改密时紧凑标注，不额外撑开列表列宽。 -->
+          <div
+            v-if="row.locked_seconds || row.must_change_password"
+            class="status-flags"
+          >
+            <template v-if="row.locked_seconds">
+              <span
+                class="status-locked"
+                :title="lockText(row.locked_seconds)"
+              >已锁定</span>
+              <el-button
+                v-if="manageable(row)"
+                link
+                type="primary"
+                size="small"
+                :loading="busyUserId === row.id"
+                :disabled="Boolean(busyUserId)"
+                @click="$emit('unlock', row)"
+              >
+                解锁
+              </el-button>
+            </template>
+            <el-tooltip
+              v-if="row.must_change_password"
+              content="下次登录须先修改密码"
+              placement="top"
+            >
+              <el-tag
+                size="small"
+                type="warning"
+                effect="plain"
+              >
+                须改密
+              </el-tag>
+            </el-tooltip>
+          </div>
+        </div>
       </template>
     </el-table-column>
     <el-table-column
       label="最近登录"
-      width="150"
+      width="108"
     >
       <template #default="{ row }">
         <span
           v-if="row.last_login_at"
+          class="time-cell"
           :title="`${formatTime(row.last_login_at)}${row.last_login_ip ? `，IP ${row.last_login_ip}` : ''}`"
         >{{ sinceText(row.last_login_at) }}</span>
         <span
           v-else
-          class="muted"
+          class="muted time-cell"
         >从未登录</span>
       </template>
     </el-table-column>
     <el-table-column
-      label="电话"
-      width="130"
+      label="联系方式"
+      min-width="168"
     >
       <template #default="{ row }">
-        <span v-if="row.phone">{{ row.phone }}</span>
-        <span
-          v-else
-          class="muted"
-        >—</span>
-      </template>
-    </el-table-column>
-    <el-table-column
-      label="邮箱"
-      min-width="200"
-      show-overflow-tooltip
-    >
-      <template #default="{ row }">
-        <span v-if="row.email">{{ row.email }}</span>
-        <span
-          v-else
-          class="muted"
-        >—</span>
-      </template>
-    </el-table-column>
-    <el-table-column
-      label="须改密"
-      width="90"
-    >
-      <template #default="{ row }">
-        <el-tag
-          v-if="row.must_change_password"
-          size="small"
-          type="warning"
-          effect="plain"
+        <div
+          v-if="row.phone || row.email"
+          class="contact-cell"
         >
-          是
-        </el-tag>
+          <span
+            v-if="row.phone"
+            class="contact-cell__item"
+            :title="row.phone"
+          >{{ row.phone }}</span>
+          <span
+            v-if="row.email"
+            class="contact-cell__item contact-cell__email"
+            :title="row.email"
+          >{{ row.email }}</span>
+        </div>
         <span
           v-else
           class="muted"
-        >否</span>
+        >—</span>
       </template>
     </el-table-column>
     <el-table-column
       label="创建时间"
-      width="190"
+      width="148"
     >
       <template #default="{ row }">
-        <span class="muted">{{ formatTime(row.created_at) }}</span>
+        <span class="muted time-cell">{{ formatTime(row.created_at) }}</span>
       </template>
     </el-table-column>
     <el-table-column
       label="操作"
-      width="156"
+      width="132"
       class-name="table-action"
     >
       <template #default="{ row }">
@@ -322,9 +326,15 @@ function roleNames(user: ManagedUser): string {
   color: var(--zt-ink-500);
 }
 
+.status-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .status-line { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-.status-line .el-button { margin-left: 0; }
-.status-locked { color: var(--zt-warning-text); font-size: 13px; }
+.status-flags { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.status-flags .el-button { margin-left: 0; padding: 0; height: auto; }
+.status-locked { color: var(--zt-warning-text); font-size: 12px; font-weight: 500; }
+.time-cell { font-size: 13px; white-space: nowrap; }
+.contact-cell { display: flex; flex-direction: column; gap: 1px; min-width: 0; line-height: 1.4; }
+.contact-cell__item { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.contact-cell__item + .contact-cell__email { color: var(--zt-ink-500); font-size: 12px; }
 .user-cell { display: inline-flex; align-items: center; gap: 10px; max-width: 100%; vertical-align: middle; }
 .user-link { overflow: hidden; min-width: 0; font-weight: 500; }
 .user-link :deep(span) { overflow: hidden; text-overflow: ellipsis; }

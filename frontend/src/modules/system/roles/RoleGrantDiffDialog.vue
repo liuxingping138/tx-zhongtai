@@ -55,7 +55,7 @@ function onConfirm() {
         :loading="saving"
         @click="onConfirm"
       >
-        去保存
+        确认并保存
       </el-button>
     </template>
   </el-dialog>

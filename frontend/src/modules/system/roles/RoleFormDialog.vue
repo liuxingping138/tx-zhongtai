@@ -40,6 +40,7 @@ watch(visible, (open) => {
     form.name = ''
     form.description = ''
   }
+  guard.markSaved()
   void validation.validate({})
 }, { flush: 'sync' })
 

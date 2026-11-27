@@ -575,6 +575,10 @@ body {
   background: var(--el-table-header-bg-color);
 }
 
+.el-table.data-table.el-table--striped .el-table__body tr.el-table__row--striped > td.table-action {
+  background: var(--el-fill-color-lighter);
+}
+
 .el-table.data-table tr:hover > td.table-action,
 .el-table.data-table tr.hover-row > td.table-action {
   background: var(--zt-row-hover);

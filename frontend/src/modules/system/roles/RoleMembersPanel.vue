@@ -169,16 +169,18 @@ defineExpose({ reload: load })
       <el-table-column
         prop="display_name"
         label="显示名"
-        min-width="160"
+        min-width="116"
+        show-overflow-tooltip
       />
       <el-table-column
         prop="username"
         label="用户名"
-        min-width="160"
+        min-width="220"
+        show-overflow-tooltip
       />
       <el-table-column
         label="账号状态"
-        width="110"
+        width="96"
       >
         <template #default="{ row }">
           <el-tag
@@ -192,7 +194,7 @@ defineExpose({ reload: load })
       <el-table-column
         v-if="canGrant"
         label="操作"
-        width="100"
+        width="88"
       >
         <template #default="{ row }">
           <button

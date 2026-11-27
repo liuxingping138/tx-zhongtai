@@ -118,14 +118,25 @@
 
 .role-item__name {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 3px 5px;
+  gap: 5px;
   min-width: 0;
   font-size: 13.5px;
   line-height: 1.35;
   font-weight: 500;
   color: var(--zt-ink-900);
+}
+
+.role-item__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.role-item__name :deep(.el-tag) {
+  flex-shrink: 0;
 }
 
 .role-item.is-off .role-item__name {
