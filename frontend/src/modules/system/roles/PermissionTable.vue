@@ -79,7 +79,10 @@ const openedCount = (group: ModuleGroup) => groupOpenedCount(group, props.modelV
 const columnState = (group: ModuleGroup, column: Column) =>
   groupColumnState(group, column, props.modelValue, props.roleCode)
 const isGroupCollapsed = (code: string) => Boolean(collapsed[code]) && !keyword.value.trim()
-const isAllScopeWarn = (code: string) => props.scopeBadges?.[code] === '数据范围：全部' && grantLevel(props.original, code) === 'NONE'
+const isScopeWarn = (code: string) => {
+  const badge = props.scopeBadges?.[code]
+  return Boolean(badge && (badge === '待选数据范围' || badge.includes(' 0/')))
+}
 
 function capabilityHint(module: ModuleEntry): string {
   return locked(module) ? lockReason(module.code, props.roleCode) : '能给人分配角色，也能修改角色权限'
@@ -113,7 +116,7 @@ async function jumpToGroup(code: string) {
   }
   collapsed[code] = false
   await nextTick()
-  document.getElementById(`perm-group-${code}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  document.getElementById(`perm-group-${code}`)?.scrollIntoView({ behavior: 'auto', block: 'start' })
 }
 
 function scrollBackTop() {
@@ -291,8 +294,8 @@ onBeforeUnmount(() => {
                 v-if="scopeBadges?.[module.code]"
                 type="button"
                 class="perm-scope-chip"
-                :class="{ 'is-all-warn': isAllScopeWarn(module.code) }"
-                :title="isAllScopeWarn(module.code) ? '新开通时默认放行全部文件类型与行业，点击前往「智库数据权限」按需缩小范围' : '点击前往「智库数据权限」精细配置范围'"
+                :class="{ 'is-all-warn': isScopeWarn(module.code) }"
+                :title="isScopeWarn(module.code) ? '尚未选定文件类型或行业范围，点击前往「智库数据权限」正向勾选' : '点击前往「智库数据权限」调整数据范围'"
                 @click="emit('openScope', module.code)"
               >
                 <span>{{ scopeBadges[module.code] }}</span>

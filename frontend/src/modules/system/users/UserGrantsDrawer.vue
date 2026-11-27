@@ -12,6 +12,7 @@ import { grantDiff, grantsFromTree, type GrantLevel } from '@/permissions/levels
 import {
   buildScopeBadges,
   collapseScopeDiffs,
+  findIncompleteThinktankLibraries,
   isThinktankScopeCode,
   splitGrantDiffs,
   syncThinktankScopesWithMenu,
@@ -109,9 +110,33 @@ async function load(): Promise<void> {
 
 watch(visible, open => { if (open) void load() })
 
+async function guardIncompleteScopes(): Promise<boolean> {
+  const incomplete = findIncompleteThinktankLibraries(thinktankLibs.value, selected.value)
+  if (!incomplete.length) return true
+  const first = incomplete[0]!
+  const namesText = incomplete.map(lib => `「${lib.name}」`).join('、')
+  try {
+    await ElMessageBox.confirm(
+      `已开通${namesText}，但文件类型或行业类型尚未勾选任何项。保存后用户进入该库将看不到任何文件，建议先配置数据范围。`,
+      '尚未选定智库数据范围',
+      {
+        type: 'warning',
+        confirmButtonText: '去配置范围',
+        cancelButtonText: '仍然保存',
+        distinguishCancelAndClose: true,
+      },
+    )
+    onOpenScope(first.code)
+    return false
+  } catch (action) {
+    return action === 'cancel'
+  }
+}
+
 async function save(): Promise<void> {
   const user = props.user
   if (!user || saving.value || !changes.value.length) return
+  if (!await guardIncompleteScopes()) return
   const summary = changes.value
     .map(
       item =>
@@ -259,8 +284,9 @@ async function save(): Promise<void> {
 </template>
 
 <style scoped>
-.grants__hint { margin: 0 0 16px; color: var(--zt-ink-500); font-size: 13px; line-height: 1.7; }
+.grants__hint { margin: 0 0 10px; color: var(--zt-ink-500); font-size: 12.5px; line-height: 1.55; }
 .grants__table { --perm-sticky-top: -20px; min-height: 240px; }
+.grants__tabs :deep(.el-tabs__header) { margin-bottom: 10px; }
 .grants__tabs :deep(.el-tabs__content) { overflow: visible; }
 .grants__tab-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 17px; margin-left: 6px; padding: 0 5px; border-radius: 999px; background: var(--zt-warning-soft); border: 1px solid var(--zt-warning-border); color: var(--zt-warning-text); font-size: 11px; font-weight: 600; line-height: 1; }
 .grants__count { margin-right: auto; color: var(--zt-ink-500); font-size: 13px; }

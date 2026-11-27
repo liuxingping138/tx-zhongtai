@@ -8,11 +8,13 @@ import {
   capDimensionToMenuLevel,
   collapseScopeDiffs,
   countDimensionChanges,
+  findIncompleteThinktankLibraries,
   isDimensionAllMode,
   isThinktankScopeCode,
   quickOpenThinktankLibrary,
   scopeBadgeText,
   setDimensionLevel,
+  setLibraryDimensionsLevel,
   splitGrantDiffs,
   syncThinktankScopesWithMenu,
   thinktankLibraries,
@@ -170,15 +172,24 @@ describe('thinktankScopes', () => {
       'thinktank.industry_type.sme': 'NONE' as const,
     }
 
-    // 开通菜单权限 FULL -> 默认将全空维度同步为 FULL（全部范围模式）
-    const opened = syncThinktankScopesWithMenu(libs, initial, {
+    // 首次开通菜单权限 FULL -> 保持数据范围为空（正向勾选、最小权限），行内提示「待选数据范围」
+    const openedEmpty = syncThinktankScopesWithMenu(libs, initial, {
       ...initial,
       'thinktank.knowledge': 'FULL',
     })
+    expect(openedEmpty['thinktank.file_type.product']).toBe('NONE')
+    expect(openedEmpty['thinktank.file_type.undefined']).toBe('NONE')
+    expect(openedEmpty['thinktank.industry_type.sme']).toBe('NONE')
+    expect(scopeBadgeText(libs[0]!, openedEmpty)).toBe('待选数据范围')
+    expect(findIncompleteThinktankLibraries(libs, openedEmpty)).toHaveLength(1)
+
+    // 一键全部放行 -> 全维度设为 FULL（全部范围模式）
+    const opened = setLibraryDimensionsLevel(libs[0]!, openedEmpty, 'FULL')
     expect(opened['thinktank.file_type.product']).toBe('FULL')
     expect(opened['thinktank.file_type.undefined']).toBe('FULL')
     expect(opened['thinktank.industry_type.sme']).toBe('FULL')
     expect(isDimensionAllMode(fileTypeDim, opened, 'FULL')).toBe(true)
+    expect(findIncompleteThinktankLibraries(libs, opened)).toHaveLength(0)
 
     // 自定义修改某一项后不再是 ALL 模式，当菜单降档为 READ 时将高于 READ 的项收敛为 READ
     const custom = { ...opened, 'thinktank.file_type.undefined': 'READ' as const }
@@ -191,6 +202,14 @@ describe('thinktankScopes', () => {
     expect(lowered['thinktank.file_type.product']).toBe('READ')
     expect(lowered['thinktank.file_type.undefined']).toBe('READ')
     expect(lowered['thinktank.industry_type.sme']).toBe('READ')
+
+    // 原为 ALL 模式的子库随菜单升/降档自动保持同步
+    const upgraded = syncThinktankScopesWithMenu(libs, lowered, {
+      ...lowered,
+      'thinktank.knowledge': 'EXPORT',
+    })
+    expect(upgraded['thinktank.file_type.product']).toBe('EXPORT')
+    expect(upgraded['thinktank.industry_type.sme']).toBe('EXPORT')
 
     // 一键切回 ALL 模式
     const restoredAll = applyDimensionAllMode(fileTypeDim, custom, 'FULL')
@@ -234,29 +253,16 @@ describe('thinktankScopes', () => {
     expect(split.menuDiffs).toHaveLength(1)
     expect(split.scopeDiffs).toHaveLength(2)
 
-    // 支持「从空开始，仅选指定项」和可选下载原文件的一键开通，且关闭子库时自动清理下载权
+    // 数据权限页签一键开通默认从空开始，且关闭子库时自动清理下载权
     expect(libs[0]!.downloadCode).toBe('thinktank.knowledge.download')
-    const openEmpty = quickOpenThinktankLibrary(libs[0]!, initial, {
-      level: 'EXPORT',
-      mode: 'EMPTY',
-      withDownload: false,
-    })
-    expect(openEmpty['thinktank.knowledge']).toBe('EXPORT')
-    expect(openEmpty['thinktank.knowledge.download']).toBe('NONE')
-    expect(openEmpty['thinktank.file_type.product']).toBe('NONE')
-    expect(openEmpty['thinktank.industry_type.sme']).toBe('NONE')
+    const quickExport = quickOpenThinktankLibrary(libs[0]!, initial, 'EXPORT')
+    expect(quickExport['thinktank.knowledge']).toBe('EXPORT')
+    expect(quickExport['thinktank.file_type.product']).toBe('NONE')
+    expect(quickExport['thinktank.industry_type.sme']).toBe('NONE')
 
-    const openWithDl = quickOpenThinktankLibrary(libs[0]!, initial, {
-      level: 'READ',
-      mode: 'ALL',
-      withDownload: true,
-    })
-    expect(openWithDl['thinktank.knowledge']).toBe('READ')
-    expect(openWithDl['thinktank.knowledge.download']).toBe('READ')
-    expect(openWithDl['thinktank.file_type.product']).toBe('READ')
-
-    const closedWithDl = syncThinktankScopesWithMenu(libs, openWithDl, {
-      ...openWithDl,
+    const withDl = { ...opened, 'thinktank.knowledge.download': 'READ' as const }
+    const closedWithDl = syncThinktankScopesWithMenu(libs, withDl, {
+      ...withDl,
       'thinktank.knowledge': 'NONE',
     })
     expect(closedWithDl['thinktank.knowledge.download']).toBe('NONE')

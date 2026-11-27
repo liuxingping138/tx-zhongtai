@@ -124,13 +124,39 @@ function shortDimensionLabel(name: string): string {
 export function scopeBadgeText(lib: ThinktankLibraryScope, grants: Grants): string {
   const menuLevel = levelOf(grants, lib.code)
   if (menuLevel === 'NONE' || !lib.dimensions.length) return ''
+  const counts = lib.dimensions.map(dim => ({
+    dim,
+    opened: dim.modules.filter(item => levelOf(grants, item.code) !== 'NONE').length,
+  }))
+  if (counts.every(c => c.opened === 0)) return '待选数据范围'
   const allFollow = lib.dimensions.every(dim => isDimensionAllMode(dim, grants, menuLevel))
   if (allFollow) return '数据范围：全部'
-  const parts = lib.dimensions.map(dim => {
-    const opened = dim.modules.filter(item => levelOf(grants, item.code) !== 'NONE').length
-    return `${shortDimensionLabel(dim.name)} ${opened}/${dim.modules.length}`
-  })
+  const parts = counts.map(({ dim, opened }) => `${shortDimensionLabel(dim.name)} ${opened}/${dim.modules.length}`)
   return `范围：${parts.join(' · ')}`
+}
+
+/** 找出已开通菜单权限、但至少有一个数据维度尚未勾选任何项的子库（用于保存前防忘配提醒）。 */
+export function findIncompleteThinktankLibraries(
+  libraries: ThinktankLibraryScope[],
+  grants: Grants,
+): ThinktankLibraryScope[] {
+  return libraries.filter(lib => {
+    if (levelOf(grants, lib.code) === 'NONE' || !lib.dimensions.length) return false
+    return lib.dimensions.some(dim => dim.modules.every(item => levelOf(grants, item.code) === 'NONE'))
+  })
+}
+
+/** 将某子库全部数据维度一键设为指定档位（用于「全部放行」或「清空重选」）。 */
+export function setLibraryDimensionsLevel(
+  lib: ThinktankLibraryScope,
+  grants: Grants,
+  level: GrantLevel,
+): Grants {
+  const next = { ...grants }
+  for (const dim of lib.dimensions) {
+    for (const item of dim.modules) next[item.code] = level
+  }
+  return next
 }
 
 /** 批量生成智库子库编码 -> 范围摘要文案映射。 */
@@ -236,12 +262,19 @@ function syncDimensionOnMenuChange(
     for (const item of dim.modules) out[item.code] = 'NONE'
     return
   }
-  const wasAllNone = dim.modules.every(item => levelOf(prev, item.code) === 'NONE')
-  const wasFollowingMenu = isDimensionAllMode(dim, prev, prevMenu)
-  if (wasAllNone || wasFollowingMenu) {
+  // 首次从无权限开通子库时保持数据范围为空（正向勾选、最小权限），不再后台强行全选 28 项造成「反选」困扰。
+  if (prevMenu === 'NONE') {
+    for (const item of dim.modules) {
+      if (rank(levelOf(out, item.code)) > rank(nextMenu)) out[item.code] = nextMenu
+    }
+    return
+  }
+  // 原本已经处于「全部范围」模式的子库，随菜单升/降档自动保持同步。
+  if (isDimensionAllMode(dim, prev, prevMenu)) {
     for (const item of dim.modules) out[item.code] = nextMenu
     return
   }
+  // 处于「指定范围」模式且菜单降档时，将高于新菜单档位的项封顶收敛。
   for (const item of dim.modules) {
     if (rank(levelOf(out, item.code)) > rank(nextMenu)) out[item.code] = nextMenu
   }
@@ -249,9 +282,9 @@ function syncDimensionOnMenuChange(
 
 /**
  * 当管理员在「菜单权限」修改了智库某个子库（如资料库）的档位时，联动同步其数据维度：
- * 1. 子库关闭（NONE）-> 清空该子库下全部数据范围；
- * 2. 子库开通或调档 -> 若某维度原本全空或处于「全部跟随」状态，自动同步为新档位；
- *    若某维度处于「指定范围」且新菜单档位降低，则将超出菜单档位的项收敛到新菜单档位。
+ * 1. 子库关闭（NONE）-> 清空该子库下全部数据范围与独立下载权限；
+ * 2. 子库首次开通（NONE -> 其他）-> 保持数据范围为空，引导正向勾选或一键全部放行；
+ * 3. 已开通子库调档 -> 原为「全部范围」时自动同步至新档位；原为「指定范围」且降档时收敛超出项。
  */
 export function syncThinktankScopesWithMenu(
   libraries: ThinktankLibraryScope[],
@@ -272,25 +305,13 @@ export function syncThinktankScopesWithMenu(
   return out ?? next
 }
 
-export interface QuickOpenOptions {
-  level: Exclude<GrantLevel, 'NONE'>
-  mode: 'ALL' | 'EMPTY'
-  withDownload?: boolean
-}
-
-/** 智库数据权限页签一键开通子库：支持「默认放行全部范围」或「从空开始，仅选指定项」，并可选择是否同时开通下载原文件。 */
+/** 智库数据权限页签一键开通子库：默认保持数据范围为空（正向勾选），随后可按需勾选或点「全部放行」。 */
 export function quickOpenThinktankLibrary(
   lib: ThinktankLibraryScope,
   grants: Grants,
-  options: QuickOpenOptions,
+  level: Exclude<GrantLevel, 'NONE'>,
 ): Grants {
-  const next: Grants = { ...grants, [lib.code]: options.level }
-  if (lib.downloadCode) {
-    next[lib.downloadCode] = options.withDownload ? 'READ' : 'NONE'
-  }
-  const scopeLevel: GrantLevel = options.mode === 'ALL' ? options.level : 'NONE'
-  for (const dim of lib.dimensions) {
-    for (const item of dim.modules) next[item.code] = scopeLevel
-  }
+  const next = setLibraryDimensionsLevel(lib, grants, 'NONE')
+  next[lib.code] = level
   return next
 }

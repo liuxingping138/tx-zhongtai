@@ -61,6 +61,7 @@ const {
   readonly: () => readonly.value,
   justCreated: () => justCreated.value,
   saved: () => emit('changed'),
+  openScope: code => onOpenScope(code),
 })
 
 const scopeBadges = computed(() => buildScopeBadges(thinktankLibs.value, selected.value))

@@ -14,6 +14,7 @@ import {
 import { grantDiff, grantsFromTree, type GrantLevel } from '@/permissions/levels'
 import {
   collapseScopeDiffs,
+  findIncompleteThinktankLibraries,
   isThinktankScopeCode,
   syncThinktankScopesWithMenu,
   thinktankLibraries,
@@ -32,6 +33,8 @@ interface RoleGrantsOptions {
   justCreated: () => string
   /** 保存成功后通知左侧角色列表刷新。 */
   saved: () => void
+  /** 资料库等智库子库数据范围为空时，引导管理员跳转至数据权限页签。 */
+  openScope?: (libCode: string) => void
 }
 
 /** 已发布的资源节点在授权表里的当前档位；没有记录按无权限。 */
@@ -146,9 +149,33 @@ export function useRoleGrants(options: RoleGrantsOptions) {
     selected.value = { ...original.value }
   }
 
+  async function guardIncompleteScopes(): Promise<boolean> {
+    const incomplete = findIncompleteThinktankLibraries(thinktankLibs.value, selected.value)
+    if (!incomplete.length) return true
+    const first = incomplete[0]!
+    const namesText = incomplete.map(lib => `「${lib.name}」`).join('、')
+    try {
+      await ElMessageBox.confirm(
+        `已开通${namesText}，但文件类型或行业类型尚未勾选任何项。保存后用户进入该库将看不到任何文件，建议先配置数据范围。`,
+        '尚未选定智库数据范围',
+        {
+          type: 'warning',
+          confirmButtonText: '去配置范围',
+          cancelButtonText: '仍然保存',
+          distinguishCancelAndClose: true,
+        },
+      )
+      options.openScope?.(first.code)
+      return false
+    } catch (action) {
+      return action === 'cancel'
+    }
+  }
+
   async function save(): Promise<void> {
     const current = role.value
     if (saving.value || !current || !changes.value.length || options.readonly()) return
+    if (!await guardIncompleteScopes()) return
     const summary = changes.value
       .map(
         item =>
