@@ -36,7 +36,7 @@ defineEmits<{
           :model-value="keyword"
           clearable
           size="default"
-          placeholder="搜索菜单或分组，例如省市区"
+          placeholder="搜索菜单或分组"
           aria-label="搜索菜单"
           class="perm-search"
           @update:model-value="$emit('update:keyword', $event)"
