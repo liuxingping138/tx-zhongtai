@@ -1,4 +1,4 @@
-"""thinktank-service 入口：智库（知识库，预留报告库、方案库等子库扩展）。"""
+"""thinktank-service 入口：智库（资料库、报告库、方案库、我的收藏）。"""
 
 from __future__ import annotations
 
@@ -21,7 +21,9 @@ from app.common.security import get_authz_client
 from app.core.config import get_settings
 from app.core.database import check_database_ready, engine
 from app.core.storage import close_storage_client
+from app.favorites.api.routes import router as favorites_router
 from app.knowledge.api.routes import router as knowledge_router
+from app.library.api.routes import proposals_router, reports_router
 
 settings = get_settings()
 setup_logging(settings.service_name, level=settings.log_level, json_output=settings.environment != "development")
@@ -66,6 +68,10 @@ def create_app() -> FastAPI:
         path_limits={
             "/api/v1/thinktank/knowledge/upload": upload_limit,
             "/api/v1/thinktank/knowledge/upload-tags": import_limit,
+            "/api/v1/thinktank/reports/upload": upload_limit,
+            "/api/v1/thinktank/reports/upload-tags": import_limit,
+            "/api/v1/thinktank/proposals/upload": upload_limit,
+            "/api/v1/thinktank/proposals/upload-tags": import_limit,
         },
     )
     app.add_middleware(RequestIdMiddleware)
@@ -80,6 +86,9 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
     app.include_router(build_health_router({"database": check_database_ready}))
     app.include_router(knowledge_router)
+    app.include_router(reports_router)
+    app.include_router(proposals_router)
+    app.include_router(favorites_router)
     return app
 
 

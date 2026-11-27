@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from pathlib import PureWindowsPath
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from platform_common.actors import Actor
@@ -14,9 +14,11 @@ from platform_common.logging_setup import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.audit_emit import enqueue_event
+from app.common.codebook_client import get_thinktank_dicts
+from app.common.upload_utils import format_size, sanitize_filename
 from app.core import storage
 from app.core.config import get_settings
-from app.knowledge.application.knowledge import audit_denial, format_size, require_file, to_out
+from app.knowledge.application.knowledge import audit_denial, require_file, to_out
 from app.knowledge.application.knowledge_preview import drop_preview_cache
 from app.knowledge.domain.fields import UNDEFINED_TAG_COLUMNS
 from app.knowledge.domain.models import KnowledgeFile
@@ -69,41 +71,40 @@ async def _assert_edit(
         raise
 
 
-def validate_metadata_values(data: dict[str, str]) -> list[str]:
-    """返回校验错误列表，供编辑接口和批量上传标签共用。"""
+def validate_metadata_values(
+    data: dict[str, str],
+    *,
+    dicts: Mapping[str, Sequence[str]] | None = None,
+) -> list[str]:
+    """返回校验错误列表，供编辑接口和批量上传标签共用（兼容动态码表新增项与历史内置枚举）。"""
+
+    allowed_file_types = set(FILE_TYPES) | set((dicts or {}).get("file_types", ()))
+    allowed_industries = set(INDUSTRY_TYPES) | set((dicts or {}).get("industries", ()))
+    allowed_products = set(PRODUCT_TYPES) | set((dicts or {}).get("product_types", ()))
+    allowed_markets = set(MARKET_CATEGORIES) | set((dicts or {}).get("market_categories", ()))
 
     reasons = overlong_reasons(data, UNDEFINED_TAG_COLUMNS, FILE_LENGTHS)
     if "file_type" in data:
         ft = normalize_file_type_input(data["file_type"])
-        if ft and ft not in FILE_TYPES:
+        if ft and ft not in allowed_file_types:
             reasons.append(f"不支持的文件类型：{ft}")
     if data.get("operator_type") and data["operator_type"] not in OPERATOR_TYPES:
         reasons.append(f"不支持的运营商类型：{data['operator_type']}")
-    if data.get("market_category") and data["market_category"] not in MARKET_CATEGORIES:
+    if data.get("market_category") and data["market_category"] not in allowed_markets:
         reasons.append(f"不支持的市场类别：{data['market_category']}")
     if data.get("industry_type"):
-        bad = [part for part in split_multi_tags(data["industry_type"]) if part not in INDUSTRY_TYPES]
+        bad = [part for part in split_multi_tags(data["industry_type"]) if part not in allowed_industries]
         if bad:
             reasons.append(f"不支持的行业类型：{'、'.join(bad)}")
     if data.get("product_type"):
-        bad = [part for part in split_multi_tags(data["product_type"]) if part not in PRODUCT_TYPES]
+        bad = [part for part in split_multi_tags(data["product_type"]) if part not in allowed_products]
         if bad:
             reasons.append(f"不支持的产品类型：{'、'.join(bad)}")
     return reasons
 
 
-def sanitize_filename(raw: str) -> str:
-    """剥离上传或改名时夹带的目录路径（含 Windows 盘符与反斜杠），只留纯文件名。"""
-
-    stripped = raw.strip()
-    if not stripped or stripped.endswith(("/", "\\")):
-        return ""
-    name = PureWindowsPath(stripped.replace("/", "\\")).name.strip()
-    return "" if name in {"", ".", ".."} else name
-
-
-def _raise_if_invalid(data: dict[str, str]) -> None:
-    reasons = validate_metadata_values(data)
+def _raise_if_invalid(data: dict[str, str], *, dicts: Mapping[str, Sequence[str]] | None = None) -> None:
+    reasons = validate_metadata_values(data, dicts=dicts)
     if reasons:
         raise ApiError("、".join(reasons), code=ErrorCode.VALIDATION_ERROR, http_status=422)
 
@@ -125,7 +126,8 @@ async def update_metadata(
         cleaned["file_name"] = sanitize_filename(cleaned["file_name"])
         if not cleaned["file_name"]:
             raise ApiError("资料名称不能为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
-    _raise_if_invalid(cleaned)
+    dicts = await get_thinktank_dicts(get_settings())
+    _raise_if_invalid(cleaned, dicts=dicts)
     next_ft = cleaned.get("file_type", row.file_type)
     next_ind = cleaned.get("industry_type", row.industry_type)
     await _assert_edit(session, actor, access, row, action="update_target_scope", target_scope=(next_ft, next_ind))
@@ -184,7 +186,8 @@ async def upload_knowledge_file(
         )
     cleaned = {k: str(v or "").strip() for k, v in metadata.items() if k in EDITABLE_FIELDS}
     cleaned = normalize_tag_values({**cleaned, "file_type": cleaned.get("file_type", "")})
-    _raise_if_invalid({**cleaned, "file_name": clean_name})
+    dicts = await get_thinktank_dicts(get_settings())
+    _raise_if_invalid({**cleaned, "file_name": clean_name}, dicts=dicts)
     file_type = cleaned["file_type"]
     industry_type = cleaned.get("industry_type", "")
     try:

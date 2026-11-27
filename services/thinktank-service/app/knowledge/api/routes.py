@@ -143,7 +143,7 @@ async def export_items(
     return Response(
         content=payload,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": content_disposition("attachment", "知识库资料.xlsx")},
+        headers={"Content-Disposition": content_disposition("attachment", "资料库.xlsx")},
     )
 
 
@@ -158,7 +158,7 @@ async def export_undefined_items(
     return Response(
         content=payload,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": content_disposition("attachment", "未定义标签数据.xlsx")},
+        headers={"Content-Disposition": content_disposition("attachment", "资料库未定义数据.xlsx")},
     )
 
 
@@ -183,7 +183,7 @@ async def upload_file(
     access: KnowledgeAccess = Depends(get_knowledge_access),
     settings: Settings = Depends(get_settings),
 ) -> JSONResponse:
-    content, filename = await read_named_upload(request, settings.upload_max_bytes, missing="请上传知识文件")
+    content, filename = await read_named_upload(request, settings.upload_max_bytes, missing="请上传资料文件")
     metadata = {
         "file_type": file_type,
         "operator_type": operator_type,
@@ -216,7 +216,7 @@ async def upload_tags(
 ) -> Response:
     content = await read_import_upload(request, settings.import_max_bytes)
     result = await export_import.upload_knowledge_tags(session, actor=actor, access=access, content=content)
-    return import_result_response(result, "知识标签-跳过明细.xlsx")
+    return import_result_response(result, "资料库标签-跳过明细.xlsx")
 
 
 @router.get("/{file_id}")

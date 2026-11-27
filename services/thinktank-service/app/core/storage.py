@@ -120,18 +120,18 @@ def legacy_object_key(filename: str, size_bytes: int, ext_lower: str) -> str:
     return f"knowledgeBase/{file_id}.{ext_lower}"
 
 
-def new_object_key(file_id: uuid.UUID, ext_lower: str) -> str:
+def new_object_key(file_id: uuid.UUID, ext_lower: str, *, prefix: str = "knowledgeBase") -> str:
     """新上传文件使用记录 UUID 作为对象键前缀，避免同名同大小文件键冲突与覆盖原系统文件。"""
 
-    return f"knowledgeBase/{file_id.hex}.{ext_lower}"
+    return f"{prefix}/{file_id.hex}.{ext_lower}"
 
 
-def is_managed_object_key(rel_path: str, file_id: uuid.UUID) -> bool:
+def is_managed_object_key(rel_path: str, file_id: uuid.UUID, *, prefix: str = "knowledgeBase") -> bool:
     """仅当对象键由本系统按记录 UUID 生成时才允许物理删除，保护迁移来的原服务器 MinIO 文件。"""
 
     if not rel_path:
         return False
-    return rel_path.startswith(f"knowledgeBase/{file_id.hex}.") or rel_path.startswith(f"knowledgeBase/{file_id}.")
+    return rel_path.startswith(f"{prefix}/{file_id.hex}.") or rel_path.startswith(f"{prefix}/{file_id}.")
 
 
 def _resolve_safe_path(base_dir: str, rel_path: str) -> Path:

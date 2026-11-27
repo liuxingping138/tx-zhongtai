@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from platform_common.actors import Actor
@@ -13,8 +14,9 @@ from platform_common.filters import Filters
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.audit_emit import enqueue_event
+from app.common.codebook_client import get_thinktank_dicts
+from app.common.upload_utils import format_size
 from app.core.config import get_settings
-from app.knowledge.application.knowledge import format_size
 from app.knowledge.application.knowledge_write import validate_metadata_values
 from app.knowledge.domain.fields import KNOWLEDGE_EXPORT_COLUMNS, TAG_WRITABLE_FIELDS, UNDEFINED_TAG_COLUMNS
 from app.knowledge.domain.models import KnowledgeFile
@@ -80,7 +82,7 @@ async def export_filtered_excel(
     payload = await build_workbook_async(
         KNOWLEDGE_EXPORT_COLUMNS,
         [_export_row(r) for r in rows],
-        sheet_name="知识库资料",
+        sheet_name="资料库",
         include_audit=False,
     )
     await enqueue_event(
@@ -173,6 +175,7 @@ async def _process_tag_row(
     actor: Actor,
     access: KnowledgeAccess,
     now: Any,
+    dicts: Mapping[str, Sequence[str]] | None = None,
 ) -> tuple[str, str | None]:
     raw_id = row_dict.get("id", "").strip()
     file_name = row_dict.get("file_name", "").strip()
@@ -183,7 +186,7 @@ async def _process_tag_row(
         return "skipped", _NO_ACCESS_OR_MISSING
 
     cleaned = normalize_tag_values({f: row_dict.get(f, "").strip() for f in TAG_WRITABLE_FIELDS if f in row_dict})
-    reasons = validate_metadata_values(cleaned)
+    reasons = validate_metadata_values(cleaned, dicts=dicts)
     if reasons:
         return "skipped", "；".join(reasons)
 
@@ -230,10 +233,11 @@ async def upload_knowledge_tags(
     access: KnowledgeAccess,
     content: bytes,
 ) -> dict[str, Any]:
-    rows = await parse_sheet_async(content, UNDEFINED_TAG_COLUMNS, subject="知识标签")
+    rows = await parse_sheet_async(content, UNDEFINED_TAG_COLUMNS, subject="资料标签")
     if not rows:
         raise ApiError("上传的标签表为空", code=ErrorCode.VALIDATION_ERROR, http_status=422)
 
+    dicts = await get_thinktank_dicts(get_settings())
     now = utcnow()
     updated = 0
     skipped_rows: list[dict[str, Any]] = []
@@ -241,7 +245,9 @@ async def upload_knowledge_tags(
 
     # 按稳定主键顺序加行锁，降低并发批量上传标签时交叉锁顺序导致的死锁风险。
     for row_dict in sorted(rows, key=_row_lock_sort_key):
-        status, reason = await _process_tag_row(session, row_dict=row_dict, actor=actor, access=access, now=now)
+        status, reason = await _process_tag_row(
+            session, row_dict=row_dict, actor=actor, access=access, now=now, dicts=dicts
+        )
         if status == "updated":
             updated += 1
             updated_names.append(row_dict.get("file_name") or row_dict.get("id") or "")

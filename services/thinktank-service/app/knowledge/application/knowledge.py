@@ -13,7 +13,8 @@ from platform_common.filters import Filters
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.audit_emit import enqueue_event
-from app.common.codebook_client import get_provinces
+from app.common.codebook_client import get_thinktank_dicts
+from app.common.upload_utils import format_size
 from app.core import office_preview, storage
 from app.core.config import get_settings
 from app.knowledge.application.knowledge_preview import (
@@ -29,7 +30,7 @@ from app.knowledge.application.knowledge_preview import (
     single_chunk_stream,
 )
 from app.knowledge.domain.models import KnowledgeFile, KnowledgeOpLog
-from app.knowledge.domain.scopes import PROVINCES, KnowledgeAccess
+from app.knowledge.domain.scopes import KnowledgeAccess
 from app.knowledge.repositories import knowledge as repo
 
 
@@ -38,10 +39,6 @@ class FileContentResult:
     content: bytes
     filename: str
     media_type: str
-
-
-def format_size(size_bytes: int) -> str:
-    return f"{size_bytes / 1024:.2f} kb"
 
 
 def to_out(row: KnowledgeFile, *, is_favorited: bool, access: KnowledgeAccess) -> dict[str, Any]:
@@ -90,7 +87,7 @@ def _log_out(row: KnowledgeOpLog) -> dict[str, Any]:
 async def require_file(session: AsyncSession, file_id: uuid.UUID, *, lock: bool = False) -> KnowledgeFile:
     row = await (repo.get_for_update(session, file_id) if lock else repo.get_by_id(session, file_id))
     if row is None:
-        raise NotFoundError("知识文件不存在")
+        raise NotFoundError("资料文件不存在")
     return row
 
 
@@ -167,8 +164,8 @@ async def list_knowledge(
 
 
 async def get_options(session: AsyncSession, *, access: KnowledgeAccess) -> dict[str, Any]:
-    provinces = await get_provinces(get_settings(), PROVINCES)
-    return await repo.list_options(session, access=access, provinces=provinces)
+    dicts = await get_thinktank_dicts(get_settings())
+    return await repo.list_options(session, access=access, dicts=dicts)
 
 
 async def search_options(
@@ -178,8 +175,8 @@ async def search_options(
     keyword: str | None,
     access: KnowledgeAccess | None = None,
 ) -> list[str]:
-    provinces = await get_provinces(get_settings(), PROVINCES) if field == "prov_name" else None
-    return await repo.search_option_values(session, field=field, keyword=keyword, provinces=provinces, access=access)
+    dicts = await get_thinktank_dicts(get_settings())
+    return await repo.search_option_values(session, field=field, keyword=keyword, dicts=dicts, access=access)
 
 
 async def get_detail(

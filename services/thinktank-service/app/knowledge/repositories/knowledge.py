@@ -1,29 +1,58 @@
-"""知识库仓储：列表/导出共用筛选定义、权限范围过滤、收藏与单文件操作日志。"""
+"""资料库仓储：列表/导出共用筛选定义、权限范围过滤、动态码表选项、收藏与单文件操作日志。"""
 
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping, Sequence
 from typing import Any
 
-from platform_common.clock import utcnow
-from platform_common.filters import LIKE_ESCAPE, Filters, contains_ilike, escape_like, filter_values, in_any
+from platform_common.filters import Filters, contains_ilike, filter_values, in_any
 from platform_common.options import SEARCH_LIMIT, OptionColumns, preview_options, search_options
-from sqlalchemy import ColumnElement, delete, exists, false, func, or_, select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import ColumnElement, exists, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
-from app.knowledge.domain.models import KnowledgeFavorite, KnowledgeFile, KnowledgeOpLog
+from app.common.codebook_client import DEFAULT_THINKTANK_DICTS
+from app.common.upload_utils import (
+    expand_pipe_options,
+    merge_unique,
+    parse_favorite_only_filter,
+    parse_tag_status_filter,
+    pipe_match,
+)
+from app.knowledge.domain.models import KnowledgeFavorite, KnowledgeFile
 from app.knowledge.domain.scopes import (
-    FILE_TYPES,
-    INDUSTRY_TYPES,
-    MARKET_CATEGORIES,
     OPERATOR_TYPES,
-    PRODUCT_TYPES,
-    PROVINCES,
     KnowledgeAccess,
     normalize_file_type_input,
 )
+from app.knowledge.repositories.interactions import (
+    add_op_log,
+    favorite_ids_for_user,
+    is_favorited,
+    list_op_logs,
+    set_favorite,
+)
+
+__all__ = [
+    "FILTER_COLUMNS",
+    "OPTION_COLUMNS",
+    "add_op_log",
+    "count_filtered",
+    "count_undefined",
+    "favorite_ids_for_user",
+    "get_by_file_name",
+    "get_by_id",
+    "get_for_update",
+    "is_favorited",
+    "list_filtered",
+    "list_items",
+    "list_op_logs",
+    "list_options",
+    "list_undefined",
+    "search_option_values",
+    "set_favorite",
+]
 
 # 列表与导出共用同一份筛选键集合，未知键直接抛 KeyError（接口层转 422）。
 FILTER_COLUMNS: dict[str, str] = {
@@ -43,21 +72,31 @@ FILTER_COLUMNS: dict[str, str] = {
 }
 
 OPTION_COLUMNS: OptionColumns = {
+    "file_type": KnowledgeFile.file_type,
     "depart_affiliation": KnowledgeFile.depart_affiliation,
+    "industry_type": KnowledgeFile.industry_type,
+    "product_type": KnowledgeFile.product_type,
+    "product_sub_type": KnowledgeFile.product_sub_type,
     "app_scenario": KnowledgeFile.app_scenario,
+    "market_category": KnowledgeFile.market_category,
     "prov_name": KnowledgeFile.prov_name,
     "data_time": KnowledgeFile.data_time,
 }
 
+_CODEBOOK_OPTION_MAP: dict[str, str] = {
+    "file_type": "file_types",
+    "depart_affiliation": "departments",
+    "industry_type": "industries",
+    "product_type": "product_types",
+    "prov_name": "provinces",
+    "market_category": "market_categories",
+}
+
+_PIPE_OPTION_FIELDS = frozenset({"industry_type", "product_type"})
+
 
 def _pipe_match(column: Any, value: str) -> ColumnElement[bool]:
-    escaped = escape_like(value)
-    return or_(
-        column == value,
-        column.like(f"{escaped}|%", escape=LIKE_ESCAPE),
-        column.like(f"%|{escaped}", escape=LIKE_ESCAPE),
-        column.like(f"%|{escaped}|%", escape=LIKE_ESCAPE),
-    )
+    return pipe_match(column, value)
 
 
 def _industry_scope_condition(allowed_industries: frozenset[str]) -> ColumnElement[bool]:
@@ -116,10 +155,10 @@ def _scope_and_status_conditions(filters: Filters, *, user_id: str | None) -> li
             clauses.append(KnowledgeFile.industry_type == "")
         conds.append(or_(*clauses))
     if vals := filter_values(filters.get("tag_status")):
-        want_def, want_undef = "已定义" in vals, "未定义" in vals
-        if want_def != want_undef:
+        want_def = parse_tag_status_filter(vals)
+        if want_def is not None:
             conds.append(KnowledgeFile.is_defined.is_(want_def))
-    if (vals := filter_values(filters.get("favorite_only"))) and (("已收藏" in vals or "仅已收藏" in vals) and user_id):
+    if (vals := filter_values(filters.get("favorite_only"))) and parse_favorite_only_filter(vals) and user_id:
         conds.append(
             exists().where(KnowledgeFavorite.user_id == user_id, KnowledgeFavorite.file_id == KnowledgeFile.id)
         )
@@ -232,108 +271,51 @@ async def list_undefined(
     return list((await session.execute(stmt)).scalars())
 
 
-async def favorite_ids_for_user(
-    session: AsyncSession,
-    *,
-    user_id: str,
-    file_ids: list[uuid.UUID],
-) -> set[uuid.UUID]:
-    if not file_ids:
-        return set()
-    stmt = select(KnowledgeFavorite.file_id).where(
-        KnowledgeFavorite.user_id == user_id,
-        KnowledgeFavorite.file_id.in_(file_ids),
-    )
-    return set((await session.execute(stmt)).scalars())
+def _dict_values(dicts: Mapping[str, Sequence[str]] | None, key: str) -> list[str]:
+    if dicts is not None and key in dicts:
+        return list(dicts[key])
+    return list(DEFAULT_THINKTANK_DICTS[key])
 
 
-async def is_favorited(session: AsyncSession, *, user_id: str, file_id: uuid.UUID) -> bool:
-    stmt = select(KnowledgeFavorite.file_id).where(
-        KnowledgeFavorite.user_id == user_id,
-        KnowledgeFavorite.file_id == file_id,
-    )
-    return (await session.scalar(stmt)) is not None
-
-
-async def set_favorite(session: AsyncSession, *, user_id: str, file_id: uuid.UUID, favorite: bool) -> bool:
-    if favorite:
-        stmt = (
-            pg_insert(KnowledgeFavorite)
-            .values(user_id=user_id, file_id=file_id, created_at=utcnow())
-            .on_conflict_do_nothing(index_elements=["user_id", "file_id"])
-            .returning(KnowledgeFavorite.file_id)
-        )
-        return (await session.scalar(stmt)) is not None
-    del_stmt = (
-        delete(KnowledgeFavorite)
-        .where(
-            KnowledgeFavorite.user_id == user_id,
-            KnowledgeFavorite.file_id == file_id,
-        )
-        .returning(KnowledgeFavorite.file_id)
-    )
-    return (await session.scalar(del_stmt)) is not None
-
-
-async def add_op_log(
-    session: AsyncSession,
-    *,
-    file_id: uuid.UUID,
-    actor_id: str,
-    actor_name: str,
-    op_type: str,
-    detail: str = "",
-) -> KnowledgeOpLog:
-    row = KnowledgeOpLog(
-        file_id=file_id,
-        actor_id=actor_id,
-        actor_name=actor_name,
-        op_type=op_type,
-        detail=detail,
-        created_at=utcnow(),
-    )
-    session.add(row)
-    return row
-
-
-async def list_op_logs(
-    session: AsyncSession,
-    *,
-    file_id: uuid.UUID,
-    page: int,
-    page_size: int,
-) -> tuple[list[KnowledgeOpLog], int]:
-    total = int(
-        await session.scalar(select(func.count()).select_from(KnowledgeOpLog).where(KnowledgeOpLog.file_id == file_id))
-        or 0
-    )
-    stmt = (
-        select(KnowledgeOpLog)
-        .where(KnowledgeOpLog.file_id == file_id)
-        .order_by(KnowledgeOpLog.created_at.desc(), KnowledgeOpLog.id.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    )
-    return list((await session.execute(stmt)).scalars()), total
+def _db_items(raw: Mapping[str, dict[str, Any]], field: str) -> tuple[list[str], bool]:
+    entry = raw.get(field) or {}
+    items = list(entry.get("items") or [])
+    if field in _PIPE_OPTION_FIELDS:
+        items = expand_pipe_options(items)
+    return items, bool(entry.get("truncated", False))
 
 
 async def list_options(
     session: AsyncSession,
     *,
     access: KnowledgeAccess,
-    provinces: list[str] | None = None,
+    dicts: Mapping[str, Sequence[str]] | None = None,
 ) -> dict[str, Any]:
     raw = await preview_options(session, OPTION_COLUMNS, conditions=_scope_conditions(access))
-    allowed_ft = [
-        label for label in (*FILE_TYPES, "未定义") if ("" if label == "未定义" else label) in access.readable_file_types
-    ]
-    allowed_ind = [label for label in INDUSTRY_TYPES if label in access.readable_industries]
+
+    ft_db, _ = _db_items(raw, "file_type")
+    ft_merged = merge_unique(_dict_values(dicts, "file_types"), ft_db, ["未定义"])
+    allowed_ft = [label for label in ft_merged if ("" if label == "未定义" else label) in access.readable_file_types]
     raw["file_type"] = {"items": allowed_ft, "truncated": False}
+
+    ind_db, _ = _db_items(raw, "industry_type")
+    ind_merged = merge_unique(_dict_values(dicts, "industries"), ind_db)
+    allowed_ind = [label for label in ind_merged if label in access.readable_industries]
     raw["industry_type"] = {"items": allowed_ind, "truncated": False}
+
+    for field, dict_key in (
+        ("depart_affiliation", "departments"),
+        ("product_type", "product_types"),
+        ("prov_name", "provinces"),
+        ("market_category", "market_categories"),
+    ):
+        db_vals, truncated = _db_items(raw, field)
+        raw[field] = {
+            "items": merge_unique(_dict_values(dicts, dict_key), db_vals),
+            "truncated": truncated,
+        }
+
     raw["operator_type"] = {"items": list(OPERATOR_TYPES), "truncated": False}
-    raw["product_type"] = {"items": list(PRODUCT_TYPES), "truncated": False}
-    raw["market_category"] = {"items": list(MARKET_CATEGORIES), "truncated": False}
-    raw["prov_name"] = {"items": list(provinces) if provinces is not None else list(PROVINCES), "truncated": False}
     raw["tag_status"] = {"items": ["已定义", "未定义"], "truncated": False}
     raw["favorite_only"] = {"items": ["仅已收藏"], "truncated": False}
     return {"options": raw}
@@ -344,15 +326,18 @@ async def search_option_values(
     *,
     field: str,
     keyword: str | None,
-    provinces: list[str] | None = None,
+    dicts: Mapping[str, Sequence[str]] | None = None,
     access: KnowledgeAccess | None = None,
 ) -> list[str]:
-    if field == "prov_name":
-        q = (keyword or "").strip()
-        source = provinces if provinces is not None else list(PROVINCES)
-        return [p for p in source if not q or q in p][:SEARCH_LIMIT]
+    q = (keyword or "").strip()
+    q_lower = q.lower()
+    if field == "operator_type":
+        return [item for item in OPERATOR_TYPES if not q_lower or q_lower in item.lower()][:SEARCH_LIMIT]
+    if field not in OPTION_COLUMNS:
+        raise KeyError(field)
+
     scope_conds = _scope_conditions(access) if access is not None else ()
-    return await search_options(
+    db_matches = await search_options(
         session,
         OPTION_COLUMNS,
         field=field,
@@ -360,3 +345,19 @@ async def search_option_values(
         limit=SEARCH_LIMIT,
         conditions=scope_conds,
     )
+    if field in _PIPE_OPTION_FIELDS:
+        db_matches = [item for item in expand_pipe_options(db_matches) if not q_lower or q_lower in item.lower()]
+
+    if dict_key := _CODEBOOK_OPTION_MAP.get(field):
+        base = _dict_values(dicts, dict_key)
+        if field == "file_type":
+            base = [*base, "未定义"]
+        merged = merge_unique(base, db_matches)
+        if access is not None:
+            if field == "file_type":
+                merged = [v for v in merged if ("" if v == "未定义" else v) in access.readable_file_types]
+            elif field == "industry_type":
+                merged = [v for v in merged if v in access.readable_industries]
+        return [v for v in merged if not q_lower or q_lower in v.lower()][:SEARCH_LIMIT]
+
+    return db_matches[:SEARCH_LIMIT]

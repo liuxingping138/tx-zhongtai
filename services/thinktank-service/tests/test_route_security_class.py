@@ -6,10 +6,19 @@ from platform_common.route_audit import audit_routes, permission_map
 
 from app.main import app
 
-FAVORITE_ROUTES = {
-    "POST /api/v1/thinktank/knowledge/{file_id}/favorite",
-    "DELETE /api/v1/thinktank/knowledge/{file_id}/favorite",
-}
+EXPECTED_RESOURCE_BY_PREFIX = (
+    ("/api/v1/thinktank/knowledge", "thinktank.knowledge"),
+    ("/api/v1/thinktank/reports", "thinktank.reports"),
+    ("/api/v1/thinktank/proposals", "thinktank.proposals"),
+    ("/api/v1/thinktank/favorites", "thinktank.favorites"),
+)
+
+
+def _expected_resource(path: str) -> str:
+    for prefix, resource in EXPECTED_RESOURCE_BY_PREFIX:
+        if path == prefix or path.startswith(f"{prefix}/"):
+            return resource
+    raise AssertionError(f"未归属的智库路由：{path}")
 
 
 def test_every_route_is_classified() -> None:
@@ -20,12 +29,20 @@ def test_every_route_is_classified() -> None:
 def test_every_non_public_route_uses_authoritative_permission() -> None:
     entries = permission_map(app)
     assert entries
+    seen_resources: set[str] = set()
     for method_path, (resource, action) in entries.items():
-        assert resource == "thinktank.knowledge"
-        method = method_path.split(" ", 1)[0]
-        if method_path in FAVORITE_ROUTES:
+        method, path = method_path.split(" ", 1)
+        assert resource == _expected_resource(path)
+        seen_resources.add(resource)
+        if path.endswith("/favorite"):
             assert action == "favorite"
         elif method in {"POST", "PATCH", "PUT", "DELETE"}:
             assert action in {"create", "update", "delete", "upload_tags"}
         else:
             assert action in {"list", "read", "preview", "download", "export", "export_undefined"}
+    assert seen_resources == {
+        "thinktank.knowledge",
+        "thinktank.reports",
+        "thinktank.proposals",
+        "thinktank.favorites",
+    }

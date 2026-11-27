@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Annotated, Any
 
 from fastapi import Depends, Request
@@ -18,10 +19,12 @@ from platform_common.service_authz import (
 from app.core.config import Settings, get_settings
 
 __all__ = [
+    "LibraryAccess",
     "SecurityClass",
     "classified",
     "fetch_scope_levels",
     "get_authz_client",
+    "get_library_access",
     "require_thinktank_permission",
 ]
 
@@ -35,7 +38,8 @@ def get_authz_client(settings: Annotated[Settings, Depends(get_settings)]) -> Au
     )
 
 
-SCOPE_PREFIXES: tuple[str, ...] = ("thinktank.file_type.", "thinktank.industry_type.")
+# 一次鉴权顺带拉回智库全量资源与二维范围档位（knowledge/reports/proposals + file_type.*/industry_type.*）
+SCOPE_PREFIXES: tuple[str, ...] = ("thinktank.",)
 
 require_thinktank_permission: Callable[[str, str], Callable[..., Any]] = build_permission_dependency(
     get_authz_client,
@@ -52,3 +56,30 @@ async def fetch_scope_levels(
     """批量查询当前用户在范围资源上的授权档位。"""
 
     return await resource_levels(request, client, resources, action)
+
+
+@dataclass(frozen=True)
+class LibraryAccess:
+    """普通子库（报告库、方案库）基于单资源授权档位的能力视图。"""
+
+    level: str = "NONE"
+
+    @property
+    def can_read(self) -> bool:
+        return self.level in {"READ", "EXPORT", "FULL"}
+
+    @property
+    def can_export(self) -> bool:
+        return self.level in {"EXPORT", "FULL"}
+
+    @property
+    def can_edit(self) -> bool:
+        return self.level == "FULL"
+
+
+def get_library_access(request: Request) -> LibraryAccess:
+    """从鉴权依赖写入的 request.state.authz_level 构造当前子库操作能力。"""
+
+    raw_level = getattr(request.state, "authz_level", None)
+    level = raw_level if isinstance(raw_level, str) and raw_level in {"READ", "EXPORT", "FULL"} else "NONE"
+    return LibraryAccess(level=level)

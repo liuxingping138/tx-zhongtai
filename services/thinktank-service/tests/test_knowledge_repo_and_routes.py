@@ -167,13 +167,22 @@ async def test_repo_crud_and_options_queries(monkeypatch: pytest.MonkeyPatch) ->
     assert len(logs) == 1 and log_total == 1
 
     monkeypatch.setattr(
-        repo, "preview_options", AsyncMock(return_value={"prov_name": {"items": [], "truncated": False}})
+        repo,
+        "preview_options",
+        AsyncMock(return_value={"prov_name": {"items": ["自定义省"], "truncated": False}}),
     )
-    opts = await repo.list_options(sess, access=FULL_ACCESS, provinces=["集团", "北京市"])  # type: ignore[arg-type]
-    assert opts["options"]["prov_name"]["items"] == ["集团", "北京市"]
-    assert await repo.search_option_values(sess, field="prov_name", keyword="北", provinces=["集团", "北京市"]) == [
-        "北京市"
-    ]  # type: ignore[arg-type]
+    monkeypatch.setattr(repo, "search_options", AsyncMock(return_value=[]))
+    dicts = {
+        "file_types": ["产品", "经分"],
+        "departments": ["政企部"],
+        "industries": ["党政", "教育"],
+        "product_types": ["云", "网"],
+        "provinces": ["集团", "北京市"],
+        "market_categories": ["行客", "无"],
+    }
+    opts = await repo.list_options(sess, access=FULL_ACCESS, dicts=dicts)  # type: ignore[arg-type]
+    assert opts["options"]["prov_name"]["items"] == ["集团", "北京市", "自定义省"]
+    assert await repo.search_option_values(sess, field="prov_name", keyword="北", dicts=dicts) == ["北京市"]  # type: ignore[arg-type]
 
 
 class _FakeHttpClient:
@@ -213,9 +222,20 @@ class _FakeHttpClient:
             raise httpx.ConnectError("refused")
         if "missing" in url:
             return httpx.Response(404, request=httpx.Request("GET", url))
-        if "provinces" in url:
+        if "thinktank-dicts" in url:
             return httpx.Response(
-                200, json={"data": {"items": ["上海市", "浙江省"]}}, request=httpx.Request("GET", url)
+                200,
+                json={
+                    "data": {
+                        "file_types": ["经分", "通报"],
+                        "departments": ["政企部"],
+                        "industries": ["党政"],
+                        "product_types": ["云"],
+                        "provinces": ["集团", "上海市", "浙江省"],
+                        "market_categories": ["行客"],
+                    }
+                },
+                request=httpx.Request("GET", url),
             )
         return httpx.Response(200, content=b"pdf-bytes", request=httpx.Request("GET", url))
 
@@ -254,20 +274,23 @@ async def test_minio_http_and_codebook_client_http(monkeypatch: pytest.MonkeyPat
 
     await codebook_client.close_codebook_client()
     monkeypatch.setattr(codebook_client.httpx, "AsyncClient", _FakeHttpClient)
-    codebook_client.clear_province_cache()
+    codebook_client.clear_thinktank_dicts_cache()
     cb_cfg = SimpleNamespace(
         codebook_base_url="http://codebook:8004", codebook_service_secret="sec", codebook_timeout_seconds=1.0
     )
-    assert await codebook_client.get_provinces(cb_cfg, ("集团",)) == ["集团", "上海市", "浙江省"]
+    fetched = await codebook_client.get_thinktank_dicts(cb_cfg)
+    assert fetched["provinces"] == ["集团", "上海市", "浙江省"]
+    assert fetched["departments"] == ["政企部"]
     # 命中缓存
-    assert await codebook_client.get_provinces(cb_cfg, ("集团",)) == ["集团", "上海市", "浙江省"]
+    assert (await codebook_client.get_thinktank_dicts(cb_cfg))["provinces"] == ["集团", "上海市", "浙江省"]
     # 连接失败回退兜底（复用进程级连接池）
     first_client = codebook_client._client
-    codebook_client.clear_province_cache()
+    codebook_client.clear_thinktank_dicts_cache()
     bad_cfg = SimpleNamespace(
         codebook_base_url="http://boom:8004", codebook_service_secret="sec", codebook_timeout_seconds=1.0
     )
-    assert await codebook_client.get_provinces(bad_cfg, ("集团", "北京市")) == ["集团", "北京市"]
+    fallback = await codebook_client.get_thinktank_dicts(bad_cfg)
+    assert fallback["provinces"][:2] == ["集团", "北京市"]
     assert codebook_client._client is first_client
     await codebook_client.close_codebook_client()
     assert codebook_client._client is None

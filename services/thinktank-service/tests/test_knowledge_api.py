@@ -446,17 +446,23 @@ async def test_storage_unavailable_and_upload_rollback_cleanup(monkeypatch: pyte
     }
     assert del_session.commit.await_count == 1
 
-    # 同步码表省枚举（配置与未配置兜底）
+    # 同步智库专属 6 张码表（未配置时回退默认）
     from app.common import codebook_client
 
-    codebook_client.clear_province_cache()
-    assert await codebook_client.get_provinces(
+    codebook_client.clear_thinktank_dicts_cache()
+    defaults = await codebook_client.get_thinktank_dicts(
         SimpleNamespace(codebook_base_url="", codebook_service_secret="", codebook_timeout_seconds=1.0),
-        ("集团", "北京市"),
-    ) == ["集团", "北京市"]
-
-    merged = codebook_client._merge_provinces(["上海市", "浙江省", "集团"], ("集团",))
-    assert merged == ["集团", "上海市", "浙江省"]
+    )
+    assert set(defaults) == {
+        "file_types",
+        "departments",
+        "industries",
+        "product_types",
+        "provinces",
+        "market_categories",
+    }
+    assert defaults["provinces"][0] == "集团"
+    assert len(defaults["provinces"]) == 32
 
 
 def test_http_routes_wire_dependencies(monkeypatch: pytest.MonkeyPatch) -> None:

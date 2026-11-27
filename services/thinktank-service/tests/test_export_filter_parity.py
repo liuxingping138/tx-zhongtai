@@ -15,6 +15,8 @@ from app.core.database import get_db_session
 from app.knowledge.api.routes import get_knowledge_access, knowledge_filters
 from app.knowledge.domain.scopes import FULL_ACCESS
 from app.knowledge.repositories import knowledge as repo
+from app.library.api.schemas import proposal_filters, report_filters
+from app.library.domain.specs import PROPOSAL_SPEC, REPORT_SPEC
 from app.main import app
 
 
@@ -25,6 +27,8 @@ def _query_params(dep: Any) -> set[str]:
 def test_filter_params_match_repository_filter_columns() -> None:
     params = _query_params(knowledge_filters)
     assert params == set(repo.FILTER_COLUMNS), f"筛选参数不一致：{params ^ set(repo.FILTER_COLUMNS)}"
+    assert _query_params(report_filters) == set(REPORT_SPEC.filter_kinds)
+    assert _query_params(proposal_filters) == set(PROPOSAL_SPEC.filter_kinds)
 
 
 async def test_unknown_search_option_field_raises_key_error() -> None:
