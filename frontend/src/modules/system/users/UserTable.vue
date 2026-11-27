@@ -32,6 +32,11 @@ function manageable(row: ManagedUser): boolean {
   return canManageRow(row, canEditUsers.value)
 }
 
+function shortTime(value?: string | null): string {
+  const full = formatTime(value)
+  return full.length > 16 ? full.slice(0, 16) : full
+}
+
 function roleNames(user: ManagedUser): string {
   return (user.roles ?? []).map(role => role.name).join('、')
 }
@@ -59,7 +64,7 @@ function roleNames(user: ManagedUser): string {
     </template>
     <el-table-column
       label="用户名"
-      min-width="206"
+      min-width="234"
       show-overflow-tooltip
     >
       <template #default="{ row }">
@@ -79,12 +84,12 @@ function roleNames(user: ManagedUser): string {
     <el-table-column
       prop="display_name"
       label="显示名"
-      min-width="88"
+      min-width="104"
       show-overflow-tooltip
     />
     <el-table-column
       label="角色"
-      min-width="180"
+      min-width="136"
     >
       <template #default="{ row }">
         <div class="role-cell">
@@ -145,7 +150,7 @@ function roleNames(user: ManagedUser): string {
     </el-table-column>
     <el-table-column
       label="状态"
-      width="116"
+      width="108"
     >
       <template #default="{ row }">
         <div class="status-cell">
@@ -211,7 +216,7 @@ function roleNames(user: ManagedUser): string {
     </el-table-column>
     <el-table-column
       label="最近登录"
-      width="108"
+      width="104"
     >
       <template #default="{ row }">
         <span
@@ -227,7 +232,7 @@ function roleNames(user: ManagedUser): string {
     </el-table-column>
     <el-table-column
       label="联系方式"
-      min-width="168"
+      min-width="194"
     >
       <template #default="{ row }">
         <div
@@ -253,10 +258,13 @@ function roleNames(user: ManagedUser): string {
     </el-table-column>
     <el-table-column
       label="创建时间"
-      width="148"
+      width="142"
     >
       <template #default="{ row }">
-        <span class="muted time-cell">{{ formatTime(row.created_at) }}</span>
+        <span
+          class="muted time-cell"
+          :title="formatTime(row.created_at)"
+        >{{ shortTime(row.created_at) }}</span>
       </template>
     </el-table-column>
     <el-table-column
