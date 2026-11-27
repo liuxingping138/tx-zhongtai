@@ -43,7 +43,7 @@ function toggleSection(id: string) {
           height="83"
         >
       </router-link>
-      <span class="workspace-platform-name">业务数据运营平台</span>
+      <span class="workspace-platform-name">鲲宇数智</span>
       <nav
         class="workspace-domains"
         aria-label="一级模块"

@@ -66,7 +66,7 @@ router.beforeEach(async (to) => {
 })
 
 router.afterEach((to) => {
-  document.title = `${to.meta.title || '页面'} · 业务数据运营平台`
+  document.title = `${to.meta.title || '页面'} · 鲲宇数智`
   // 路由守卫的单测在 node 里跑，没有 sessionStorage。
   if (typeof sessionStorage !== 'undefined') clearReloadMark(sessionStorage)
 })

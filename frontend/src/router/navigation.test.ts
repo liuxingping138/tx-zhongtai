@@ -39,6 +39,7 @@ describe('正式导航入口和原权限门禁', () => {
     auth.visibleMenus = [menu('码表管理', null), menu('政策类型', 'codebook-policy-types', '码表管理')]
     await router.push('/')
     expect(router.currentRoute.value.path).toBe('/codebook/policy-types')
+    expect(document.title).toBe('政策类型码表 · 鲲宇数智')
   })
 
   it('没有已发布可用菜单时进入空权限页', async () => {

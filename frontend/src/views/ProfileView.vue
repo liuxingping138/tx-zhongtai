@@ -152,7 +152,7 @@ async function onLogoutAll() {
               v-if="!roles.length"
               class="profile-role-chip is-muted"
             >未分配角色</span>
-            <span class="profile-meta-sep" /><span class="profile-meta-text">腾信睿德业务数据运营平台</span>
+            <span class="profile-meta-sep" /><span class="profile-meta-text">腾信睿德 · 鲲宇数智</span>
             <span class="profile-meta-sep" /><span class="profile-meta-text">ID: {{ auth.user?.id || '—' }}</span>
           </div>
         </div>

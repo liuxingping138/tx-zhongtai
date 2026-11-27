@@ -88,7 +88,7 @@ async function onSubmit() {
             aria-hidden="true"
           ><i /><i /><i /></span>
           <div class="brand-text">
-            <span class="brand-title">业务数据运营平台</span>
+            <span class="brand-title">鲲宇数智</span>
             <span class="brand-sub">TELELANDS DATA WORKSPACE</span>
           </div>
         </div>
@@ -333,7 +333,7 @@ async function onSubmit() {
       </div>
 
       <footer class="login-panel__footer">
-        业务数据运营平台<span>统一入口 · 高效协同</span>
+        鲲宇数智<span>统一入口 · 高效协同</span>
       </footer>
     </section>
   </main>
