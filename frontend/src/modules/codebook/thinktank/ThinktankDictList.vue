@@ -219,7 +219,7 @@ onMounted(() => {
 
       <TableSkeleton
         v-if="loading && items.length === 0"
-        :columns="3"
+        :columns="6"
         :has-actions="canWrite"
       />
       <el-table
@@ -238,9 +238,18 @@ onMounted(() => {
           />
         </template>
         <el-table-column
+          label="序号"
+          width="72"
+          align="center"
+        >
+          <template #default="{ $index }">
+            <span class="dict-seq">{{ (query.page - 1) * query.page_size + $index + 1 }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column
           :label="config.fieldLabel"
           prop="name"
-          min-width="260"
+          min-width="220"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -248,8 +257,25 @@ onMounted(() => {
           </template>
         </el-table-column>
         <el-table-column
+          label="入库时间"
+          min-width="180"
+        >
+          <template #default="{ row }">
+            <span class="dict-meta">{{ formatTime(row.created_at) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="入库人"
+          min-width="130"
+          show-overflow-tooltip
+        >
+          <template #default="{ row }">
+            <span class="dict-meta">{{ row.created_by_name || '—' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column
           label="更新时间"
-          width="190"
+          min-width="180"
         >
           <template #default="{ row }">
             <span class="dict-meta">{{ formatTime(row.updated_at) }}</span>
@@ -257,7 +283,7 @@ onMounted(() => {
         </el-table-column>
         <el-table-column
           label="操作人"
-          width="140"
+          min-width="130"
           show-overflow-tooltip
         >
           <template #default="{ row }">
@@ -305,6 +331,12 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.dict-seq {
+  color: var(--zt-ink-500);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
 .dict-name {
   color: var(--zt-ink-900);
   font-weight: 550;

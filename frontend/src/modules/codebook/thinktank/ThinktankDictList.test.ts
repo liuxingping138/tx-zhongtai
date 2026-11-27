@@ -167,16 +167,16 @@ const STUBS = {
         return h('div', { class: 'el-table-stub' }, [
           rows.length === 0
             ? slots.empty?.()
-            : rows.map((row) =>
+            : rows.map((row, index) =>
                 h(
                   'div',
                   { class: 'table-row', key: row.id },
                   colVNodes.map((vnode) => {
                     const colProps = (vnode.props ?? {}) as { label?: string; prop?: string }
-                    const colSlots = vnode.children as { default?: (arg: { row: ThinktankDictItem }) => VNodeChild } | null
+                    const colSlots = vnode.children as { default?: (arg: { row: ThinktankDictItem; $index: number }) => VNodeChild } | null
                     if (!colProps.label) return null
                     return h('div', { class: 'table-cell', 'data-label': colProps.label }, [
-                      colSlots?.default ? colSlots.default({ row }) : cellText(row, colProps.prop),
+                      colSlots?.default ? colSlots.default({ row, $index: index }) : cellText(row, colProps.prop),
                     ])
                   }),
                 ),
@@ -363,9 +363,10 @@ describe('ThinktankDictList 智库专属码表复用页', () => {
 
     expect(wrapper.find('.table-skeleton-stub').exists()).toBe(false)
     const cells = wrapper.findAll('.table-cell')
-    expect(cells.map(c => c.attributes('data-label'))).toEqual(['省份名称', '更新时间', '操作人', '操作'])
-    expect(cells[0]!.text()).toBe('广东省')
-    expect(cells[2]!.text()).toBe('李四')
+    expect(cells.map(c => c.attributes('data-label'))).toEqual(['序号', '省份名称', '入库时间', '入库人', '更新时间', '操作人', '操作'])
+    expect(cells[0]!.text()).toBe('1')
+    expect(cells[1]!.text()).toBe('广东省')
+    expect(cells[5]!.text()).toBe('李四')
     expect(mocks.fetchFilterOptions).toHaveBeenCalledWith('/codebook/thinktank/provinces')
   })
 
@@ -377,7 +378,7 @@ describe('ThinktankDictList 智库专属码表复用页', () => {
     expect(wrapper.find('.page-actions').text()).not.toContain('新增')
     expect(wrapper.find('.import-btn-stub').exists()).toBe(false)
     expect(wrapper.find('.export-btn-stub').attributes('disabled')).toBeDefined()
-    expect(wrapper.findAll('.table-cell').map(c => c.attributes('data-label'))).toEqual(['文件类别', '更新时间', '操作人'])
+    expect(wrapper.findAll('.table-cell').map(c => c.attributes('data-label'))).toEqual(['序号', '文件类别', '入库时间', '入库人', '更新时间', '操作人'])
 
     grantPermissions([{ code: 'codebook.thinktank_file_types', level: 'EXPORT' }])
     await nextTick()
@@ -563,7 +564,7 @@ describe('ThinktankDictList 智库专属码表复用页', () => {
     expect(wrapper.find('.el-dialog-stub').exists()).toBe(false)
     expect(mocks.list).toHaveBeenCalledWith('provinces', { keyword: [], page: 1, page_size: 20 })
     expect(mocks.fetchFilterOptions).toHaveBeenCalledWith('/codebook/thinktank/provinces')
-    expect(wrapper.find('.table-cell').text()).toBe('北京市')
+    expect(wrapper.find('.table-cell[data-label="省份名称"]').text()).toBe('北京市')
 
     // 模拟路由切换（同一组件实例复用，仅 route.meta.dictSlug & route.path 变更）
     const routeWrapper = mountPage({ metaSlug: 'file-types', path: '/codebook/thinktank/file-types' })
