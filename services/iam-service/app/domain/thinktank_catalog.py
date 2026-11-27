@@ -6,7 +6,6 @@ from app.domain.catalog_types import ActionSpec, MenuSpec, ResourceSpec
 from app.domain.enums import GrantLevel, NodeType
 
 THINKTANK_FAVORITES_CODE = "thinktank.favorites"
-THINKTANK_IP_WHITELIST_CODE = "thinktank.ip_whitelist"
 THINKTANK_LIBRARY_CODES: tuple[str, ...] = (
     "thinktank.knowledge",
     "thinktank.reports",
@@ -160,16 +159,6 @@ THINKTANK_RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
         )
         for idx, (slug, name) in enumerate(INDUSTRY_TYPE_SCOPES)
     ),
-    # 访问白名单：智库只在公司网络能用，别处要在这里给 IP 开有时效的白名单。一般只授给管理员。
-    ResourceSpec(
-        THINKTANK_IP_WHITELIST_CODE,
-        "访问白名单",
-        "thinktank-service",
-        NodeType.RESOURCE,
-        True,
-        495,
-        "thinktank",
-    ),
 )
 
 THINKTANK_ACTION_SPECS: tuple[ActionSpec, ...] = (
@@ -179,10 +168,6 @@ THINKTANK_ACTION_SPECS: tuple[ActionSpec, ...] = (
     *(ActionSpec(code, "download", GrantLevel.READ) for code in THINKTANK_DOWNLOAD_CODES),
     ActionSpec("thinktank.favorites", "list", GrantLevel.READ),
     ActionSpec("thinktank.favorites", "favorite", GrantLevel.READ),
-    ActionSpec(THINKTANK_IP_WHITELIST_CODE, "list", GrantLevel.READ),
-    ActionSpec(THINKTANK_IP_WHITELIST_CODE, "create", GrantLevel.FULL),
-    ActionSpec(THINKTANK_IP_WHITELIST_CODE, "update", GrantLevel.FULL),
-    ActionSpec(THINKTANK_IP_WHITELIST_CODE, "delete", GrantLevel.FULL),
     *(action for slug, _ in FILE_TYPE_SCOPES for action in _scope_actions(f"thinktank.file_type.{slug}")),
     *(action for slug, _ in INDUSTRY_TYPE_SCOPES for action in _scope_actions(f"thinktank.industry_type.{slug}")),
 )
@@ -222,15 +207,6 @@ THINKTANK_MENU_SPECS: tuple[MenuSpec, ...] = (
         454,
         "thinktank-favorites",
         "thinktank.favorites",
-        "menu.thinktank",
-        enabled=True,
-    ),
-    MenuSpec(
-        "menu.thinktank.ip_whitelist",
-        "访问白名单",
-        455,
-        "thinktank-ip-whitelist",
-        THINKTANK_IP_WHITELIST_CODE,
         "menu.thinktank",
         enabled=True,
     ),

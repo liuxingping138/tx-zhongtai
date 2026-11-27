@@ -50,25 +50,20 @@ root_package = "app"
 [[tool.importlinter.contracts]]
 name = "领域内分层：api → application → repositories → domain"
 type = "layers"
-containers = ["app.knowledge", "app.library", "app.favorites", "app.access"]
+containers = ["app.knowledge", "app.library", "app.favorites"]
 layers = ["api", "application", "repositories", "domain"]
 
 [[tool.importlinter.contracts]]
 name = "common、core 不依赖任何业务库"
 type = "forbidden"
 source_modules = ["app.common", "app.core"]
-forbidden_modules = ["app.knowledge", "app.library", "app.favorites", "app.access"]
+forbidden_modules = ["app.knowledge", "app.library", "app.favorites"]
 
 [[tool.importlinter.contracts]]
 name = "入口层不跳过 application 直接用仓储"
 type = "forbidden"
-source_modules = ["app.knowledge.api", "app.library.api", "app.favorites.api", "app.access.api", "app.cli"]
-forbidden_modules = [
-  "app.knowledge.repositories",
-  "app.library.repositories",
-  "app.favorites.repositories",
-  "app.access.repositories",
-]
+source_modules = ["app.knowledge.api", "app.library.api", "app.favorites.api", "app.cli"]
+forbidden_modules = ["app.knowledge.repositories", "app.library.repositories", "app.favorites.repositories"]
 allow_indirect_imports = true
 
 [tool.pytest.ini_options]

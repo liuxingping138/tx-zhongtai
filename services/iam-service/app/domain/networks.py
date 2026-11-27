@@ -18,9 +18,11 @@ class InvalidNetworkError(ValueError):
     """管理员填的 IP / 网段不合格，message 直接给页面看。"""
 
 
-def parse_address(raw: str) -> Address | None:
-    """请求来源 IP。解析不了（如单测的 testclient）返回 None，按不在任何网络里处理。"""
+def parse_address(raw: str | None) -> Address | None:
+    """请求来源 IP。解析不了（没带、乱写）返回 None，按不在任何网络里处理。"""
 
+    if not raw:
+        return None
     try:
         addr = ipaddress.ip_address(raw.strip())
     except ValueError:
@@ -53,6 +55,12 @@ def normalize_network(raw: str) -> str:
     return str(net.network_address) if net.num_addresses == 1 else str(net)
 
 
+def split_items(raw: str) -> list[str]:
+    """配置项里逗号、分号、空格分隔的多项。"""
+
+    return [item for item in raw.replace(";", ",").replace(" ", ",").split(",") if item]
+
+
 @lru_cache(maxsize=8)
 def _office_networks(items: tuple[str, ...]) -> tuple[Network, ...]:
     return tuple(ipaddress.ip_network(item, strict=False) for item in items)
@@ -69,7 +77,7 @@ def contains(networks: Iterable[Network], addr: Address) -> bool:
 
 
 def range_contains(ip_range: str, addr: Address) -> bool:
-    """库里存的一条白名单是否覆盖这个地址；历史脏数据解析不了就当不覆盖。"""
+    """库里存的一条白名单是否覆盖这个地址；脏数据解析不了就当不覆盖。"""
 
     try:
         net = ipaddress.ip_network(ip_range, strict=False)

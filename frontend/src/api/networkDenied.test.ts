@@ -5,7 +5,7 @@ import { networkDeniedMessage, noteNetworkDenied } from './networkDenied'
 describe('智库网络准入的 403', () => {
   it('认出网络准入并记下带 IP 的说明', () => {
     const message = '智库只能在公司网络下访问。你当前的 IP 是 5.6.7.8'
-    expect(noteNetworkDenied({ status: 403, code: 'THINKTANK_NETWORK_DENIED', message, requestId: null })).toBe(true)
+    expect(noteNetworkDenied({ status: 403, code: 'NETWORK_DENIED', message, requestId: null })).toBe(true)
     expect(networkDeniedMessage.value).toBe(message)
   })
 

@@ -113,3 +113,5 @@ class AuthorizeRequest(StrictModel):
     resource: str = Field(min_length=1, max_length=128)
     action: str = Field(min_length=1, max_length=64)
     scope_prefixes: list[str] = Field(default_factory=list, max_length=16)
+    # 终端用户的来源 IP：限定公司网络的模块（智库）据此核对公司网络和访问白名单，业务服务开了 send_client_ip 才带
+    client_ip: str | None = Field(default=None, max_length=64)

@@ -61,9 +61,6 @@ _EVENT_META = {
     "thinktank.proposals.favorited": ("thinktank.proposals", "favorite", "proposal_file", "收藏方案文件"),
     "thinktank.proposals.unfavorited": ("thinktank.proposals", "unfavorite", "proposal_file", "取消收藏方案文件"),
     "thinktank.proposals.downloaded": ("thinktank.proposals", "download", "proposal_file", "下载方案文件"),
-    "thinktank.ip_whitelist.created": ("thinktank.ip_whitelist", "create", "ip_whitelist", "开通访问白名单"),
-    "thinktank.ip_whitelist.updated": ("thinktank.ip_whitelist", "update", "ip_whitelist", "修改访问白名单"),
-    "thinktank.ip_whitelist.deleted": ("thinktank.ip_whitelist", "delete", "ip_whitelist", "删除访问白名单"),
 }
 
 _emitter = AuditEmitter(

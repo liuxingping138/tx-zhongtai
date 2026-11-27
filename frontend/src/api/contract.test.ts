@@ -28,13 +28,13 @@ import * as codebook from './codebook'
 import * as crawlerConfig from './crawlerConfig'
 import * as crawler from './crawlerMonitoring'
 import * as filterOptions from './filterOptions'
+import * as ipWhitelist from './ipWhitelist'
 import * as policy from './policy'
 import * as scenarioCandidates from './scenarioCandidates'
 import * as scheduler from './scheduler'
 import * as system from './system'
 import * as tender from './tender'
 import * as thinktank from './thinktank'
-import * as thinktankAccess from './thinktankAccess'
 
 type Spec = { paths: Record<string, Record<string, unknown>> }
 
@@ -61,13 +61,13 @@ const modules = {
   crawlerConfig,
   crawler,
   filterOptions,
+  ipWhitelist,
   policy,
   scenarioCandidates,
   scheduler,
   system,
   tender,
   thinktank,
-  thinktankAccess,
 }
 
 const wrappers = Object.entries(modules).flatMap(([module, exports]) =>

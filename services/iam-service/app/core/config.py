@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import ipaddress
 from functools import lru_cache
 from pathlib import Path
 
 from platform_common.config import BaseServiceSettings, Environment
 from pydantic import Field, model_validator
 from pydantic_settings import SettingsConfigDict
+
+from app.domain.networks import split_items
 
 
 class Settings(BaseServiceSettings):
@@ -73,6 +76,28 @@ class Settings(BaseServiceSettings):
     worker_max_attempts: int = 100
     worker_backoff_base_seconds: int = 2
     worker_backoff_cap_seconds: int = 900
+
+    # 限定公司网络的模块：资源编码以这些前缀开头的（逗号分隔，目前只有智库），鉴权时还要核对来源 IP——
+    # 在公司出口 office_networks 里直接放行，否则要这个人有没到期的访问白名单（系统管理 → 访问白名单）。
+    # network_guard_enabled=false 关掉核对，只给 P6 这类从容器网络里访问、来源不是真实公网 IP 的环境用。
+    network_guard_enabled: bool = True
+    network_restricted_prefixes: str = "thinktank."
+    office_networks: str = "1.119.196.74"
+    # 白名单一次最长开多少天：到期要管理员续，免得临时开的口子变成永久的。
+    whitelist_max_days: int = 365
+
+    @model_validator(mode="after")
+    def _check_network_settings(self) -> Settings:
+        for item in split_items(self.office_networks):
+            try:
+                ipaddress.ip_network(item, strict=False)
+            except ValueError as exc:
+                raise ValueError(f"IAM_OFFICE_NETWORKS 里的「{item}」不是有效的 IP 或网段") from exc
+        if self.network_guard_enabled and not split_items(self.office_networks):
+            raise ValueError("开启了网络限制但 IAM_OFFICE_NETWORKS 为空，限定网络的模块所有人都进不去")
+        if self.whitelist_max_days < 1:
+            raise ValueError("IAM_WHITELIST_MAX_DAYS 至少为 1")
+        return self
 
     @model_validator(mode="after")
     def _reject_demo_internal_secrets_in_production(self) -> Settings:

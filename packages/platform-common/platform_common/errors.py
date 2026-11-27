@@ -43,6 +43,8 @@ class ErrorCode:
     DEPENDENCY_UNAVAILABLE = "DEPENDENCY_UNAVAILABLE"
     # 服务间调用的内部凭据不对。这是部署配置错误，不是终端用户没登录，调用方要转成 503。
     INTERNAL_CALLER_REJECTED = "INTERNAL_CALLER_REJECTED"
+    # 账号有权限，但来源网络不在允许范围（限定公司网络的模块，没有有效访问白名单）。也是 403，前端单独提示。
+    NETWORK_DENIED = "NETWORK_DENIED"
     INTERNAL_ERROR = "INTERNAL_ERROR"
 
 
@@ -84,6 +86,18 @@ class PermissionDeniedError(ApiError):
     code = ErrorCode.AUTH_PERMISSION_DENIED
 
     def __init__(self, message: str = "没有执行该操作的权限") -> None:
+        super().__init__(message)
+
+
+class NetworkDeniedError(ApiError):
+    """有权限但来源网络不对（限定公司网络的模块）。故意不继承 PermissionDeniedError：
+    按分类收窄范围的地方会把「没权限」吞成空结果，网络被拒必须一路抛到前端。"""
+
+    http_status = status.HTTP_403_FORBIDDEN
+    code = ErrorCode.NETWORK_DENIED
+    default_message = "当前网络不能访问这个模块，请在公司网络下使用，或联系管理员开通访问白名单"
+
+    def __init__(self, message: str = default_message) -> None:
         super().__init__(message)
 
 

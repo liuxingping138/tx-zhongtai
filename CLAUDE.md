@@ -175,13 +175,8 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
   LibreOffice、Ghostscript 让镜像变大，转码、压缩时占内存，默认 `THINKTANK_MEM_LIMIT` 是 1536m
 - 预览、下载、编辑等写知识库自己的操作记录（`/{id}/logs`），同时经 Outbox 上报审计（投递循环在服务 lifespan 里，没有单独 worker）。
   省份候选值经 codebook `/internal/v1/provinces` 取，取不到用内置列表（密钥 `CODEBOOK_THINKTANK_CALLER_SECRET`，compose 传给两边）
-- **网络准入（用户要求）**：智库只在公司网络里能用。`app/access/`：`main.py` 给资料库、报告库、方案库、我的收藏的路由挂 `require_trusted_network`，
-  来源 IP（`platform_common.http_utils.client_ip`，信任网关重写的 X-Forwarded-For 首段）在 `THINKTANK_OFFICE_NETWORKS`（公司出口 1.119.196.74）里直接放行、不查库；
-  其余查 `thinktank_ip_whitelist` 里没到期的（单个 IP 或不宽于 /24 的网段，每个请求现查、不缓存，删了或到期下一个请求就拦），都不中回 403 `THINKTANK_NETWORK_DENIED`，
-  提示里带当前 IP，前端（`api/networkDenied.ts` + `main.ts` 的 403 回调）跳 `/network-denied` 说明页。白名单由管理员在「智库 → 访问白名单」`/thinktank/ip-whitelist`
-  （资源 `thinktank.ip_whitelist`：查看档看，完整档开通、修改 / 续期、删除，写操作进审计）维护，一次最长 `THINKTANK_WHITELIST_MAX_DAYS`（365）天；
-  这组接口本身**不挂**网络准入，管理员在外面、或公司换了出口 IP 时还能进来处理。P6 关掉准入（`THINKTANK_NETWORK_GUARD_ENABLED=false`），单测在 conftest 里也关、`test_network_guard.py` 单独开着测。
-  新加智库业务路由放进已挂准入的 router，另起 router 要在 `main.py` 一样挂上（`test_guard_covers_every_business_route_but_not_whitelist_admin` 会拦）
+- **只能在公司网络用（用户要求）**：规则在 IAM（见「系统管理」一节的访问白名单），智库这边只是 `require_thinktank_permission` 开了 `send_client_ip`，
+  每次鉴权（含 PDF 每一段 Range、范围档位查询）把来源 IP 带给 IAM，不通过回 403 `NETWORK_DENIED`。新加智库路由照常挂 `require_thinktank_permission` 就自动受限
 - 历史资料、操作记录和收藏用 `python -m app.cli.seed_knowledge`（`make seed-knowledge`）从 `services/thinktank-service/data` 导入
 
 ### 爬虫监测是只读统计，数据靠同步进来
@@ -292,6 +287,13 @@ policy-service 内部再按领域分成 `policy/`、`crawler/`、`scheduler/`、
 （建人带角色、用户详情调角色、角色侧增删成员、复制角色）都要求 `system.permissions:grant`，
 而该资源只能授予超级管理员角色——这是防止「用户管理员给自己加超级管理员」的关键约束，改入口时不要放宽。
 权限页的模块分组、可选档位和中文说明都由 `frontend/src/permissions/catalog.ts` 从资源树推导。
+
+**访问白名单（用户要求，按「权限的一种」做在 IAM）**：资源编码以 `IAM_NETWORK_RESTRICTED_PREFIXES`（默认 `thinktank.`）开头的模块只能在公司网络用。
+业务服务的 `build_permission_dependency(..., send_client_ip=True)` 把来源 IP（`platform_common.http_utils.client_ip`）随 `/internal/v1/authorize` 带给 IAM（同一请求里的 `resource_levels`、`authorize_request` 也带），
+IAM 在权限通过后由 `application/network_access.py` 核对：在 `IAM_OFFICE_NETWORKS`（公司出口 1.119.196.74）里直接放行；否则查 `iam_ip_whitelist` 里**这个人**没到期的（单个 IP 或不宽于 /24 的网段，每次现查、不缓存），
+都不中回 403 `NETWORK_DENIED`（`platform_common.errors.NetworkDeniedError`，故意不继承 `PermissionDeniedError`，免得范围查询把它吞成空结果），提示里带当前 IP；没带 IP 按拒绝。
+前端 `api/networkDenied.ts` + `main.ts` 的 403 回调跳 `/network-denied` 说明页。管理员在「系统管理 → 访问白名单」`/system/ip-whitelist`（资源 `system.ip_whitelist`：查看档看，完整档开通、修改 / 续期、删除，写操作进审计）
+选人、填 IP、定有效期（常用时长、自定义 N 小时 / 天或指定到期时间；最短 10 分钟、最长 `IAM_WHITELIST_MAX_DAYS`），这一页本身不受网络限制。删除的账号鉴权直接不通过、列表也不显示他的白名单，行留着不删（和操作日志对得上）。P6 关掉（`IAM_NETWORK_GUARD_ENABLED=false`）。
 
 删除用户是逻辑删除：`status` 置 `UserStatus.DELETED`，同时吊销会话、清空角色，行保留以便操作日志对得上人。
 新写的用户查询（登录、列表、按名查找、改人前的存在性检查）都要排除 `DELETED`，
@@ -509,7 +511,7 @@ openpyxl 是纯 CPU 同步库，每个服务只有一个 uvicorn worker，直接
 ## 已知限制
 
 - 本期不执行生产部署；`deploy/gateway/traefik.prod.yml.example` 只是 HTTPS 模板
-- `client_ip`（`platform_common.http_utils`）无条件信任 `X-Forwarded-For` 首段，成立前提是服务只能经网关访问；智库按 IP 放行也靠它
+- `client_ip`（`platform_common.http_utils`）无条件信任 `X-Forwarded-For` 首段，成立前提是服务只能经网关访问；访问白名单按 IP 放行也靠它
   （Traefik 会清洗客户端自带的该头）。服务端口 8001–8007 不得直接对外暴露，
   也不要在 Traefik 前再加一层不做同样清洗的代理
 - 导出不分页，整个结果集读进内存再生成 Excel，靠 `export_max_rows` 兜底

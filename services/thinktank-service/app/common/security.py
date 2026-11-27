@@ -41,9 +41,12 @@ def get_authz_client(settings: Annotated[Settings, Depends(get_settings)]) -> Au
 # 一次鉴权顺带拉回智库全量资源与二维范围档位（knowledge/reports/proposals + file_type.*/industry_type.*）
 SCOPE_PREFIXES: tuple[str, ...] = ("thinktank.",)
 
+# send_client_ip：智库只在公司网络能用，IAM 鉴权时按来源 IP 核对公司网络和这个人的访问白名单（系统管理 → 访问白名单），
+# 不通过回 403 NETWORK_DENIED。每次请求（含 PDF 每一段 Range）都随鉴权核对，白名单删了或到期下一个请求就拦。
 require_thinktank_permission: Callable[[str, str], Callable[..., Any]] = build_permission_dependency(
     get_authz_client,
     scope_prefixes=SCOPE_PREFIXES,
+    send_client_ip=True,
 )
 
 

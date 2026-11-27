@@ -11,7 +11,6 @@ EXPECTED_RESOURCE_BY_PREFIX = (
     ("/api/v1/thinktank/reports", "thinktank.reports"),
     ("/api/v1/thinktank/proposals", "thinktank.proposals"),
     ("/api/v1/thinktank/favorites", "thinktank.favorites"),
-    ("/api/v1/thinktank/ip-whitelist", "thinktank.ip_whitelist"),
 )
 
 
@@ -53,5 +52,4 @@ def test_every_non_public_route_uses_authoritative_permission() -> None:
         "thinktank.proposals",
         "thinktank.proposals.download",
         "thinktank.favorites",
-        "thinktank.ip_whitelist",
     }

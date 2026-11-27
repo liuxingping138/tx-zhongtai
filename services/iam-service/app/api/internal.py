@@ -9,6 +9,7 @@ from app.api.schemas import AuthorizeRequest
 from app.api.security import classified, principal_from_access_token
 from app.application import outbox_delivery
 from app.application.authorization import audit_service_denial, authorize_access_context
+from app.application.network_access import assert_network_allowed
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
 from app.core.http_utils import success_json
@@ -49,6 +50,9 @@ async def authorize(
     )
     if not data["allowed"]:
         await audit_service_denial(redis_client, principal.user, data, caller)
+    else:
+        # 权限够了再看网络：限定公司网络的模块（智库），不在公司网络又没有这个人的有效白名单就回 403 NETWORK_DENIED。
+        await assert_network_allowed(session, settings, principal.user.id, body.resource, body.client_ip)
     return success_json(data)
 
 

@@ -29,6 +29,8 @@ services:
       IAM_CSRF_ALLOWED_ORIGINS: '["http://localhost:8090","http://127.0.0.1:8090"]'
       IAM_INTERNAL_CALLER_SECRETS: '{"audit-service":"p6-only-change-me-internal","codebook-service":"p6-only-change-me-internal","policy-service":"p6-only-change-me-internal","ai-service":"p6-only-change-me-internal","tender-service":"p6-only-change-me-internal","thinktank-service":"p6-only-change-me-internal"}'
       IAM_AUDIT_INGEST_SECRET: p6-only-change-me-ingest
+      # e2e 从服务器本机经 127.0.0.1:8090 进来，来源是容器网关地址，不是公司出口 IP；P6 不测网络限制（单测覆盖）。
+      IAM_NETWORK_GUARD_ENABLED: "false"
   iam-worker:
     volumes:
       - ../secrets/jwt-p6:/secrets/jwt
@@ -103,8 +105,6 @@ services:
       THINKTANK_AUDIT_INGEST_SECRET: p6-only-change-me-ingest
       THINKTANK_CODEBOOK_SERVICE_SECRET: p6-only-change-me-internal
       THINKTANK_MINIO_ENDPOINT: ""
-      # e2e 从服务器本机经 127.0.0.1:8090 进来，来源是容器网关地址，不是公司出口 IP；P6 不测网络准入（单测覆盖）。
-      THINKTANK_NETWORK_GUARD_ENABLED: "false"
   llm-mock:
     build:
       context: ../..

@@ -162,6 +162,30 @@ class UserGrant(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="更新时间")
 
 
+class IpWhitelistEntry(Base):
+    """限定公司网络的模块（智库），这个人从这个 IP 来、没到期就放行。到期不删，留着看历史、可续期。"""
+
+    __tablename__ = "iam_ip_whitelist"
+    __table_args__ = (
+        Index("ix_iam_ip_whitelist_user_expires", "user_id", "expires_at"),
+        {"comment": "访问白名单"},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid, comment="主键")
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("iam_users.id", ondelete="CASCADE"), nullable=False, comment="用户ID"
+    )
+    ip_range: Mapped[str] = mapped_column(String(64), nullable=False, comment="IP或网段")
+    reason: Mapped[str] = mapped_column(String(500), nullable=False, default="", server_default="", comment="开通原因")
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="到期时间")
+    created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, comment="开通人ID")
+    created_by_name: Mapped[str] = mapped_column(String(128), nullable=False, comment="开通人")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="开通时间")
+    updated_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, comment="最后修改人ID")
+    updated_by_name: Mapped[str] = mapped_column(String(128), nullable=False, comment="最后修改人")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="最后修改时间")
+
+
 class MenuItem(Base):
     __tablename__ = "iam_menu_items"
     __table_args__ = {"comment": "菜单项"}

@@ -5,14 +5,14 @@ import { useRoute, useRouter } from 'vue-router'
 import { networkDeniedMessage } from '@/api/networkDenied'
 
 /**
- * 智库被网络准入拦下：不在公司网络、也没有有效白名单。写清当前 IP，方便发给管理员开通；
+ * 限定公司网络的模块（智库）被拦下：不在公司网络、也没有自己的有效白名单。写清当前 IP，方便发给管理员开通；
  * 开通后点「重新打开」回到原来的页面。
  */
 const route = useRoute()
 const router = useRouter()
 
 const message = computed(
-  () => networkDeniedMessage.value || '智库只能在公司网络下访问。如需在其他地方使用，请联系管理员为你当前的 IP 开通临时白名单。',
+  () => networkDeniedMessage.value || '这个模块只能在公司网络下访问。如需在其他地方使用，请把你当前的 IP 发给管理员开通访问白名单。',
 )
 
 function retry(): void {
@@ -27,7 +27,7 @@ function retry(): void {
     <div class="status-view__card">
       <el-result
         icon="warning"
-        title="当前网络不能访问智库"
+        title="当前网络不能访问"
         :sub-title="message"
       >
         <template #extra>

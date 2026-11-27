@@ -48,7 +48,7 @@ onRemoteLogout(() => {
 })
 let forbiddenReload: Promise<void> | null = null
 setForbiddenHandler((error) => {
-  // 智库网络准入：权限没变，是网络不对。跳说明页（带着原地址，开通白名单后点「重新打开」回去）。
+  // 限定公司网络的模块（智库）：权限没变，是网络不对。跳说明页（带着原地址，开通白名单后点「重新打开」回去）。
   if (noteNetworkDenied(error)) {
     const currentRoute = router.currentRoute.value
     if (currentRoute.name !== 'network-denied') {

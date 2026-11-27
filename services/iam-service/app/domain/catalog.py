@@ -20,6 +20,8 @@ from app.domain.thinktank_catalog import (
 RETIRED_RESOURCE_CODES: tuple[str, ...] = (
     # 多轮对话：上线以来只被调过两次，和模板、打标主线无关（2026-11-03 删）
     "ai.chat",
+    # 访问白名单先放在智库下，同日改到系统管理（system.ip_whitelist），按用户 + IP 开通（2026-11-27）
+    "thinktank.ip_whitelist",
 )
 # 已下线的动作（资源还在）：同步清单时删掉，角色权限页不再列出。
 RETIRED_ACTIONS: tuple[tuple[str, str], ...] = (
@@ -59,6 +61,8 @@ RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("system.permissions", "权限分配", "iam-service", NodeType.RESOURCE, True, 13, "system"),
     ResourceSpec("system.scheduler", "任务调度", "policy-service", NodeType.RESOURCE, True, 15, "system"),
     ResourceSpec("system.audit", "操作日志", "iam-service", NodeType.RESOURCE, True, 14, "system"),
+    # 访问白名单：限定公司网络的模块（目前是智库），别处要管理员给这个人按 IP 开有时效的白名单。
+    ResourceSpec("system.ip_whitelist", "访问白名单", "iam-service", NodeType.RESOURCE, True, 16, "system"),
     ResourceSpec("policy", "政策", "policy-service", NodeType.DIRECTORY, True, 20),
     ResourceSpec("policy.sources", "信源管理", "policy-service", NodeType.RESOURCE, True, 21, "policy"),
     ResourceSpec("policy.crawler_monitoring", "爬虫监测", "policy-service", NodeType.RESOURCE, True, 22, "policy"),
@@ -118,6 +122,10 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ActionSpec("system.users", "delete", GrantLevel.FULL),
     ActionSpec("system.users", "export", GrantLevel.EXPORT),
     ActionSpec("system.users", "import", GrantLevel.FULL),
+    ActionSpec("system.ip_whitelist", "list", GrantLevel.READ),
+    ActionSpec("system.ip_whitelist", "create", GrantLevel.FULL),
+    ActionSpec("system.ip_whitelist", "update", GrantLevel.FULL),
+    ActionSpec("system.ip_whitelist", "delete", GrantLevel.FULL),
     ActionSpec("system.roles", "list", GrantLevel.READ),
     ActionSpec("system.roles", "read", GrantLevel.READ),
     ActionSpec("system.roles", "create", GrantLevel.FULL),
@@ -219,6 +227,7 @@ MENU_SPECS: tuple[MenuSpec, ...] = (
     MenuSpec("menu.system.login_logs", "登录日志", 15, "system-login-logs", "system.audit", "menu.system"),
     MenuSpec("menu.system.audit", "操作日志", 16, "system-audit", "system.audit", "menu.system"),
     MenuSpec("menu.system.scheduler", "任务调度", 17, "system-scheduler", "system.scheduler", "menu.system"),
+    MenuSpec("menu.system.ip_whitelist", "访问白名单", 18, "system-ip-whitelist", "system.ip_whitelist", "menu.system"),
     MenuSpec("menu.policy", "政策", 20, enabled=True),
     MenuSpec("menu.policy.sources", "信源管理", 21, "policy-sources", "policy.sources", "menu.policy", enabled=True),
     MenuSpec(

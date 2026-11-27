@@ -158,7 +158,7 @@ function signOutOnce(): void {
 }
 
 let unauthorizedHandler: (() => void) | null = null
-/** 403 回调带上错误：同是 403，智库网络准入（THINKTANK_NETWORK_DENIED）要跳说明页，不是权限变了。 */
+/** 403 回调带上错误：同是 403，网络限制（NETWORK_DENIED）要跳说明页，不是权限变了。 */
 let forbiddenHandler: ((error?: ApiError) => void) | null = null
 let signingOut = false
 

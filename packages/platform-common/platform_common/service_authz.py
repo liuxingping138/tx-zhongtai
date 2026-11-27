@@ -19,6 +19,7 @@ from platform_common.actors import Actor
 from platform_common.authz import AuthzClient
 from platform_common.enums import SecurityClass
 from platform_common.errors import PermissionDeniedError, UnauthenticatedError
+from platform_common.http_utils import client_ip
 from platform_common.route_audit import mark_permission_dependency
 
 
@@ -45,7 +46,14 @@ async def authorize_request(client: AuthzClient, request: Request, resource: str
     不通过时由 client 抛 PermissionDeniedError。
     """
 
-    await client.authorize(access_token=_bearer_token(request), resource=resource, action=action)
+    await client.authorize(access_token=_bearer_token(request), resource=resource, action=action, **_ip_kwargs(request))
+
+
+def _ip_kwargs(request: Request) -> dict[str, str]:
+    """路由鉴权依赖开了 send_client_ip 时，同一请求里的其他鉴权调用也带上来源 IP（IAM 对限定网络的模块要核对）。"""
+
+    ip = getattr(request.state, "authz_client_ip", None)
+    return {"client_ip": ip} if isinstance(ip, str) and ip else {}
 
 
 @functools.cache
@@ -74,10 +82,11 @@ async def resource_levels(request: Request, client: AuthzClient, resources: list
         return {resource: preloaded[resource] for resource in resources if preloaded.get(resource)}
 
     token = _bearer_token(request)
+    ip_kwargs = _ip_kwargs(request)
 
     async def level(resource: str) -> str | None:
         try:
-            result = await client.authorize(access_token=token, resource=resource, action=action)
+            result = await client.authorize(access_token=token, resource=resource, action=action, **ip_kwargs)
         except PermissionDeniedError:
             return None
         return result.level or None
@@ -90,8 +99,12 @@ def build_permission_dependency(
     get_client: Callable[..., AuthzClient],
     *,
     scope_prefixes: Sequence[str] | None = None,
+    send_client_ip: bool = False,
 ) -> Callable[[str, str], Callable[..., Any]]:
-    """构造本服务的 require_*_permission 工厂；服务名在 get_client 构造 AuthzClient 时已写入。"""
+    """构造本服务的 require_*_permission 工厂；服务名在 get_client 构造 AuthzClient 时已写入。
+
+    send_client_ip：鉴权时带上来源 IP，IAM 据此对限定公司网络的模块核对访问白名单（智库开着）。
+    """
 
     def require_permission(resource: str, action: str) -> Callable[..., Any]:
         async def dependency(
@@ -100,11 +113,14 @@ def build_permission_dependency(
             # 参数会被误当成查询参数。这里只能用默认值写法。
             client: AuthzClient = Depends(get_client),  # noqa: B008  闭包依赖不能写成 Annotated，原因见上
         ) -> Actor:
+            if send_client_ip:
+                request.state.authz_client_ip = client_ip(request)
             result = await client.authorize(
                 access_token=_bearer_token(request),
                 resource=resource,
                 action=action,
                 scope_prefixes=scope_prefixes,
+                **_ip_kwargs(request),
             )
             if result.level:
                 request.state.authz_level = result.level

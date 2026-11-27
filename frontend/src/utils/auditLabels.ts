@@ -7,6 +7,7 @@ export const MODULE_LABELS: Record<string, string> = {
   'system.permissions': '权限分配',
   'system.audit': '操作日志',
   'system.scheduler': '任务调度',
+  'system.ip_whitelist': '访问白名单',
   policy: '政策',
   'policy.sources': '信源管理',
   'policy.base_tags': '政策基础标签表',
@@ -42,7 +43,6 @@ export const MODULE_LABELS: Record<string, string> = {
   'thinktank.reports': '报告库',
   'thinktank.proposals': '方案库',
   'thinktank.favorites': '我的收藏',
-  'thinktank.ip_whitelist': '访问白名单',
 }
 
 export const ACTION_LABELS: Record<string, string> = {
