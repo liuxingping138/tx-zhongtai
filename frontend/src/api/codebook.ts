@@ -245,3 +245,60 @@ export function confirmEnrich(body: {
 }): Promise<{ rows: number }> {
   return request(http.post('/codebook/scenarios/enrich-confirm', body))
 }
+
+export type ThinktankDictSlug =
+  | 'file-types'
+  | 'departments'
+  | 'industries'
+  | 'product-types'
+  | 'provinces'
+  | 'market-categories'
+
+export interface ThinktankDictItem {
+  id: string
+  dict_type: string
+  name: string
+  sort_order: number
+  version: number
+  created_at: string
+  created_by_name: string
+  updated_at: string
+  updated_by_name: string
+}
+
+export function listThinktankDicts(
+  slug: ThinktankDictSlug,
+  params: { keyword?: FilterParam; page?: number; page_size?: number },
+): Promise<Page<ThinktankDictItem>> {
+  return request(http.get(`/codebook/thinktank/${slug}`, { params }))
+}
+
+export function createThinktankDict(
+  slug: ThinktankDictSlug,
+  payload: { name: string; sort_order?: number },
+): Promise<ThinktankDictItem> {
+  return request(http.post(`/codebook/thinktank/${slug}`, payload))
+}
+
+export function updateThinktankDict(
+  slug: ThinktankDictSlug,
+  id: string,
+  payload: { name?: string; sort_order?: number; version: number },
+): Promise<ThinktankDictItem> {
+  return request(http.patch(`/codebook/thinktank/${slug}/${id}`, payload))
+}
+
+export function deleteThinktankDict(
+  slug: ThinktankDictSlug,
+  id: string,
+): Promise<{ deleted: boolean }> {
+  return request(http.delete(`/codebook/thinktank/${slug}/${id}`))
+}
+
+export function importThinktankDicts(
+  slug: ThinktankDictSlug,
+  file: File,
+  onProgress?: (percent: number, stage: ImportStage) => void,
+): Promise<ImportResult> {
+  return postExcelImport(`/codebook/thinktank/${slug}/import`, file, onProgress)
+}
