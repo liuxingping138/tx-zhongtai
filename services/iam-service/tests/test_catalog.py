@@ -162,11 +162,14 @@ def test_thinktank_catalog_has_knowledge_reports_proposals_favorites_and_scopes(
         assert levels[(dl_code, "download")] == GrantLevel.READ
         for act in ("create", "update", "upload_tags", "delete"):
             assert levels[(lib_code, act)] == GrantLevel.FULL
+    assert levels[("thinktank.statistics", "list")] == GrantLevel.READ
+    assert levels[("thinktank.statistics", "export")] == GrantLevel.EXPORT
     assert levels[("thinktank.favorites", "list")] == GrantLevel.READ
     assert levels[("thinktank.favorites", "favorite")] == GrantLevel.READ
 
     menus = [spec for spec in MENU_SPECS if spec.parent_code == "menu.thinktank"]
     assert [(m.code, m.title, m.route_name, m.resource_code, m.sort_order) for m in menus] == [
+        ("menu.thinktank.statistics", "智库统计", "thinktank-statistics", "thinktank.statistics", 450),
         ("menu.thinktank.knowledge", "资料库", "thinktank-knowledge", "thinktank.knowledge", 451),
         ("menu.thinktank.reports", "报告库", "thinktank-reports", "thinktank.reports", 452),
         ("menu.thinktank.proposals", "方案库", "thinktank-proposals", "thinktank.proposals", 453),

@@ -113,6 +113,7 @@ class ReportOpLog(Base):
     __tablename__ = "thinktank_report_logs"
     __table_args__ = (
         Index("ix_thinktank_rl_file_created", "file_id", "created_at"),
+        Index("ix_thinktank_rl_created_op", "created_at", "op_type"),
         {"comment": "报告库文件操作日志"},
     )
 
@@ -234,6 +235,7 @@ class ProposalOpLog(Base):
     __tablename__ = "thinktank_proposal_logs"
     __table_args__ = (
         Index("ix_thinktank_pl_file_created", "file_id", "created_at"),
+        Index("ix_thinktank_pl_created_op", "created_at", "op_type"),
         {"comment": "方案库文件操作日志"},
     )
 

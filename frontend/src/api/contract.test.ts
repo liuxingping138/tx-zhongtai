@@ -35,6 +35,7 @@ import * as scheduler from './scheduler'
 import * as system from './system'
 import * as tender from './tender'
 import * as thinktank from './thinktank'
+import * as thinktankStats from './thinktankStats'
 
 type Spec = { paths: Record<string, Record<string, unknown>> }
 
@@ -68,6 +69,7 @@ const modules = {
   system,
   tender,
   thinktank,
+  thinktankStats,
 }
 
 const wrappers = Object.entries(modules).flatMap(([module, exports]) =>
@@ -87,7 +89,7 @@ describe('前端接口封装与后端 OpenAPI 一致', () => {
     else if (label === 'tender.getTenderRecord' || label === 'tender.getTenderContent') await fn('winbid', '123', '0')
     else if (label.startsWith('filterOptions.')) await fn('/policy/sources', 'province_name', '京')
     else if (/^codebook\.(list|create|update|delete|import)ThinktankDicts?$/.test(label)) await fn('file-types', 'id-1', {})
-    else if (label === 'thinktank.unfavoriteThinktankItem' || label === 'thinktank.downloadThinktankItemBlob') await fn('reports', 'id-1')
+    else if (['thinktank.unfavoriteThinktankItem', 'thinktank.downloadThinktankItemBlob', 'thinktankStats.getThinktankDocPeek'].includes(label)) await fn('reports', 'id-1')
     else await fn('id-1', () => Promise.resolve({}))
     expect(calls.length).toBeGreaterThan(0)
     for (const { method, url } of calls) {
@@ -157,6 +159,7 @@ describe('前端接口封装与后端 OpenAPI 一致', () => {
     '/thinktank/knowledge/export',
     '/thinktank/reports/export',
     '/thinktank/proposals/export',
+    '/thinktank/statistics/export',
   ]
 
   it.each(EXPORT_PATHS)('导出接口 GET /api/v1%s 在后端 OpenAPI 中存在', path => {

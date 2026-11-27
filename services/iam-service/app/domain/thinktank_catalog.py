@@ -86,6 +86,7 @@ THINKTANK_SCOPE_PREFIXES: tuple[str, ...] = ("thinktank.file_type.", "thinktank.
 
 THINKTANK_RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("thinktank", "智库", "thinktank-service", NodeType.DIRECTORY, True, 45),
+    ResourceSpec("thinktank.statistics", "智库统计", "thinktank-service", NodeType.RESOURCE, True, 450, "thinktank"),
     ResourceSpec("thinktank.knowledge", "资料库", "thinktank-service", NodeType.RESOURCE, True, 451, "thinktank"),
     ResourceSpec("thinktank.reports", "报告库", "thinktank-service", NodeType.RESOURCE, True, 452, "thinktank"),
     ResourceSpec("thinktank.proposals", "方案库", "thinktank-service", NodeType.RESOURCE, True, 453, "thinktank"),
@@ -162,6 +163,8 @@ THINKTANK_RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
 )
 
 THINKTANK_ACTION_SPECS: tuple[ActionSpec, ...] = (
+    ActionSpec("thinktank.statistics", "list", GrantLevel.READ),
+    ActionSpec("thinktank.statistics", "export", GrantLevel.EXPORT),
     *_library_actions("thinktank.knowledge"),
     *_library_actions("thinktank.reports"),
     *_library_actions("thinktank.proposals"),
@@ -174,6 +177,15 @@ THINKTANK_ACTION_SPECS: tuple[ActionSpec, ...] = (
 
 THINKTANK_MENU_SPECS: tuple[MenuSpec, ...] = (
     MenuSpec("menu.thinktank", "智库", 45, enabled=True),
+    MenuSpec(
+        "menu.thinktank.statistics",
+        "智库统计",
+        450,
+        "thinktank-statistics",
+        "thinktank.statistics",
+        "menu.thinktank",
+        enabled=True,
+    ),
     MenuSpec(
         "menu.thinktank.knowledge",
         "资料库",

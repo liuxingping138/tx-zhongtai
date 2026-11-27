@@ -102,6 +102,7 @@ class KnowledgeOpLog(Base):
     __tablename__ = "thinktank_knowledge_logs"
     __table_args__ = (
         Index("ix_thinktank_kl_file_created", "file_id", "created_at"),
+        Index("ix_thinktank_kl_created_op", "created_at", "op_type"),
         {"comment": "知识库文件操作日志"},
     )
 

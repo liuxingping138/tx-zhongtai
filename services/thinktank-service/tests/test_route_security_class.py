@@ -7,6 +7,7 @@ from platform_common.route_audit import audit_routes, permission_map
 from app.main import app
 
 EXPECTED_RESOURCE_BY_PREFIX = (
+    ("/api/v1/thinktank/statistics", "thinktank.statistics"),
     ("/api/v1/thinktank/knowledge", "thinktank.knowledge"),
     ("/api/v1/thinktank/reports", "thinktank.reports"),
     ("/api/v1/thinktank/proposals", "thinktank.proposals"),
@@ -45,6 +46,7 @@ def test_every_non_public_route_uses_authoritative_permission() -> None:
         else:
             assert action in {"list", "read", "preview", "export", "export_undefined"}
     assert seen_resources == {
+        "thinktank.statistics",
         "thinktank.knowledge",
         "thinktank.knowledge.download",
         "thinktank.reports",

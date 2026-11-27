@@ -24,6 +24,7 @@ from app.core.storage import close_storage_client
 from app.favorites.api.routes import router as favorites_router
 from app.knowledge.api.routes import router as knowledge_router
 from app.library.api.routes import proposals_router, reports_router
+from app.statistics.api.routes import router as statistics_router
 
 settings = get_settings()
 setup_logging(settings.service_name, level=settings.log_level, json_output=settings.environment != "development")
@@ -89,6 +90,7 @@ def create_app() -> FastAPI:
     app.include_router(reports_router)
     app.include_router(proposals_router)
     app.include_router(favorites_router)
+    app.include_router(statistics_router)
     return app
 
 

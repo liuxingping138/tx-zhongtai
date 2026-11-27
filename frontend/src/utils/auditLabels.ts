@@ -39,6 +39,7 @@ export const MODULE_LABELS: Record<string, string> = {
   'ai.billing': '费用账单',
   'ai.releases': '模板上线',
   thinktank: '智库',
+  'thinktank.statistics': '智库统计',
   'thinktank.knowledge': '资料库',
   'thinktank.reports': '报告库',
   'thinktank.proposals': '方案库',

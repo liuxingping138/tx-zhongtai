@@ -250,6 +250,12 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '中标基础数据详情', resource: 'tender.winbid', menuPath: '/tender/winbid' },
       },
       {
+        path: 'thinktank/statistics',
+        name: 'thinktank-statistics',
+        component: () => import('@/modules/thinktank/statistics/ThinktankStatistics.vue'),
+        meta: { title: '智库统计', resource: 'thinktank.statistics' },
+      },
+      {
         path: 'thinktank/knowledge',
         name: 'thinktank-knowledge',
         component: () => import('@/modules/thinktank/knowledge/KnowledgeList.vue'),
