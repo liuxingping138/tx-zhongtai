@@ -4,7 +4,13 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { errorMessage, isStaleConflict, markShown } from '@/api/errors'
 import { getRole, listResourceTree, listRoleGrants, replaceRoleGrants } from '@/api/system'
 import type { ResourceNode, RoleItem } from '@/api/types'
-import { LEVEL_TEXT, capabilityModules, moduleGroups, moduleNames } from '@/permissions/catalog'
+import {
+  capabilityModules,
+  formatGrantLevel,
+  isThinktankDownloadCode,
+  moduleGroups,
+  moduleNames,
+} from '@/permissions/catalog'
 import { grantDiff, grantsFromTree, type GrantLevel } from '@/permissions/levels'
 import {
   collapseScopeDiffs,
@@ -69,11 +75,17 @@ export function useRoleGrants(options: RoleGrantsOptions) {
       const counts = role.value?.grant_counts
       return counts ? counts.read + counts.export + counts.full : 0
     }
-    return Object.entries(selected.value).filter(([code, level]) => level !== 'NONE' && !isThinktankScopeCode(code)).length
+    return Object.entries(selected.value).filter(
+      ([code, level]) => level !== 'NONE' && !isThinktankScopeCode(code) && !isThinktankDownloadCode(code),
+    ).length
   })
 
   function updateSelected(next: Grants): void {
     selected.value = syncThinktankScopesWithMenu(thinktankLibs.value, selected.value, next)
+  }
+
+  function replaceSelected(next: Grants): void {
+    selected.value = next
   }
 
   // 快速切换角色时先发的请求可能后回来：只认最后一次，不然左边高亮的是 B，右边显示、保存的却是 A。
@@ -138,7 +150,10 @@ export function useRoleGrants(options: RoleGrantsOptions) {
     const current = role.value
     if (saving.value || !current || !changes.value.length || options.readonly()) return
     const summary = changes.value
-      .map(item => `${item.label ?? names.value[item.code] ?? item.code}：${LEVEL_TEXT[item.from]} → ${LEVEL_TEXT[item.to]}`)
+      .map(
+        item =>
+          `${item.label ?? names.value[item.code] ?? item.code}：${formatGrantLevel(item.code, item.from)} → ${formatGrantLevel(item.code, item.to)}`,
+      )
       .join('\n')
     saving.value = true
     try {
@@ -180,6 +195,6 @@ export function useRoleGrants(options: RoleGrantsOptions) {
   return {
     role, tree, selected, original, loading, saving, loadError,
     groups, capabilities, thinktankLibs, names, changes, openedCount,
-    updateSelected, load, refreshRole, confirmDiscard, reset, save,
+    updateSelected, replaceSelected, load, refreshRole, confirmDiscard, reset, save,
   }
 }

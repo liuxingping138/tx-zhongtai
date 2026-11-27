@@ -9,6 +9,7 @@ from __future__ import annotations
 from app.domain.catalog_types import ActionSpec, MenuSpec, ResourceSpec
 from app.domain.enums import GrantLevel, NodeType
 from app.domain.thinktank_catalog import (
+    RETIRED_THINKTANK_ACTIONS,
     THINKTANK_ACTION_SPECS,
     THINKTANK_MENU_SPECS,
     THINKTANK_RESOURCE_SPECS,
@@ -27,6 +28,7 @@ RETIRED_ACTIONS: tuple[tuple[str, str], ...] = (
     # 基础标签、政策解读都是 AI 打标从源库读来的，没有手工新增，只留导入
     ("policy.base_tags", "create"),
     ("policy.interpretations", "create"),
+    *RETIRED_THINKTANK_ACTIONS,
 )
 
 _THINKTANK_CODEBOOK_RESOURCES: tuple[tuple[str, str, int, str, int], ...] = (

@@ -12,8 +12,9 @@ import {
   countTotalModules,
   filterCapabilities,
   filterGroupsByStatus,
-  isChanged,
+  isDownloadEnabled,
   isLocked,
+  isModuleChanged,
   levelOf as grantLevel,
   openedCount as groupOpenedCount,
   toggleCell,
@@ -71,12 +72,14 @@ const allCollapsed = computed(
 )
 
 const levelOf = (code: string) => grantLevel(props.modelValue, code)
-const changed = (code: string) => isChanged(props.modelValue, props.original, code)
+const changed = (module: ModuleEntry) => isModuleChanged(module, props.modelValue, props.original)
+const downloadOn = (module: ModuleEntry) => isDownloadEnabled(module, props.modelValue)
 const locked = (module: ModuleEntry) => isLocked(module, props.roleCode)
 const openedCount = (group: ModuleGroup) => groupOpenedCount(group, props.modelValue)
 const columnState = (group: ModuleGroup, column: Column) =>
   groupColumnState(group, column, props.modelValue, props.roleCode)
 const isGroupCollapsed = (code: string) => Boolean(collapsed[code]) && !keyword.value.trim()
+const isAllScopeWarn = (code: string) => props.scopeBadges?.[code] === '数据范围：全部' && grantLevel(props.original, code) === 'NONE'
 
 function capabilityHint(module: ModuleEntry): string {
   return locked(module) ? lockReason(module.code, props.roleCode) : '能给人分配角色，也能修改角色权限'
@@ -250,7 +253,7 @@ onBeforeUnmount(() => {
             v-for="module in group.modules"
             :key="module.code"
             class="perm-row perm-table__row perm-grid-cols"
-            :class="{ 'is-on': levelOf(module.code) !== 'NONE', 'is-changed': changed(module.code) }"
+            :class="{ 'is-on': levelOf(module.code) !== 'NONE', 'is-changed': changed(module) }"
             role="row"
           >
             <div class="perm-row__name">
@@ -261,6 +264,12 @@ onBeforeUnmount(() => {
                 :class="`is-${levelOf(module.code).toLowerCase()}`"
               >
                 {{ SHORT_LEVEL_TEXT[levelOf(module.code)] }}
+              </span>
+              <span
+                v-if="downloadOn(module)"
+                class="perm-level-pill is-download"
+              >
+                可下载
               </span>
               <el-tooltip
                 v-if="locked(module)"
@@ -275,14 +284,15 @@ onBeforeUnmount(() => {
                 </el-icon>
               </el-tooltip>
               <span
-                v-if="changed(module.code)"
+                v-if="changed(module)"
                 class="perm-row__changed"
               >已修改</span>
               <button
                 v-if="scopeBadges?.[module.code]"
                 type="button"
                 class="perm-scope-chip"
-                title="点击前往「智库数据权限」精细配置范围"
+                :class="{ 'is-all-warn': isAllScopeWarn(module.code) }"
+                :title="isAllScopeWarn(module.code) ? '新开通时默认放行全部文件类型与行业，点击前往「智库数据权限」按需缩小范围' : '点击前往「智库数据权限」精细配置范围'"
                 @click="emit('openScope', module.code)"
               >
                 <span>{{ scopeBadges[module.code] }}</span>
@@ -293,7 +303,7 @@ onBeforeUnmount(() => {
             </div>
             <PermissionCells
               :module="module"
-              :level="levelOf(module.code)"
+              :grants="modelValue"
               :disabled="disabled || locked(module)"
               @toggle="onCell(module, $event)"
               @hover-col="hoveredCol = $event"
@@ -317,7 +327,7 @@ onBeforeUnmount(() => {
             <span class="perm-group__name">特殊能力</span>
             <span class="perm-group__count">仅超管</span>
           </div>
-          <div /><div /><div />
+          <div /><div /><div /><div />
           <div class="perm-group__note">
             不是菜单，仅属于超级管理员。
           </div>
@@ -326,7 +336,7 @@ onBeforeUnmount(() => {
           v-for="module in visibleCapabilities"
           :key="module.code"
           class="perm-row perm-table__row perm-grid-cols"
-          :class="{ 'is-on': levelOf(module.code) !== 'NONE', 'is-changed': changed(module.code) }"
+          :class="{ 'is-on': levelOf(module.code) !== 'NONE', 'is-changed': changed(module) }"
           role="row"
         >
           <div class="perm-row__name">
@@ -348,7 +358,7 @@ onBeforeUnmount(() => {
           </div>
           <PermissionCells
             :module="module"
-            :level="levelOf(module.code)"
+            :grants="modelValue"
             :disabled="disabled || locked(module)"
             @toggle="onCell(module, $event)"
             @hover-col="hoveredCol = $event"

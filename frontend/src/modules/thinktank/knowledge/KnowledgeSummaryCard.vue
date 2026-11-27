@@ -54,7 +54,7 @@ const facts = computed(() => buildKnowledgeFacts(props.item, formatTime))
           {{ item.is_favorited ? '已收藏' : '收藏' }}
         </el-button>
         <el-button
-          v-if="item.can_export"
+          v-if="item.can_download"
           size="small"
           :icon="Download"
           :loading="downloading"

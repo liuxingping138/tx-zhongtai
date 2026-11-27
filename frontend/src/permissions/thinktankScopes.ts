@@ -1,5 +1,5 @@
 import type { ResourceNode } from '@/api/types'
-import { rank, type ModuleEntry, type ModuleGroup } from './catalog'
+import { isThinktankDownloadCode, rank, type ModuleEntry, type ModuleGroup } from './catalog'
 import type { GrantLevel } from './levels'
 import { levelOf, type Grants } from './matrix'
 
@@ -12,6 +12,7 @@ const WRITE_LABELS: Record<string, string> = {
 export interface ThinktankLibraryScope {
   code: string
   name: string
+  downloadCode?: string
   dimensions: ModuleGroup[]
 }
 
@@ -50,10 +51,20 @@ function buildDimensionGroup(dimNode: ResourceNode): ModuleGroup | null {
 
 function buildLibraryScope(libNode: ResourceNode): ThinktankLibraryScope | null {
   if (libNode.node_type !== 'resource' || !libNode.published) return null
+  const downloadChild = (libNode.children ?? []).find(
+    child => child.node_type === 'resource' && child.published && isThinktankDownloadCode(child.code),
+  )
   const dimensions = (libNode.children ?? [])
     .map(buildDimensionGroup)
     .filter((item): item is ModuleGroup => item !== null)
-  return dimensions.length ? { code: libNode.code, name: libNode.name, dimensions } : null
+  return dimensions.length
+    ? {
+        code: libNode.code,
+        name: libNode.name,
+        ...(downloadChild ? { downloadCode: downloadChild.code } : {}),
+        dimensions,
+      }
+    : null
 }
 
 /**
@@ -253,9 +264,33 @@ export function syncThinktankScopesWithMenu(
     const nextMenu = levelOf(next, lib.code)
     if (prevMenu === nextMenu) continue
     out = out ?? { ...next }
+    if (nextMenu === 'NONE' && lib.downloadCode) out[lib.downloadCode] = 'NONE'
     for (const dim of lib.dimensions) {
       syncDimensionOnMenuChange(dim, prev, out, prevMenu, nextMenu)
     }
   }
   return out ?? next
+}
+
+export interface QuickOpenOptions {
+  level: Exclude<GrantLevel, 'NONE'>
+  mode: 'ALL' | 'EMPTY'
+  withDownload?: boolean
+}
+
+/** 智库数据权限页签一键开通子库：支持「默认放行全部范围」或「从空开始，仅选指定项」，并可选择是否同时开通下载原文件。 */
+export function quickOpenThinktankLibrary(
+  lib: ThinktankLibraryScope,
+  grants: Grants,
+  options: QuickOpenOptions,
+): Grants {
+  const next: Grants = { ...grants, [lib.code]: options.level }
+  if (lib.downloadCode) {
+    next[lib.downloadCode] = options.withDownload ? 'READ' : 'NONE'
+  }
+  const scopeLevel: GrantLevel = options.mode === 'ALL' ? options.level : 'NONE'
+  for (const dim of lib.dimensions) {
+    for (const item of dim.modules) next[item.code] = scopeLevel
+  }
+  return next
 }

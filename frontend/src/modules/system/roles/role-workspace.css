@@ -75,7 +75,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 2px 8px;
-  padding: 10px 12px 10px 14px;
+  padding: 9px 10px 9px 13px;
   border: 1px solid transparent;
   border-radius: var(--zt-radius);
   background: none;
@@ -120,8 +120,10 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
+  gap: 3px 5px;
   min-width: 0;
+  font-size: 13.5px;
+  line-height: 1.35;
   font-weight: 500;
   color: var(--zt-ink-900);
 }

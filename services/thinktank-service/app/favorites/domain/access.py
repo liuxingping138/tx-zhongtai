@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from app.knowledge.domain.scopes import ALL_SCOPE_RESOURCES, KnowledgeAccess
+from app.knowledge.domain.scopes import ALL_SCOPE_RESOURCES, KNOWLEDGE_DOWNLOAD_RESOURCE, KnowledgeAccess
 
 _READ_LEVELS = frozenset({"READ", "EXPORT", "FULL"})
 _EXPORT_LEVELS = frozenset({"EXPORT", "FULL"})
@@ -20,17 +20,22 @@ ALL_FAVORITES_SCOPE_RESOURCES: list[str] = [
     "thinktank.knowledge",
     "thinktank.reports",
     "thinktank.proposals",
+    KNOWLEDGE_DOWNLOAD_RESOURCE,
+    "thinktank.reports.download",
+    "thinktank.proposals.download",
     *ALL_SCOPE_RESOURCES,
 ]
 
 
 @dataclass(frozen=True)
 class FavoritesAccess:
-    """当前用户在智库三个子库上的实时访问与导出能力。"""
+    """当前用户在智库三个子库上的实时访问、下载与导出能力。"""
 
     knowledge: KnowledgeAccess | None = None
     reports_level: str | None = None
     proposals_level: str | None = None
+    reports_allow_download: bool = False
+    proposals_allow_download: bool = False
 
     @classmethod
     def from_levels(cls, levels: Mapping[str, str]) -> FavoritesAccess:
@@ -42,6 +47,8 @@ class FavoritesAccess:
             knowledge=knowledge,
             reports_level=r_level if r_level in _READ_LEVELS else None,
             proposals_level=p_level if p_level in _READ_LEVELS else None,
+            reports_allow_download=levels.get("thinktank.reports.download") in _READ_LEVELS,
+            proposals_allow_download=levels.get("thinktank.proposals.download") in _READ_LEVELS,
         )
 
     @property
@@ -59,6 +66,14 @@ class FavoritesAccess:
     @property
     def can_read_proposals(self) -> bool:
         return self.proposals_level in _READ_LEVELS
+
+    @property
+    def reports_can_download(self) -> bool:
+        return self.can_read_reports and self.reports_allow_download
+
+    @property
+    def proposals_can_download(self) -> bool:
+        return self.can_read_proposals and self.proposals_allow_download
 
     @property
     def reports_can_export(self) -> bool:

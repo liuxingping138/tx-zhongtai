@@ -2,14 +2,15 @@ import { isChecked, lockReason, supports, toggleColumn, type ModuleEntry, type M
 import type { GrantLevel } from './levels'
 
 /** 角色权限矩阵的纯逻辑：谁被锁定、整组一列怎么勾、搜索与状态过滤怎么筛。组件只负责渲染。 */
-export type Column = Exclude<GrantLevel, 'NONE'>
+export type Column = Exclude<GrantLevel, 'NONE'> | 'DOWNLOAD'
 export type Grants = Record<string, GrantLevel>
 export type PermissionStatusFilter = 'ALL' | 'OPEN' | 'CHANGED'
 
 export const COLUMNS: { level: Column; label: string; sub: string; what: string }[] = [
   { level: 'READ', label: '查看', sub: '列表/详情', what: '打开菜单，看列表和详情' },
-  { level: 'EXPORT', label: '导出', sub: '下载 Excel', what: '下载 Excel' },
-  { level: 'FULL', label: '管理', sub: '增删改/导入', what: '新增、编辑、导入等' },
+  { level: 'DOWNLOAD', label: '下载', sub: '原文件', what: '下载智库资料/报告/方案原文件（独立于导出 Excel）' },
+  { level: 'EXPORT', label: '导出', sub: '导出 Excel', what: '导出当前列表或未定义清单 Excel' },
+  { level: 'FULL', label: '管理', sub: '增删改/导入', what: '新增、编辑、上传、导入等' },
 ]
 
 export function levelOf(grants: Grants, code: string): GrantLevel {
@@ -18,6 +19,26 @@ export function levelOf(grants: Grants, code: string): GrantLevel {
 
 export function isChanged(grants: Grants, original: Grants, code: string): boolean {
   return levelOf(grants, code) !== levelOf(original, code)
+}
+
+export function isDownloadEnabled(module: ModuleEntry, grants: Grants): boolean {
+  if (!module.downloadCode) return false
+  return levelOf(grants, module.code) !== 'NONE' && levelOf(grants, module.downloadCode) !== 'NONE'
+}
+
+export function supportsColumn(module: ModuleEntry, column: Column): boolean {
+  if (column === 'DOWNLOAD') return Boolean(module.downloadCode)
+  return supports(module, column)
+}
+
+export function isColumnChecked(module: ModuleEntry, column: Column, grants: Grants): boolean {
+  if (column === 'DOWNLOAD') return isDownloadEnabled(module, grants)
+  return isChecked(levelOf(grants, module.code), column)
+}
+
+export function isModuleChanged(module: ModuleEntry, grants: Grants, original: Grants): boolean {
+  if (isChanged(grants, original, module.code)) return true
+  return Boolean(module.downloadCode && isChanged(grants, original, module.downloadCode))
 }
 
 export function isLocked(module: ModuleEntry, roleCode: string | undefined): boolean {
@@ -54,7 +75,7 @@ function matchesStatus(
   status: PermissionStatusFilter,
 ): boolean {
   if (status === 'OPEN') return levelOf(grants, module.code) !== 'NONE'
-  if (status === 'CHANGED') return isChanged(grants, original, module.code)
+  if (status === 'CHANGED') return isModuleChanged(module, grants, original)
   return true
 }
 
@@ -84,21 +105,40 @@ export function countOpenedModules(groups: ModuleGroup[], grants: Grants): numbe
 
 export function countChangedModules(groups: ModuleGroup[], grants: Grants, original: Grants): number {
   return groups.reduce(
-    (acc, group) => acc + group.modules.filter(module => isChanged(grants, original, module.code)).length,
+    (acc, group) => acc + group.modules.filter(module => isModuleChanged(module, grants, original)).length,
     0,
   )
+}
+
+function applyModuleColumn(module: ModuleEntry, column: Column, grants: Grants, next: Grants): void {
+  if (column === 'DOWNLOAD') {
+    const dlCode = module.downloadCode
+    if (!dlCode) return
+    if (isDownloadEnabled(module, grants)) {
+      next[dlCode] = 'NONE'
+      return
+    }
+    if (levelOf(grants, module.code) === 'NONE') next[module.code] = 'READ'
+    next[dlCode] = 'READ'
+    return
+  }
+  const nextLevel = toggleColumn(module, levelOf(grants, module.code), column)
+  next[module.code] = nextLevel
+  if (nextLevel === 'NONE' && module.downloadCode) next[module.downloadCode] = 'NONE'
 }
 
 /** 点单个格子后的新授权；锁定或这个菜单没有这项操作时返回 null。 */
 export function toggleCell(
   module: ModuleEntry, column: Column, grants: Grants, roleCode: string | undefined,
 ): Grants | null {
-  if (isLocked(module, roleCode) || !supports(module, column)) return null
-  return { ...grants, [module.code]: toggleColumn(module, levelOf(grants, module.code), column) }
+  if (isLocked(module, roleCode) || !supportsColumn(module, column)) return null
+  const next = { ...grants }
+  applyModuleColumn(module, column, grants, next)
+  return next
 }
 
 function columnTargets(group: ModuleGroup, column: Column, roleCode: string | undefined): ModuleEntry[] {
-  return group.modules.filter(module => !isLocked(module, roleCode) && supports(module, column))
+  return group.modules.filter(module => !isLocked(module, roleCode) && supportsColumn(module, column))
 }
 
 /** 整组一列的复选框状态：没有可勾的行时 empty，不画复选框。 */
@@ -106,7 +146,7 @@ export function columnState(
   group: ModuleGroup, column: Column, grants: Grants, roleCode: string | undefined,
 ): { checked: boolean; indeterminate: boolean; empty: boolean } {
   const targets = columnTargets(group, column, roleCode)
-  const on = targets.filter(module => isChecked(levelOf(grants, module.code), column)).length
+  const on = targets.filter(module => isColumnChecked(module, column, grants)).length
   return { checked: targets.length > 0 && on === targets.length, indeterminate: on > 0 && on < targets.length, empty: !targets.length }
 }
 
@@ -116,11 +156,10 @@ export function toggleGroupColumn(
 ): Grants | null {
   const targets = columnTargets(group, column, roleCode)
   if (!targets.length) return null
-  const allOn = targets.every(module => isChecked(levelOf(grants, module.code), column))
+  const allOn = targets.every(module => isColumnChecked(module, column, grants))
   const next = { ...grants }
   for (const module of targets) {
-    const current = levelOf(grants, module.code)
-    if (allOn || !isChecked(current, column)) next[module.code] = toggleColumn(module, current, column)
+    if (allOn || !isColumnChecked(module, column, grants)) applyModuleColumn(module, column, grants, next)
   }
   return next
 }

@@ -35,7 +35,7 @@ from tests.helpers import no_pdf_tools, preview_settings
 
 ACTOR = Actor(id="u1", name="测试管理员")
 NOW = datetime(2026, 11, 27, 8, 0, tzinfo=UTC)
-FULL_LIB_ACCESS = LibraryAccess(level="FULL")
+FULL_LIB_ACCESS = LibraryAccess(level="FULL", allow_download=True)
 READ_LIB_ACCESS = LibraryAccess(level="READ")
 
 
@@ -408,7 +408,16 @@ async def test_library_preview_download_logs_and_delete(
         access=READ_LIB_ACCESS,
         file_id=row.id,
     )
-    assert detail["can_export"] is False and detail["can_edit"] is False
+    assert detail["can_download"] is False and detail["can_export"] is False and detail["can_edit"] is False
+
+    dl_only_detail = await library_read.get_detail(
+        session,  # type: ignore[arg-type]
+        spec,
+        actor=ACTOR,
+        access=LibraryAccess(level="READ", allow_download=True),
+        file_id=row.id,
+    )
+    assert dl_only_detail["can_download"] is True and dl_only_detail["can_export"] is False
 
     preview_res = await library_read.preview_item(
         session,  # type: ignore[arg-type]
@@ -652,6 +661,12 @@ def test_library_http_routes_end_to_end(monkeypatch: pytest.MonkeyPatch, slug: s
         assert client.get(f"{base}/{fid}/content").status_code == 200
         assert client.head(f"{base}/{fid}/content").status_code == 200
         assert client.get(f"{base}/{fid}/download").status_code == 200
+        # 仅有 EXPORT 但无独立下载权，或仅有下载权但无子库查看权，均拒绝下载
+        app.dependency_overrides[get_library_access] = lambda: LibraryAccess(level="EXPORT", allow_download=False)
+        assert client.get(f"{base}/{fid}/download").status_code == 403
+        app.dependency_overrides[get_library_access] = lambda: LibraryAccess(level="NONE", allow_download=True)
+        assert client.get(f"{base}/{fid}/download").status_code == 403
+        app.dependency_overrides[get_library_access] = lambda: FULL_LIB_ACCESS
         assert client.post(f"{base}/{fid}/favorite").json()["data"]["is_favorited"] is True
         assert client.delete(f"{base}/{fid}/favorite").status_code == 200
         assert client.get(f"{base}/{fid}/logs").status_code == 200

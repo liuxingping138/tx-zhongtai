@@ -10,7 +10,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from platform_common.actors import Actor
 from platform_common.enums import SecurityClass
-from platform_common.errors import ApiError, ErrorCode
+from platform_common.errors import ApiError, ErrorCode, PermissionDeniedError
 from platform_common.filters import Filters
 from platform_common.http_utils import (
     IMPORT_FILE_OPENAPI,
@@ -198,8 +198,11 @@ def _register_item_read_routes(router: APIRouter, spec: LibrarySpec) -> None:
     async def download_item(
         file_id: uuid.UUID,
         session: AsyncSession = Depends(get_db_session, scope="function"),
-        actor: Actor = Depends(require_thinktank_permission(resource, "download")),
+        actor: Actor = Depends(require_thinktank_permission(f"{resource}.download", "download")),
+        access: LibraryAccess = Depends(get_library_access),
     ) -> StreamingResponse:
+        if not access.can_download:
+            raise PermissionDeniedError(f"没有{spec.item_noun}的下载权限")
         res = await read_service.stream_file_content(session, spec, actor=actor, file_id=file_id, for_download=True)
         headers = {
             "Content-Disposition": content_disposition("attachment", res.filename, fallback=spec.fallback_stem),

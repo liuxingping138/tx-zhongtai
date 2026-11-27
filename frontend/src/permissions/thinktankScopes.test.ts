@@ -10,6 +10,7 @@ import {
   countDimensionChanges,
   isDimensionAllMode,
   isThinktankScopeCode,
+  quickOpenThinktankLibrary,
   scopeBadgeText,
   setDimensionLevel,
   splitGrantDiffs,
@@ -45,6 +46,18 @@ const SAMPLE_TREE: ResourceNode[] = [
           { action_code: 'create', required_level: 'FULL' },
         ],
         children: [
+          {
+            id: '2-dl',
+            code: 'thinktank.knowledge.download',
+            name: '资料库下载',
+            service_code: 'thinktank-service',
+            node_type: 'resource',
+            published: true,
+            sort_order: 455,
+            parent_id: '2',
+            actions: [{ action_code: 'download', required_level: 'READ' }],
+            children: [],
+          },
           {
             id: '3',
             code: 'thinktank.knowledge.file_type',
@@ -220,5 +233,32 @@ describe('thinktankScopes', () => {
     const split = splitGrantDiffs(libs, collapsed)
     expect(split.menuDiffs).toHaveLength(1)
     expect(split.scopeDiffs).toHaveLength(2)
+
+    // 支持「从空开始，仅选指定项」和可选下载原文件的一键开通，且关闭子库时自动清理下载权
+    expect(libs[0]!.downloadCode).toBe('thinktank.knowledge.download')
+    const openEmpty = quickOpenThinktankLibrary(libs[0]!, initial, {
+      level: 'EXPORT',
+      mode: 'EMPTY',
+      withDownload: false,
+    })
+    expect(openEmpty['thinktank.knowledge']).toBe('EXPORT')
+    expect(openEmpty['thinktank.knowledge.download']).toBe('NONE')
+    expect(openEmpty['thinktank.file_type.product']).toBe('NONE')
+    expect(openEmpty['thinktank.industry_type.sme']).toBe('NONE')
+
+    const openWithDl = quickOpenThinktankLibrary(libs[0]!, initial, {
+      level: 'READ',
+      mode: 'ALL',
+      withDownload: true,
+    })
+    expect(openWithDl['thinktank.knowledge']).toBe('READ')
+    expect(openWithDl['thinktank.knowledge.download']).toBe('READ')
+    expect(openWithDl['thinktank.file_type.product']).toBe('READ')
+
+    const closedWithDl = syncThinktankScopesWithMenu(libs, openWithDl, {
+      ...openWithDl,
+      'thinktank.knowledge': 'NONE',
+    })
+    expect(closedWithDl['thinktank.knowledge.download']).toBe('NONE')
   })
 })

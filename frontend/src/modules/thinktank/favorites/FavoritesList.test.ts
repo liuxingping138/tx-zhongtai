@@ -50,7 +50,7 @@ const FavoritesTableStub = {
     <div class="fav-table-stub">
       <div v-for="row in items" :key="row.id" class="fav-row" :data-id="row.id">
         <a class="fav-link" :href="row.preview_path">{{ row.title }}</a>
-        <button v-if="row.can_export" type="button" class="btn-download" @click="$emit('download', row)">下载</button>
+        <button v-if="row.can_download" type="button" class="btn-download" @click="$emit('download', row)">下载</button>
         <button type="button" class="btn-unfav" @click="$emit('unfavorite', row)">取消收藏</button>
       </div>
     </div>
@@ -81,6 +81,7 @@ function makeEntry(overrides: Partial<ThinktankFavoriteEntry> = {}): ThinktankFa
     file_size_display: '1.2 MB',
     favorited_at: '2026-06-01T10:00:00+08:00',
     updated_at: '2026-06-01T10:00:00+08:00',
+    can_download: true,
     can_export: true,
     preview_path: '/thinktank/knowledge/k1',
     ...overrides,
@@ -111,8 +112,8 @@ describe('FavoritesList.vue', () => {
 
   it('渲染分段标签计数、支持切库筛选与关键词搜索', async () => {
     const items = [
-      makeEntry({ id: 'k1', library: 'knowledge', can_export: true }),
-      makeEntry({ id: 'r1', library: 'reports', library_label: '报告库', title: '交付报告.docx', can_export: false, preview_path: '/thinktank/reports/r1' }),
+      makeEntry({ id: 'k1', library: 'knowledge', can_download: true }),
+      makeEntry({ id: 'r1', library: 'reports', library_label: '报告库', title: '交付报告.docx', can_download: false, preview_path: '/thinktank/reports/r1' }),
     ]
     mockListFavorites.mockResolvedValue({
       items,
@@ -154,8 +155,8 @@ describe('FavoritesList.vue', () => {
 
   it('支持下载与立即取消收藏并同步更新列表与标签计数', async () => {
     const items = [
-      makeEntry({ id: 'k1', library: 'knowledge', can_export: true }),
-      makeEntry({ id: 'r1', library: 'reports', library_label: '报告库', can_export: false, preview_path: '/thinktank/reports/r1' }),
+      makeEntry({ id: 'k1', library: 'knowledge', can_download: true }),
+      makeEntry({ id: 'r1', library: 'reports', library_label: '报告库', can_download: false, preview_path: '/thinktank/reports/r1' }),
     ]
     mockListFavorites.mockResolvedValue({
       items,

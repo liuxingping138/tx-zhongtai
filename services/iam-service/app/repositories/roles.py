@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.enums import NodeType, UserStatus
 from app.domain.models import Resource, Role, RoleGrant, User, UserRole
+from app.domain.thinktank_catalog import THINKTANK_DOWNLOAD_CODES
 
 
 async def get_role_by_id(session: AsyncSession, role_id: uuid.UUID) -> Role | None:
@@ -120,7 +121,10 @@ async def member_counts(session: AsyncSession, role_ids: list[uuid.UUID]) -> dic
 
 
 async def grant_level_counts(session: AsyncSession, role_ids: list[uuid.UUID]) -> dict[uuid.UUID, dict[str, int]]:
-    """每个角色在已发布模块上的只读 / 可管理数量。未发布资源与智库数据范围子项不计入，免得摘要与菜单表对不上。"""
+    """每个角色在已发布模块上的只读 / 可管理数量。
+
+    未发布资源、智库下载附加权与数据范围子项不计入，免得摘要与菜单表对不上。
+    """
 
     if not role_ids:
         return {}
@@ -133,6 +137,7 @@ async def grant_level_counts(session: AsyncSession, role_ids: list[uuid.UUID]) -
             Resource.node_type == NodeType.RESOURCE,
             ~Resource.code.startswith("thinktank.file_type."),
             ~Resource.code.startswith("thinktank.industry_type."),
+            ~Resource.code.in_(THINKTANK_DOWNLOAD_CODES),
         )
         .group_by(RoleGrant.role_id, RoleGrant.level)
     )

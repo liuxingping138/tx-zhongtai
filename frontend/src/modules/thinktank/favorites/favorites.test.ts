@@ -23,6 +23,7 @@ function makeEntry(overrides: Partial<ThinktankFavoriteEntry> = {}): ThinktankFa
     file_size_display: '1.2 MB',
     favorited_at: '2026-06-01T10:00:00+08:00',
     updated_at: '2026-06-01T10:00:00+08:00',
+    can_download: true,
     can_export: true,
     preview_path: '/thinktank/knowledge/id-1',
     ...overrides,

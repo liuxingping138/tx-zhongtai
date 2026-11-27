@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest'
 
 import type { ResourceNode } from '@/api/types'
-import { capabilityModules, isChecked, levelHint, lockReason, moduleGroups, moduleNames, toggleColumn, writesHint } from './catalog'
+import {
+  capabilityModules,
+  formatGrantLevel,
+  isChecked,
+  isThinktankDownloadCode,
+  levelHint,
+  lockReason,
+  moduleGroups,
+  moduleNames,
+  toggleColumn,
+  writesHint,
+} from './catalog'
 
 function node(partial: Partial<ResourceNode> & Pick<ResourceNode, 'code' | 'name'>): ResourceNode {
   return {
@@ -144,17 +155,40 @@ describe('moduleNames', () => {
             code: 'thinktank.reports',
             name: '报告库',
             actions: [action('list', 'READ'), action('export', 'EXPORT'), action('create', 'FULL'), action('upload_tags', 'FULL')],
+            children: [
+              node({
+                code: 'thinktank.reports.download',
+                name: '报告库下载',
+                actions: [action('download', 'READ')],
+              }),
+            ],
           }),
           node({
             code: 'thinktank.proposals',
             name: '方案库',
             actions: [action('list', 'READ'), action('create', 'FULL'), action('upload_tags', 'FULL')],
+            children: [
+              node({
+                code: 'thinktank.proposals.download',
+                name: '方案库下载',
+                actions: [action('download', 'READ')],
+              }),
+            ],
           }),
         ],
       }),
     ]
-    const ttMods = moduleGroups(ttTree)[0]!.modules
+    const ttGroups = moduleGroups(ttTree)
+    const ttMods = ttGroups[0]!.modules
     expect(writesHint(ttMods[0]!)).toBe('管理包含：上传文件、上传标签')
     expect(writesHint(ttMods[1]!)).toBe('管理包含：上传文件、上传标签')
+    expect(ttMods[0]!.downloadCode).toBe('thinktank.reports.download')
+    expect(ttMods[1]!.downloadCode).toBe('thinktank.proposals.download')
+    expect(isThinktankDownloadCode('thinktank.reports.download')).toBe(true)
+    expect(isThinktankDownloadCode('thinktank.reports')).toBe(false)
+    expect(formatGrantLevel('thinktank.reports.download', 'READ')).toBe('可下载')
+    expect(formatGrantLevel('thinktank.reports.download', 'NONE')).toBe('不可下载')
+    expect(moduleNames(ttGroups)['thinktank.reports.download']).toBe('智库 / 报告库（下载原文件）')
+    expect(moduleNames(ttGroups)['thinktank.proposals.download']).toBe('智库 / 方案库（下载原文件）')
   })
 })

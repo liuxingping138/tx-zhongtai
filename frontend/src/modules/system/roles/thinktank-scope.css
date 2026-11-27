@@ -90,6 +90,42 @@
   white-space: nowrap;
 }
 
+.tt-dl-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--zt-border);
+  background: var(--zt-panel);
+  color: var(--zt-ink-500);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tt-dl-toggle:hover:not(:disabled) {
+  border-color: var(--zt-teal-line);
+  color: var(--zt-teal-text);
+  background: var(--zt-teal-soft);
+}
+
+.tt-dl-toggle.is-on {
+  border-color: var(--zt-teal-line);
+  background: var(--zt-teal-soft);
+  color: var(--zt-teal-text);
+  font-weight: 600;
+}
+
+.tt-dl-toggle:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .tt-overview__counts strong {
   color: var(--zt-ink-900);
   font-weight: 650;
@@ -131,10 +167,35 @@
 }
 
 .tt-scope__closed-desc {
-  margin: 0 0 14px;
+  margin: 0 0 12px;
   font-size: 13px;
   line-height: 1.6;
   color: var(--zt-ink-700);
+}
+
+.tt-scope__open-options {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-bottom: 12px;
+}
+
+.tt-open-dl-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--zt-ink-700);
+  cursor: pointer;
+  user-select: none;
+}
+
+.tt-open-dl-check input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--zt-blue-600);
+  cursor: pointer;
 }
 
 .tt-scope__quick-btns {
@@ -445,15 +506,35 @@
   display: flex;
   align-items: center;
   gap: 5px;
+  flex: 1 1 auto;
   min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
   font-size: 12.5px;
   font-weight: 550;
   color: var(--zt-ink-900);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tt-item-card__name:disabled {
+  cursor: default;
+}
+
+.tt-item-card:hover:not(.is-disabled) {
+  border-color: var(--zt-border-strong);
 }
 
 .tt-item-card.is-none .tt-item-card__name {
   color: var(--zt-ink-500);
   font-weight: 450;
+}
+
+.tt-item-card.is-none .tt-item-card__name:hover:not(:disabled) {
+  color: var(--zt-blue-600);
 }
 
 .tt-item-card__text {

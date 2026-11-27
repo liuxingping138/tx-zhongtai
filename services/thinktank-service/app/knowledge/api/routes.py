@@ -29,22 +29,31 @@ from app.knowledge.api.schemas import KnowledgePatch
 from app.knowledge.application import export_import, preview_warmup
 from app.knowledge.application import knowledge as service
 from app.knowledge.application import knowledge_write as write_service
-from app.knowledge.domain.scopes import ALL_SCOPE_RESOURCES, KnowledgeAccess
+from app.knowledge.domain.scopes import ALL_SCOPE_RESOURCES, KNOWLEDGE_DOWNLOAD_RESOURCE, KnowledgeAccess
 
 router = APIRouter(prefix="/api/v1/thinktank/knowledge", tags=["thinktank-knowledge"])
 RESOURCE = "thinktank.knowledge"
+DOWNLOAD_RESOURCE = KNOWLEDGE_DOWNLOAD_RESOURCE
+_VALID_LEVELS = frozenset({"READ", "EXPORT", "FULL"})
 
 
 async def get_knowledge_access(
     request: Request,
     client: Annotated[AuthzClient, Depends(get_authz_client)],
 ) -> KnowledgeAccess:
-    """加载当前用户在各文件类型、行业类型上的授权档位，并按子库菜单档位封顶。"""
+    """加载当前用户在资料库、独立下载权及各文件类型/行业类型上的授权档位，并按子库菜单档位封顶。"""
 
     levels = await fetch_scope_levels(request, client, ALL_SCOPE_RESOURCES, "list")
-    raw_level = getattr(request.state, "authz_level", None)
-    module_level = raw_level if isinstance(raw_level, str) and raw_level in {"READ", "EXPORT", "FULL"} else "NONE"
-    return KnowledgeAccess.from_levels(levels, module_level=module_level)
+    scopes = getattr(request.state, "authz_scopes", None)
+    if isinstance(scopes, dict):
+        raw_level = scopes.get(RESOURCE)
+        raw_download = scopes.get(DOWNLOAD_RESOURCE)
+    else:
+        raw_level = getattr(request.state, "authz_level", None)
+        raw_download = levels.get(DOWNLOAD_RESOURCE)
+    module_level = raw_level if isinstance(raw_level, str) and raw_level in _VALID_LEVELS else "NONE"
+    allow_download = isinstance(raw_download, str) and raw_download in _VALID_LEVELS
+    return KnowledgeAccess.from_levels(levels, module_level=module_level, allow_download=allow_download)
 
 
 def knowledge_filters(
@@ -273,7 +282,7 @@ async def get_item_content(
 async def download_item(
     file_id: uuid.UUID,
     session: AsyncSession = Depends(get_db_session, scope="function"),
-    actor: Actor = Depends(require_thinktank_permission(RESOURCE, "download")),
+    actor: Actor = Depends(require_thinktank_permission(DOWNLOAD_RESOURCE, "download")),
     access: KnowledgeAccess = Depends(get_knowledge_access),
 ) -> StreamingResponse:
     res = await service.stream_file_content(session, actor=actor, access=access, file_id=file_id, for_download=True)

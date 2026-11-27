@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { isChecked, supports, type ModuleEntry } from '@/permissions/catalog'
-import type { GrantLevel } from '@/permissions/levels'
-import { COLUMNS, type Column } from '@/permissions/matrix'
+import type { ModuleEntry } from '@/permissions/catalog'
+import { COLUMNS, isColumnChecked, supportsColumn, type Column, type Grants } from '@/permissions/matrix'
 
-/** 矩阵里一个菜单的「查看 / 导出 / 管理」三个整格热区；采用 Material 3 定制矢量复选框。 */
-defineProps<{ module: ModuleEntry; level: GrantLevel; disabled: boolean }>()
+/** 矩阵里一个菜单的「查看 / 下载 / 导出 / 管理」四个整格热区；采用 Material 3 定制矢量复选框。 */
+defineProps<{ module: ModuleEntry; grants: Grants; disabled: boolean }>()
 defineEmits<{
   toggle: [column: Column]
   hoverCol: [column: Column | null]
@@ -17,9 +16,13 @@ defineEmits<{
     :key="column.level"
   >
     <label
-      v-if="supports(module, column.level)"
+      v-if="supportsColumn(module, column.level)"
       class="perm-cell"
-      :class="{ 'is-disabled': disabled, 'is-checked': isChecked(level, column.level) }"
+      :class="{
+        'is-disabled': disabled,
+        'is-checked': isColumnChecked(module, column.level, grants),
+        'is-download': column.level === 'DOWNLOAD',
+      }"
       :title="`${module.name} · ${column.label}（${column.what}）`"
       @mouseenter="$emit('hoverCol', column.level)"
       @mouseleave="$emit('hoverCol', null)"
@@ -29,7 +32,7 @@ defineEmits<{
           type="checkbox"
           class="m3-check"
           :aria-label="`${module.name} ${column.label}`"
-          :checked="isChecked(level, column.level)"
+          :checked="isColumnChecked(module, column.level, grants)"
           :disabled="disabled"
           @change="$emit('toggle', column.level)"
         >

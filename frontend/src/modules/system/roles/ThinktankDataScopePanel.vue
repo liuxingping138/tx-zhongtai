@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { InfoFilled } from '@element-plus/icons-vue'
+import { Download, InfoFilled } from '@element-plus/icons-vue'
 
 import { LEVEL_TEXT, rank, type ModuleEntry, type ModuleGroup } from '@/permissions/catalog'
 import type { GrantLevel } from '@/permissions/levels'
@@ -8,8 +8,8 @@ import { levelOf, openedCount, type Grants } from '@/permissions/matrix'
 import {
   applyDimensionAllMode,
   isDimensionAllMode,
+  quickOpenThinktankLibrary,
   setDimensionLevel,
-  syncThinktankScopesWithMenu,
   type ThinktankLibraryScope,
 } from '@/permissions/thinktankScopes'
 import ThinktankDimCard from './ThinktankDimCard.vue'
@@ -27,6 +27,8 @@ const emit = defineEmits<{ 'update:modelValue': [value: Grants] }>()
 const activeLibCode = ref('')
 // 记录管理员手动切为「指定范围」的维度编码，避免点「指定范围」时因当前值恰好全等而跳回「全部范围」
 const forcedCustom = reactive<Record<string, boolean>>({})
+const quickOpenMode = ref<'ALL' | 'EMPTY'>('ALL')
+const quickOpenWithDownload = ref(false)
 
 watch(
   [() => props.libraries, () => props.initialLibCode],
@@ -47,6 +49,11 @@ const activeLib = computed(() => props.libraries.find(l => l.code === activeLibC
 const activeMenuLevel = computed<GrantLevel>(() =>
   activeLib.value ? levelOf(props.modelValue, activeLib.value.code) : 'NONE',
 )
+const activeDownloadEnabled = computed(() => {
+  const dlCode = activeLib.value?.downloadCode
+  if (!dlCode || activeMenuLevel.value === 'NONE') return false
+  return levelOf(props.modelValue, dlCode) !== 'NONE'
+})
 
 const libMenuLevel = (code: string): GrantLevel => levelOf(props.modelValue, code)
 const shortDimLabel = (name: string): string => name.replace(/范围$/, '').trim() || name
@@ -68,8 +75,26 @@ function setDimMode(dim: ModuleGroup, mode: 'ALL' | 'CUSTOM') {
 
 function quickOpenLibrary(level: Exclude<GrantLevel, 'NONE'>) {
   if (props.disabled || !activeLib.value) return
-  const next = { ...props.modelValue, [activeLib.value.code]: level }
-  emit('update:modelValue', syncThinktankScopesWithMenu(props.libraries, props.modelValue, next))
+  for (const dim of activeLib.value.dimensions) {
+    forcedCustom[dim.code] = quickOpenMode.value === 'EMPTY'
+  }
+  emit(
+    'update:modelValue',
+    quickOpenThinktankLibrary(activeLib.value, props.modelValue, {
+      level,
+      mode: quickOpenMode.value,
+      withDownload: quickOpenWithDownload.value,
+    }),
+  )
+}
+
+function toggleDownload() {
+  const dlCode = activeLib.value?.downloadCode
+  if (props.disabled || !dlCode || activeMenuLevel.value === 'NONE') return
+  emit('update:modelValue', {
+    ...props.modelValue,
+    [dlCode]: activeDownloadEnabled.value ? 'NONE' : 'READ',
+  })
 }
 
 function onSetItem(item: ModuleEntry, level: GrantLevel) {
@@ -121,6 +146,21 @@ function onBatchSet(dim: ModuleGroup, level: GrantLevel) {
               </span>
             </button>
           </div>
+          <button
+            v-if="activeLib && activeMenuLevel !== 'NONE' && activeLib.downloadCode"
+            type="button"
+            class="tt-dl-toggle"
+            :class="{ 'is-on': activeDownloadEnabled }"
+            :disabled="disabled"
+            :aria-pressed="activeDownloadEnabled"
+            :title="activeDownloadEnabled ? '点击关闭该子库原文件下载权限（不影响列表导出 Excel）' : '点击开通该子库原文件下载权限（独立于导出 Excel）'"
+            @click="toggleDownload"
+          >
+            <el-icon :size="12">
+              <Download />
+            </el-icon>
+            <span>下载原文件：{{ activeDownloadEnabled ? '已开通' : '未开通' }}</span>
+          </button>
           <span
             v-if="activeLib && activeMenuLevel !== 'NONE'"
             class="tt-overview__counts"
@@ -138,7 +178,7 @@ function onBatchSet(dim: ModuleGroup, level: GrantLevel) {
           </span>
         </div>
         <el-tooltip
-          content="文档需同时满足所选文件类型与行业类型权限才可见；报告库、方案库当前直接跟随菜单档位生效"
+          content="文档需同时满足所选文件类型与行业类型权限才可见；下载原文件与导出 Excel 各自独立控制；报告库、方案库直接在「菜单权限」按列配置"
           placement="top-end"
         >
           <span class="tt-overview__rule">
@@ -161,8 +201,49 @@ function onBatchSet(dim: ModuleGroup, level: GrantLevel) {
           尚未开通「{{ activeLib.name }}」菜单访问权限
         </p>
         <p class="tt-scope__closed-desc">
-          数据范围权限建立在子库菜单权限之上。请先在「菜单权限」页签开通「{{ activeLib.name }}」，或直接点击下方按钮一键开通（默认自动开启该库全部文件类型与行业范围，随后可切换至指定范围精细勾选）：
+          数据范围权限建立在子库菜单权限之上。选择初始范围模式后一键开通，若只需放行少数文件类型与行业，推荐选择「从空开始，仅选指定项」：
         </p>
+        <div
+          v-if="!disabled"
+          class="tt-scope__open-options"
+        >
+          <div
+            class="tt-dim-card__switch"
+            role="radiogroup"
+            aria-label="一键开通初始数据范围模式"
+          >
+            <button
+              type="button"
+              role="radio"
+              :aria-checked="quickOpenMode === 'ALL'"
+              class="tt-mode-btn"
+              :class="{ 'is-active': quickOpenMode === 'ALL' }"
+              @click="quickOpenMode = 'ALL'"
+            >
+              默认放行全部范围
+            </button>
+            <button
+              type="button"
+              role="radio"
+              :aria-checked="quickOpenMode === 'EMPTY'"
+              class="tt-mode-btn"
+              :class="{ 'is-active': quickOpenMode === 'EMPTY' }"
+              @click="quickOpenMode = 'EMPTY'"
+            >
+              从空开始，仅选指定项
+            </button>
+          </div>
+          <label
+            v-if="activeLib.downloadCode"
+            class="tt-open-dl-check"
+          >
+            <input
+              v-model="quickOpenWithDownload"
+              type="checkbox"
+            >
+            <span>同时开通「下载原文件」</span>
+          </label>
+        </div>
         <div
           v-if="!disabled"
           class="tt-scope__quick-btns"

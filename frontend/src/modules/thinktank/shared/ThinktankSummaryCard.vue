@@ -10,7 +10,7 @@ defineProps<{
   fileSuffix: string
   isDefined: boolean
   isFavorited: boolean
-  canExport: boolean
+  canDownload: boolean
   canEdit: boolean
   auditModule: string
   facts: readonly SummaryFact[]
@@ -66,7 +66,7 @@ const emit = defineEmits<{
           {{ isFavorited ? '已收藏' : '收藏' }}
         </el-button>
         <el-button
-          v-if="canExport"
+          v-if="canDownload"
           size="small"
           :icon="Download"
           :loading="downloading"

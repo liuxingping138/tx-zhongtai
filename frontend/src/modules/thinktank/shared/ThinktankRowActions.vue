@@ -6,7 +6,7 @@ const props = withDefaults(
   defineProps<{
     title: string
     canEdit: boolean
-    canExport: boolean
+    canDownload: boolean
     isFavorited: boolean
     detailTo: RouteLocationRaw
     editTo: RouteLocationRaw
@@ -86,7 +86,7 @@ function onCommand(command: string) {
             <span class="kmenu-label">编辑标签</span>
           </el-dropdown-item>
           <el-dropdown-item
-            v-if="canExport"
+            v-if="canDownload"
             command="download"
             :disabled="downloading"
           >

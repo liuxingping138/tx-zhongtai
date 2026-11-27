@@ -65,18 +65,29 @@ def test_favorites_access_from_levels() -> None:
     access = FavoritesAccess.from_levels(
         {
             "thinktank.knowledge": "READ",
+            "thinktank.knowledge.download": "READ",
             "thinktank.file_type.product": "FULL",
             "thinktank.industry_type.edu": "FULL",
             "thinktank.reports": "EXPORT",
+            "thinktank.proposals.download": "READ",
         }
     )
     assert access.can_read_knowledge is True
     assert access.knowledge is not None
-    # 资料库模块级 READ 封顶，export 为 False
+    # 资料库模块级 READ 封顶，export 为 False，但开通独立下载权后可下载范围内文件
     assert access.knowledge.can_read_record("产品", "教育") is True
+    assert access.knowledge.can_download_record("产品", "教育") is True
     assert access.knowledge.can_export_record("产品", "教育") is False
-    assert access.can_read_reports is True and access.reports_can_export is True
-    assert access.can_read_proposals is False and access.proposals_can_export is False
+    # 报告库仅有 EXPORT 无独立下载权：可导出不可下载
+    assert (
+        access.can_read_reports is True and access.reports_can_export is True and access.reports_can_download is False
+    )
+    # 方案库无主查看权即使残留 .download 也不可读不可下载
+    assert (
+        access.can_read_proposals is False
+        and access.proposals_can_export is False
+        and access.proposals_can_download is False
+    )
 
 
 async def test_favorites_repo_only_queries_permitted_libraries() -> None:
@@ -155,6 +166,7 @@ async def test_favorites_service_formats_items_and_can_export(monkeypatch: pytes
             "thinktank.file_type.undefined": "EXPORT",
             "thinktank.industry_type.none": "EXPORT",
             "thinktank.reports": "READ",
+            "thinktank.reports.download": "READ",
             "thinktank.proposals": "EXPORT",
         }
     )
@@ -177,14 +189,14 @@ async def test_favorites_service_formats_items_and_can_export(monkeypatch: pytes
     assert result["counts"] == {"all": 3, "knowledge": 1, "reports": 1, "proposals": 1}
     p_item, r_item, k_item = result["items"]
     assert p_item["library_label"] == "方案库"
-    assert p_item["can_export"] is True
+    assert p_item["can_export"] is True and p_item["can_download"] is False
     assert p_item["preview_path"] == f"/thinktank/proposals/{p_id}"
     assert r_item["library_label"] == "报告库"
-    assert r_item["can_export"] is False
+    assert r_item["can_export"] is False and r_item["can_download"] is True
     assert r_item["preview_path"] == f"/thinktank/reports/{r_id}"
     assert k_item["library_label"] == "资料库"
     assert k_item["category_label"] == "未定义"
-    assert k_item["can_export"] is True
+    assert k_item["can_export"] is True and k_item["can_download"] is False
     assert k_item["preview_path"] == f"/thinktank/knowledge/{k_id}"
 
 

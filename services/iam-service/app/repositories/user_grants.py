@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.enums import NodeType
 from app.domain.models import Resource, UserGrant
+from app.domain.thinktank_catalog import THINKTANK_DOWNLOAD_CODES
 
 
 async def list_for_user(session: AsyncSession, user_id: uuid.UUID) -> list[tuple[str, str]]:
@@ -60,6 +61,7 @@ async def count_by_users(session: AsyncSession, user_ids: list[uuid.UUID]) -> di
             Resource.node_type == NodeType.RESOURCE,
             ~Resource.code.startswith("thinktank.file_type."),
             ~Resource.code.startswith("thinktank.industry_type."),
+            ~Resource.code.in_(THINKTANK_DOWNLOAD_CODES),
         )
         .group_by(UserGrant.user_id)
     )

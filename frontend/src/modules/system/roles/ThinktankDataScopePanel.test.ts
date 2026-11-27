@@ -9,6 +9,7 @@ const LIBRARIES: ThinktankLibraryScope[] = [
   {
     code: 'thinktank.knowledge',
     name: '资料库',
+    downloadCode: 'thinktank.knowledge.download',
     dimensions: [
       {
         code: 'thinktank.knowledge.file_type',
@@ -49,12 +50,17 @@ describe('ThinktankDataScopePanel', () => {
     })
 
     expect(wrapper.text()).toContain('尚未开通「资料库」菜单访问权限')
-    const btn = wrapper.findAll('button').find(b => b.text().includes('可管理'))!
-    await btn.trigger('click')
+    // 切换为「从空开始，仅选指定项」并勾选「同时开通下载原文件」
+    const emptyModeBtn = wrapper.findAll('button').find(b => b.text().includes('从空开始'))!
+    await emptyModeBtn.trigger('click')
+    await wrapper.find('.tt-open-dl-check input[type="checkbox"]').setValue(true)
+    const exportBtn = wrapper.findAll('button').find(b => b.text().includes('查看和导出'))!
+    await exportBtn.trigger('click')
     expect(wrapper.emitted('update:modelValue')?.[0]?.[0]).toMatchObject({
-      'thinktank.knowledge': 'FULL',
-      'thinktank.file_type.product': 'FULL',
-      'thinktank.file_type.notice': 'FULL',
+      'thinktank.knowledge': 'EXPORT',
+      'thinktank.knowledge.download': 'READ',
+      'thinktank.file_type.product': 'NONE',
+      'thinktank.file_type.notice': 'NONE',
     })
   })
 
@@ -82,10 +88,18 @@ describe('ThinktankDataScopePanel', () => {
     const fullBtn = wrapper.find('button[aria-label="产品 可管理"]')
     expect((fullBtn.element as HTMLButtonElement).disabled).toBe(true)
 
-    // 单项切换档位
+    // 单项切换档位 + 点击卡片左侧名称一键开关 + 顶栏独立下载开关
     await wrapper.find('button[aria-label="产品 仅查看"]').trigger('click')
     expect(wrapper.emitted('update:modelValue')?.[0]?.[0]).toMatchObject({
       'thinktank.file_type.product': 'READ',
+    })
+    await wrapper.findAll('.tt-item-card__name')[0]!.trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.[1]?.[0]).toMatchObject({
+      'thinktank.file_type.product': 'NONE',
+    })
+    await wrapper.find('.tt-dl-toggle').trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.[2]?.[0]).toMatchObject({
+      'thinktank.knowledge.download': 'READ',
     })
 
     // 维度专属搜索与「仅看已修改」筛选

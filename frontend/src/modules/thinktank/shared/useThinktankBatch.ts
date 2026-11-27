@@ -20,7 +20,7 @@ export interface ThinktankBatchItem {
   id: string
   is_favorited: boolean
   can_edit: boolean
-  can_export: boolean
+  can_download: boolean
 }
 
 export interface ThinktankBatchApi<T extends ThinktankBatchItem> {
@@ -82,7 +82,7 @@ export function useThinktankBatch<T extends ThinktankBatchItem>(options: Thinkta
   const batchBusy = ref(false)
   const unfavorited = computed(() => options.checked.value.filter(row => !row.is_favorited))
   const favorited = computed(() => options.checked.value.filter(row => row.is_favorited))
-  const downloadable = computed(() => options.checked.value.filter(row => row.can_export))
+  const downloadable = computed(() => options.checked.value.filter(row => row.can_download))
   const deletable = computed(() => options.checked.value.filter(row => row.can_edit))
 
   async function onBatchFavorite() {

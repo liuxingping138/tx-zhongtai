@@ -48,6 +48,23 @@ const WRITE_LABEL_BY_RESOURCE: Record<string, Record<string, string>> = {
 export const SUPERADMIN_ONLY = new Set(['system.permissions'])
 export const SUPERADMIN_ROLE_CODE = 'superadmin'
 
+/** 智库各子库独立「下载原文件」权限资源编码，独立于菜单档位中的「导出 Excel」。 */
+export const THINKTANK_DOWNLOAD_CODES = new Set([
+  'thinktank.knowledge.download',
+  'thinktank.reports.download',
+  'thinktank.proposals.download',
+])
+
+export function isThinktankDownloadCode(code: string): boolean {
+  return THINKTANK_DOWNLOAD_CODES.has(code)
+}
+
+/** 展示某一资源的档位文案：独立下载权显示「不可下载 / 可下载」，其余模块显示四档文案。 */
+export function formatGrantLevel(code: string, level: GrantLevel): string {
+  if (isThinktankDownloadCode(code)) return level === 'NONE' ? '不可下载' : '可下载'
+  return LEVEL_TEXT[level]
+}
+
 export interface ModuleEntry {
   code: string
   name: string
@@ -58,6 +75,8 @@ export interface ModuleEntry {
   levels: GrantLevel[]
   /** 「管理」档包含的写操作。 */
   writes: string[]
+  /** 独立「下载原文件」子资源编码（目前智库资料库、报告库、方案库拥有此独立列）。 */
+  downloadCode?: string
 }
 
 export interface ModuleGroup {
@@ -82,7 +101,16 @@ function toEntry(node: ResourceNode): ModuleEntry {
   const levels: GrantLevel[] = ['NONE', 'READ']
   if (hasExport) levels.push('EXPORT')
   if (writes.length) levels.push('FULL')
-  return { code: node.code, name: node.name, levels, writes: [...new Set(writes)] }
+  const downloadChild = (node.children ?? []).find(
+    child => child.node_type === 'resource' && child.published && isThinktankDownloadCode(child.code),
+  )
+  return {
+    code: node.code,
+    name: node.name,
+    levels,
+    writes: [...new Set(writes)],
+    ...(downloadChild ? { downloadCode: downloadChild.code } : {}),
+  }
 }
 
 /**
@@ -178,7 +206,12 @@ export function lockReason(code: string, roleCode: string | undefined): string {
 export function moduleNames(groups: ModuleGroup[]): Record<string, string> {
   const out: Record<string, string> = {}
   for (const group of groups) {
-    for (const module of group.modules) out[module.code] = `${group.name} / ${module.name}`
+    for (const module of group.modules) {
+      out[module.code] = `${group.name} / ${module.name}`
+      if (module.downloadCode) {
+        out[module.downloadCode] = `${group.name} / ${module.name}（下载原文件）`
+      }
+    }
   }
   return out
 }

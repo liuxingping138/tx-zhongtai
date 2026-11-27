@@ -17,7 +17,7 @@ defineProps<{
   text: string
   fileName: string
   fileSuffix: string
-  canExport: boolean
+  canDownload: boolean
   watermark: string
 }>()
 
@@ -103,7 +103,7 @@ onBeforeUnmount(() => {
             {{ metaCollapsed ? '展开标签' : '收起标签' }}
           </button>
           <button
-            v-if="fullscreen && canExport"
+            v-if="fullscreen && canDownload"
             type="button"
             class="review__tool-btn"
             :disabled="downloading"
@@ -153,7 +153,7 @@ onBeforeUnmount(() => {
           ref="pdfViewer"
           :url="pdfUrl"
           :loading-text="loadingText"
-          :can-download="canExport"
+          :can-download="canDownload"
           :downloading="downloading"
           @unavailable="emit('unavailable')"
           @download="emit('download')"
@@ -163,7 +163,7 @@ onBeforeUnmount(() => {
           class="viewer-text-wrap"
         >
           <div
-            v-if="mode === 'summary' && canExport"
+            v-if="mode === 'summary' && canDownload"
             class="viewer-hint"
           >
             当前文件格式（{{ fileSuffix }}）暂不支持网页直出渲染，可点击上方「下载源文件」查看完整原版文档。

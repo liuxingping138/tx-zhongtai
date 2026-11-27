@@ -144,7 +144,7 @@ const emit = defineEmits<{
             <span>预览</span>
           </RouterLink>
           <button
-            v-if="row.can_export"
+            v-if="row.can_download"
             type="button"
             class="row-action"
             :disabled="downloadingKeys.has(favoriteRowKey(row))"

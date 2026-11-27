@@ -5,8 +5,18 @@ import { describe, expect, it } from 'vitest'
 import type { ModuleEntry, ModuleGroup } from '@/permissions/catalog'
 import PermissionTable from './PermissionTable.vue'
 
-const entry = (code: string, name: string, levels: ModuleEntry['levels'], writes: string[] = []): ModuleEntry => ({
-  code, name, levels, writes,
+const entry = (
+  code: string,
+  name: string,
+  levels: ModuleEntry['levels'],
+  writes: string[] = [],
+  downloadCode?: string,
+): ModuleEntry => ({
+  code,
+  name,
+  levels,
+  writes,
+  ...(downloadCode ? { downloadCode } : {}),
 })
 
 const GROUPS: ModuleGroup[] = [
@@ -22,7 +32,7 @@ const GROUPS: ModuleGroup[] = [
     code: 'thinktank',
     name: '智库',
     modules: [
-      entry('thinktank.knowledge', '资料库', ['NONE', 'READ', 'EXPORT', 'FULL'], ['上传文件']),
+      entry('thinktank.knowledge', '资料库', ['NONE', 'READ', 'EXPORT', 'FULL'], ['上传文件'], 'thinktank.knowledge.download'),
     ],
   },
 ]
@@ -80,10 +90,18 @@ describe('PermissionTable', () => {
     await wrapper.find('.perm-collapse-btn').trigger('click')
     expect(wrapper.findAll('.perm-table__row')).toHaveLength(3)
 
-    // 勾选单元格发出更新事件
+    // 勾选单元格发出更新事件；下载列仅对智库展示，爬虫监测保持 2 个复选框
+    const crawlerRow = wrapper.findAll('.perm-table__row').find(r => r.text().includes('爬虫监测'))!
+    expect(crawlerRow.findAll('input[type="checkbox"]')).toHaveLength(2)
     const crawlerRead = wrapper.find('input[aria-label="爬虫监测 查看"]')
     await crawlerRead.trigger('change')
+    const dlCheck = wrapper.find('input[aria-label="资料库 下载"]')
+    await dlCheck.trigger('change')
     const updates = wrapper.emitted('update:modelValue')
     expect(updates?.[0]?.[0]).toMatchObject({ 'policy.crawler': 'READ' })
+    expect(updates?.[1]?.[0]).toMatchObject({
+      'thinktank.knowledge': 'EXPORT',
+      'thinktank.knowledge.download': 'READ',
+    })
   })
 })

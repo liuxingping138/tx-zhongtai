@@ -96,6 +96,7 @@ PROVINCES: tuple[str, ...] = (
     "新疆维吾尔自治区",
 )
 
+KNOWLEDGE_DOWNLOAD_RESOURCE = "thinktank.knowledge.download"
 FILE_TYPE_RESOURCE_BY_VALUE: dict[str, str] = {
     ("" if slug == "undefined" else label): f"thinktank.file_type.{slug}" for slug, label in FILE_TYPE_ITEMS
 }
@@ -108,6 +109,7 @@ ALL_SCOPE_RESOURCES: list[str] = [
 ]
 
 _LEVEL_RANK: dict[str, int] = {"NONE": 0, "READ": 1, "EXPORT": 2, "FULL": 3}
+_READ_LEVELS = frozenset({"READ", "EXPORT", "FULL"})
 _EXPORT_LEVELS = frozenset({"EXPORT", "FULL"})
 _EDIT_LEVELS = frozenset({"FULL"})
 
@@ -165,13 +167,20 @@ def normalize_tag_values(values: dict[str, str]) -> dict[str, str]:
 
 @dataclass(frozen=True)
 class KnowledgeAccess:
-    """当前用户在文件类型与行业类型上的权限范围。按 IAM 资源档位算出，一次请求内不变。"""
+    """当前用户在文件类型与行业类型上的权限范围及独立下载权限。按 IAM 资源档位算出，一次请求内不变。"""
 
     file_type_levels: dict[str, str]
     industry_levels: dict[str, str]
+    allow_download: bool = False
 
     @classmethod
-    def from_levels(cls, levels: dict[str, str], *, module_level: str | None = None) -> KnowledgeAccess:
+    def from_levels(
+        cls,
+        levels: dict[str, str],
+        *,
+        module_level: str | None = None,
+        allow_download: bool | None = None,
+    ) -> KnowledgeAccess:
         file_levels = {
             value: _cap_level(levels[res], module_level)
             for value, res in FILE_TYPE_RESOURCE_BY_VALUE.items()
@@ -182,7 +191,17 @@ class KnowledgeAccess:
             for value, res in INDUSTRY_RESOURCE_BY_VALUE.items()
             if res in levels and _cap_level(levels[res], module_level) != "NONE"
         }
-        return cls(file_type_levels=file_levels, industry_levels=ind_levels)
+        can_enter = module_level is None or module_level in _READ_LEVELS
+        dl_granted = (
+            bool(allow_download)
+            if allow_download is not None
+            else levels.get(KNOWLEDGE_DOWNLOAD_RESOURCE) in _READ_LEVELS
+        )
+        return cls(
+            file_type_levels=file_levels,
+            industry_levels=ind_levels,
+            allow_download=can_enter and dl_granted,
+        )
 
     @property
     def readable_file_types(self) -> frozenset[str]:
@@ -228,6 +247,9 @@ class KnowledgeAccess:
     def can_read_record(self, file_type: str, industry_type: str) -> bool:
         return self._matches(file_type, industry_type, self.readable_file_types, self.readable_industries)
 
+    def can_download_record(self, file_type: str, industry_type: str) -> bool:
+        return self.allow_download and self.can_read_record(file_type, industry_type)
+
     def can_export_record(self, file_type: str, industry_type: str) -> bool:
         return self._matches(file_type, industry_type, self.exportable_file_types, self.exportable_industries)
 
@@ -246,11 +268,17 @@ class KnowledgeAccess:
             ind_label = industry_type or "无"
             raise PermissionDeniedError(f"没有「{ft_label} / {ind_label}」范围的查看权限")
 
+    def require_download(self, file_type: str, industry_type: str) -> None:
+        if not self.can_download_record(file_type, industry_type):
+            ft_label = file_type or "未定义"
+            ind_label = industry_type or "无"
+            raise PermissionDeniedError(f"没有「{ft_label} / {ind_label}」范围的文件下载权限")
+
     def require_export(self, file_type: str, industry_type: str) -> None:
         if not self.can_export_record(file_type, industry_type):
             ft_label = file_type or "未定义"
             ind_label = industry_type or "无"
-            raise PermissionDeniedError(f"没有「{ft_label} / {ind_label}」范围的下载或导出权限")
+            raise PermissionDeniedError(f"没有「{ft_label} / {ind_label}」范围的导出权限")
 
     def require_edit(self, file_type: str, industry_type: str) -> None:
         if not self.can_edit_record(file_type, industry_type):
@@ -260,6 +288,7 @@ class KnowledgeAccess:
 
     def to_summary(self) -> dict[str, object]:
         return {
+            "can_download": self.allow_download,
             "readable_file_types": [
                 label
                 for _, label in FILE_TYPE_ITEMS
@@ -284,4 +313,5 @@ class KnowledgeAccess:
 FULL_ACCESS = KnowledgeAccess(
     file_type_levels=dict.fromkeys(FILE_TYPE_RESOURCE_BY_VALUE, "FULL"),
     industry_levels=dict.fromkeys(INDUSTRY_RESOURCE_BY_VALUE, "FULL"),
+    allow_download=True,
 )

@@ -39,7 +39,7 @@ function mountViewer() {
       text: '',
       fileName: '方案.pdf',
       fileSuffix: 'PDF',
-      canExport: true,
+      canDownload: true,
       watermark: '测试',
     },
     global: { stubs: { PdfStreamViewer: PdfStreamViewerStub, 'el-icon': true, 'el-tag': true }, renderStubDefaultSlot: true },

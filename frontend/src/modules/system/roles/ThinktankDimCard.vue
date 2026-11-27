@@ -60,6 +60,25 @@ function levelTitle(item: ModuleEntry, option: { level: GrantLevel; label: strin
   }
   return `${item.name}：${option.label}`
 }
+
+function highestAllowed(item: ModuleEntry): GrantLevel {
+  const candidates = item.levels.filter(lvl => lvl !== 'NONE' && rank(lvl) <= rank(props.menuLevel))
+  return candidates[candidates.length - 1] ?? 'NONE'
+}
+
+function onQuickToggle(item: ModuleEntry) {
+  if (props.disabled) return
+  const current = levelOf(props.grants, item.code)
+  const target = current === 'NONE' ? highestAllowed(item) : 'NONE'
+  if (target !== current) emit('setItem', item, target)
+}
+
+function quickToggleTitle(item: ModuleEntry): string {
+  const current = levelOf(props.grants, item.code)
+  if (props.disabled) return item.name
+  if (current === 'NONE') return `${item.name}：点击快速设为「${LEVEL_TEXT[highestAllowed(item)]}」`
+  return `${item.name}：点击快速关闭此项`
+}
 </script>
 
 <template>
@@ -195,9 +214,12 @@ function levelTitle(item: ModuleEntry, option: { level: GrantLevel; label: strin
             { 'is-changed': isChanged(grants, original, item.code) },
           ]"
         >
-          <div
+          <button
+            type="button"
             class="tt-item-card__name"
-            :title="item.name"
+            :disabled="disabled"
+            :title="quickToggleTitle(item)"
+            @click="onQuickToggle(item)"
           >
             <span
               v-if="isChanged(grants, original, item.code)"
@@ -205,7 +227,7 @@ function levelTitle(item: ModuleEntry, option: { level: GrantLevel; label: strin
               title="已修改"
             />
             <span class="tt-item-card__text">{{ item.name }}</span>
-          </div>
+          </button>
           <div
             class="tt-seg"
             role="radiogroup"

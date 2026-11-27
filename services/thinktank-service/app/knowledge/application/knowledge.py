@@ -62,6 +62,7 @@ def to_out(row: KnowledgeFile, *, is_favorited: bool, access: KnowledgeAccess) -
         "remark": row.remark,
         "is_defined": row.is_defined,
         "is_favorited": is_favorited,
+        "can_download": access.can_download_record(row.file_type, row.industry_type),
         "can_export": access.can_export_record(row.file_type, row.industry_type),
         "can_edit": access.can_edit_record(row.file_type, row.industry_type),
         "version": row.version,
@@ -122,6 +123,16 @@ async def assert_read(
 ) -> None:
     try:
         access.require_read(row.file_type, row.industry_type)
+    except PermissionDeniedError as exc:
+        await audit_denial(session, actor=actor, row=row, action=action, reason=str(exc))
+        raise
+
+
+async def assert_download(
+    session: AsyncSession, actor: Actor, access: KnowledgeAccess, row: KnowledgeFile, action: str
+) -> None:
+    try:
+        access.require_download(row.file_type, row.industry_type)
     except PermissionDeniedError as exc:
         await audit_denial(session, actor=actor, row=row, action=action, reason=str(exc))
         raise
@@ -283,7 +294,7 @@ async def stream_file_content(
 ) -> FileStreamResult:
     row = await require_file(session, file_id)
     if for_download:
-        await assert_export(session, actor, access, row, "download")
+        await assert_download(session, actor, access, row, "download")
     else:
         await assert_read(session, actor, access, row, "preview_content")
         candidate_etag = expected_preview_etag(row)

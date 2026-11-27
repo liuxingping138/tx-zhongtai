@@ -57,6 +57,7 @@ function makeItem(id: string, overrides: Partial<KnowledgeItem> = {}): Knowledge
     is_defined: true,
     is_favorited: false,
     can_edit: true,
+    can_download: true,
     can_export: true,
     version: 1,
     created_at: '2026-01-01T00:00:00Z',
@@ -195,8 +196,8 @@ describe('useKnowledgeBatch composable', () => {
     expect(refresh).not.toHaveBeenCalled()
   })
 
-  it('batch downloads exportable knowledge rows cleanly', async () => {
-    const checked = ref([makeItem('1', { can_export: true }), makeItem('2', { can_export: false })])
+  it('batch downloads downloadable knowledge rows cleanly', async () => {
+    const checked = ref([makeItem('1', { can_download: true }), makeItem('2', { can_download: false })])
     const clearSelection = vi.fn()
     mockDownload.mockResolvedValueOnce({
       data: new Blob(['data']),

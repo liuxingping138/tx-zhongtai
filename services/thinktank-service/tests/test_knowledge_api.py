@@ -173,14 +173,14 @@ async def test_access_denied_records_audit_and_commits(monkeypatch: pytest.Monke
     monkeypatch.setattr(knowledge.repo, "get_by_id", AsyncMock(return_value=row))
     monkeypatch.setattr(knowledge.repo, "get_for_update", AsyncMock(return_value=row))
 
-    read_only = KnowledgeAccess.from_levels(
-        {"thinktank.file_type.product": "READ", "thinktank.industry_type.finance": "READ"}
+    export_only = KnowledgeAccess.from_levels(
+        {"thinktank.file_type.product": "EXPORT", "thinktank.industry_type.finance": "EXPORT"}
     )
     session = _Session()
 
-    # 有 READ 权限不能下载（需要 EXPORT）
-    with pytest.raises(PermissionDeniedError):
-        await knowledge.read_file_content(session, actor=ACTOR, access=read_only, file_id=row.id, for_download=True)  # type: ignore[arg-type]
+    # 仅有 EXPORT 权限但未开通独立下载权时不能下载
+    with pytest.raises(PermissionDeniedError, match="文件下载权限"):
+        await knowledge.read_file_content(session, actor=ACTOR, access=export_only, file_id=row.id, for_download=True)  # type: ignore[arg-type]
     assert events[-1]["event_type"] == "thinktank.knowledge.access_denied"
     assert events[-1]["extra"] == {"outcome": "denied"}
     assert session.commit.await_count == 1

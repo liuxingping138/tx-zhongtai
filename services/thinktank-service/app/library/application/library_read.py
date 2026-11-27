@@ -60,6 +60,7 @@ def to_out(spec: LibrarySpec, row: Any, *, is_favorited: bool, access: LibraryAc
             "remark": row.remark,
             "is_defined": row.is_defined,
             "is_favorited": is_favorited,
+            "can_download": access.can_download,
             "can_export": access.can_export,
             "can_edit": access.can_edit,
             "version": row.version,

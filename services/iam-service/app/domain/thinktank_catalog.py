@@ -11,6 +11,16 @@ THINKTANK_LIBRARY_CODES: tuple[str, ...] = (
     "thinktank.reports",
     "thinktank.proposals",
 )
+THINKTANK_DOWNLOAD_BY_LIBRARY: dict[str, str] = {
+    "thinktank.knowledge": "thinktank.knowledge.download",
+    "thinktank.reports": "thinktank.reports.download",
+    "thinktank.proposals": "thinktank.proposals.download",
+}
+THINKTANK_DOWNLOAD_CODES: tuple[str, ...] = tuple(THINKTANK_DOWNLOAD_BY_LIBRARY.values())
+# 2026-11-27 拆出独立下载权限：下载原文件不再绑在子库 EXPORT 档上，改为各子库专属 *.download 资源。
+RETIRED_THINKTANK_ACTIONS: tuple[tuple[str, str], ...] = tuple(
+    (lib_code, "download") for lib_code in THINKTANK_LIBRARY_CODES
+)
 
 # 文件类型范围资源：编码后缀与 thinktank-service domain/knowledge_scopes.py 一一对应。
 FILE_TYPE_SCOPES: tuple[tuple[str, str], ...] = (
@@ -57,7 +67,6 @@ def _library_actions(resource_code: str) -> tuple[ActionSpec, ...]:
         ActionSpec(resource_code, "favorite", GrantLevel.READ),
         ActionSpec(resource_code, "export", GrantLevel.EXPORT),
         ActionSpec(resource_code, "export_undefined", GrantLevel.EXPORT),
-        ActionSpec(resource_code, "download", GrantLevel.EXPORT),
         ActionSpec(resource_code, "create", GrantLevel.FULL),
         ActionSpec(resource_code, "update", GrantLevel.FULL),
         ActionSpec(resource_code, "upload_tags", GrantLevel.FULL),
@@ -81,6 +90,33 @@ THINKTANK_RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("thinktank.reports", "报告库", "thinktank-service", NodeType.RESOURCE, True, 452, "thinktank"),
     ResourceSpec("thinktank.proposals", "方案库", "thinktank-service", NodeType.RESOURCE, True, 453, "thinktank"),
     ResourceSpec("thinktank.favorites", "我的收藏", "thinktank-service", NodeType.RESOURCE, True, 454, "thinktank"),
+    ResourceSpec(
+        "thinktank.knowledge.download",
+        "资料库下载",
+        "thinktank-service",
+        NodeType.RESOURCE,
+        True,
+        455,
+        "thinktank.knowledge",
+    ),
+    ResourceSpec(
+        "thinktank.reports.download",
+        "报告库下载",
+        "thinktank-service",
+        NodeType.RESOURCE,
+        True,
+        456,
+        "thinktank.reports",
+    ),
+    ResourceSpec(
+        "thinktank.proposals.download",
+        "方案库下载",
+        "thinktank-service",
+        NodeType.RESOURCE,
+        True,
+        457,
+        "thinktank.proposals",
+    ),
     ResourceSpec(
         "thinktank.knowledge.file_type",
         "文件类型范围",
@@ -129,6 +165,7 @@ THINKTANK_ACTION_SPECS: tuple[ActionSpec, ...] = (
     *_library_actions("thinktank.knowledge"),
     *_library_actions("thinktank.reports"),
     *_library_actions("thinktank.proposals"),
+    *(ActionSpec(code, "download", GrantLevel.READ) for code in THINKTANK_DOWNLOAD_CODES),
     ActionSpec("thinktank.favorites", "list", GrantLevel.READ),
     ActionSpec("thinktank.favorites", "favorite", GrantLevel.READ),
     *(action for slug, _ in FILE_TYPE_SCOPES for action in _scope_actions(f"thinktank.file_type.{slug}")),

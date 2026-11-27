@@ -14,6 +14,18 @@ from app.favorites.repositories import favorites as repo
 from app.favorites.repositories.favorites import FavoriteRow
 
 
+def _can_download(row: FavoriteRow, access: FavoritesAccess) -> bool:
+    if row.library == "knowledge":
+        if access.knowledge is None:
+            return False
+        return access.knowledge.can_download_record(row.category_label, row.industry_label)
+    if row.library == "reports":
+        return access.reports_can_download
+    if row.library == "proposals":
+        return access.proposals_can_download
+    return False
+
+
 def _can_export(row: FavoriteRow, access: FavoritesAccess) -> bool:
     if row.library == "knowledge":
         if access.knowledge is None:
@@ -40,6 +52,7 @@ def _entry_out(row: FavoriteRow, access: FavoritesAccess) -> dict[str, Any]:
         "file_size_display": format_size(row.file_size_bytes),
         "favorited_at": format_beijing(row.favorited_at),
         "updated_at": format_beijing(row.updated_at),
+        "can_download": _can_download(row, access),
         "can_export": _can_export(row, access),
         "preview_path": f"/thinktank/{row.library}/{row.id}",
     }

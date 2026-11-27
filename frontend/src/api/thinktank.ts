@@ -38,6 +38,7 @@ interface ThinktankBaseItem {
   remark: string
   is_defined: boolean
   is_favorited: boolean
+  can_download: boolean
   can_export: boolean
   can_edit: boolean
   version: number
@@ -62,6 +63,7 @@ export interface KnowledgeItem extends ThinktankBaseItem {
 }
 
 export interface KnowledgeAccessSummary {
+  can_download: boolean
   readable_file_types: string[]
   exportable_file_types: string[]
   editable_file_types: string[]
@@ -233,6 +235,7 @@ export interface ThinktankFavoriteEntry {
   file_size_display: string
   favorited_at: string
   updated_at: string
+  can_download: boolean
   can_export: boolean
   preview_path: string
 }

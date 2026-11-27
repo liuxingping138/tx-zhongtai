@@ -152,8 +152,14 @@ def test_thinktank_catalog_has_knowledge_reports_proposals_favorites_and_scopes(
     for lib_code in ("thinktank.knowledge", "thinktank.reports", "thinktank.proposals"):
         for act in ("list", "read", "preview", "favorite"):
             assert levels[(lib_code, act)] == GrantLevel.READ
-        for act in ("export", "export_undefined", "download"):
+        for act in ("export", "export_undefined"):
             assert levels[(lib_code, act)] == GrantLevel.EXPORT
+        assert (lib_code, "download") not in levels
+        assert (lib_code, "download") in RETIRED_ACTIONS
+        dl_code = f"{lib_code}.download"
+        assert by_code[dl_code].published is True
+        assert by_code[dl_code].parent_code == lib_code
+        assert levels[(dl_code, "download")] == GrantLevel.READ
         for act in ("create", "update", "upload_tags", "delete"):
             assert levels[(lib_code, act)] == GrantLevel.FULL
     assert levels[("thinktank.favorites", "list")] == GrantLevel.READ

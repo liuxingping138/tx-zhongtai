@@ -181,7 +181,7 @@
 
 .perm-grid-cols {
   display: grid;
-  grid-template-columns: minmax(220px, 1.55fr) 76px 76px 76px minmax(170px, 1.45fr);
+  grid-template-columns: minmax(220px, 1.55fr) 68px 68px 68px 68px minmax(160px, 1.35fr);
   align-items: center;
 }
 
@@ -434,6 +434,12 @@
   border: 1px solid var(--zt-border);
 }
 
+.perm-level-pill.is-download {
+  color: var(--zt-teal-text);
+  background: var(--zt-teal-soft);
+  border: 1px solid var(--zt-teal-line);
+}
+
 .perm-level-pill.is-export {
   color: var(--zt-success-text);
   background: var(--zt-success-soft);
@@ -486,6 +492,17 @@
 .perm-scope-chip:hover {
   border-style: solid;
   border-color: var(--zt-blue-600);
+}
+
+.perm-scope-chip.is-all-warn {
+  border-color: var(--zt-warning-border);
+  background: var(--zt-warning-soft);
+  color: var(--zt-warning-text);
+}
+
+.perm-scope-chip.is-all-warn:hover {
+  border-style: solid;
+  border-color: var(--zt-warning);
 }
 
 /* ============================================================================
@@ -604,7 +621,7 @@
 
 @media (max-width: 960px) {
   .perm-grid-cols {
-    grid-template-columns: minmax(160px, 1.35fr) 60px 60px 60px minmax(120px, 1.2fr);
+    grid-template-columns: minmax(150px, 1.3fr) 54px 54px 54px 54px minmax(110px, 1.1fr);
   }
   .perm-th--col small {
     display: none;

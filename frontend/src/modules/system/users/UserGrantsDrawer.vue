@@ -7,7 +7,7 @@ import { getUserGrants, listResourceTree, replaceUserGrants } from '@/api/system
 import type { ResourceNode } from '@/api/types'
 import { collectGrants } from '@/composables/useRoleGrants'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
-import { LEVEL_TEXT, moduleGroups, moduleNames } from '@/permissions/catalog'
+import { formatGrantLevel, isThinktankDownloadCode, moduleGroups, moduleNames } from '@/permissions/catalog'
 import { grantDiff, grantsFromTree, type GrantLevel } from '@/permissions/levels'
 import {
   buildScopeBadges,
@@ -20,6 +20,7 @@ import {
 } from '@/permissions/thinktankScopes'
 import TableSkeleton from '@/components/TableSkeleton.vue'
 import PermissionTable from '../roles/PermissionTable.vue'
+import RoleGrantDiffDialog from '../roles/RoleGrantDiffDialog.vue'
 import ThinktankDataScopePanel from '../roles/ThinktankDataScopePanel.vue'
 
 /**
@@ -41,6 +42,7 @@ const saving = ref(false)
 const loadError = ref('')
 const activeTab = ref<'menu' | 'data-scopes'>('menu')
 const scopeFocusLib = ref('')
+const diffDialogVisible = ref(false)
 
 const groups = computed(() => moduleGroups(tree.value))
 const thinktankLibs = computed(() => thinktankLibraries(tree.value))
@@ -58,7 +60,9 @@ const scopeBadges = computed(() => buildScopeBadges(thinktankLibs.value, selecte
 const splitDiffs = computed(() => splitGrantDiffs(thinktankLibs.value, changes.value))
 const opened = computed(
   () =>
-    Object.entries(selected.value).filter(([code, level]) => level !== 'NONE' && !isThinktankScopeCode(code)).length,
+    Object.entries(selected.value).filter(
+      ([code, level]) => level !== 'NONE' && !isThinktankScopeCode(code) && !isThinktankDownloadCode(code),
+    ).length,
 )
 
 function onOpenScope(code: string): void {
@@ -68,6 +72,10 @@ function onOpenScope(code: string): void {
 
 function updateSelected(next: Grants): void {
   selected.value = syncThinktankScopesWithMenu(thinktankLibs.value, selected.value, next)
+}
+
+function replaceSelected(next: Grants): void {
+  selected.value = next
 }
 
 let loadSeq = 0
@@ -105,7 +113,10 @@ async function save(): Promise<void> {
   const user = props.user
   if (!user || saving.value || !changes.value.length) return
   const summary = changes.value
-    .map(item => `${item.label ?? names.value[item.code] ?? item.code}：${LEVEL_TEXT[item.from]} → ${LEVEL_TEXT[item.to]}`)
+    .map(
+      item =>
+        `${item.label ?? names.value[item.code] ?? item.code}：${formatGrantLevel(item.code, item.from)} → ${formatGrantLevel(item.code, item.to)}`,
+    )
     .join('\n')
   const sure = await ElMessageBox.confirm(summary, `给「${user.display_name}」单独授权，共 ${changes.value.length} 项修改？`, {
     type: 'warning',
@@ -173,6 +184,7 @@ async function save(): Promise<void> {
             菜单权限<span
               v-if="splitDiffs.menuDiffs.length"
               class="grants__tab-badge"
+              :title="`菜单与下载权限有 ${splitDiffs.menuDiffs.length} 项待保存修改`"
             >+{{ splitDiffs.menuDiffs.length }}</span>
           </template>
           <PermissionTable
@@ -190,6 +202,7 @@ async function save(): Promise<void> {
             智库数据权限<span
               v-if="splitDiffs.scopeDiffs.length"
               class="grants__tab-badge"
+              :title="`智库数据范围有 ${splitDiffs.scopeDiffs.length} 项待保存修改（整组同档位变化会自动合并计数）`"
             >+{{ splitDiffs.scopeDiffs.length }}</span>
           </template>
           <ThinktankDataScopePanel
@@ -198,7 +211,7 @@ async function save(): Promise<void> {
             :original="original"
             :disabled="saving"
             :initial-lib-code="scopeFocusLib"
-            @update:model-value="updateSelected"
+            @update:model-value="replaceSelected"
           />
         </el-tab-pane>
       </el-tabs>
@@ -210,6 +223,16 @@ async function save(): Promise<void> {
         class="editor-dirty"
         role="status"
       >改了 {{ changes.length }} 处未保存</span>
+      <el-button
+        v-if="changes.length"
+        size="small"
+        link
+        type="primary"
+        :disabled="saving"
+        @click="diffDialogVisible = true"
+      >
+        查看修改明细
+      </el-button>
       <el-button
         :disabled="saving"
         @click="closeDrawer"
@@ -225,6 +248,13 @@ async function save(): Promise<void> {
         保存
       </el-button>
     </template>
+    <RoleGrantDiffDialog
+      v-model="diffDialogVisible"
+      :changes="changes"
+      :names="names"
+      :saving="saving"
+      @save="save"
+    />
   </el-drawer>
 </template>
 

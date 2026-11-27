@@ -91,12 +91,43 @@ def test_access_levels_orthogonal_file_type_and_industry() -> None:
         access.require_edit("", "")
 
     summary = access.to_summary()
+    assert summary["can_download"] is False
     assert summary["readable_file_types"] == ["产品", "经分", "未定义"]
     assert summary["exportable_file_types"] == ["经分", "未定义"]
     assert summary["editable_file_types"] == ["未定义"]
     assert summary["readable_industries"] == ["党政", "教育", "无"]
     assert len(FILE_TYPE_ITEMS) == 16
     assert len(INDUSTRY_TYPE_ITEMS) == 12
+
+    # 独立下载权限与导出解耦：仅 EXPORT 不允许下载；仅 READ + .download 允许范围内下载但不允许导出
+    assert access.can_export_record("经分", "") is True
+    assert access.can_download_record("经分", "") is False
+    with pytest.raises(PermissionDeniedError, match="文件下载权限"):
+        access.require_download("经分", "")
+
+    read_and_download = KnowledgeAccess.from_levels(
+        {
+            "thinktank.knowledge.download": "READ",
+            "thinktank.file_type.jingfen": "READ",
+            "thinktank.industry_type.agri": "READ",
+        },
+        module_level="READ",
+    )
+    assert read_and_download.can_download_record("经分", "农业") is True
+    assert read_and_download.can_export_record("经分", "农业") is False
+    assert read_and_download.can_download_record("产品", "农业") is False
+    assert read_and_download.to_summary()["can_download"] is True
+
+    # 没有资料库主权限时，即使残留 .download 也不放行
+    no_module = KnowledgeAccess.from_levels(
+        {
+            "thinktank.knowledge.download": "READ",
+            "thinktank.file_type.jingfen": "READ",
+            "thinktank.industry_type.agri": "READ",
+        },
+        module_level="NONE",
+    )
+    assert no_module.can_download_record("经分", "农业") is False
 
 
 async def test_storage_save_read_delete_and_path_traversal(tmp_path: Path) -> None:

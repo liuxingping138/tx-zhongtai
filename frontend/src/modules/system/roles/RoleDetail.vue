@@ -54,7 +54,7 @@ const grantNotice = computed<{ type: 'info' | 'warning'; title: string } | null>
 })
 const {
   role, groups, capabilities, thinktankLibs, names, selected, original, loading, saving, loadError, changes, openedCount,
-  updateSelected, load, refreshRole, confirmDiscard, reset: onReset, save: onSave,
+  updateSelected, replaceSelected, load, refreshRole, confirmDiscard, reset: onReset, save: onSave,
 } = useRoleGrants({
   roleId: () => roleId.value,
   canSeeGrants: () => canSeeGrants.value,
@@ -207,6 +207,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
             菜单权限<span
               v-if="splitDiffs.menuDiffs.length"
               class="role-body__badge is-dirty"
+              :title="`菜单与下载权限有 ${splitDiffs.menuDiffs.length} 项待保存修改`"
             >+{{ splitDiffs.menuDiffs.length }}</span>
           </template>
           <div
@@ -251,6 +252,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
             智库数据权限<span
               v-if="splitDiffs.scopeDiffs.length"
               class="role-body__badge is-dirty"
+              :title="`智库数据范围有 ${splitDiffs.scopeDiffs.length} 项待保存修改（整组同档位变化会自动合并计数）`"
             >+{{ splitDiffs.scopeDiffs.length }}</span>
           </template>
           <div class="role-tab-pad">
@@ -260,7 +262,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
               :original="original"
               :disabled="readonly"
               :initial-lib-code="scopeFocusLib"
-              @update:model-value="updateSelected"
+              @update:model-value="replaceSelected"
             />
           </div>
         </el-tab-pane>

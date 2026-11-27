@@ -35,7 +35,7 @@ function makeItem(id: string, overrides: Partial<TestItem> = {}): TestItem {
     title: `报告-${id}.pdf`,
     is_favorited: false,
     can_edit: true,
-    can_export: true,
+    can_download: true,
     ...overrides,
   }
 }
@@ -59,10 +59,10 @@ describe('useThinktankBatch', () => {
     expect(res.failed).toEqual([])
   })
 
-  it('batch downloads exportable rows, respects headers and fallback names, and reports partial failures', async () => {
-    const row1 = makeItem('r1', { can_export: true, title: '行业报告.pdf' })
-    const row2 = makeItem('r2', { can_export: false, title: '无权报告.pdf' })
-    const row3 = makeItem('r3', { can_export: true, title: '方案.pptx' })
+  it('batch downloads downloadable rows, respects headers and fallback names, and reports partial failures', async () => {
+    const row1 = makeItem('r1', { can_download: true, title: '行业报告.pdf' })
+    const row2 = makeItem('r2', { can_download: false, title: '无权报告.pdf' })
+    const row3 = makeItem('r3', { can_download: true, title: '方案.pptx' })
     const checked = ref([row1, row2, row3])
     const clearSelection = vi.fn()
     const download = vi.fn<(id: string) => Promise<AxiosResponse<Blob>>>()
@@ -97,7 +97,7 @@ describe('useThinktankBatch', () => {
   })
 
   it('uses id fallback title when getTitle is omitted and skips download when api.download is absent', async () => {
-    const row = makeItem('x1', { can_export: true })
+    const row = makeItem('x1', { can_download: true })
     const checked = ref([row])
     const download = vi.fn().mockResolvedValue({ data: new Blob(['a']), headers: {} })
     const batch = useThinktankBatch({

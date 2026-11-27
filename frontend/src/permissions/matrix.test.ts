@@ -10,19 +10,30 @@ import {
   filterGroups,
   filterGroupsByStatus,
   isChanged,
+  isColumnChecked,
+  isModuleChanged,
   openedCount,
   toggleCell,
   toggleGroupColumn,
   type Grants,
 } from './matrix'
 
-const entry = (code: string, name: string, levels: ModuleEntry['levels']): ModuleEntry => ({ code, name, levels, writes: [] })
+const entry = (code: string, name: string, levels: ModuleEntry['levels'], downloadCode?: string): ModuleEntry => ({
+  code,
+  name,
+  levels,
+  writes: [],
+  ...(downloadCode ? { downloadCode } : {}),
+})
 const sources = entry('policy.sources', '信源管理', ['READ', 'EXPORT', 'FULL'])
 const tags = entry('policy.base_tags', '基础标签', ['READ', 'EXPORT', 'FULL'])
 const audit = entry('system.audit', '操作日志', ['READ'])
 const perms = entry('system.permissions', '权限分配', ['READ', 'FULL'])
+const knowledge = entry('thinktank.knowledge', '资料库', ['READ', 'EXPORT', 'FULL'], 'thinktank.knowledge.download')
+const reports = entry('thinktank.reports', '报告库', ['READ', 'EXPORT', 'FULL'], 'thinktank.reports.download')
 const policy: ModuleGroup = { code: 'policy', name: '政策', modules: [sources, tags] }
 const system: ModuleGroup = { code: 'system', name: '系统管理', modules: [audit] }
+const thinktank: ModuleGroup = { code: 'thinktank', name: '智库', modules: [knowledge, reports] }
 
 describe('filterGroups', () => {
   it('没有关键词时原样返回', () => {
@@ -55,9 +66,47 @@ describe('toggleCell', () => {
     expect(toggleCell(perms, 'FULL', {}, 'editor')).toBeNull()
     expect(toggleCell(perms, 'FULL', {}, 'superadmin')).toEqual({ 'system.permissions': 'FULL' })
   })
+  it('下载列与导出列完全独立：勾下载自动补查看、取消下载不影响导出、取消查看自动清空下载', () => {
+    expect(toggleCell(sources, 'DOWNLOAD', {}, undefined)).toBeNull()
+    // 空态勾下载 -> 自动升为 READ + download=READ，且不勾 EXPORT
+    const dlOnly = toggleCell(knowledge, 'DOWNLOAD', {}, undefined)!
+    expect(dlOnly).toEqual({ 'thinktank.knowledge': 'READ', 'thinktank.knowledge.download': 'READ' })
+    expect(isColumnChecked(knowledge, 'DOWNLOAD', dlOnly)).toBe(true)
+    expect(isColumnChecked(knowledge, 'EXPORT', dlOnly)).toBe(false)
+    // 勾导出不自动开下载；已有导出再取消下载不影响导出
+    const exportOnly = toggleCell(knowledge, 'EXPORT', {}, undefined)!
+    expect(isColumnChecked(knowledge, 'DOWNLOAD', exportOnly)).toBe(false)
+    const both = toggleCell(knowledge, 'DOWNLOAD', exportOnly, undefined)!
+    expect(both).toEqual({ 'thinktank.knowledge': 'EXPORT', 'thinktank.knowledge.download': 'READ' })
+    const backToExport = toggleCell(knowledge, 'DOWNLOAD', both, undefined)!
+    expect(backToExport).toEqual({ 'thinktank.knowledge': 'EXPORT', 'thinktank.knowledge.download': 'NONE' })
+    // 取消查看时自动关闭下载
+    const cleared = toggleCell(knowledge, 'READ', both, undefined)!
+    expect(cleared).toEqual({ 'thinktank.knowledge': 'NONE', 'thinktank.knowledge.download': 'NONE' })
+    // 仅改下载也算模块已修改
+    expect(isModuleChanged(knowledge, both, exportOnly)).toBe(true)
+  })
 })
 
 describe('整组一列', () => {
+  it('智库整组下载列支持全选、半选与取消', () => {
+    expect(columnState(policy, 'DOWNLOAD', {}, undefined).empty).toBe(true)
+    const allOn = toggleGroupColumn(thinktank, 'DOWNLOAD', {}, undefined)!
+    expect(allOn).toEqual({
+      'thinktank.knowledge': 'READ',
+      'thinktank.knowledge.download': 'READ',
+      'thinktank.reports': 'READ',
+      'thinktank.reports.download': 'READ',
+    })
+    expect(columnState(thinktank, 'DOWNLOAD', allOn, undefined).checked).toBe(true)
+    const allOff = toggleGroupColumn(thinktank, 'DOWNLOAD', allOn, undefined)!
+    expect(allOff).toEqual({
+      'thinktank.knowledge': 'READ',
+      'thinktank.knowledge.download': 'NONE',
+      'thinktank.reports': 'READ',
+      'thinktank.reports.download': 'NONE',
+    })
+  })
   it('没勾满时全部勾上，已有更高档的保留', () => {
     const grants: Grants = { 'policy.sources': 'FULL' }
     expect(toggleGroupColumn(policy, 'EXPORT', grants, undefined)).toEqual({

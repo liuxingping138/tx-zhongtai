@@ -17,6 +17,8 @@ EXPECTED_RESOURCE_BY_PREFIX = (
 def _expected_resource(path: str) -> str:
     for prefix, resource in EXPECTED_RESOURCE_BY_PREFIX:
         if path == prefix or path.startswith(f"{prefix}/"):
+            if path.endswith("/download"):
+                return f"{resource}.download"
             return resource
     raise AssertionError(f"未归属的智库路由：{path}")
 
@@ -34,15 +36,20 @@ def test_every_non_public_route_uses_authoritative_permission() -> None:
         method, path = method_path.split(" ", 1)
         assert resource == _expected_resource(path)
         seen_resources.add(resource)
-        if path.endswith("/favorite"):
+        if path.endswith("/download"):
+            assert action == "download"
+        elif path.endswith("/favorite"):
             assert action == "favorite"
         elif method in {"POST", "PATCH", "PUT", "DELETE"}:
             assert action in {"create", "update", "delete", "upload_tags"}
         else:
-            assert action in {"list", "read", "preview", "download", "export", "export_undefined"}
+            assert action in {"list", "read", "preview", "export", "export_undefined"}
     assert seen_resources == {
         "thinktank.knowledge",
+        "thinktank.knowledge.download",
         "thinktank.reports",
+        "thinktank.reports.download",
         "thinktank.proposals",
+        "thinktank.proposals.download",
         "thinktank.favorites",
     }

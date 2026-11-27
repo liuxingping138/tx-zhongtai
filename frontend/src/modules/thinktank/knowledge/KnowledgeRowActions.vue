@@ -24,7 +24,7 @@ const emit = defineEmits<{
   <ThinktankRowActions
     :title="row.file_name"
     :can-edit="row.can_edit"
-    :can-export="row.can_export"
+    :can-download="row.can_download"
     :is-favorited="row.is_favorited"
     :detail-to="detailTo"
     :edit-to="editTo"

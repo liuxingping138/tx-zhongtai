@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 
 import type { EffectivePermission } from '@/api/types'
-import { LEVEL_TEXT } from '@/permissions/catalog'
+import { formatGrantLevel, isThinktankDownloadCode } from '@/permissions/catalog'
 import { isThinktankScopeCode } from '@/permissions/thinktankScopes'
 
 /** 用户的实际权限：多个角色叠加后每个模块取最高一档，并写明每档来自哪个角色。 */
@@ -43,8 +43,15 @@ const grouped = computed(() => {
 
 function sourceText(item: EffectivePermission): string {
   return item.sources
-    .map(source => `${source.role_name}（${LEVEL_TEXT[source.level]}${source.active ? '' : '，角色已停用'}）`)
+    .map(source => `${source.role_name}（${formatGrantLevel(item.resource_code, source.level)}${source.active ? '' : '，角色已停用'}）`)
     .join('、')
+}
+
+function pillVariant(item: EffectivePermission): 'none' | 'download' | 'read' | 'export' | 'full' {
+  if (item.level === 'NONE') return 'none'
+  if (isThinktankDownloadCode(item.resource_code)) return 'download'
+  if (item.level === 'EXPORT') return 'export'
+  return item.level === 'FULL' ? 'full' : 'read'
 }
 
 const filteredGrouped = computed(() => {
@@ -66,7 +73,13 @@ const filteredGrouped = computed(() => {
 })
 
 const effectiveCount = computed(
-  () => props.permissions.filter(item => item.level !== 'NONE' && !isThinktankScopeCode(item.resource_code)).length,
+  () =>
+    props.permissions.filter(
+      item =>
+        item.level !== 'NONE'
+        && !isThinktankScopeCode(item.resource_code)
+        && !isThinktankDownloadCode(item.resource_code),
+    ).length,
 )
 </script>
 
@@ -177,21 +190,13 @@ const effectiveCount = computed(
             <td class="col-level">
               <span
                 class="perm-pill"
-                :class="{
-                  'perm-pill--full': item.level === 'FULL',
-                  'perm-pill--read': item.level === 'READ',
-                  'perm-pill--none': item.level === 'NONE',
-                }"
+                :class="`perm-pill--${pillVariant(item)}`"
               >
                 <span
                   class="pill-dot"
-                  :class="{
-                    'is-full': item.level === 'FULL',
-                    'is-read': item.level === 'READ',
-                    'is-none': item.level === 'NONE',
-                  }"
+                  :class="`is-${pillVariant(item)}`"
                 />
-                {{ item.level === 'NONE' ? '未开通' : LEVEL_TEXT[item.level] }}
+                {{ item.level === 'NONE' ? '未开通' : formatGrantLevel(item.resource_code, item.level) }}
               </span>
             </td>
             <td class="col-source">
@@ -206,7 +211,7 @@ const effectiveCount = computed(
                   :class="{ 'source-badge--direct': s.role_id === null, 'source-badge--inactive': !s.active }"
                 >
                   <span class="source-badge__name">{{ s.role_name }}</span>
-                  <span class="source-badge__level">({{ LEVEL_TEXT[s.level] }})</span>
+                  <span class="source-badge__level">({{ formatGrantLevel(item.resource_code, s.level) }})</span>
                 </span>
               </div>
               <span
@@ -259,33 +264,37 @@ const effectiveCount = computed(
 
 .perm-table-wrap { width: 100%; overflow-x: auto; border: 1px solid var(--zt-border); border-radius: var(--zt-radius); }
 .perm-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
-.perm-table thead th { background: var(--zt-surface-subtle); color: var(--zt-ink-700); font-weight: 650; font-size: 12px; padding: 10px 16px; border-bottom: 1px solid var(--zt-border); white-space: nowrap; letter-spacing: 0.2px; }
-.col-module { width: 220px; }
-.col-level { width: 112px; white-space: nowrap; }
-.col-source { min-width: 220px; }
-.col-mech { min-width: 112px; white-space: nowrap; }
+.perm-table thead th { background: var(--zt-surface-subtle); color: var(--zt-ink-700); font-weight: 650; font-size: 12px; padding: 10px 12px; border-bottom: 1px solid var(--zt-border); white-space: nowrap; letter-spacing: 0.2px; }
+.col-module { width: 184px; max-width: 210px; }
+.col-level { width: 100px; white-space: nowrap; }
+.col-source { min-width: 170px; }
+.col-mech { width: 96px; white-space: nowrap; }
 
-.group-row td { background: var(--zt-surface-subtle); padding: 8px 16px; border-top: 1px solid var(--zt-border); border-bottom: 1px solid var(--zt-divider); }
+.group-row td { background: var(--zt-surface-subtle); padding: 8px 12px; border-top: 1px solid var(--zt-border); border-bottom: 1px solid var(--zt-divider); }
 .group-label { display: flex; align-items: center; gap: 8px; }
 .group-bar { width: 3px; height: 12px; background: var(--zt-blue-600); border-radius: 2px; }
 .group-name { font-size: 12.5px; font-weight: 650; color: var(--zt-ink-900); }
 .group-count { font-size: 11.5px; color: var(--zt-ink-500); background: var(--zt-panel); border: 1px solid var(--zt-border); border-radius: 10px; padding: 0 6px; }
 
-.data-row td { padding: 11px 16px; border-bottom: 1px solid var(--zt-divider); vertical-align: middle; background: var(--zt-panel); transition: background 0.15s ease; }
+.data-row td { padding: 10px 12px; border-bottom: 1px solid var(--zt-divider); vertical-align: middle; background: var(--zt-panel); transition: background 0.15s ease; }
 .data-row:hover td { background: var(--zt-surface-subtle); }
 .data-row.is-disabled td { background: var(--zt-panel); }
 .data-row.is-disabled .module-title { color: var(--zt-ink-400); }
 
 .module-title { font-weight: 550; color: var(--zt-ink-900); line-height: 1.3; }
-.module-code { font-family: var(--zt-font-mono, monospace); font-size: 11.5px; color: var(--zt-ink-400); margin-top: 2px; }
+.module-code { font-family: var(--zt-font-mono, monospace); font-size: 11.5px; color: var(--zt-ink-400); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.perm-pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; white-space: nowrap; }
-.perm-pill--full { background: var(--zt-success-soft); color: var(--zt-success-text); border: 1px solid var(--zt-success-border); }
-.perm-pill--read { background: var(--el-color-primary-light-9); color: var(--zt-blue-600); border: 1px solid var(--el-color-primary-light-7); }
+.perm-pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 12px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+.perm-pill--full { background: var(--el-color-primary-light-9); color: var(--zt-blue-600); border: 1px solid var(--el-color-primary-light-7); }
+.perm-pill--export { background: var(--zt-success-soft); color: var(--zt-success-text); border: 1px solid var(--zt-success-border); }
+.perm-pill--download { background: var(--zt-teal-soft); color: var(--zt-teal-text); border: 1px solid var(--zt-teal-line); }
+.perm-pill--read { background: var(--zt-soft); color: var(--zt-ink-700); border: 1px solid var(--zt-border); }
 .perm-pill--none { background: var(--zt-surface-subtle); color: var(--zt-ink-400); border: 1px solid var(--zt-border); }
 .pill-dot { width: 6px; height: 6px; border-radius: 50%; }
-.pill-dot.is-full { background: var(--zt-success); }
-.pill-dot.is-read { background: var(--zt-blue-600); }
+.pill-dot.is-full { background: var(--zt-blue-600); }
+.pill-dot.is-export { background: var(--zt-success); }
+.pill-dot.is-download { background: var(--zt-teal-text); }
+.pill-dot.is-read { background: var(--zt-ink-400); }
 .pill-dot.is-none { background: var(--zt-muted-mark); }
 
 .source-list { display: flex; flex-wrap: wrap; gap: 6px; }

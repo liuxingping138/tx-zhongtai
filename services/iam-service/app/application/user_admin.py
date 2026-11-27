@@ -23,15 +23,13 @@ from app.application.user_fields import (
     validate_username,
 )
 from app.application.user_guard import assert_can_manage_target, manageable_ids
-from app.domain.authorization import (
-    max_level,
-    remaining_loginable_superadmins,
-)
+from app.domain.authorization import max_level, remaining_loginable_superadmins
 from app.domain.catalog import SUPERADMIN_ROLE_CODE
 from app.domain.enums import UserStatus
 from app.domain.filters import UserFilters
 from app.domain.models import Role, User
 from app.domain.password import hash_password_async, validate_password_policy
+from app.domain.thinktank_catalog import THINKTANK_DOWNLOAD_CODES
 from app.repositories import outbox as outbox_repo
 from app.repositories import resources as resource_repo
 from app.repositories import roles as role_repo
@@ -344,6 +342,8 @@ async def effective_permissions(session: AsyncSession, user_id: uuid.UUID) -> di
         effective = max_level(str(item["level"]) for item in sources if item["active"])
         resource = by_code.get(code)
         parent = by_id.get(resource.parent_id) if resource and resource.parent_id else None
+        if code in THINKTANK_DOWNLOAD_CODES and parent and parent.parent_id:
+            parent = by_id.get(parent.parent_id) or parent
         items.append(
             {
                 "resource_code": code,

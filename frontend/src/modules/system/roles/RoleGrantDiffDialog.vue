@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { LEVEL_TEXT } from '@/permissions/catalog'
+import { formatGrantLevel, isThinktankDownloadCode } from '@/permissions/catalog'
 import type { DiffEntry } from '@/permissions/thinktankScopes'
 
 defineProps<{
@@ -36,13 +36,13 @@ function onConfirm() {
             size="small"
             type="info"
             effect="plain"
-          >{{ LEVEL_TEXT[item.from] }}</el-tag>
+          >{{ formatGrantLevel(item.code, item.from) }}</el-tag>
           <span>→</span>
           <el-tag
             size="small"
-            :type="item.to === 'NONE' ? 'info' : 'primary'"
+            :type="item.to === 'NONE' ? 'info' : isThinktankDownloadCode(item.code) ? 'success' : 'primary'"
             effect="plain"
-          >{{ LEVEL_TEXT[item.to] }}</el-tag>
+          >{{ formatGrantLevel(item.code, item.to) }}</el-tag>
         </span>
       </div>
     </div>
