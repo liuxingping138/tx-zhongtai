@@ -14,12 +14,13 @@
   background: var(--zt-panel);
 }
 
-/* 单行紧凑子库概览条 */
+/* 紧凑子库概览条：宽屏单行排布，窄屏自动换行零重叠 */
 .tt-overview {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px 12px;
   min-height: 44px;
   padding: 6px 14px;
   border: 1px solid var(--zt-border);
@@ -30,7 +31,8 @@
 .tt-overview__left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 8px 10px;
   min-width: 0;
 }
 
