@@ -10,8 +10,10 @@ import { useUnsavedForm } from '@/composables/useUnsavedForm'
 import { LEVEL_TEXT, moduleGroups, moduleNames } from '@/permissions/catalog'
 import { grantDiff, grantsFromTree, type GrantLevel } from '@/permissions/levels'
 import {
+  buildScopeBadges,
   collapseScopeDiffs,
   isThinktankScopeCode,
+  splitGrantDiffs,
   syncThinktankScopesWithMenu,
   thinktankLibraries,
   thinktankScopeNames,
@@ -38,6 +40,7 @@ const loading = ref(false)
 const saving = ref(false)
 const loadError = ref('')
 const activeTab = ref<'menu' | 'data-scopes'>('menu')
+const scopeFocusLib = ref('')
 
 const groups = computed(() => moduleGroups(tree.value))
 const thinktankLibs = computed(() => thinktankLibraries(tree.value))
@@ -51,10 +54,17 @@ const changes = computed(() =>
     grantDiff(grantsFromTree(tree.value, original.value), grantsFromTree(tree.value, selected.value)),
   ),
 )
+const scopeBadges = computed(() => buildScopeBadges(thinktankLibs.value, selected.value))
+const splitDiffs = computed(() => splitGrantDiffs(thinktankLibs.value, changes.value))
 const opened = computed(
   () =>
     Object.entries(selected.value).filter(([code, level]) => level !== 'NONE' && !isThinktankScopeCode(code)).length,
 )
+
+function onOpenScope(code: string): void {
+  scopeFocusLib.value = code
+  activeTab.value = 'data-scopes'
+}
 
 function updateSelected(next: Grants): void {
   selected.value = syncThinktankScopesWithMenu(thinktankLibs.value, selected.value, next)
@@ -156,28 +166,38 @@ async function save(): Promise<void> {
       <el-tabs
         v-if="tree.length"
         v-model="activeTab"
+        class="grants__tabs"
       >
-        <el-tab-pane
-          name="menu"
-          label="菜单权限"
-        >
+        <el-tab-pane name="menu">
+          <template #label>
+            菜单权限<span
+              v-if="splitDiffs.menuDiffs.length"
+              class="grants__tab-badge"
+            >+{{ splitDiffs.menuDiffs.length }}</span>
+          </template>
           <PermissionTable
             :model-value="selected"
             :groups="groups"
             :original="original"
             :disabled="saving"
+            :scope-badges="scopeBadges"
             @update:model-value="updateSelected"
+            @open-scope="onOpenScope"
           />
         </el-tab-pane>
-        <el-tab-pane
-          name="data-scopes"
-          label="智库数据权限"
-        >
+        <el-tab-pane name="data-scopes">
+          <template #label>
+            智库数据权限<span
+              v-if="splitDiffs.scopeDiffs.length"
+              class="grants__tab-badge"
+            >+{{ splitDiffs.scopeDiffs.length }}</span>
+          </template>
           <ThinktankDataScopePanel
             :libraries="thinktankLibs"
             :model-value="selected"
             :original="original"
             :disabled="saving"
+            :initial-lib-code="scopeFocusLib"
             @update:model-value="updateSelected"
           />
         </el-tab-pane>
@@ -210,7 +230,9 @@ async function save(): Promise<void> {
 
 <style scoped>
 .grants__hint { margin: 0 0 16px; color: var(--zt-ink-500); font-size: 13px; line-height: 1.7; }
-.grants__table { min-height: 240px; }
+.grants__table { --perm-sticky-top: -20px; min-height: 240px; }
+.grants__tabs :deep(.el-tabs__content) { overflow: visible; }
+.grants__tab-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 17px; margin-left: 6px; padding: 0 5px; border-radius: 999px; background: var(--zt-warning-soft); border: 1px solid var(--zt-warning-border); color: var(--zt-warning-text); font-size: 11px; font-weight: 600; line-height: 1; }
 .grants__count { margin-right: auto; color: var(--zt-ink-500); font-size: 13px; }
 </style>
 

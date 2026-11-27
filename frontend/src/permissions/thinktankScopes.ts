@@ -86,13 +86,65 @@ export function isDimensionAllMode(dimension: ModuleGroup, grants: Grants, menuL
   return dimension.modules.every(item => levelOf(grants, item.code) === menuLevel)
 }
 
-/** 将某数据维度一键设为「全部范围（跟随子库菜单档位）」。 */
-export function applyDimensionAllMode(dimension: ModuleGroup, grants: Grants, menuLevel: GrantLevel): Grants {
+/** 将某数据维度一键设为指定档位（用于「全部清空 / 全设为仅查看 / 查看和导出 / 可管理」批量操作）。 */
+export function setDimensionLevel(dimension: ModuleGroup, grants: Grants, level: GrantLevel): Grants {
   const next = { ...grants }
   for (const item of dimension.modules) {
-    next[item.code] = menuLevel
+    next[item.code] = level
   }
   return next
+}
+
+/** 将某数据维度一键设为「全部范围（跟随子库菜单档位）」。 */
+export function applyDimensionAllMode(dimension: ModuleGroup, grants: Grants, menuLevel: GrantLevel): Grants {
+  return setDimensionLevel(dimension, grants, menuLevel)
+}
+
+/** 统计某数据维度下与原始值不同的条目数量。 */
+export function countDimensionChanges(dimension: ModuleGroup, grants: Grants, original: Grants): number {
+  return dimension.modules.filter(item => levelOf(grants, item.code) !== levelOf(original, item.code)).length
+}
+
+function shortDimensionLabel(name: string): string {
+  return name.replace(/(类型)?范围$/, '').trim() || name
+}
+
+/** 生成智库子库在「菜单权限」行旁展示的数据范围摘要文案；未开通子库时返回空串。 */
+export function scopeBadgeText(lib: ThinktankLibraryScope, grants: Grants): string {
+  const menuLevel = levelOf(grants, lib.code)
+  if (menuLevel === 'NONE' || !lib.dimensions.length) return ''
+  const allFollow = lib.dimensions.every(dim => isDimensionAllMode(dim, grants, menuLevel))
+  if (allFollow) return '数据范围：全部'
+  const parts = lib.dimensions.map(dim => {
+    const opened = dim.modules.filter(item => levelOf(grants, item.code) !== 'NONE').length
+    return `${shortDimensionLabel(dim.name)} ${opened}/${dim.modules.length}`
+  })
+  return `范围：${parts.join(' · ')}`
+}
+
+/** 批量生成智库子库编码 -> 范围摘要文案映射。 */
+export function buildScopeBadges(libraries: ThinktankLibraryScope[], grants: Grants): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const lib of libraries) {
+    const text = scopeBadgeText(lib, grants)
+    if (text) out[lib.code] = text
+  }
+  return out
+}
+
+/** 拆分折叠后的变更摘要为「菜单权限」和「智库数据权限」两组，用于页签未保存计数徽章。 */
+export function splitGrantDiffs(
+  libraries: ThinktankLibraryScope[],
+  diffs: DiffEntry[],
+): { menuDiffs: DiffEntry[]; scopeDiffs: DiffEntry[] } {
+  const dimCodes = new Set(libraries.flatMap(lib => lib.dimensions.map(dim => dim.code)))
+  const menuDiffs: DiffEntry[] = []
+  const scopeDiffs: DiffEntry[] = []
+  for (const diff of diffs) {
+    if (isThinktankScopeCode(diff.code) || dimCodes.has(diff.code)) scopeDiffs.push(diff)
+    else menuDiffs.push(diff)
+  }
+  return { menuDiffs, scopeDiffs }
 }
 
 /** 按子库菜单档位上限收敛维度内各项可选档位（例如菜单为仅查看时，数据范围不可勾导出/管理）。 */

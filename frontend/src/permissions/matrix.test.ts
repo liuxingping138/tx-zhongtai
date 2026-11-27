@@ -2,7 +2,18 @@ import { describe, expect, it } from 'vitest'
 
 import type { ModuleEntry, ModuleGroup } from './catalog'
 import {
-  columnState, filterCapabilities, filterGroups, isChanged, openedCount, toggleCell, toggleGroupColumn, type Grants,
+  columnState,
+  countChangedModules,
+  countOpenedModules,
+  countTotalModules,
+  filterCapabilities,
+  filterGroups,
+  filterGroupsByStatus,
+  isChanged,
+  openedCount,
+  toggleCell,
+  toggleGroupColumn,
+  type Grants,
 } from './matrix'
 
 const entry = (code: string, name: string, levels: ModuleEntry['levels']): ModuleEntry => ({ code, name, levels, writes: [] })
@@ -79,5 +90,18 @@ describe('统计', () => {
   it('缺失按 NONE 比较，没变就不算修改', () => {
     expect(isChanged({}, { 'policy.sources': 'NONE' }, 'policy.sources')).toBe(false)
     expect(isChanged({ 'policy.sources': 'READ' }, {}, 'policy.sources')).toBe(true)
+  })
+  it('支持按全部/已开通/已修改状态联合过滤并统计总数', () => {
+    const groups = [policy, system]
+    const grants: Grants = { 'policy.sources': 'FULL', 'system.audit': 'READ' }
+    const original: Grants = { 'policy.sources': 'READ', 'system.audit': 'READ' }
+    expect(countTotalModules(groups)).toBe(3)
+    expect(countOpenedModules(groups, grants)).toBe(2)
+    expect(countChangedModules(groups, grants, original)).toBe(1)
+    expect(filterGroupsByStatus(groups, grants, original, '', 'ALL')).toHaveLength(2)
+    expect(filterGroupsByStatus(groups, grants, original, '', 'OPEN').map(g => g.modules.length)).toEqual([1, 1])
+    const changedOnly = filterGroupsByStatus(groups, grants, original, '', 'CHANGED')
+    expect(changedOnly).toHaveLength(1)
+    expect(changedOnly[0]?.modules).toEqual([sources])
   })
 })

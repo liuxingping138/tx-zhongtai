@@ -9,15 +9,17 @@ import { errorMessage } from '@/api/errors'
 import type { RoleItem } from '@/api/types'
 import { useRoleGrants } from '@/composables/useRoleGrants'
 import { SUPERADMIN_ROLE_CODE } from '@/permissions/catalog'
+import { buildScopeBadges, splitGrantDiffs } from '@/permissions/thinktankScopes'
 import DetailSkeleton from '@/components/DetailSkeleton.vue'
 import { useAuthStore } from '@/stores/auth'
 import PermissionTable from './PermissionTable.vue'
 import RoleFormDialog, { type RoleFormMode } from './RoleFormDialog.vue'
+import RoleGrantDiffDialog from './RoleGrantDiffDialog.vue'
 import RoleMembersPanel from './RoleMembersPanel.vue'
 import ThinktankDataScopePanel from './ThinktankDataScopePanel.vue'
 
 /**
- * 角色详情：嵌在「角色与权限」右侧。上面是角色信息，下面分「权限设置」「成员」两个页签。
+ * 角色详情：嵌在「角色与权限」右侧。上面是角色信息，下面分「菜单权限」「智库数据权限」「成员」三个页签。
  * 名称、状态、成员数、权限变化后通知左侧列表刷新。授权草稿和保存在 useRoleGrants。
  */
 const emit = defineEmits<{ changed: [] }>()
@@ -35,6 +37,8 @@ function initialTab(): 'grants' | 'data-scopes' | 'members' {
   return route.query.tab === 'data-scopes' ? 'data-scopes' : 'grants'
 }
 const tab = ref<'grants' | 'data-scopes' | 'members'>(initialTab())
+const scopeFocusLib = ref('')
+const diffDialogVisible = ref(false)
 const justCreated = ref(typeof route.query.created === 'string' ? route.query.created : '')
 
 const isSuperRole = computed(() => role.value?.code === SUPERADMIN_ROLE_CODE && role.value.is_builtin)
@@ -50,7 +54,7 @@ const grantNotice = computed<{ type: 'info' | 'warning'; title: string } | null>
   return null
 })
 const {
-  role, groups, capabilities, thinktankLibs, selected, original, loading, saving, loadError, changes, openedCount,
+  role, groups, capabilities, thinktankLibs, names, selected, original, loading, saving, loadError, changes, openedCount,
   updateSelected, load, refreshRole, confirmDiscard, reset: onReset, save: onSave,
 } = useRoleGrants({
   roleId: () => roleId.value,
@@ -60,12 +64,20 @@ const {
   saved: () => emit('changed'),
 })
 
+const scopeBadges = computed(() => buildScopeBadges(thinktankLibs.value, selected.value))
+const splitDiffs = computed(() => splitGrantDiffs(thinktankLibs.value, changes.value))
+
 const formVisible = ref(false)
 const formMode = ref<RoleFormMode>('edit')
 
 function openForm(mode: RoleFormMode) {
   formMode.value = mode
   formVisible.value = true
+}
+
+function onOpenScope(code: string) {
+  scopeFocusLib.value = code
+  tab.value = 'data-scopes'
 }
 
 function onFormSaved(saved: RoleItem, mode: RoleFormMode) {
@@ -121,6 +133,8 @@ watch(tab, (value) => {
 watch(roleId, (value, previous) => {
   if (value && value !== previous) {
     justCreated.value = typeof route.query.created === 'string' ? route.query.created : ''
+    scopeFocusLib.value = ''
+    diffDialogVisible.value = false
     tab.value = initialTab()
     void load()
   }
@@ -253,10 +267,13 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
           v-model="tab"
           class="role-tabs"
         >
-          <el-tab-pane
-            name="grants"
-            label="菜单权限"
-          >
+          <el-tab-pane name="grants">
+            <template #label>
+              菜单权限<span
+                v-if="splitDiffs.menuDiffs.length"
+                class="role-body__badge is-dirty"
+              >+{{ splitDiffs.menuDiffs.length }}</span>
+            </template>
             <el-alert
               v-if="!canSeeGrants"
               type="info"
@@ -273,12 +290,6 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
                 class="role-detail__notice"
                 :title="grantNotice.title"
               />
-              <p
-                v-if="!readonly || saving"
-                class="role-body__guide"
-              >
-                按菜单勾选。分组行的勾选框一次开通整列；开通「智库」下子库菜单后，可在右侧「智库数据权限」页签按文件类型与行业精细限制范围。
-              </p>
               <PermissionTable
                 :model-value="selected"
                 :groups="groups"
@@ -286,26 +297,28 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
                 :disabled="readonly"
                 :role-code="role.code"
                 :capabilities="capabilities"
+                :scope-badges="scopeBadges"
                 @update:model-value="updateSelected"
+                @open-scope="onOpenScope"
               />
             </template>
           </el-tab-pane>
           <el-tab-pane
             v-if="canSeeGrants"
             name="data-scopes"
-            label="智库数据权限"
           >
-            <p
-              v-if="!readonly || saving"
-              class="role-body__guide"
-            >
-              针对「智库」下各子库设置数据行级范围（默认跟随子库菜单档位放行全部范围，可切换为「指定范围」按文件类型、行业精细勾选）。
-            </p>
+            <template #label>
+              智库数据权限<span
+                v-if="splitDiffs.scopeDiffs.length"
+                class="role-body__badge is-dirty"
+              >+{{ splitDiffs.scopeDiffs.length }}</span>
+            </template>
             <ThinktankDataScopePanel
               :libraries="thinktankLibs"
               :model-value="selected"
               :original="original"
               :disabled="readonly"
+              :initial-lib-code="scopeFocusLib"
               @update:model-value="updateSelected"
             />
           </el-tab-pane>
@@ -321,13 +334,23 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
             />
           </el-tab-pane>
         </el-tabs>
+
         <!-- 钉在权限卡片底部：在「菜单权限」或「智库数据权限」页签下滚动时一直看得到。 -->
         <div
           v-if="canSeeGrants && tab !== 'members' && changes.length"
           class="savebar"
           role="status"
         >
-          <span class="savebar__text">有 <strong>{{ changes.length }}</strong> 项修改还没保存，保存后成员下次操作即生效</span>
+          <div class="savebar__left">
+            <span class="savebar__text">有 <strong>{{ changes.length }}</strong> 项修改还没保存，保存后成员下次操作即生效</span>
+            <el-button
+              size="small"
+              :disabled="saving"
+              @click="diffDialogVisible = true"
+            >
+              查看修改明细
+            </el-button>
+          </div>
           <el-button
             :disabled="saving"
             @click="onReset"
@@ -344,6 +367,15 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
         </div>
       </section>
     </template>
+
+    <RoleGrantDiffDialog
+      v-model="diffDialogVisible"
+      :changes="changes"
+      :names="names"
+      :saving="saving"
+      @save="onSave"
+    />
+
     <RoleFormDialog
       v-model="formVisible"
       :mode="formMode"
@@ -353,44 +385,4 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
   </div>
 </template>
 
-<style scoped>
-.role-detail { display: flex; flex-direction: column; gap: 16px; min-height: 300px; }
-.role-detail__error { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 48px 24px; text-align: center; border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: var(--zt-panel); color: var(--zt-ink-700); }
-.role-detail__error h2 { margin: 0; font-size: 17px; }
-.role-detail__error p { margin: 0; }
-.role-detail__notice { margin-bottom: 0; }
-
-.role-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding: 20px 24px; border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: var(--zt-panel); box-shadow: var(--zt-shadow); }
-.role-head__main { min-width: 0; }
-.role-head__title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.role-head__title h2 { margin: 0; font-size: 20px; font-weight: 650; line-height: 1.4; color: var(--zt-ink-900); }
-.role-head__desc { margin: 6px 0 0; max-width: 72ch; font-size: 14px; line-height: 1.6; color: var(--zt-ink-700); }
-.role-head__desc.is-empty { color: var(--zt-ink-500); }
-.role-head__stats { display: flex; flex-wrap: wrap; gap: 8px 32px; margin: 14px 0 0; }
-.role-head__stats div { display: flex; align-items: baseline; gap: 6px; }
-.role-head__stats dt { font-size: 12px; color: var(--zt-ink-500); }
-.role-head__stats dd { margin: 0; font-size: 14px; color: var(--zt-ink-900); font-variant-numeric: tabular-nums; }
-.role-head__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; flex: none; }
-.role-head__actions .el-button + .el-button { margin-left: 0; }
-
-.role-body { padding: 4px 24px 24px; border: 1px solid var(--zt-border); border-radius: var(--zt-radius); background: var(--zt-panel); box-shadow: var(--zt-shadow); }
-.role-body .role-detail__notice { margin-bottom: 12px; }
-.role-body__guide { margin: 0 0 12px; font-size: 13px; line-height: 1.6; color: var(--zt-ink-700); }
-.role-body__guide strong { color: var(--zt-ink-900); }
-.role-body__badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 18px; margin-left: 6px; padding: 0 6px; border-radius: 10px; background: var(--zt-surface-subtle); border: 1px solid var(--zt-border); font-size: 11.5px; line-height: 1; text-align: center; color: var(--zt-ink-700); }
-
-.role-tabs :deep(.el-tabs__header) { margin-bottom: 16px; }
-.role-tabs :deep(.el-tabs__nav-wrap::after) { height: 1px; background-color: var(--zt-divider); }
-.role-tabs :deep(.el-tabs__item) { font-size: 14px; font-weight: 500; color: var(--zt-ink-700); padding: 0 16px; height: 42px; }
-.role-tabs :deep(.el-tabs__item.is-active) { font-weight: 600; color: var(--zt-blue-600); }
-.role-tabs :deep(.el-tabs__active-bar) { height: 2.5px; border-radius: 2px 2px 0 0; background-color: var(--zt-blue-600); }
-
-.savebar { position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin: 16px -24px -24px; padding: 12px 24px; border-top: 1px solid var(--zt-warning-border); border-radius: 0 0 var(--zt-radius) var(--zt-radius); background: var(--zt-warning-soft); box-shadow: 0 -6px 16px var(--zt-shadow-soft); }
-.savebar__text { margin-right: auto; font-size: 14px; color: var(--zt-ink-700); }
-.savebar__text strong { color: var(--zt-warning-text); font-variant-numeric: tabular-nums; }
-.savebar .el-button + .el-button { margin-left: 0; }
-@media (max-width: 1100px) {
-  .role-head { flex-direction: column; }
-  .role-head__actions { justify-content: flex-start; }
-}
-</style>
+<style scoped src="./role-detail.css"></style>

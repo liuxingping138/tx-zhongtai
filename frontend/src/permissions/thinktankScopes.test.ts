@@ -4,10 +4,15 @@ import type { ResourceNode } from '@/api/types'
 import { moduleGroups } from './catalog'
 import {
   applyDimensionAllMode,
+  buildScopeBadges,
   capDimensionToMenuLevel,
   collapseScopeDiffs,
+  countDimensionChanges,
   isDimensionAllMode,
   isThinktankScopeCode,
+  scopeBadgeText,
+  setDimensionLevel,
+  splitGrantDiffs,
   syncThinktankScopesWithMenu,
   thinktankLibraries,
   thinktankScopeNames,
@@ -200,5 +205,20 @@ describe('thinktankScopes', () => {
     expect(collapsed).toHaveLength(3)
     expect(collapsed[1]?.label).toBe('智库·资料库 / 文件类型范围（全部 2 项）')
     expect(collapsed[2]?.label).toBe('智库·资料库 / 行业类型范围（全部 1 项）')
+
+    // 维度批量设档、修改统计、摘要徽章与分签变更拆分
+    const batchRead = setDimensionLevel(fileTypeDim, opened, 'READ')
+    expect(batchRead['thinktank.file_type.product']).toBe('READ')
+    expect(batchRead['thinktank.file_type.undefined']).toBe('READ')
+    expect(countDimensionChanges(fileTypeDim, batchRead, opened)).toBe(2)
+
+    expect(scopeBadgeText(libs[0]!, initial)).toBe('')
+    expect(scopeBadgeText(libs[0]!, opened)).toBe('数据范围：全部')
+    const partial = { ...opened, 'thinktank.file_type.undefined': 'NONE' as const }
+    expect(buildScopeBadges(libs, partial)).toEqual({ 'thinktank.knowledge': '范围：文件 1/2 · 行业 1/1' })
+
+    const split = splitGrantDiffs(libs, collapsed)
+    expect(split.menuDiffs).toHaveLength(1)
+    expect(split.scopeDiffs).toHaveLength(2)
   })
 })

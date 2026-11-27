@@ -1,14 +1,15 @@
 import { isChecked, lockReason, supports, toggleColumn, type ModuleEntry, type ModuleGroup } from './catalog'
 import type { GrantLevel } from './levels'
 
-/** 角色权限矩阵的纯逻辑：谁被锁定、整组一列怎么勾、搜索怎么过滤。组件只负责渲染。 */
+/** 角色权限矩阵的纯逻辑：谁被锁定、整组一列怎么勾、搜索与状态过滤怎么筛。组件只负责渲染。 */
 export type Column = Exclude<GrantLevel, 'NONE'>
 export type Grants = Record<string, GrantLevel>
+export type PermissionStatusFilter = 'ALL' | 'OPEN' | 'CHANGED'
 
-export const COLUMNS: { level: Column; label: string; what: string }[] = [
-  { level: 'READ', label: '查看', what: '打开菜单，看列表和详情' },
-  { level: 'EXPORT', label: '导出', what: '下载 Excel' },
-  { level: 'FULL', label: '管理', what: '新增、编辑、导入等' },
+export const COLUMNS: { level: Column; label: string; sub: string; what: string }[] = [
+  { level: 'READ', label: '查看', sub: '列表/详情', what: '打开菜单，看列表和详情' },
+  { level: 'EXPORT', label: '导出', sub: '下载 Excel', what: '下载 Excel' },
+  { level: 'FULL', label: '管理', sub: '增删改/导入', what: '新增、编辑、导入等' },
 ]
 
 export function levelOf(grants: Grants, code: string): GrantLevel {
@@ -44,6 +45,48 @@ export function filterCapabilities(items: ModuleEntry[], keyword: string): Modul
 
 export function openedCount(group: ModuleGroup, grants: Grants): number {
   return group.modules.filter(module => levelOf(grants, module.code) !== 'NONE').length
+}
+
+function matchesStatus(
+  module: ModuleEntry,
+  grants: Grants,
+  original: Grants,
+  status: PermissionStatusFilter,
+): boolean {
+  if (status === 'OPEN') return levelOf(grants, module.code) !== 'NONE'
+  if (status === 'CHANGED') return isChanged(grants, original, module.code)
+  return true
+}
+
+/** 联合关键词与状态（全部 / 已开通 / 已修改）过滤分组；过滤后空组隐藏。 */
+export function filterGroupsByStatus(
+  groups: ModuleGroup[],
+  grants: Grants,
+  original: Grants,
+  keyword: string,
+  status: PermissionStatusFilter,
+): ModuleGroup[] {
+  const searched = filterGroups(groups, keyword)
+  if (status === 'ALL') return searched
+  return searched.flatMap(group => {
+    const modules = group.modules.filter(module => matchesStatus(module, grants, original, status))
+    return modules.length ? [{ ...group, modules }] : []
+  })
+}
+
+export function countTotalModules(groups: ModuleGroup[]): number {
+  return groups.reduce((acc, group) => acc + group.modules.length, 0)
+}
+
+export function countOpenedModules(groups: ModuleGroup[], grants: Grants): number {
+  return groups.reduce((acc, group) => acc + openedCount(group, grants), 0)
+}
+
+export function countChangedModules(groups: ModuleGroup[], grants: Grants, original: Grants): number {
+  return groups.reduce(
+    (acc, group) => acc + group.modules.filter(module => isChanged(grants, original, module.code)).length,
+    0,
+  )
 }
 
 /** 点单个格子后的新授权；锁定或这个菜单没有这项操作时返回 null。 */
