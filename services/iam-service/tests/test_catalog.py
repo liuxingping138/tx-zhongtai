@@ -112,20 +112,57 @@ def test_codebook_has_dictionary_and_thinktank_directories() -> None:
     assert by_code["menu.codebook.thinktank"].title == "智库码表"
     dict_children = [spec.title for spec in MENU_SPECS if spec.parent_code == "menu.codebook.dictionary"]
     assert dict_children == ["政策类型码表", "行业场景码表", "省市区码表"]
+    thinktank_menus = [spec for spec in MENU_SPECS if spec.parent_code == "menu.codebook.thinktank"]
+    assert [(m.title, m.route_name, m.resource_code, m.sort_order) for m in thinktank_menus] == [
+        ("文件类别码表", "codebook-thinktank-file-types", "codebook.thinktank_file_types", 521),
+        ("客户部门归属码表", "codebook-thinktank-departments", "codebook.thinktank_departments", 522),
+        ("行业类别码表", "codebook-thinktank-industries", "codebook.thinktank_industries", 523),
+        ("产品类别码表", "codebook-thinktank-product-types", "codebook.thinktank_product_types", 524),
+        ("省份码表", "codebook-thinktank-provinces", "codebook.thinktank_provinces", 525),
+        ("市场类别码表", "codebook-thinktank-market-categories", "codebook.thinktank_market_categories", 526),
+    ]
+    res_by_code = {spec.code: spec for spec in RESOURCE_SPECS}
+    levels = {(spec.resource_code, spec.action_code): spec.required_level for spec in ACTION_SPECS}
+    for idx, menu in enumerate(thinktank_menus, start=54):
+        assert menu.resource_code is not None
+        res = res_by_code[menu.resource_code]
+        assert (res.parent_code, res.sort_order, res.published) == ("codebook", idx, True)
+        assert levels[(res.code, "list")] == GrantLevel.READ
+        assert levels[(res.code, "export")] == GrantLevel.EXPORT
+        for write_action in ("create", "update", "delete", "import"):
+            assert levels[(res.code, write_action)] == GrantLevel.FULL
 
 
-def test_thinktank_catalog_has_knowledge_and_type_industry_scopes() -> None:
+def test_thinktank_catalog_has_knowledge_reports_proposals_favorites_and_scopes() -> None:
     by_code = {spec.code: spec for spec in RESOURCE_SPECS}
     assert by_code["thinktank"].published is True
-    assert by_code["thinktank.knowledge"].published is True
-    assert by_code["thinktank.knowledge"].parent_code == "thinktank"
+    assert (by_code["thinktank.knowledge"].name, by_code["thinktank.knowledge"].sort_order) == ("资料库", 451)
+    assert (by_code["thinktank.reports"].name, by_code["thinktank.reports"].sort_order) == ("报告库", 452)
+    assert (by_code["thinktank.proposals"].name, by_code["thinktank.proposals"].sort_order) == ("方案库", 453)
+    assert (by_code["thinktank.favorites"].name, by_code["thinktank.favorites"].sort_order) == ("我的收藏", 454)
+    for code in ("thinktank.knowledge", "thinktank.reports", "thinktank.proposals", "thinktank.favorites"):
+        assert by_code[code].published is True
+        assert by_code[code].parent_code == "thinktank"
     assert by_code["thinktank.knowledge.file_type"].parent_code == "thinktank.knowledge"
     assert by_code["thinktank.knowledge.industry_type"].parent_code == "thinktank.knowledge"
     assert by_code["thinktank.file_type.product"].parent_code == "thinktank.knowledge.file_type"
     assert by_code["thinktank.industry_type.energy"].parent_code == "thinktank.knowledge.industry_type"
+
     levels = {(spec.resource_code, spec.action_code): spec.required_level for spec in ACTION_SPECS}
-    assert levels[("thinktank.knowledge", "preview")] == GrantLevel.READ
-    assert levels[("thinktank.knowledge", "favorite")] == GrantLevel.READ
-    assert levels[("thinktank.knowledge", "download")] == GrantLevel.EXPORT
-    assert levels[("thinktank.knowledge", "export_undefined")] == GrantLevel.EXPORT
-    assert levels[("thinktank.knowledge", "upload_tags")] == GrantLevel.FULL
+    for lib_code in ("thinktank.knowledge", "thinktank.reports", "thinktank.proposals"):
+        for act in ("list", "read", "preview", "favorite"):
+            assert levels[(lib_code, act)] == GrantLevel.READ
+        for act in ("export", "export_undefined", "download"):
+            assert levels[(lib_code, act)] == GrantLevel.EXPORT
+        for act in ("create", "update", "upload_tags", "delete"):
+            assert levels[(lib_code, act)] == GrantLevel.FULL
+    assert levels[("thinktank.favorites", "list")] == GrantLevel.READ
+    assert levels[("thinktank.favorites", "favorite")] == GrantLevel.READ
+
+    menus = [spec for spec in MENU_SPECS if spec.parent_code == "menu.thinktank"]
+    assert [(m.code, m.title, m.route_name, m.resource_code, m.sort_order) for m in menus] == [
+        ("menu.thinktank.knowledge", "资料库", "thinktank-knowledge", "thinktank.knowledge", 451),
+        ("menu.thinktank.reports", "报告库", "thinktank-reports", "thinktank.reports", 452),
+        ("menu.thinktank.proposals", "方案库", "thinktank-proposals", "thinktank.proposals", 453),
+        ("menu.thinktank.favorites", "我的收藏", "thinktank-favorites", "thinktank.favorites", 454),
+    ]

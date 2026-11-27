@@ -20,6 +20,7 @@ from app.api.internal import router as internal_router
 from app.api.policy_types import router as policy_types_router
 from app.api.scenarios import router as scenarios_router
 from app.api.security import get_authz_client
+from app.api.thinktank_dicts import router as thinktank_dicts_router
 from app.application.audit_emit import outbox_loop
 from app.core.config import get_settings
 from app.core.database import check_database_ready, engine
@@ -70,6 +71,7 @@ def create_app() -> FastAPI:
     app.include_router(policy_types_router)
     app.include_router(scenarios_router)
     app.include_router(area_codes_router)
+    app.include_router(thinktank_dicts_router)
     app.include_router(internal_router)
     return app
 

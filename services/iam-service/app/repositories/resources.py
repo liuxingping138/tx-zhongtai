@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,6 +45,28 @@ async def effective_level(session: AsyncSession, user_id: uuid.UUID, resource_id
         .where(UserRole.user_id == user_id, Role.status == RoleStatus.ACTIVE, RoleGrant.resource_id == resource_id)
     )
     direct = select(UserGrant.level).where(UserGrant.user_id == user_id, UserGrant.resource_id == resource_id)
+    result = await session.execute(by_role.union_all(direct))
+    return max_level(level for (level,) in result.all())
+
+
+async def max_effective_level(
+    session: AsyncSession, user_id: uuid.UUID, resource_ids: Sequence[uuid.UUID]
+) -> str | None:
+    """这个人在一组模块上的最高授权：启用角色加单独授权，一条查询。"""
+
+    if not resource_ids:
+        return None
+    by_role = (
+        select(RoleGrant.level)
+        .join(Role, Role.id == RoleGrant.role_id)
+        .join(UserRole, UserRole.role_id == Role.id)
+        .where(
+            UserRole.user_id == user_id,
+            Role.status == RoleStatus.ACTIVE,
+            RoleGrant.resource_id.in_(resource_ids),
+        )
+    )
+    direct = select(UserGrant.level).where(UserGrant.user_id == user_id, UserGrant.resource_id.in_(resource_ids))
     result = await session.execute(by_role.union_all(direct))
     return max_level(level for (level,) in result.all())
 

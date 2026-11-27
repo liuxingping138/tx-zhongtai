@@ -5,6 +5,13 @@ from __future__ import annotations
 from app.domain.catalog_types import ActionSpec, MenuSpec, ResourceSpec
 from app.domain.enums import GrantLevel, NodeType
 
+THINKTANK_FAVORITES_CODE = "thinktank.favorites"
+THINKTANK_LIBRARY_CODES: tuple[str, ...] = (
+    "thinktank.knowledge",
+    "thinktank.reports",
+    "thinktank.proposals",
+)
+
 # 文件类型范围资源：编码后缀与 thinktank-service domain/knowledge_scopes.py 一一对应。
 FILE_TYPE_SCOPES: tuple[tuple[str, str], ...] = (
     ("product", "文件类型：产品"),
@@ -42,6 +49,22 @@ INDUSTRY_TYPE_SCOPES: tuple[tuple[str, str], ...] = (
 )
 
 
+def _library_actions(resource_code: str) -> tuple[ActionSpec, ...]:
+    return (
+        ActionSpec(resource_code, "list", GrantLevel.READ),
+        ActionSpec(resource_code, "read", GrantLevel.READ),
+        ActionSpec(resource_code, "preview", GrantLevel.READ),
+        ActionSpec(resource_code, "favorite", GrantLevel.READ),
+        ActionSpec(resource_code, "export", GrantLevel.EXPORT),
+        ActionSpec(resource_code, "export_undefined", GrantLevel.EXPORT),
+        ActionSpec(resource_code, "download", GrantLevel.EXPORT),
+        ActionSpec(resource_code, "create", GrantLevel.FULL),
+        ActionSpec(resource_code, "update", GrantLevel.FULL),
+        ActionSpec(resource_code, "upload_tags", GrantLevel.FULL),
+        ActionSpec(resource_code, "delete", GrantLevel.FULL),
+    )
+
+
 def _scope_actions(resource_code: str) -> tuple[ActionSpec, ...]:
     return (
         ActionSpec(resource_code, "list", GrantLevel.READ),
@@ -54,7 +77,10 @@ THINKTANK_SCOPE_PREFIXES: tuple[str, ...] = ("thinktank.file_type.", "thinktank.
 
 THINKTANK_RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("thinktank", "智库", "thinktank-service", NodeType.DIRECTORY, True, 45),
-    ResourceSpec("thinktank.knowledge", "知识库", "thinktank-service", NodeType.RESOURCE, True, 451, "thinktank"),
+    ResourceSpec("thinktank.knowledge", "资料库", "thinktank-service", NodeType.RESOURCE, True, 451, "thinktank"),
+    ResourceSpec("thinktank.reports", "报告库", "thinktank-service", NodeType.RESOURCE, True, 452, "thinktank"),
+    ResourceSpec("thinktank.proposals", "方案库", "thinktank-service", NodeType.RESOURCE, True, 453, "thinktank"),
+    ResourceSpec("thinktank.favorites", "我的收藏", "thinktank-service", NodeType.RESOURCE, True, 454, "thinktank"),
     ResourceSpec(
         "thinktank.knowledge.file_type",
         "文件类型范围",
@@ -100,17 +126,11 @@ THINKTANK_RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
 )
 
 THINKTANK_ACTION_SPECS: tuple[ActionSpec, ...] = (
-    ActionSpec("thinktank.knowledge", "list", GrantLevel.READ),
-    ActionSpec("thinktank.knowledge", "read", GrantLevel.READ),
-    ActionSpec("thinktank.knowledge", "preview", GrantLevel.READ),
-    ActionSpec("thinktank.knowledge", "favorite", GrantLevel.READ),
-    ActionSpec("thinktank.knowledge", "export", GrantLevel.EXPORT),
-    ActionSpec("thinktank.knowledge", "export_undefined", GrantLevel.EXPORT),
-    ActionSpec("thinktank.knowledge", "download", GrantLevel.EXPORT),
-    ActionSpec("thinktank.knowledge", "create", GrantLevel.FULL),
-    ActionSpec("thinktank.knowledge", "update", GrantLevel.FULL),
-    ActionSpec("thinktank.knowledge", "upload_tags", GrantLevel.FULL),
-    ActionSpec("thinktank.knowledge", "delete", GrantLevel.FULL),
+    *_library_actions("thinktank.knowledge"),
+    *_library_actions("thinktank.reports"),
+    *_library_actions("thinktank.proposals"),
+    ActionSpec("thinktank.favorites", "list", GrantLevel.READ),
+    ActionSpec("thinktank.favorites", "favorite", GrantLevel.READ),
     *(action for slug, _ in FILE_TYPE_SCOPES for action in _scope_actions(f"thinktank.file_type.{slug}")),
     *(action for slug, _ in INDUSTRY_TYPE_SCOPES for action in _scope_actions(f"thinktank.industry_type.{slug}")),
 )
@@ -119,10 +139,37 @@ THINKTANK_MENU_SPECS: tuple[MenuSpec, ...] = (
     MenuSpec("menu.thinktank", "智库", 45, enabled=True),
     MenuSpec(
         "menu.thinktank.knowledge",
-        "知识库",
+        "资料库",
         451,
         "thinktank-knowledge",
         "thinktank.knowledge",
+        "menu.thinktank",
+        enabled=True,
+    ),
+    MenuSpec(
+        "menu.thinktank.reports",
+        "报告库",
+        452,
+        "thinktank-reports",
+        "thinktank.reports",
+        "menu.thinktank",
+        enabled=True,
+    ),
+    MenuSpec(
+        "menu.thinktank.proposals",
+        "方案库",
+        453,
+        "thinktank-proposals",
+        "thinktank.proposals",
+        "menu.thinktank",
+        enabled=True,
+    ),
+    MenuSpec(
+        "menu.thinktank.favorites",
+        "我的收藏",
+        454,
+        "thinktank-favorites",
+        "thinktank.favorites",
         "menu.thinktank",
         enabled=True,
     ),

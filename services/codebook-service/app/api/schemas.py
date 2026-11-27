@@ -96,3 +96,20 @@ class EnrichConfirm(BaseModel):
     desc_130: str = Field(default="", max_length=4000)
     desc_pest: str = Field(default="", max_length=4000)
     level_desc: str = Field(default="", max_length=4000)
+
+
+class ThinktankDictWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    sort_order: int = Field(default=0, ge=0)
+
+
+class ThinktankDictPatch(BaseModel):
+    """仅修改显式提供的字段。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = None
+    sort_order: int | None = Field(default=None, ge=0)
+    version: int = Field(ge=1)

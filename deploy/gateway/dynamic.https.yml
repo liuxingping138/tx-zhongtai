@@ -89,7 +89,7 @@ http:
       priority: 110
       tls: {}
     thinktank-download:
-      rule: "PathRegexp(`^/api/v1/thinktank/knowledge/[^/]+/(content|download)$`)"
+      rule: "PathRegexp(`^/api/v1/thinktank/(knowledge|reports|proposals)/[^/]+/(content|download)$`)"
       entryPoints: ["websecure"]
       service: thinktank-service
       middlewares: ["secure-headers"]

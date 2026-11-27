@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.security import SecurityClass, classified
-from app.application import area_codes, code_tables, scenario_enrich, scenario_sync
+from app.application import area_codes, code_tables, scenario_enrich, scenario_sync, thinktank_dicts
 from app.core.config import Settings, get_settings
 from app.core.database import get_db_session
 
@@ -48,6 +48,19 @@ async def list_provinces(
 
     verify_internal_caller(request, settings.internal_caller_secrets)
     return success_json({"items": await area_codes.list_provinces(session)})
+
+
+@router.get("/thinktank-dicts")
+@classified(SecurityClass.INTERNAL)
+async def list_thinktank_dicts(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session, scope="function"),
+    settings: Settings = Depends(get_settings),
+) -> JSONResponse:
+    """供智库服务读取 6 张智库专属码表的全部枚举值。"""
+
+    verify_internal_caller(request, settings.internal_caller_secrets)
+    return success_json(await thinktank_dicts.get_all_thinktank_dicts(session))
 
 
 class ScenarioItems(BaseModel):

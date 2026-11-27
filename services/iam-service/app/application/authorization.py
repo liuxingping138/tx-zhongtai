@@ -11,9 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application import authz_catalog
 from app.application.audit_outbox import enqueue_independent
-from app.domain.authorization import AuthzDecision, evaluate_authorization
-from app.domain.enums import UserStatus
+from app.domain.authorization import AuthzDecision, evaluate_authorization, level_satisfies, max_level
+from app.domain.enums import GrantLevel, UserStatus
 from app.domain.models import MenuItem, User
+from app.domain.thinktank_catalog import THINKTANK_FAVORITES_CODE, THINKTANK_LIBRARY_CODES
 from app.repositories import resources as resource_repo
 from app.repositories import users as user_repo
 
@@ -29,6 +30,18 @@ _DECISION_MESSAGE = {
     AuthzDecision.DENY_LEVEL: "没有执行该操作的权限",
     AuthzDecision.DENY_ACCOUNT: "账号不可用",
 }
+
+
+def apply_derived_levels(levels: dict[str, str], *, allow_thinktank_favorites: bool = True) -> dict[str, str]:
+    """拥有智库任意子库（资料库/报告库/方案库）查看及以上权限时，自动把「我的收藏」提升至至少 READ。"""
+
+    if allow_thinktank_favorites and any(
+        level_satisfies(levels.get(code), GrantLevel.READ) for code in THINKTANK_LIBRARY_CODES
+    ):
+        elevated = max_level([levels.get(THINKTANK_FAVORITES_CODE), GrantLevel.READ])
+        if elevated is not None:
+            return {**levels, THINKTANK_FAVORITES_CODE: elevated}
+    return levels
 
 
 async def resolve_authorization(
@@ -48,6 +61,16 @@ async def resolve_authorization(
     level = None
     if active and entry is not None and entry.grantable and required is not None:
         level = await resource_repo.effective_level(session, user.id, entry.id)
+        if resource_code == THINKTANK_FAVORITES_CODE and not level_satisfies(level, GrantLevel.READ):
+            lib_ids = [
+                lib.id
+                for code in THINKTANK_LIBRARY_CODES
+                if (lib := authz_catalog.catalog.peek(code)) is not None and lib.grantable
+            ]
+            if lib_ids:
+                lib_level = await resource_repo.max_effective_level(session, user.id, lib_ids)
+                if level_satisfies(lib_level, GrantLevel.READ):
+                    level = max_level([level, GrantLevel.READ])
     decision = evaluate_authorization(
         account_active=active,
         resource_published=None if entry is None else entry.published,
@@ -148,13 +171,18 @@ async def authorize_access_context(
         },
     }
     if allowed and scope_prefixes:
-        payload["scopes"] = await resource_repo.list_effective_levels_by_prefixes(session, user.id, scope_prefixes)
+        scopes = await resource_repo.list_effective_levels_by_prefixes(session, user.id, scope_prefixes)
+        if any(THINKTANK_FAVORITES_CODE.startswith(prefix.strip()) for prefix in scope_prefixes if prefix.strip()):
+            scopes = apply_derived_levels(scopes)
+        payload["scopes"] = scopes
     return payload
 
 
 async def visible_permissions(session: AsyncSession, user_id: uuid.UUID) -> dict[str, object]:
-    levels = await resource_repo.list_effective_levels(session, user_id)
+    raw_levels = await resource_repo.list_effective_levels(session, user_id)
     resources = await resource_repo.list_all_resources(session)
+    favorites_unpublished = any(item.code == THINKTANK_FAVORITES_CODE and not item.published for item in resources)
+    levels = apply_derived_levels(raw_levels, allow_thinktank_favorites=not favorites_unpublished)
     menus = await resource_repo.list_all_menus(session)
     resource_by_id = {item.id: item for item in resources}
     visible_menus: list[dict[str, object]] = []

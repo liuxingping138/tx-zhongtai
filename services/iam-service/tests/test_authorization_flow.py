@@ -276,6 +276,126 @@ class TestVisiblePermissions:
         assert [item["title"] for item in result["menus"]] == ["政策", "信源"]  # type: ignore[attr-defined]
         assert result["resources"] == [{"code": "policy.sources", "level": "READ"}]
 
+    @pytest.mark.parametrize(
+        "lib_code",
+        ["thinktank.knowledge", "thinktank.reports", "thinktank.proposals"],
+    )
+    async def test_any_thinktank_library_auto_reveals_favorites_menu_and_resource(
+        self, monkeypatch: pytest.MonkeyPatch, lib_code: str
+    ) -> None:
+        lib_res = SimpleNamespace(id=uuid.uuid4(), code=lib_code, published=True)
+        fav_res = SimpleNamespace(id=uuid.uuid4(), code="thinktank.favorites", published=True)
+        now = datetime.now(UTC)
+
+        def menu(title: str, resource_id: uuid.UUID | None) -> SimpleNamespace:
+            return SimpleNamespace(
+                id=uuid.uuid4(),
+                parent_id=None,
+                title=title,
+                route_name=title,
+                resource_id=resource_id,
+                icon=None,
+                sort_order=1,
+                enabled=True,
+                created_at=now,
+            )
+
+        monkeypatch.setattr(
+            authorization.resource_repo, "list_effective_levels", AsyncMock(return_value={lib_code: "READ"})
+        )
+        monkeypatch.setattr(
+            authorization.resource_repo, "list_all_resources", AsyncMock(return_value=[lib_res, fav_res])
+        )
+        monkeypatch.setattr(
+            authorization.resource_repo,
+            "list_all_menus",
+            AsyncMock(return_value=[menu("智库", None), menu("子库", lib_res.id), menu("我的收藏", fav_res.id)]),
+        )
+        result = await authorization.visible_permissions(object(), uuid.uuid4())  # type: ignore[arg-type]
+        assert [item["title"] for item in result["menus"]] == ["智库", "子库", "我的收藏"]  # type: ignore[attr-defined]
+        assert {"code": "thinktank.favorites", "level": "READ"} in result["resources"]  # type: ignore[operator]
+
+    async def test_explicit_full_favorites_is_not_downgraded_and_unpublished_is_hidden(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        lib_res = SimpleNamespace(id=uuid.uuid4(), code="thinktank.knowledge", published=True)
+        fav_res = SimpleNamespace(id=uuid.uuid4(), code="thinktank.favorites", published=True)
+        monkeypatch.setattr(
+            authorization.resource_repo,
+            "list_effective_levels",
+            AsyncMock(return_value={"thinktank.knowledge": "READ", "thinktank.favorites": "FULL"}),
+        )
+        monkeypatch.setattr(
+            authorization.resource_repo, "list_all_resources", AsyncMock(return_value=[lib_res, fav_res])
+        )
+        monkeypatch.setattr(authorization.resource_repo, "list_all_menus", AsyncMock(return_value=[]))
+        full_result = await authorization.visible_permissions(object(), uuid.uuid4())  # type: ignore[arg-type]
+        assert {"code": "thinktank.favorites", "level": "FULL"} in full_result["resources"]  # type: ignore[operator]
+
+        fav_res.published = False
+        monkeypatch.setattr(
+            authorization.resource_repo,
+            "list_effective_levels",
+            AsyncMock(return_value={"thinktank.knowledge": "READ"}),
+        )
+        hidden_result = await authorization.visible_permissions(object(), uuid.uuid4())  # type: ignore[arg-type]
+        assert all(item["code"] != "thinktank.favorites" for item in hidden_result["resources"])  # type: ignore[attr-defined]
+
+
+class TestThinktankFavoritesAutoAuthz:
+    async def test_authorize_favorites_elevates_from_any_thinktank_library(
+        self, repo: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        fav_id = uuid.uuid4()
+        reports_id = uuid.uuid4()
+        repo.resources = [
+            _resource("thinktank.favorites", rid=fav_id),
+            _resource("thinktank.reports", rid=reports_id),
+        ]
+        repo.actions = [
+            SimpleNamespace(resource_id=fav_id, action_code="list", required_level="READ"),
+            SimpleNamespace(resource_id=fav_id, action_code="favorite", required_level="READ"),
+        ]
+        repo.level = None
+        max_level_mock = AsyncMock(return_value="READ")
+        monkeypatch.setattr(authorization.resource_repo, "max_effective_level", max_level_mock)
+        monkeypatch.setattr(
+            authorization.resource_repo,
+            "list_effective_levels_by_prefixes",
+            AsyncMock(return_value={"thinktank.reports": "EXPORT"}),
+        )
+
+        decision, level = await _resolve(_user(), "thinktank.favorites", "list")
+        assert (decision, level) == (AuthzDecision.ALLOW, "READ")
+        max_level_mock.assert_awaited_once()
+        assert max_level_mock.await_args.args[2] == [reports_id]
+
+        ctx = await authorization.authorize_access_context(
+            object(),
+            _user(),
+            "thinktank.favorites",
+            "list",
+            scope_prefixes=["thinktank."],  # type: ignore[arg-type]
+        )
+        assert ctx["allowed"] is True
+        assert ctx["scopes"] == {"thinktank.reports": "EXPORT", "thinktank.favorites": "READ"}
+
+        # 没有任何智库子库权限且未直接授我的收藏时，仍拒绝。
+        max_level_mock.return_value = None
+        denied_decision, denied_level = await _resolve(_user(), "thinktank.favorites", "list")
+        assert (denied_decision, denied_level) == (AuthzDecision.DENY_LEVEL, None)
+
+
+async def test_resource_repo_max_effective_level_handles_empty_and_results() -> None:
+    from app.repositories import resources as res_repo
+
+    class _FakeSession:
+        async def execute(self, _stmt: Any) -> Any:
+            return SimpleNamespace(all=lambda: [("READ",), ("EXPORT",)])
+
+    assert await res_repo.max_effective_level(_FakeSession(), uuid.uuid4(), []) is None  # type: ignore[arg-type]
+    assert await res_repo.max_effective_level(_FakeSession(), uuid.uuid4(), [uuid.uuid4()]) == "EXPORT"  # type: ignore[arg-type]
+
 
 async def test_service_denials_are_audited_once_per_window(monkeypatch: pytest.MonkeyPatch) -> None:
     """业务服务问 IAM 被拒要留审计；同一个人、同一模块、同一动作 10 分钟只记一次，轮询不刷屏。"""

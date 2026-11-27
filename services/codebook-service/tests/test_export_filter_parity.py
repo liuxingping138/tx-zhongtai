@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 from platform_common.route_audit import iter_api_routes, query_param_names
 
+from app.domain.thinktank_dicts import THINKTANK_DICT_SPECS
 from app.main import app
 from app.repositories import area_codes, policy_types, scenarios
 
@@ -20,6 +21,12 @@ TABLES = [
     ("/api/v1/codebook/area-codes", area_codes, True),
     ("/api/v1/codebook/policy-types", policy_types, False),
 ]
+
+
+def test_thinktank_dict_export_matches_list_filters() -> None:
+    for spec in THINKTANK_DICT_SPECS:
+        prefix = f"/api/v1/codebook/thinktank/{spec.slug}"
+        assert _query_params(prefix) - PAGING == _query_params(f"{prefix}/export")
 
 
 def _query_params(path: str) -> set[str]:

@@ -146,6 +146,26 @@ class AreaCode(Base):
         return {spec.field: str(getattr(self, spec.field) or "") for spec in AREA_CODE_COLUMNS}
 
 
+class ThinktankDict(Base):
+    __tablename__ = "codebook_thinktank_dicts"
+    __table_args__ = (
+        UniqueConstraint("dict_type", "name", name="uq_codebook_thinktank_dicts_type_name"),
+        {"comment": "智库专属码表"},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid, comment="主键")
+    dict_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True, comment="码表类型")
+    name: Mapped[str] = mapped_column(String(128), nullable=False, comment="名称")
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0", comment="排序")
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1", comment="版本号")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="入库时间")
+    created_by_id: Mapped[str] = mapped_column(String(64), nullable=False, comment="入库人ID")
+    created_by_name: Mapped[str] = mapped_column(String(128), nullable=False, comment="入库人")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, comment="更新时间")
+    updated_by_id: Mapped[str] = mapped_column(String(64), nullable=False, comment="更新人ID")
+    updated_by_name: Mapped[str] = mapped_column(String(128), nullable=False, comment="操作人")
+
+
 class OutboxEvent(Base):
     __tablename__ = "codebook_outbox"
     __table_args__ = {"comment": "码表服务出站事件"}

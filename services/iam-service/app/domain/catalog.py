@@ -29,6 +29,27 @@ RETIRED_ACTIONS: tuple[tuple[str, str], ...] = (
     ("policy.interpretations", "create"),
 )
 
+_THINKTANK_CODEBOOK_RESOURCES: tuple[tuple[str, str, int, str, int], ...] = (
+    ("codebook.thinktank_file_types", "文件类别码表", 54, "codebook-thinktank-file-types", 521),
+    ("codebook.thinktank_departments", "客户部门归属码表", 55, "codebook-thinktank-departments", 522),
+    ("codebook.thinktank_industries", "行业类别码表", 56, "codebook-thinktank-industries", 523),
+    ("codebook.thinktank_product_types", "产品类别码表", 57, "codebook-thinktank-product-types", 524),
+    ("codebook.thinktank_provinces", "省份码表", 58, "codebook-thinktank-provinces", 525),
+    ("codebook.thinktank_market_categories", "市场类别码表", 59, "codebook-thinktank-market-categories", 526),
+)
+
+
+def _thinktank_codebook_actions(resource_code: str) -> tuple[ActionSpec, ...]:
+    return (
+        ActionSpec(resource_code, "list", GrantLevel.READ),
+        ActionSpec(resource_code, "export", GrantLevel.EXPORT),
+        ActionSpec(resource_code, "create", GrantLevel.FULL),
+        ActionSpec(resource_code, "update", GrantLevel.FULL),
+        ActionSpec(resource_code, "delete", GrantLevel.FULL),
+        ActionSpec(resource_code, "import", GrantLevel.FULL),
+    )
+
+
 RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("system", "系统管理", "iam-service", NodeType.DIRECTORY, True, 10),
     ResourceSpec("system.users", "用户管理", "iam-service", NodeType.RESOURCE, True, 11, "system"),
@@ -56,6 +77,10 @@ RESOURCE_SPECS: tuple[ResourceSpec, ...] = (
     ResourceSpec("codebook.policy_types", "政策类型码表", "codebook-service", NodeType.RESOURCE, True, 51, "codebook"),
     ResourceSpec("codebook.scenarios", "行业场景码表", "codebook-service", NodeType.RESOURCE, True, 52, "codebook"),
     ResourceSpec("codebook.area_codes", "省市区编码表", "codebook-service", NodeType.RESOURCE, True, 53, "codebook"),
+    *(
+        ResourceSpec(code, name, "codebook-service", NodeType.RESOURCE, True, sort_order, "codebook")
+        for code, name, sort_order, _, _ in _THINKTANK_CODEBOOK_RESOURCES
+    ),
     *THINKTANK_RESOURCE_SPECS,
     ResourceSpec("ai", "AI提问", "ai-service", NodeType.DIRECTORY, True, 60),
     ResourceSpec("ai.prompts", "提示词模板", "ai-service", NodeType.RESOURCE, True, 61, "ai"),
@@ -118,6 +143,7 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
     ActionSpec("codebook.area_codes", "create", GrantLevel.FULL),
     ActionSpec("codebook.area_codes", "update", GrantLevel.FULL),
     ActionSpec("codebook.area_codes", "import", GrantLevel.FULL),
+    *(action for code, _, _, _, _ in _THINKTANK_CODEBOOK_RESOURCES for action in _thinktank_codebook_actions(code)),
     ActionSpec("policy.sources", "list", GrantLevel.READ),
     ActionSpec("policy.sources", "read", GrantLevel.READ),
     ActionSpec("policy.sources", "export", GrantLevel.EXPORT),
@@ -274,6 +300,18 @@ MENU_SPECS: tuple[MenuSpec, ...] = (
         enabled=True,
     ),
     MenuSpec("menu.codebook.thinktank", "智库码表", 52, parent_code="menu.codebook", enabled=True),
+    *(
+        MenuSpec(
+            f"menu.{code}",
+            name,
+            menu_sort,
+            route_name,
+            code,
+            "menu.codebook.thinktank",
+            enabled=True,
+        )
+        for code, name, _, route_name, menu_sort in _THINKTANK_CODEBOOK_RESOURCES
+    ),
     MenuSpec("menu.ai", "AI提问", 60, enabled=True),
     MenuSpec("menu.ai.prompts", "提示词模板", 61, "ai-prompts", "ai.prompts", "menu.ai", enabled=True),
     MenuSpec("menu.ai.batch_runs", "批量任务", 62, "ai-batch-runs", "ai.batch_runs", "menu.ai", enabled=True),

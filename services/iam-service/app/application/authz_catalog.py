@@ -66,6 +66,11 @@ class AuthzCatalog:
         self._entries = {}
         self._loaded_at = None
 
+    def peek(self, code: str) -> CatalogResource | None:
+        """读取已加载目录里的条目，不触发重载。供同一次判定内查询关联资源（如智库子库推导我的收藏）使用。"""
+
+        return self._entries.get(code)
+
     async def resource(self, session: AsyncSession, code: str, action: str | None = None) -> CatalogResource | None:
         """action 给了的话，资源在、动作却不在也算查不到：部署时给已有模块加了新动作，seed 前已经读过目录的话，
         原来要等满一分钟，期间连超管调这个动作都被拒。"""

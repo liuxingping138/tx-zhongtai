@@ -10,7 +10,7 @@ import pytest
 
 from app.application import admin_create, seed
 from app.application.admin_create import AdminCreateError, create_initial_admin
-from app.domain.catalog import ACTION_SPECS, MENU_SPECS, RESOURCE_SPECS
+from app.domain.catalog import ACTION_SPECS, MENU_SPECS, RESOURCE_SPECS, RETIRED_ACTIONS
 from app.domain.enums import NodeType, UserStatus
 from app.domain.models import MenuItem, Resource, ResourceAction, Role, RoleGrant, User, UserRole
 
@@ -89,6 +89,41 @@ async def test_second_sync_updates_in_place() -> None:
     session = _Session(factory=lambda: MagicMock(id=uuid.uuid4()))
     await seed.sync_catalog(session)  # type: ignore[arg-type]
     assert session.added == []
+
+
+async def test_sync_renames_existing_knowledge_resource_and_menu_in_place() -> None:
+    existing_resources = {
+        spec.code: Resource(
+            id=seed._stable_id(f"resource:{spec.code}"),
+            code=spec.code,
+            name="知识库" if spec.code == "thinktank.knowledge" else spec.name,
+            service_code=spec.service_code,
+            node_type=spec.node_type,
+            published=spec.published,
+            sort_order=spec.sort_order,
+        )
+        for spec in RESOURCE_SPECS
+    }
+    existing_menus = {
+        spec.code: MenuItem(
+            id=seed._stable_id(f"menu:{spec.code}"),
+            title="知识库" if spec.code == "menu.thinktank.knowledge" else spec.title,
+            route_name=spec.route_name,
+            sort_order=spec.sort_order,
+            enabled=spec.enabled,
+        )
+        for spec in MENU_SPECS
+    }
+    results = [
+        *[None for _ in RETIRED_ACTIONS],
+        *[existing_resources[spec.code] for spec in RESOURCE_SPECS],
+        *[MagicMock() for _ in ACTION_SPECS],
+        *[existing_menus[spec.code] for spec in MENU_SPECS],
+    ]
+    session = _Session(results=results, factory=lambda: MagicMock(id=uuid.uuid4()))
+    await seed.sync_catalog(session)  # type: ignore[arg-type]
+    assert existing_resources["thinktank.knowledge"].name == "资料库"
+    assert existing_menus["menu.thinktank.knowledge"].title == "资料库"
 
 
 async def test_admin_create_rejects_bad_input() -> None:

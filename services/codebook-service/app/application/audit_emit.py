@@ -7,6 +7,24 @@ from platform_common.audit_emit import AuditEmitter
 from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.domain.models import OutboxEvent
+from app.domain.thinktank_dicts import THINKTANK_DICT_SPECS
+
+_THINKTANK_DICT_EVENT_META = {
+    f"codebook.thinktank.{spec.dict_type}.{suffix}": (
+        spec.resource,
+        action,
+        f"thinktank_{spec.dict_type}",
+        label,
+    )
+    for spec in THINKTANK_DICT_SPECS
+    for suffix, action, label in (
+        ("created", "create", f"新增{spec.label}"),
+        ("updated", "update", f"编辑{spec.label}"),
+        ("deleted", "delete", f"删除{spec.label}"),
+        ("imported", "import", f"导入{spec.title}"),
+        ("exported", "export", f"导出{spec.title}"),
+    )
+}
 
 # 事件类型 -> (模块编码, 动作编码, 目标类型, 中文标签)
 _EVENT_META = {
@@ -26,6 +44,7 @@ _EVENT_META = {
     "codebook.area_code.imported": ("codebook.area_codes", "import", "area_code", "导入省市区编码表"),
     "codebook.area_code.exported": ("codebook.area_codes", "export", "area_code", "导出省市区编码表"),
     "codebook.area_code.resolved": ("codebook.area_codes", "resolve", "area_code", "补全省市区编码"),
+    **_THINKTANK_DICT_EVENT_META,
 }
 
 _emitter = AuditEmitter(

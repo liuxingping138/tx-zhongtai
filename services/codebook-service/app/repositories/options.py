@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.fields import ENRICH_CHOICES
-from app.domain.models import AreaCode, PolicyType, Scenario
+from app.domain.models import AreaCode, PolicyType, Scenario, ThinktankDict
 
 SCENARIO_OPTION_COLUMNS: OptionColumns = {
     "industry_scenario_code": Scenario.industry_scenario_code,
@@ -30,6 +30,10 @@ AREA_CODE_OPTION_COLUMNS: OptionColumns = {
     "county_name": AreaCode.county_name,
 }
 
+THINKTANK_DICT_OPTION_COLUMNS: OptionColumns = {
+    "name": ThinktankDict.name,
+}
+
 
 async def scenario_options(session: AsyncSession) -> dict[str, Any]:
     options = await preview_options(session, SCENARIO_OPTION_COLUMNS)
@@ -44,6 +48,26 @@ async def policy_type_options(session: AsyncSession) -> dict[str, Any]:
 
 async def area_code_options(session: AsyncSession) -> dict[str, Any]:
     return {"options": await preview_options(session, AREA_CODE_OPTION_COLUMNS)}
+
+
+async def thinktank_dict_options(session: AsyncSession, dict_type: str) -> dict[str, Any]:
+    return {
+        "options": await preview_options(
+            session, THINKTANK_DICT_OPTION_COLUMNS, conditions=(ThinktankDict.dict_type == dict_type,)
+        )
+    }
+
+
+async def search_thinktank_dict_options(
+    session: AsyncSession, dict_type: str, *, field: str, keyword: str | None
+) -> list[str]:
+    return await search_options(
+        session,
+        THINKTANK_DICT_OPTION_COLUMNS,
+        field=field,
+        keyword=keyword,
+        conditions=(ThinktankDict.dict_type == dict_type,),
+    )
 
 
 async def search(session: AsyncSession, columns: OptionColumns, *, field: str, keyword: str | None) -> list[str]:
