@@ -35,12 +35,12 @@ const GRANULARITIES: { key: ThinktankStatsGranularity; label: string }[] = [
   { key: 'year', label: '按年' },
 ]
 
-const PRESETS: { key: ThinktankStatsPreset; label: string }[] = [
-  { key: '7d', label: '近 7 天' },
-  { key: '30d', label: '近 30 天' },
-  { key: 'quarter', label: '本季度' },
-  { key: 'year', label: '今年以来' },
-  { key: 'all', label: '全部' },
+const PRESETS: { key: ThinktankStatsPreset; label: string; prose: string }[] = [
+  { key: '7d', label: '7天', prose: '近 7 天' },
+  { key: '30d', label: '30天', prose: '近 30 天' },
+  { key: 'quarter', label: '本季', prose: '本季度' },
+  { key: 'year', label: '今年', prose: '今年以来' },
+  { key: 'all', label: '全部', prose: '全部周期' },
 ]
 
 const auth = useAuthStore()
@@ -63,7 +63,7 @@ const canExport = computed(() => auth.canExport('thinktank.statistics'))
 
 const windowLabel = computed(() => {
   if (customRange.value) return `${customRange.value[0]} 至 ${customRange.value[1]}`
-  return PRESETS.find(p => p.key === preset.value)?.label ?? '本周期'
+  return PRESETS.find(p => p.key === preset.value)?.prose ?? '本周期'
 })
 
 const scopeLabel = computed(() => LIBRARIES.find(l => l.key === library.value)?.label ?? '智库三库')
@@ -213,19 +213,24 @@ onMounted(() => { void load() })
           end-placeholder="结束日期"
           unlink-panels
           class="tt-ctrl__date"
+          style="width: 204px; flex: 0 0 204px"
           @update:model-value="onCustomRangeChange"
         />
       </div>
 
-      <div class="tt-ctrl__group">
-        <el-button
-          size="small"
-          :icon="Refresh"
-          :loading="loading"
-          @click="load"
+      <div class="tt-ctrl__group tt-ctrl__actions">
+        <el-tooltip
+          content="刷新统计数据"
+          placement="bottom"
         >
-          刷新
-        </el-button>
+          <el-button
+            size="small"
+            :icon="Refresh"
+            :loading="loading"
+            aria-label="刷新统计数据"
+            @click="load"
+          />
+        </el-tooltip>
         <el-button
           v-if="canExport"
           size="small"
@@ -234,7 +239,7 @@ onMounted(() => { void load() })
           :loading="exporting"
           @click="onExport"
         >
-          导出统计简报
+          导出简报
         </el-button>
       </div>
     </header>

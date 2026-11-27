@@ -9,7 +9,6 @@ from platform_common.clock import format_beijing, utcnow
 from platform_common.errors import NotFoundError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.upload_utils import format_size
 from app.statistics.domain.specs import (
     ALL_LIBRARIES,
     DIMENSIONS_BY_SCOPE,
@@ -18,6 +17,7 @@ from app.statistics.domain.specs import (
     StatisticsQuery,
     aggregate_classification_counts,
     compute_delta_pct,
+    format_human_size,
     libraries_for_scope,
     resolve_time_window,
 )
@@ -35,7 +35,7 @@ def _serialize_doc(doc: repo.RankedDocument) -> dict[str, Any]:
         "dept": doc.dept,
         "file_suffix": doc.file_suffix,
         "file_size_bytes": doc.file_size_bytes,
-        "file_size_display": format_size(doc.file_size_bytes),
+        "file_size_display": format_human_size(doc.file_size_bytes),
         "uploader": doc.uploader,
         "uploaded_at": format_beijing(doc.uploaded_at),
         "is_defined": doc.is_defined,
@@ -141,7 +141,7 @@ async def get_statistics_overview(
             "undefined_files": max(0, scope_files - scope_defined),
             "defined_rate": _pct(scope_defined, scope_files),
             "total_size_bytes": scope_bytes,
-            "total_size_display": format_size(scope_bytes),
+            "total_size_display": format_human_size(scope_bytes),
             "libraries": [
                 {
                     "key": k,
@@ -151,7 +151,7 @@ async def get_statistics_overview(
                     "defined_rate": _pct(lib_totals[k].defined, lib_totals[k].files),
                     "share_pct": _pct(lib_totals[k].files, all_files),
                     "size_bytes": lib_totals[k].size_bytes,
-                    "size_display": format_size(lib_totals[k].size_bytes),
+                    "size_display": format_human_size(lib_totals[k].size_bytes),
                 }
                 for k in ALL_LIBRARIES
             ],

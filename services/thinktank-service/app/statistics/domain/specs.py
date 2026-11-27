@@ -258,6 +258,23 @@ def compute_delta_pct(current: int, previous: int | None) -> float | None:
     return round(((current - previous) * 100.0) / previous, 1)
 
 
+_SIZE_STEP = 1024.0
+
+
+def format_human_size(size_bytes: int) -> str:
+    """将字节数自动换算为 B / KB / MB / GB / TB，避免大库体积出现千万级 kb。"""
+
+    if size_bytes <= 0:
+        return "0 B"
+    units = ("B", "KB", "MB", "GB", "TB")
+    val = float(size_bytes)
+    for unit in units:
+        if val < _SIZE_STEP or unit == units[-1]:
+            return f"{int(val)} B" if unit == "B" else f"{val:.2f} {unit}"
+        val /= _SIZE_STEP
+    return f"{val:.2f} TB"
+
+
 def format_bucket_label(bucket_dt: datetime, granularity: Granularity) -> str:
     """把北京时间桶起点格式化为图表横轴刻度文案。"""
 

@@ -26,6 +26,7 @@ from app.statistics.domain.specs import (
     aggregate_classification_counts,
     compute_delta_pct,
     format_bucket_label,
+    format_human_size,
     libraries_for_scope,
     parse_wan_amount,
     resolve_time_window,
@@ -92,6 +93,10 @@ def test_classification_pipe_split_and_helpers() -> None:
     assert libraries_for_scope("all") == ("knowledge", "reports", "proposals")
     assert libraries_for_scope("reports") == ("reports",)
     assert len(DIMENSIONS_BY_SCOPE["proposals"]) >= 4
+    assert format_human_size(0) == "0 B"
+    assert format_human_size(512) == "512 B"
+    assert format_human_size(24 * 1024 * 1024) == "24.00 MB"
+    assert format_human_size(19 * 1024 * 1024 * 1024) == "19.00 GB"
 
 
 def _stub_repo(monkeypatch: pytest.MonkeyPatch) -> None:

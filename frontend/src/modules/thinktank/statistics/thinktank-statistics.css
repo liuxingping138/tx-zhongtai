@@ -20,8 +20,8 @@
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 10px;
-  padding: 10px 14px;
+  gap: 8px;
+  padding: 8px 12px;
   background: var(--zt-panel);
   border: 1px solid var(--zt-border);
   border-radius: 12px;
@@ -32,13 +32,17 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
+}
+
+.tt-ctrl__actions {
+  flex-shrink: 0;
 }
 
 .tt-seg {
   display: inline-flex;
-  padding: 3px;
-  border-radius: 9px;
+  padding: 2px;
+  border-radius: 8px;
   background: var(--zt-soft);
   border: 1px solid var(--zt-border);
 }
@@ -50,9 +54,9 @@
   border: 0;
   background: transparent;
   color: var(--zt-ink-700);
-  padding: 5px 11px;
+  padding: 4px 9px;
   border-radius: 6px;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 550;
   white-space: nowrap;
   cursor: pointer;
@@ -94,7 +98,7 @@
   border: 1px solid var(--zt-border);
   background: var(--zt-panel);
   color: var(--zt-ink-700);
-  padding: 5px 10px;
+  padding: 4px 8px;
   border-radius: 7px;
   font-size: 12px;
   font-weight: 500;
@@ -114,8 +118,9 @@
   font-weight: 600;
 }
 
-.tt-ctrl__date {
-  width: 224px;
+.tt-ctrl :deep(.el-date-editor.tt-ctrl__date) {
+  width: 204px;
+  flex: 0 0 204px;
 }
 
 /* 第 0 层：一句话智能洞察条 */
