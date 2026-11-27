@@ -15,8 +15,9 @@ from app.knowledge.domain.scopes import KnowledgeAccess
 from app.knowledge.repositories import knowledge as knowledge_repo
 
 
-async def test_get_thinktank_dicts_partial_fallback_and_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_get_thinktank_dicts_realtime_and_failure_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
+    mode = {"state": "first"}
 
     class _Client:
         is_closed = False
@@ -26,6 +27,14 @@ async def test_get_thinktank_dicts_partial_fallback_and_cache(monkeypatch: pytes
 
         async def get(self, url: str, **_kwargs: Any) -> httpx.Response:
             calls.append(url)
+            if mode["state"] == "fail":
+                raise httpx.ConnectError("codebook unavailable", request=httpx.Request("GET", url))
+            if mode["state"] == "updated":
+                return httpx.Response(
+                    200,
+                    json={"data": {"provinces": ["集团", "广东省", "浙江省"]}},
+                    request=httpx.Request("GET", url),
+                )
             return httpx.Response(
                 200,
                 json={
@@ -62,11 +71,21 @@ async def test_get_thinktank_dicts_partial_fallback_and_cache(monkeypatch: pytes
     assert first["provinces"] == ["集团", "广东省"]
     assert first["market_categories"] == ["行客", "商客", "综合", "无"]
 
-    # 返回深拷贝，外部修改不污染缓存
+    # 码表更新后实时生效（零延迟），且外部修改返回值不污染内部快照
     first["provinces"].append("污染项")
+    mode["state"] = "updated"
     second = await codebook_client.get_thinktank_dicts(cfg)
-    assert len(calls) == 1
-    assert second["provinces"] == ["集团", "广东省"]
+    assert len(calls) == 2
+    assert second["provinces"] == ["集团", "广东省", "浙江省"]
+
+    # 码表服务临时不可用时触发短时熔断并回退最近一次成功快照
+    mode["state"] = "fail"
+    third = await codebook_client.get_thinktank_dicts(cfg)
+    assert len(calls) == 3
+    assert third["provinces"] == ["集团", "广东省", "浙江省"]
+    fourth = await codebook_client.get_thinktank_dicts(cfg)
+    assert len(calls) == 3
+    assert fourth["provinces"] == ["集团", "广东省", "浙江省"]
     await codebook_client.close_codebook_client()
 
 

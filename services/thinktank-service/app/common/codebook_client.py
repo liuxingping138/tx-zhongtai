@@ -1,4 +1,4 @@
-"""从码表服务拉取智库 6 张专属码表（/internal/v1/thinktank-dicts），不可用或某项为空时逐项回退默认枚举。"""
+"""从码表服务实时拉取智库 6 张专属码表（/internal/v1/thinktank-dicts），仅异常不可达时短时熔断回退。"""
 
 from __future__ import annotations
 
@@ -11,9 +11,10 @@ from platform_common.logging_setup import get_logger
 
 logger = get_logger(__name__)
 
-_CACHE_TTL_SECONDS = 300.0
-_FAIL_CACHE_TTL_SECONDS = 30.0
-_cache: dict[str, tuple[float, dict[str, list[str]]]] = {}
+# 正常调用不缓存，码表变更后智库立即生效；仅在码表服务异常不可达时短时熔断，避免雪崩阻塞。
+_FAIL_BACKOFF_SECONDS = 10.0
+_fail_until: dict[str, float] = {}
+_last_good: dict[str, dict[str, list[str]]] = {}
 _HTTP_LIMITS = httpx.Limits(max_keepalive_connections=10, max_connections=20)
 _client: httpx.AsyncClient | None = None
 _client_factory: Any = None
@@ -135,7 +136,8 @@ class CodebookSettings(Protocol):
 
 
 def clear_thinktank_dicts_cache() -> None:
-    _cache.clear()
+    _fail_until.clear()
+    _last_good.clear()
 
 
 def default_thinktank_dicts() -> dict[str, list[str]]:
@@ -165,7 +167,7 @@ def _normalize_payload(raw_data: Any) -> dict[str, list[str]]:
 
 
 async def get_thinktank_dicts(settings: CodebookSettings) -> dict[str, list[str]]:
-    """拉取智库 6 张专属码表；未配置、失败或字段为空时逐键回退内置默认列表。"""
+    """实时拉取智库 6 张专属码表；未配置或字段为空时逐键回退内置默认，异常时短时熔断并优先回退最近一次成功快照。"""
 
     base_url = (getattr(settings, "codebook_base_url", "") or "").strip().rstrip("/")
     secret = (getattr(settings, "codebook_service_secret", "") or "").strip()
@@ -173,9 +175,10 @@ async def get_thinktank_dicts(settings: CodebookSettings) -> dict[str, list[str]
         return default_thinktank_dicts()
 
     now = time.monotonic()
-    cached = _cache.get(base_url)
-    if cached is not None and now < cached[0]:
-        return _copy_dicts(cached[1])
+    backoff_until = _fail_until.get(base_url, 0.0)
+    if now < backoff_until:
+        snapshot = _last_good.get(base_url)
+        return _copy_dicts(snapshot) if snapshot is not None else default_thinktank_dicts()
 
     try:
         resp = await _get_client().get(
@@ -187,10 +190,11 @@ async def get_thinktank_dicts(settings: CodebookSettings) -> dict[str, list[str]
         payload = resp.json()
         raw_data = payload.get("data") if isinstance(payload, dict) else None
         normalized = _normalize_payload(raw_data)
-        _cache[base_url] = (now + _CACHE_TTL_SECONDS, normalized)
+        _last_good[base_url] = normalized
+        _fail_until.pop(base_url, None)
         return _copy_dicts(normalized)
     except (httpx.HTTPError, ValueError, TypeError) as exc:
         logger.warning("codebook_thinktank_dicts_fallback", error=str(exc))
-        fallback = default_thinktank_dicts()
-        _cache[base_url] = (now + _FAIL_CACHE_TTL_SECONDS, fallback)
-        return _copy_dicts(fallback)
+        _fail_until[base_url] = now + _FAIL_BACKOFF_SECONDS
+        snapshot = _last_good.get(base_url)
+        return _copy_dicts(snapshot) if snapshot is not None else default_thinktank_dicts()
