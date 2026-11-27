@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 
 import { onAccessTokenChange } from '@/api/session'
+import type { ThinktankLibraryKey } from '@/api/thinktank'
 
 export type PreviewMode = 'pdf' | 'text' | 'summary'
 
@@ -36,29 +37,35 @@ export function isOfficeFile(fileName: string, suffix: string): boolean {
 }
 
 /** PDF.js 按 Range 直接读的地址（经网关，和 http 实例同一个 /api/v1 前缀）。 */
+export function thinktankContentUrl(library: ThinktankLibraryKey, id: string): string {
+  return `/api/v1/thinktank/${library}/${encodeURIComponent(id)}/content`
+}
+
+/** 资料库 `/content` Range 地址。 */
 export function knowledgeContentUrl(id: string): string {
-  return `/api/v1/thinktank/knowledge/${encodeURIComponent(id)}/content`
+  return thinktankContentUrl('knowledge', id)
 }
 
 export interface KnowledgeContentOptions {
   persistent?: boolean
   getOwner?: () => string
+  library?: ThinktankLibraryKey
 }
 
-function evictOverflow(cache: Map<string, CachedEntry>, protectedId: string) {
+function evictOverflow(cache: Map<string, CachedEntry>, protectedKey: string) {
   for (const key of cache.keys()) {
     if (cache.size <= CONTENT_CACHE_SIZE) break
-    if (key !== protectedId) cache.delete(key)
+    if (key !== protectedKey) cache.delete(key)
   }
 }
 
 /**
- * 预览页右栏的原文。
+ * 预览页右栏的原文（支持资料库、报告库、方案库复用）。
  *
  * - PDF（含 Office 转出的）不在这里下载：只给出 `/content` 地址，由 PDF.js 按 Range 分段取，第一页先出来。
  *   服务端回的其实是摘要文本（转码失败、源文件不存在）时，阅读器报 `unavailable`，再调 `fallbackToText` 按文本取。
  * - 文本（TXT / MD / CSV）整份取回显示。同一条记录同时只发一次 `/content`；换到别的记录时中止还在路上的请求。
- * - `persistent: true` 时文本用当前登录会话级内存缓存（按用户 ID 隔离、按文件版本失效，
+ * - `persistent: true` 时文本用当前登录会话级内存缓存（按用户 ID 与子库隔离、按文件版本失效，
  *   每次进页仍先过 `/preview` 实时鉴权）。
  */
 export function useKnowledgeContent(
@@ -66,6 +73,7 @@ export function useKnowledgeContent(
   onError: (err: unknown) => void,
   options: KnowledgeContentOptions = {},
 ) {
+  const library: ThinktankLibraryKey = options.library ?? 'knowledge'
   const loading = ref(false)
   const mode = ref<PreviewMode>('summary')
   const text = ref('')
@@ -76,6 +84,8 @@ export function useKnowledgeContent(
   let shownVersion = ''
   let pending: { id: string; ctrl: AbortController; promise: Promise<TextEntry> } | null = null
 
+  const cacheKey = (id: string) => `${library}:${id}`
+
   function syncOwner() {
     if (!options.persistent || !options.getOwner) return
     const currentOwner = options.getOwner()
@@ -84,9 +94,10 @@ export function useKnowledgeContent(
   }
 
   function remember(id: string, version: string, entry: TextEntry) {
-    cache.delete(id)
-    cache.set(id, { version, entry })
-    evictOverflow(cache, shownId)
+    const key = cacheKey(id)
+    cache.delete(key)
+    cache.set(key, { version, entry })
+    evictOverflow(cache, cacheKey(shownId))
   }
 
   async function toEntry(want: 'text' | 'summary', resp: BlobResponse): Promise<TextEntry> {
@@ -117,7 +128,7 @@ export function useKnowledgeContent(
   }
 
   function tryCached(id: string, version: string): boolean {
-    const hit = cache.get(id)
+    const hit = cache.get(cacheKey(id))
     if (!hit || hit.version !== version) return false
     remember(id, version, hit.entry)
     display(hit.entry)
@@ -150,7 +161,7 @@ export function useKnowledgeContent(
 
   /** 主动踢出某条缓存（如删除文件、鉴权失败）。 */
   function evict(id: string) {
-    cache.delete(id)
+    cache.delete(cacheKey(id))
   }
 
   function abortOther(id: string) {
@@ -173,7 +184,7 @@ export function useKnowledgeContent(
     loading.value = false
     if (!hasBinary || initialMode === 'summary') return
     if (initialMode === 'pdf') {
-      pdfUrl.value = knowledgeContentUrl(id)
+      pdfUrl.value = thinktankContentUrl(library, id)
       return
     }
     await loadText(id, 'text', version)

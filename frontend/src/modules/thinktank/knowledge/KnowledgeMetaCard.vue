@@ -8,6 +8,7 @@ import { updateKnowledge, type KnowledgeItem } from '@/api/thinktank'
 import DetailFieldTable from '@/components/DetailFieldTable.vue'
 import { buildDetailSections } from '@/components/detailSections'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
+import { scopedOptions } from '../shared/options'
 import {
   buildMetaSectionSpecs,
   DETAIL_SYSTEM_COLUMNS,
@@ -18,13 +19,15 @@ import {
   joinPipeTags,
   splitPipeTags,
   TABLE_COLUMNS,
+  type KnowledgeDynamicOptions,
   type MetaFormSpec,
   type TextFieldKey,
 } from './fields'
 
 const props = defineProps<{
   item: KnowledgeItem
-  provinces: string[]
+  provinces: readonly string[]
+  options?: KnowledgeDynamicOptions
   editableFileTypes?: string[]
   editableIndustries?: string[]
 }>()
@@ -32,15 +35,11 @@ const props = defineProps<{
 const emit = defineEmits<{ updated: [item: KnowledgeItem] }>()
 
 const fileTypeChoices = computed(() =>
-  props.editableFileTypes
-    ? EDITABLE_FILE_TYPE_OPTIONS.filter(t => props.editableFileTypes?.includes(t))
-    : [...EDITABLE_FILE_TYPE_OPTIONS],
+  scopedOptions(props.options?.file_type, EDITABLE_FILE_TYPE_OPTIONS, props.editableFileTypes, ['未定义']),
 )
 const canClearFileType = computed(() => !props.editableFileTypes || props.editableFileTypes.includes('未定义'))
 const industryChoices = computed(() =>
-  props.editableIndustries
-    ? INDUSTRY_OPTIONS.filter(i => props.editableIndustries?.includes(i))
-    : [...INDUSTRY_OPTIONS],
+  scopedOptions(props.options?.industry_type, INDUSTRY_OPTIONS, props.editableIndustries),
 )
 const canClearIndustry = computed(() => !props.editableIndustries || props.editableIndustries.includes('无'))
 
@@ -67,7 +66,18 @@ const form = reactive({
 })
 
 function specsForSection(title: string): MetaFormSpec[] {
-  return buildMetaSectionSpecs(title, fileTypeChoices.value, canClearFileType.value, industryChoices.value, props.provinces)
+  return buildMetaSectionSpecs(
+    title,
+    fileTypeChoices.value,
+    canClearFileType.value,
+    industryChoices.value,
+    props.options?.prov_name ?? props.provinces,
+    {
+      depart_affiliation: props.options?.depart_affiliation,
+      product_type: props.options?.product_type,
+      market_category: props.options?.market_category,
+    },
+  )
 }
 
 function syncForm(record: KnowledgeItem) {
@@ -269,6 +279,8 @@ defineExpose({ editing, dirty, startEdit, cancelEdit, confirmDiscard: canLeave }
                 v-else-if="spec.kind === 'select'"
                 v-model="form[spec.key as TextFieldKey]"
                 filterable
+                :allow-create="spec.allowCreate"
+                :default-first-option="spec.allowCreate"
                 :clearable="spec.clearable"
               >
                 <el-option
@@ -328,7 +340,10 @@ defineExpose({ editing, dirty, startEdit, cancelEdit, confirmDiscard: canLeave }
         class="review__dirty"
       >有未保存的修改</span>
       <div class="review__edit-actions">
-        <el-button @click="cancelEdit">
+        <el-button
+          :disabled="saving"
+          @click="cancelEdit"
+        >
           取消
         </el-button>
         <el-button

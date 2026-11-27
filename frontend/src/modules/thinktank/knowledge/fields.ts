@@ -1,26 +1,38 @@
 import type { DataColumn } from '@/components/dataColumns'
 import type { EditorGroup } from '@/components/editorGroups'
+import {
+  DEPARTMENT_FALLBACK,
+  displayCategory,
+  FILE_TYPE_FALLBACK,
+  INDUSTRY_FALLBACK,
+  joinPipeTags,
+  joinWhoWhen,
+  MARKET_CATEGORY_FALLBACK,
+  parseContentDispositionFilename,
+  preferOptions,
+  PRODUCT_TYPE_FALLBACK,
+  PROVINCE_FALLBACK,
+  splitPipeTags,
+  suffixTagType,
+  TAG_STATUS_OPTIONS,
+} from '../shared/options'
 
-export const FILE_TYPE_OPTIONS = [
-  '产品', '经分', '行业营销指引', '通知', '通报', '工作会',
-  '工作部署&专项行动', '网络规划', '考核', '政企改革&数字化',
-  '客户视图', '渠道&生态', '国际业务', '项目部', '其他', '未定义',
-] as const
+export {
+  joinPipeTags,
+  parseContentDispositionFilename,
+  splitPipeTags,
+  suffixTagType,
+  TAG_STATUS_OPTIONS,
+}
 
-export const EDITABLE_FILE_TYPE_OPTIONS = FILE_TYPE_OPTIONS.filter(v => v !== '未定义')
-
-export const INDUSTRY_OPTIONS = [
-  '中小', '党政', '工业能源', '教育', '医卫', '交通物流',
-  'IT互联网', '金融', '农业', '住建', '文旅', '无',
-] as const
-
+export const FILE_TYPE_OPTIONS = [...FILE_TYPE_FALLBACK, '未定义'] as const
+export const EDITABLE_FILE_TYPE_OPTIONS = [...FILE_TYPE_FALLBACK] as const
+export const INDUSTRY_OPTIONS = [...INDUSTRY_FALLBACK] as const
+export const DEPARTMENT_OPTIONS = [...DEPARTMENT_FALLBACK] as const
+export const PROVINCE_OPTIONS = [...PROVINCE_FALLBACK] as const
 export const OPERATOR_OPTIONS = ['未知', '电信', '联通', '移动'] as const
-export const MARKET_CATEGORY_OPTIONS = ['行客', '商客', '综合', '无'] as const
-export const PRODUCT_TYPE_OPTIONS = [
-  '量子', '解决方案', '云', '网', '数', '智', '安',
-  '语音', '消息', 'ICT', '数字平台', '服务', '无',
-] as const
-export const TAG_STATUS_OPTIONS = ['已定义', '未定义'] as const
+export const MARKET_CATEGORY_OPTIONS = [...MARKET_CATEGORY_FALLBACK] as const
+export const PRODUCT_TYPE_OPTIONS = [...PRODUCT_TYPE_FALLBACK] as const
 export const FAVORITE_OPTIONS = ['仅已收藏'] as const
 
 export const FILTER_KEYS = [
@@ -39,7 +51,7 @@ export const FILTER_KEYS = [
   'favorite_only',
 ] as const
 
-/** 与后端和原知识库清单页完全一致的 14 列。 */
+/** 与后端和资料库清单页完全一致的 14 列。 */
 export const TABLE_COLUMNS: DataColumn[] = [
   { prop: 'file_name', label: '资料名称', minWidth: 280, grow: 2, wrap: true },
   { prop: 'file_type', label: '文件类型', width: 135 },
@@ -120,6 +132,15 @@ export const DETAIL_SYSTEM_COLUMNS: DataColumn[] = [
   { prop: 'updated_at', label: '最近更新时间', time: true },
 ]
 
+export interface KnowledgeDynamicOptions {
+  file_type?: readonly string[]
+  depart_affiliation?: readonly string[]
+  industry_type?: readonly string[]
+  product_type?: readonly string[]
+  prov_name?: readonly string[]
+  market_category?: readonly string[]
+}
+
 export type TextFieldKey =
   | 'file_name'
   | 'file_type'
@@ -140,6 +161,7 @@ export interface MetaFormSpec {
   kind: 'input' | 'textarea' | 'select' | 'multi'
   options?: readonly string[]
   clearable?: boolean
+  allowCreate?: boolean
 }
 
 export function buildMetaSectionSpecs(
@@ -148,14 +170,19 @@ export function buildMetaSectionSpecs(
   canClearFileType: boolean,
   industryChoices: readonly string[],
   provinces: readonly string[],
+  extra?: Pick<KnowledgeDynamicOptions, 'depart_affiliation' | 'product_type' | 'market_category'>,
 ): MetaFormSpec[] {
+  const provinceChoices = preferOptions(provinces, PROVINCE_OPTIONS)
+  const deptChoices = preferOptions(extra?.depart_affiliation, DEPARTMENT_OPTIONS)
+  const marketChoices = preferOptions(extra?.market_category, MARKET_CATEGORY_OPTIONS)
+  const productChoices = preferOptions(extra?.product_type, PRODUCT_TYPE_OPTIONS)
   if (title === '基本信息') {
     return [
       { key: 'file_name', label: '资料名称', required: true, span: true, kind: 'input' },
       { key: 'file_type', label: '文件类型', kind: 'select', options: fileTypeChoices, clearable: canClearFileType },
       { key: 'operator_type', label: '运营商类型', kind: 'select', options: OPERATOR_OPTIONS, clearable: true },
-      { key: 'depart_affiliation', label: '部门归属', kind: 'input' },
-      { key: 'prov_name', label: '省份', kind: 'select', options: provinces, clearable: true },
+      { key: 'depart_affiliation', label: '部门归属', kind: 'select', options: deptChoices, clearable: true, allowCreate: true },
+      { key: 'prov_name', label: '省份', kind: 'select', options: provinceChoices, clearable: true },
       { key: 'data_time', label: '资料时间', kind: 'input' },
     ]
   }
@@ -163,8 +190,8 @@ export function buildMetaSectionSpecs(
     return [
       { key: 'industry_types', label: '行业类型（可多选）', span: true, kind: 'multi', options: industryChoices },
       { key: 'app_scenario', label: '应用场景', span: true, kind: 'input' },
-      { key: 'market_category', label: '市场类别', kind: 'select', options: MARKET_CATEGORY_OPTIONS, clearable: true },
-      { key: 'product_types', label: '产品类型（可多选）', span: true, kind: 'multi', options: PRODUCT_TYPE_OPTIONS },
+      { key: 'market_category', label: '市场类别', kind: 'select', options: marketChoices, clearable: true },
+      { key: 'product_types', label: '产品类型（可多选）', span: true, kind: 'multi', options: productChoices },
       { key: 'product_sub_type', label: '产品子类型', span: true, kind: 'input' },
       { key: 'remark', label: '备注', span: true, kind: 'textarea' },
     ]
@@ -172,25 +199,8 @@ export function buildMetaSectionSpecs(
   return []
 }
 
-export function splitPipeTags(raw: string | undefined | null): string[] {
-  if (!raw) return []
-  return raw.split('|').map(s => s.trim()).filter(Boolean)
-}
-
-export function joinPipeTags(items: string[]): string {
-  return items.map(s => s.trim()).filter(Boolean).join('|')
-}
-
 export function displayFileType(value: string | undefined | null): string {
-  return value && value.trim() ? value : '未定义'
-}
-
-export function suffixTagType(suffix: string): '' | 'success' | 'warning' | 'danger' | 'info' {
-  const s = (suffix || '').toUpperCase()
-  if (s === 'PDF') return 'danger'
-  if (s === 'PPT') return 'warning'
-  if (s === 'EXCEL') return 'success'
-  return 'info'
+  return displayCategory(value)
 }
 
 export function buildKnowledgeFacts(r: {
@@ -205,10 +215,6 @@ export function buildKnowledgeFacts(r: {
   updated_by_name?: string
   updated_at?: string
 }, formatTimeFn: (val: string) => string): Array<{ label: string; value: string }> {
-  const joinWhoWhen = (who?: string, when?: string) => {
-    const parts = [who ? who.trim() : '', when ? formatTimeFn(when) : ''].filter(Boolean)
-    return parts.length ? parts.join(' · ') : '—'
-  }
   return [
     { label: '省份', value: r.prov_name || '—' },
     { label: '文件类型', value: displayFileType(r.file_type) },
@@ -216,21 +222,7 @@ export function buildKnowledgeFacts(r: {
     { label: '部门归属', value: r.depart_affiliation || '—' },
     { label: '资料时间', value: r.data_time || '—' },
     { label: '文件大小', value: r.file_size_display || '—' },
-    { label: '上传', value: joinWhoWhen(r.created_by_name, r.uploaded_at) },
-    { label: '最近更新', value: joinWhoWhen(r.updated_by_name, r.updated_at) },
+    { label: '上传', value: joinWhoWhen(r.created_by_name, r.uploaded_at, formatTimeFn) },
+    { label: '最近更新', value: joinWhoWhen(r.updated_by_name, r.updated_at, formatTimeFn) },
   ]
-}
-
-export function parseContentDispositionFilename(header: string | undefined, fallback: string): string {
-  if (!header) return fallback
-  const utf8Match = header.match(/filename\*=UTF-8''([^;]+)/i)
-  if (utf8Match?.[1]) {
-    try {
-      return decodeURIComponent(utf8Match[1].trim())
-    } catch {
-      return fallback
-    }
-  }
-  const plainMatch = header.match(/filename="?([^";]+)"?/i)
-  return plainMatch?.[1]?.trim() || fallback
 }

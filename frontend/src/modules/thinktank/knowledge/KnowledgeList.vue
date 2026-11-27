@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Delete, Download, Star, StarFilled, Upload } from '@element-plus/icons-vue'
+import { Download, StarFilled, Upload } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
 import type { RouteLocationRaw } from 'vue-router'
@@ -34,6 +34,7 @@ import { filtersForExport, useListQuery } from '@/composables/useListQuery'
 import { useTableSelection } from '@/composables/useTableSelection'
 import { reviewQuery } from '@/modules/policy/shared/reviewQuery'
 import { useAuthStore } from '@/stores/auth'
+import ThinktankBatchToolbar from '../shared/ThinktankBatchToolbar.vue'
 import KnowledgeFilters, { type KnowledgeFilterQuery } from './KnowledgeFilters.vue'
 import KnowledgeLogsDrawer from './KnowledgeLogsDrawer.vue'
 import KnowledgeRowActions from './KnowledgeRowActions.vue'
@@ -44,12 +45,14 @@ import {
   parseContentDispositionFilename,
   SUMMARY_KEYS,
   TABLE_COLUMNS,
+  type KnowledgeDynamicOptions,
 } from './fields'
 import { useKnowledgeBatch } from './useKnowledgeBatch'
 
 const RESOURCE = 'thinktank.knowledge'
 const ACTION_WIDTH = 132
 const auth = useAuthStore()
+const accessScope = ref<KnowledgeAccessSummary | null>(null)
 const hasEditableScope = computed(() => Boolean(accessScope.value && accessScope.value.editable_file_types.length > 0 && accessScope.value.editable_industries.length > 0))
 const hasExportableScope = computed(() => Boolean(accessScope.value && accessScope.value.exportable_file_types.length > 0 && accessScope.value.exportable_industries.length > 0))
 const canCreate = computed(() => auth.canFull(RESOURCE) && hasEditableScope.value)
@@ -65,13 +68,21 @@ const query = reactive({
 })
 
 const filters = useFilterOptions('/thinktank/knowledge')
-const accessScope = ref<KnowledgeAccessSummary | null>(null)
+const dynamicOptions = computed<KnowledgeDynamicOptions>(() => ({
+  file_type: filters.get('file_type').items,
+  depart_affiliation: filters.get('depart_affiliation').items,
+  industry_type: filters.get('industry_type').items,
+  product_type: filters.get('product_type').items,
+  prov_name: filters.get('prov_name').items,
+  market_category: filters.get('market_category').items,
+}))
+
 const listQuery = useListQuery(query, (): Promise<void> => load())
 const { items, total, loading, loadError, resultFiltered, load } = useListLoader({
   requested: () => listQuery.requested(),
   commitPage: () => listQuery.commitPage(),
   fetch: listKnowledge,
-  errorText: '加载知识库列表失败',
+  errorText: '加载资料库列表失败',
 })
 const { columns, defaults, selected } = useDetailColumns(TABLE_COLUMNS, EDITOR_GROUPS)
 
@@ -101,7 +112,7 @@ function editRoute(row: KnowledgeItem, index: number): RouteLocationRaw {
 
 const { exporting, onExport } = useExcelExport({
   path: '/thinktank/knowledge/export',
-  filename: '知识库资料.xlsx',
+  filename: '资料库.xlsx',
   filters: () => filtersForExport(listQuery.applied),
 })
 
@@ -110,7 +121,7 @@ async function onExportUndefined() {
   exportingUndefined.value = true
   try {
     const resp = await exportUndefinedKnowledge()
-    const filename = parseContentDispositionFilename(resp.headers?.['content-disposition'], '未定义标签数据.xlsx')
+    const filename = parseContentDispositionFilename(resp.headers?.['content-disposition'], '资料库未定义数据.xlsx')
     downloadBlob(resp.data, filename)
     ElMessage.success('未定义数据下载已开始')
   } catch (error) {
@@ -123,10 +134,10 @@ async function onExportUndefined() {
 async function onUploadTags(file: File) {
   try {
     const result = await runExcelImport(file, onProgress => uploadKnowledgeTags(file, onProgress))
-    reportImportResult(result, '知识标签-跳过明细.xlsx')
+    reportImportResult(result, '资料库标签导入结果.xlsx')
     await refresh()
   } catch (error) {
-    ElMessage.error(errorMessage(error, '上传知识标签失败'))
+    ElMessage.error(errorMessage(error, '上传资料标签失败'))
   }
   return false
 }
@@ -168,9 +179,7 @@ function onOpenLogs(row: KnowledgeItem) {
 
 async function onDeleteRow(row: KnowledgeItem) {
   try {
-    await ElMessageBox.confirm(`确认删除「${row.file_name}」吗？删除后将记入操作审计。`, '删除确认', {
-      type: 'warning',
-    })
+    await ElMessageBox.confirm(`确认删除「${row.file_name}」吗？删除后将记入操作审计。`, '删除确认', { type: 'warning' })
     await deleteKnowledge(row.id)
     ElMessage.success('删除成功')
     await refresh()
@@ -193,7 +202,7 @@ onMounted(() => { void Promise.all([load(), filters.load(), loadAccess()]) })
 <template>
   <div>
     <ListPage
-      title="智库知识库"
+      title="资料库"
       hint="按文件类型与行业类型授权检索、预览、收藏、下载、标签完善，全操作留痕审计。"
       :total="total"
       :page="query.page"
@@ -233,7 +242,7 @@ onMounted(() => { void Promise.all([load(), filters.load(), loadAccess()]) })
           </el-button>
           <ImportButton
             v-if="canUploadTags"
-            label="上传知识标签"
+            label="上传资料标签"
             hint="上传导出的未定义标签 Excel 模板，批量完善标签并记录操作审计。"
             :upload="onUploadTags"
           />
@@ -252,34 +261,19 @@ onMounted(() => { void Promise.all([load(), filters.load(), loadAccess()]) })
           />
           <AuditLogButton module="thinktank.knowledge" />
         </template>
-        <!-- 勾选当前页记录后切换为上下文批量工具栏，避免 1440px 折行且未勾选时不摆置灰按钮 -->
         <template v-else>
-          <el-button
-            v-if="batch.unfavorited.value.length"
-            :icon="Star"
-            :loading="batch.batchBusy.value"
-            @click="batch.onBatchFavorite"
-          >
-            批量收藏（{{ batch.unfavorited.value.length }}）
-          </el-button>
-          <el-button
-            v-if="batch.favorited.value.length"
-            :icon="StarFilled"
-            :loading="batch.batchBusy.value"
-            @click="batch.onBatchUnfavorite(listQuery.applied.favorite_only.length > 0)"
-          >
-            批量取消收藏（{{ batch.favorited.value.length }}）
-          </el-button>
-          <el-button
-            v-if="canCreate && batch.deletable.value.length"
-            type="danger"
-            plain
-            :icon="Delete"
-            :loading="batch.batchBusy.value"
-            @click="batch.onBatchDelete"
-          >
-            批量删除（{{ batch.deletable.value.length }}）
-          </el-button>
+          <ThinktankBatchToolbar
+            :unfavorited-count="batch.unfavorited.value.length"
+            :favorited-count="batch.favorited.value.length"
+            :downloadable-count="batch.downloadable.value.length"
+            :deletable-count="batch.deletable.value.length"
+            :can-delete="canCreate"
+            :busy="batch.batchBusy.value"
+            @favorite="batch.onBatchFavorite"
+            @unfavorite="batch.onBatchUnfavorite(listQuery.applied.favorite_only.length > 0)"
+            @download="batch.onBatchDownload"
+            @delete="batch.onBatchDelete"
+          />
         </template>
       </template>
 
@@ -322,7 +316,7 @@ onMounted(() => { void Promise.all([load(), filters.load(), loadAccess()]) })
         :action-width="ACTION_WIDTH"
         :loading="loading"
         :filtered="resultFiltered"
-        detail-title="知识资料详情"
+        detail-title="资料详情"
         @reset="listQuery.resetFilters"
         @selection-change="checked = $event"
       >
@@ -365,7 +359,8 @@ onMounted(() => { void Promise.all([load(), filters.load(), loadAccess()]) })
 
     <KnowledgeUploadDialog
       v-model="uploadVisible"
-      :provinces="filters.get('prov_name').items"
+      :provinces="dynamicOptions.prov_name ?? []"
+      :options="dynamicOptions"
       :editable-file-types="accessScope?.editable_file_types ?? []"
       :editable-industries="accessScope?.editable_industries ?? []"
       @uploaded="refresh"
@@ -379,7 +374,6 @@ onMounted(() => { void Promise.all([load(), filters.load(), loadAccess()]) })
 </template>
 
 <style scoped>
-/* 智库 13 项筛选：默认折叠 1 行核心条件，展开后严格按 4 列固定标签栅格对齐，告别参差不齐 */
 .fav-star { color: var(--zt-warning); font-size: 14px; flex-shrink: 0; }
 .selection-clear { padding: 0 4px; border: 0; background: none; color: var(--zt-blue-600); font: inherit; cursor: pointer; }
 .selection-clear:hover { text-decoration: underline; }

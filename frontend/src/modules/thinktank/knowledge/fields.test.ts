@@ -16,7 +16,7 @@ import {
   TABLE_COLUMNS,
 } from './fields'
 
-describe('知识库字段与工具函数', () => {
+describe('资料库字段与工具函数', () => {
   it('竖线分隔标签的拆分与拼接幂等且去空白', () => {
     expect(splitPipeTags('')).toEqual([])
     expect(splitPipeTags(null)).toEqual([])
@@ -76,5 +76,18 @@ describe('知识库字段与工具函数', () => {
     expect(buildMetaSectionSpecs('基本信息', ['产品'], true, ['党政'], ['北京'])).toHaveLength(6)
     expect(buildMetaSectionSpecs('行业与产品标签', ['产品'], false, ['党政'], ['北京'])).toHaveLength(6)
     expect(buildMetaSectionSpecs('系统信息', ['产品'], false, ['党政'], ['北京'])).toEqual([])
+
+    const dynamicBasic = buildMetaSectionSpecs('基本信息', ['产品'], true, ['党政'], [], {
+      depart_affiliation: ['政企部'],
+    })
+    expect(dynamicBasic.find(s => s.key === 'depart_affiliation')?.options).toEqual(['政企部'])
+    expect(dynamicBasic.find(s => s.key === 'prov_name')?.options).toContain('集团')
+
+    const dynamicTags = buildMetaSectionSpecs('行业与产品标签', ['产品'], false, ['党政'], ['北京市'], {
+      market_category: ['行客'],
+      product_type: ['量子'],
+    })
+    expect(dynamicTags.find(s => s.key === 'market_category')?.options).toEqual(['行客'])
+    expect(dynamicTags.find(s => s.key === 'product_types')?.options).toEqual(['量子'])
   })
 })

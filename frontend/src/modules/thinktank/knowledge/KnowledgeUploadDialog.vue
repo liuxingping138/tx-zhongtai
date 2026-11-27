@@ -6,18 +6,23 @@ import { computed, reactive, ref, watch } from 'vue'
 import { errorMessage } from '@/api/errors'
 import { uploadKnowledgeFile } from '@/api/thinktank'
 import { useUnsavedForm } from '@/composables/useUnsavedForm'
+import { preferOptions, scopedOptions, UPLOAD_ACCEPT } from '../shared/options'
 import {
+  DEPARTMENT_OPTIONS,
   EDITABLE_FILE_TYPE_OPTIONS,
   INDUSTRY_OPTIONS,
   MARKET_CATEGORY_OPTIONS,
   OPERATOR_OPTIONS,
   PRODUCT_TYPE_OPTIONS,
+  PROVINCE_OPTIONS,
   joinPipeTags,
+  type KnowledgeDynamicOptions,
 } from './fields'
 
 const props = defineProps<{
   modelValue: boolean
-  provinces: string[]
+  provinces: readonly string[]
+  options?: KnowledgeDynamicOptions
   editableFileTypes: string[]
   editableIndustries: string[]
 }>()
@@ -44,14 +49,19 @@ const form = reactive({
 })
 
 const fileTypeChoices = computed(() =>
-  EDITABLE_FILE_TYPE_OPTIONS.filter(t => props.editableFileTypes.includes(t)),
+  scopedOptions(props.options?.file_type, EDITABLE_FILE_TYPE_OPTIONS, props.editableFileTypes, ['未定义']),
 )
 const canLeaveUndefined = computed(() => props.editableFileTypes.includes('未定义'))
 
 const industryChoices = computed(() =>
-  INDUSTRY_OPTIONS.filter(i => props.editableIndustries.includes(i)),
+  scopedOptions(props.options?.industry_type, INDUSTRY_OPTIONS, props.editableIndustries),
 )
 const canLeaveNoIndustry = computed(() => props.editableIndustries.includes('无'))
+
+const departmentChoices = computed(() => preferOptions(props.options?.depart_affiliation, DEPARTMENT_OPTIONS))
+const productTypeChoices = computed(() => preferOptions(props.options?.product_type, PRODUCT_TYPE_OPTIONS))
+const marketCategoryChoices = computed(() => preferOptions(props.options?.market_category, MARKET_CATEGORY_OPTIONS))
+const provinceChoices = computed(() => preferOptions(props.options?.prov_name ?? props.provinces, PROVINCE_OPTIONS))
 
 const visible = computed({
   get: () => props.modelValue,
@@ -130,7 +140,7 @@ async function onSubmit() {
 <template>
   <el-dialog
     :model-value="modelValue"
-    title="上传知识库文件"
+    title="上传资料库文件"
     width="640px"
     destroy-on-close
     :close-on-click-modal="!uploading"
@@ -143,7 +153,7 @@ async function onSubmit() {
       drag
       :auto-upload="false"
       :show-file-list="false"
-      accept=".pdf,.xlsx,.xls,.docx,.doc,.pptx,.ppt,.txt,.csv,.md"
+      :accept="UPLOAD_ACCEPT"
       :on-change="onPickFile"
     >
       <el-icon class="el-icon--upload">
@@ -164,6 +174,7 @@ async function onSubmit() {
           <el-form-item label="文件类型">
             <el-select
               v-model="form.file_type"
+              filterable
               :clearable="canLeaveUndefined"
               :placeholder="canLeaveUndefined ? '留空则归入未定义' : '请选择文件类型'"
               class="w-full"
@@ -182,6 +193,7 @@ async function onSubmit() {
             <el-select
               v-model="form.industry_types"
               multiple
+              filterable
               collapse-tags
               :clearable="canLeaveNoIndustry"
               :placeholder="canLeaveNoIndustry ? '留空视为「无」' : '请选择行业类型'"
@@ -222,7 +234,7 @@ async function onSubmit() {
               class="w-full"
             >
               <el-option
-                v-for="item in MARKET_CATEGORY_OPTIONS"
+                v-for="item in marketCategoryChoices"
                 :key="item"
                 :label="item"
                 :value="item"
@@ -235,13 +247,14 @@ async function onSubmit() {
             <el-select
               v-model="form.product_types"
               multiple
+              filterable
               collapse-tags
               clearable
               placeholder="请选择"
               class="w-full"
             >
               <el-option
-                v-for="item in PRODUCT_TYPE_OPTIONS"
+                v-for="item in productTypeChoices"
                 :key="item"
                 :label="item"
                 :value="item"
@@ -259,7 +272,7 @@ async function onSubmit() {
               class="w-full"
             >
               <el-option
-                v-for="item in provinces"
+                v-for="item in provinceChoices"
                 :key="item"
                 :label="item"
                 :value="item"
@@ -269,11 +282,22 @@ async function onSubmit() {
         </el-col>
         <el-col :span="12">
           <el-form-item label="部门归属">
-            <el-input
+            <el-select
               v-model="form.depart_affiliation"
-              placeholder="请输入部门名称"
+              filterable
+              allow-create
+              default-first-option
               clearable
-            />
+              placeholder="请选择或输入部门"
+              class="w-full"
+            >
+              <el-option
+                v-for="item in departmentChoices"
+                :key="item"
+                :label="item"
+                :value="item"
+              />
+            </el-select>
           </el-form-item>
         </el-col>
         <el-col :span="12">

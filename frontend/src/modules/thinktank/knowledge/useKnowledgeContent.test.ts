@@ -6,6 +6,7 @@ import {
   CONTENT_CACHE_SIZE,
   isOfficeFile,
   knowledgeContentUrl,
+  thinktankContentUrl,
   useKnowledgeContent,
   type BlobResponse,
 } from './useKnowledgeContent'
@@ -188,6 +189,28 @@ describe('useKnowledgeContent', () => {
     setAccessToken('')
     await page.show('doc1', 'text', '', true, 'v1')
     expect(fetchBlob).toHaveBeenCalledTimes(2)
+    clearKnowledgeContentCache()
+  })
+
+  it('支持按子库前缀生成 /content 地址并按子库隔离会话缓存', async () => {
+    clearKnowledgeContentCache()
+    expect(thinktankContentUrl('reports', 'r/1')).toBe('/api/v1/thinktank/reports/r%2F1/content')
+    expect(thinktankContentUrl('proposals', 'p1')).toBe('/api/v1/thinktank/proposals/p1/content')
+
+    const fetchReport = vi.fn(() => Promise.resolve(textResp('报告正文')))
+    const fetchProposal = vi.fn(() => Promise.resolve(textResp('方案正文')))
+    const reportContent = useKnowledgeContent(fetchReport, vi.fn(), { persistent: true, getOwner: () => 'u1', library: 'reports' })
+    const proposalContent = useKnowledgeContent(fetchProposal, vi.fn(), { persistent: true, getOwner: () => 'u1', library: 'proposals' })
+
+    await reportContent.show('same-id', 'pdf', '', true, 'v1')
+    expect(reportContent.pdfUrl.value).toBe('/api/v1/thinktank/reports/same-id/content')
+
+    await reportContent.show('same-id', 'text', '', true, 'v1')
+    await proposalContent.show('same-id', 'text', '', true, 'v1')
+    expect(reportContent.text.value).toBe('报告正文')
+    expect(proposalContent.text.value).toBe('方案正文')
+    expect(fetchReport).toHaveBeenCalledOnce()
+    expect(fetchProposal).toHaveBeenCalledOnce()
     clearKnowledgeContentCache()
   })
 })

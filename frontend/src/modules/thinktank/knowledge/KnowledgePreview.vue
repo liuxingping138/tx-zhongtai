@@ -30,7 +30,7 @@ import { fetchNeighbors } from './neighborWindow'
 import { openRecord } from './previewFlow'
 import { isOfficeFile, useKnowledgeContent } from './useKnowledgeContent'
 import { usePreviewPanels } from './usePreviewPanels'
-import { FILTER_KEYS, parseContentDispositionFilename } from './fields'
+import { FILTER_KEYS, parseContentDispositionFilename, type KnowledgeDynamicOptions } from './fields'
 
 const route = useRoute()
 const router = useRouter()
@@ -41,7 +41,7 @@ const loading = ref(true)
 const error = ref('')
 const downloading = ref(false)
 const item = ref<KnowledgeItem | null>(null)
-const provinces = ref<string[]>([])
+const dynamicOptions = ref<KnowledgeDynamicOptions>({})
 const accessScope = ref<KnowledgeAccessSummary | null>(null)
 const logsOpen = ref(false)
 const metaCardRef = ref<{ confirmDiscard: () => Promise<boolean>; startEdit: () => void } | null>(null)
@@ -49,7 +49,7 @@ const { previewCollapsed, metaCollapsed, setPreviewCollapsed, setMetaCollapsed }
 const content = useKnowledgeContent(
   fetchKnowledgeContentBlob,
   err => ElMessage.warning(errorMessage(err, '加载原文预览失败，已回退摘要视图')),
-  { persistent: true, getOwner: () => auth.user?.id ?? '' },
+  { persistent: true, getOwner: () => auth.user?.id ?? '', library: 'knowledge' },
 )
 const { loading: contentLoading, mode: previewMode, text: previewText, pdfUrl } = content
 const total = ref(0)
@@ -101,17 +101,27 @@ function consumeEditQuery() {
   }
 }
 
-/** 省份候选和可编辑范围跟着人走、不跟记录走：进页时后台取一次，不挡首屏，只有编辑标签时用得到。 */
+/** 码表候选和可编辑范围跟着人走、不跟记录走：进页时后台取一次，不挡首屏。 */
 function loadEditOptions() {
   fetchFilterOptions('/thinktank/knowledge')
-    .then((opts) => { if (opts?.options?.prov_name?.items) provinces.value = opts.options.prov_name.items })
-    .catch(() => { /* 取不到时省份只能手填 */ })
+    .then((opts) => {
+      const o = opts?.options
+      if (!o) return
+      dynamicOptions.value = {
+        file_type: o.file_type?.items,
+        depart_affiliation: o.depart_affiliation?.items,
+        industry_type: o.industry_type?.items,
+        product_type: o.product_type?.items,
+        prov_name: o.prov_name?.items,
+        market_category: o.market_category?.items,
+      }
+    })
+    .catch(() => { /* 取不到时编辑表单自动回退兜底列表 */ })
   getKnowledgeAccess()
     .then((scope) => { accessScope.value = scope })
     .catch(() => { /* 取不到时编辑弹层不限候选 */ })
 }
 
-// 资料信息一到就出整页，原文在右栏自己加载：PDF 按 Range 先出第一页，Office 首次打开要转码几秒。
 async function loadPage() {
   const targetId = fileId.value
   if (!targetId) return
@@ -207,7 +217,7 @@ onMounted(() => {
         @click="navigateTo(listRoute)"
       >
         <el-icon><ArrowLeft /></el-icon>
-        <span>返回智库知识库</span>
+        <span>返回资料库</span>
       </button>
       <div
         v-if="position !== null && total > 0"
@@ -276,7 +286,8 @@ onMounted(() => {
           v-if="!metaCollapsed || previewCollapsed"
           ref="metaCardRef"
           :item="item"
-          :provinces="provinces"
+          :provinces="dynamicOptions.prov_name ?? []"
+          :options="dynamicOptions"
           :editable-file-types="accessScope?.editable_file_types"
           :editable-industries="accessScope?.editable_industries"
           @updated="item = $event"

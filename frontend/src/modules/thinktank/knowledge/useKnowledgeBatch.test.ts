@@ -7,6 +7,8 @@ import { formatBatchSummary, runConcurrent, useKnowledgeBatch } from './useKnowl
 const mockFavorite = vi.fn<(id: string) => Promise<{ file_id: string; is_favorited: boolean }>>()
 const mockUnfavorite = vi.fn<(id: string) => Promise<{ file_id: string; is_favorited: boolean }>>()
 const mockDelete = vi.fn<(id: string) => Promise<{ id: string; deleted: boolean }>>()
+const mockDownload = vi.fn<(id: string) => Promise<{ data: Blob; headers: Record<string, string> }>>()
+const mockDownloadBlob = vi.fn<(blob: Blob, filename: string) => void>()
 const mockSuccess = vi.fn<(message: string) => void>()
 const mockWarning = vi.fn<(message: string) => void>()
 const mockError = vi.fn<(message: string) => void>()
@@ -16,6 +18,10 @@ vi.mock('@/api/thinktank', () => ({
   favoriteKnowledge: (id: string) => mockFavorite(id),
   unfavoriteKnowledge: (id: string) => mockUnfavorite(id),
   deleteKnowledge: (id: string) => mockDelete(id),
+  downloadKnowledgeBlob: (id: string) => mockDownload(id),
+}))
+vi.mock('@/api/download', () => ({
+  downloadBlob: (blob: Blob, filename: string) => { mockDownloadBlob(blob, filename) },
 }))
 
 vi.mock('element-plus', () => ({
@@ -187,5 +193,22 @@ describe('useKnowledgeBatch composable', () => {
     await batch.onBatchDelete()
     expect(mockError).toHaveBeenCalledWith('批量删除失败：文件不存在')
     expect(refresh).not.toHaveBeenCalled()
+  })
+
+  it('batch downloads exportable knowledge rows cleanly', async () => {
+    const checked = ref([makeItem('1', { can_export: true }), makeItem('2', { can_export: false })])
+    const clearSelection = vi.fn()
+    mockDownload.mockResolvedValueOnce({
+      data: new Blob(['data']),
+      headers: { 'content-disposition': 'attachment; filename="k1.pdf"' },
+    })
+
+    const batch = useKnowledgeBatch({ checked, clearSelection, refresh: vi.fn() })
+    await batch.onBatchDownload()
+    expect(mockDownload).toHaveBeenCalledTimes(1)
+    expect(mockDownload).toHaveBeenCalledWith('1')
+    expect(mockDownloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'k1.pdf')
+    expect(mockSuccess).toHaveBeenCalledWith('已下载 1 条资料')
+    expect(clearSelection).toHaveBeenCalledTimes(1)
   })
 })
